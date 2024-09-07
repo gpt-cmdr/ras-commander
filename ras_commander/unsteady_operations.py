@@ -7,7 +7,7 @@ import re
 
 class UnsteadyOperations:
     """
-    A class for operations on HEC-RAS unsteady flow files.
+    Class for all operations related to HEC-RAS unsteady flow files.
     """
     @staticmethod
     def copy_unsteady_files(dst_folder, template_unsteady):

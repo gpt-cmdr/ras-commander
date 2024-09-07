@@ -9,7 +9,8 @@ from .project_config import ProjectConfig
 
 class Utilities:
     """
-    A class containing utility functions for the ras_commander library.
+    A class containing the utility functions for the ras_commander library.
+    When integrating new functions that do not clearly fit into other classes, add them here.
     """
     @staticmethod
     def create_backup(file_path, backup_suffix="_backup"):

@@ -8,6 +8,11 @@ import pandas as pd
 class FileOperations:
     """
     A class for HEC-RAS file operations.
+    
+    
+    Revision Notes: All functions from class ProjectManager should be moved here
+    
+    
     """
     @staticmethod
     def find_hecras_project_file(folder_path):

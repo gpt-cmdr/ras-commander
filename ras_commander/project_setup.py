@@ -1,3 +1,5 @@
+# REVISION NOTE: We should be able to move these functions into the project_management.py file and delete this file. 
+
 from pathlib import Path
 from .file_operations import FileOperations
 

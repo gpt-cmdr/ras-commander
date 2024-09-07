@@ -10,7 +10,7 @@ from .project_config import ProjectConfig
 
 class ProjectManager:
     """
-    A class for managing HEC-RAS projects.
+    A class for functions that interface with the HEC-RAS project's project file.
     """
     @staticmethod
     def get_next_available_number(existing_numbers):
