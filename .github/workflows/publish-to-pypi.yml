@@ -18,7 +18,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: [3.8, 3.9, 3.10, 3.11, 3.12]
+        python-version: '3.x'
 
     # Install dependencies (twine, wheel, setuptools)
     - name: Install dependencies
@@ -35,6 +35,6 @@ jobs:
     - name: Publish package to PyPI
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # Secure PyPI API token
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # Ensure this secret is set in your GitHub repository
       run: |
         twine upload dist/*
