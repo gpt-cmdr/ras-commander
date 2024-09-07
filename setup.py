@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 #INSTRUCTIONS: Create a New Tag and Push It to GitHub
 #The workflow is triggered by a new tag push. To create a new tag and push it to GitHub, follow these steps:
 #Update your version number in setup.py:
-#version="0.1.1"  # Example of updating the version number
+#version="0.1.2"  # Example of updating the version number
 #
 # Commit your changes:
 #git add setup.py
