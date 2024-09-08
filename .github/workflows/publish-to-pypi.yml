@@ -9,20 +9,18 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  build_and_publish:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # This ensures all tags are fetched
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.11"  # Use the latest supported version
 
     - name: Display Python version and environment info
       run: |
