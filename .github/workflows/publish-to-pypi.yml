@@ -1,0 +1,60 @@
+name: Upload Python Package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest  # Changed from windows-latest to ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11, 3.12]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Display Python version and environment info
+      run: |
+        python --version
+        pip --version
+        python -m site --user-site
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Verify package structure
+      run: |
+        ls -R
+        cat setup.py
+        cat pyproject.toml
+
+    - name: Create requirements.txt
+      run: |
+        pip freeze > requirements.txt
+        cat requirements.txt
+
+    - name: Build package
+      run: python -m build
+
+    - name: Verify built package
+      run: |
+        ls -l dist/
+        twine check dist/*
+
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
