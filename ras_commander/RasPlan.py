@@ -16,11 +16,12 @@ class RasPlan:
     """
     
     @staticmethod
-    def set_geom(self, new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
+    def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
-        Set the geometry for the current plan.
+        Set the geometry for the specified plan.
 
         Parameters:
+            plan_number (Union[str, int]): The plan number to update.
             new_geom (Union[str, int]): The new geometry number to set.
             ras_object: An optional RAS object instance.
 
@@ -28,8 +29,7 @@ class RasPlan:
             pd.DataFrame: The updated geometry DataFrame.
 
         Example:
-            plan = RasPlan('path/to/plan.p01')
-            updated_geom_df = plan.set_geom('G01')
+            updated_geom_df = RasPlan.set_geom('02', '03')
 
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
@@ -37,25 +37,56 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        geom_df = ras_obj.geom_df
+        # Ensure plan_number and new_geom are strings
+        plan_number = str(plan_number).zfill(2)
+        new_geom = str(new_geom).zfill(2)
 
-        if new_geom not in geom_df['geom_number']:
-            raise ValueError(f"Geometry {new_geom} not found in project.")
-
-        self.geom = new_geom
-        geom_df.loc[geom_df['plan_number'] == self.plan_number, 'geom_number'] = new_geom
-
-        print(f"Geometry for plan {self.plan_number} set to {new_geom}")
-        print("Updated geometry DataFrame:")
-        display(geom_df)
-
+        # Before doing anything, make sure the plan, geom, flow, and unsteady dataframes are current
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-
-        return geom_df
         
+        # List the geom_df for debugging
+        print("Current geometry DataFrame within the function:")
+        print(ras_obj.geom_df)
+        
+        if new_geom not in ras_obj.geom_df['geom_number'].values:
+            raise ValueError(f"Geometry {new_geom} not found in project.")
+
+        # Update the geometry for the specified plan
+        ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
+
+        print(f"Geometry for plan {plan_number} set to {new_geom}")
+        print("Updated plan DataFrame:")
+        display(ras_obj.plan_df)
+
+        # Update the project file
+        prj_file_path = ras_obj.prj_file
+        with open(prj_file_path, 'r') as f:
+            lines = f.readlines()
+
+        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
+        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
+        
+        for i, line in enumerate(lines):
+            if plan_pattern.match(line):
+                for j in range(i+1, len(lines)):
+                    if geom_pattern.match(lines[j]):
+                        lines[j] = f"Geom File=g{new_geom}\n"
+                        break
+                break
+
+        with open(prj_file_path, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated project file with new geometry for plan {plan_number}")
+
+        # Re-initialize the ras object to reflect changes
+        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
+
+        return ras_obj.plan_df
+
     @staticmethod
     def set_steady(plan_number: str, new_steady_flow_number: str, ras_object=None):
         """
@@ -148,7 +179,11 @@ class RasPlan:
         if not plan_file_path:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
-        RasPlan.update_plan_file(plan_file_path, 'Unsteady', new_unsteady_flow_number)
+        
+        # DEV NOTE: THIS WORKS HERE, BUT IN OTHER FUNCTIONS WE DO THIS MANUALLY.  
+        # UPDATE OTHER FUNCTIONS TO USE RasUtils.update_plan_file INSTEAD OF REPLICATING THIS CODE.
+        
+        RasUtils.update_plan_file(plan_file_path, 'Unsteady', new_unsteady_flow_number)
         print(f"Updated unsteady flow file in {plan_file_path} to u{new_unsteady_flow_number}")
 
         ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -315,6 +350,16 @@ class RasPlan:
         
         # Update the plan dataframe in the ras instance to ensure it is current
         ras_obj.plan_df = ras_obj.get_plan_entries()
+        
+        # Ensure plan_number is a string
+        plan_number = str(plan_number)
+        
+        # Ensure plan_number is formatted as '01', '02', etc.
+        plan_number = plan_number.zfill(2)
+        
+        # print the ras_obj.plan_df dataframe
+        print("Plan DataFrame:")
+        display(ras_obj.plan_df)
         
         plan_entry = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_number]
         if not plan_entry.empty:
@@ -1096,7 +1141,6 @@ class RasPlan:
         
         return new_steady
 
-
     @staticmethod
     def clone_geom(template_geom, ras_object=None):
         """
@@ -1109,13 +1153,15 @@ class RasPlan:
         
         Returns:
         str: New geometry number (e.g., '03')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
         # Update geometry entries without reinitializing the entire project
-        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')  # Call the correct function to get updated geometry entries
-        #print(f"Updated geometry entries:\n{ras_obj.geom_df}")
+        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
 
         template_geom_filename = f"{ras_obj.project_name}.g{template_geom}"
         template_geom_path = ras_obj.project_folder / template_geom_filename
@@ -1178,13 +1224,17 @@ class RasPlan:
         print(f"Updated {ras_obj.prj_file} with new geometry file g{next_geom_number}")
         new_geom = next_geom_number
         
-        # Update the geometry entries in the ras object
+        # Update all dataframes in the ras object
+        ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
         print(f"Updated geometry entries:\n{ras_obj.geom_df}")
 
         return new_geom
-        
-        
+            
+            
         
         
     @staticmethod

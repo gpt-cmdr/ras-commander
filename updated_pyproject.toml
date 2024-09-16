@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ras_commander"
+dynamic = ["version"]
+description = "A library for automating HEC-RAS operations using python functions."
+authors = [{name = "William Katzenmeyer, P.E., C.F.M.", email = "heccommander@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/ras_commander"
+
+[tool.setuptools_scm]
+write_to = "ras_commander/_version.py"
+
+[tool.setuptools]
+packages = ["ras_commander"]

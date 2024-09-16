@@ -2,7 +2,7 @@
 
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
-import syss
+import sys
 from pathlib import Path
 
 # Add the parent directory to the Python path

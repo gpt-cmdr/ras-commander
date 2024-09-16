@@ -1,0 +1,370 @@
+GEMINI PROMPTS: 
+
+
+"""
+Analyze the ras_commander libary's classes and functions.
+I want to compile all of the developer's notes and future feature improvements that are contained in code comments.
+Review each function and compile the developer's notes and future feature improvements contained in the code comments.
+
+"""
+
+
+
+
+
+""""
+
+Provide a thorough review of each function in the library. Answer the following questions:
+
+What improvements could be made to the docstring
+What improvments could be made to the code
+Are there any areas that could be readily optimized or refactored to favor less duplication, readability and simplicity.
+Are the arguments named consistently with other similar function arguments?
+Does the function need more robust comments and documentation?
+
+Then, provide a markdown box containing a summary of the suggested improvements for the function.
+"""
+
+
+https://aistudio.google.com/app/prompts/1gS0pR5f7Mb1iRg1H_mX62Vz-mzg8NhKF
+
+share link: 
+https://drive.google.com/file/d/1LGWgvUYmdlo5FhUR0KCI9kR15Xo_LCa2/view?usp=sharing, https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221gS0pR5f7Mb1iRg1H_mX62Vz-mzg8NhKF%22%5D,%22action%22:%22open%22,%22userId%22:%22102396263624103754250%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing, https://drive.google.com/file/d/1xNanqvllOe0zBza2hgkSu646-X6qiVdG/view?usp=sharing
+
+
+"""
+Please analyze the ras-commander library and provide suggestions to better align with the PEP 8 guidelines.
+Start with naming conventions. Analyze the naming conventions of each:
+Classes
+Functions
+Throughout the library. Think step by step and provide a comprehensive review.
+
+
+"""
+
+
+"""
+
+What about this? Spend some time providing a critical analysis of how ras_commander can be designed for inheritance:
+Designing for Inheritance
+Always decide whether a class’s methods and instance variables (collectively: “attributes”) should be public or non-public. If in doubt, choose non-public; it’s easier to make it public later than to make a public attribute non-public.
+Public attributes are those that you expect unrelated clients of your class to use, with your commitment to avoid backwards incompatible changes. Non-public attributes are those that are not intended to be used by third parties; you make no guarantees that non-public attributes won’t change or even be removed.
+We don’t use the term “private” here, since no attribute is really private in Python (without a generally unnecessary amount of work).
+Another category of attributes are those that are part of the “subclass API” (often called “protected” in other languages). Some classes are designed to be inherited from, either to extend or modify aspects of the class’s behavior. When designing such a class, take care to make explicit decisions about which attributes are public, which are part of the subclass API, and which are truly only to be used by your base class.
+With this in mind, here are the Pythonic guidelines:
+Public attributes should have no leading underscores.
+If your public attribute name collides with a reserved keyword, append a single trailing underscore to your attribute name. This is preferable to an abbreviation or corrupted spelling. (However, notwithstanding this rule, ‘cls’ is the preferred spelling for any variable or argument which is known to be a class, especially the first argument to a class method.)
+Note 1: See the argument name recommendation above for class methods.
+For simple public data attributes, it is best to expose just the attribute name, without complicated accessor/mutator methods. Keep in mind that Python provides an easy path to future enhancement, should you find that a simple data attribute needs to grow functional behavior. In that case, use properties to hide functional implementation behind simple data attribute access syntax.
+Note 1: Try to keep the functional behavior side-effect free, although side-effects such as caching are generally fine.
+Note 2: Avoid using properties for computationally expensive operations; the attribute notation makes the caller believe that access is (relatively) cheap.
+If your class is intended to be subclassed, and you have attributes that you do not want subclasses to use, consider naming them with double leading underscores and no trailing underscores. This invokes Python’s name mangling algorithm, where the name of the class is mangled into the attribute name. This helps avoid attribute name collisions should subclasses inadvertently contain attributes with the same name.
+Note 1: Note that only the simple class name is used in the mangled name, so if a subclass chooses both the same class name and attribute name, you can still get name collisions.
+Note 2: Name mangling can make certain uses, such as debugging and getattr(), less convenient. However the name mangling algorithm is well documented and easy to perform manually.
+Note 3: Not everyone likes name mangling. Try to balance the need to avoid accidental name clashes with potential use by advanced callers.
+Think step by step and provide self-reflection on any suggestions.
+
+"""
+
+
+"""
+Now, come up with a list of specific improvements and design principles I can make that will make designing for inheritance easier.
+Provide a suggested documentation of the public API.
+See the style guide in the library, and provide an additional section that addresses these points.
+
+"""
+
+
+
+Initial Exploratory Conversation: 
+
+https://aistudio.google.com/app/prompts/1tGoCo-P_L2ZdwHNZiAQCXkG9BPHEUrhx
+"""
+Create a table with the names of all functions, their arguments, and their purpose.  
+
+First, make a detailed analysis of the potential uses of this set of functions.
+
+"""
+
+
+
+
+
+
+
+CLAUDE PROMPTS: 
+
+"""
+
+Please go through the table line by line and check look through the /examples/ folder to see if I adequately covered each unique combination of function and optional arguments.  
+
+Please review step by step.  This will take multiple messages, just keep going
+"""
+
+"""
+provide examples for each: 
+
+The compute_plan function's ras_object argument could benefit from an explicit example.
+The compute_test_mode function's clear_geompre argument is not demonstrated in the examples.
+The compute_parallel function's plan_numbers, ras_object, and dest_folder arguments are not explicitly demonstrated.
+
+"""
+
+"""
+
+Make a table for each class file in the library with all functions, their arguments (with typing/expected input), and a short summary of the function's purpose.
+
+"""
+
+"""
+I want to improve the project initialization example.  I want to include examples of showing all of the data in the default or custom ras objects.
+
+"""
+
+"""
+RasFolderInit
+py
+BaldEagle
+u01
+BaldEagle
+p01
+BaldEagle
+prj
+B
+Summarize the HEC-RAS Plan Info per the code.  
+
+Then, construct tables for the project that show all of the relevant info including plan name, all relevant entries, description, and boundary conditions.
+
+"""
+https://claude.ai/chat/ad48aaf0-a1ba-4332-aeb1-2f16d391fab4
+"""
+Now, for the plan file, let's make a list of all the keys, their structure, and make a strategy to extract them.  Especially where multiple entries may be present such as boundary conditions.  
+
+I want a table with each key, an example entry from the BaldEagle.p01 file, and the extraction strategy.  We will be using python, but don't write the code yet.  Just think step by step and make a plan.
+
+"""
+
+"""
+The plan file will be provided with this table, so you don't need to put the entire line in the example column, just the values.  
+
+Please make the table comprehensive and inclusive of all keys in the BaldEagle.p01
+"""
+
+"""
+Now, I've provided the exact same plan, but I've opened the project and saved it with the latest Version 6.5.  Review all differences and revise your strategy.
+
+"""
+
+"""
+I renamed that section 
+## Observed Keys in Version 6.5 (Unsteady Plan File)
+
+Since those were plans for a 1D unsteady hec-ras simulation
+
+Now, I'm going to provide .p02 for the same project, which is a steady flow plan in 6.5.  Please summarize any differences in the key names (the values will be different, that is expected, just focus on which keys are present)
+
+"""
+
+
+"""
+Now, write an addendum to your previous strategy detailing how steady simulation plans are very similar, and what differences are present in the 2D plans (key names, not values).  
+
+The strategy will remain the same, and there will be no differences for different versions.  The single key pairs will be populated, and multi-key pairs such as boundary conditions will be put in a pandas dataframe.
+
+"""
+
+Creating Libary Examples: https://claude.ai/chat/c3e93ef7-2c03-45bb-b7e1-2de7241f3b5b
+(standalone link)
+
+
+"""
+
+Provide a comprehensive set of tables with the following:
+
+1 table for each class, with all functions, arguments, and a detailed summary of it's purpose and functionality. 
+
+This may take multiple messages, just keep going.
+"""
+
+
+
+
+
+
+
+
+https://claude.ai/chat/c3e93ef7-2c03-45bb-b7e1-2de7241f3b5b
+"""
+Analyze the ras-commander library examples rn8.ipynb
+I want to create a subfolder called "examples" that contain self-contained .py files.  
+First, based on the example ipynb, create a .py file that sets up the example files by unzipping them from ./tests/Example Projects.zip
+After unzipping: 
+Bald Eagle Creek is located under ./tests/Bald Eagle Creek/
+Contains 1D Steady and Unsteady Projects
+BaldEagleCrkMulti2D, ./tests/BaldEagleCrkMulti2D/
+Contains 2D, 1D/2D and some 1D projects
+Muncie, ./tests/Bald Eagle Creek/
+Contains 1D (with Storage Area) and 2D projects
+Let's start by making a plan to comprehensively cover usage examples of each function in the ras_commander library as well as common automation and execution workflows per the existing examples ipynb
+
+"""
+
+"""
+
+Now start generating examples
+
+"""
+
+
+"""
+First, lets talk about this: 
+
+"""
+Understanding and Using the Global ras Instance
+
+The RasFolderInit class uses a singleton pattern to create a global instance named ras.
+This global instance is crucial for maintaining consistency across different functions and
+modules when working with HEC-RAS projects.
+
+Key points about the global ras instance:
+1. Singleton Pattern: Only one instance of RasFolderInit is created and shared across the entire application.
+2. Global Access: The ras instance can be imported and used in any module or function.
+3. Consistent State: It ensures that all parts of your code are working with the same HEC-RAS project data.
+4. Initialization: The ras instance is initialized with project details when you call ras.initialize(project_folder, ras_exe_path).
+
+To use the global ras instance in other functions:
+1. Import it at the top of your Python file:
+   from .RasFolderInit import ras
+
+Access project information and methods:
+def my_function():
+    print(f"Working with project: {ras.project_name}")
+    plan_file = ras.get_plan_path("01")
+    # ... other operations ...
+
+Always check if the project is initialized before using:
+def another_function():
+    ras.check_initialized()
+    # Proceed with operations using ras...
+
+By consistently using the global ras instance, we ensure that all parts of the library
+are working with the same HEC-RAS project data, reducing complexity.
+
+"""
+
+Is it still accurate?  I've made changes to the code to make sure the library can be used with multiple projects
+
+"""
+
+https://claude.ai/chat/a110f7d2-780d-4aef-83a1-ba8da6884f67
+"""
+I have made quite a few updates to the ras_commander libary, but I have not yet updated ras-commander library examples rn6.ipynb
+
+First, analyze ras-commander's global ras object and the prevalent use of optional function arguments and their defaults behaviors.  
+
+Summarize the relevance of the default behaviors to ease of use for end users of the library that are only concerned with one project folder at a time.  Execution can still be handled asynchronously by using the optional folder arguments when executing.  
+
+The audience are non-coders, so ensure you include every example, from the simplest to most complex.  
+
+Then, summarize how these defaults enable the simplest operation of ras-commander, with the optional flexibility for very complex operations, and how that is relevant to HEC-RAS automation.  
+
+This will be in markdown format, and will be inserted into   ras-commander library examples rn6.ipynb
+
+"""
+https://claude.ai/chat/8939095d-16ad-4e9a-8282-8b50063708b0
+
+"""
+@staticmethod
+    def compute_parallel(config, max_workers, cores_per_run):
+
+(...)       
+
+How do I add optional arguments to a function?  For instance, for the above.  I would like to be able to pass a list of plan numbers instead of the script defaulting to all plans.  This would allow more precise run control.
+
+"""
+
+https://claude.ai/chat/88f19b5d-6f0b-4294-91fd-454740b372ce
+
+"""
+ras_commander workspace_renamed5
+txt
+B
+I have already simplified the class and function names.  Now I would like to simplify the variable names.  
+
+First, list all variable names.  Start with all variables in function arguments, as it's own table.  Then a table for all variables defined by the user.  Then all variables used internally.  Include a summary to explain each variable and how its used
+
+"""
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+""""""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+"""
+
+
+
+
+
+
+
+

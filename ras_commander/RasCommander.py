@@ -327,18 +327,27 @@ class RasCommander:
         if dest_folder is not None:
             dest_folder_path = Path(dest_folder)
             if dest_folder_path.exists():
-                raise ValueError(
-                    f"\nError: Destination folder already exists: '{dest_folder_path}'\n"
-                    f"To prevent accidental overwriting of results, this operation cannot proceed.\n"
-                    f"Please take one of the following actions:\n"
-                    f"1. Delete the folder manually and run the operation again.\n"
-                    f"2. Use a different destination folder name.\n"
-                    f"3. Programmatically delete the folder before calling compute_parallel, like this:\n"
-                    f"   if Path('{dest_folder_path}').exists():\n"
-                    f"       shutil.rmtree('{dest_folder_path}')\n"
-                    f"This safety measure ensures that you don't inadvertently overwrite existing results."
-                )
-            shutil.copytree(project_folder, dest_folder_path)
+                if any(dest_folder_path.iterdir()):
+                    raise ValueError(
+                        f"\nError: Destination folder already exists: '{dest_folder_path}'\n"
+                        f"To prevent accidental overwriting of results, this operation cannot proceed.\n"
+                        f"Please take one of the following actions:\n"
+                        f"1. Delete the folder manually and run the operation again.\n"
+                        f"2. Use a different destination folder name.\n"
+                        f"3. Programmatically delete the folder before calling compute_parallel, like this:\n"
+                        f"   if Path('{dest_folder_path}').exists():\n"
+                        f"       shutil.rmtree('{dest_folder_path}')\n"
+                        f"This safety measure ensures that you don't inadvertently overwrite existing results."
+                    )
+            else:
+                try:
+                    dest_folder_path.mkdir(parents=True, exist_ok=True)
+                except PermissionError:
+                    raise PermissionError(f"Unable to create destination folder '{dest_folder_path}'. Permission denied.")
+            try:
+                shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
+            except shutil.Error as e:
+                raise IOError(f"Error copying project to destination folder: {str(e)}")
             project_folder = dest_folder_path  # Update project_folder to the new destination
 
         if plan_numbers:

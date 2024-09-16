@@ -1,11 +1,13 @@
 """
 Utility functions for the ras_commander library.
 """
+import os
 import shutil
 import logging
 import time
 from pathlib import Path
 from .RasPrj import ras
+from typing import Union
 
 class RasUtils:
     """
@@ -167,25 +169,35 @@ class RasUtils:
             return None
 
     @staticmethod
-    def get_plan_path(current_plan_number: int, ras_object=None) -> Path:
+    def get_plan_path(current_plan_number_or_path: Union[str, Path], ras_object=None) -> Path:
         """
-        Get the path for a plan file with a given plan number.
+        Get the path for a plan file with a given plan number or path.
 
         Parameters:
-        current_plan_number (int): The plan number (1 to 99)
+        current_plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
         ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
 
         Returns:
-        Path: Full path to the plan file with the given plan number
+        Path: Full path to the plan file
 
         Example:
         >>> plan_path = RasUtils.get_plan_path(1)
+        >>> print(f"Plan file path: {plan_path}")
+        >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
         >>> print(f"Plan file path: {plan_path}")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
-        current_plan_number = f"{int(current_plan_number):02d}"  # Ensure two-digit format
+        plan_path = Path(current_plan_number_or_path)
+        if plan_path.is_file():
+            return plan_path
+        
+        try:
+            current_plan_number = f"{int(current_plan_number_or_path):02d}"  # Ensure two-digit format
+        except ValueError:
+            raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
+        
         plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
         return ras_obj.project_folder / plan_name
 
@@ -231,12 +243,12 @@ class RasUtils:
         return False
 
     @staticmethod
-    def update_plan_file(plan_number: int, file_type: str, entry_number: int, ras_object=None) -> None:
+    def update_plan_file(plan_number_or_path: Union[str, Path], file_type: str, entry_number: int, ras_object=None) -> None:
         """
         Update a plan file with a new file reference.
 
         Parameters:
-        plan_number (int): The plan number (1 to 99)
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
         file_type (str): Type of file to update ('Geom', 'Flow', or 'Unsteady')
         entry_number (int): Number (from 1 to 99) to set
         ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
@@ -247,6 +259,7 @@ class RasUtils:
 
         Example:
         >>> update_plan_entries(1, "Geom", 2)
+        >>> update_plan_entries("path/to/plan.p01", "Geom", 2)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -255,7 +268,10 @@ class RasUtils:
         if file_type not in valid_file_types:
             raise ValueError(f"Invalid file_type. Expected one of: {', '.join(valid_file_types.keys())}")
 
-        plan_file_path = RasUtils.get_plan_path(plan_number, ras_object)
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+        
         if not plan_file_path.exists():
             raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
 
@@ -263,7 +279,8 @@ class RasUtils:
         search_pattern = f"{file_type} File="
         entry_number = f"{int(entry_number):02d}"  # Ensure two-digit format
 
-        with plan_file_path.open('r') as file:
+        RasUtils.check_file_access(plan_file_path, 'r')
+        with open(plan_file_path, 'r') as file:
             lines = file.readlines()
 
         for i, line in enumerate(lines):
@@ -280,4 +297,14 @@ class RasUtils:
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    def check_file_access(file_path, mode='r'):
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        if mode in ('r', 'rb') and not os.access(path, os.R_OK):
+            raise PermissionError(f"Read permission denied for file: {file_path}")
+        if mode in ('w', 'wb', 'a', 'ab') and not os.access(path.parent, os.W_OK):
+            raise PermissionError(f"Write permission denied for directory: {path.parent}")
 

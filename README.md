@@ -1,161 +1,4 @@
-## RAS-Commander Library Organization
-
-| Directory/File | Purpose |
-|---|---|
-| ras_commander/__init__.py | Initializes the library and defines the public API. |
-| ras_commander/RasCommander.py | Handles execution of HEC-RAS simulations. |
-| ras_commander/RasFileOps.py | Provides functions for reading and parsing HEC-RAS project files. |
-| ras_commander/RasGeo.py | Provides functions for manipulating geometry files. |
-| ras_commander/RasPlan.py | Provides functions for modifying and updating plan files. |
-| ras_commander/RasPrj.py | Defines the RasPrj class for managing project-level information. |
-| ras_commander/rasinit.py | Provides the `init_ras_project` function to initialize a project. |
-| ras_commander/RasPrj.py | Provides functions for managing HEC-RAS projects (e.g., copying files, updating project file). |
-| ras_commander/RasUnsteady.py | Provides functions for manipulating unsteady flow files. |
-| ras_commander/RasUtils.py | Provides general utility functions (e.g., file backup, directory creation). |
-
-## Project Organization Diagram
-
-```
-ras_commander
-├── .github
-│   └── workflows
-│       └── python-package.yml
-├── ras_commander
-│   ├── __init__.py
-│   ├── RasCommander.py
-│   ├── RasFileOps.py
-│   ├── RasGeo.py
-│   ├── RasPlan.py
-│   ├── RasPrj.py
-│   ├── rasinit.py
-│   ├── RasPrj.py
-│   ├── RasUnsteady.py
-│   └── RasUtils.py
-├── tests
-│   └── ... (test files)
-├── .gitignore
-├── LICENSE
-├── README.md
-├── pyproject.toml
-├── setup.cfg
-└── setup.py
-```
-
-## Functions Overview
-
-| Function | Arguments | Purpose |
-|---|---|---|
-| `init_ras_project` | `ras_project_folder`, `ras_exe_path` | Initializes a HEC-RAS project by setting up the `RasPrj` with project details. |
-| `compute_plan` | `plan_file` | Executes a HEC-RAS plan file. |
-| `compute_plan_from_folder` | `test_plan_file`, `test_folder_path` | Execute a single HEC-RAS plan from a folder other than the project path. |
-| `compute_test_mode` | `project_folder` | Recreates the -test function from the HEC-RAS interface, primarily by copying the project directory, forcing recomputation, and running each plan. |
-| `compute_parallel` | `config`, `max_workers`, `cores_per_run` | Run HEC-RAS plans in parallel. |
-| `compute_parallel_all` | `project_folder`, `ras_exe_path` | Run all HEC-RAS plans in parallel from a project folder path. | 
-
-[The rest of the function list remains the same, just ensure the class names are updated to their new lowercase versions]
-
-## Potential Uses of RAS-Commander Functions
-
-[This section remains unchanged]
-
-## GitHub Actions
-
-[This section remains unchanged]
-
-## Basic Usage Instructions
-
-To get started with RAS-Commander, follow these steps:
-
-1. Install the library:
-   ```
-   pip install ras-commander
-   ```
-
-2. Import the necessary modules:
-   ```python
-   from ras_commander import rasinit, RasFileOps, RasPrj, RasPlan, RasGeo, RasUnsteady, RasCommander, RasUtils
-   ```
-
-3. Initialize a HEC-RAS project:
-   ```python
-   project_folder = r"C:\path\to\your\project"
-   ras_exe_path = r"C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe"
-   config = rasinit(project_folder, ras_exe_path)
-   ```
-
-4. Perform operations on your HEC-RAS project. For example:
-
-   - Execute a single plan:
-     ```python
-     plan_file = RasPlan.get_plan_path("01")
-     RasCommander.compute_plan(plan_file)
-     ```
-
-   - Run multiple plans in parallel:
-     ```python
-     max_workers = 2
-     cores_per_run = 1
-     results = RasCommander.compute_parallel(config, max_workers, cores_per_run)
-     ```
-
-   - Copy and modify geometry files:
-     ```python
-     RasGeo.clone_geom(config.project_folder, "01")
-     plan_file = RasPlan.get_plan_path("01")
-     RasGeo.set_geom(plan_file, "02")
-     ```
-
-   - Work with unsteady flow files:
-     ```python
-     new_unsteady_number = RasUnsteady.clone_unsteady(config.project_folder, "01")
-     plan_file = RasPlan.get_plan_path("01")
-     RasUnsteady.set_unsteady(plan_file, new_unsteady_number)
-     ```
-
-5. Access project information:
-   ```python
-   print(f"Project name: {config.project_name}")
-   print(f"Project file: {config.prj_file}")
-   print(f"Project folder: {config.project_folder}")
-   ```
-
-For more detailed examples and advanced usage, refer to the function documentation and the examples provided in the repository.
-
-
-
-
-NOTES: INCORPORATE INTO THE README.MD FILE ABOVE UNDER A NEW SECTION FOR CURRENT USES AND ROADMAP ITEMS, THEN DELETE THIS NOTE
-
-
-Potential Uses of HEC-RAS Automation Functions
-This set of functions provides a powerful foundation for automating various aspects of HEC-RAS modeling workflows. Here are some potential applications:
-1. Calibration and Sensitivity Analysis:
-Automated Parameter Variation: Users can create multiple simulation scenarios with varying parameters (e.g., Manning's n values, boundary conditions, initial conditions) to calibrate their model against observed data.
-Sensitivity Testing: Evaluate the impact of different input parameters on model outputs by generating a range of scenarios and analyzing the results. This helps identify critical parameters that require more attention during calibration.
-2. Real-time Forecasting:
-Dynamic Model Updates: Integrate with external data sources (e.g., weather forecasts, streamflow observations) to automatically update boundary conditions and initial conditions in unsteady flow files before running the simulation.
-Ensemble Forecasting: Generate multiple forecasts by incorporating uncertainty in input data and model parameters. This provides a more comprehensive understanding of potential future flow conditions.
-3. Scenario Analysis:
-Land Use Change Impacts: Evaluate the effects of land use changes on flood risk by modifying Manning's n values using extract_2d_mannings_tables, modify_2d_mannings_table, and write_2d_mannings_tables and running simulations with updated geometry files.
-Climate Change Impacts: Analyze the potential impacts of projected climate changes on flood risk by adjusting precipitation patterns and other relevant parameters in unsteady flow files.
-4. Batch Processing and High-Performance Computing:
-Large-scale Model Runs: Utilize run_plans_parallel to execute multiple simulations concurrently on a multi-core system, significantly reducing processing time for large-scale models or complex scenarios.
-Automated Report Generation: Integrate with Python libraries like matplotlib and bokeh to automatically generate customized reports summarizing simulation results, including tables, figures, and maps.
-5. Model Development and Testing:
-Rapid Prototyping: Quickly set up and run new model configurations using template files and automated workflows, facilitating rapid model development and testing.
-Regression Testing: Ensure model integrity and consistency after code changes or updates by automatically running a predefined set of simulations and comparing results with expected outputs.
-6. User-Friendly Interfaces:
-GUI Development: Integrate with Python GUI libraries like Tkinter or PyQt to create user-friendly interfaces for automating HEC-RAS workflows, allowing non-programmers to access the power of automation.
-
-
-
-
-
-
-Certainly! I'll create an updated README.md for the ras_commander library, incorporating the information you've provided and the context from the previous HEC-Commander tools. Here's the updated README.md:
-
-```markdown
-# ras_commander
+# RAS-Commander (ras_commander)
 
 ras_commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RAS-Commander 1.0 Python Notebook Application previously released under the HEC-Commander tools.
 
@@ -173,13 +16,13 @@ ras_commander is a Python library for automating HEC-RAS operations, providing a
 Install ras_commander using pip:
 
 ```bash
-pip install ras_commander
+pip install ras-commander
 ```
 
 ## Requirements
 
 - Python 3.9+
-- HEC-RAS 6.5 (other versions may work but are not officially supported)
+- HEC-RAS 6.2 or later (other versions may work, all testing was done with version 6.2 and above)
 
 For a full list of dependencies, see the `requirements.txt` file.
 
@@ -284,9 +127,10 @@ ras_commander
 ├── setup.cfg
 ├── setup.py
 └── requirements.txt
+```
 
 
-## Inclusion of .cursorrules for AI-driven Coding Experience
+## Inclusion of .cursorrules and ai_tools for AI-driven Coding Experience
 
 Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions.  Additionally, two other provided methods for interacting with the library though your current AI subscriptions: 
 
@@ -295,6 +139,7 @@ Open the ras_commander folder in the Cursor IDE, and it will automatically inclu
    - Entire code base: LINK HERE (TOKEN COUNT) (for Claude or Gemini)
    - Examples and Function Docstrings Only: LINK HERE (TOKEN COUNT) (for GPT-4o, o1 or Llama 3.1 405b)
 - Cursor IDE through .cursorrules file
+- 'rascommander_code_assistant.ipynb' notebook in the ras_commander folder, which allows for dynamic summarization of the code base and API chatting directly through the notebook. 
 
 There are a series of scripts provided in the "llm_summaries" folder that provide summaries of the code base, and the docstrings of the functions.  They can be run in your local environment, or provided to ChatGPT's code interpreter for execution.  
 
@@ -311,8 +156,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
 
 
-
-
 ## License
 
 ras_commander is released under the MIT License. See the license file for details.
@@ -327,3 +170,36 @@ ras_commander is based on the HEC-Commander project's "Command Line is All You N
 
 For questions, suggestions, or support, please contact:
 William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
+
+
+
+
+
+
+
+
+
+NOTES: INCORPORATE INTO THE README.MD FILE ABOVE UNDER A NEW SECTION FOR CURRENT USES AND ROADMAP ITEMS, THEN DELETE THIS NOTE
+
+
+Potential Uses of HEC-RAS Automation Functions
+This set of functions provides a powerful foundation for automating various aspects of HEC-RAS modeling workflows. Here are some potential applications:
+1. Calibration and Sensitivity Analysis:
+Automated Parameter Variation: Users can create multiple simulation scenarios with varying parameters (e.g., Manning's n values, boundary conditions, initial conditions) to calibrate their model against observed data.
+Sensitivity Testing: Evaluate the impact of different input parameters on model outputs by generating a range of scenarios and analyzing the results. This helps identify critical parameters that require more attention during calibration.
+2. Real-time Forecasting:
+Dynamic Model Updates: Integrate with external data sources (e.g., weather forecasts, streamflow observations) to automatically update boundary conditions and initial conditions in unsteady flow files before running the simulation.
+Ensemble Forecasting: Generate multiple forecasts by incorporating uncertainty in input data and model parameters. This provides a more comprehensive understanding of potential future flow conditions.
+3. Scenario Analysis:
+Land Use Change Impacts: Evaluate the effects of land use changes on flood risk by modifying Manning's n values using extract_2d_mannings_tables, modify_2d_mannings_table, and write_2d_mannings_tables and running simulations with updated geometry files.
+Climate Change Impacts: Analyze the potential impacts of projected climate changes on flood risk by adjusting precipitation patterns and other relevant parameters in unsteady flow files.
+4. Batch Processing and High-Performance Computing:
+Large-scale Model Runs: Utilize run_plans_parallel to execute multiple simulations concurrently on a multi-core system, significantly reducing processing time for large-scale models or complex scenarios.
+Automated Report Generation: Integrate with Python libraries like matplotlib and bokeh to automatically generate customized reports summarizing simulation results, including tables, figures, and maps.
+5. Model Development and Testing:
+Rapid Prototyping: Quickly set up and run new model configurations using template files and automated workflows, facilitating rapid model development and testing.
+Regression Testing: Ensure model integrity and consistency after code changes or updates by automatically running a predefined set of simulations and comparing results with expected outputs.
+6. User-Friendly Interfaces:
+GUI Development: Integrate with Python GUI libraries like Tkinter or PyQt to create user-friendly interfaces for automating HEC-RAS workflows, allowing non-programmers to access the power of automation.
+
+

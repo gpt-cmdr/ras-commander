@@ -134,7 +134,19 @@ def main():
     print()
     
     # Step 9: Get the HDF entries for the cloned plan to prove that the results were written
-    print(ras.get_hdf_entries())
+    print("Step 9: Retrieving HDF entries for the cloned plan")
+    # Refresh the plan entries to ensure we have the latest data
+    ras.plan_df = ras.get_plan_entries()
+    hdf_entries = ras.get_hdf_entries()
+    if not hdf_entries.empty:
+        print("HDF entries for the cloned plan:")
+        print(hdf_entries)
+    else:
+        print("No HDF entries found. This could mean the plan hasn't been computed successfully or the results haven't been written yet.")
+    
+    # Display the plan entries to see if the HDF path is populated
+    print("\nCurrent plan entries:")
+    print(ras.plan_df)
     
 if __name__ == "__main__":
     main()

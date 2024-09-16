@@ -33,8 +33,14 @@ class RasUnsteady:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         unsteady_path = Path(unsteady_file)
-        with open(unsteady_path, 'r') as f:
-            lines = f.readlines()
+        try:
+            with open(unsteady_path, 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        except PermissionError:
+            raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+        
         updated = False
         for i, line in enumerate(lines):
             for param, new_value in modifications.items():
@@ -43,8 +49,13 @@ class RasUnsteady:
                     updated = True
                     print(f"Updated {param} to {new_value}")
         if updated:
-            with open(unsteady_path, 'w') as f:
-                f.writelines(lines)
+            try:
+                with open(unsteady_path, 'w') as f:
+                    f.writelines(lines)
+            except PermissionError:
+                raise PermissionError(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+            except IOError as e:
+                raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
             print(f"Applied modifications to {unsteady_file}")
         else:
             print(f"No matching parameters found in {unsteady_file}")

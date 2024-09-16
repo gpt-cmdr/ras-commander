@@ -62,8 +62,10 @@ def main():
     # Step 2: Clone a geometry file and assign it to the cloned plan
     print("Step 2: Cloning a geometry file and assigning it to the cloned plan")
     new_geom_number = RasPlan.clone_geom("01")
+    print(f"New geometry created: {new_geom_number}")
+    print(f"Now set the new geometry to the new plan")
     RasPlan.set_geom(new_plan_number, new_geom_number)
-    print(f"New geometry created: {new_geom_number} and assigned to plan {new_plan_number}")
+    print(f"New geometry {new_geom_number} assigned to plan {new_plan_number}")
     print("Updated geometry files:")
     print(ras.geom_df)
     print()
@@ -95,6 +97,16 @@ def main():
         print(f"Plan {new_plan_number} computed successfully")
     else:
         print(f"Failed to compute plan {new_plan_number}")
+        
+    # Step 7: Get and print results paths
+    print("\nStep 7: Getting results paths")
+    for plan_number in [new_plan_number, "01"]:  # Check both the new plan and the original plan
+        results_path = RasPlan.get_results_path(plan_number)
+        if results_path:
+            print(f"Results for plan {plan_number} are located at: {results_path}")
+        else:
+            print(f"No results found for plan {plan_number}")
+        
 
 if __name__ == "__main__":
     main()

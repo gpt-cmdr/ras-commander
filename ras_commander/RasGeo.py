@@ -61,9 +61,14 @@ class RasGeo:
             geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
             geom_preprocessor_file = plan_path.with_suffix(geom_preprocessor_suffix)
             if geom_preprocessor_file.exists():
-                print(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
-                geom_preprocessor_file.unlink()
-                print("File deletion completed successfully.")
+                try:
+                    print(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
+                    geom_preprocessor_file.unlink()
+                    print("File deletion completed successfully.")
+                except PermissionError:
+                    raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
+                except OSError as e:
+                    raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
             else:
                 print(f"No geometry preprocessor file found for: {plan_file}")
         

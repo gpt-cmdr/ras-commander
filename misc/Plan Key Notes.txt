@@ -1,0 +1,161 @@
+
+# HEC-RAS Plan File Key Comparison: Steady vs Unsteady Flow
+
+## Key Differences
+
+1. Plan Title: As expected, this differs between the two files.
+2. Short Identifier: Different for each plan.
+3. Flow File: Changed from 'u02' in the unsteady plan to 'f02' in the steady plan.
+
+## Keys Present in Both Files
+
+The majority of keys are present in both files, including all computational parameters, output settings, and hydraulic modeling options.
+
+## Keys Unique to Steady Flow Plan (BaldEagle.p02)
+
+No keys were found to be unique to the steady flow plan.
+
+## Keys Unique to Unsteady Flow Plan (BaldEagle.p01)
+
+No keys were found to be unique to the unsteady flow plan.
+
+## Notable Value Differences
+
+While not part of the key structure, some notable value differences include:
+
+1. Global Vel Dist: Changed from '0 , 0 , 0' to '15 , 15 , 15'
+2. Friction Slope Method: Changed from '2' to '1'
+3. UNET MaxInSteps: Changed from '0' to '20'
+4. UNET D2 RampUpFraction: Changed from '0.5' to '0.1'
+5. UNET D2 Eddy Viscosity and UNET D2 Transverse Eddy Viscosity: These have specific values in the steady plan but were empty in the unsteady plan.
+6. Sediment Output Level: Changed from '4' to '3'
+7. Profile and TS Output Increment: Changed from '10' to '1'
+8. Write HDF5 File: Changed from '0' to '1'
+
+## Conclusion
+
+The key structure between the steady and unsteady flow plans is remarkably consistent. The main differences lie in the specific values assigned to certain keys rather than in the presence or absence of keys. This suggests that the HEC-RAS software uses a unified file structure for both steady and unsteady flow plans, with the differences in simulation type being controlled by the specific parameter values rather than by fundamentally different file structures.
+
+
+# HEC-RAS 2D Plan File Key Comparison
+
+## New Keys Specific to 2D Plan
+
+1. UNET D2 Name
+2. Breach Loc (multiple entries)
+3. Breach Method
+4. Breach Geom
+5. Breach Start
+6. Breach Progression
+7. Simplified Physical Breach Downcutting
+8. Simplified Physical Breach Widening
+9. Mass Wasting Options
+10. Breach Use User Defined Growth Ratio
+11. Breach User Defined Growth Ratio
+12. DLBreach Methods
+13. DLBreach SoilType
+14. DLBreach Soil Properties
+15. DLBreach Core SoilType
+16. DLBreach Cover Option
+17. DLBreach Cover Soil Properties
+18. DLBreach Breach Direction
+19. ADH Filename
+20. ADH Link
+
+## Keys with Expanded Information
+
+1. UNET D2 Cores: Present in previous plans, but now has a specific value (6)
+2. UNET D2 SolverType: Now specifies "Pardiso (Direct)"
+3. UNET D2 Turbulence Formulation: Now set to "None"
+4. UNET D2 Smagorinsky Mixing: Now has a specific value (0.05)
+
+## Keys with Different Default Values
+
+1. UNET ZSATol: Changed from 0.1 to 0.01
+2. UNET WFX: Changed from 1 to 3
+3. UNET Froude Limit: Changed from 0.8 to 1
+4. UNET Froude Power: Changed from 4 to 10
+5. Calibration Iterations: Changed from 20 to 100
+6. Calibration Tolerance: Changed from 0.2 to 0.01
+7. Calibration Optimization Method: Changed from 1 to 0
+
+## New Sections
+
+1. Detailed Breach Parameters: Multiple sections detailing breach locations and properties
+2. ADH (Adaptive Hydraulics) Parameters: New section at the end of the file
+
+## Conclusion
+
+The 2D plan file introduces several new keys related to breach modeling and 2D flow calculations. It also includes more detailed parameters for certain existing keys, particularly those related to UNET D2 (2D) calculations. The presence of breach-related keys suggests that this plan includes levee or dam breach scenarios, which are often modeled in 2D. The ADH-related keys at the end of the file indicate integration with Adaptive Hydraulics modeling, which is a capability often used in conjunction with 2D modeling in HEC-RAS.
+
+The overall structure of the file remains similar to the 1D plans, with most of the basic hydraulic and computational parameters still present. However, the 2D plan file includes significantly more detail related to 2D modeling and breach scenarios.
+
+
+
+# HEC-RAS Plan Extraction Strategy Addendum
+
+## Similarities Across Plan Types
+
+1. Basic Structure: All plan types (steady, unsteady, 1D, and 2D) maintain a similar overall structure with key-value pairs.
+2. Common Keys: Many keys are shared across all plan types, including basic project information, computational parameters, and output settings.
+3. Version Consistency: The key structure remains consistent across different HEC-RAS versions, with differences primarily in values rather than key names.
+
+## Key Differences in 2D Plans
+
+While 2D plans share many keys with 1D plans, they introduce several new keys and sections:
+
+1. 2D Specific Keys:
+   - UNET D2 Name
+   - UNET D2 Cores
+   - UNET D2 SolverType
+   - UNET D2 Turbulence Formulation
+   - UNET D2 Smagorinsky Mixing
+
+2. Breach Modeling Keys:
+   - Breach Loc (multiple entries)
+   - Breach Method
+   - Breach Geom
+   - Breach Start
+   - Breach Progression
+   - Simplified Physical Breach Downcutting
+   - Simplified Physical Breach Widening
+   - Mass Wasting Options
+   - Various DLBreach keys
+
+3. Adaptive Hydraulics (ADH) Keys:
+   - ADH Filename
+   - ADH Link
+
+## Updated Extraction Strategy
+
+1. Single Key-Value Pairs:
+   - Create a dictionary to store all single key-value pairs.
+   - Populate this dictionary for all plan types (steady, unsteady, 1D, 2D).
+   - Handle empty values consistently, storing them as None or an empty string.
+
+2. Multi-Key Pairs (e.g., Boundary Conditions, Breach Locations):
+   - Use pandas DataFrames to store multi-key pairs.
+   - Create separate DataFrames for different types of multi-key data (e.g., one for boundary conditions, another for breach locations).
+   - Ensure the DataFrame structure can accommodate data from all plan types.
+
+3. Plan Type Detection:
+   - Implement logic to detect the plan type (steady/unsteady, 1D/2D) based on the presence of specific keys.
+   - Use this detection to guide the extraction process, especially for 2D-specific keys.
+
+4. Consistent Extraction Process:
+   - Use a single extraction function that can handle all plan types.
+   - Within this function, use conditional logic to handle plan-type-specific keys and sections.
+
+5. Version Agnostic Approach:
+   - Design the extraction process to be version-agnostic, focusing on key names rather than specific values.
+   - Maintain a comprehensive list of all possible keys across versions and plan types.
+
+6. Handling 2D-Specific Data:
+   - For 2D-specific sections (like breach data), create dedicated DataFrames or nested dictionaries to capture the hierarchical structure.
+   - Ensure that the extraction process can handle the repetitive nature of certain 2D-specific sections (e.g., multiple breach locations).
+
+7. Error Handling and Logging:
+   - Implement robust error handling to manage unexpected key names or structures.
+   - Log any inconsistencies or unrecognized keys for further analysis.
+
+By following this updated strategy, we can create a flexible and comprehensive extraction process that handles all types of HEC-RAS plan files consistently, regardless of the simulation type or software version. The resulting data structure will provide easy access to both common and plan-specific parameters, facilitating further analysis and processing of HEC-RAS simulation data.

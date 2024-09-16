@@ -1,0 +1,278 @@
+Use consistent naming conventions throughout the library.
+
+Add robust file system checks and handling to prevent errors when working with directories and files.
+
+Implement better error handling and provide more informative error messages. (do not use logging)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Certainly. Here's a comprehensive set of instructions for a third party agent to implement the recommendations for updating the ras object after operations that modify the project structure:
+
+1. Locate the following functions in the RasPlan class:
+   - clone_geom()
+   - clone_plan()
+   - set_geom()
+   - set_steady()
+   - set_unsteady()
+   - set_num_cores()
+   - set_geom_preprocessor()
+
+2. For each of these functions, add the following lines at the end of the function, just before the return statement:
+   ```python
+   ras_obj = ras_object or ras
+   ras_obj.plan_df = ras_obj.get_plan_entries()
+   ras_obj.geom_df = ras_obj.get_geom_entries()
+   ras_obj.flow_df = ras_obj.get_flow_entries()
+   ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+   ```
+
+3. Locate the RasUnsteady.update_unsteady_parameters() function and add the following lines at the end:
+   ```python
+   ras_obj = ras_object or ras
+   ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+   ```
+
+4. Locate the RasGeo.clear_geompre_files() function and add the following lines at the end:
+   ```python
+   ras_obj = ras_object or ras
+   ras_obj.geom_df = ras_obj.get_geom_entries()
+   ```
+
+5. In the RasCommander class, locate the compute_plan() and compute_test_mode() functions. At the end of each function, add:
+   ```python
+   ras_obj = ras_object or ras
+   ras_obj.plan_df = ras_obj.get_plan_entries()
+   ras_obj.geom_df = ras_obj.get_geom_entries()
+   ras_obj.flow_df = ras_obj.get_flow_entries()
+   ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+   ```
+
+6. For the RasCommander.compute_parallel() function, add the following lines just before starting each worker thread:
+   ```python
+   worker_ras_instance.plan_df = worker_ras_instance.get_plan_entries()
+   worker_ras_instance.geom_df = worker_ras_instance.get_geom_entries()
+   worker_ras_instance.flow_df = worker_ras_instance.get_flow_entries()
+   worker_ras_instance.unsteady_df = worker_ras_instance.get_unsteady_entries()
+   ```
+
+7. In each function where you've added these updates, ensure that the `ras_object` parameter is properly handled. If it's not already present in the function signature, add it with a default value of None:
+   ```python
+   def function_name(self, ..., ras_object=None):
+   ```
+
+8. At the beginning of each function where you've added these updates, add the following line if it's not already present:
+   ```python
+   ras_obj = ras_object or ras
+   ```
+
+9. Review all functions in the RasUtils class. For any function that modifies project files, add the appropriate dataframe update lines as shown in steps 2-5.
+
+10. After implementing these changes, thoroughly test each modified function to ensure it correctly updates the ras object and doesn't introduce any new errors.
+
+11. Update the docstrings of all modified functions to indicate that they now update the ras object's dataframes.
+
+By following these instructions, the third party agent should be able to implement the recommendations for updating the ras object after operations that modify the project structure, addressing the "Not updating the ras object after cloning operations" issue.
+
+
+
+
+
+
+
+
+
+
+Certainly. Here are specific examples of inconsistencies in naming conventions that should be addressed to improve the library's consistency:
+
+1. Plan number column:
+   - In some places, it's referred to as 'Plan'
+   - In others, it's 'plan_number'
+   Recommendation: Consistently use 'plan_number' throughout the library.
+
+   Example:
+   Change:
+   ```python
+   all_plan_numbers = ras.plan_df['Plan'].tolist()
+   ```
+   To:
+   ```python
+   all_plan_numbers = ras.plan_df['plan_number'].tolist()
+   ```
+
+2. Geometry number column:
+   - Sometimes it's 'Geom'
+   - Other times it's 'geom_number'
+   Recommendation: Consistently use 'geom_number'.
+
+3. Function naming for getting file paths:
+   - RasPlan.get_plan_path()
+   - RasPlan.get_geom_path()
+   - But then: RasUtils.get_file_path()
+   Recommendation: Move all path-getting functions to RasUtils and use consistent naming:
+   - RasUtils.get_plan_path()
+   - RasUtils.get_geom_path()
+   - RasUtils.get_flow_path()
+   - RasUtils.get_unsteady_path()
+
+4. Capitalization in method names:
+   - Some use camelCase: computePlan()
+   - Others use snake_case: compute_plan()
+   Recommendation: Consistently use snake_case for method names as per PEP 8.
+
+5. Parameter naming:
+   - Some functions use 'plan_number'
+   - Others use 'plan_num' or 'planNum'
+   Recommendation: Consistently use 'plan_number' for clarity.
+
+6. File type identifiers:
+   - Sometimes 'p' for plan files
+   - Other times 'plan'
+   Recommendation: Consistently use single-letter identifiers ('p' for plan, 'g' for geometry, etc.)
+
+7. Boolean parameter naming:
+   - Some use 'clear_geompre'
+   - Others might use 'clearGeomPre' or 'clear_geometry_preprocessor'
+   Recommendation: Consistently use descriptive snake_case names like 'clear_geom_preprocessor'
+
+
+By addressing these specific inconsistencies, the library will become more uniform and easier to understand and use. Remember to update all relevant documentation and comments when making these changes to maintain clarity throughout the codebase.
+
+
+
+
+
+
+
+
+
+Certainly. Here are specific examples from the ras_commander library where we can add robust file system checks and handling:
+
+1. In RasCommander.compute_parallel():
+   Current code:
+   ```python
+   if dest_folder is not None:
+       dest_folder_path = Path(dest_folder)
+       if dest_folder_path.exists() and any(dest_folder_path.iterdir()):
+           raise ValueError(f"Destination folder '{dest_folder_path}' exists and is not empty.")
+       shutil.copytree(project_folder, dest_folder_path)
+   ```
+   Improved version:
+   ```python
+   if dest_folder is not None:
+       dest_folder_path = Path(dest_folder)
+       if dest_folder_path.exists():
+           if any(dest_folder_path.iterdir()):
+               raise ValueError(f"Destination folder '{dest_folder_path}' exists and is not empty.")
+       else:
+           try:
+               dest_folder_path.mkdir(parents=True, exist_ok=True)
+           except PermissionError:
+               raise PermissionError(f"Unable to create destination folder '{dest_folder_path}'. Permission denied.")
+       try:
+           shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
+       except shutil.Error as e:
+           raise IOError(f"Error copying project to destination folder: {str(e)}")
+   ```
+
+2. In RasPlan.clone_plan():
+   Current code:
+   ```python
+   shutil.copy(template_plan_path, new_plan_path)
+   ```
+   Improved version:
+   ```python
+   try:
+       shutil.copy2(template_plan_path, new_plan_path)
+   except FileNotFoundError:
+       raise FileNotFoundError(f"Template plan file not found: {template_plan_path}")
+   except PermissionError:
+       raise PermissionError(f"Permission denied when copying plan file to {new_plan_path}")
+   except shutil.SameFileError:
+       raise ValueError(f"Cannot clone plan to itself: {template_plan_path}")
+   ```
+
+3. In RasGeo.clear_geompre_files():
+   Current code:
+   ```python
+   if geom_preprocessor_file.exists():
+       geom_preprocessor_file.unlink()
+   ```
+   Improved version:
+   ```python
+   if geom_preprocessor_file.exists():
+       try:
+           geom_preprocessor_file.unlink()
+       except PermissionError:
+           raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
+       except OSError as e:
+           raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
+   ```
+
+4. In RasUnsteady.update_unsteady_parameters():
+   Current code:
+   ```python
+   with open(unsteady_path, 'r') as f:
+       lines = f.readlines()
+   # ... (processing)
+   with open(unsteady_path, 'w') as f:
+       f.writelines(lines)
+   ```
+   Improved version:
+   ```python
+   try:
+       with open(unsteady_path, 'r') as f:
+           lines = f.readlines()
+   except FileNotFoundError:
+       raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+   except PermissionError:
+       raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+   
+   # ... (processing)
+   
+   try:
+       with open(unsteady_path, 'w') as f:
+           f.writelines(lines)
+   except PermissionError:
+       raise PermissionError(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+   except IOError as e:
+       raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+   ```
+
+5. Add a utility function in RasUtils for checking file existence and permissions:
+   ```python
+   @staticmethod
+   def check_file_access(file_path, mode='r'):
+       path = Path(file_path)
+       if not path.exists():
+           raise FileNotFoundError(f"File not found: {file_path}")
+       if mode in ('r', 'rb') and not os.access(path, os.R_OK):
+           raise PermissionError(f"Read permission denied for file: {file_path}")
+       if mode in ('w', 'wb', 'a', 'ab') and not os.access(path.parent, os.W_OK):
+           raise PermissionError(f"Write permission denied for directory: {path.parent}")
+   ```
+
+   Use this utility function before file operations, e.g.:
+   ```python
+   RasUtils.check_file_access(plan_file_path, 'r')
+   with open(plan_file_path, 'r') as f:
+       # file operations
+   ```
+
+These improvements add robust checks for file existence, permissions, and handling of potential errors during file system operations. They provide more informative error messages and handle common file system-related exceptions, making the library more resilient and user-friendly.
