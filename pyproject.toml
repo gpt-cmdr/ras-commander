@@ -19,7 +19,7 @@ classifiers = [
 Homepage = "https://github.com/yourusername/ras_commander"
 
 [tool.setuptools_scm]
-local_scheme = "no-local-version"
+version_scheme = "post-release"
 write_to = "ras_commander/_version.py"
 
 [tool.setuptools]
