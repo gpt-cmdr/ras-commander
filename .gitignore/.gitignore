@@ -1,0 +1,8 @@
+# Ignore the example_projects folder and all its subfolders
+example_projects/
+
+# Ignore the Example_Projects_6_5.zip file
+Example_Projects_6_5.zip
+
+# Ignore the misc folder and all its subfolders
+misc/

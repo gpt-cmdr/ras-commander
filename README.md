@@ -3,118 +3,327 @@
 | Directory/File | Purpose |
 |---|---|
 | ras_commander/__init__.py | Initializes the library and defines the public API. |
-| ras_commander/execution.py | Handles execution of HEC-RAS simulations. |
-| ras_commander/file_operations.py | Provides functions for reading and parsing HEC-RAS project files. |
-| ras_commander/geometry_operations.py | Provides functions for manipulating geometry files. |
-| ras_commander/plan_operations.py | Provides functions for modifying and updating plan files. |
-| ras_commander/project_config.py | Defines the ProjectConfig class for managing project-level information. |
-| ras_commander/project_init.py | Provides the `init_ras_project` function to initialize a project. |
-| ras_commander/project_management.py | Provides functions for managing HEC-RAS projects (e.g., copying files, updating project file). |
-| ras_commander/project_setup.py | Provides helper functions for project setup (e.g., finding project file, loading project data). |
-| ras_commander/unsteady_operations.py | Provides functions for manipulating unsteady flow files. |
-| ras_commander/utilities.py | Provides general utility functions (e.g., file backup, directory creation). |
-
+| ras_commander/RasCommander.py | Handles execution of HEC-RAS simulations. |
+| ras_commander/RasFileOps.py | Provides functions for reading and parsing HEC-RAS project files. |
+| ras_commander/RasGeo.py | Provides functions for manipulating geometry files. |
+| ras_commander/RasPlan.py | Provides functions for modifying and updating plan files. |
+| ras_commander/RasPrj.py | Defines the RasPrj class for managing project-level information. |
+| ras_commander/rasinit.py | Provides the `init_ras_project` function to initialize a project. |
+| ras_commander/RasPrj.py | Provides functions for managing HEC-RAS projects (e.g., copying files, updating project file). |
+| ras_commander/RasUnsteady.py | Provides functions for manipulating unsteady flow files. |
+| ras_commander/RasUtils.py | Provides general utility functions (e.g., file backup, directory creation). |
 
 ## Project Organization Diagram
 
 ```
 ras_commander
-├── execution.py
-├── file_operations.py
-├── geometry_operations.py
-├── plan_operations.py
-├── project_config.py
-├── project_init.py
-├── project_management.py
-├── project_setup.py
-├── unsteady_operations.py
-└── utilities.py
+├── .github
+│   └── workflows
+│       └── python-package.yml
+├── ras_commander
+│   ├── __init__.py
+│   ├── RasCommander.py
+│   ├── RasFileOps.py
+│   ├── RasGeo.py
+│   ├── RasPlan.py
+│   ├── RasPrj.py
+│   ├── rasinit.py
+│   ├── RasPrj.py
+│   ├── RasUnsteady.py
+│   └── RasUtils.py
+├── tests
+│   └── ... (test files)
+├── .gitignore
+├── LICENSE
+├── README.md
+├── pyproject.toml
+├── setup.cfg
+└── setup.py
 ```
 
 ## Functions Overview
 
 | Function | Arguments | Purpose |
 |---|---|---|
-| `init_ras_project` | `ras_project_folder`, `hecras_exe_path` | Initializes a HEC-RAS project by setting up the `ProjectConfig` with project details. |
-| `compute_hecras_plan` | `plan_file` | Executes a HEC-RAS plan file. |
-| `compute_hecras_plan_from_folder` | `test_plan_file`, `test_folder_path` | Execute a single HEC-RAS plan from a folder other than the project path.
-| `recreate_test_function` | `project_folder` | Recreates the -test function from the HEC-RAS interface, primarily by copying the project directory, forcing recomputation, and running each plan. |
-| `run_plans_parallel` | `config`, `max_workers`, `cores_per_run` | Run HEC-RAS plans in parallel. |
-| `run_all_plans_parallel` | `project_folder`, `hecras_exe_path` | Run all HEC-RAS plans in parallel from a project folder path. | 
-| `find_hecras_project_file` | `folder_path` | Locates the HEC-RAS project file (.prj) within a given folder. |
-| `get_project_name` | `project_path` | Extracts the project name from the project file path. |
-| `get_plan_entries` | `project_file` | Parses the project file to extract plan file information into a DataFrame. |
-| `get_flow_entries` | `project_file` | Parses the project file to extract steady flow file information into a DataFrame. |
-| `get_unsteady_entries` | `project_file` | Parses the project file to extract unsteady flow file information into a DataFrame. |
-| `get_geom_entries` | `project_file` | Parses the project file to extract geometry file information into a DataFrame. |
-| `clear_geometry_preprocessor_files` | `plan_file` | Deletes the geometry preprocessor files (.cXX) associated with a plan file. |
-| `clear_geometry_preprocessor_files_for_all_plans` |  | Deletes geometry preprocessor files for all plans in the project directory. |
-| `copy_geometry_files` | `dst_folder`, `template_geom` | Copies geometry files from a template to a destination folder, assigning the next available geometry number. |
-| `rename_geometry_files` | `old_number`, `new_number` | Renames geometry files (both .gXX and .gXX.hdf) in the project folder. |
-| `update_geometry_reference_in_plan` | `plan_file`, `new_geometry_number` | Updates the "Geom File=" entry in a plan file to reference a new geometry number. |
-| `apply_geometry_to_plan` | `plan_file`, `geometry_number` | Sets the geometry file used by a plan file. |
-| `apply_flow_to_plan` | `plan_file`, `flow_number` | Sets the steady flow file used by a plan file. |
-| `copy_plan_from_template` | `template_plan` | Creates a new plan file by copying a template and updates the project file with the new plan entry. |
-| `get_next_available_number` | `existing_numbers` | Finds the next available number (e.g., for plans, unsteady flows) based on existing ones. |
-| `apply_unsteady_to_plan` | `plan_file`, `unsteady_number` | Sets the unsteady flow file used by a plan file. |
-| `set_num_cores` | `plan_file`, `num_cores` | Sets the maximum number of cores to be used for a plan file. |
-| `update_geompre_flags` | `file_path`, `run_htab_value`, `use_ib_tables_value` | Updates the geometry preprocessor flags in a plan file. |
-| `get_plan_full_path` | `plan_number` | Returns the full path to a plan file based on its number. |
-| `get_results_full_path` | `plan_number` | Returns the full path to a plan's results file (.hdf) based on its number. |
-| `get_flow_full_path` | `flow_number` | Returns the full path to a steady flow file based on its number. |
-| `get_unsteady_full_path` | `unsteady_number` | Returns the full path to an unsteady flow file based on its number. |
-| `get_geom_full_path` | `geometry_number` | Returns the full path to a geometry file based on its number. |
-| `copy_unsteady_files` | `dst_folder`, `template_unsteady` | Copies unsteady flow files from a template to a destination folder, assigning the next available unsteady number. |
-| `rename_unsteady_files` | `old_number`, `new_number` | Renames unsteady flow files (both .uXX and .uXX.hdf) in the project folder. |
-| `update_unsteady_reference_in_plan` | `plan_file`, `new_unsteady_number` | Updates the "Unsteady File=" entry in a plan file to reference a new unsteady flow number. |
-| `modify_unsteady_flow_parameters` | `unsteady_file`, `modifications` | Modifies parameters within an unsteady flow file based on a dictionary of changes. |
-| `create_backup` | `file_path`, `backup_suffix` | Creates a backup copy of a file. |
-| `restore_from_backup` | `backup_path`, `remove_backup` | Restores a file from a backup copy. |
-| `safe_remove` | `file_path` | Removes a file if it exists, handling potential errors. |
-| `ensure_directory` | `directory_path` | Creates a directory if it does not exist. |
-| `list_files_with_extension` | `extension` | Lists files with a specific extension in the project directory. |
-| `get_file_size` | `file_path` | Returns the size of a file in bytes. |
-| `get_modification_time` | `file_path` | Returns the last modification time of a file. |
-| `get_plan_path` | `current_plan_number` | Returns the full path to a plan file based on its number. |
-| `retry_remove_folder` | `folder_path`, `max_attempts`, `initial_delay` | Attempts to remove a folder with retry and a delay. |
+| `init_ras_project` | `ras_project_folder`, `ras_exe_path` | Initializes a HEC-RAS project by setting up the `RasPrj` with project details. |
+| `compute_plan` | `plan_file` | Executes a HEC-RAS plan file. |
+| `compute_plan_from_folder` | `test_plan_file`, `test_folder_path` | Execute a single HEC-RAS plan from a folder other than the project path. |
+| `compute_test_mode` | `project_folder` | Recreates the -test function from the HEC-RAS interface, primarily by copying the project directory, forcing recomputation, and running each plan. |
+| `compute_parallel` | `config`, `max_workers`, `cores_per_run` | Run HEC-RAS plans in parallel. |
+| `compute_parallel_all` | `project_folder`, `ras_exe_path` | Run all HEC-RAS plans in parallel from a project folder path. | 
 
-
+[The rest of the function list remains the same, just ensure the class names are updated to their new lowercase versions]
 
 ## Potential Uses of RAS-Commander Functions
 
-The RAS-Commander library offers a wide range of functionalities that can be used to automate various aspects of HEC-RAS modeling workflows. Here are some potential uses:
+[This section remains unchanged]
 
-**1. Automated Plan Creation and Execution:**
+## GitHub Actions
 
-* **Batch processing of multiple scenarios:** RAS-Commander allows you to create new plan files based on templates, modify plan parameters (e.g., geometry, flow, unsteady flow files, number of cores), and execute them in parallel. This can be useful for analyzing multiple scenarios with different inputs or model configurations.
-* **Sensitivity analysis and optimization:** By combining RAS-Commander with other libraries (e.g., for parameter sampling or optimization), you can automate sensitivity analysis and parameter optimization studies.
-* **Monte Carlo simulations:** RAS-Commander can be used to automate the execution of Monte Carlo simulations by creating multiple plan files with randomly sampled input parameters.
+[This section remains unchanged]
 
-**2. Project Management and Organization:**
+## Basic Usage Instructions
 
-* **Automated file management:** Functions for copying, renaming, and updating file references help maintain consistency and organization within your HEC-RAS project.
-* **Backup and restore functionalities:** Ensure project integrity by creating backups of project files and restoring them when needed.
-* **Project setup and initialization:** Streamline the process of setting up new HEC-RAS projects with standardized configurations.
+To get started with RAS-Commander, follow these steps:
 
-**3. Advanced Modeling Techniques:**
+1. Install the library:
+   ```
+   pip install ras-commander
+   ```
 
-* **Coupled modeling:** RAS-Commander can be used to automate the setup and execution of coupled models (e.g., HEC-RAS with other hydrodynamic or hydrologic models).
-* **Data assimilation and calibration:** By integrating RAS-Commander with data assimilation or calibration tools, you can automate the process of updating model parameters based on observed data.
-* **Post-processing and analysis:** RAS-Commander can be used to extract results from HEC-RAS output files and perform post-processing and analysis tasks.
+2. Import the necessary modules:
+   ```python
+   from ras_commander import rasinit, RasFileOps, RasPrj, RasPlan, RasGeo, RasUnsteady, RasCommander, RasUtils
+   ```
+
+3. Initialize a HEC-RAS project:
+   ```python
+   project_folder = r"C:\path\to\your\project"
+   ras_exe_path = r"C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe"
+   config = rasinit(project_folder, ras_exe_path)
+   ```
+
+4. Perform operations on your HEC-RAS project. For example:
+
+   - Execute a single plan:
+     ```python
+     plan_file = RasPlan.get_plan_path("01")
+     RasCommander.compute_plan(plan_file)
+     ```
+
+   - Run multiple plans in parallel:
+     ```python
+     max_workers = 2
+     cores_per_run = 1
+     results = RasCommander.compute_parallel(config, max_workers, cores_per_run)
+     ```
+
+   - Copy and modify geometry files:
+     ```python
+     RasGeo.clone_geom(config.project_folder, "01")
+     plan_file = RasPlan.get_plan_path("01")
+     RasGeo.set_geom(plan_file, "02")
+     ```
+
+   - Work with unsteady flow files:
+     ```python
+     new_unsteady_number = RasUnsteady.clone_unsteady(config.project_folder, "01")
+     plan_file = RasPlan.get_plan_path("01")
+     RasUnsteady.set_unsteady(plan_file, new_unsteady_number)
+     ```
+
+5. Access project information:
+   ```python
+   print(f"Project name: {config.project_name}")
+   print(f"Project file: {config.prj_file}")
+   print(f"Project folder: {config.project_folder}")
+   ```
+
+For more detailed examples and advanced usage, refer to the function documentation and the examples provided in the repository.
 
 
-**4. Integration with Other Tools:**
-
-* **Python scripting and automation:** RAS-Commander can be easily integrated into Python scripts and workflows for more complex automation tasks.
-* **Web applications and dashboards:** Develop web applications and dashboards that allow users to interact with HEC-RAS models and visualize results through a user-friendly interface.
-* **Integration with GIS software:** RAS-Commander can be used to link HEC-RAS models with GIS software for spatial analysis and visualization.
 
 
-**Examples:**
-
-* **Floodplain mapping:** Automate the creation of floodplain maps for different return periods by creating and executing multiple plan files with varying flow conditions.
-* **Dam break analysis:** Automate the setup and execution of dam break simulations by modifying unsteady flow parameters and boundary conditions.
-* **Bridge scour analysis:** Automate the assessment of bridge scour potential by integrating HEC-RAS with bridge scour analysis tools.
+NOTES: INCORPORATE INTO THE README.MD FILE ABOVE UNDER A NEW SECTION FOR CURRENT USES AND ROADMAP ITEMS, THEN DELETE THIS NOTE
 
 
-By automating repetitive tasks and providing a framework for managing complex workflows, RAS-Commander can significantly improve the efficiency and reproducibility of HEC-RAS modeling projects. This can lead to better decision-making and more accurate and reliable results. 
+Potential Uses of HEC-RAS Automation Functions
+This set of functions provides a powerful foundation for automating various aspects of HEC-RAS modeling workflows. Here are some potential applications:
+1. Calibration and Sensitivity Analysis:
+Automated Parameter Variation: Users can create multiple simulation scenarios with varying parameters (e.g., Manning's n values, boundary conditions, initial conditions) to calibrate their model against observed data.
+Sensitivity Testing: Evaluate the impact of different input parameters on model outputs by generating a range of scenarios and analyzing the results. This helps identify critical parameters that require more attention during calibration.
+2. Real-time Forecasting:
+Dynamic Model Updates: Integrate with external data sources (e.g., weather forecasts, streamflow observations) to automatically update boundary conditions and initial conditions in unsteady flow files before running the simulation.
+Ensemble Forecasting: Generate multiple forecasts by incorporating uncertainty in input data and model parameters. This provides a more comprehensive understanding of potential future flow conditions.
+3. Scenario Analysis:
+Land Use Change Impacts: Evaluate the effects of land use changes on flood risk by modifying Manning's n values using extract_2d_mannings_tables, modify_2d_mannings_table, and write_2d_mannings_tables and running simulations with updated geometry files.
+Climate Change Impacts: Analyze the potential impacts of projected climate changes on flood risk by adjusting precipitation patterns and other relevant parameters in unsteady flow files.
+4. Batch Processing and High-Performance Computing:
+Large-scale Model Runs: Utilize run_plans_parallel to execute multiple simulations concurrently on a multi-core system, significantly reducing processing time for large-scale models or complex scenarios.
+Automated Report Generation: Integrate with Python libraries like matplotlib and bokeh to automatically generate customized reports summarizing simulation results, including tables, figures, and maps.
+5. Model Development and Testing:
+Rapid Prototyping: Quickly set up and run new model configurations using template files and automated workflows, facilitating rapid model development and testing.
+Regression Testing: Ensure model integrity and consistency after code changes or updates by automatically running a predefined set of simulations and comparing results with expected outputs.
+6. User-Friendly Interfaces:
+GUI Development: Integrate with Python GUI libraries like Tkinter or PyQt to create user-friendly interfaces for automating HEC-RAS workflows, allowing non-programmers to access the power of automation.
+
+
+
+
+
+
+Certainly! I'll create an updated README.md for the ras_commander library, incorporating the information you've provided and the context from the previous HEC-Commander tools. Here's the updated README.md:
+
+```markdown
+# ras_commander
+
+ras_commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RAS-Commander 1.0 Python Notebook Application previously released under the HEC-Commander tools.
+
+## Features
+
+- Automate HEC-RAS project management and simulations
+- Support for both single and multiple project instances
+- Parallel execution of HEC-RAS plans
+- Utilities for managing geometry, plan, and unsteady flow files
+- Example project management for testing and development
+- Two primary operation modes: "Run Missing" and "Build from DSS"
+
+## Installation
+
+Install ras_commander using pip:
+
+```bash
+pip install ras_commander
+```
+
+## Requirements
+
+- Python 3.9+
+- HEC-RAS 6.5 (other versions may work but are not officially supported)
+
+For a full list of dependencies, see the `requirements.txt` file.
+
+## Quick Start
+
+```python
+from ras_commander import init_ras_project, RasCommander, RasPlan
+
+# Initialize a project
+init_ras_project("/path/to/project", "6.5")
+
+# Execute a single plan
+RasCommander.compute_plan("01")
+
+# Execute plans in parallel
+results = RasCommander.compute_parallel(
+    plan_numbers=["01", "02"],
+    max_workers=2,
+    cores_per_run=2
+)
+
+# Modify a plan
+RasPlan.set_geom("01", "02")
+```
+
+## Key Components
+
+- `RasPrj`: Manages HEC-RAS projects
+- `RasCommander`: Handles execution of HEC-RAS simulations
+- `RasPlan`: Provides functions for modifying and updating plan files
+- `RasGeo`: Handles operations related to geometry files
+- `RasUnsteady`: Manages unsteady flow file operations
+- `RasUtils`: Contains utility functions for file operations and data management
+- `RasExamples`: Manages and loads HEC-RAS example projects
+
+## Documentation
+
+For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
+
+## Examples
+
+Check out the `examples/` directory for sample scripts demonstrating various features of ras_commander.
+
+## Development
+
+### Setting up the development environment
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/ras_commander.git
+   ```
+2. Create a virtual environment and activate it:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+   ```
+3. Install the development dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+Certainly! I'll provide an updated Project Organization Diagram based on the current structure of the ras_commander library. Here's the updated diagram:
+
+
+## Project Organization Diagram
+
+```
+ras_commander
+├── .github
+│   └── workflows
+│       └── python-package.yml
+├── ras_commander
+│   ├── __init__.py
+│   ├── RasCommander.py
+│   ├── RasExamples.py
+│   ├── RasGeo.py
+│   ├── RasPlan.py
+│   ├── RasPrj.py
+│   ├── RasUnsteady.py
+│   └── RasUtils.py
+├── examples
+│   ├── 01_project_initialization.py
+│   ├── 02_plan_operations.py
+│   ├── 03_geometry_operations.py
+│   ├── 04_unsteady_flow_operations.py
+│   ├── 05_utility_functions.py
+│   ├── 06_single_plan_execution.py
+│   ├── 07_sequential_plan_execution.py
+│   ├── 08_parallel_execution.py
+│   ├── 09_specifying_plans.py
+│   ├── 10_arguments_for_compute.py
+│   ├── 11_Using_RasExamples.ipynb
+│   ├── 12_plan_set_execution.py
+│   └── 13_multiple_project_operations.py
+├── tests
+│   └── ... (test files)
+├── .gitignore
+├── LICENSE
+├── README.md
+├── STYLE_GUIDE.md
+├── Comprehensive_Library_Guide.md
+├── pyproject.toml
+├── setup.cfg
+├── setup.py
+└── requirements.txt
+
+
+## Inclusion of .cursorrules for AI-driven Coding Experience
+
+Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions.  Additionally, two other provided methods for interacting with the library though your current AI subscriptions: 
+
+- ChatGPT:  ras_commander GPT Assistant (LINK HERE)
+- Latest LLM summaries of the code base:
+   - Entire code base: LINK HERE (TOKEN COUNT) (for Claude or Gemini)
+   - Examples and Function Docstrings Only: LINK HERE (TOKEN COUNT) (for GPT-4o, o1 or Llama 3.1 405b)
+- Cursor IDE through .cursorrules file
+
+There are a series of scripts provided in the "llm_summaries" folder that provide summaries of the code base, and the docstrings of the functions.  They can be run in your local environment, or provided to ChatGPT's code interpreter for execution.  
+
+## RAS-Commander GPT Assistant 
+
+The ras_commander GPT assistant has access the entire code base, and can be a helpful tool for understanding the library and its capabilities.  However, it is subject to the same context window limitations and file retrieval limtations as I have covered in ADD BLOG LINK HERE.  For best results, use the llm summaries above to provide robust context to the model before asking to generate complex workflows. 
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
+
+## Style Guide
+
+This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
+
+
+
+
+## License
+
+ras_commander is released under the MIT License. See the license file for details.
+
+## Acknowledgments
+
+ras_commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository.  In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4o, Google's Gemini Experimental models,and the Cursor AI Coding IDE.
+
+
+
+## Contact
+
+For questions, suggestions, or support, please contact:
+William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
