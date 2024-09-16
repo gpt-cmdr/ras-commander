@@ -1,0 +1,58 @@
+name: Upload Python Package
+
+on:
+  push:
+    tags:
+      - 'v*'  # This will trigger the workflow on any tag starting with 'v'
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # This ensures all tags are fetched
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"  # Use the latest supported version
+
+    - name: Display Python version and environment info
+      run: |
+        python --version
+        pip --version
+        python -m site --user-site
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Verify package structure
+      run: |
+        ls -R
+        cat setup.py
+        cat pyproject.toml
+
+    - name: Create requirements.txt
+      run: |
+        pip freeze > requirements.txt
+        cat requirements.txt
+
+    - name: Build package
+      run: python -m build
+
+    - name: Verify built package
+      run: |
+        ls -l dist/
+        twine check dist/*
+
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
