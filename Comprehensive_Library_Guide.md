@@ -4,7 +4,7 @@
 
 RAS-Commander is a Python library designed to automate and streamline operations with HEC-RAS projects. This guide provides a comprehensive overview of the library's key concepts, best practices, and usage patterns.
 
-## Key Concepts
+## Key Concepts for ras_commander
 
 1. **RAS Objects**: 
    - RAS objects represent HEC-RAS projects and contain information about plans, geometries, and flow files.
