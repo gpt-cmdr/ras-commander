@@ -2,6 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="ras-commander",
+    packages=['ras_commander'],  # Explicitly specify the package
     packages=find_packages(),
     install_requires=[
         "pandas>=1.0.0",
