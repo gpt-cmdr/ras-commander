@@ -19,9 +19,7 @@ classifiers = [
 Homepage = "https://github.com/billk-FM/ras-commander"
 
 [tool.setuptools_scm]
-version_scheme = "release-branch-semver"  # This ensures clean, stable version numbers
-local_scheme = "no-local-version"  # Avoid any local identifiers like +g684fd17
-write_to = "ras_commander/_version.py"
+version_scheme = "post-release"
 
 [tool.setuptools]
-packages = ["ras_commander"]
+packages = ["ras-commander"]
