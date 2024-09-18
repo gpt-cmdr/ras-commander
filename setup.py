@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="ras-commander",
     packages=['ras_commander'],  # Explicitly specify the package
-    packages=find_packages(),
+    package_dir={'ras_commander': 'ras_commander'},  # Map the package name to the directory
     install_requires=[
         "pandas>=1.0.0",
         "requests>=2.25.0",
@@ -23,7 +23,7 @@ setup(
     },
     python_requires=">=3.9",
     author="William Katzenmeyer, P.E., C.F.M.",
-    author_email="heccommander@gmail.com",
+    author_email="billk@fenstermaker.com",
     description="A library for automating HEC-RAS operations using python functions.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
