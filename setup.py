@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="ras-commander",
@@ -23,7 +23,7 @@ setup(
     },
     python_requires=">=3.9",
     author="William Katzenmeyer, P.E., C.F.M.",
-    author_email="billk@fenstermaker.com",
+    author_email="heccommander@gmail.com",
     description="A library for automating HEC-RAS operations using python functions.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
