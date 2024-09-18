@@ -1,0 +1,45 @@
+User selected to use previously computed internal boundary data 
+but the geometry preprocessor file was for the previous version.
+All internal boundary data will be recomputed.
+
+Simulation started at: 14Nov2012 01:29 PM
+
+Writing geometry to output file
+Completed writing geometry to output file
+
+
+Writing plan information to output file
+Completed writing plan information to output file
+
+
+Geometric Preprocessor Version 4.2.0 Jan 2010 XXX XXXX
+
+Finished Processing Geometry
+GeomPreprocessor complete - Accepting the preprocessor files.
+
+Performing Unsteady Flow Simulation  Version 4.2.0 Jan 2010 XXX XXXX
+
+Maximum iterations of 20 at: 		RS	WSEL	ERROR
+20FEB1999 12:44:00  Bald Eagle      	Loc Hav         	75917.82	  592.36	   0.012
+
+
+Finished Unsteady Flow Simulation
+
+Writing Results to DSS
+Finished Writing Results to DSS
+
+Reading Data for Post Process
+
+Running Post Processor  Version 4.2.0 Jan 2010 XXX XXXX
+
+Finished Post Processing
+
+Task	Time
+Writing geometry information	1.09 sec
+Writing plan information	0.00 sec
+Preprocessing Geometry	59.03 sec
+Unsteady Flow Computations	3.81 sec
+Writing to DSS	0.84 sec
+Post-Processing	31.64 sec
+Complete Process	1 min 36.46 sec
+

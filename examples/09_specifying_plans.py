@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-
 # Add the parent directory to the Python path
 current_file = Path(__file__).resolve()
 parent_directory = current_file.parent.parent
@@ -12,7 +11,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -20,7 +19,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Housekeeping Note: 
 # For all of the functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders
@@ -30,7 +29,7 @@ except ImportError:
     
 import shutil
 from pathlib import Path
-# Define the keys to search for in folder names
+
 # Delete example projects folder
 current_file = Path(__file__).resolve()
 current_dir = current_file.parent
@@ -41,8 +40,6 @@ if delete_folder_path.exists():
     shutil.rmtree(delete_folder_path)
 else:
     print(f"Folder not found: {delete_folder_path}")
-    
-# re-
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -50,11 +47,11 @@ ras_examples.extract_project(["Balde Eagle Creek"])
 
 #### --- START OF SCRIPT --- ####
 
-# RAS-Commander Library Notes:
+# RAS Commander (ras-commander) Library Notes:
 # 1. This example uses the default global 'ras' object for simplicity.
 # 2. If you need to work with multiple projects, use separate ras objects for each project.
 # 3. Once you start using non-global ras objects, stick with that approach throughout your script.
-# 4. The RasCommander class provides methods for executing plans in various ways.
+# 4. The RasCmdr class provides methods for executing plans in various ways.
 # 5. You can specify individual plans or lists of plans for batch operations.
 
 # Best Practices:
@@ -76,17 +73,16 @@ def main():
 
     # Example 1: Sequential execution of specific plans
     print("Example 1: Sequential execution of specific plans (1 and 3)")
-    RasCommander.compute_test_mode(plan_numbers=["01", "03"], folder_suffix="[SpecificSequential]", max_cores=6)
+    RasCmdr.compute_test_mode(plan_number=["01", "03"], dest_folder_suffix="[SpecificSequential]", num_cores=6)
     print("Sequential execution of specific plans completed")
     print()
 
     # Example 2: Parallel execution of specific plans
     print("Example 2: Parallel execution of specific plans")
-    results_specific = RasCommander.compute_parallel(
-        plan_numbers=["01", "02"],
+    results_specific = RasCmdr.compute_parallel(
+        plan_number=["01", "02"],
         max_workers=2,
-        cores_per_run=2,
-        dest_folder=project_path.parent / "parallel_specific_results"
+        num_cores=2
     )
     print("Parallel execution of specific plans results:")
     for plan_number, success in results_specific.items():
@@ -96,13 +92,9 @@ def main():
     # Example 3: Execute all plans
     print("Example 3: Execute all plans")
     all_plan_numbers = ras.plan_df['plan_number'].tolist()
-    RasCommander.compute_test_mode(plan_numbers=all_plan_numbers, folder_suffix="[AllPlans]")
+    RasCmdr.compute_test_mode(plan_number=all_plan_numbers, dest_folder_suffix="[AllPlans]")
     print("Execution of all plans completed")
     print()
 
 if __name__ == "__main__":
     main()
-
-
-
-

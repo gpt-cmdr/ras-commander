@@ -1,7 +1,7 @@
 from importlib.metadata import version, PackageNotFoundError
 
 try:
-    __version__ = version("ras_commander")
+    __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
     __version__ = "unknown"
@@ -12,19 +12,19 @@ from .RasPrj import RasPrj
 from .RasPlan import RasPlan
 from .RasGeo import RasGeo
 from .RasUnsteady import RasUnsteady
-from .RasCommander import RasCommander
+from .RasCmdr import RasCmdr
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 
 # Import all attributes from these modules
 from .RasPrj import *
-from .RasPrj import *
 from .RasPlan import *
 from .RasGeo import *
 from .RasUnsteady import *
-from .RasCommander import *
+from .RasCmdr import *
 from .RasUtils import *
 from .RasExamples import *
+
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
     "ras",
@@ -34,7 +34,7 @@ __all__ = [
     "RasPlan",
     "RasGeo",
     "RasUnsteady",
-    "RasCommander",
+    "RasCmdr",
     "RasUtils",
     "RasExamples"
 ]

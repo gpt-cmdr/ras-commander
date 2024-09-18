@@ -10,7 +10,7 @@ Functions:
     get_ras_exe: Determine the HEC-RAS executable path based on the input.
 
 DEVELOPER NOTE:
-This class is used to initialize a RAS project and is used in conjunction with the RasCommander class to manage the execution of RAS plans.
+This class is used to initialize a RAS project and is used in conjunction with the RasCmdr class to manage the execution of RAS plans.
 By default, the RasPrj class is initialized with the global 'ras' object.
 However, you can create multiple RasPrj instances to manage multiple projects.
 Do not mix and match global 'ras' object instances and custom instances of RasPrj - it will cause errors.

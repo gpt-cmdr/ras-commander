@@ -1,0 +1,82 @@
+Message  | Plan: 'Steady Flow Run' (BaldEagle.p02)
+Message  | Simulation started at: 16Oct2015 11:33:02 AM
+Message  | Using 64 Bit Computation Engines
+Message  | PROCESS:RasGeomWriter
+Message  | 
+Message  | Writing Geometry
+Progress | 1
+Message  | Completed Writing Geometry
+Message  | 
+Message  | Writing Event Conditions
+Message  | Event Conditions Complete
+Message  | PROCESS:RasSteady
+Progress | 0.1
+Progress | 0.2
+Message  | 	
+Message  | Steady Flow Simulation HEC-RAS 5.0.0 Beta August 2015
+Progress | 0.1
+Progress | 0.3
+Progress | 0.4
+Progress | 0.5
+Progress | 0.6
+Progress | 0.7
+Progress | 0.8000001
+Progress | 0.9000001
+Progress | 1
+Progress | 2.645503E-03
+Progress | 2.380952E-02
+Progress | 4.563492E-02
+Progress | 6.679894E-02
+Progress | 8.928572E-02
+Progress | 0.1104497
+Progress | 0.1322751
+Progress | 0.1534391
+Progress | 0.1752646
+Progress | 0.1964286
+Progress | 0.2175926
+Progress | 0.2387566
+Progress | 0.2599206
+Progress | 0.2810847
+Progress | 0.3029101
+Progress | 0.3240741
+Progress | 0.3452381
+Progress | 0.3664021
+Progress | 0.3875661
+Progress | 0.4087301
+Progress | 0.4305556
+Progress | 0.4517196
+Progress | 0.4728836
+Progress | 0.4940476
+Progress | 0.5152116
+Progress | 0.537037
+Progress | 0.5582011
+Progress | 0.5793651
+Progress | 0.6005291
+Progress | 0.6216931
+Progress | 0.6428571
+Progress | 0.6646826
+Progress | 0.6858466
+Progress | 0.7070106
+Progress | 0.7281746
+Progress | 0.7493386
+Progress | 0.7705026
+Progress | 0.7923281
+Progress | 0.8134921
+Progress | 0.8346561
+Progress | 0.8558201
+Progress | 0.8769841
+Progress | 0.8981481
+Progress | 0.9199736
+Progress | 0.9411376
+Progress | 0.9623016
+Progress | 0.9834656
+Message  | 
+Message  | Finished Steady Flow Simulation
+Message  | 
+Message  | 
+Message  | Computations Summary
+Message  | 
+Message  | Computation Task	Time(hh:mm:ss)
+Message  | Completing Geometry	<1
+Message  | Steady Flow Computations(64)	       3
+Message  | Complete Process	       3

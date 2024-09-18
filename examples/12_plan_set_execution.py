@@ -11,7 +11,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -19,7 +19,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -74,10 +74,10 @@ def main():
 
     # Execute the plan set in parallel
     print("Executing plan set in parallel")
-    results = RasCommander.compute_parallel(
-        plan_numbers=plan_set['plan_number'].tolist(),
+    results = RasCmdr.compute_parallel(
+        plan_number=plan_set['plan_number'].tolist(),
         max_workers=3,
-        cores_per_run=2
+        num_cores=2
     )
 
     # Add execution results to the plan_set DataFrame

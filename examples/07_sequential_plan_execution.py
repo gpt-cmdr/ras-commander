@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-
 # Add the parent directory to the Python path
 current_file = Path(__file__).resolve()
 parent_directory = current_file.parent.parent
@@ -12,7 +11,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -20,7 +19,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Housekeeping Note: 
 # For all of the functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders
@@ -41,8 +40,6 @@ if delete_folder_path.exists():
     shutil.rmtree(delete_folder_path)
 else:
     print(f"Folder not found: {delete_folder_path}")
-    
-# re-
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -50,7 +47,7 @@ ras_examples.extract_project(["Balde Eagle Creek"])
 
 #### --- START OF SCRIPT --- ####
 
-# RAS-Commander Library Notes:
+# ras-commander Library Notes:
 # 1. This example uses the default global 'ras' object for simplicity.
 # 2. If you need to work with multiple projects, use separate ras objects for each project.
 # 3. Once you start using non-global ras objects, stick with that approach throughout your script.
@@ -72,21 +69,24 @@ def main():
     print(ras.plan_df)
     print()
 
-    # Example 1: Sequential execution of all plans without clearing geompre files
-    print("Example 1: Sequential execution of all plans without clearing geompre files")
-    RasCommander.compute_test_mode(folder_suffix="[AllSequential]")
-    print("Sequential execution of all plans completed without clearing geompre files")
+    # Example 1: Sequential execution of all plans with overwrite_dest
+    print("Example 1: Sequential execution of all plans with overwrite_dest")
+    RasCmdr.compute_test_mode(
+        dest_folder_suffix="[AllSequential]",
+        overwrite_dest=True
+    )
+    print("Sequential execution of all plans completed with overwrite_dest")
     print()
     
-    # Example 2: Sequential execution of specific plans with clearing geompre files
-    print("Example 2: Sequential execution of specific plans with clearing geompre files")
-    RasCommander.compute_test_mode(
-        plan_numbers=["01", "02"],
-        folder_suffix="[SpecificSequentialClearGeompre]",
+    # Example 2: Sequential execution of specific plans with clearing geompre files and overwrite_dest
+    print("Example 2: Sequential execution of specific plans with clearing geompre files and overwrite_dest")
+    RasCmdr.compute_test_mode(
+        plan_number=["01", "02"],
+        dest_folder_suffix="[SpecificSequentialClearGeompre]",
         clear_geompre=True,
-        max_cores=2
+        overwrite_dest=True
     )
-    print("Sequential execution of specific plans completed with clearing geompre files")
+    print("Sequential execution of specific plans completed with clearing geompre files and overwrite_dest")
     print()
 
     # Example 3: Demonstrate clearing geompre files for specific plans

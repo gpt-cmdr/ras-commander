@@ -13,7 +13,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -21,7 +21,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -29,15 +29,18 @@ ras_examples.extract_project(["Balde Eagle Creek"])
 
 #### --- START OF SCRIPT --- ####
 
-# RAS-Commander Library Notes:
-# 1. This example uses the default global 'ras' object for simplicity.
-# 2. If you need to work with multiple projects, use separate ras objects for each project.
-# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+"""
+This script demonstrates the process of initializing a HEC-RAS project and performing various operations on unsteady flow plans using the ras-commander library.
 
-# Best Practices:
-# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
-# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
-# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+Process Flow:
+1. Project Initialization: Initialize a HEC-RAS project by specifying the project path and version.
+2. Plan Cloning: Clone an existing plan, creating a new plan entry.
+3. Unsteady Flow Parameter Updates: Modify various unsteady flow parameters in the new plan.
+4. Plan Computation: Compute the new plan and verify successful execution.
+
+Note: This example uses the default global 'ras' object for simplicity. For complex scripts or when working with
+multiple projects, it's recommended to create and use separate ras objects.
+"""
 
 def main():
     # Initialize the project using the global 'ras' object
@@ -93,7 +96,7 @@ def main():
 
     # Step 6: Compute the updated plan
     print("Step 6: Computing the updated plan")
-    success = RasCommander.compute_plan(new_plan_number)
+    success = RasCmdr.compute_plan(new_plan_number)
     if success:
         print(f"Plan {new_plan_number} computed successfully")
     else:

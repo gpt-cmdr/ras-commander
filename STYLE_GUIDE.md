@@ -1,4 +1,4 @@
-# RAS Commander (ras_commander) Style Guide
+# RAS Commander (ras-commander) Style Guide
 
 ## Table of Contents
 1. [Naming Conventions](#1-naming-conventions)
@@ -10,15 +10,22 @@
 7. [Version Control](#7-version-control)
 8. [Type Hinting](#8-type-hinting)
 9. [Project-Specific Conventions](#9-project-specific-conventions)
+10. [Inheritance](#10-inheritance)
 
 ## 1. Naming Conventions
 
 ### 1.1 General Rules
 - Use `snake_case` for all function and variable names
-- Use `CamelCase` for class names
+- Use `PascalCase` for class names
 - Use `UPPER_CASE` for constants
 
-### 1.2 Function Naming
+### 1.2 Library-Specific Naming
+- Informal Name: RAS Commander
+- Package Name and GitHub Library Name: ras-commander (with a hyphen)
+- Import Name: ras_commander (with an underscore)
+- Main Class of functions for HEC-RAS Automation: RasCmdr
+
+### 1.3 Function Naming
 - Start function names with a verb describing the action
 - Use clear, descriptive names
 - Common verbs and their uses:
@@ -30,7 +37,7 @@
   - `find_`: search
   - `update_`: modify existing data
 
-### 1.3 Abbreviations
+### 1.4 Abbreviations
 Use the following abbreviations consistently throughout the codebase:
 
 - ras: HEC-RAS
@@ -49,11 +56,11 @@ Use the following abbreviations consistently throughout the codebase:
 
 Use these abbreviations in lowercase for function and variable names (e.g., `geom`, not `Geom` or `GEOM`).
 
-### 1.4 Class Naming
-- Use `CamelCase` for class names (e.g., `FileOperations`, `PlanOperations`)
+### 1.5 Class Naming
+- Use `PascalCase` for class names (e.g., `FileOperations`, `PlanOperations`, `RasCmdr`)
 - Class names should be nouns or noun phrases
 
-### 1.5 Variable Naming
+### 1.6 Variable Naming
 - Use descriptive names indicating purpose or content
 - Prefix boolean variables with `is_`, `has_`, or similar
 

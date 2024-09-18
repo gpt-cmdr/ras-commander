@@ -13,7 +13,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -21,7 +21,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -29,7 +29,7 @@ ras_examples.extract_project(["Balde Eagle Creek", "BaldEagleCrkMulti2D", "Munci
 
 #### --- START OF SCRIPT --- ####
 
-# RAS-Commander Library Notes:
+# RAS Commander Library Notes:
 # 1. This example demonstrates both the default global 'ras' object and custom ras objects.
 # 2. The global 'ras' object is suitable for simple scripts working with a single project.
 # 3. Custom ras objects are recommended for complex scripts or when working with multiple projects.
@@ -131,7 +131,7 @@ def main():
     print("-----------------------------------------------------")
     print("from ras_commander import *")
     print("# This allows you to use all functions and classes without prefixes")
-    print("# For example: compute_plan() instead of RasCommander.compute_plan()")
+    print("# For example: compute_plan() instead of RasCmdr.compute_plan()")
     print("# Note: This approach can lead to naming conflicts and is generally not recommended for larger scripts")
 
 if __name__ == "__main__":

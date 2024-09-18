@@ -1,5 +1,5 @@
 """
-Utility functions for the ras_commander library.
+Utility functions for the ras-commander library.
 """
 import os
 import shutil
@@ -11,7 +11,7 @@ from typing import Union
 
 class RasUtils:
     """
-    A class containing utility functions for the ras_commander library.
+    A class containing utility functions for the ras-commander library.
     When integrating new functions that do not clearly fit into other classes, add them here.
     """
 
@@ -258,8 +258,8 @@ class RasUtils:
         FileNotFoundError: If the plan file doesn't exist
 
         Example:
-        >>> update_plan_entries(1, "Geom", 2)
-        >>> update_plan_entries("path/to/plan.p01", "Geom", 2)
+        >>> RasUtils.update_plan_file(1, "Geom", 2)
+        >>> RasUtils.update_plan_file("path/to/plan.p01", "Geom", 2)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()

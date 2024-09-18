@@ -13,7 +13,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -21,7 +21,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -29,7 +29,7 @@ ras_examples.extract_project(["Muncie"])
 
 #### --- START OF SCRIPT --- ####
 
-# RAS-Commander Library Notes:
+# RAS Commander Library Notes:
 # 1. This example uses the default global 'ras' object for simplicity.
 # 2. If you need to work with multiple projects, use separate ras objects for each project.
 # 3. Once you start using non-global ras objects, stick with that approach throughout your script.
@@ -91,7 +91,7 @@ def main():
 
     # Step 6: Compute the cloned plan with new geometry and core count
     print("Step 6: Computing the cloned plan")
-    success = RasCommander.compute_plan(new_plan_number)
+    success = RasCmdr.compute_plan(new_plan_number)
     print(f"Computing plan {new_plan_number}")
     if success:
         print(f"Plan {new_plan_number} computed successfully")

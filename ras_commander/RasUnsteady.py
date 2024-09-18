@@ -10,8 +10,6 @@ class RasUnsteady:
     Class for all operations related to HEC-RAS unsteady flow files.
     """
     
-    
-
     @staticmethod
     def update_unsteady_parameters(unsteady_file, modifications, ras_object=None):
         """
@@ -27,6 +25,18 @@ class RasUnsteady:
 
         Note:
             This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
+        
+        Example:
+            from ras_commander import RasCmdr
+            
+            # Initialize RAS project
+            ras_cmdr = RasCmdr()
+            ras_cmdr.init_ras_project(project_folder, ras_version)
+            
+            # Update unsteady parameters
+            unsteady_file = r"path/to/unsteady_file.u01"
+            modifications = {"Parameter1": "NewValue1", "Parameter2": "NewValue2"}
+            RasUnsteady.update_unsteady_parameters(unsteady_file, modifications, ras_object=ras_cmdr.ras)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -60,5 +70,4 @@ class RasUnsteady:
         else:
             print(f"No matching parameters found in {unsteady_file}")
 
-        ras_obj = ras_object or ras
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()

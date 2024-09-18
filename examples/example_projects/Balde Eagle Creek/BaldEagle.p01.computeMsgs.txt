@@ -1,0 +1,287 @@
+Message  | Plan: 'Unsteady with Bridges and Dam' (BaldEagle.p01)
+Message  | Simulation started at: 16Oct2015 11:32:35 AM
+Message  | Using 64 Bit Computation Engines
+Message  | PROCESS:RasGeomWriter
+Message  | 
+Message  | Writing Geometry
+Message  | Computing XS Interpolation Surfaces
+Progress | 5.617978E-03
+Progress | 2.808989E-02
+Progress | 0.0505618
+Progress | 7.303371E-02
+Progress | 9.550562E-02
+Progress | 0.1179775
+Progress | 0.1404494
+Progress | 0.1629214
+Progress | 0.1853933
+Progress | 0.2078652
+Progress | 0.2303371
+Progress | 0.252809
+Progress | 0.2752809
+Progress | 0.2977528
+Progress | 0.3202247
+Progress | 0.3426966
+Progress | 0.3651685
+Progress | 0.3876404
+Progress | 0.4101124
+Progress | 0.4325843
+Progress | 0.4550562
+Progress | 0.4775281
+Progress | 0.5
+Progress | 0.5224719
+Progress | 0.5449438
+Progress | 0.5674157
+Progress | 0.5898876
+Progress | 0.6123595
+Progress | 0.6348315
+Progress | 0.6573034
+Progress | 0.6797753
+Progress | 0.7022472
+Progress | 0.7247191
+Progress | 0.747191
+Progress | 0.7696629
+Progress | 0.7921348
+Progress | 0.8146067
+Progress | 0.8370786
+Progress | 0.8595505
+Progress | 0.8820225
+Progress | 0.9044944
+Progress | 0.9269663
+Progress | 0.9494382
+Progress | 0.9719101
+Progress | 0.994382
+Message  | XS Interpolation Surfaces generated in 266 ms
+Progress | 1
+Message  | Completed Writing Geometry
+Message  | PROCESS:RASGeomPreprocess
+Message  | 	
+Message  | Geometric Preprocessor HEC-RAS 5.0.0 Beta August 2015
+Progress | 0.2
+Progress | 0.3
+Message  |            10 Internal Boundary curve(s) have been read in
+Progress | 5.291005E-03
+Progress | 2.645503E-02
+Progress | 4.761905E-02
+Progress | 6.878307E-02
+Progress | 8.994709E-02
+Progress | 0.1111111
+Progress | 0.1322751
+Progress | 0.1534391
+Progress | 0.1746032
+Progress | 0.1957672
+Progress | 0.2169312
+Progress | 0.2380952
+Progress | 0.2592593
+Progress | 0.2804233
+Progress | 0.3015873
+Progress | 0.3227513
+Progress | 0.3439153
+Progress | 0.3650794
+Progress | 0.3862434
+Progress | 0.4074074
+Progress | 0.4285714
+Progress | 0.4497355
+Progress | 0.4708995
+Progress | 0.4920635
+Progress | 0.5132275
+Progress | 0.5343915
+Progress | 0.5555556
+Progress | 0.5767196
+Progress | 0.5978836
+Progress | 0.6190476
+Progress | 0.6402116
+Progress | 0.6613756
+Progress | 0.6825397
+Progress | 0.7037037
+Progress | 0.7248677
+Progress | 0.7460318
+Progress | 0.7671958
+Progress | 0.7883598
+Progress | 0.8095238
+Progress | 0.8306878
+Progress | 0.8518519
+Progress | 0.8730159
+Progress | 0.8941799
+Progress | 0.9153439
+Progress | 0.9365079
+Progress | 0.9576719
+Progress | 0.978836
+Progress | 1
+Message  | 
+Message  | Finished Processing Geometry
+Message  | 
+Message  | Writing Event Conditions
+Message  | Event Conditions Complete
+Message  | PROCESS:RasUnsteady
+Message  | 
+Message  | Performing Unsteady Flow Simulation  HEC-RAS 5.0.0 Beta August 2015
+Message  | 
+Progress | 0.1
+Progress | 0.2
+Progress | 0.3
+Progress | 0.320038
+Progress | 0.3400759
+Progress | 0.3601139
+Progress | 0.3801518
+Progress | 0.4001898
+Progress | 0.4202277
+Progress | 0.4402657
+Progress | 0.4603036
+Progress | 0.4803416
+Progress | 0.5003795
+Progress | 0.5204175
+Progress | 0.5404555
+Progress | 0.5604934
+Progress | 0.5805314
+Progress | 0.6005693
+Progress | 0.6232805
+Progress | 0.6465608
+Progress | 0.6677249
+Progress | 0.6888889
+Progress | 0.7100529
+Progress | 0.731217
+Progress | 0.752381
+Progress | 0.773545
+Progress | 0.794709
+Progress | 0.815873
+Progress | 0.8391535
+Progress | 0.8603175
+Progress | 0.8835979
+Progress | 0.9047619
+Progress | 0.925926
+Progress | 0.94709
+Progress | 0.968254
+Progress | 0.989418
+Progress | 2.237137E-04
+Progress | 2.170022E-02
+Progress | 4.317673E-02
+Progress | 6.465324E-02
+Progress | 8.612975E-02
+Progress | 0.1076063
+Progress | 0.1290828
+Progress | 0.1505593
+Progress | 0.1720358
+Progress | 0.1935123
+Progress | 0.2149888
+Progress | 0.2364653
+Progress | 0.2579418
+Progress | 0.2794183
+Progress | 0.3008949
+Progress | 0.3223714
+Progress | 0.3438479
+Progress | 0.3653244
+Progress | 0.3868009
+Progress | 0.4082774
+Progress | 0.4297539
+Progress | 0.4512304
+Progress | 0.4727069
+Progress | 0.4941834
+Progress | 0.51566
+Progress | 0.5371364
+Progress | 0.5586129
+Progress | 0.5800895
+Progress | 0.601566
+Progress | 0.6230425
+Progress | 0.644519
+Progress | 0.6659955
+Progress | 0.687472
+Progress | 0.7089486
+Progress | 0.7304251
+Progress | 0.7519016
+Progress | 0.7733781
+Progress | 0.7948546
+Progress | 0.8163311
+Progress | 0.8378076
+Progress | 0.8592842
+Progress | 0.8807607
+Progress | 0.9022371
+Progress | 0.9237136
+Progress | 0.9451901
+Progress | 0.9666667
+Progress | 0.9881432
+Message  |  
+Message  | 
+Message  | Finished Unsteady Flow Simulation
+Message  | PROCESS:RasDSSWriter
+Message  |  
+Message  | Writing Results to DSS
+Message  | Finished Writing Results to DSS
+Message  | 
+Message  | Reading Data for Post Process
+Message  | PROCESS:RasSteady
+Progress | 0.1
+Progress | 0.2
+Message  | 	
+Message  | Running Post Processor  HEC-RAS 5.0.0 Beta August 2015
+Progress | 0.1
+Progress | 0.3
+Progress | 0.4
+Progress | 0.5
+Progress | 0.6
+Progress | 0.7
+Progress | 0.8000001
+Progress | 0.9000001
+Progress | 1
+Progress | 2.506266E-03
+Progress | 2.255639E-02
+Progress | 4.267614E-02
+Progress | 6.272626E-02
+Progress | 0.082846
+Progress | 0.1028961
+Progress | 0.1229462
+Progress | 0.1429964
+Progress | 0.1630465
+Progress | 0.1830966
+Progress | 0.2031468
+Progress | 0.2231969
+Progress | 0.243247
+Progress | 0.2632971
+Progress | 0.2833472
+Progress | 0.3033974
+Progress | 0.3234475
+Progress | 0.3434976
+Progress | 0.3635477
+Progress | 0.3835979
+Progress | 0.403648
+Progress | 0.4236981
+Progress | 0.4437483
+Progress | 0.4637984
+Progress | 0.4838485
+Progress | 0.5038986
+Progress | 0.5239488
+Progress | 0.5439989
+Progress | 0.564049
+Progress | 0.5840991
+Progress | 0.6041493
+Progress | 0.6241994
+Progress | 0.6442495
+Progress | 0.6642996
+Progress | 0.6843498
+Progress | 0.7043999
+Progress | 0.72445
+Progress | 0.7445002
+Progress | 0.7645503
+Progress | 0.7846004
+Progress | 0.8046505
+Progress | 0.8247007
+Progress | 0.8447508
+Progress | 0.8648009
+Progress | 0.884851
+Progress | 0.9049011
+Progress | 0.9249513
+Progress | 0.9450014
+Progress | 0.9650515
+Progress | 0.9851016
+Message  | 
+Message  | Finished Post Processing
+Message  | 
+Message  | 
+Message  | Computations Summary
+Message  | 
+Message  | Computation Task	Time(hh:mm:ss)
+Message  | Completing Geometry	<1
+Message  | Preprocessing Geometry(64)	<1
+Message  | Unsteady Flow Computations(64)	       1
+Message  | Writing to DSS(64)	<1
+Message  | Post-Processing(64)	      23
+Message  | Complete Process	      26

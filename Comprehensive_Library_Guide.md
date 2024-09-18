@@ -2,7 +2,7 @@
 
 ## Introduction
 
-RAS-Commander is a Python library designed to automate and streamline operations with HEC-RAS projects. This guide provides a comprehensive overview of the library's key concepts, best practices, and usage patterns.
+RAS-Commander (ras-commander) is a Python library designed to automate and streamline operations with HEC-RAS projects. This guide provides a comprehensive overview of the library's key concepts, best practices, and usage patterns.
 
 ## Key Concepts for ras_commander
 
@@ -33,13 +33,12 @@ RAS-Commander is a Python library designed to automate and streamline operations
 ## Module Overview
 
 1. **RasPrj**: Manages HEC-RAS project initialization and data.
-2. **RasCommander**: Handles execution of HEC-RAS simulations.
+2. **RasCmdr**: Handles execution of HEC-RAS simulations.
 3. **RasPlan**: Provides functions for plan file operations.
 4. **RasGeo**: Manages geometry file operations.
 5. **RasUnsteady**: Handles unsteady flow file operations.
 6. **RasUtils**: Offers utility functions for common tasks.
 7. **RasExamples**: Manages example HEC-RAS projects.
-
 
 ## Best Practices
 
@@ -61,7 +60,7 @@ RAS-Commander is a Python library designed to automate and streamline operations
 2. **Plan Specification**:
    - Use plan numbers as strings (e.g., "01", "02") for consistency:
      ```python
-     RasCommander.compute_plan("01")
+     RasCmdr.compute_plan("01")
      ```
    - Always check available plans before specifying plan numbers:
      ```python
@@ -75,24 +74,24 @@ RAS-Commander is a Python library designed to automate and streamline operations
      ```
    - Use `clear_geompre=True` for clean computation environment:
      ```python
-     RasCommander.compute_plan("01", clear_geompre=True)
+     RasCmdr.compute_plan("01", clear_geompre=True)
      ```
 
 4. **Parallel Execution**:
-   - Consider available cores when setting `max_workers`:
+   - Consider available cores when setting `max_workers` and `num_cores`:
      ```python
-     RasCommander.compute_parallel(max_workers=4, cores_per_run=2)
+     RasCmdr.compute_parallel(max_workers=4, num_cores=2)
      ```
    - Use `dest_folder` to keep project folder organized:
      ```python
-     RasCommander.compute_parallel(dest_folder="/path/to/results")
+     RasCmdr.compute_parallel(dest_folder="/path/to/results")
      ```
 
 5. **Error Handling**:
    - Use try-except blocks to handle potential errors:
      ```python
      try:
-         RasCommander.compute_plan("01")
+         RasCmdr.compute_plan("01")
      except FileNotFoundError:
          print("Plan file not found")
      ```
@@ -141,15 +140,15 @@ RAS-Commander is a Python library designed to automate and streamline operations
 
 4. **Executing a Single Plan**:
    ```python
-   from ras_commander import RasCommander
-   success = RasCommander.compute_plan("01")
+   from ras_commander import RasCmdr
+   success = RasCmdr.compute_plan("01", num_cores=2)
    print(f"Plan execution {'successful' if success else 'failed'}")
    ```
 
 5. **Parallel Execution of Multiple Plans**:
    ```python
-   from ras_commander import RasCommander
-   results = RasCommander.compute_parallel(plan_numbers=["01", "02"], max_workers=2, cores_per_run=2)
+   from ras_commander import RasCmdr
+   results = RasCmdr.compute_parallel(plan_numbers=["01", "02"], max_workers=2, num_cores=2)
    for plan, success in results.items():
        print(f"Plan {plan}: {'Successful' if success else 'Failed'}")
    ```
@@ -163,12 +162,11 @@ RAS-Commander is a Python library designed to automate and streamline operations
        print(f"Extracted project to: {path}")
    ```
 
-```markdown
 ## Advanced Usage
 
 1. **Working with Multiple Projects**:
    ```python
-   from ras_commander import init_ras_project, RasCommander, RasPlan
+   from ras_commander import init_ras_project, RasCmdr, RasPlan
 
    project1 = init_ras_project("/path/to/project1", "6.5")
    project2 = init_ras_project("/path/to/project2", "6.5")
@@ -178,17 +176,17 @@ RAS-Commander is a Python library designed to automate and streamline operations
    new_plan2 = RasPlan.clone_plan("01", ras_object=project2)
 
    # Execute plans in both projects
-   RasCommander.compute_plan(new_plan1, ras_object=project1)
-   RasCommander.compute_plan(new_plan2, ras_object=project2)
+   RasCmdr.compute_plan(new_plan1, ras_object=project1, num_cores=2)
+   RasCmdr.compute_plan(new_plan2, ras_object=project2, num_cores=2)
    ```
 
 2. **Using ThreadPoolExecutor for Simultaneous Execution**:
    ```python
    from concurrent.futures import ThreadPoolExecutor
-   from ras_commander import RasCommander
+   from ras_commander import RasCmdr
 
    def execute_plan(plan, project, compute_folder):
-       return RasCommander.compute_plan(plan, ras_object=project, compute_folder=compute_folder)
+       return RasCmdr.compute_plan(plan, ras_object=project, compute_folder=compute_folder, num_cores=2)
 
    with ThreadPoolExecutor(max_workers=2) as executor:
        futures = [
@@ -202,7 +200,7 @@ RAS-Commander is a Python library designed to automate and streamline operations
 3. **Creating and Using Plan Sets**:
    ```python
    import pandas as pd
-   from ras_commander import RasPlan, RasCommander
+   from ras_commander import RasPlan, RasCmdr
 
    def create_plan_set(base_plan, num_copies):
        plan_set = []
@@ -212,19 +210,19 @@ RAS-Commander is a Python library designed to automate and streamline operations
        return pd.DataFrame(plan_set)
 
    plan_set = create_plan_set("01", 5)
-   results = RasCommander.compute_parallel(plan_numbers=plan_set['plan_number'].tolist())
+   results = RasCmdr.compute_parallel(plan_numbers=plan_set['plan_number'].tolist(), num_cores=2)
    ```
 
 4. **Custom Error Handling and Logging**:
    ```python
    import logging
-   from ras_commander import RasCommander
+   from ras_commander import RasCmdr
 
    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
    logger = logging.getLogger(__name__)
 
    try:
-       RasCommander.compute_plan("01")
+       RasCmdr.compute_plan("01", num_cores=2)
    except FileNotFoundError as e:
        logger.error(f"Plan file not found: {e}")
    except Exception as e:
@@ -260,6 +258,7 @@ RAS-Commander is a Python library designed to automate and streamline operations
 3. **Parallel Execution Problems**:
    - Reduce the number of `max_workers` if you're experiencing memory issues.
    - Ensure each worker has sufficient resources (cores, memory) to run a plan.
+   - Adjust `num_cores` based on your system's capabilities and the complexity of your models.
 
 4. **File Access Errors**:
    - Verify that you have read/write permissions for the project directory.
@@ -271,8 +270,8 @@ RAS-Commander is a Python library designed to automate and streamline operations
 
 ## Conclusion
 
-The RAS-Commander library provides a powerful set of tools for automating HEC-RAS operations. By following the best practices outlined in this guide and leveraging the library's features, you can efficiently manage and execute complex HEC-RAS projects programmatically.
+The RAS-Commander (ras-commander) library provides a powerful set of tools for automating HEC-RAS operations. By following the best practices outlined in this guide and leveraging the library's features, you can efficiently manage and execute complex HEC-RAS projects programmatically.
 
 Remember to always refer to the latest documentation and the library's source code for the most up-to-date information. As you become more familiar with RAS-Commander, you'll discover more ways to optimize your HEC-RAS workflows and increase your productivity.
 
-For further assistance, bug reports, or feature requests, please refer to the library's GitHub repository and issue tracker. Happy modeling!
+For further assistance, bug reports, or feature requests, please refer to the library's GitHub repository (https://github.com/billk-FM/ras-commander) and issue tracker. Happy modeling!

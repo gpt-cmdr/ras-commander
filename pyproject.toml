@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ras_commander"
+name = "ras-commander"
 dynamic = ["version"]
 description = "A library for automating HEC-RAS operations using python functions."
 authors = [{name = "William Katzenmeyer, P.E., C.F.M.", email = "heccommander@gmail.com"}]
@@ -16,13 +16,12 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/ras_commander"
+Homepage = "https://github.com/billk-FM/ras-commander"
 
 [tool.setuptools_scm]
 version_scheme = "release-branch-semver"  # This ensures clean, stable version numbers
 local_scheme = "no-local-version"  # Avoid any local identifiers like +g684fd17
 write_to = "ras_commander/_version.py"
-
 
 [tool.setuptools]
 packages = ["ras_commander"]

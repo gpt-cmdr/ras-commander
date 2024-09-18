@@ -1,3 +1,0 @@
-# Extract specific projects
-ras_examples = RasExamples()
-ras_examples.extract_project(["Balde Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])

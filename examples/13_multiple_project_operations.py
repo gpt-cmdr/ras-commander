@@ -13,7 +13,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -21,7 +21,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -34,7 +34,7 @@ def execute_plan(plan_number, ras_object, compute_folder):
     RasPlan.set_num_cores(plan_number, 2, ras_object=ras_object)
     
     # Execute the plan in the compute folder
-    success = RasCommander.compute_plan(plan_number, ras_object=ras_object, compute_folder=compute_folder)
+    success = RasCmdr.compute_plan(plan_number, ras_object=ras_object, dest_folder=compute_folder)
     
     return plan_number, success
 

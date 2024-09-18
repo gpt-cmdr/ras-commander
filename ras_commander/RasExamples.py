@@ -10,13 +10,13 @@ from datetime import datetime
 
 class RasExamples:
     """
-    A class for quickly loading HEC-RAS example projects for testing and development of ras_commander.
+    A class for quickly loading HEC-RAS example projects for testing and development of ras-commander.
 
     This class provides functionality to download, extract, and manage HEC-RAS example projects.
     It supports both default HEC-RAS example projects and custom projects from user-provided URLs.
 
     Expected folder structure:              Notes:
-    ras_commander/
+    ras-commander/
     ├── examples/                           # This is examples_dir
     │   ├── example_projects/               # This is projects_dir
     │   │   ├── Balde Eagle Creek/          # Individual Projects from Zip file
@@ -24,9 +24,9 @@ class RasExamples:
     │   │   └── ...
     │   ├── Example_Projects_6_5.zip        # HEC-RAS Example Projects zip file will be downloaded here
     │   ├── example_projects.csv            # CSV file containing cached project metadata
-    │   └── 01_project_initialization.py    # ras_commander library examples are also at this level
+    │   └── 01_project_initialization.py    # ras-commander library examples are also at this level
     │   └── ...
-    └── ras_commander/                      # Code for the ras_commander library
+    └── ras_commander/                      # Code for the ras-commander library
 
     Attributes:
         base_url (str): Base URL for downloading HEC-RAS example projects.
