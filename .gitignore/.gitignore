@@ -6,3 +6,12 @@ Example_Projects_6_5.zip
 
 # Ignore the misc folder and all its subfolders
 misc/
+ras_commander/__pycache__/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.venv/

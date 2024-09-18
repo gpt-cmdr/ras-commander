@@ -22,4 +22,4 @@ Homepage = "https://github.com/billk-FM/ras-commander"
 version_scheme = "post-release"
 
 [tool.setuptools]
-packages = ["ras-commander"]
+packages = ["ras_commander"]
