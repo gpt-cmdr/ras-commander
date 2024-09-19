@@ -1,4 +1,3 @@
-# Start of Selection
 # RAS Commander (ras-commander)
 
 RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under HEC-Commander tools.
@@ -184,5 +183,3 @@ RAS Commander is based on the HEC-Commander project's "Command Line is All You N
 
 For questions, suggestions, or support, please contact:
 William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
-# End of Selection
-```
