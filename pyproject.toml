@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -37,6 +37,7 @@ Homepage = "https://github.com/billk-FM/ras-commander"
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
+write_to = "ras_commander/_version.py"
 
 [tool.setuptools]
 packages = ["ras_commander"]
