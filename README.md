@@ -20,10 +20,8 @@ Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com
 
 Install ras-commander using pip:
 
-```bash
-pip install pandas requests pathlib # Only 3 requirements for ras-commander, needs to be added to the requirements.txt file so pip install works
+pip install pandas requests pathlib
 pip install ras-commander
-```
 
 ## Requirements
 
@@ -34,7 +32,6 @@ For a full list of dependencies, see the `requirements.txt` file.
 
 ## Quick Start
 
-```python
 from ras_commander import init_ras_project, RasCmdr, RasPlan
 
 # Initialize a project
@@ -54,7 +51,6 @@ results = RasCmdr.compute_parallel(
 
 # Modify a plan
 RasPlan.set_geom("01", "02")
-```
 
 ## Key Components
 
@@ -66,6 +62,61 @@ RasPlan.set_geom("01", "02")
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
+## RasExamples
+
+The `RasExamples` class provides functionality for quickly loading and managing HEC-RAS example projects. This is particularly useful for testing and development purposes.
+
+Key features:
+- Download and extract HEC-RAS example projects
+- List available project categories and projects
+- Extract specific projects for use
+- Manage example project data efficiently
+
+Example usage:
+from ras_commander import RasExamples
+
+ras_examples = RasExamples()
+ras_examples.get_example_projects()  # Downloads example projects if not already present
+categories = ras_examples.list_categories()
+projects = ras_examples.list_projects("Steady Flow")
+extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
+
+## RasPrj
+
+The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
+
+Key features:
+- Initialize HEC-RAS projects
+- Load and manage project data (plans, geometries, flows, etc.)
+- Provide easy access to project files and information
+
+Note: While a global `ras` object is available for convenience, you can create multiple `RasPrj` instances to manage several projects simultaneously.
+
+Example usage:
+from ras_commander import RasPrj, init_ras_project
+
+# Using the global ras object
+init_ras_project("/path/to/project", "6.5")
+
+# Creating a custom RasPrj instance
+custom_project = RasPrj()
+init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
+
+
+## AI-Driven Coding Experience
+
+ras-commander provides several AI-powered tools to enhance the coding experience:
+
+1. ChatGPT Assistant: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
+
+2. LLM Summaries: Up-to-date summaries of the codebase for use with large language models like Claude or GPT-4.
+
+3. Cursor IDE Integration: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.
+
+4. Jupyter Notebook Assistant: A notebook for dynamic code summarization and API interaction.
+
+These tools aim to streamline development and provide intelligent assistance when working with the ras-commander library.
+
 ## Documentation
 
 For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
@@ -76,7 +127,6 @@ Check out the `examples/` directory for sample scripts demonstrating various fea
 
 ## Project Organization Diagram
 
-```
 ras_commander
 ├── .github
 │   └── workflows
@@ -115,22 +165,21 @@ ras_commander
 ├── setup.cfg
 ├── setup.py
 └── requirements.txt
-```
 
 ## Inclusion of .cursorrules and ai_tools for AI-driven Coding Experience
 
-Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions.  Additionally, two other provided methods for interacting with the library through your current AI subscriptions: 
+Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions. Additionally, two other provided methods for interacting with the library through your current AI subscriptions:
 
-- ChatGPT:  ras_commander GPT Assistant (LINK HERE)
+- ChatGPT: ras_commander GPT Assistant (LINK HERE)
 - Latest LLM summaries of the code base:
    - Entire code base: LINK HERE (TOKEN COUNT) (for Claude or Gemini)
    - Examples and Function Docstrings Only: LINK HERE (TOKEN COUNT) (for GPT-4o, o1 or Llama 3.1 405b)
 - Cursor IDE through .cursorrules file
-- 'rascommander_code_assistant.ipynb' notebook in the ras_commander folder, which allows for dynamic summarization of the code base and API chatting directly through the notebook. 
+- 'rascommander_code_assistant.ipynb' notebook in the ras_commander folder, which allows for dynamic summarization of the code base and API chatting directly through the notebook.
 
-There are a series of scripts provided in the "llm_summaries" folder that provide summaries of the code base, and the docstrings of the functions.  They can be run in your local environment, or provided to ChatGPT's code interpreter for execution.  
+There are a series of scripts provided in the "llm_summaries" folder that provide summaries of the code base, and the docstrings of the functions. They can be run in your local environment, or provided to ChatGPT's code interpreter for execution.
 
-## RAS-Cmdr GPT Assistant 
+## RAS-Cmdr GPT Assistant
 
 The RAS Commander GPT assistant has access to the entire code base, and can be a helpful tool for understanding the library and its capabilities.  However, it is subject to the same context window limitations and file retrieval limitations as I have covered in ADD BLOG LINK HERE.  For best results, use the llm summaries above to provide robust context to the model before asking to generate complex workflows. 
 

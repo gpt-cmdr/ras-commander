@@ -76,3 +76,20 @@ For geodataframes, use the 'union_all()' method instead of the deprecated 'unary
 Note for pandas >= 2.0: Use pd.concat instead of the removed append method.
 
 Always provide full code segments with no elides.
+
+## Knowledge Files
+
+When coding new RAS workflows, always refer to the Comprehensive Library Guide via retrieval: Comprehensive_Library_Guide.md
+
+When coding new library functions, always refer to the Style Guide  via retrieval: 
+STYLE_GUIDE.md
+
+You have a text file with the entire repository's contents, that can be used for file search and retrieval. 
+
+You also have a .zip file with the entire RAS-Commander library from github, containing full copies of all files.  Use your code interpreter to extract and read existing files in their entirety whenever your chunked retrieval is incomplete.  You can read up to 20,000 characters at a time (usually enough for the whole file). 
+
+# Now, Analyze and Respond to the User's Query
+
+When revising code, always provide full code segments without elisions.
+
+-----

@@ -11,6 +11,8 @@
 8. [Type Hinting](#8-type-hinting)
 9. [Project-Specific Conventions](#9-project-specific-conventions)
 10. [Inheritance](#10-inheritance)
+11. [RasUtils Usage](#11-rasutils-usage)
+12. [Working with RasExamples](#12-working-with-rasexamples)
 
 ## 1. Naming Conventions
 
@@ -119,6 +121,22 @@ Use these abbreviations in lowercase for function and variable names (e.g., `geo
 - Use explicit exception handling with try/except blocks
 - Raise custom exceptions when appropriate, with descriptive messages
 - Use logging for error reporting and debugging information
+- Use specific exception types when raising errors (e.g., `ValueError`, `FileNotFoundError`)
+- Provide informative error messages that include relevant details
+- Implement proper cleanup in finally blocks when necessary
+- For user-facing functions, consider wrapping internal exceptions in custom exceptions specific to ras-commander
+
+Example:
+```python
+try:
+    result = compute_plan(plan_number)
+except FileNotFoundError as e:
+    raise RasCommanderError(f"Plan file not found: {e}")
+except ValueError as e:
+    raise RasCommanderError(f"Invalid plan parameter: {e}")
+except Exception as e:
+    raise RasCommanderError(f"Unexpected error during plan computation: {e}")
+```
 
 ## 6. Testing
 
@@ -126,18 +144,35 @@ Use these abbreviations in lowercase for function and variable names (e.g., `geo
 - Use the `unittest` framework
 - Aim for high test coverage, especially for critical functionality
 - Include tests for both single-project and multi-project scenarios
+- Write clear and descriptive test names
+- Use setUp and tearDown methods for common test preparations and cleanups
+- Use mock objects when appropriate to isolate units under test
 
 ## 7. Version Control
 
 - Use meaningful commit messages that clearly describe the changes made
 - Create feature branches for new features or significant changes
 - Submit pull requests for code review before merging into the main branch
+- Keep commits focused and atomic (one logical change per commit)
+- Use git tags for marking releases
+- Follow semantic versioning for release numbering
 
 ## 8. Type Hinting
 
-- Use type hints for function parameters and return values
+- Use type hints for all function parameters and return values
 - Use the `typing` module for complex types (e.g., `List`, `Dict`, `Optional`)
 - Include type hints in function signatures and docstrings
+- Use `Union` for parameters that can accept multiple types
+- For methods that don't return a value, use `-> None`
+
+Example:
+```python
+from typing import List, Optional
+
+def process_plans(plan_numbers: List[str], max_workers: Optional[int] = None) -> bool:
+    # Function implementation
+    return True
+```
 
 ## 9. Project-Specific Conventions
 
@@ -165,22 +200,20 @@ Use these abbreviations in lowercase for function and variable names (e.g., `geo
 - Prefer returning meaningful values over modifying global state
 - Use tuple returns for multiple values instead of modifying input parameters
 
-Remember, consistency is key. When in doubt, prioritize readability and clarity in your code. Always consider the maintainability and extensibility of the codebase when making design decisions.
-
 ## 10. Inheritance
 
 ### 10.1 General Principles
 
-- Prioritize composition over inheritance when appropriate.
-- Design base classes for extension.
-- Clearly document the public API and subclass API using docstrings.
+- Prioritize composition over inheritance when appropriate
+- Design base classes for extension
+- Clearly document the public API and subclass API using docstrings
 
 ### 10.2 Naming Conventions
 
-- Public API: No leading underscores.
-- Subclass API: Single leading underscore (e.g., `_prepare_for_execution`).
-- Internal attributes and methods: Single leading underscore.
-- Name mangling (double leading underscores): Use sparingly and document the decision clearly.
+- Public API: No leading underscores
+- Subclass API: Single leading underscore (e.g., `_prepare_for_execution`)
+- Internal attributes and methods: Single leading underscore
+- Name mangling (double leading underscores): Use sparingly and document the decision clearly
 
 ### 10.3 Template Method Pattern
 
@@ -189,3 +222,53 @@ Consider using the template method pattern in base classes to define a high-leve
 ### 10.4 Dataframe Access Control
 
 Use properties to control access and modification of dataframes, providing a controlled interface for subclasses.
+
+## 11. RasUtils Usage
+
+- Use RasUtils for general-purpose utility functions that don't fit into other specific classes
+- When adding new utility functions, ensure they are static methods of the RasUtils class
+- Keep utility functions focused and single-purpose
+- Document utility functions thoroughly, including examples of usage
+
+Example:
+```python
+class RasUtils:
+    @staticmethod
+    def create_backup(file_path: Path, backup_suffix: str = "_backup") -> Path:
+        """
+        Create a backup of the specified file.
+
+        Args:
+            file_path (Path): Path to the file to be backed up
+            backup_suffix (str): Suffix to append to the backup file name
+
+        Returns:
+            Path: Path to the created backup file
+
+        Example:
+            >>> backup_path = RasUtils.create_backup(Path("project.prj"))
+            >>> print(f"Backup created at: {backup_path}")
+        """
+        # Function implementation
+```
+
+## 12. Working with RasExamples
+
+- Use RasExamples for managing and loading example HEC-RAS projects
+- Always check if example projects are already downloaded before attempting to download them again
+- Use the `list_categories()` and `list_projects()` methods to explore available examples
+- When extracting projects, use meaningful names and keep track of extracted paths
+- Clean up extracted projects when they are no longer needed using `clean_projects_directory()`
+
+Example:
+```python
+ras_examples = RasExamples()
+if not ras_examples.is_project_extracted("Bald Eagle Creek"):
+    extracted_path = ras_examples.extract_project("Bald Eagle Creek")[0]
+    # Use the extracted project
+    # ...
+    # Clean up when done
+    RasUtils.remove_with_retry(extracted_path, is_folder=True)
+```
+
+Remember, consistency is key. When in doubt, prioritize readability and clarity in your code. Always consider the maintainability and extensibility of the codebase when making design decisions.
