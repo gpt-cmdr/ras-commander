@@ -24,6 +24,20 @@ The ras-commander library emerged from the initial test-bed of AI-driven coding 
 - Example project management for testing and development
 - Two primary operation modes: "Run Missing" and "Build from DSS"
 
+## AI-Driven Coding Experience
+
+ras-commander provides several AI-powered tools to enhance the coding experience:
+
+1. **ChatGPT Assistant: [RAS Commander Library Assistant](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
+
+2. **Knowledge Base Summaries**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.
+
+3. **Cursor IDE Integration**: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor.  
+
+4. **AI Assistant Notebook**: A notebook for dynamic code summarization and API interaction (bring your own API Key)
+
+These tools aim to streamline development and provide intelligent assistance when modeling with, and working with and revising the ras-commander library.
+
 ## Installation
 
 Install ras-commander using pip:
@@ -154,6 +168,16 @@ custom_project = RasPrj()
 init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
 
 
+
+
+## Documentation
+
+For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
+
+## Examples
+
+Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
+
 ## AI-Driven Coding Experience
 
 ras-commander provides several AI-powered tools to enhance the coding experience:
@@ -167,27 +191,6 @@ ras-commander provides several AI-powered tools to enhance the coding experience
 4. Jupyter Notebook Assistant: A notebook for dynamic code summarization and API interaction.
 
 These tools aim to streamline development and provide intelligent assistance when working with the ras-commander library.
-
-## Documentation
-
-For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
-
-## Examples
-
-Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
-
-## Inclusion of .cursorrules and ai_tools for AI-driven Coding Experience
-
-Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions. Additionally, two other provided methods for interacting with the library through your current AI subscriptions:
-
-- ChatGPT: ras_commander GPT Assistant (LINK HERE)
-- Latest LLM summaries of the code base:
-   - Entire code base: LINK HERE (TOKEN COUNT) (for Claude or Gemini)
-   - Examples and Function Docstrings Only: LINK HERE (TOKEN COUNT) (for GPT-4o, o1 or Llama 3.1 405b)
-- Cursor IDE through .cursorrules file
-- 'rascommander_code_assistant.ipynb' notebook in the ras_commander folder, which allows for dynamic summarization of the code base and API chatting directly through the notebook.
-
-There are a series of scripts provided in the "llm_summaries" folder that provide summaries of the code base, and the docstrings of the functions. They can be run in your local environment, or provided to ChatGPT's code interpreter for execution.
 
 ## RAS-Cmdr GPT Assistant
 
