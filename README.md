@@ -3,10 +3,14 @@
 RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under the [HEC-Commander tools repository](https://github.com/billk-FM/HEC-Commander).
 
 ## Contributors:
-William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
-Sean Micek, P.E., C.F.M. - smicek@fenstermaker.com
-Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com
-(Your Name Here)
+William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com  
+
+Sean Micek, P.E., C.F.M. - smicek@fenstermaker.com  
+
+Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com  
+
+(Your Name Here)  
+
 
 ## Background
 The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
