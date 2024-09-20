@@ -59,16 +59,22 @@ pip install ras-commander
 For a full list of dependencies, see the `requirements.txt` file.
 
 ## Quick Start
-
+```
 from ras_commander import init_ras_project, RasCmdr, RasPlan
+```
 
 # Initialize a project
+```
 init_ras_project(r"/path/to/project", "6.5")
+```
 
 # Execute a single plan
+```
 RasCmdr.compute_plan("01", dest_folder=r"/path/to/results", overwrite_dest=True)
+```
 
 # Execute plans in parallel
+```
 results = RasCmdr.compute_parallel(
     plan_numbers=["01", "02"],
     max_workers=2,
@@ -76,9 +82,12 @@ results = RasCmdr.compute_parallel(
     dest_folder=r"/path/to/results",
     overwrite_dest=True
 )
+```
 
 # Modify a plan
+```
 RasPlan.set_geom("01", "02")
+```
 
 ## Key Components
 
