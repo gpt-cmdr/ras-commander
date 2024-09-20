@@ -126,7 +126,7 @@ For detailed usage instructions and API documentation, please refer to the [Comp
 Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
 
 ## Project Organization Diagram
-
+```
 ras_commander
 ├── .github
 │   └── workflows
@@ -165,7 +165,7 @@ ras_commander
 ├── setup.cfg
 ├── setup.py
 └── requirements.txt
-
+```
 ## Inclusion of .cursorrules and ai_tools for AI-driven Coding Experience
 
 Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions. Additionally, two other provided methods for interacting with the library through your current AI subscriptions:
