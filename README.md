@@ -30,11 +30,10 @@ ras-commander provides several AI-powered tools to enhance the coding experience
 
 1. **ChatGPT Assistant: [RAS Commander Library Assistant](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
 
-2. **Knowledge Base Summaries**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.
+2. **[Purpose-Built Knowledge Base Summaries](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.
 
-3. **Cursor IDE Integration**: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor.  
-
-4. **AI Assistant Notebook**: A notebook for dynamic code summarization and API interaction (bring your own API Key)
+3. **[Cursor IDE Integration](https://github.com/billk-FM/ras-commander/blob/main/.cursorrules)**: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.  
+4. **[AI Assistant Notebook](https://github.com/billk-FM/ras-commander/blob/main/ai_tools/rascommander_code_assistant.ipynb)**: A notebook for dynamic code summarization and API interaction (bring your own API Key).  Currently, this only does a single-shot message on the Claude Sonnet 3.5 API, which can be up to 50 cents per request.  Future revisions will include the ability to select which knowledge base file to include, a choice of SOTA models + multi turn conversations to build automation notebooks interactively.  
 
 These tools aim to streamline development and provide intelligent assistance when modeling with, and working with and revising the ras-commander library.
 
