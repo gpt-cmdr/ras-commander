@@ -1,9 +1,11 @@
 # Ignore the example_projects folder and all its subfolders
 examples/example_projects/
 
+# 
 workspace/
 projects/
 my_projects/
+
 
 ignore egg info
 *.egg-info/

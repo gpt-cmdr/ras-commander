@@ -6,15 +6,16 @@ import re
 OMIT_FOLDERS = [
     "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests",
     "build", "dist", "ras_commander.egg-info", "venv",
-    "example_projects", "llm_summary", "misc",
+    "example_projects", "assistant_knowledge_bases", "misc", "ai_tools",
 ]
 OMIT_FILES = [
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",
     ".bat", ".sh", ".log", ".tmp", ".bak", ".swp",
     ".DS_Store", "Thumbs.db", "example_projects.zip",
-    "Example_Projects_6_5.zip", "example_projects.ipynb",
+    "Example_Projects_6_5.zip", "example_projects.ipynb", "11_Using_RasExamples.ipynb", 
+    "future_dev_roadmap.ipynb",
 ]
-SUMMARY_OUTPUT_DIR = "llm_summary"
+SUMMARY_OUTPUT_DIR = "assistant_knowledge_bases"
 SCRIPT_NAME = Path(__file__).name
 
 def ensure_output_dir(base_path):
@@ -84,7 +85,7 @@ def generate_full_summary(summarize_subfolder, output_dir):
 def generate_split_summary(summarize_subfolder, output_dir):
     split_files_mapping = {
         "examples": "examples.txt",
-        "ras_commander": "ras_commander_library.txt",
+        "ras_commander": "ras_commander_classes_and_functions_only.txt",
         # Add more mappings as needed
     }
 
@@ -117,7 +118,7 @@ def generate_split_summary(summarize_subfolder, output_dir):
 def generate_documentation_only_summary(summarize_subfolder, output_dir):
     # For example, processing 'ras_commander' folder
     target_folder = summarize_subfolder / "ras_commander"
-    output_file_name = "ras_commander_without_code.txt"
+    output_file_name = "ras_commander_documentation_only.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating Documentation-Only Summary: {output_file_path}")
 
@@ -141,7 +142,7 @@ def generate_documentation_only_summary(summarize_subfolder, output_dir):
     print(f"Documentation-only summary created at '{output_file_path}'")
 
 def generate_full_docsonly_summary(summarize_subfolder, output_dir):
-    output_file_name = f"{summarize_subfolder.name}_fulldocsonly.txt"
+    output_file_name = f"{summarize_subfolder.name}_all_without_code.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating Full Documentation-Only Summary: {output_file_path}")
 
