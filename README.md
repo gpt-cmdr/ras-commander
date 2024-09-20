@@ -40,15 +40,21 @@ These tools aim to streamline development and provide intelligent assistance whe
 
 ## Installation
 
-Install ras-commander using pip:
+Create a virtual environment with conda or venv (ask ChatGPT if you need help)
 
+In your virtual environment, install ras-commander using pip:
+```
 pip install pandas requests pathlib
 pip install ras-commander
+```
+
+   
 
 ## Requirements
 
-- Python 3.9+
+- Tested with Python 3.11
 - HEC-RAS 6.2 or later (other versions may work, all testing was done with version 6.2 and above)
+- Detailed project workflows and/or existing libraries and code where ras-commander can be integrated.
 
 For a full list of dependencies, see the `requirements.txt` file.
 
@@ -140,11 +146,14 @@ Key features:
 Example usage:
 from ras_commander import RasExamples
 
+```
 ras_examples = RasExamples()
 ras_examples.get_example_projects()  # Downloads example projects if not already present
 categories = ras_examples.list_categories()
 projects = ras_examples.list_projects("Steady Flow")
 extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
+```
+
 
 ## RasPrj
 
@@ -158,17 +167,20 @@ Key features:
 Note: While a global `ras` object is available for convenience, you can create multiple `RasPrj` instances to manage several projects simultaneously.
 
 Example usage:
+```
 from ras_commander import RasPrj, init_ras_project
+```
 
-# Using the global ras object
+### Using the global ras object
+```
 init_ras_project("/path/to/project", "6.5")
+```
 
-# Creating a custom RasPrj instance
+### Creating a custom RasPrj instance
+```
 custom_project = RasPrj()
 init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
-
-
-
+```
 
 ## Documentation
 
@@ -177,24 +189,6 @@ For detailed usage instructions and API documentation, please refer to the [Comp
 ## Examples
 
 Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
-
-## AI-Driven Coding Experience
-
-ras-commander provides several AI-powered tools to enhance the coding experience:
-
-1. ChatGPT Assistant: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
-
-2. LLM Summaries: Up-to-date summaries of the codebase for use with large language models like Claude or GPT-4.
-
-3. Cursor IDE Integration: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.
-
-4. Jupyter Notebook Assistant: A notebook for dynamic code summarization and API interaction.
-
-These tools aim to streamline development and provide intelligent assistance when working with the ras-commander library.
-
-## RAS-Cmdr GPT Assistant
-
-The RAS Commander GPT assistant has access to the entire code base, and can be a helpful tool for understanding the library and its capabilities.  However, it is subject to the same context window limitations and file retrieval limitations as I have covered in ADD BLOG LINK HERE.  For best results, use the llm summaries above to provide robust context to the model before asking to generate complex workflows. 
 
 ## Future Development
 
