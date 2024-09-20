@@ -1,0 +1,2885 @@
+File: c:\GH\ras-commander\.cursorrules
+==================================================
+# RAS Commander (ras-commander) Coding Assistant
+
+## Overview
+
+This Coding Assistant helps you write efficient and well-structured Python code for working with HEC-RAS projects using the RAS Commander (ras-commander) library.
+
+**Key Features:**
+
+* **Automates HEC-RAS tasks:** Streamlines project setup, plan execution, data management, and more.
+* **Pythonic interface:** Leverages familiar Python libraries like pandas and pathlib for intuitive coding.
+* **Flexible execution:** Supports single plan, sequential, and parallel execution modes.
+* **Built-in examples:** Provides access to HEC-RAS example projects for learning and testing.
+
+**Core Concepts:**
+
+* **RAS Objects:** Represent HEC-RAS projects and their components (plans, geometry, flow files).
+* **Project Initialization:** Use `init_ras_project()` to set up a project, choosing between global and custom instances.
+* **File Handling:** pathlib.Path ensures consistent file path management across operating systems.
+* **Data Management:** Pandas DataFrames organize project data for efficient manipulation.
+* **Execution Modes:** Choose from single, sequential, or parallel execution based on project needs.
+* **Utility Functions:** RasUtils provides common file operations and project management tasks.
+
+## Classes, Functions and Arguments for ras_commander
+
+Class/Function | Required Arguments | Optional Arguments
+---------------|--------------------|--------------------|
+RasPrj | | |
+init_ras_project | ras_project_folder, ras_version | ras_instance
+get_ras_exe | ras_version | - |
+RasPlan | | |
+set_geom | plan_number, new_geom | ras_object |
+set_steady | plan_number, new_steady_flow_number | ras_object |
+set_unsteady | plan_number, new_unsteady_flow_number | ras_object |
+set_num_cores | plan_number, num_cores | ras_object |
+clone_plan | template_plan | new_plan_shortid, ras_object |
+RasGeo | | |
+clear_geompre_files | | plan_files, ras_object |
+RasUnsteady | | |
+update_unsteady_parameters | unsteady_file, modifications | ras_object |
+RasCmdr | | |
+compute_plan | plan_number | dest_folder, ras_object, clear_geompre, num_cores, overwrite_dest |
+compute_parallel | | plan_number, max_workers, num_cores, ras_object, dest_folder, overwrite_dest |
+compute_test_mode | | plan_number, dest_folder_suffix, clear_geompre, num_cores, ras_object, overwrite_dest |
+RasUtils | | |
+create_backup | file_path | backup_suffix, ras_object |
+restore_from_backup | backup_path | remove_backup, ras_object |
+update_plan_file | plan_number_or_path, file_type, entry_number | ras_object |
+RasExamples | | |
+extract_project | project_names | - |
+
+## Coding Assistance Rules:
+
+Your role is building, refactoring and debugging Python scripts using Python 3.9+, focusing on automation tasks for HEC-RAS projects.
+
+1. Prefer default libraries where possible, especially pathlib for file operations.
+2. Use r-strings for file and directory path inputs.
+3. Use f-strings for string formatting and concatenation.
+4. Always use pathlib over os for manipulation of file and directory paths.
+5. Print DataFrame names and variable names before displaying DataFrames.
+6. Prefer pandas for data manipulation and analysis tasks.
+7. Use matplotlib or bokeh for visualization when needed.
+8. Always include comments for code readability and explain complex operations.
+9. Use logging for informative output and debugging information.
+10. Follow PEP 8 conventions for code style.
+11. Provide clear error handling and user feedback.
+12. When using RAS Commander functions, explain their purpose and key arguments.
+13. Encourage consistent use of either global 'ras' object or custom instances throughout scripts.
+14. Highlight best practices for parallel execution and performance optimization.
+15. Suggest using RasExamples for testing and learning purposes when appropriate.
+
+When revising code, write planning steps as comments before implementation, labeled as:
+## Explicit Planning and Reasoning for Revisions
+
+For geodataframes, use the 'union_all()' method instead of the deprecated 'unary_union' attribute.
+
+Note for pandas >= 2.0: Use pd.concat instead of the removed append method.
+
+Always provide full code segments with no elides.
+
+==================================================
+
+Folder: c:\GH\ras-commander\.gitignore
+==================================================
+
+File: c:\GH\ras-commander\Comprehensive_Library_Guide.md
+==================================================
+# Comprehensive RAS-Commander Library Guide
+
+## Introduction
+
+RAS-Commander (`ras_commander`) is a Python library designed to automate and streamline operations with HEC-RAS projects. It provides a suite of tools for managing projects, executing simulations, and handling results. This guide offers a comprehensive overview of the library's key concepts, modules, best practices, and advanced usage patterns.
+
+---
+
+## Table of Contents
+
+- [Key Concepts](#key-concepts)
+- [Module Overview](#module-overview)
+- [Best Practices](#best-practices)
+- [Usage Patterns](#usage-patterns)
+  - [Initializing a Project](#initializing-a-project)
+  - [Cloning a Plan](#cloning-a-plan)
+  - [Executing Plans](#executing-plans)
+  - [Working with Multiple Projects](#working-with-multiple-projects)
+  - [Performance Optimization](#performance-optimization)
+- [Advanced Usage](#advanced-usage)
+  - [RasExamples](#rasexamples)
+  - [RasUtils](#rasutils)
+  - [Artifact System](#artifact-system)
+  - [AI-Driven Coding Tools](#ai-driven-coding-tools)
+- [Troubleshooting](#troubleshooting)
+- [Conclusion](#conclusion)
+
+---
+
+## Key Concepts
+
+1. **RAS Objects**:
+   - Represent HEC-RAS projects containing information about plans, geometries, and flow files.
+   - Support both a global `ras` object and custom `RasPrj` instances for different projects.
+
+2. **Project Initialization**:
+   - Use `init_ras_project()` to initialize projects and set up RAS objects.
+   - Handles project file discovery and data structure setup.
+
+3. **File Handling**:
+   - Utilizes `pathlib.Path` for consistent, platform-independent file paths.
+   - Adheres to HEC-RAS file naming conventions (`.prj`, `.p01`, `.g01`, `.f01`, `.u01`).
+
+4. **Data Management**:
+   - Employs Pandas DataFrames to manage structured data about plans, geometries, and flow files.
+   - Provides methods for accessing and updating these DataFrames.
+
+5. **Execution Modes**:
+   - **Single Plan Execution**: Run individual plans.
+   - **Sequential Execution**: Run multiple plans in sequence.
+   - **Parallel Execution**: Run multiple plans concurrently for improved performance.
+
+6. **Example Projects**:
+   - The `RasExamples` class offers functionality to download and manage HEC-RAS example projects for testing and learning.
+
+7. **Utility Functions**:
+   - `RasUtils` provides common utility functions for file operations, backups, and error handling.
+
+8. **Artifact System**:
+   - Handles substantial, self-contained content that users might modify or reuse, displayed in a separate UI window.
+
+9. **AI-Driven Coding Tools**:
+   - Integrates AI-powered tools like ChatGPT Assistant, LLM Summaries, Cursor IDE Integration, and Jupyter Notebook Assistant.
+
+---
+
+## Module Overview
+
+1. **RasPrj**: Manages HEC-RAS project initialization and data.
+2. **RasCmdr**: Handles execution of HEC-RAS simulations.
+3. **RasPlan**: Provides functions for plan file operations.
+4. **RasGeo**: Manages geometry file operations.
+5. **RasUnsteady**: Handles unsteady flow file operations.
+6. **RasUtils**: Offers utility functions for common tasks.
+7. **RasExamples**: Manages example HEC-RAS projects.
+
+---
+
+## Best Practices
+
+### 1. RAS Object Usage
+
+- **Single Project Scripts**:
+  - Use the global `ras` object for simplicity.
+    ```python
+    from ras_commander import ras, init_ras_project
+
+    init_ras_project("/path/to/project", "6.5")
+    # Use ras object for operations
+    ```
+
+- **Multiple Projects**:
+  - Create separate `RasPrj` instances for each project.
+    ```python
+    from ras_commander import RasPrj, init_ras_project
+
+    project1 = init_ras_project("/path/to/project1", "6.5", ras_instance=RasPrj())
+    project2 = init_ras_project("/path/to/project2", "6.5", ras_instance=RasPrj())
+    ```
+
+- **Consistency**:
+  - Avoid mixing global and custom RAS objects in the same script.
+
+### 2. Plan Specification
+
+- Use plan numbers as strings (e.g., `"01"`, `"02"`) for consistency.
+  ```python
+  RasCmdr.compute_plan("01")
+  ```
+
+- Check available plans before specifying plan numbers.
+  ```python
+  print(ras.plan_df)  # Displays available plans
+  ```
+
+### 3. Geometry Preprocessor Files
+
+- Clear geometry preprocessor files before significant changes.
+  ```python
+  RasGeo.clear_geompre_files()
+  ```
+
+- Use `clear_geompre=True` for a clean computation environment.
+  ```python
+  RasCmdr.compute_plan("01", clear_geompre=True)
+  ```
+
+### 4. Parallel Execution
+
+- Adjust `max_workers` and `num_cores` based on system capabilities.
+  ```python
+  RasCmdr.compute_parallel(max_workers=4, num_cores=2)
+  ```
+
+- Use `dest_folder` to organize outputs and prevent conflicts.
+  ```python
+  RasCmdr.compute_parallel(dest_folder="/path/to/results")
+  ```
+
+### 5. Error Handling
+
+- Implement try-except blocks to handle potential errors.
+  ```python
+  try:
+      RasCmdr.compute_plan("01")
+  except FileNotFoundError:
+      print("Plan file not found")
+  ```
+
+- Utilize logging for informative output.
+  ```python
+  import logging
+  logging.basicConfig(level=logging.INFO)
+  ```
+
+### 6. File Path Handling
+
+- Use `pathlib.Path` for robust file and directory operations.
+  ```python
+  from pathlib import Path
+  project_path = Path("/path/to/project")
+  ```
+
+### 7. Type Hinting
+
+- Apply type hints to improve code readability and IDE support.
+  ```python
+  def compute_plan(plan_number: str, clear_geompre: bool = False) -> bool:
+      ...
+  ```
+
+---
+
+## Usage Patterns
+
+### Initializing a Project
+
+```python
+from ras_commander import init_ras_project, ras
+
+init_ras_project("/path/to/project", "6.5")
+print(f"Working with project: {ras.project_name}")
+```
+
+### Cloning a Plan
+
+```python
+from ras_commander import RasPlan
+
+new_plan_number = RasPlan.clone_plan("01")
+print(f"Created new plan: {new_plan_number}")
+```
+
+### Executing Plans
+
+- **Single Plan Execution**:
+  ```python
+  from ras_commander import RasCmdr
+
+  success = RasCmdr.compute_plan("01", num_cores=2)
+  print(f"Plan execution {'successful' if success else 'failed'}")
+  ```
+
+- **Parallel Execution of Multiple Plans**:
+  ```python
+  from ras_commander import RasCmdr
+
+  results = RasCmdr.compute_parallel(
+      plan_numbers=["01", "02", "03"],
+      max_workers=3,
+      num_cores=4,
+      dest_folder="/path/to/results",
+      clear_geompre=True
+  )
+
+  for plan, success in results.items():
+      print(f"Plan {plan}: {'Successful' if success else 'Failed'}")
+  ```
+
+### Working with Multiple Projects
+
+```python
+from ras_commander import RasPrj, init_ras_project, RasCmdr
+
+# Initialize two separate projects
+project1 = init_ras_project("/path/to/project1", "6.5", ras_instance=RasPrj())
+project2 = init_ras_project("/path/to/project2", "6.5", ras_instance=RasPrj())
+
+# Perform operations on each project
+RasCmdr.compute_plan("01", ras_object=project1)
+RasCmdr.compute_plan("02", ras_object=project2)
+
+# Compare results
+results1 = project1.get_hdf_entries()
+results2 = project2.get_hdf_entries()
+```
+
+### Performance Optimization
+
+```python
+from ras_commander import RasCmdr
+
+results = RasCmdr.compute_parallel(
+    plan_numbers=["01", "02", "03"],
+    max_workers=3,
+    num_cores=4,
+    dest_folder="/path/to/results",
+    clear_geompre=True
+)
+
+for plan, success in results.items():
+    print(f"Plan {plan}: {'Successful' if success else 'Failed'}")
+```
+
+- **Best Practices**:
+  - Use `compute_parallel()` for concurrent plan execution.
+  - Adjust `max_workers` and `num_cores` based on system capabilities.
+  - Organize outputs with `dest_folder`.
+  - Use `clear_geompre=True` for clean computations.
+
+---
+
+## Advanced Usage
+
+### RasExamples
+
+The `RasExamples` class provides functionality for managing HEC-RAS example projects. This is particularly useful for testing, learning, and development purposes.
+
+#### Key Concepts
+
+- **Example Project Management**: Access and manipulate example projects.
+- **Automatic Downloading and Extraction**: Fetches projects from official sources.
+- **Project Categorization**: Organizes projects into categories for easy navigation.
+
+#### Usage Patterns
+
+```python
+from ras_commander import RasExamples
+
+# Initialize RasExamples
+ras_examples = RasExamples()
+
+# Download example projects (if not already present)
+ras_examples.get_example_projects()
+
+# List available categories
+categories = ras_examples.list_categories()
+print(f"Available categories: {categories}")
+
+# List projects in a specific category
+steady_flow_projects = ras_examples.list_projects("Steady Flow")
+print(f"Steady Flow projects: {steady_flow_projects}")
+
+# Extract specific projects
+extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
+for path in extracted_paths:
+    print(f"Extracted project to: {path}")
+
+# Clean up extracted projects when done
+ras_examples.clean_projects_directory()
+```
+
+### RasUtils
+
+The `RasUtils` class provides utility functions for common tasks in the `ras_commander` library.
+
+#### Key Concepts
+
+- **File and Directory Operations**: Create, delete, and manage files and directories.
+- **Backup and Restoration**: Safeguard original files with backups.
+- **Error Handling and Retries**: Robust methods to handle common file system errors.
+
+#### Usage Patterns
+
+```python
+from ras_commander import RasUtils
+from pathlib import Path
+
+# Create a backup of a file
+original_file = Path("project.prj")
+backup_file = RasUtils.create_backup(original_file)
+
+# Ensure a directory exists
+output_dir = RasUtils.create_directory(Path("output"))
+
+# Find files by extension
+prj_files = RasUtils.find_files_by_extension(".prj")
+
+# Get file information
+file_size = RasUtils.get_file_size(original_file)
+mod_time = RasUtils.get_file_modification_time(original_file)
+
+# Update a plan file
+RasUtils.update_plan_file("01", "Geom", 2)
+
+# Remove a file or folder with retry logic
+RasUtils.remove_with_retry(Path("temp_folder"), is_folder=True)
+```
+
+### Artifact System
+
+The artifact system in `ras_commander` is designed to handle substantial, self-contained content that users might modify or reuse. Artifacts are displayed in a separate UI window for clarity.
+
+#### When to Use Artifacts
+
+- **Code Snippets**: Longer than 15 lines.
+- **Complex Diagrams or Charts**: Visual representations that require focus.
+- **Detailed Reports or Documentation**: Extensive text content.
+
+#### Example of Creating an Artifact
+
+```python
+# Example Function Artifact
+
+<ANTARTIFACTLINK identifier="example-function" type="application/vnd.ant.code" language="python" title="Example Function" isClosed="true" />
+```
+
+### AI-Driven Coding Tools
+
+`ras_commander` integrates several AI-powered tools to enhance the coding experience.
+
+#### Tools and Features
+
+1. **ChatGPT Assistant**:
+   - Use for general questions about the library and its usage.
+   - Provides code suggestions and explanations.
+
+2. **LLM Summaries**:
+   - Utilize large language models for up-to-date context on the codebase.
+   - Available in two versions: full codebase and examples/docstrings only.
+
+3. **Cursor IDE Integration**:
+   - Offers context-aware suggestions and documentation.
+   - Automatically includes a `.cursorrules` file when opening the `ras_commander` folder.
+
+4. **Jupyter Notebook Assistant**:
+   - Dynamic code summarization and API interaction.
+   - Allows for real-time querying and exploration of the library.
+
+#### Best Practices
+
+- **Documentation First**: Start with the provided documentation and examples.
+- **Specific Queries**: Use the ChatGPT Assistant for specific questions or clarifications.
+- **LLM Summaries**: Leverage when working with external AI models.
+- **IDE Integration**: Use Cursor IDE for the most integrated coding experience.
+- **Interactive Learning**: Explore the Jupyter Notebook Assistant for experimentation.
+
+---
+
+## Troubleshooting
+
+### 1. Project Initialization Issues
+
+- **Ensure Correct Paths**: Verify that the project path is accurate and the `.prj` file exists.
+- **HEC-RAS Version**: Confirm that the specified HEC-RAS version is installed on your system.
+
+### 2. Execution Failures
+
+- **File Existence**: Check that all referenced plan, geometry, and flow files exist.
+- **Executable Path**: Ensure the HEC-RAS executable path is correctly set.
+- **Log Files**: Review HEC-RAS log files for specific error messages.
+
+### 3. Parallel Execution Problems
+
+- **Resource Allocation**: Reduce `max_workers` if encountering memory issues.
+- **System Capabilities**: Adjust `num_cores` based on your system's capacity.
+- **Clean Environment**: Use `clear_geompre=True` to prevent conflicts.
+
+### 4. File Access Errors
+
+- **Permissions**: Verify read/write permissions for the project directory.
+- **File Locks**: Close any open HEC-RAS instances that might lock files.
+
+### 5. Inconsistent Results
+
+- **Geometry Files**: Clear geometry preprocessor files when making changes.
+- **Plan Parameters**: Ensure all plan parameters are correctly set before execution.
+
+---
+
+## Conclusion
+
+The RAS-Commander (`ras_commander`) library provides a powerful set of tools for automating HEC-RAS operations. By following the best practices outlined in this guide and leveraging the library's features, you can efficiently manage and execute complex HEC-RAS projects programmatically.
+
+Remember to refer to the latest documentation and the library's source code for up-to-date information. As you become more familiar with `ras_commander`, you'll discover more ways to optimize your HEC-RAS workflows and increase productivity.
+
+For further assistance, bug reports, or feature requests, please refer to the library's [GitHub repository](https://github.com/billk-FM/ras-commander) and issue tracker.
+
+---
+
+**Happy Modeling!**
+==================================================
+
+Folder: c:\GH\ras-commander\examples
+==================================================
+
+File: c:\GH\ras-commander\LICENSE
+==================================================
+MIT License
+
+Copyright (c) 2024 William M. Katzenmeyer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
+
+==================================================
+
+File: c:\GH\ras-commander\pyproject.toml
+==================================================
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+==================================================
+
+Folder: c:\GH\ras-commander\ras_commander
+==================================================
+
+File: c:\GH\ras-commander\README.md
+==================================================
+# RAS Commander (ras-commander)
+
+RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under HEC-Commander tools.
+
+Contributors:
+William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
+Sean Micek, P.E., C.F.M. - smicek@fenstermaker.com
+Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com
+
+## Features
+
+- Automate HEC-RAS project management and simulations
+- Support for both single and multiple project instances
+- Parallel execution of HEC-RAS plans
+- Utilities for managing geometry, plan, and unsteady flow files
+- Example project management for testing and development
+- Two primary operation modes: "Run Missing" and "Build from DSS"
+
+## Installation
+
+Install ras-commander using pip:
+
+pip install pandas requests pathlib
+pip install ras-commander
+
+## Requirements
+
+- Python 3.9+
+- HEC-RAS 6.2 or later (other versions may work, all testing was done with version 6.2 and above)
+
+For a full list of dependencies, see the `requirements.txt` file.
+
+## Quick Start
+
+from ras_commander import init_ras_project, RasCmdr, RasPlan
+
+# Initialize a project
+init_ras_project(r"/path/to/project", "6.5")
+
+# Execute a single plan
+RasCmdr.compute_plan("01", dest_folder=r"/path/to/results", overwrite_dest=True)
+
+# Execute plans in parallel
+results = RasCmdr.compute_parallel(
+    plan_numbers=["01", "02"],
+    max_workers=2,
+    cores_per_run=2,
+    dest_folder=r"/path/to/results",
+    overwrite_dest=True
+)
+
+# Modify a plan
+RasPlan.set_geom("01", "02")
+
+## Key Components
+
+- `RasPrj`: Manages HEC-RAS projects
+- `RasCmdr`: Handles execution of HEC-RAS simulations
+- `RasPlan`: Provides functions for modifying and updating plan files
+- `RasGeo`: Handles operations related to geometry files
+- `RasUnsteady`: Manages unsteady flow file operations
+- `RasUtils`: Contains utility functions for file operations and data management
+- `RasExamples`: Manages and loads HEC-RAS example projects
+
+## RasExamples
+
+The `RasExamples` class provides functionality for quickly loading and managing HEC-RAS example projects. This is particularly useful for testing and development purposes.
+
+Key features:
+- Download and extract HEC-RAS example projects
+- List available project categories and projects
+- Extract specific projects for use
+- Manage example project data efficiently
+
+Example usage:
+from ras_commander import RasExamples
+
+ras_examples = RasExamples()
+ras_examples.get_example_projects()  # Downloads example projects if not already present
+categories = ras_examples.list_categories()
+projects = ras_examples.list_projects("Steady Flow")
+extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
+
+## RasPrj
+
+The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
+
+Key features:
+- Initialize HEC-RAS projects
+- Load and manage project data (plans, geometries, flows, etc.)
+- Provide easy access to project files and information
+
+Note: While a global `ras` object is available for convenience, you can create multiple `RasPrj` instances to manage several projects simultaneously.
+
+Example usage:
+from ras_commander import RasPrj, init_ras_project
+
+# Using the global ras object
+init_ras_project("/path/to/project", "6.5")
+
+# Creating a custom RasPrj instance
+custom_project = RasPrj()
+init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
+
+
+## AI-Driven Coding Experience
+
+ras-commander provides several AI-powered tools to enhance the coding experience:
+
+1. ChatGPT Assistant: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
+
+2. LLM Summaries: Up-to-date summaries of the codebase for use with large language models like Claude or GPT-4.
+
+3. Cursor IDE Integration: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.
+
+4. Jupyter Notebook Assistant: A notebook for dynamic code summarization and API interaction.
+
+These tools aim to streamline development and provide intelligent assistance when working with the ras-commander library.
+
+## Documentation
+
+For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
+
+## Examples
+
+Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
+
+## Project Organization Diagram
+
+ras_commander
+├── .github
+│   └── workflows
+│       └── python-package.yml
+├── ras_commander
+│   ├── __init__.py
+│   ├── RasCmdr.py
+│   ├── RasExamples.py
+│   ├── RasGeo.py
+│   ├── RasPlan.py
+│   ├── RasPrj.py
+│   ├── RasUnsteady.py
+│   └── RasUtils.py
+├── examples
+│   ├── 01_project_initialization.py
+│   ├── 02_plan_operations.py
+│   ├── 03_geometry_operations.py
+│   ├── 04_unsteady_flow_operations.py
+│   ├── 05_utility_functions.py
+│   ├── 06_single_plan_execution.py
+│   ├── 07_sequential_plan_execution.py
+│   ├── 08_parallel_execution.py
+│   ├── 09_specifying_plans.py
+│   ├── 10_arguments_for_compute.py
+│   ├── 11_Using_RasExamples.ipynb
+│   ├── 12_plan_set_execution.py
+│   └── 13_multiple_project_operations.py
+├── tests
+│   └── ... (test files)
+├── .gitignore
+├── LICENSE
+├── README.md
+├── STYLE_GUIDE.md
+├── Comprehensive_Library_Guide.md
+├── pyproject.toml
+├── setup.cfg
+├── setup.py
+└── requirements.txt
+
+## Inclusion of .cursorrules and ai_tools for AI-driven Coding Experience
+
+Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions. Additionally, two other provided methods for interacting with the library through your current AI subscriptions:
+
+- ChatGPT: ras_commander GPT Assistant (LINK HERE)
+- Latest LLM summaries of the code base:
+   - Entire code base: LINK HERE (TOKEN COUNT) (for Claude or Gemini)
+   - Examples and Function Docstrings Only: LINK HERE (TOKEN COUNT) (for GPT-4o, o1 or Llama 3.1 405b)
+- Cursor IDE through .cursorrules file
+- 'rascommander_code_assistant.ipynb' notebook in the ras_commander folder, which allows for dynamic summarization of the code base and API chatting directly through the notebook.
+
+There are a series of scripts provided in the "llm_summaries" folder that provide summaries of the code base, and the docstrings of the functions. They can be run in your local environment, or provided to ChatGPT's code interpreter for execution.
+
+## RAS-Cmdr GPT Assistant
+
+The RAS Commander GPT assistant has access to the entire code base, and can be a helpful tool for understanding the library and its capabilities.  However, it is subject to the same context window limitations and file retrieval limitations as I have covered in ADD BLOG LINK HERE.  For best results, use the llm summaries above to provide robust context to the model before asking to generate complex workflows. 
+
+## Current Uses and Roadmap Items
+
+### Potential Uses (Roadmap Items) of HEC-RAS Automation Functions
+
+This set of functions provides a powerful foundation for automating various aspects of HEC-RAS modeling workflows. Here are some potential applications:
+
+1. **Calibration and Sensitivity Analysis:**
+    - **Automated Parameter Variation:** Users can create multiple simulation scenarios with varying parameters (e.g., Manning's n values, boundary conditions, initial conditions) to calibrate their model against observed data.
+    - **Sensitivity Testing:** Evaluate the impact of different input parameters on model outputs by generating a range of scenarios and analyzing the results. This helps identify critical parameters that require more attention during calibration.
+
+2. **Real-time Forecasting:**
+    - **Dynamic Model Updates:** Integrate with external data sources (e.g., weather forecasts, streamflow observations) to automatically update boundary conditions and initial conditions in unsteady flow files before running the simulation.
+    - **Ensemble Forecasting:** Generate multiple forecasts by incorporating uncertainty in input data and model parameters. This provides a more comprehensive understanding of potential future flow conditions.
+
+3. **Scenario Analysis:**
+    - **Land Use Change Impacts:** Evaluate the effects of land use changes on flood risk by modifying Manning's n values using `extract_2d_mannings_tables`, `modify_2d_mannings_table`, and `write_2d_mannings_tables` and running simulations with updated geometry files.
+    - **Climate Change Impacts:** Analyze the potential impacts of projected climate changes on flood risk by adjusting precipitation patterns and other relevant parameters in unsteady flow files.
+
+4. **Batch Processing and High-Performance Computing:**
+    - **Large-scale Model Runs:** Utilize `run_plans_parallel` to execute multiple simulations concurrently on a multi-core system, significantly reducing processing time for large-scale models or complex scenarios.
+    - **Automated Report Generation:** Integrate with Python libraries like matplotlib and bokeh to automatically generate customized reports summarizing simulation results, including tables, figures, and maps.
+
+5. **Model Development and Testing:**
+    - **Rapid Prototyping:** Quickly set up and run new model configurations using template files and automated workflows, facilitating rapid model development and testing.
+    - **Regression Testing:** Ensure model integrity and consistency after code changes or updates by automatically running a predefined set of simulations and comparing results with expected outputs.
+
+6. **User-Friendly Interfaces:**
+    - **GUI Development:** Integrate with Python GUI libraries like Tkinter or PyQt to create user-friendly interfaces for automating HEC-RAS workflows, allowing non-programmers to access the power of automation.
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
+
+## Style Guide
+
+This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
+
+## License
+
+ras-commander is released under the MIT License. See the license file for details.
+
+## Acknowledgments
+
+RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository.  In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4o, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+
+## Contact
+
+For questions, suggestions, or support, please contact:
+William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
+
+==================================================
+
+File: c:\GH\ras-commander\requirements.txt
+==================================================
+# Core dependencies
+pandas>=1.0.0
+numpy>=1.18.0
+pathlib>=1.0.1
+requests>=2.25.0
+
+# Data handling and analysis
+h5py>=3.1.0
+
+# Plotting (if needed)
+matplotlib>=3.3.0
+
+# Development and testing
+pytest>=6.2.0
+flake8>=3.9.0
+black>=21.5b1
+
+# Documentation
+sphinx>=3.5.0
+sphinx-rtd-theme>=0.5.0
+
+# Packaging and distribution
+setuptools>=50.3.2
+wheel>=0.35.1
+twine>=3.3.0
+==================================================
+
+File: c:\GH\ras-commander\setup.py
+==================================================
+from setuptools import setup, find_packages
+
+setup(
+    name="ras-commander",
+    version="0.33.0",
+    packages=["ras_commander"],
+    include_package_data=True,
+)
+==================================================
+
+File: c:\GH\ras-commander\STYLE_GUIDE.md
+==================================================
+# RAS Commander (ras-commander) Style Guide
+
+## Table of Contents
+1. [Naming Conventions](#1-naming-conventions)
+2. [Code Structure and Organization](#2-code-structure-and-organization)
+3. [Documentation and Comments](#3-documentation-and-comments)
+4. [Code Style](#4-code-style)
+5. [Error Handling](#5-error-handling)
+6. [Testing](#6-testing)
+7. [Version Control](#7-version-control)
+8. [Type Hinting](#8-type-hinting)
+9. [Project-Specific Conventions](#9-project-specific-conventions)
+10. [Inheritance](#10-inheritance)
+11. [RasUtils Usage](#11-rasutils-usage)
+12. [Working with RasExamples](#12-working-with-rasexamples)
+
+## 1. Naming Conventions
+
+### 1.1 General Rules
+- Use `snake_case` for all function and variable names
+- Use `PascalCase` for class names
+- Use `UPPER_CASE` for constants
+
+### 1.2 Library-Specific Naming
+- Informal Name: RAS Commander
+- Package Name and GitHub Library Name: ras-commander (with a hyphen)
+- Import Name: ras_commander (with an underscore)
+- Main Class of functions for HEC-RAS Automation: RasCmdr
+
+### 1.3 Function Naming
+- Start function names with a verb describing the action
+- Use clear, descriptive names
+- Common verbs and their uses:
+  - `get_`: retrieve data
+  - `set_`: set values or properties
+  - `compute_`: execute or calculate
+  - `clone_`: copy
+  - `clear_`: remove or reset data
+  - `find_`: search
+  - `update_`: modify existing data
+
+### 1.4 Abbreviations
+Use the following abbreviations consistently throughout the codebase:
+
+- ras: HEC-RAS
+- prj: Project
+- geom: Geometry
+- pre: Preprocessor
+- geompre: Geometry Preprocessor
+- num: Number
+- init: Initialize
+- XS: Cross Section
+- DSS: Data Storage System
+- GIS: Geographic Information System
+- BC: Boundary Condition
+- IC: Initial Condition
+- TW: Tailwater
+
+Use these abbreviations in lowercase for function and variable names (e.g., `geom`, not `Geom` or `GEOM`).
+
+### 1.5 Class Naming
+- Use `PascalCase` for class names (e.g., `FileOperations`, `PlanOperations`, `RasCmdr`)
+- Class names should be nouns or noun phrases
+
+### 1.6 Variable Naming
+- Use descriptive names indicating purpose or content
+- Prefix boolean variables with `is_`, `has_`, or similar
+
+## 2. Code Structure and Organization
+
+### 2.1 File Organization
+- Group related functions into appropriate classes
+- Keep each class in its own file, named after the class
+
+### 2.2 Function Organization
+- Order functions logically within a class
+- Place common or important functions at the top of the class
+
+### 2.3 Module Structure
+- Use the following order for module contents:
+  1. Module-level docstring
+  2. Imports (grouped and ordered)
+  3. Constants
+  4. Classes
+  5. Functions
+
+## 3. Documentation and Comments
+
+### 3.1 Docstrings
+- Use docstrings for all modules, classes, methods, and functions
+- Follow Google Python Style Guide format
+- Include parameters, return values, and a brief description
+- For complex functions, include examples in the docstring
+
+### 3.2 Comments
+- Use inline comments sparingly, only for complex logic
+- Keep comments up-to-date with code changes
+- Use TODO comments for future work, formatted as: `# TODO: description`
+
+## 4. Code Style
+
+### 4.1 Imports
+- Order imports as follows:
+  1. Standard library imports
+  2. Third-party library imports
+  3. Local application imports
+- Use absolute imports
+- Use `import ras_commander as ras` for shortening the library name in examples
+
+### 4.2 Whitespace
+- Follow PEP 8 guidelines
+- Use 4 spaces for indentation (no tabs)
+- Use blank lines to separate logical sections of code
+
+### 4.3 Line Length
+- Limit lines to 79 characters for code, 72 for comments and docstrings
+- Use parentheses for line continuation in long expressions
+
+## 5. Error Handling
+
+- Use explicit exception handling with try/except blocks
+- Raise custom exceptions when appropriate, with descriptive messages
+- Use logging for error reporting and debugging information
+- Use specific exception types when raising errors (e.g., `ValueError`, `FileNotFoundError`)
+- Provide informative error messages that include relevant details
+- Implement proper cleanup in finally blocks when necessary
+- For user-facing functions, consider wrapping internal exceptions in custom exceptions specific to ras-commander
+
+Example:
+```python
+try:
+    result = compute_plan(plan_number)
+except FileNotFoundError as e:
+    raise RasCommanderError(f"Plan file not found: {e}")
+except ValueError as e:
+    raise RasCommanderError(f"Invalid plan parameter: {e}")
+except Exception as e:
+    raise RasCommanderError(f"Unexpected error during plan computation: {e}")
+```
+
+## 6. Testing
+
+- Write unit tests for all functions and methods
+- Use the `unittest` framework
+- Aim for high test coverage, especially for critical functionality
+- Include tests for both single-project and multi-project scenarios
+- Write clear and descriptive test names
+- Use setUp and tearDown methods for common test preparations and cleanups
+- Use mock objects when appropriate to isolate units under test
+
+## 7. Version Control
+
+- Use meaningful commit messages that clearly describe the changes made
+- Create feature branches for new features or significant changes
+- Submit pull requests for code review before merging into the main branch
+- Keep commits focused and atomic (one logical change per commit)
+- Use git tags for marking releases
+- Follow semantic versioning for release numbering
+
+## 8. Type Hinting
+
+- Use type hints for all function parameters and return values
+- Use the `typing` module for complex types (e.g., `List`, `Dict`, `Optional`)
+- Include type hints in function signatures and docstrings
+- Use `Union` for parameters that can accept multiple types
+- For methods that don't return a value, use `-> None`
+
+Example:
+```python
+from typing import List, Optional
+
+def process_plans(plan_numbers: List[str], max_workers: Optional[int] = None) -> bool:
+    # Function implementation
+    return True
+```
+
+## 9. Project-Specific Conventions
+
+### 9.1 RAS Instance Handling
+- Design functions to accept an optional `ras_object` parameter:
+  ```python
+  def some_function(param1, param2, ras_object=None):
+      ras_obj = ras_object or ras
+      ras_obj.check_initialized()
+      # Function implementation
+  ```
+
+### 9.2 File Path Handling
+- Use `pathlib.Path` for file and directory path manipulations
+- Convert string paths to Path objects at the beginning of functions
+
+### 9.3 DataFrame Handling
+- Use pandas for data manipulation and storage where appropriate
+- Prefer method chaining for pandas operations to improve readability
+
+### 9.4 Parallel Execution
+- Follow the guidelines in the "Benchmarking is All You Need" blog post for optimal core usage in parallel plan execution
+
+### 9.5 Function Return Values
+- Prefer returning meaningful values over modifying global state
+- Use tuple returns for multiple values instead of modifying input parameters
+
+## 10. Inheritance
+
+### 10.1 General Principles
+
+- Prioritize composition over inheritance when appropriate
+- Design base classes for extension
+- Clearly document the public API and subclass API using docstrings
+
+### 10.2 Naming Conventions
+
+- Public API: No leading underscores
+- Subclass API: Single leading underscore (e.g., `_prepare_for_execution`)
+- Internal attributes and methods: Single leading underscore
+- Name mangling (double leading underscores): Use sparingly and document the decision clearly
+
+### 10.3 Template Method Pattern
+
+Consider using the template method pattern in base classes to define a high-level algorithm structure. Subclasses can then override specific steps to customize behavior.
+
+### 10.4 Dataframe Access Control
+
+Use properties to control access and modification of dataframes, providing a controlled interface for subclasses.
+
+## 11. RasUtils Usage
+
+- Use RasUtils for general-purpose utility functions that don't fit into other specific classes
+- When adding new utility functions, ensure they are static methods of the RasUtils class
+- Keep utility functions focused and single-purpose
+- Document utility functions thoroughly, including examples of usage
+
+Example:
+```python
+class RasUtils:
+    @staticmethod
+    def create_backup(file_path: Path, backup_suffix: str = "_backup") -> Path:
+        """
+        Create a backup of the specified file.
+
+        Args:
+            file_path (Path): Path to the file to be backed up
+            backup_suffix (str): Suffix to append to the backup file name
+
+        Returns:
+            Path: Path to the created backup file
+
+        Example:
+            >>> backup_path = RasUtils.create_backup(Path("project.prj"))
+            >>> print(f"Backup created at: {backup_path}")
+        """
+        # Function implementation
+```
+
+## 12. Working with RasExamples
+
+- Use RasExamples for managing and loading example HEC-RAS projects
+- Always check if example projects are already downloaded before attempting to download them again
+- Use the `list_categories()` and `list_projects()` methods to explore available examples
+- When extracting projects, use meaningful names and keep track of extracted paths
+- Clean up extracted projects when they are no longer needed using `clean_projects_directory()`
+
+Example:
+```python
+ras_examples = RasExamples()
+if not ras_examples.is_project_extracted("Bald Eagle Creek"):
+    extracted_path = ras_examples.extract_project("Bald Eagle Creek")[0]
+    # Use the extracted project
+    # ...
+    # Clean up when done
+    RasUtils.remove_with_retry(extracted_path, is_folder=True)
+```
+
+Remember, consistency is key. When in doubt, prioritize readability and clarity in your code. Always consider the maintainability and extensibility of the codebase when making design decisions.
+==================================================
+
+File: c:\GH\ras-commander\.gitignore\.gitignore
+==================================================
+# Ignore the example_projects folder and all its subfolders
+examples/example_projects/
+
+# 
+workspace/
+projects/
+my_projects/
+
+
+ignore egg info
+*.egg-info/
+
+.eggs/
+
+# Ignore the Example_Projects_6_5.zip file
+Example_Projects_6_5.zip
+
+# Ignore the misc folder and all its subfolders
+misc/
+ras_commander/__pycache__/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.venv/
+venv/
+==================================================
+
+File: c:\GH\ras-commander\examples\01_project_initialization.py
+==================================================
+# 01_project_initialization.py
+
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
+
+#### --- START OF SCRIPT --- ####
+
+# RAS Commander Library Notes:
+# 1. This example demonstrates both the default global 'ras' object and custom ras objects.
+# 2. The global 'ras' object is suitable for simple scripts working with a single project.
+# 3. Custom ras objects are recommended for complex scripts or when working with multiple projects.
+# 4. The init_ras_project function initializes a project and sets up the ras object.
+# 5. Each ras object contains information about its project, including plan, geometry, and flow files.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+# 4. Use descriptive names for custom ras objects to clearly identify different projects.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\02_plan_operations.py
+==================================================
+# 02_plan_operations.py
+
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+"""
+This script demonstrates the process of initializing a HEC-RAS project and performing various operations on plans, geometries, and unsteady flows using the functions within the RasPlan Class.
+
+Process Flow:
+1. Project Initialization: Initialize a HEC-RAS project by specifying the project path and version.
+2. Plan Cloning: Clone an existing plan, creating a new plan entry.
+3. Geometry Cloning: Clone a geometry associated with the original plan, generating a new geometry entry.
+4. Unsteady Flow Cloning: Clone an unsteady flow, creating a new unsteady flow entry.
+5. Plan Configuration:
+   a. Set the cloned geometry for the new plan.
+   b. Set the cloned unsteady flow for the new plan.
+   c. Update the number of cores to be used for the new plan.
+   d. Configure geometry preprocessor options for the new plan.
+6. Plan Computation: Compute the new plan and verify successful execution.
+7. Results Verification: Check the HDF entries to confirm that results were written.
+
+Additional operations that could be demonstrated:
+8. Plan Modification: Update specific parameters in the plan file (e.g., simulation time, output intervals).
+9. Geometry Editing: Modify cross-sections, manning's n values, or other geometry data.
+10. Unsteady Flow Modification: Adjust boundary conditions or initial conditions.
+11. Batch Operations: Perform operations on multiple plans simultaneously.
+12. Error Handling: Demonstrate how to handle and report errors during plan operations.
+13. Results Analysis: Extract and analyze key output values from the computed plan.
+"""
+
+# RAS Commander Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\03_geometry_operations.py
+==================================================
+# 03_geometry_operations.py
+
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Muncie"])
+
+#### --- START OF SCRIPT --- ####
+
+# RAS Commander Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+# 4. The RasGeo class provides methods for working with geometry files and preprocessor operations.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+# 4. Always clear geometry preprocessor files before making significant changes to ensure clean results.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\04_unsteady_flow_operations.py
+==================================================
+# 04_unsteady_flow_operations.py
+
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+"""
+This script demonstrates the process of initializing a HEC-RAS project and performing various operations on unsteady flow plans using the ras-commander library.
+
+Process Flow:
+1. Project Initialization: Initialize a HEC-RAS project by specifying the project path and version.
+2. Plan Cloning: Clone an existing plan, creating a new plan entry.
+3. Unsteady Flow Parameter Updates: Modify various unsteady flow parameters in the new plan.
+4. Plan Computation: Compute the new plan and verify successful execution.
+
+Note: This example uses the default global 'ras' object for simplicity. For complex scripts or when working with
+multiple projects, it's recommended to create and use separate ras objects.
+"""
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\05_utility_functions.py
+==================================================
+# 05_utility_functions.py
+
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+# RAS Commander (ras-commander) Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+# 4. The RasUtils class provides various utility functions for working with HEC-RAS projects.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\06_single_plan_execution.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Define the "example_projects" folder in the same directory as the script
+examples_path = Path(__file__).parent / "example_projects"
+
+# Delete the project if it exists
+if examples_path.exists():
+    import shutil
+    shutil.rmtree(examples_path)
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+# ras-commander Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\07_sequential_plan_execution.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Housekeeping Note: 
+# For all of the functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders
+# So if you want your script to be repeatable, you need to make sure you delete the folders before running again.
+# Otherwise an error will be raised to prevent overwriting any results from your previous runs.
+# This will not be done by the example projects routines, which only overwrite the source folder for repeatability. 
+    
+import shutil
+from pathlib import Path
+# Define the keys to search for in folder names
+# Delete example projects folder
+current_file = Path(__file__).resolve()
+current_dir = current_file.parent
+delete_folder_path = current_dir / "example_projects"
+
+if delete_folder_path.exists():
+    print(f"Removing existing folder: {delete_folder_path}")
+    shutil.rmtree(delete_folder_path)
+else:
+    print(f"Folder not found: {delete_folder_path}")
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+# ras-commander Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+# 4. For functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders.
+# 5. If you want your script to be repeatable, make sure to delete the folders before running again.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\08_parallel_execution.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+import shutil
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+# ras-commander Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+# 4. For functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders.
+# 5. If you want your script to be repeatable, make sure to delete the folders before running again.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+# 4. When using parallel execution, consider the number of cores available on your machine.
+# 5. Use the dest_folder argument to keep your project folder clean and organized.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\09_specifying_plans.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Housekeeping Note: 
+# For all of the functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders
+# So if you want your script to be repeatable, you need to make sure you delete the folders before running again.
+# Otherwise an error will be raised to prevent overwriting any results from your previous runs.
+# This will not be done by the example projects routines, which only overwrite the source folder for repeatability. 
+    
+import shutil
+from pathlib import Path
+
+# Delete example projects folder
+current_file = Path(__file__).resolve()
+current_dir = current_file.parent
+delete_folder_path = current_dir / "example_projects"
+
+if delete_folder_path.exists():
+    print(f"Removing existing folder: {delete_folder_path}")
+    shutil.rmtree(delete_folder_path)
+else:
+    print(f"Folder not found: {delete_folder_path}")
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+# RAS Commander (ras-commander) Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+# 4. The RasCmdr class provides methods for executing plans in various ways.
+# 5. You can specify individual plans or lists of plans for batch operations.
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+# 4. When specifying plans, use plan numbers as strings (e.g., "01", "02") for consistency.
+# 5. Always check the available plans in the project before specifying plan numbers for execution.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+
+==================================================
+
+File: c:\GH\ras-commander\examples\10_arguments_for_compute.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+# RAS Commander Library Notes:
+# 1. This example uses the default global 'ras' object for simplicity.
+# 2. If you need to work with multiple projects, use separate ras objects for each project.
+# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+# 4. The RasCmdr class provides various arguments for fine-tuning plan computation:
+#    - plan_number: String representing the plan number to compute (e.g., "01")
+#    - dest_folder: Path object specifying the destination folder for computation results
+#    - clear_geompre: Boolean to clear geometry preprocessor files before computation
+#    - num_cores: Integer specifying the number of cores to use
+#    - overwrite_dest: Boolean to determine if existing destination folders should be overwritten
+
+# Best Practices:
+# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
+# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
+# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
+# 4. Utilize the various arguments in compute functions to customize plan execution.
+# 5. Always consider your system's capabilities when setting num_cores.
+# 6. Use clear_geompre=True when you want to ensure a clean computation environment.
+# 7. Specify dest_folder to keep your project folder organized and prevent overwriting previous results.
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+
+==================================================
+
+File: c:\GH\ras-commander\examples\12_plan_set_execution.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+import pandas as pd
+
+
+def create_plan_set:
+    """Docs only, see 'create_plan_set.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\13_multiple_project_operations.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+import shutil
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek", "Muncie"])
+
+#### --- START OF SCRIPT --- ####
+
+def execute_plan:
+    """Docs only, see 'execute_plan.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\14_Core_Sensitivity.ipynb
+==================================================
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#%pip install ras-commander pandas requests pathlib matplotlib"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import time\n",
+    "import pandas as pd\n",
+    "import matplotlib.pyplot as plt\n",
+    "from pathlib import Path\n",
+    "from ras_commander import RasExamples, init_ras_project, RasCommander, RasPlan, RasGeo\n",
+    "\n",
+    "# Step 1: Initialize RasExamples and extract the Muncie project\n",
+    "ras_examples = RasExamples()\n",
+    "ras_examples.extract_project([\"Muncie\"])\n",
+    "\n",
+    "# Use Path.cwd() to get the current working directory in a Jupyter Notebook\n",
+    "current_directory = Path.cwd()\n",
+    "project_path = current_directory / \"example_projects\" / \"Muncie\"\n",
+    "\n",
+    "# Step 2: Initialize the Muncie Project using init_ras_project (from ras_commander)\n",
+    "muncie_project = init_ras_project(project_path, \"6.5\")\n",
+    "\n",
+    "# Step 3: Initialize a DataFrame to store execution results\n",
+    "results = []\n",
+    "\n",
+    "# Step 4: Iterate over each plan and core count\n",
+    "for plan_number in muncie_project.plan_df['plan_number'].unique():\n",
+    "    print(f\"Running sensitivity analysis for Plan {plan_number}\")\n",
+    "    \n",
+    "    # Clear geompre files before running the plan\n",
+    "    plan_path = RasPlan.get_plan_path(plan_number)\n",
+    "    RasGeo.clear_geompre_files(plan_path)\n",
+    "    \n",
+    "    for cores in range(1, 9):\n",
+    "        # Set core count for this plan\n",
+    "        RasPlan.set_num_cores(plan_number, cores)\n",
+    "        \n",
+    "        # Time the execution of the plan\n",
+    "        start_time = time.time()\n",
+    "        RasCommander.compute_plan(plan_number)\n",
+    "        execution_time = time.time() - start_time\n",
+    "        \n",
+    "        # Store the results\n",
+    "        results.append({\n",
+    "            \"plan_number\": plan_number,\n",
+    "            \"cores\": cores,\n",
+    "            \"execution_time\": execution_time\n",
+    "        })\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Step 5: Convert results into a DataFrame\n",
+    "results_df = pd.DataFrame(results)\n",
+    "\n",
+    "# Step 6: Extract plan title, shortid, and description\n",
+    "plan_info_df = muncie_project.plan_df[['plan_number', 'title', 'shortid', 'description']]\n",
+    "\n",
+    "# Merge the execution results with the plan information\n",
+    "merged_df = pd.merge(results_df, plan_info_df, on='plan_number')\n",
+    "\n",
+    "# Step 7: Calculate unit runtime (based on 1 core execution time)\n",
+    "merged_df['unit_runtime'] = merged_df.groupby('plan_number')['execution_time'].transform(lambda x: x / x.iloc[0])\n",
+    "\n",
+    "# Display the results dataframe for verification\n",
+    "print(\"merged_df DataFrame:\")\n",
+    "print(merged_df)\n",
+    "\n",
+    "# Step 8: Plot a line chart for unit runtime vs. cores for each plan\n",
+    "plt.figure(figsize=(10, 6))\n",
+    "for plan in merged_df['plan_number'].unique():\n",
+    "    plan_data = merged_df[merged_df['plan_number'] == plan]\n",
+    "    plt.plot(plan_data['cores'], plan_data['unit_runtime'], label=f\"Plan {plan}\")\n",
+    "\n",
+    "plt.xlabel(\"Number of Cores\")\n",
+    "plt.ylabel(\"Unit Runtime (Relative to 1 Core)\")\n",
+    "plt.title(\"Core Count Sensitivity Analysis\")\n",
+    "plt.legend(title=\"Plan Title\")\n",
+    "plt.grid(True)\n",
+    "plt.show()"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "releasecmdr311",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.9"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
+
+==================================================
+
+File: c:\GH\ras-commander\examples\xx_edge_cases.py
+==================================================
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+import shutil
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+example_projects_folder = Path(__file__).parent.parent / "example_projects"
+
+# delete the folder if it exists
+if example_projects_folder.exists():
+    shutil.rmtree(example_projects_folder)
+
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+def main:
+    """Docs only, see 'main.py' for full function code"""
+    main()
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+==================================================
+"""
+Execution operations for running HEC-RAS simulations using subprocess.
+Based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the -c compute flag to run HEC-RAS and orchestrating changes directly in the RAS input files to achieve automation outcomes. 
+"""
+
+import os
+import subprocess
+import shutil
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from .RasPrj import ras, RasPrj, init_ras_project, get_ras_exe
+from .RasPlan import RasPlan
+from .RasGeo import RasGeo
+from .RasUtils import RasUtils
+import subprocess
+import os
+import logging
+import time
+import pandas as pd
+from threading import Thread, Lock
+import queue
+from pathlib import Path
+import shutil
+import queue
+from threading import Thread, Lock
+import time
+
+# TO DO: 
+# 1. Alternate Run Mode for compute_plan and compute_parallel:  Using Powershell to execute the HEC-RAS command and hide the RAS window and all child windows.
+#    If this is implemented, and the plan has a popup, then the plan will not execute.  This is a deal breaker for many scenarios, and should only be used
+#    as a special option for those who don't want to deal with the popups, or want to run in the background.  This option should be limited to non-commercial use.
+# 2. Implment compute_plan_remote to go along with compute_plan.  This will be a compute_plan that is run on a remote machine via a psexec command.
+#    First, we will use the keyring package to securely store the remote machine username and password.
+#    Second, we will implement the psexec command to execute the HEC-RAS command on the remote machine.
+#    Each machine will need to be initialized as a remote_worker object, which will store the machine name, username, password, ras_exe_path, local folder path and other relevant info.
+#    A separate RasRemote class will be created to handle the creation of the remote_worker objects and the necessary abstractions. 
+#    The compute_plan_remote function will live in RasCmdr, and will be a thin abstraction above the RasRemote class, since the functions will be simliar to the existing compute_plan functions, but specific to remote execution.  
+
+
+class RasCmdr:
+    @staticmethod
+    def compute_plan(
+        plan_number,
+        dest_folder=None, 
+        ras_object=None,
+        clear_geompre=False,
+        num_cores=None,
+        overwrite_dest=False
+    ):
+        """
+        Execute a HEC-RAS plan.
+
+        Args:
+            plan_number (str, Path): The plan number to execute (e.g., "01", "02") or the full path to the plan file.
+            dest_folder (str, Path, optional): Name of the folder or full path for computation.
+                If a string is provided, it will be created in the same parent directory as the project folder.
+                If a full path is provided, it will be used as is.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
+            num_cores (int, optional): Number of cores to use for the plan execution. If None, the current setting is not changed.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+
+        Returns:
+            bool: True if the execution was successful, False otherwise.
+
+        Raises:
+            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        if dest_folder is not None:
+            dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
+            
+            if dest_folder.exists():
+                if overwrite_dest:
+                    shutil.rmtree(dest_folder)
+                elif any(dest_folder.iterdir()):
+                    raise ValueError(f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite.")
+            
+            dest_folder.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True)
+            
+            compute_ras = RasPrj()
+            compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+            compute_prj_path = compute_ras.prj_file
+        else:
+            compute_ras = ras_obj
+            compute_prj_path = ras_obj.prj_file
+
+        # Determine the plan path
+        compute_plan_path = Path(plan_number) if isinstance(plan_number, (str, Path)) and Path(plan_number).is_file() else RasPlan.get_plan_path(plan_number, compute_ras)
+
+        if not compute_prj_path or not compute_plan_path:
+            print(f"Error: Could not find project file or plan file for plan {plan_number}")
+            return False
+
+        # Clear geometry preprocessor files if requested
+        if clear_geompre:
+            try:
+                RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
+                print(f"Cleared geometry preprocessor files for plan: {plan_number}")
+            except Exception as e:
+                print(f"Error clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
+
+        # Set the number of cores if specified
+        if num_cores is not None:
+            try:
+                RasPlan.set_num_cores(compute_plan_path, num_cores=num_cores, ras_object=compute_ras)
+                print(f"Set number of cores to {num_cores} for plan: {plan_number}")
+            except Exception as e:
+                print(f"Error setting number of cores for plan {plan_number}: {str(e)}")
+
+        # Prepare the command for HEC-RAS execution
+        cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+        print("Running HEC-RAS from the Command Line:")
+        print(f"Running command: {cmd}")
+
+        # Execute the HEC-RAS command
+        start_time = time.time()
+        try:
+            subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+            end_time = time.time()
+            run_time = end_time - start_time
+            print(f"HEC-RAS execution completed for plan: {plan_number}")
+            print(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+            return True
+        except subprocess.CalledProcessError as e:
+            end_time = time.time()
+            run_time = end_time - start_time
+            print(f"Error running plan: {plan_number}")
+            print(f"Error message: {e.output}")
+            print(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+            return False
+
+        ras_obj = ras_object or ras
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+
+
+    @staticmethod
+    def compute_parallel(
+        plan_number: str | list[str] | None = None,
+        max_workers: int = 2,
+        num_cores: int = 2,
+        clear_geompre: bool = False,
+        ras_object: RasPrj | None = None,
+        dest_folder: str | Path | None = None,
+        overwrite_dest: bool = False
+    ) -> dict[str, bool]:
+        """
+        Execute HEC-RAS plans in parallel using multiple worker threads.
+
+        This function creates separate worker folders, copies the project to each, and executes the specified plans
+        in parallel. It allows for isolated and concurrent execution of multiple plans.
+
+        Args:
+            plan_number (str | list[str] | None): Plan number, list of plan numbers, or None to execute all plans.
+            max_workers (int, optional): Maximum number of worker threads to use. Default is 2.
+            num_cores (int, optional): Number of cores to use for each plan execution. Default is 2.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            dest_folder (str | Path, optional): Destination folder for the final computed results.
+                If None, results will be stored in a "[Computed]" folder next to the original project.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+
+        Returns:
+            dict[str, bool]: A dictionary with plan numbers as keys and boolean values indicating success (True) or failure (False).
+
+        Raises:
+            ValueError: If the destination folder exists and is not empty, and overwrite_dest is False.
+            FileNotFoundError: If a plan file is not found.
+
+        Notes:
+            - This function creates separate folders for each worker to ensure isolated execution.
+            - Each worker uses its own RAS object to prevent conflicts.
+            - Plans are distributed among workers using a queue to ensure efficient parallel processing.
+            - The function automatically handles cleanup and consolidation of results after execution.
+        
+        Revision Notes:
+            - Added support for clear_geompre flag as a pass-through to compute_plan.
+            - Simplified worker thread logic by removing redundant operations.
+            - Removed duplicate RAS object initialization in worker threads.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        project_folder = ras_obj.project_folder
+
+        if dest_folder is not None:
+            dest_folder_path = Path(dest_folder)
+            if dest_folder_path.exists():
+                if overwrite_dest:
+                    shutil.rmtree(dest_folder_path)
+                elif any(dest_folder_path.iterdir()):
+                    raise ValueError(f"Destination folder '{dest_folder_path}' exists and is not empty. Use overwrite_dest=True to overwrite.")
+            dest_folder_path.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
+            project_folder = dest_folder_path
+
+        if plan_number:
+            if isinstance(plan_number, str):
+                plan_number = [plan_number]
+            ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
+
+        num_plans = len(ras_obj.plan_df)
+        max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
+        print(f"Adjusted max_workers to {max_workers} based on the number of plans: {num_plans}")
+
+        # Clean up existing worker folders and create new ones
+        worker_ras_objects = {}
+        for worker_id in range(1, max_workers + 1):
+            worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
+            if worker_folder.exists():
+                shutil.rmtree(worker_folder)
+            shutil.copytree(project_folder, worker_folder)
+            
+            worker_ras_instance = init_ras_project(
+                ras_project_folder=worker_folder,
+                ras_version=ras_obj.ras_exe_path,
+                ras_instance=RasPrj()
+            )
+            worker_ras_objects[worker_id] = worker_ras_instance
+
+        plan_queue = queue.Queue()
+        for plan_number in ras_obj.plan_df['plan_number']:
+            plan_queue.put(plan_number)
+
+        execution_results: dict[str, bool] = {}
+        results_lock = Lock()
+        queue_lock = Lock()
+
+        def worker_thread:
+    """Docs only, see 'worker_thread.py' for full function code"""
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasExamples.py
+==================================================
+import os
+import requests
+import zipfile
+import pandas as pd
+from pathlib import Path
+import shutil
+from typing import Union, List
+import csv
+from datetime import datetime
+
+class RasExamples:
+    """
+    A class for quickly loading HEC-RAS example projects for testing and development of ras-commander.
+
+    This class provides functionality to download, extract, and manage HEC-RAS example projects.
+    It supports both default HEC-RAS example projects and custom projects from user-provided URLs.
+
+    Expected folder structure:              Notes:
+    ras-commander/
+    ├── examples/                           # This is examples_dir
+    │   ├── example_projects/               # This is projects_dir
+    │   │   ├── Balde Eagle Creek/          # Individual Projects from Zip file
+    │   │   ├── Muncie/                 
+    │   │   └── ...
+    │   ├── Example_Projects_6_5.zip        # HEC-RAS Example Projects zip file will be downloaded here
+    │   ├── example_projects.csv            # CSV file containing cached project metadata
+    │   └── 01_project_initialization.py    # ras-commander library examples are also at this level
+    │   └── ...
+    └── ras_commander/                      # Code for the ras-commander library
+
+    Attributes:
+        base_url (str): Base URL for downloading HEC-RAS example projects.
+        valid_versions (list): List of valid HEC-RAS versions for example projects.
+        base_dir (Path): Base directory for storing example projects.
+        examples_dir (Path): Directory for example projects and related files. (assumed to be parent )
+        projects_dir (Path): Directory where example projects are extracted.
+        zip_file_path (Path): Path to the downloaded zip file.
+        folder_df (pd.DataFrame): DataFrame containing folder structure information.
+        csv_file_path (Path): Path to the CSV file for caching project metadata.
+
+    
+    Future Improvements:
+    - Implement the ability for user-provided example projects (provided as a zip file) for their own repeatable examples. 
+    - If the zip file is in the same folder structure as the HEC-RAS example projects, simple replace Example_Projects_6_5.zip and the folder structure will be automatically extracted from the zip file.
+    - The actual RAS example projects haven't been updated much, but there is the structure here to handle future versions. Although this version of the code is probably fine for a few years, until HEC-RAS 2025 comes out. 
+       
+    """
+
+    def __init__:
+    """Docs only, see '__init__.py' for full function code"""
+# ras_examples = RasExamples()
+# extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
+# for path in extracted_paths:
+#     print(f"Extracted to: {path}")
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasGeo.py
+==================================================
+"""
+Operations for handling geometry files in HEC-RAS projects.
+"""
+from pathlib import Path
+from typing import List, Union
+from .RasPlan import RasPlan
+from .RasPrj import ras
+import re
+
+class RasGeo:
+    """
+    A class for operations on HEC-RAS geometry files.
+    """
+    
+    @staticmethod
+    def clear_geompre_files(
+        plan_files: Union[str, Path, List[Union[str, Path]]] = None,
+        ras_object = None
+    ) -> None:
+        """
+        Clear HEC-RAS geometry preprocessor files for specified plan files or all plan files in the project directory.
+        
+        Limitations/Future Work:
+        - This function only deletes the geometry preprocessor file.
+        - It does not clear the IB tables.
+        - It also does not clear geometry preprocessor tables from the geometry HDF.
+        - All of these features will need to be added to reliably remove geometry preprocessor files for 1D and 2D projects.
+        
+        Parameters:
+            plan_files (Union[str, Path, List[Union[str, Path]]], optional): 
+                Full path(s) to the HEC-RAS plan file(s) (.p*).
+                If None, clears all plan files in the project directory.
+            ras_object: An optional RAS object instance.
+        
+        Returns:
+            None
+        
+        Examples:
+            # Clear all geometry preprocessor files in the project directory
+            RasGeo.clear_geompre_files()
+            
+            # Clear a single plan file
+            RasGeo.clear_geompre_files(r'path/to/plan.p01')
+            
+            # Clear multiple plan files
+            RasGeo.clear_geompre_files([r'path/to/plan1.p01', r'path/to/plan2.p02'])
+
+        Note:
+            This function updates the ras object's geometry dataframe after clearing the preprocessor files.
+        """
+        ## Explicit Function Steps
+        # 1. Initialize the ras_object, defaulting to the global ras if not provided.
+        # 2. Define a helper function to clear a single geometry preprocessor file.
+        # 3. Determine the list of plan files to process based on the input.
+        # 4. Iterate over each plan file and clear its geometry preprocessor file.
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
+            plan_path = Path(plan_file)
+            geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
+            geom_preprocessor_file = plan_path.with_suffix(geom_preprocessor_suffix)
+            if geom_preprocessor_file.exists():
+                try:
+                    print(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
+                    geom_preprocessor_file.unlink()
+                    print("File deletion completed successfully.")
+                except PermissionError:
+                    raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
+                except OSError as e:
+                    raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
+            else:
+                print(f"No geometry preprocessor file found for: {plan_file}")
+        
+        if plan_files is None:
+            print("Clearing all geometry preprocessor files in the project directory.")
+            plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
+        elif isinstance(plan_files, (str, Path)):
+            plan_files_to_clear = [plan_files]
+        elif isinstance(plan_files, list):
+            plan_files_to_clear = plan_files
+        else:
+            raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
+        
+        for plan_file in plan_files_to_clear:
+            clear_single_file(plan_file, ras_obj)
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasPlan.py
+==================================================
+"""
+Operations for modifying and updating HEC-RAS plan files.
+
+"""
+import re
+from pathlib import Path
+import shutil
+from typing import Union, Optional
+import pandas as pd
+from .RasPrj import RasPrj, ras
+from .RasUtils import RasUtils
+
+class RasPlan:
+    """
+    A class for operations on HEC-RAS plan files.
+    """
+    
+    @staticmethod
+    def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
+        """
+        Set the geometry for the specified plan.
+
+        Parameters:
+            plan_number (Union[str, int]): The plan number to update.
+            new_geom (Union[str, int]): The new geometry number to set.
+            ras_object: An optional RAS object instance.
+
+        Returns:
+            pd.DataFrame: The updated geometry DataFrame.
+
+        Example:
+            updated_geom_df = RasPlan.set_geom('02', '03')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Ensure plan_number and new_geom are strings
+        plan_number = str(plan_number).zfill(2)
+        new_geom = str(new_geom).zfill(2)
+
+        # Before doing anything, make sure the plan, geom, flow, and unsteady dataframes are current
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        # List the geom_df for debugging
+        print("Current geometry DataFrame within the function:")
+        print(ras_obj.geom_df)
+        
+        if new_geom not in ras_obj.geom_df['geom_number'].values:
+            raise ValueError(f"Geometry {new_geom} not found in project.")
+
+        # Update the geometry for the specified plan
+        ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
+
+        print(f"Geometry for plan {plan_number} set to {new_geom}")
+        print("Updated plan DataFrame:")
+        display(ras_obj.plan_df)
+
+        # Update the project file
+        prj_file_path = ras_obj.prj_file
+        with open(prj_file_path, 'r') as f:
+            lines = f.readlines()
+
+        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
+        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
+        
+        for i, line in enumerate(lines):
+            if plan_pattern.match(line):
+                for j in range(i+1, len(lines)):
+                    if geom_pattern.match(lines[j]):
+                        lines[j] = f"Geom File=g{new_geom}\n"
+                        break
+                break
+
+        with open(prj_file_path, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated project file with new geometry for plan {plan_number}")
+
+        # Re-initialize the ras object to reflect changes
+        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
+
+        return ras_obj.plan_df
+
+    @staticmethod
+    def set_steady:
+    """Docs only, see 'set_steady.py' for full function code"""
+#  Clone Functions to copy unsteady, flow, and geometry files from templates
+     
+    @staticmethod
+    def clone_plan:
+    """Docs only, see 'clone_plan.py' for full function code"""
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasPrj.py
+==================================================
+"""RasPrj.py
+
+This module provides a class for managing HEC-RAS projects.
+
+Classes:
+    RasPrj: A class for managing HEC-RAS projects.
+
+Functions:
+    init_ras_project: Initialize a RAS project.
+    get_ras_exe: Determine the HEC-RAS executable path based on the input.
+
+DEVELOPER NOTE:
+This class is used to initialize a RAS project and is used in conjunction with the RasCmdr class to manage the execution of RAS plans.
+By default, the RasPrj class is initialized with the global 'ras' object.
+However, you can create multiple RasPrj instances to manage multiple projects.
+Do not mix and match global 'ras' object instances and custom instances of RasPrj - it will cause errors.
+"""
+# Example Terminal Output for RasPrj Functions:
+# print(f"\n----- INSERT TEXT HERE -----\n")
+
+from pathlib import Path
+import pandas as pd
+import re
+
+class RasPrj:
+    def __init__:
+    """Docs only, see '__init__.py' for full function code"""
+ras = RasPrj()
+
+def init_ras_project:
+    """Docs only, see 'init_ras_project.py' for full function code"""
+                     "or a full path to the HEC-RAS executable.")
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+==================================================
+"""
+Operations for handling unsteady flow files in HEC-RAS projects.
+"""
+from pathlib import Path
+from .RasPrj import ras
+import re
+
+class RasUnsteady:
+    """
+    Class for all operations related to HEC-RAS unsteady flow files.
+    """
+    
+    @staticmethod
+    def update_unsteady_parameters:
+    """Docs only, see 'update_unsteady_parameters.py' for full function code"""
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasUtils.py
+==================================================
+"""
+Utility functions for the ras-commander library.
+"""
+import os
+import shutil
+import logging
+import time
+from pathlib import Path
+from .RasPrj import ras
+from typing import Union
+
+class RasUtils:
+    """
+    A class containing utility functions for the ras-commander library.
+    When integrating new functions that do not clearly fit into other classes, add them here.
+    """
+
+    @staticmethod
+    def create_backup(file_path: Path, backup_suffix: str = "_backup", ras_object=None) -> Path:
+        """
+        Create a backup of the specified file.
+
+        Parameters:
+        file_path (Path): Path to the file to be backed up
+        backup_suffix (str): Suffix to append to the backup file name
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Path to the created backup file
+
+        Example:
+        >>> backup_path = RasUtils.create_backup(Path("project.prj"))
+        >>> print(f"Backup created at: {backup_path}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        original_path = Path(file_path)
+        backup_path = original_path.with_name(f"{original_path.stem}{backup_suffix}{original_path.suffix}")
+        shutil.copy2(original_path, backup_path)
+        logging.info(f"Backup created: {backup_path}")
+        return backup_path
+
+    @staticmethod
+    def restore_from_backup(backup_path: Path, remove_backup: bool = True, ras_object=None) -> Path:
+        """
+        Restore a file from its backup.
+
+        Parameters:
+        backup_path (Path): Path to the backup file
+        remove_backup (bool): Whether to remove the backup file after restoration
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Path to the restored file
+
+        Example:
+        >>> restored_path = RasUtils.restore_from_backup(Path("project_backup.prj"))
+        >>> print(f"File restored to: {restored_path}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        backup_path = Path(backup_path)
+        original_path = backup_path.with_name(backup_path.stem.rsplit('_backup', 1)[0] + backup_path.suffix)
+        shutil.copy2(backup_path, original_path)
+        logging.info(f"File restored: {original_path}")
+        if remove_backup:
+            backup_path.unlink()
+            logging.info(f"Backup removed: {backup_path}")
+        return original_path
+
+    @staticmethod
+    def create_directory(directory_path: Path, ras_object=None) -> Path:
+        """
+        Ensure that a directory exists, creating it if necessary.
+
+        Parameters:
+        directory_path (Path): Path to the directory
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Path to the ensured directory
+
+        Example:
+        >>> ensured_dir = RasUtils.create_directory(Path("output"))
+        >>> print(f"Directory ensured: {ensured_dir}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        path = Path(directory_path)
+        path.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Directory ensured: {path}")
+        return path
+
+    @staticmethod
+    def find_files_by_extension(extension: str, ras_object=None) -> list:
+        """
+        List all files in the project directory with a specific extension.
+
+        Parameters:
+        extension (str): File extension to filter (e.g., '.prj')
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        list: List of file paths matching the extension
+
+        Example:
+        >>> prj_files = RasUtils.find_files_by_extension('.prj')
+        >>> print(f"Found {len(prj_files)} .prj files")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        files = list(ras_obj.project_folder.glob(f"*{extension}"))
+        return [str(file) for file in files]
+
+    @staticmethod
+    def get_file_size(file_path: Path, ras_object=None) -> int:
+        """
+        Get the size of a file in bytes.
+
+        Parameters:
+        file_path (Path): Path to the file
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        int: Size of the file in bytes
+
+        Example:
+        >>> size = RasUtils.get_file_size(Path("project.prj"))
+        >>> print(f"File size: {size} bytes")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        path = Path(file_path)
+        if path.exists():
+            return path.stat().st_size
+        else:
+            logging.warning(f"File not found: {path}")
+            return None
+
+    @staticmethod
+    def get_file_modification_time(file_path: Path, ras_object=None) -> float:
+        """
+        Get the last modification time of a file.
+
+        Parameters:
+        file_path (Path): Path to the file
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        float: Last modification time as a timestamp
+
+        Example:
+        >>> mtime = RasUtils.get_file_modification_time(Path("project.prj"))
+        >>> print(f"Last modified: {mtime}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        path = Path(file_path)
+        if path.exists():
+            return path.stat().st_mtime
+        else:
+            logging.warning(f"File not found: {path}")
+            return None
+
+    @staticmethod
+    def get_plan_path(current_plan_number_or_path: Union[str, Path], ras_object=None) -> Path:
+        """
+        Get the path for a plan file with a given plan number or path.
+
+        Parameters:
+        current_plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Full path to the plan file
+
+        Example:
+        >>> plan_path = RasUtils.get_plan_path(1)
+        >>> print(f"Plan file path: {plan_path}")
+        >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
+        >>> print(f"Plan file path: {plan_path}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        plan_path = Path(current_plan_number_or_path)
+        if plan_path.is_file():
+            return plan_path
+        
+        try:
+            current_plan_number = f"{int(current_plan_number_or_path):02d}"  # Ensure two-digit format
+        except ValueError:
+            raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
+        
+        plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
+        return ras_obj.project_folder / plan_name
+
+    @staticmethod
+    def remove_with_retry(path: Path, max_attempts: int = 5, initial_delay: float = 1.0, is_folder: bool = True, ras_object=None) -> bool:
+        """
+        Attempts to remove a file or folder with retry logic and exponential backoff.
+
+        Parameters:
+        path (Path): Path to the file or folder to be removed.
+        max_attempts (int): Maximum number of removal attempts.
+        initial_delay (float): Initial delay between attempts in seconds.
+        is_folder (bool): If True, the path is treated as a folder; if False, it's treated as a file.
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        bool: True if the file or folder was successfully removed, False otherwise.
+
+        Example:
+        >>> success = RasUtils.remove_with_retry(Path("temp_folder"), is_folder=True)
+        >>> print(f"Removal successful: {success}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        path = Path(path)
+        for attempt in range(max_attempts):
+            try:
+                if path.exists():
+                    if is_folder:
+                        shutil.rmtree(path)
+                    else:
+                        path.unlink()
+                return True
+            except PermissionError:
+                if attempt < max_attempts - 1:
+                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                    logging.warning(f"Failed to remove {path}. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    logging.error(f"Failed to remove {path} after {max_attempts} attempts. Skipping.")
+                    return False
+        return False
+
+    @staticmethod
+    def update_plan_file(plan_number_or_path: Union[str, Path], file_type: str, entry_number: int, ras_object=None) -> None:
+        """
+        Update a plan file with a new file reference.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        file_type (str): Type of file to update ('Geom', 'Flow', or 'Unsteady')
+        entry_number (int): Number (from 1 to 99) to set
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Raises:
+        ValueError: If an invalid file_type is provided
+        FileNotFoundError: If the plan file doesn't exist
+
+        Example:
+        >>> RasUtils.update_plan_file(1, "Geom", 2)
+        >>> RasUtils.update_plan_file("path/to/plan.p01", "Geom", 2)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        valid_file_types = {'Geom': 'g', 'Flow': 'f', 'Unsteady': 'u'}
+        if file_type not in valid_file_types:
+            raise ValueError(f"Invalid file_type. Expected one of: {', '.join(valid_file_types.keys())}")
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+        
+        if not plan_file_path.exists():
+            raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
+
+        file_prefix = valid_file_types[file_type]
+        search_pattern = f"{file_type} File="
+        entry_number = f"{int(entry_number):02d}"  # Ensure two-digit format
+
+        RasUtils.check_file_access(plan_file_path, 'r')
+        with open(plan_file_path, 'r') as file:
+            lines = file.readlines()
+
+        for i, line in enumerate(lines):
+            if line.startswith(search_pattern):
+                lines[i] = f"{search_pattern}{file_prefix}{entry_number}\n"
+                logging.info(f"Updated {file_type} File in {plan_file_path} to {file_prefix}{entry_number}")
+                break
+
+        with plan_file_path.open('w') as file:
+            file.writelines(lines)
+
+        logging.info(f"Successfully updated plan file: {plan_file_path}")
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    def check_file_access:
+    """Docs only, see 'check_file_access.py' for full function code"""
+
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\_version.py
+==================================================
+# file generated by setuptools_scm
+# don't change, don't track in version control
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import Tuple, Union
+    VERSION_TUPLE = Tuple[Union[int, str], ...]
+else:
+    VERSION_TUPLE = object
+
+version: str
+__version__: str
+__version_tuple__: VERSION_TUPLE
+version_tuple: VERSION_TUPLE
+
+__version__ = version = '0.29.dev1+g22e75d4.d20240919'
+__version_tuple__ = version_tuple = (0, 29, 'dev1', 'g22e75d4.d20240919')
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\__init__.py
+==================================================
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("ras-commander")
+except PackageNotFoundError:
+    # package is not installed
+    __version__ = "unknown"
+
+# Import all necessary functions and classes directly
+from .RasPrj import ras, init_ras_project, get_ras_exe
+from .RasPrj import RasPrj
+from .RasPlan import RasPlan
+from .RasGeo import RasGeo
+from .RasUnsteady import RasUnsteady
+from .RasCmdr import RasCmdr
+from .RasUtils import RasUtils
+from .RasExamples import RasExamples
+
+# Import all attributes from these modules
+from .RasPrj import *
+from .RasPlan import *
+from .RasGeo import *
+from .RasUnsteady import *
+from .RasCmdr import *
+from .RasUtils import *
+from .RasExamples import *
+
+# Define __all__ to specify what should be imported when using "from ras_commander import *"
+__all__ = [
+    "ras",
+    "init_ras_project",
+    "get_ras_exe",
+    "RasPrj",
+    "RasPlan",
+    "RasGeo",
+    "RasUnsteady",
+    "RasCmdr",
+    "RasUtils",
+    "RasExamples"
+]
+
+==================================================
+

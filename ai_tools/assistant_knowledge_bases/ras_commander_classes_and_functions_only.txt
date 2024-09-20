@@ -1,0 +1,2989 @@
+File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+==================================================
+"""
+Execution operations for running HEC-RAS simulations using subprocess.
+Based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the -c compute flag to run HEC-RAS and orchestrating changes directly in the RAS input files to achieve automation outcomes. 
+"""
+
+import os
+import subprocess
+import shutil
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from .RasPrj import ras, RasPrj, init_ras_project, get_ras_exe
+from .RasPlan import RasPlan
+from .RasGeo import RasGeo
+from .RasUtils import RasUtils
+import subprocess
+import os
+import logging
+import time
+import pandas as pd
+from threading import Thread, Lock
+import queue
+from pathlib import Path
+import shutil
+import queue
+from threading import Thread, Lock
+import time
+
+# TO DO: 
+# 1. Alternate Run Mode for compute_plan and compute_parallel:  Using Powershell to execute the HEC-RAS command and hide the RAS window and all child windows.
+#    If this is implemented, and the plan has a popup, then the plan will not execute.  This is a deal breaker for many scenarios, and should only be used
+#    as a special option for those who don't want to deal with the popups, or want to run in the background.  This option should be limited to non-commercial use.
+# 2. Implment compute_plan_remote to go along with compute_plan.  This will be a compute_plan that is run on a remote machine via a psexec command.
+#    First, we will use the keyring package to securely store the remote machine username and password.
+#    Second, we will implement the psexec command to execute the HEC-RAS command on the remote machine.
+#    Each machine will need to be initialized as a remote_worker object, which will store the machine name, username, password, ras_exe_path, local folder path and other relevant info.
+#    A separate RasRemote class will be created to handle the creation of the remote_worker objects and the necessary abstractions. 
+#    The compute_plan_remote function will live in RasCmdr, and will be a thin abstraction above the RasRemote class, since the functions will be simliar to the existing compute_plan functions, but specific to remote execution.  
+
+
+class RasCmdr:
+    @staticmethod
+    def compute_plan(
+        plan_number,
+        dest_folder=None, 
+        ras_object=None,
+        clear_geompre=False,
+        num_cores=None,
+        overwrite_dest=False
+    ):
+        """
+        Execute a HEC-RAS plan.
+
+        Args:
+            plan_number (str, Path): The plan number to execute (e.g., "01", "02") or the full path to the plan file.
+            dest_folder (str, Path, optional): Name of the folder or full path for computation.
+                If a string is provided, it will be created in the same parent directory as the project folder.
+                If a full path is provided, it will be used as is.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
+            num_cores (int, optional): Number of cores to use for the plan execution. If None, the current setting is not changed.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+
+        Returns:
+            bool: True if the execution was successful, False otherwise.
+
+        Raises:
+            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        if dest_folder is not None:
+            dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
+            
+            if dest_folder.exists():
+                if overwrite_dest:
+                    shutil.rmtree(dest_folder)
+                elif any(dest_folder.iterdir()):
+                    raise ValueError(f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite.")
+            
+            dest_folder.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True)
+            
+            compute_ras = RasPrj()
+            compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+            compute_prj_path = compute_ras.prj_file
+        else:
+            compute_ras = ras_obj
+            compute_prj_path = ras_obj.prj_file
+
+        # Determine the plan path
+        compute_plan_path = Path(plan_number) if isinstance(plan_number, (str, Path)) and Path(plan_number).is_file() else RasPlan.get_plan_path(plan_number, compute_ras)
+
+        if not compute_prj_path or not compute_plan_path:
+            print(f"Error: Could not find project file or plan file for plan {plan_number}")
+            return False
+
+        # Clear geometry preprocessor files if requested
+        if clear_geompre:
+            try:
+                RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
+                print(f"Cleared geometry preprocessor files for plan: {plan_number}")
+            except Exception as e:
+                print(f"Error clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
+
+        # Set the number of cores if specified
+        if num_cores is not None:
+            try:
+                RasPlan.set_num_cores(compute_plan_path, num_cores=num_cores, ras_object=compute_ras)
+                print(f"Set number of cores to {num_cores} for plan: {plan_number}")
+            except Exception as e:
+                print(f"Error setting number of cores for plan {plan_number}: {str(e)}")
+
+        # Prepare the command for HEC-RAS execution
+        cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+        print("Running HEC-RAS from the Command Line:")
+        print(f"Running command: {cmd}")
+
+        # Execute the HEC-RAS command
+        start_time = time.time()
+        try:
+            subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+            end_time = time.time()
+            run_time = end_time - start_time
+            print(f"HEC-RAS execution completed for plan: {plan_number}")
+            print(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+            return True
+        except subprocess.CalledProcessError as e:
+            end_time = time.time()
+            run_time = end_time - start_time
+            print(f"Error running plan: {plan_number}")
+            print(f"Error message: {e.output}")
+            print(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+            return False
+
+        ras_obj = ras_object or ras
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+
+
+    @staticmethod
+    def compute_parallel(
+        plan_number: str | list[str] | None = None,
+        max_workers: int = 2,
+        num_cores: int = 2,
+        clear_geompre: bool = False,
+        ras_object: RasPrj | None = None,
+        dest_folder: str | Path | None = None,
+        overwrite_dest: bool = False
+    ) -> dict[str, bool]:
+        """
+        Execute HEC-RAS plans in parallel using multiple worker threads.
+
+        This function creates separate worker folders, copies the project to each, and executes the specified plans
+        in parallel. It allows for isolated and concurrent execution of multiple plans.
+
+        Args:
+            plan_number (str | list[str] | None): Plan number, list of plan numbers, or None to execute all plans.
+            max_workers (int, optional): Maximum number of worker threads to use. Default is 2.
+            num_cores (int, optional): Number of cores to use for each plan execution. Default is 2.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            dest_folder (str | Path, optional): Destination folder for the final computed results.
+                If None, results will be stored in a "[Computed]" folder next to the original project.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+
+        Returns:
+            dict[str, bool]: A dictionary with plan numbers as keys and boolean values indicating success (True) or failure (False).
+
+        Raises:
+            ValueError: If the destination folder exists and is not empty, and overwrite_dest is False.
+            FileNotFoundError: If a plan file is not found.
+
+        Notes:
+            - This function creates separate folders for each worker to ensure isolated execution.
+            - Each worker uses its own RAS object to prevent conflicts.
+            - Plans are distributed among workers using a queue to ensure efficient parallel processing.
+            - The function automatically handles cleanup and consolidation of results after execution.
+        
+        Revision Notes:
+            - Added support for clear_geompre flag as a pass-through to compute_plan.
+            - Simplified worker thread logic by removing redundant operations.
+            - Removed duplicate RAS object initialization in worker threads.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        project_folder = ras_obj.project_folder
+
+        if dest_folder is not None:
+            dest_folder_path = Path(dest_folder)
+            if dest_folder_path.exists():
+                if overwrite_dest:
+                    shutil.rmtree(dest_folder_path)
+                elif any(dest_folder_path.iterdir()):
+                    raise ValueError(f"Destination folder '{dest_folder_path}' exists and is not empty. Use overwrite_dest=True to overwrite.")
+            dest_folder_path.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
+            project_folder = dest_folder_path
+
+        if plan_number:
+            if isinstance(plan_number, str):
+                plan_number = [plan_number]
+            ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
+
+        num_plans = len(ras_obj.plan_df)
+        max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
+        print(f"Adjusted max_workers to {max_workers} based on the number of plans: {num_plans}")
+
+        # Clean up existing worker folders and create new ones
+        worker_ras_objects = {}
+        for worker_id in range(1, max_workers + 1):
+            worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
+            if worker_folder.exists():
+                shutil.rmtree(worker_folder)
+            shutil.copytree(project_folder, worker_folder)
+            
+            worker_ras_instance = init_ras_project(
+                ras_project_folder=worker_folder,
+                ras_version=ras_obj.ras_exe_path,
+                ras_instance=RasPrj()
+            )
+            worker_ras_objects[worker_id] = worker_ras_instance
+
+        plan_queue = queue.Queue()
+        for plan_number in ras_obj.plan_df['plan_number']:
+            plan_queue.put(plan_number)
+
+        execution_results: dict[str, bool] = {}
+        results_lock = Lock()
+        queue_lock = Lock()
+
+        def worker_thread(worker_id: int):
+            worker_ras_obj = worker_ras_objects[worker_id]
+            while True:
+                with queue_lock:
+                    if plan_queue.empty():
+                        break
+                    plan_number = plan_queue.get()
+                
+                try:
+                    print(f"Worker {worker_id} executing plan {plan_number}")
+                    success = RasCmdr.compute_plan(
+                        plan_number, 
+                        ras_object=worker_ras_obj, 
+                        clear_geompre=clear_geompre,
+                        num_cores=num_cores
+                    )
+                    with results_lock:
+                        execution_results[plan_number] = success
+                    print(f"Completed: Plan {plan_number} in worker {worker_id}")
+                except Exception as e:
+                    with results_lock:
+                        execution_results[plan_number] = False
+                    print(f"Failed: Plan {plan_number} in worker {worker_id}. Error: {str(e)}")
+
+        # Start worker threads
+        worker_threads = [Thread(target=worker_thread, args=(worker_id,)) for worker_id in range(1, max_workers + 1)]
+        for thread in worker_threads:
+            thread.start()
+
+        # Wait for all threads to complete
+        for thread in worker_threads:
+            thread.join()
+
+        # Consolidate results
+        final_dest_folder = dest_folder_path if dest_folder is not None else project_folder.parent / f"{project_folder.name} [Computed]"
+        final_dest_folder.mkdir(exist_ok=True)
+        print(f"Final destination for computed results: {final_dest_folder}")
+
+        for worker_ras in worker_ras_objects.values():
+            worker_folder = worker_ras.project_folder
+            try:
+                for item in worker_folder.iterdir():
+                    dest_path = final_dest_folder / item.name
+                    if dest_path.exists():
+                        if dest_path.is_dir():
+                            shutil.rmtree(dest_path)
+                        else:
+                            dest_path.unlink()
+                    shutil.move(str(item), final_dest_folder)
+                shutil.rmtree(worker_folder)
+            except Exception as e:
+                print(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
+
+        # Print execution results for each plan
+        print("\nExecution Results:")
+        for plan_number, success in execution_results.items():
+            print(f"Plan {plan_number}: {'Successful' if success else 'Failed'}")
+
+        return execution_results
+    
+    
+    
+    @staticmethod
+    def compute_test_mode(
+        plan_number=None, 
+        dest_folder_suffix="[Test]", 
+        clear_geompre=False, 
+        num_cores=None, 
+        ras_object=None,
+        overwrite_dest=False
+    ):
+        """
+        Execute HEC-RAS plans in test mode.  This is a re-creation of the HEC-RAS command line -test flag, 
+        which does not work in recent versions of HEC-RAS.
+        
+        As a special-purpose function that emulates the original -test flag, it operates differently than the 
+        other two compute_ functions.  Per the original HEC-RAS test flag, it creates a separate test folder,
+        copies the project there, and executes the specified plans in sequential order.
+        
+        For most purposes, just copying a the project folder, initing that new folder, then running each plan 
+        with compute_plan is a simpler and more flexible approach.  This is shown in the examples provided
+        in the ras-commander library.
+
+        Args:
+            plan_number (str, list[str], optional): Plan number or list of plan numbers to execute. 
+                If None, all plans will be executed. Default is None.
+            dest_folder_suffix (str, optional): Suffix to append to the test folder name to create dest_folder. 
+                Defaults to "[Test]".
+                dest_folder is always created in the project folder's parent directory.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files.
+                Defaults to False.
+            num_cores (int, optional): Maximum number of cores to use for each plan.
+                If None, the current setting is not changed. Default is None.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+
+        Returns:
+            None
+
+        Example:
+            Run all plans: RasCommander.compute_test_mode()
+            Run a specific plan: RasCommander.compute_test_mode(plan_number="01")
+            Run multiple plans: RasCommander.compute_test_mode(plan_number=["01", "03", "05"])
+            Run plans with a custom folder suffix: RasCommander.compute_test_mode(dest_folder_suffix="[TestRun]")
+            Run plans and clear geometry preprocessor files: RasCommander.compute_test_mode(clear_geompre=True)
+            Run plans with a specific number of cores: RasCommander.compute_test_mode(num_cores=4)
+            
+        Notes:
+            - This function executes plans in a separate folder for isolated testing.
+            - If plan_number is not provided, all plans in the project will be executed.
+            - The function does not change the geometry preprocessor and IB tables settings.  
+                - To force recomputing of geometry preprocessor and IB tables, use the clear_geompre=True option.
+            - Plans are executed sequentially.
+            - Because copying the project is implicit, only a dest_folder_suffix option is provided.
+            - For more flexible run management, use the compute_parallel or compute_sequential functions.
+        """
+        
+        # This line of code is used to initialize the RasPrj object with the default "ras" object if no specific object is provided.
+        ras_obj = ras_object or ras
+        # This line of code is used to check if the RasPrj object is initialized.
+        ras_obj.check_initialized()
+        
+        print("Starting the compute_test_mode...")
+           
+        # Use the project folder from the ras object
+        project_folder = ras_obj.project_folder
+
+        # Check if the project folder exists
+        if not project_folder.exists():
+            print(f"Error: Project folder '{project_folder}' does not exist.")
+            return
+
+        # Create test folder with the specified suffix in the same directory as the project folder
+        compute_folder = project_folder.parent / f"{project_folder.name} {dest_folder_suffix}"
+        print(f"Creating the test folder: {compute_folder}...")
+
+        # Check if the compute folder exists and is empty
+        if compute_folder.exists():
+            if overwrite_dest:
+                shutil.rmtree(compute_folder)
+            elif any(compute_folder.iterdir()):
+                raise ValueError(
+                    f"Compute folder '{compute_folder}' exists and is not empty. "
+                    "Use overwrite_dest=True to overwrite."
+                )
+        else:
+            try:
+                shutil.copytree(project_folder, compute_folder)
+            except FileNotFoundError:
+                print(f"Error: Unable to copy project folder. Source folder '{project_folder}' not found.")
+                return
+            except PermissionError:
+                print(f"Error: Permission denied when trying to create or copy to '{compute_folder}'.")
+                return
+            except Exception as e:
+                print(f"Error occurred while copying project folder: {str(e)}")
+                return
+
+        # Initialize a new RAS project in the compute folder
+        try:
+            compute_ras = RasPrj()
+            compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
+            compute_prj_path = compute_ras.prj_file
+        except Exception as e:
+            print(f"Error initializing RAS project in compute folder: {str(e)}")
+            return
+
+        if not compute_prj_path:
+            print("Project file not found.")
+            return
+
+
+        # Get plan entries
+        print("Getting plan entries...")
+        try:
+            ras_compute_plan_entries = compute_ras.plan_df
+            print("Retrieved plan entries successfully.")
+        except Exception as e:
+            print(f"Error retrieving plan entries: {str(e)}")
+            return
+
+        if plan_number:
+            if isinstance(plan_number, str):
+                plan_number = [plan_number]
+            ras_compute_plan_entries = ras_compute_plan_entries[
+                ras_compute_plan_entries['plan_number'].isin(plan_number)
+            ]
+            print(f"Filtered plans to execute: {plan_number}")
+
+        print("Running selected plans sequentially...")
+        for _, plan in ras_compute_plan_entries.iterrows():
+            plan_number = plan["plan_number"]
+            start_time = time.time()
+            try:
+                RasCommander.compute_plan(
+                    plan_number,
+                    ras_object=compute_ras,
+                    clear_geompre=clear_geompre,
+                    num_cores=num_cores
+                )
+            except Exception as e:
+                print(f"Error computing plan {plan_number}: {str(e)}")
+            end_time = time.time()
+            run_time = end_time - start_time
+            print(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+
+        print("All selected plans have been executed.")
+        print("compute_test_mode completed.")
+
+        ras_obj = ras_object or ras
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasExamples.py
+==================================================
+import os
+import requests
+import zipfile
+import pandas as pd
+from pathlib import Path
+import shutil
+from typing import Union, List
+import csv
+from datetime import datetime
+
+class RasExamples:
+    """
+    A class for quickly loading HEC-RAS example projects for testing and development of ras-commander.
+
+    This class provides functionality to download, extract, and manage HEC-RAS example projects.
+    It supports both default HEC-RAS example projects and custom projects from user-provided URLs.
+
+    Expected folder structure:              Notes:
+    ras-commander/
+    ├── examples/                           # This is examples_dir
+    │   ├── example_projects/               # This is projects_dir
+    │   │   ├── Balde Eagle Creek/          # Individual Projects from Zip file
+    │   │   ├── Muncie/                 
+    │   │   └── ...
+    │   ├── Example_Projects_6_5.zip        # HEC-RAS Example Projects zip file will be downloaded here
+    │   ├── example_projects.csv            # CSV file containing cached project metadata
+    │   └── 01_project_initialization.py    # ras-commander library examples are also at this level
+    │   └── ...
+    └── ras_commander/                      # Code for the ras-commander library
+
+    Attributes:
+        base_url (str): Base URL for downloading HEC-RAS example projects.
+        valid_versions (list): List of valid HEC-RAS versions for example projects.
+        base_dir (Path): Base directory for storing example projects.
+        examples_dir (Path): Directory for example projects and related files. (assumed to be parent )
+        projects_dir (Path): Directory where example projects are extracted.
+        zip_file_path (Path): Path to the downloaded zip file.
+        folder_df (pd.DataFrame): DataFrame containing folder structure information.
+        csv_file_path (Path): Path to the CSV file for caching project metadata.
+
+    
+    Future Improvements:
+    - Implement the ability for user-provided example projects (provided as a zip file) for their own repeatable examples. 
+    - If the zip file is in the same folder structure as the HEC-RAS example projects, simple replace Example_Projects_6_5.zip and the folder structure will be automatically extracted from the zip file.
+    - The actual RAS example projects haven't been updated much, but there is the structure here to handle future versions. Although this version of the code is probably fine for a few years, until HEC-RAS 2025 comes out. 
+       
+    """
+
+    def __init__(self):
+        """
+        Initialize the RasExamples class.
+
+        This constructor sets up the necessary attributes and paths for managing HEC-RAS example projects.
+        It initializes the base URL for downloads, valid versions, directory paths, and other essential
+        attributes. It also creates the projects directory if it doesn't exist and loads the project data.
+
+        The method also prints the location of the example projects folder and calls _load_project_data()
+        to initialize the project data.
+        """
+        self.base_url = 'https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/'
+        self.valid_versions = [
+            "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+            "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
+            "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
+        ]
+        self.base_dir = Path.cwd()
+        self.examples_dir = self.base_dir
+        self.projects_dir = self.examples_dir / 'example_projects'
+        self.zip_file_path = None
+        self.folder_df = None
+        self.csv_file_path = self.examples_dir / 'example_projects.csv'
+
+        self.projects_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Example projects folder: {self.projects_dir}")
+        self._load_project_data()
+
+    def _load_project_data(self):
+        """
+        Load project data from CSV if up-to-date, otherwise extract from zip.
+
+        Checks for existing CSV file and compares modification times with zip file.
+        Extracts folder structure if necessary and saves to CSV.
+        """
+        self._find_zip_file()
+        
+        if not self.zip_file_path:
+            print("No example projects zip file found. Downloading...")
+            self.get_example_projects()
+        
+        zip_modified_time = os.path.getmtime(self.zip_file_path)
+        
+        if self.csv_file_path.exists():
+            csv_modified_time = os.path.getmtime(self.csv_file_path)
+            
+            if csv_modified_time >= zip_modified_time:
+                print("Loading project data from CSV...")
+                self.folder_df = pd.read_csv(self.csv_file_path)
+                print(f"Loaded {len(self.folder_df)} projects from CSV, use list_categories() and list_projects() to explore them")
+                return
+
+        print("Extracting folder structure from zip file...")
+        self._extract_folder_structure()
+        self._save_to_csv()
+
+    def _find_zip_file(self):
+        """Locate the example projects zip file in the examples directory."""
+        for version in self.valid_versions:
+            potential_zip = self.examples_dir / f"Example_Projects_{version.replace('.', '_')}.zip"
+            if potential_zip.exists():
+                self.zip_file_path = potential_zip
+                print(f"Found zip file: {self.zip_file_path}")
+                break
+
+    def _extract_folder_structure(self):
+        """
+        Extract folder structure from the zip file.
+
+        Populates folder_df with category and project information.
+        """
+        folder_data = []
+        try:
+            with zipfile.ZipFile(self.zip_file_path, 'r') as zip_ref:
+                for file in zip_ref.namelist():
+                    parts = Path(file).parts
+                    if len(parts) > 2:
+                        folder_data.append({
+                            'Category': parts[1],
+                            'Project': parts[2]
+                        })
+            
+            self.folder_df = pd.DataFrame(folder_data).drop_duplicates()
+            print(f"Extracted {len(self.folder_df)} projects")
+            print("folder_df:")
+            display(self.folder_df)
+        except Exception as e:
+            print(f"An error occurred while extracting the folder structure: {str(e)}")
+            self.folder_df = pd.DataFrame(columns=['Category', 'Project'])
+
+    def _save_to_csv(self):
+        """Save the extracted folder structure to CSV file."""
+        if self.folder_df is not None and not self.folder_df.empty:
+            self.folder_df.to_csv(self.csv_file_path, index=False)
+            print(f"Saved project data to {self.csv_file_path}")
+
+    def get_example_projects(self, version_number='6.5'):
+        """
+        Download and extract HEC-RAS example projects for a specified version.
+
+        Args:
+            version_number (str): HEC-RAS version number. Defaults to '6.5'.
+
+        Returns:
+            Path: Path to the extracted example projects.
+
+        Raises:
+            ValueError: If an invalid version number is provided.
+        """
+        print(f"Getting example projects for version {version_number}")
+        if version_number not in self.valid_versions:
+            raise ValueError(f"Invalid version number. Valid versions are: {', '.join(self.valid_versions)}")
+
+        zip_url = f"{self.base_url}1.0.31/Example_Projects_{version_number.replace('.', '_')}.zip"
+        
+        self.examples_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.zip_file_path = self.examples_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
+
+        if not self.zip_file_path.exists():
+            print(f"Downloading HEC-RAS Example Projects from {zip_url}. \n The file is over 400 MB, so it may take a few minutes to download....")
+            response = requests.get(zip_url)
+            with open(self.zip_file_path, 'wb') as file:
+                file.write(response.content)
+            print(f"Downloaded to {self.zip_file_path}")
+        else:
+            print("HEC-RAS Example Projects zip file already exists. Skipping download.")
+
+        self._load_project_data()
+        return self.projects_dir
+
+    def list_categories(self):
+        """
+        List all categories of example projects.
+
+        Returns:
+            list: Available categories.
+        """
+        if self.folder_df is None or 'Category' not in self.folder_df.columns:
+            print("No categories available. Make sure the zip file is properly loaded.")
+            return []
+        categories = self.folder_df['Category'].unique()
+        print(f"Available categories: {', '.join(categories)}")
+        return categories.tolist()
+
+    def list_projects(self, category=None):
+        """
+        List all projects or projects in a specific category.
+
+        Args:
+            category (str, optional): Category to filter projects.
+
+        Returns:
+            list: List of project names.
+        """
+        if self.folder_df is None:
+            print("No projects available. Make sure the zip file is properly loaded.")
+            return []
+        if category:
+            projects = self.folder_df[self.folder_df['Category'] == category]['Project'].unique()
+        else:
+            projects = self.folder_df['Project'].unique()
+        return projects.tolist()
+
+    def extract_project(self, project_names: Union[str, List[str]]):
+        """
+        Extract one or more specific projects from the zip file.
+
+        Args:
+            project_names (str or List[str]): Name(s) of the project(s) to extract.
+
+        Returns:
+            List[Path]: List of paths to the extracted project(s).
+
+        Raises:
+            ValueError: If any project is not found.
+        """
+        if isinstance(project_names, str):
+            project_names = [project_names]
+
+        extracted_paths = []
+
+        for project_name in project_names:
+            print("----- RasExamples Extracting Project -----")
+            print(f"Extracting project '{project_name}'")
+            project_path = self.projects_dir / project_name
+
+            if project_path.exists():
+                print(f"Project '{project_name}' already exists. Deleting existing folder...")
+                shutil.rmtree(project_path)
+                print(f"Existing folder for project '{project_name}' has been deleted.")
+
+            if self.folder_df is None or self.folder_df.empty:
+                raise ValueError("No project information available. Make sure the zip file is properly loaded.")
+
+            project_info = self.folder_df[self.folder_df['Project'] == project_name]
+            if project_info.empty:
+                raise ValueError(f"Project '{project_name}' not found in the zip file.")
+
+            category = project_info['Category'].iloc[0]
+            
+            # Ensure the project directory exists
+            project_path.mkdir(parents=True, exist_ok=True)
+
+            try:
+                with zipfile.ZipFile(self.zip_file_path, 'r') as zip_ref:
+                    for file in zip_ref.namelist():
+                        parts = Path(file).parts
+                        if len(parts) > 2 and parts[2] == project_name:
+                            # Remove the first two levels (category and project name)
+                            relative_path = Path(*parts[3:])
+                            extract_path = project_path / relative_path
+                            if file.endswith('/'):
+                                extract_path.mkdir(parents=True, exist_ok=True)
+                            else:
+                                extract_path.parent.mkdir(parents=True, exist_ok=True)
+                                with zip_ref.open(file) as source, open(extract_path, "wb") as target:
+                                    shutil.copyfileobj(source, target)
+
+                print(f"Successfully extracted project '{project_name}' to {project_path}")
+                extracted_paths.append(project_path)
+            except zipfile.BadZipFile:
+                print(f"Error: The file {self.zip_file_path} is not a valid zip file.")
+            except FileNotFoundError:
+                print(f"Error: The file {self.zip_file_path} was not found.")
+            except Exception as e:
+                print(f"An unexpected error occurred while extracting the project: {str(e)}")
+            #print("----- RasExamples Extraction Complete -----")
+        return extracted_paths
+
+    def is_project_extracted(self, project_name):
+        """
+        Check if a specific project is already extracted.
+
+        Args:
+            project_name (str): Name of the project to check.
+
+        Returns:
+            bool: True if the project is extracted, False otherwise.
+        """
+        project_path = self.projects_dir / project_name
+        return project_path.exists()
+
+    def clean_projects_directory(self):
+        """Remove all extracted projects from the example_projects directory."""
+        print(f"Cleaning projects directory: {self.projects_dir}")
+        if self.projects_dir.exists():
+            shutil.rmtree(self.projects_dir)
+        self.projects_dir.mkdir(parents=True, exist_ok=True)
+        print("Projects directory cleaned.")
+
+# Example usage:
+# ras_examples = RasExamples()
+# extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
+# for path in extracted_paths:
+#     print(f"Extracted to: {path}")
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasGeo.py
+==================================================
+"""
+Operations for handling geometry files in HEC-RAS projects.
+"""
+from pathlib import Path
+from typing import List, Union
+from .RasPlan import RasPlan
+from .RasPrj import ras
+import re
+
+class RasGeo:
+    """
+    A class for operations on HEC-RAS geometry files.
+    """
+    
+    @staticmethod
+    def clear_geompre_files(
+        plan_files: Union[str, Path, List[Union[str, Path]]] = None,
+        ras_object = None
+    ) -> None:
+        """
+        Clear HEC-RAS geometry preprocessor files for specified plan files or all plan files in the project directory.
+        
+        Limitations/Future Work:
+        - This function only deletes the geometry preprocessor file.
+        - It does not clear the IB tables.
+        - It also does not clear geometry preprocessor tables from the geometry HDF.
+        - All of these features will need to be added to reliably remove geometry preprocessor files for 1D and 2D projects.
+        
+        Parameters:
+            plan_files (Union[str, Path, List[Union[str, Path]]], optional): 
+                Full path(s) to the HEC-RAS plan file(s) (.p*).
+                If None, clears all plan files in the project directory.
+            ras_object: An optional RAS object instance.
+        
+        Returns:
+            None
+        
+        Examples:
+            # Clear all geometry preprocessor files in the project directory
+            RasGeo.clear_geompre_files()
+            
+            # Clear a single plan file
+            RasGeo.clear_geompre_files(r'path/to/plan.p01')
+            
+            # Clear multiple plan files
+            RasGeo.clear_geompre_files([r'path/to/plan1.p01', r'path/to/plan2.p02'])
+
+        Note:
+            This function updates the ras object's geometry dataframe after clearing the preprocessor files.
+        """
+        ## Explicit Function Steps
+        # 1. Initialize the ras_object, defaulting to the global ras if not provided.
+        # 2. Define a helper function to clear a single geometry preprocessor file.
+        # 3. Determine the list of plan files to process based on the input.
+        # 4. Iterate over each plan file and clear its geometry preprocessor file.
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
+            plan_path = Path(plan_file)
+            geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
+            geom_preprocessor_file = plan_path.with_suffix(geom_preprocessor_suffix)
+            if geom_preprocessor_file.exists():
+                try:
+                    print(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
+                    geom_preprocessor_file.unlink()
+                    print("File deletion completed successfully.")
+                except PermissionError:
+                    raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
+                except OSError as e:
+                    raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
+            else:
+                print(f"No geometry preprocessor file found for: {plan_file}")
+        
+        if plan_files is None:
+            print("Clearing all geometry preprocessor files in the project directory.")
+            plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
+        elif isinstance(plan_files, (str, Path)):
+            plan_files_to_clear = [plan_files]
+        elif isinstance(plan_files, list):
+            plan_files_to_clear = plan_files
+        else:
+            raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
+        
+        for plan_file in plan_files_to_clear:
+            clear_single_file(plan_file, ras_obj)
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasPlan.py
+==================================================
+"""
+Operations for modifying and updating HEC-RAS plan files.
+
+"""
+import re
+from pathlib import Path
+import shutil
+from typing import Union, Optional
+import pandas as pd
+from .RasPrj import RasPrj, ras
+from .RasUtils import RasUtils
+
+class RasPlan:
+    """
+    A class for operations on HEC-RAS plan files.
+    """
+    
+    @staticmethod
+    def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
+        """
+        Set the geometry for the specified plan.
+
+        Parameters:
+            plan_number (Union[str, int]): The plan number to update.
+            new_geom (Union[str, int]): The new geometry number to set.
+            ras_object: An optional RAS object instance.
+
+        Returns:
+            pd.DataFrame: The updated geometry DataFrame.
+
+        Example:
+            updated_geom_df = RasPlan.set_geom('02', '03')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Ensure plan_number and new_geom are strings
+        plan_number = str(plan_number).zfill(2)
+        new_geom = str(new_geom).zfill(2)
+
+        # Before doing anything, make sure the plan, geom, flow, and unsteady dataframes are current
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        # List the geom_df for debugging
+        print("Current geometry DataFrame within the function:")
+        print(ras_obj.geom_df)
+        
+        if new_geom not in ras_obj.geom_df['geom_number'].values:
+            raise ValueError(f"Geometry {new_geom} not found in project.")
+
+        # Update the geometry for the specified plan
+        ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
+
+        print(f"Geometry for plan {plan_number} set to {new_geom}")
+        print("Updated plan DataFrame:")
+        display(ras_obj.plan_df)
+
+        # Update the project file
+        prj_file_path = ras_obj.prj_file
+        with open(prj_file_path, 'r') as f:
+            lines = f.readlines()
+
+        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
+        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
+        
+        for i, line in enumerate(lines):
+            if plan_pattern.match(line):
+                for j in range(i+1, len(lines)):
+                    if geom_pattern.match(lines[j]):
+                        lines[j] = f"Geom File=g{new_geom}\n"
+                        break
+                break
+
+        with open(prj_file_path, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated project file with new geometry for plan {plan_number}")
+
+        # Re-initialize the ras object to reflect changes
+        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
+
+        return ras_obj.plan_df
+
+    @staticmethod
+    def set_steady(plan_number: str, new_steady_flow_number: str, ras_object=None):
+        """
+        Apply a steady flow file to a plan file.
+        
+        Parameters:
+        plan_number (str): Plan number (e.g., '02')
+        new_steady_flow_number (str): Steady flow number to apply (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Raises:
+        ValueError: If the specified steady flow number is not found in the project file
+        FileNotFoundError: If the specified plan file is not found
+
+        Example:
+        >>> RasPlan.set_steady('02', '01')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        logging.info(f"Setting steady flow file to {new_steady_flow_number} in Plan {plan_number}")
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+                        
+        # Update the flow dataframe in the ras instance to ensure it is current
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        
+        if new_steady_flow_number not in ras_obj.flow_df['flow_number'].values:
+            raise ValueError(f"Steady flow number {new_steady_flow_number} not found in project file.")
+        
+        # Resolve the full path of the plan file
+        plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
+        if not plan_file_path:
+            raise FileNotFoundError(f"Plan file not found: {plan_number}")
+        
+        with open(plan_file_path, 'r') as f:
+            lines = f.readlines()
+        with open(plan_file_path, 'w') as f:
+            for line in lines:
+                if line.startswith("Flow File=f"):
+                    f.write(f"Flow File=f{new_steady_flow_number}\n")
+                    logging.info(f"Updated Flow File in {plan_file_path} to f{new_steady_flow_number}")
+                else:
+                    f.write(line)
+
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    def set_unsteady(plan_number: str, new_unsteady_flow_number: str, ras_object=None):
+        """
+        Apply an unsteady flow file to a plan file.
+        
+        Parameters:
+        plan_number (str): Plan number (e.g., '04')
+        new_unsteady_flow_number (str): Unsteady flow number to apply (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Raises:
+        ValueError: If the specified unsteady number is not found in the project file
+        FileNotFoundError: If the specified plan file is not found
+
+        Example:
+        >>> RasPlan.set_unsteady('04', '01')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        print(f"Setting unsteady flow file from {new_unsteady_flow_number} to {plan_number}")
+        
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        # Update the unsteady dataframe in the ras instance to ensure it is current
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        if new_unsteady_flow_number not in ras_obj.unsteady_df['unsteady_number'].values:
+            raise ValueError(f"Unsteady number {new_unsteady_flow_number} not found in project file.")
+        
+        # Get the full path of the plan file
+        plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
+        if not plan_file_path:
+            raise FileNotFoundError(f"Plan file not found: {plan_number}")
+        
+        
+        # DEV NOTE: THIS WORKS HERE, BUT IN OTHER FUNCTIONS WE DO THIS MANUALLY.  
+        # UPDATE OTHER FUNCTIONS TO USE RasUtils.update_plan_file INSTEAD OF REPLICATING THIS CODE.
+        
+        RasUtils.update_plan_file(plan_file_path, 'Unsteady', new_unsteady_flow_number)
+        print(f"Updated unsteady flow file in {plan_file_path} to u{new_unsteady_flow_number}")
+
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    def set_num_cores(plan_number, num_cores, ras_object=None):
+        """
+        Update the maximum number of cores to use in the HEC-RAS plan file.
+        
+        Parameters:
+        plan_number (str): Plan number (e.g., '02') or full path to the plan file
+        num_cores (int): Maximum number of cores to use
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Notes on setting num_cores in HEC-RAS:
+        The recommended setting for num_cores is 2 (most efficient) to 8 (most performant)
+        More details in the HEC-Commander Repository Blog "Benchmarking is All You Need"
+        https://github.com/billk-FM/HEC-Commander/blob/main/Blog/7._Benchmarking_Is_All_You_Need.md
+        
+        Microsoft Windows has a maximum of 64 cores that can be allocated to a single Ras.exe process. 
+
+        Example:
+        >>> # Using plan number
+        >>> RasPlan.set_num_cores('02', 4)
+        >>> # Using full path to plan file
+        >>> RasPlan.set_num_cores('/path/to/project.p02', 4)
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        print(f"Setting num_cores to {num_cores} in Plan {plan_number}")
+        
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        # Determine if plan_number is a path or a plan number
+        if Path(plan_number).is_file():
+            plan_file_path = Path(plan_number)
+            if not plan_file_path.exists():
+                raise FileNotFoundError(f"Plan file not found: {plan_file_path}. Please provide a valid plan number or path.")
+        else:
+            # Update the plan dataframe in the ras instance to ensure it is current
+            ras_obj.plan_df = ras_obj.get_prj_entries('Plan')
+            
+            # Get the full path of the plan file
+            plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
+            if not plan_file_path:
+                raise FileNotFoundError(f"Plan file not found: {plan_number}. Please provide a valid plan number or path.")
+        
+        cores_pattern = re.compile(r"(UNET D1 Cores= )\d+")
+        with open(plan_file_path, 'r') as file:
+            content = file.read()
+        new_content = cores_pattern.sub(rf"\g<1>{num_cores}", content)
+        with open(plan_file_path, 'w') as file:
+            file.write(new_content)
+        print(f"Updated {plan_file_path} with {num_cores} cores.")
+        
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        
+    @staticmethod
+    def set_geom_preprocessor(file_path, run_htab, use_ib_tables, ras_object=None):
+        """
+        Update the simulation plan file to modify the `Run HTab` and `UNET Use Existing IB Tables` settings.
+        
+        Parameters:
+        file_path (str): Path to the simulation plan file (.p06 or similar) that you want to modify.
+        run_htab (int): Value for the `Run HTab` setting:
+            - `0` : Do not run the geometry preprocessor, use existing geometry tables.
+            - `-1` : Run the geometry preprocessor, forcing a recomputation of the geometry tables.
+        use_ib_tables (int): Value for the `UNET Use Existing IB Tables` setting:
+            - `0` : Use existing interpolation/boundary (IB) tables without recomputing them.
+            - `-1` : Do not use existing IB tables, force a recomputation.
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Raises:
+        ValueError: If `run_htab` or `use_ib_tables` are not integers or not within the accepted values (`0` or `-1`).
+        FileNotFoundError: If the specified file does not exist.
+        IOError: If there is an error reading or writing the file.
+
+        Example:
+        >>> RasPlan.set_geom_preprocessor('/path/to/project.p06', run_htab=-1, use_ib_tables=0)
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        if run_htab not in [-1, 0]:
+            raise ValueError("Invalid value for `Run HTab`. Expected `0` or `-1`.")
+        if use_ib_tables not in [-1, 0]:
+            raise ValueError("Invalid value for `UNET Use Existing IB Tables`. Expected `0` or `-1`.")
+        try:
+            print(f"Reading the file: {file_path}")
+            with open(file_path, 'r') as file:
+                lines = file.readlines()
+            print("Updating the file with new settings...")
+            updated_lines = []
+            for line in lines:
+                if line.lstrip().startswith("Run HTab="):
+                    updated_line = f"Run HTab= {run_htab} \n"
+                    updated_lines.append(updated_line)
+                    print(f"Updated 'Run HTab' to {run_htab}")
+                elif line.lstrip().startswith("UNET Use Existing IB Tables="):
+                    updated_line = f"UNET Use Existing IB Tables= {use_ib_tables} \n"
+                    updated_lines.append(updated_line)
+                    print(f"Updated 'UNET Use Existing IB Tables' to {use_ib_tables}")
+                else:
+                    updated_lines.append(line)
+            print(f"Writing the updated settings back to the file: {file_path}")
+            with open(file_path, 'w') as file:
+                file.writelines(updated_lines)
+            print("File update completed successfully.")
+        except FileNotFoundError:
+            raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+        except IOError as e:
+            raise IOError(f"An error occurred while reading or writing the file: {e}")
+
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+# Get Functions to retrieve file paths for plan, flow, unsteady, geometry and results files
+
+    @staticmethod
+    def get_results_path(plan_number: str, ras_object=None) -> Optional[str]:
+        """
+        Retrieve the results file path for a given HEC-RAS plan number.
+
+        Args:
+            plan_number (str): The HEC-RAS plan number for which to find the results path.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+            Optional[str]: The full path to the results file if found and the file exists, or None if not found.
+
+        Raises:
+            RuntimeError: If the project is not initialized.
+
+        Example:
+            >>> ras_plan = RasPlan()
+            >>> results_path = ras_plan.get_results_path('01')
+            >>> if results_path:
+            ...     print(f"Results file found at: {results_path}")
+            ... else:
+            ...     print("Results file not found.")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        # Update the plan dataframe in the ras instance to ensure it is current
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        
+        # Ensure plan_number is a string
+        plan_number = str(plan_number)
+        
+        # Ensure plan_number is formatted as '01', '02', etc.
+        plan_number = plan_number.zfill(2)
+        
+        # print the ras_obj.plan_df dataframe
+        print("Plan DataFrame:")
+        display(ras_obj.plan_df)
+        
+        plan_entry = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_number]
+        if not plan_entry.empty:
+            results_path = plan_entry['HDF_Results_Path'].iloc[0]
+            if results_path:
+                print(f"Results file for Plan number {plan_number} exists at: {results_path}")
+                return results_path
+            else:
+                print(f"Results file for Plan number {plan_number} does not exist.")
+                return None
+        else:
+            print(f"Plan number {plan_number} not found in the entries.")
+            return None
+        
+    @staticmethod
+    def get_plan_path(plan_number: str, ras_object=None) -> Optional[str]:
+        """
+        Return the full path for a given plan number.
+        
+        This method ensures that the latest plan entries are included by refreshing
+        the plan dataframe before searching for the requested plan number.
+        
+        Args:
+        plan_number (str): The plan number to search for.
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        Optional[str]: The full path of the plan file if found, None otherwise.
+        
+        Raises:
+        RuntimeError: If the project is not initialized.
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> plan_path = ras_plan.get_plan_path('01')
+        >>> if plan_path:
+        ...     print(f"Plan file found at: {plan_path}")
+        ... else:
+        ...     print("Plan file not found.")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        project_name = ras_obj.project_name
+        
+        # Use updated plan dataframe
+        plan_df = ras_obj.get_plan_entries()
+        
+        plan_path = plan_df[plan_df['plan_number'] == plan_number]
+        
+        if not plan_path.empty:
+            full_path = plan_path['full_path'].iloc[0]
+            return full_path
+        else:
+            print(f"Plan number {plan_number} not found in the updated plan entries.")
+            return None
+
+    @staticmethod
+    def get_flow_path(flow_number: str, ras_object=None) -> Optional[str]:
+        """
+        Return the full path for a given flow number.
+
+        Args:
+        flow_number (str): The flow number to search for.
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Optional[str]: The full path of the flow file if found, None otherwise.
+
+        Raises:
+        RuntimeError: If the project is not initialized.
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> flow_path = ras_plan.get_flow_path('01')
+        >>> if flow_path:
+        ...     print(f"Flow file found at: {flow_path}")
+        ... else:
+        ...     print("Flow file not found.")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        # Use updated flow dataframe
+        ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
+        
+        flow_path = ras_obj.flow_df[ras_obj.flow_df['flow_number'] == flow_number]
+        if not flow_path.empty:
+            full_path = flow_path['full_path'].iloc[0]
+            return full_path
+        else:
+            print(f"Flow number {flow_number} not found in the updated flow entries.")
+            return None
+
+    @staticmethod
+    def get_unsteady_path(unsteady_number: str, ras_object=None) -> Optional[str]:
+        """
+        Return the full path for a given unsteady number.
+
+        Args:
+        unsteady_number (str): The unsteady number to search for.
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Optional[str]: The full path of the unsteady file if found, None otherwise.
+
+        Raises:
+        RuntimeError: If the project is not initialized.
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> unsteady_path = ras_plan.get_unsteady_path('01')
+        >>> if unsteady_path:
+        ...     print(f"Unsteady file found at: {unsteady_path}")
+        ... else:
+        ...     print("Unsteady file not found.")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        # Use updated unsteady dataframe
+        ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
+        
+        unsteady_path = ras_obj.unsteady_df[ras_obj.unsteady_df['unsteady_number'] == unsteady_number]
+        if not unsteady_path.empty:
+            full_path = unsteady_path['full_path'].iloc[0]
+            return full_path
+        else:
+            print(f"Unsteady number {unsteady_number} not found in the updated unsteady entries.")
+            return None
+
+    @staticmethod
+    def get_geom_path(geom_number: str, ras_object=None) -> Optional[str]:
+        """
+        Return the full path for a given geometry number.
+
+        Args:
+        geom_number (str): The geometry number to search for.
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Optional[str]: The full path of the geometry file if found, None otherwise.
+
+        Raises:
+        RuntimeError: If the project is not initialized.
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> geom_path = ras_plan.get_geom_path('01')
+        >>> if geom_path:
+        ...     print(f"Geometry file found at: {geom_path}")
+        ... else:
+        ...     print("Geometry file not found.")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        # Use updated geom dataframe
+        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
+        
+        geom_path = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == geom_number]
+        if not geom_path.empty:
+            full_path = geom_path['full_path'].iloc[0]
+            return full_path
+        else:
+            print(f"Geometry number {geom_number} not found in the updated geometry entries.")
+            return None
+#  Clone Functions to copy unsteady, flow, and geometry files from templates
+     
+    @staticmethod
+    def clone_plan(template_plan, new_plan_shortid=None, ras_object=None):
+        """
+        Create a new plan file based on a template and update the project file.
+        
+        Parameters:
+        template_plan (str): Plan number to use as template (e.g., '01')
+        new_plan_shortid (str, optional): New short identifier for the plan file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        str: New plan number
+        
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> new_plan_number = ras_plan.clone_plan('01', new_plan_shortid='New Plan')
+        >>> print(f"New plan created with number: {new_plan_number}")
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update plan entries without reinitializing the entire project
+        ras_obj.plan_df = ras_obj.get_prj_entries('Plan')
+
+        new_plan_num = RasPlan.get_next_number(ras_obj.plan_df['plan_number'])
+        template_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{template_plan}"
+        new_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_plan_num}"
+        
+        if not template_plan_path.exists():
+            raise FileNotFoundError(f"Template plan file '{template_plan_path}' does not exist.")
+
+        shutil.copy(template_plan_path, new_plan_path)
+        print(f"Copied {template_plan_path} to {new_plan_path}")
+
+        with open(new_plan_path, 'r') as f:
+            plan_lines = f.readlines()
+
+        shortid_pattern = re.compile(r'^Short Identifier=(.*)$', re.IGNORECASE)
+        for i, line in enumerate(plan_lines):
+            match = shortid_pattern.match(line.strip())
+            if match:
+                current_shortid = match.group(1)
+                if new_plan_shortid is None:
+                    new_shortid = (current_shortid + "_copy")[:24]
+                else:
+                    new_shortid = new_plan_shortid[:24]
+                plan_lines[i] = f"Short Identifier={new_shortid}\n"
+                break
+
+        with open(new_plan_path, 'w') as f:
+            f.writelines(plan_lines)
+
+        print(f"Updated short identifier in {new_plan_path}")
+
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+
+        # Prepare the new Plan File entry line
+        new_plan_line = f"Plan File=p{new_plan_num}\n"
+
+        # Find the correct insertion point for the new Plan File entry
+        plan_file_pattern = re.compile(r'^Plan File=p(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = plan_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(new_plan_num):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_plan_line)
+        else:
+            # Try to insert after the last Plan File entry
+            plan_indices = [i for i, line in enumerate(lines) if plan_file_pattern.match(line.strip())]
+            if plan_indices:
+                last_plan_index = plan_indices[-1]
+                lines.insert(last_plan_index + 1, new_plan_line)
+            else:
+                # Append at the end if no Plan File entries exist
+                lines.append(new_plan_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new plan p{new_plan_num}")
+        new_plan = new_plan_num
+        
+        # Store the project folder path
+        project_folder = ras_obj.project_folder
+
+        # Re-initialize the ras global object
+        ras_obj.initialize(project_folder, ras_obj.ras_exe_path)
+
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+        return new_plan
+
+
+    @staticmethod
+    def clone_unsteady(template_unsteady, ras_object=None):
+        """
+        Copy unsteady flow files from a template, find the next unsteady number,
+        and update the project file accordingly.
+
+        Parameters:
+        template_unsteady (str): Unsteady flow number to be used as a template (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        str: New unsteady flow number (e.g., '03')
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> new_unsteady_num = ras_plan.clone_unsteady('01')
+        >>> print(f"New unsteady flow file created: u{new_unsteady_num}")
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update unsteady entries without reinitializing the entire project
+        ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
+
+        new_unsteady_num = RasPlan.get_next_number(ras_obj.unsteady_df['unsteady_number'])
+        template_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}"
+        new_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}"
+
+        if not template_unsteady_path.exists():
+            raise FileNotFoundError(f"Template unsteady file '{template_unsteady_path}' does not exist.")
+
+        shutil.copy(template_unsteady_path, new_unsteady_path)
+        print(f"Copied {template_unsteady_path} to {new_unsteady_path}")
+
+        # Copy the corresponding .hdf file if it exists
+        template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}.hdf"
+        new_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}.hdf"
+        if template_hdf_path.exists():
+            shutil.copy(template_hdf_path, new_hdf_path)
+            print(f"Copied {template_hdf_path} to {new_hdf_path}")
+        else:
+            print(f"No corresponding .hdf file found for '{template_unsteady_path}'. Skipping '.hdf' copy.")
+
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+
+        # Prepare the new Unsteady Flow File entry line
+        new_unsteady_line = f"Unsteady File=u{new_unsteady_num}\n"
+
+        # Find the correct insertion point for the new Unsteady Flow File entry
+        unsteady_file_pattern = re.compile(r'^Unsteady File=u(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = unsteady_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(new_unsteady_num):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_unsteady_line)
+        else:
+            # Try to insert after the last Unsteady Flow File entry
+            unsteady_indices = [i for i, line in enumerate(lines) if unsteady_file_pattern.match(line.strip())]
+            if unsteady_indices:
+                last_unsteady_index = unsteady_indices[-1]
+                lines.insert(last_unsteady_index + 1, new_unsteady_line)
+            else:
+                # Append at the end if no Unsteady Flow File entries exist
+                lines.append(new_unsteady_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new unsteady flow file u{new_unsteady_num}")
+        new_unsteady = new_unsteady_num
+        
+        # Store the project folder path
+        project_folder = ras_obj.project_folder
+        hecras_path = ras_obj.ras_exe_path
+
+        # Re-initialize the ras global object
+        ras_obj.initialize(project_folder, hecras_path)
+        
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        return new_unsteady
+
+    @staticmethod
+    def clone_steady(template_flow, ras_object=None):
+        """
+        Copy steady flow files from a template, find the next flow number,
+        and update the project file accordingly.
+        
+        Parameters:
+        template_flow (str): Flow number to be used as a template (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        str: New flow number (e.g., '03')
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> new_flow_num = ras_plan.clone_steady('01')
+        >>> print(f"New steady flow file created: f{new_flow_num}")
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update flow entries without reinitializing the entire project
+        ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
+
+        new_flow_num = RasPlan.get_next_number(ras_obj.flow_df['flow_number'])
+        template_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{template_flow}"
+        new_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_flow_num}"
+
+        if not template_flow_path.exists():
+            raise FileNotFoundError(f"Template steady flow file '{template_flow_path}' does not exist.")
+
+        shutil.copy(template_flow_path, new_flow_path)
+        print(f"Copied {template_flow_path} to {new_flow_path}")
+
+        # Read the contents of the project file
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+
+        # Prepare the new Steady Flow File entry line
+        new_flow_line = f"Flow File=f{new_flow_num}\n"
+
+        # Find the correct insertion point for the new Steady Flow File entry
+        flow_file_pattern = re.compile(r'^Flow File=f(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = flow_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(new_flow_num):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_flow_line)
+        else:
+            # Try to insert after the last Steady Flow File entry
+            flow_indices = [i for i, line in enumerate(lines) if flow_file_pattern.match(line.strip())]
+            if flow_indices:
+                last_flow_index = flow_indices[-1]
+                lines.insert(last_flow_index + 1, new_flow_line)
+            else:
+                # Append at the end if no Steady Flow File entries exist
+                lines.append(new_flow_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new steady flow file f{new_flow_num}")
+        new_steady = new_flow_num
+        
+        # Store the project folder path
+        project_folder = ras_obj.project_folder
+
+        # Re-initialize the ras global object
+        ras_obj.initialize(project_folder, ras_obj.ras_exe_path)
+        
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        return new_steady
+
+
+    @staticmethod
+    def clone_geom(template_geom, ras_object=None):
+        """
+        Copy geometry files from a template, find the next geometry number,
+        and update the project file accordingly.
+        
+        Parameters:
+        template_geom (str): Geometry number to be used as a template (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        str: New geometry number (e.g., '03')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update geometry entries without reinitializing the entire project
+        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')  # Call the correct function to get updated geometry entries
+        print(f"Updated geometry entries:\n{ras_obj.geom_df}")
+
+#  Clone Functions to copy unsteady, flow, and geometry files from templates
+     
+    @staticmethod
+    def clone_plan(template_plan, new_plan_shortid=None, ras_object=None):
+        """
+        Create a new plan file based on a template and update the project file.
+        
+        Parameters:
+        template_plan (str): Plan number to use as template (e.g., '01')
+        new_plan_shortid (str, optional): New short identifier for the plan file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        str: New plan number
+        
+        Revision Notes:
+        - Updated to insert new plan entry in the correct position
+        - Improved error handling and logging
+        - Updated to use get_prj_entries('Plan') for the latest entries
+        - Added print statements for progress tracking
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> new_plan_number = ras_plan.clone_plan('01', new_plan_shortid='New Plan')
+        >>> print(f"New plan created with number: {new_plan_number}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update plan entries without reinitializing the entire project
+        ras_obj.plan_df = ras_obj.get_prj_entries('Plan')
+
+        new_plan_num = RasPlan.get_next_number(ras_obj.plan_df['plan_number'])
+        template_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{template_plan}"
+        new_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_plan_num}"
+        
+        if not template_plan_path.exists():
+            raise FileNotFoundError(f"Template plan file '{template_plan_path}' does not exist.")
+
+        shutil.copy(template_plan_path, new_plan_path)
+        print(f"Copied {template_plan_path} to {new_plan_path}")
+
+        with open(new_plan_path, 'r') as f:
+            plan_lines = f.readlines()
+
+        shortid_pattern = re.compile(r'^Short Identifier=(.*)$', re.IGNORECASE)
+        for i, line in enumerate(plan_lines):
+            match = shortid_pattern.match(line.strip())
+            if match:
+                current_shortid = match.group(1)
+                if new_plan_shortid is None:
+                    new_shortid = (current_shortid + "_copy")[:24]
+                else:
+                    new_shortid = new_plan_shortid[:24]
+                plan_lines[i] = f"Short Identifier={new_shortid}\n"
+                break
+
+        with open(new_plan_path, 'w') as f:
+            f.writelines(plan_lines)
+
+        print(f"Updated short identifier in {new_plan_path}")
+
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+
+        # Prepare the new Plan File entry line
+        new_plan_line = f"Plan File=p{new_plan_num}\n"
+
+        # Find the correct insertion point for the new Plan File entry
+        plan_file_pattern = re.compile(r'^Plan File=p(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = plan_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(new_plan_num):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_plan_line)
+        else:
+            # Try to insert after the last Plan File entry
+            plan_indices = [i for i, line in enumerate(lines) if plan_file_pattern.match(line.strip())]
+            if plan_indices:
+                last_plan_index = plan_indices[-1]
+                lines.insert(last_plan_index + 1, new_plan_line)
+            else:
+                # Append at the end if no Plan File entries exist
+                lines.append(new_plan_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new plan p{new_plan_num}")
+        new_plan = new_plan_num
+        
+        # Store the project folder path
+        project_folder = ras_obj.project_folder
+
+        # Re-initialize the ras global object
+        ras_obj.initialize(project_folder, ras_obj.ras_exe_path)
+        return new_plan
+
+
+    @staticmethod
+    def clone_unsteady(template_unsteady, ras_object=None):
+        """
+        Copy unsteady flow files from a template, find the next unsteady number,
+        and update the project file accordingly.
+
+        Parameters:
+        template_unsteady (str): Unsteady flow number to be used as a template (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        str: New unsteady flow number (e.g., '03')
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> new_unsteady_num = ras_plan.clone_unsteady('01')
+        >>> print(f"New unsteady flow file created: u{new_unsteady_num}")
+
+        Revision Notes:
+        - Updated to insert new unsteady flow entry in the correct position
+        - Improved error handling and logging
+        - Removed dst_folder parameter as it's not needed (using project folder)
+        - Added handling for corresponding .hdf files
+        - Updated to use get_prj_entries('Unsteady') for the latest entries
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update unsteady entries without reinitializing the entire project
+        ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
+
+        new_unsteady_num = RasPlan.get_next_number(ras_obj.unsteady_df['unsteady_number'])
+        template_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}"
+        new_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}"
+
+        if not template_unsteady_path.exists():
+            raise FileNotFoundError(f"Template unsteady file '{template_unsteady_path}' does not exist.")
+
+        shutil.copy(template_unsteady_path, new_unsteady_path)
+        print(f"Copied {template_unsteady_path} to {new_unsteady_path}")
+
+        # Copy the corresponding .hdf file if it exists
+        template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}.hdf"
+        new_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}.hdf"
+        if template_hdf_path.exists():
+            shutil.copy(template_hdf_path, new_hdf_path)
+            print(f"Copied {template_hdf_path} to {new_hdf_path}")
+        else:
+            print(f"No corresponding .hdf file found for '{template_unsteady_path}'. Skipping '.hdf' copy.")
+
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+
+        # Prepare the new Unsteady Flow File entry line
+        new_unsteady_line = f"Unsteady File=u{new_unsteady_num}\n"
+
+        # Find the correct insertion point for the new Unsteady Flow File entry
+        unsteady_file_pattern = re.compile(r'^Unsteady File=u(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = unsteady_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(new_unsteady_num):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_unsteady_line)
+        else:
+            # Try to insert after the last Unsteady Flow File entry
+            unsteady_indices = [i for i, line in enumerate(lines) if unsteady_file_pattern.match(line.strip())]
+            if unsteady_indices:
+                last_unsteady_index = unsteady_indices[-1]
+                lines.insert(last_unsteady_index + 1, new_unsteady_line)
+            else:
+                # Append at the end if no Unsteady Flow File entries exist
+                lines.append(new_unsteady_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new unsteady flow file u{new_unsteady_num}")
+        new_unsteady = new_unsteady_num
+        
+        # Store the project folder path
+        project_folder = ras_obj.project_folder
+        hecras_path = ras_obj.ras_exe_path
+
+        # Re-initialize the ras global object
+        ras_obj.initialize(project_folder, hecras_path)
+        
+        return new_unsteady
+
+    @staticmethod
+    def clone_steady(template_flow, ras_object=None):
+        """
+        Copy steady flow files from a template, find the next flow number,
+        and update the project file accordingly.
+        
+        Parameters:
+        template_flow (str): Flow number to be used as a template (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        str: New flow number (e.g., '03')
+
+        Example:
+        >>> ras_plan = RasPlan()
+        >>> new_flow_num = ras_plan.clone_steady('01')
+        >>> print(f"New steady flow file created: f{new_flow_num}")
+
+        Revision Notes:
+        - Updated to insert new steady flow entry in the correct position
+        - Improved error handling and logging
+        - Added handling for corresponding .hdf files
+        - Updated to use get_prj_entries('Flow') for the latest entries
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update flow entries without reinitializing the entire project
+        ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
+
+        new_flow_num = RasPlan.get_next_number(ras_obj.flow_df['flow_number'])
+        template_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{template_flow}"
+        new_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_flow_num}"
+
+        if not template_flow_path.exists():
+            raise FileNotFoundError(f"Template steady flow file '{template_flow_path}' does not exist.")
+
+        shutil.copy(template_flow_path, new_flow_path)
+        print(f"Copied {template_flow_path} to {new_flow_path}")
+
+        # Read the contents of the project file
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+
+        # Prepare the new Steady Flow File entry line
+        new_flow_line = f"Flow File=f{new_flow_num}\n"
+
+        # Find the correct insertion point for the new Steady Flow File entry
+        flow_file_pattern = re.compile(r'^Flow File=f(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = flow_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(new_flow_num):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_flow_line)
+        else:
+            # Try to insert after the last Steady Flow File entry
+            flow_indices = [i for i, line in enumerate(lines) if flow_file_pattern.match(line.strip())]
+            if flow_indices:
+                last_flow_index = flow_indices[-1]
+                lines.insert(last_flow_index + 1, new_flow_line)
+            else:
+                # Append at the end if no Steady Flow File entries exist
+                lines.append(new_flow_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as f:
+            f.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new steady flow file f{new_flow_num}")
+        new_steady = new_flow_num
+        
+        # Store the project folder path
+        project_folder = ras_obj.project_folder
+
+        # Re-initialize the ras global object
+        ras_obj.initialize(project_folder, ras_obj.ras_exe_path)
+        
+        return new_steady
+
+    @staticmethod
+    def clone_geom(template_geom, ras_object=None):
+        """
+        Copy geometry files from a template, find the next geometry number,
+        and update the project file accordingly.
+        
+        Parameters:
+        template_geom (str): Geometry number to be used as a template (e.g., '01')
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        str: New geometry number (e.g., '03')
+
+        Note:
+            This function updates the ras object's dataframes after modifying the project structure.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Update geometry entries without reinitializing the entire project
+        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
+
+        template_geom_filename = f"{ras_obj.project_name}.g{template_geom}"
+        template_geom_path = ras_obj.project_folder / template_geom_filename
+
+        if not template_geom_path.is_file():
+            raise FileNotFoundError(f"Template geometry file '{template_geom_path}' does not exist.")
+
+        next_geom_number = RasPlan.get_next_number(ras_obj.geom_df['geom_number'])
+
+        new_geom_filename = f"{ras_obj.project_name}.g{next_geom_number}"
+        new_geom_path = ras_obj.project_folder / new_geom_filename
+
+        shutil.copyfile(template_geom_path, new_geom_path)
+        print(f"Copied '{template_geom_path}' to '{new_geom_path}'.")
+
+        # Handle HDF file copy
+        template_hdf_path = template_geom_path.with_suffix('.g' + template_geom + '.hdf')
+        new_hdf_path = new_geom_path.with_suffix('.g' + next_geom_number + '.hdf')
+        if template_hdf_path.is_file():
+            shutil.copyfile(template_hdf_path, new_hdf_path)
+            print(f"Copied '{template_hdf_path}' to '{new_hdf_path}'.")
+        else:
+            print(f"Warning: Template geometry HDF file '{template_hdf_path}' does not exist. This is common, and not critical. Continuing without it.")
+
+        with open(ras_obj.prj_file, 'r') as file:
+            lines = file.readlines()
+
+        # Prepare the new Geometry File entry line
+        new_geom_line = f"Geom File=g{next_geom_number}\n"
+
+        # Find the correct insertion point for the new Geometry File entry
+        geom_file_pattern = re.compile(r'^Geom File=g(\d+)', re.IGNORECASE)
+        insertion_index = None
+        for i, line in enumerate(lines):
+            match = geom_file_pattern.match(line.strip())
+            if match:
+                current_number = int(match.group(1))
+                if current_number < int(next_geom_number):
+                    continue
+                else:
+                    insertion_index = i
+                    break
+
+        if insertion_index is not None:
+            lines.insert(insertion_index, new_geom_line)
+        else:
+            # Try to insert after the last Geometry File entry
+            geom_indices = [i for i, line in enumerate(lines) if geom_file_pattern.match(line.strip())]
+            if geom_indices:
+                last_geom_index = geom_indices[-1]
+                lines.insert(last_geom_index + 1, new_geom_line)
+            else:
+                # Append at the end if no Geometry File entries exist
+                lines.append(new_geom_line)
+
+        # Write the updated lines back to the project file
+        with open(ras_obj.prj_file, 'w') as file:
+            file.writelines(lines)
+
+        print(f"Updated {ras_obj.prj_file} with new geometry file g{next_geom_number}")
+        new_geom = next_geom_number
+        
+        # Update all dataframes in the ras object
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+        print(f"Updated geometry entries:\n{ras_obj.geom_df}")
+
+        return new_geom
+            
+            
+        
+        
+    @staticmethod
+    def get_next_number(existing_numbers):
+        """
+        Determine the next available number from a list of existing numbers.
+        
+        Parameters:
+        existing_numbers (list): List of existing numbers as strings
+        
+        Returns:
+        str: Next available number as a zero-padded string
+        
+        Example:
+        >>> existing_numbers = ['01', '02', '04']
+        >>> RasPlan.get_next_number(existing_numbers)
+        '03'
+        >>> existing_numbers = ['01', '02', '03']
+        >>> RasPlan.get_next_number(existing_numbers)
+        '04'
+        """
+        existing_numbers = sorted(int(num) for num in existing_numbers)
+        next_number = 1
+        for num in existing_numbers:
+            if num == next_number:
+                next_number += 1
+            else:
+                break
+        return f"{next_number:02d}"
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasPrj.py
+==================================================
+"""RasPrj.py
+
+This module provides a class for managing HEC-RAS projects.
+
+Classes:
+    RasPrj: A class for managing HEC-RAS projects.
+
+Functions:
+    init_ras_project: Initialize a RAS project.
+    get_ras_exe: Determine the HEC-RAS executable path based on the input.
+
+DEVELOPER NOTE:
+This class is used to initialize a RAS project and is used in conjunction with the RasCmdr class to manage the execution of RAS plans.
+By default, the RasPrj class is initialized with the global 'ras' object.
+However, you can create multiple RasPrj instances to manage multiple projects.
+Do not mix and match global 'ras' object instances and custom instances of RasPrj - it will cause errors.
+"""
+# Example Terminal Output for RasPrj Functions:
+# print(f"\n----- INSERT TEXT HERE -----\n")
+
+from pathlib import Path
+import pandas as pd
+import re
+
+class RasPrj:
+    def __init__(self):
+        self.initialized = False
+
+    def initialize(self, project_folder, ras_exe_path):
+        """
+        Initialize a RasPrj instance.
+
+        This method sets up the RasPrj instance with the given project folder and RAS executable path.
+        It finds the project file, loads project data, and sets the initialization flag.
+
+        Args:
+            project_folder (str or Path): Path to the HEC-RAS project folder.
+            ras_exe_path (str or Path): Path to the HEC-RAS executable.
+
+        Raises:
+            ValueError: If no HEC-RAS project file is found in the specified folder.
+
+        Note:
+            This method is intended for internal use. External users should use the init_ras_project function instead.
+        """
+        self.project_folder = Path(project_folder)
+        self.prj_file = self.find_ras_prj(self.project_folder)
+        if self.prj_file is None:
+            raise ValueError(f"No HEC-RAS project file found in {self.project_folder}")
+        self.project_name = Path(self.prj_file).stem
+        self.ras_exe_path = ras_exe_path
+        self._load_project_data()
+        self.initialized = True
+        print(f"\n-----Initialization complete for project: {self.project_name}-----")
+        print(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}\n")
+
+    def _load_project_data(self):
+        """
+        Load project data from the HEC-RAS project file.
+
+        This method initializes DataFrames for plan, flow, unsteady, and geometry entries
+        by calling the _get_prj_entries method for each entry type.
+        """
+        # Initialize DataFrames
+        self.plan_df = self._get_prj_entries('Plan')
+        self.flow_df = self._get_prj_entries('Flow')
+        self.unsteady_df = self._get_prj_entries('Unsteady')
+        self.geom_df = self._get_prj_entries('Geom')
+
+    def _get_prj_entries(self, entry_type):
+        """
+        Extract entries of a specific type from the HEC-RAS project file.
+
+        Args:
+            entry_type (str): The type of entry to extract (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the extracted entries.
+
+        Note:
+            This method reads the project file and extracts entries matching the specified type.
+            For 'Plan' entries, it also checks for the existence of HDF results files.
+        """
+        # Initialize an empty list to store entries
+        entries = []
+        # Create a regex pattern to match the specific entry type
+        pattern = re.compile(rf"{entry_type} File=(\w+)")
+
+        # Open and read the project file
+        with open(self.prj_file, 'r') as file:
+            for line in file:
+                # Check if the line matches the pattern
+                match = pattern.match(line.strip())
+                if match:
+                    # Extract the file name from the matched pattern
+                    file_name = match.group(1)
+                    # Create a dictionary for the current entry
+                    entry = {
+                        f'{entry_type.lower()}_number': file_name[1:],
+                        'full_path': str(self.project_folder / f"{self.project_name}.{file_name}")
+                    }
+
+                    # Special handling for Plan entries
+                    if entry_type == 'Plan':
+                        # Construct the path for the HDF results file
+                        hdf_results_path = self.project_folder / f"{self.project_name}.p{file_name[1:]}.hdf"
+                        # Add the results_path to the entry, if the file exists
+                        entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
+
+                    # Add the entry to the list
+                    entries.append(entry)
+
+        # Convert the list of entries to a DataFrame and return it
+        return pd.DataFrame(entries)
+
+    @property
+    def is_initialized(self):
+        """
+        Check if the RasPrj instance has been initialized.
+
+        Returns:
+            bool: True if the instance has been initialized, False otherwise.
+        """
+        return self.initialized
+
+    def check_initialized(self):
+        """
+        Ensure that the RasPrj instance has been initialized.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        if not self.initialized:
+            raise RuntimeError("Project not initialized. Call init_ras_project() first.")
+
+    @staticmethod
+    def find_ras_prj(folder_path):
+        """
+        Find the appropriate HEC-RAS project file (.prj) in the given folder.
+        
+        Parameters:
+        folder_path (str or Path): Path to the folder containing HEC-RAS files.
+        
+        Returns:
+        Path: The full path of the selected .prj file or None if no suitable file is found.
+        """
+        folder_path = Path(folder_path)
+        prj_files = list(folder_path.glob("*.prj"))
+        rasmap_files = list(folder_path.glob("*.rasmap"))
+        if len(prj_files) == 1:
+            return prj_files[0].resolve()
+        if len(prj_files) > 1:
+            if len(rasmap_files) == 1:
+                base_filename = rasmap_files[0].stem
+                prj_file = folder_path / f"{base_filename}.prj"
+                return prj_file.resolve()
+            for prj_file in prj_files:
+                with open(prj_file, 'r') as file:
+                    if "Proj Title=" in file.read():
+                        return prj_file.resolve()
+        print("No suitable .prj file found after all checks.")
+        return None
+
+    def get_project_name(self):
+        """
+        Get the name of the HEC-RAS project.
+
+        Returns:
+            str: The name of the project.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        self.check_initialized()
+        return self.project_name
+
+    def get_prj_entries(self, entry_type):
+        """
+        Get entries of a specific type from the HEC-RAS project.
+
+        Args:
+            entry_type (str): The type of entry to retrieve (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the requested entries.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        self.check_initialized()
+        return self._get_prj_entries(entry_type)
+
+    def get_plan_entries(self):
+        """
+        Get all plan entries from the HEC-RAS project.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing all plan entries.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Plan')
+
+    def get_flow_entries(self):
+        """
+        Get all flow entries from the HEC-RAS project.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing all flow entries.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Flow')
+
+    def get_unsteady_entries(self):
+        """
+        Get all unsteady flow entries from the HEC-RAS project.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing all unsteady flow entries.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Unsteady')
+
+    def get_geom_entries(self):
+        """
+        Get all geometry entries from the HEC-RAS project.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing all geometry entries.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Geom')
+    
+    def get_hdf_entries(self):
+        """
+        Get HDF entries for plans that have results.
+        
+        Returns:
+        pd.DataFrame: A DataFrame containing plan entries with HDF results.
+                  Returns an empty DataFrame if no HDF entries are found.
+        """
+        self.check_initialized()
+        
+        # Filter the plan_df to include only entries with existing HDF results
+        hdf_entries = self.plan_df[self.plan_df['HDF_Results_Path'].notna()].copy()
+        
+        # If no HDF entries are found, return an empty DataFrame with the correct columns
+        if hdf_entries.empty:
+            return pd.DataFrame(columns=self.plan_df.columns)
+        
+        return hdf_entries
+    
+    def print_data(self):
+        """Print all RAS Object data for this instance.
+           If any objects are added, add them to the print statements below."""
+        print(f"\n--- Data for {self.project_name} ---")
+        print(f"Project folder: {self.project_folder}")
+        print(f"PRJ file: {self.prj_file}")
+        print(f"HEC-RAS executable: {self.ras_exe_path}")
+        print("\nPlan files:")
+        print(self.plan_df)
+        print("\nFlow files:")
+        print(self.flow_df)
+        print("\nUnsteady flow files:")
+        print(self.unsteady_df)
+        print("\nGeometry files:")
+        print(self.geom_df)
+        print("\nHDF entries:")
+        print(self.get_hdf_entries())
+        print("----------------------------\n")
+
+
+# Create a global instance named 'ras'
+ras = RasPrj()
+
+def init_ras_project(ras_project_folder, ras_version, ras_instance=None):
+    """
+    Initialize a RAS project.
+
+    USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
+    The initialize method of the RasPrj class only modifies the global 'ras' object.
+
+    This function creates or initializes a RasPrj instance, providing a safer and more
+    flexible interface than directly using the 'initialize' method.
+
+    Parameters:
+    -----------
+    ras_project_folder : str
+        The path to the RAS project folder.
+    ras_version : str
+        The version of RAS to use (e.g., "6.5").
+        The version can also be a full path to the Ras.exe file. (Useful when calling ras objects for folder copies.)
+    ras_instance : RasPrj, optional
+        An instance of RasPrj to initialize. If None, the global 'ras' instance is used.
+
+    Returns:
+    --------
+    RasPrj
+        An initialized RasPrj instance.
+
+    Usage:
+    ------
+    1. For general use with a single project:
+        init_ras_project("/path/to/project", "6.5")
+        # Use the global 'ras' object after initialization
+
+    2. For managing multiple projects:
+        project1 = init_ras_project("/path/to/project1", "6.5", ras_instance=RasPrj())
+        project2 = init_ras_project("/path/to/project2", "6.5", ras_instance=RasPrj())
+
+    Notes:
+    ------
+    - This function is preferred over directly calling the 'initialize' method.
+    - It supports both the global 'ras' object and custom instances.
+    - Be consistent in your approach: stick to either the global 'ras' object
+      or custom instances throughout your script or application.
+    - Document your choice of approach clearly in your code.
+
+    Warnings:
+    ---------
+    Avoid mixing use of the global 'ras' object and custom instances to prevent
+    confusion and potential bugs.
+    """
+
+    if not Path(ras_project_folder).exists():
+        raise FileNotFoundError(f"The specified RAS project folder does not exist: {ras_project_folder}. Please check the path and try again.")
+
+    ras_exe_path = get_ras_exe(ras_version)
+
+    if ras_instance is None:
+        print(f"\n-----Initializing global 'ras' object via init_ras_project function-----")
+        ras_instance = ras
+    elif not isinstance(ras_instance, RasPrj):
+        print(f"\n-----Initializing custom RasPrj instance via init_ras_project function-----")
+        raise TypeError("ras_instance must be an instance of RasPrj or None.")
+
+    # Initialize the RasPrj instance
+    ras_instance.initialize(ras_project_folder, ras_exe_path)
+
+    #print(f"\n-----HEC-RAS project initialized via init_ras_project function: {ras_instance.project_name}-----\n")
+    return ras_instance
+
+
+def get_ras_exe(ras_version):
+    """
+    Determine the HEC-RAS executable path based on the input.
+    
+    Args:
+    ras_version (str): Either a version number or a full path to the HEC-RAS executable.
+    
+    Returns:
+    str: The full path to the HEC-RAS executable.
+    
+    Raises:
+    ValueError: If the input is neither a valid version number nor a valid file path.
+    FileNotFoundError: If the executable file does not exist at the specified or constructed path.
+    """
+    ras_version_numbers = [
+        "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
+        "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
+    ]
+    
+    hecras_path = Path(ras_version)
+    
+    if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
+        return str(hecras_path)
+    
+    if ras_version in ras_version_numbers:
+        default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
+        if default_path.is_file():
+            return str(default_path)
+        else:
+            raise FileNotFoundError(f"HEC-RAS executable not found at the expected path: {default_path}")
+    
+    try:
+        version_float = float(ras_version)
+        if version_float > max(float(v) for v in ras_version_numbers):
+            newer_version_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
+            if newer_version_path.is_file():
+                return str(newer_version_path)
+            else:
+                raise FileNotFoundError(f"Newer version of HEC-RAS was specified. Check the version number or pass the full Ras.exe path as the function argument instead of the version number. The script looked for the executable at: {newer_version_path}")
+    except ValueError:
+        pass
+    
+    raise ValueError(f"Invalid HEC-RAS version or path: {ras_version}. "
+                     f"Please provide a valid version number from {ras_version_numbers} "
+                     "or a full path to the HEC-RAS executable.")
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+==================================================
+"""
+Operations for handling unsteady flow files in HEC-RAS projects.
+"""
+from pathlib import Path
+from .RasPrj import ras
+import re
+
+class RasUnsteady:
+    """
+    Class for all operations related to HEC-RAS unsteady flow files.
+    """
+    
+    @staticmethod
+    def update_unsteady_parameters(unsteady_file, modifications, ras_object=None):
+        """
+        Modify parameters in an unsteady flow file.
+        
+        Parameters:
+        unsteady_file (str): Full path to the unsteady flow file
+        modifications (dict): Dictionary of modifications to apply, where keys are parameter names and values are new values
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Note:
+            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
+        
+        Example:
+            from ras_commander import RasCmdr
+            
+            # Initialize RAS project
+            ras_cmdr = RasCmdr()
+            ras_cmdr.init_ras_project(project_folder, ras_version)
+            
+            # Update unsteady parameters
+            unsteady_file = r"path/to/unsteady_file.u01"
+            modifications = {"Parameter1": "NewValue1", "Parameter2": "NewValue2"}
+            RasUnsteady.update_unsteady_parameters(unsteady_file, modifications, ras_object=ras_cmdr.ras)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        unsteady_path = Path(unsteady_file)
+        try:
+            with open(unsteady_path, 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        except PermissionError:
+            raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+        
+        updated = False
+        for i, line in enumerate(lines):
+            for param, new_value in modifications.items():
+                if line.startswith(f"{param}="):
+                    lines[i] = f"{param}={new_value}\n"
+                    updated = True
+                    print(f"Updated {param} to {new_value}")
+        if updated:
+            try:
+                with open(unsteady_path, 'w') as f:
+                    f.writelines(lines)
+            except PermissionError:
+                raise PermissionError(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+            except IOError as e:
+                raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+            print(f"Applied modifications to {unsteady_file}")
+        else:
+            print(f"No matching parameters found in {unsteady_file}")
+
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\RasUtils.py
+==================================================
+"""
+Utility functions for the ras-commander library.
+"""
+import os
+import shutil
+import logging
+import time
+from pathlib import Path
+from .RasPrj import ras
+from typing import Union
+
+class RasUtils:
+    """
+    A class containing utility functions for the ras-commander library.
+    When integrating new functions that do not clearly fit into other classes, add them here.
+    """
+
+    @staticmethod
+    def create_backup(file_path: Path, backup_suffix: str = "_backup", ras_object=None) -> Path:
+        """
+        Create a backup of the specified file.
+
+        Parameters:
+        file_path (Path): Path to the file to be backed up
+        backup_suffix (str): Suffix to append to the backup file name
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Path to the created backup file
+
+        Example:
+        >>> backup_path = RasUtils.create_backup(Path("project.prj"))
+        >>> print(f"Backup created at: {backup_path}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        original_path = Path(file_path)
+        backup_path = original_path.with_name(f"{original_path.stem}{backup_suffix}{original_path.suffix}")
+        shutil.copy2(original_path, backup_path)
+        logging.info(f"Backup created: {backup_path}")
+        return backup_path
+
+    @staticmethod
+    def restore_from_backup(backup_path: Path, remove_backup: bool = True, ras_object=None) -> Path:
+        """
+        Restore a file from its backup.
+
+        Parameters:
+        backup_path (Path): Path to the backup file
+        remove_backup (bool): Whether to remove the backup file after restoration
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Path to the restored file
+
+        Example:
+        >>> restored_path = RasUtils.restore_from_backup(Path("project_backup.prj"))
+        >>> print(f"File restored to: {restored_path}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        backup_path = Path(backup_path)
+        original_path = backup_path.with_name(backup_path.stem.rsplit('_backup', 1)[0] + backup_path.suffix)
+        shutil.copy2(backup_path, original_path)
+        logging.info(f"File restored: {original_path}")
+        if remove_backup:
+            backup_path.unlink()
+            logging.info(f"Backup removed: {backup_path}")
+        return original_path
+
+    @staticmethod
+    def create_directory(directory_path: Path, ras_object=None) -> Path:
+        """
+        Ensure that a directory exists, creating it if necessary.
+
+        Parameters:
+        directory_path (Path): Path to the directory
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Path to the ensured directory
+
+        Example:
+        >>> ensured_dir = RasUtils.create_directory(Path("output"))
+        >>> print(f"Directory ensured: {ensured_dir}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        path = Path(directory_path)
+        path.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Directory ensured: {path}")
+        return path
+
+    @staticmethod
+    def find_files_by_extension(extension: str, ras_object=None) -> list:
+        """
+        List all files in the project directory with a specific extension.
+
+        Parameters:
+        extension (str): File extension to filter (e.g., '.prj')
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        list: List of file paths matching the extension
+
+        Example:
+        >>> prj_files = RasUtils.find_files_by_extension('.prj')
+        >>> print(f"Found {len(prj_files)} .prj files")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        files = list(ras_obj.project_folder.glob(f"*{extension}"))
+        return [str(file) for file in files]
+
+    @staticmethod
+    def get_file_size(file_path: Path, ras_object=None) -> int:
+        """
+        Get the size of a file in bytes.
+
+        Parameters:
+        file_path (Path): Path to the file
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        int: Size of the file in bytes
+
+        Example:
+        >>> size = RasUtils.get_file_size(Path("project.prj"))
+        >>> print(f"File size: {size} bytes")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        path = Path(file_path)
+        if path.exists():
+            return path.stat().st_size
+        else:
+            logging.warning(f"File not found: {path}")
+            return None
+
+    @staticmethod
+    def get_file_modification_time(file_path: Path, ras_object=None) -> float:
+        """
+        Get the last modification time of a file.
+
+        Parameters:
+        file_path (Path): Path to the file
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        float: Last modification time as a timestamp
+
+        Example:
+        >>> mtime = RasUtils.get_file_modification_time(Path("project.prj"))
+        >>> print(f"Last modified: {mtime}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        path = Path(file_path)
+        if path.exists():
+            return path.stat().st_mtime
+        else:
+            logging.warning(f"File not found: {path}")
+            return None
+
+    @staticmethod
+    def get_plan_path(current_plan_number_or_path: Union[str, Path], ras_object=None) -> Path:
+        """
+        Get the path for a plan file with a given plan number or path.
+
+        Parameters:
+        current_plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        Path: Full path to the plan file
+
+        Example:
+        >>> plan_path = RasUtils.get_plan_path(1)
+        >>> print(f"Plan file path: {plan_path}")
+        >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
+        >>> print(f"Plan file path: {plan_path}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        plan_path = Path(current_plan_number_or_path)
+        if plan_path.is_file():
+            return plan_path
+        
+        try:
+            current_plan_number = f"{int(current_plan_number_or_path):02d}"  # Ensure two-digit format
+        except ValueError:
+            raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
+        
+        plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
+        return ras_obj.project_folder / plan_name
+
+    @staticmethod
+    def remove_with_retry(path: Path, max_attempts: int = 5, initial_delay: float = 1.0, is_folder: bool = True, ras_object=None) -> bool:
+        """
+        Attempts to remove a file or folder with retry logic and exponential backoff.
+
+        Parameters:
+        path (Path): Path to the file or folder to be removed.
+        max_attempts (int): Maximum number of removal attempts.
+        initial_delay (float): Initial delay between attempts in seconds.
+        is_folder (bool): If True, the path is treated as a folder; if False, it's treated as a file.
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Returns:
+        bool: True if the file or folder was successfully removed, False otherwise.
+
+        Example:
+        >>> success = RasUtils.remove_with_retry(Path("temp_folder"), is_folder=True)
+        >>> print(f"Removal successful: {success}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        path = Path(path)
+        for attempt in range(max_attempts):
+            try:
+                if path.exists():
+                    if is_folder:
+                        shutil.rmtree(path)
+                    else:
+                        path.unlink()
+                return True
+            except PermissionError:
+                if attempt < max_attempts - 1:
+                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                    logging.warning(f"Failed to remove {path}. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    logging.error(f"Failed to remove {path} after {max_attempts} attempts. Skipping.")
+                    return False
+        return False
+
+    @staticmethod
+    def update_plan_file(plan_number_or_path: Union[str, Path], file_type: str, entry_number: int, ras_object=None) -> None:
+        """
+        Update a plan file with a new file reference.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        file_type (str): Type of file to update ('Geom', 'Flow', or 'Unsteady')
+        entry_number (int): Number (from 1 to 99) to set
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Raises:
+        ValueError: If an invalid file_type is provided
+        FileNotFoundError: If the plan file doesn't exist
+
+        Example:
+        >>> RasUtils.update_plan_file(1, "Geom", 2)
+        >>> RasUtils.update_plan_file("path/to/plan.p01", "Geom", 2)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        valid_file_types = {'Geom': 'g', 'Flow': 'f', 'Unsteady': 'u'}
+        if file_type not in valid_file_types:
+            raise ValueError(f"Invalid file_type. Expected one of: {', '.join(valid_file_types.keys())}")
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+        
+        if not plan_file_path.exists():
+            raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
+
+        file_prefix = valid_file_types[file_type]
+        search_pattern = f"{file_type} File="
+        entry_number = f"{int(entry_number):02d}"  # Ensure two-digit format
+
+        RasUtils.check_file_access(plan_file_path, 'r')
+        with open(plan_file_path, 'r') as file:
+            lines = file.readlines()
+
+        for i, line in enumerate(lines):
+            if line.startswith(search_pattern):
+                lines[i] = f"{search_pattern}{file_prefix}{entry_number}\n"
+                logging.info(f"Updated {file_type} File in {plan_file_path} to {file_prefix}{entry_number}")
+                break
+
+        with plan_file_path.open('w') as file:
+            file.writelines(lines)
+
+        logging.info(f"Successfully updated plan file: {plan_file_path}")
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    def check_file_access(file_path, mode='r'):
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        if mode in ('r', 'rb') and not os.access(path, os.R_OK):
+            raise PermissionError(f"Read permission denied for file: {file_path}")
+        if mode in ('w', 'wb', 'a', 'ab') and not os.access(path.parent, os.W_OK):
+            raise PermissionError(f"Write permission denied for directory: {path.parent}")
+
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\_version.py
+==================================================
+# file generated by setuptools_scm
+# don't change, don't track in version control
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import Tuple, Union
+    VERSION_TUPLE = Tuple[Union[int, str], ...]
+else:
+    VERSION_TUPLE = object
+
+version: str
+__version__: str
+__version_tuple__: VERSION_TUPLE
+version_tuple: VERSION_TUPLE
+
+__version__ = version = '0.29.dev1+g22e75d4.d20240919'
+__version_tuple__ = version_tuple = (0, 29, 'dev1', 'g22e75d4.d20240919')
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\__init__.py
+==================================================
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("ras-commander")
+except PackageNotFoundError:
+    # package is not installed
+    __version__ = "unknown"
+
+# Import all necessary functions and classes directly
+from .RasPrj import ras, init_ras_project, get_ras_exe
+from .RasPrj import RasPrj
+from .RasPlan import RasPlan
+from .RasGeo import RasGeo
+from .RasUnsteady import RasUnsteady
+from .RasCmdr import RasCmdr
+from .RasUtils import RasUtils
+from .RasExamples import RasExamples
+
+# Import all attributes from these modules
+from .RasPrj import *
+from .RasPlan import *
+from .RasGeo import *
+from .RasUnsteady import *
+from .RasCmdr import *
+from .RasUtils import *
+from .RasExamples import *
+
+# Define __all__ to specify what should be imported when using "from ras_commander import *"
+__all__ = [
+    "ras",
+    "init_ras_project",
+    "get_ras_exe",
+    "RasPrj",
+    "RasPlan",
+    "RasGeo",
+    "RasUnsteady",
+    "RasCmdr",
+    "RasUtils",
+    "RasExamples"
+]
+
+==================================================
+
