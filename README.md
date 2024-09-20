@@ -1,11 +1,15 @@
 # RAS Commander (ras-commander)
 
-RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under HEC-Commander tools.
+RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under the [HEC-Commander tools repository](https://github.com/billk-FM/HEC-Commander).
 
-Contributors:
+## Contributors:
 William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
 Sean Micek, P.E., C.F.M. - smicek@fenstermaker.com
 Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com
+(Your Name Here)
+
+## Background
+The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
 
 ## Features
 
@@ -62,7 +66,50 @@ RasPlan.set_geom("01", "02")
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
-## RasExamples
+
+## Project Organization Diagram
+```
+ras_commander
+├── .github
+│   └── workflows
+│       └── python-package.yml
+├── ras_commander
+│   ├── __init__.py
+│   ├── RasCmdr.py
+│   ├── RasExamples.py
+│   ├── RasGeo.py
+│   ├── RasPlan.py
+│   ├── RasPrj.py
+│   ├── RasUnsteady.py
+│   └── RasUtils.py
+├── examples
+│   ├── 01_project_initialization.py
+│   ├── 02_plan_operations.py
+│   ├── 03_geometry_operations.py
+│   ├── 04_unsteady_flow_operations.py
+│   ├── 05_utility_functions.py
+│   ├── 06_single_plan_execution.py
+│   ├── 07_sequential_plan_execution.py
+│   ├── 08_parallel_execution.py
+│   ├── 09_specifying_plans.py
+│   ├── 10_arguments_for_compute.py
+│   ├── 11_Using_RasExamples.ipynb
+│   ├── 12_plan_set_execution.py
+│   └── 13_multiple_project_operations.py
+├── tests
+│   └── ... (test files)
+├── .gitignore
+├── LICENSE
+├── README.md
+├── STYLE_GUIDE.md
+├── Comprehensive_Library_Guide.md
+├── pyproject.toml
+├── setup.cfg
+├── setup.py
+└── requirements.txt
+```
+
+## Accessing HEC Examples through RasExamples
 
 The `RasExamples` class provides functionality for quickly loading and managing HEC-RAS example projects. This is particularly useful for testing and development purposes.
 
@@ -125,47 +172,6 @@ For detailed usage instructions and API documentation, please refer to the [Comp
 
 Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
 
-## Project Organization Diagram
-```
-ras_commander
-├── .github
-│   └── workflows
-│       └── python-package.yml
-├── ras_commander
-│   ├── __init__.py
-│   ├── RasCmdr.py
-│   ├── RasExamples.py
-│   ├── RasGeo.py
-│   ├── RasPlan.py
-│   ├── RasPrj.py
-│   ├── RasUnsteady.py
-│   └── RasUtils.py
-├── examples
-│   ├── 01_project_initialization.py
-│   ├── 02_plan_operations.py
-│   ├── 03_geometry_operations.py
-│   ├── 04_unsteady_flow_operations.py
-│   ├── 05_utility_functions.py
-│   ├── 06_single_plan_execution.py
-│   ├── 07_sequential_plan_execution.py
-│   ├── 08_parallel_execution.py
-│   ├── 09_specifying_plans.py
-│   ├── 10_arguments_for_compute.py
-│   ├── 11_Using_RasExamples.ipynb
-│   ├── 12_plan_set_execution.py
-│   └── 13_multiple_project_operations.py
-├── tests
-│   └── ... (test files)
-├── .gitignore
-├── LICENSE
-├── README.md
-├── STYLE_GUIDE.md
-├── Comprehensive_Library_Guide.md
-├── pyproject.toml
-├── setup.cfg
-├── setup.py
-└── requirements.txt
-```
 ## Inclusion of .cursorrules and ai_tools for AI-driven Coding Experience
 
 Open the ras_commander folder in the Cursor IDE, and it will automatically include the .cursorrules file in your instructions. Additionally, two other provided methods for interacting with the library through your current AI subscriptions:
@@ -183,34 +189,20 @@ There are a series of scripts provided in the "llm_summaries" folder that provid
 
 The RAS Commander GPT assistant has access to the entire code base, and can be a helpful tool for understanding the library and its capabilities.  However, it is subject to the same context window limitations and file retrieval limitations as I have covered in ADD BLOG LINK HERE.  For best results, use the llm summaries above to provide robust context to the model before asking to generate complex workflows. 
 
-## Current Uses and Roadmap Items
+## Future Development
 
-### Potential Uses (Roadmap Items) of HEC-RAS Automation Functions
+The ras-commander library is an ongoing project. Future plans include:
+- Integration of more advanced AI-driven features
+- Expansion of HMS and DSS functionalities
+- Enhanced GPU support for computational tasks
+- Community-driven development of new modules and features
 
-This set of functions provides a powerful foundation for automating various aspects of HEC-RAS modeling workflows. Here are some potential applications:
+## Related Resources
 
-1. **Calibration and Sensitivity Analysis:**
-    - **Automated Parameter Variation:** Users can create multiple simulation scenarios with varying parameters (e.g., Manning's n values, boundary conditions, initial conditions) to calibrate their model against observed data.
-    - **Sensitivity Testing:** Evaluate the impact of different input parameters on model outputs by generating a range of scenarios and analyzing the results. This helps identify critical parameters that require more attention during calibration.
+- [HEC-Commander Blog](https://github.com/billk-FM/HEC-Commander/tree/main/Blog)
+- [GPT-Commander YouTube Channel](https://www.youtube.com/@GPT_Commander)
+- [ChatGPT Examples for Water Resources Engineers](https://github.com/billk-FM/HEC-Commander/tree/main/ChatGPT%20Examples)
 
-2. **Real-time Forecasting:**
-    - **Dynamic Model Updates:** Integrate with external data sources (e.g., weather forecasts, streamflow observations) to automatically update boundary conditions and initial conditions in unsteady flow files before running the simulation.
-    - **Ensemble Forecasting:** Generate multiple forecasts by incorporating uncertainty in input data and model parameters. This provides a more comprehensive understanding of potential future flow conditions.
-
-3. **Scenario Analysis:**
-    - **Land Use Change Impacts:** Evaluate the effects of land use changes on flood risk by modifying Manning's n values using `extract_2d_mannings_tables`, `modify_2d_mannings_table`, and `write_2d_mannings_tables` and running simulations with updated geometry files.
-    - **Climate Change Impacts:** Analyze the potential impacts of projected climate changes on flood risk by adjusting precipitation patterns and other relevant parameters in unsteady flow files.
-
-4. **Batch Processing and High-Performance Computing:**
-    - **Large-scale Model Runs:** Utilize `run_plans_parallel` to execute multiple simulations concurrently on a multi-core system, significantly reducing processing time for large-scale models or complex scenarios.
-    - **Automated Report Generation:** Integrate with Python libraries like matplotlib and bokeh to automatically generate customized reports summarizing simulation results, including tables, figures, and maps.
-
-5. **Model Development and Testing:**
-    - **Rapid Prototyping:** Quickly set up and run new model configurations using template files and automated workflows, facilitating rapid model development and testing.
-    - **Regression Testing:** Ensure model integrity and consistency after code changes or updates by automatically running a predefined set of simulations and comparing results with expected outputs.
-
-6. **User-Friendly Interfaces:**
-    - **GUI Development:** Integrate with Python GUI libraries like Tkinter or PyQt to create user-friendly interfaces for automating HEC-RAS workflows, allowing non-programmers to access the power of automation.
 
 ## Contributing
 
