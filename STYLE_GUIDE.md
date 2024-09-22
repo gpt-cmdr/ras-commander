@@ -118,6 +118,18 @@ Use these abbreviations in lowercase for function and variable names (e.g., `geo
 
 ## 5. Error Handling
 
+**Use Logging Instead of Prints**
+Ensure that every operation that can fail or needs to provide feedback to the user is logged instead of using `print`. This will help in debugging and improve monitoring during execution.
+
+   ```python
+   logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+   ```
+
+   Example of replacing a `print` with logging:
+   ```python
+   logging.info('Starting HEC-RAS simulation...')
+   ```
+
 - Use explicit exception handling with try/except blocks
 - Raise custom exceptions when appropriate, with descriptive messages
 - Use logging for error reporting and debugging information

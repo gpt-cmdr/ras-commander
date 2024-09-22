@@ -15,12 +15,23 @@ By default, the RasPrj class is initialized with the global 'ras' object.
 However, you can create multiple RasPrj instances to manage multiple projects.
 Do not mix and match global 'ras' object instances and custom instances of RasPrj - it will cause errors.
 """
+
 # Example Terminal Output for RasPrj Functions:
-# print(f"\n----- INSERT TEXT HERE -----\n")
+# logging.info("----- INSERT TEXT HERE -----")
 
 from pathlib import Path
 import pandas as pd
 import re
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 
 class RasPrj:
     def __init__(self):
@@ -46,13 +57,14 @@ class RasPrj:
         self.project_folder = Path(project_folder)
         self.prj_file = self.find_ras_prj(self.project_folder)
         if self.prj_file is None:
+            logging.error(f"No HEC-RAS project file found in {self.project_folder}")
             raise ValueError(f"No HEC-RAS project file found in {self.project_folder}")
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
         self._load_project_data()
         self.initialized = True
-        print(f"\n-----Initialization complete for project: {self.project_name}-----")
-        print(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}\n")
+        logging.info(f"Initialization complete for project: {self.project_name}")
+        logging.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}")
 
     def _load_project_data(self):
         """
@@ -87,28 +99,32 @@ class RasPrj:
         pattern = re.compile(rf"{entry_type} File=(\w+)")
 
         # Open and read the project file
-        with open(self.prj_file, 'r') as file:
-            for line in file:
-                # Check if the line matches the pattern
-                match = pattern.match(line.strip())
-                if match:
-                    # Extract the file name from the matched pattern
-                    file_name = match.group(1)
-                    # Create a dictionary for the current entry
-                    entry = {
-                        f'{entry_type.lower()}_number': file_name[1:],
-                        'full_path': str(self.project_folder / f"{self.project_name}.{file_name}")
-                    }
+        try:
+            with open(self.prj_file, 'r') as file:
+                for line in file:
+                    # Check if the line matches the pattern
+                    match = pattern.match(line.strip())
+                    if match:
+                        # Extract the file name from the matched pattern
+                        file_name = match.group(1)
+                        # Create a dictionary for the current entry
+                        entry = {
+                            f'{entry_type.lower()}_number': file_name[1:],
+                            'full_path': str(self.project_folder / f"{self.project_name}.{file_name}")
+                        }
 
-                    # Special handling for Plan entries
-                    if entry_type == 'Plan':
-                        # Construct the path for the HDF results file
-                        hdf_results_path = self.project_folder / f"{self.project_name}.p{file_name[1:]}.hdf"
-                        # Add the results_path to the entry, if the file exists
-                        entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
+                        # Special handling for Plan entries
+                        if entry_type == 'Plan':
+                            # Construct the path for the HDF results file
+                            hdf_results_path = self.project_folder / f"{self.project_name}.p{file_name[1:]}.hdf"
+                            # Add the results_path to the entry, if the file exists
+                            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
 
-                    # Add the entry to the list
-                    entries.append(entry)
+                        # Add the entry to the list
+                        entries.append(entry)
+        except Exception as e:
+            logging.exception(f"Failed to read project file {self.prj_file}: {e}")
+            raise
 
         # Convert the list of entries to a DataFrame and return it
         return pd.DataFrame(entries)
@@ -131,6 +147,7 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         """
         if not self.initialized:
+            logging.error("Project not initialized. Call init_ras_project() first.")
             raise RuntimeError("Project not initialized. Call init_ras_project() first.")
 
     @staticmethod
@@ -148,17 +165,26 @@ class RasPrj:
         prj_files = list(folder_path.glob("*.prj"))
         rasmap_files = list(folder_path.glob("*.rasmap"))
         if len(prj_files) == 1:
+            logging.info(f"Single .prj file found: {prj_files[0]}")
             return prj_files[0].resolve()
         if len(prj_files) > 1:
             if len(rasmap_files) == 1:
                 base_filename = rasmap_files[0].stem
                 prj_file = folder_path / f"{base_filename}.prj"
-                return prj_file.resolve()
+                if prj_file.exists():
+                    logging.info(f"Matched .prj file based on .rasmap: {prj_file}")
+                    return prj_file.resolve()
             for prj_file in prj_files:
-                with open(prj_file, 'r') as file:
-                    if "Proj Title=" in file.read():
-                        return prj_file.resolve()
-        print("No suitable .prj file found after all checks.")
+                try:
+                    with open(prj_file, 'r') as file:
+                        content = file.read()
+                        if "Proj Title=" in content:
+                            logging.info(f".prj file with 'Proj Title=' found: {prj_file}")
+                            return prj_file.resolve()
+                except Exception as e:
+                    logging.warning(f"Failed to read .prj file {prj_file}: {e}")
+                    continue
+        logging.warning("No suitable .prj file found after all checks.")
         return None
 
     def get_project_name(self):
@@ -255,31 +281,33 @@ class RasPrj:
         # Filter the plan_df to include only entries with existing HDF results
         hdf_entries = self.plan_df[self.plan_df['HDF_Results_Path'].notna()].copy()
         
-        # If no HDF entries are found, return an empty DataFrame with the correct columns
+        # If no HDF entries are found, log the information
         if hdf_entries.empty:
+            logging.info("No HDF entries found.")
             return pd.DataFrame(columns=self.plan_df.columns)
         
+        logging.info(f"Found {len(hdf_entries)} HDF entries.")
         return hdf_entries
     
     def print_data(self):
         """Print all RAS Object data for this instance.
            If any objects are added, add them to the print statements below."""
-        print(f"\n--- Data for {self.project_name} ---")
-        print(f"Project folder: {self.project_folder}")
-        print(f"PRJ file: {self.prj_file}")
-        print(f"HEC-RAS executable: {self.ras_exe_path}")
-        print("\nPlan files:")
-        print(self.plan_df)
-        print("\nFlow files:")
-        print(self.flow_df)
-        print("\nUnsteady flow files:")
-        print(self.unsteady_df)
-        print("\nGeometry files:")
-        print(self.geom_df)
-        print("\nHDF entries:")
-        print(self.get_hdf_entries())
-        print("----------------------------\n")
-
+        self.check_initialized()
+        logging.info(f"--- Data for {self.project_name} ---")
+        logging.info(f"Project folder: {self.project_folder}")
+        logging.info(f"PRJ file: {self.prj_file}")
+        logging.info(f"HEC-RAS executable: {self.ras_exe_path}")
+        logging.info("Plan files:")
+        logging.info(f"\n{self.plan_df}")
+        logging.info("Flow files:")
+        logging.info(f"\n{self.flow_df}")
+        logging.info("Unsteady flow files:")
+        logging.info(f"\n{self.unsteady_df}")
+        logging.info("Geometry files:")
+        logging.info(f"\n{self.geom_df}")
+        logging.info("HDF entries:")
+        logging.info(f"\n{self.get_hdf_entries()}")
+        logging.info("----------------------------")
 
 # Create a global instance named 'ras'
 ras = RasPrj()
@@ -334,21 +362,21 @@ def init_ras_project(ras_project_folder, ras_version, ras_instance=None):
     """
 
     if not Path(ras_project_folder).exists():
+        logging.error(f"The specified RAS project folder does not exist: {ras_project_folder}. Please check the path and try again.")
         raise FileNotFoundError(f"The specified RAS project folder does not exist: {ras_project_folder}. Please check the path and try again.")
 
     ras_exe_path = get_ras_exe(ras_version)
 
     if ras_instance is None:
-        print(f"\n-----Initializing global 'ras' object via init_ras_project function-----")
+        logging.info("Initializing global 'ras' object via init_ras_project function.")
         ras_instance = ras
     elif not isinstance(ras_instance, RasPrj):
-        print(f"\n-----Initializing custom RasPrj instance via init_ras_project function-----")
+        logging.error("Provided ras_instance is not an instance of RasPrj.")
         raise TypeError("ras_instance must be an instance of RasPrj or None.")
 
     # Initialize the RasPrj instance
     ras_instance.initialize(ras_project_folder, ras_exe_path)
 
-    #print(f"\n-----HEC-RAS project initialized via init_ras_project function: {ras_instance.project_name}-----\n")
     return ras_instance
 
 
@@ -375,13 +403,16 @@ def get_ras_exe(ras_version):
     hecras_path = Path(ras_version)
     
     if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
+        logging.info(f"HEC-RAS executable found at specified path: {hecras_path}")
         return str(hecras_path)
     
     if ras_version in ras_version_numbers:
         default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
         if default_path.is_file():
+            logging.info(f"HEC-RAS executable found at default path: {default_path}")
             return str(default_path)
         else:
+            logging.error(f"HEC-RAS executable not found at the expected path: {default_path}")
             raise FileNotFoundError(f"HEC-RAS executable not found at the expected path: {default_path}")
     
     try:
@@ -389,12 +420,23 @@ def get_ras_exe(ras_version):
         if version_float > max(float(v) for v in ras_version_numbers):
             newer_version_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
             if newer_version_path.is_file():
+                logging.info(f"Newer version of HEC-RAS executable found at: {newer_version_path}")
                 return str(newer_version_path)
             else:
-                raise FileNotFoundError(f"Newer version of HEC-RAS was specified. Check the version number or pass the full Ras.exe path as the function argument instead of the version number. The script looked for the executable at: {newer_version_path}")
+                logging.error("Newer version of HEC-RAS was specified, but the executable was not found.")
+                raise FileNotFoundError(
+                    f"Newer version of HEC-RAS was specified. Check the version number or pass the full Ras.exe path as the function argument instead of the version number. The script looked for the executable at: {newer_version_path}"
+                )
     except ValueError:
         pass
     
-    raise ValueError(f"Invalid HEC-RAS version or path: {ras_version}. "
-                     f"Please provide a valid version number from {ras_version_numbers} "
-                     "or a full path to the HEC-RAS executable.")
+    logging.error(
+        f"Invalid HEC-RAS version or path: {ras_version}. "
+        f"Please provide a valid version number from {ras_version_numbers} "
+        "or a full path to the HEC-RAS executable."
+    )
+    raise ValueError(
+        f"Invalid HEC-RAS version or path: {ras_version}. "
+        f"Please provide a valid version number from {ras_version_numbers} "
+        "or a full path to the HEC-RAS executable."
+    )

@@ -7,7 +7,13 @@ import logging
 import time
 from pathlib import Path
 from .RasPrj import ras
-from typing import Union
+from typing import Union, Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class RasUtils:
     """
@@ -37,8 +43,12 @@ class RasUtils:
         
         original_path = Path(file_path)
         backup_path = original_path.with_name(f"{original_path.stem}{backup_suffix}{original_path.suffix}")
-        shutil.copy2(original_path, backup_path)
-        logging.info(f"Backup created: {backup_path}")
+        try:
+            shutil.copy2(original_path, backup_path)
+            logging.info(f"Backup created: {backup_path}")
+        except Exception as e:
+            logging.error(f"Failed to create backup for {original_path}: {e}")
+            raise
         return backup_path
 
     @staticmethod
@@ -62,12 +72,21 @@ class RasUtils:
         ras_obj.check_initialized()
         
         backup_path = Path(backup_path)
-        original_path = backup_path.with_name(backup_path.stem.rsplit('_backup', 1)[0] + backup_path.suffix)
-        shutil.copy2(backup_path, original_path)
-        logging.info(f"File restored: {original_path}")
-        if remove_backup:
-            backup_path.unlink()
-            logging.info(f"Backup removed: {backup_path}")
+        if '_backup' not in backup_path.stem:
+            logging.error(f"Backup suffix '_backup' not found in {backup_path.name}")
+            raise ValueError(f"Backup suffix '_backup' not found in {backup_path.name}")
+        
+        original_stem = backup_path.stem.rsplit('_backup', 1)[0]
+        original_path = backup_path.with_name(f"{original_stem}{backup_path.suffix}")
+        try:
+            shutil.copy2(backup_path, original_path)
+            logging.info(f"File restored: {original_path}")
+            if remove_backup:
+                backup_path.unlink()
+                logging.info(f"Backup removed: {backup_path}")
+        except Exception as e:
+            logging.error(f"Failed to restore from backup {backup_path}: {e}")
+            raise
         return original_path
 
     @staticmethod
@@ -90,8 +109,12 @@ class RasUtils:
         ras_obj.check_initialized()
         
         path = Path(directory_path)
-        path.mkdir(parents=True, exist_ok=True)
-        logging.info(f"Directory ensured: {path}")
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            logging.info(f"Directory ensured: {path}")
+        except Exception as e:
+            logging.error(f"Failed to create directory {path}: {e}")
+            raise
         return path
 
     @staticmethod
@@ -113,11 +136,17 @@ class RasUtils:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
-        files = list(ras_obj.project_folder.glob(f"*{extension}"))
-        return [str(file) for file in files]
+        try:
+            files = list(ras_obj.project_folder.glob(f"*{extension}"))
+            file_list = [str(file) for file in files]
+            logging.info(f"Found {len(file_list)} files with extension '{extension}' in {ras_obj.project_folder}")
+            return file_list
+        except Exception as e:
+            logging.error(f"Failed to find files with extension '{extension}': {e}")
+            raise
 
     @staticmethod
-    def get_file_size(file_path: Path, ras_object=None) -> int:
+    def get_file_size(file_path: Path, ras_object=None) -> Optional[int]:
         """
         Get the size of a file in bytes.
 
@@ -126,7 +155,7 @@ class RasUtils:
         ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
 
         Returns:
-        int: Size of the file in bytes
+        Optional[int]: Size of the file in bytes, or None if the file does not exist
 
         Example:
         >>> size = RasUtils.get_file_size(Path("project.prj"))
@@ -137,13 +166,19 @@ class RasUtils:
         
         path = Path(file_path)
         if path.exists():
-            return path.stat().st_size
+            try:
+                size = path.stat().st_size
+                logging.info(f"Size of {path}: {size} bytes")
+                return size
+            except Exception as e:
+                logging.error(f"Failed to get size for {path}: {e}")
+                raise
         else:
             logging.warning(f"File not found: {path}")
             return None
 
     @staticmethod
-    def get_file_modification_time(file_path: Path, ras_object=None) -> float:
+    def get_file_modification_time(file_path: Path, ras_object=None) -> Optional[float]:
         """
         Get the last modification time of a file.
 
@@ -152,7 +187,7 @@ class RasUtils:
         ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
 
         Returns:
-        float: Last modification time as a timestamp
+        Optional[float]: Last modification time as a timestamp, or None if the file does not exist
 
         Example:
         >>> mtime = RasUtils.get_file_modification_time(Path("project.prj"))
@@ -163,7 +198,13 @@ class RasUtils:
         
         path = Path(file_path)
         if path.exists():
-            return path.stat().st_mtime
+            try:
+                mtime = path.stat().st_mtime
+                logging.info(f"Last modification time of {path}: {mtime}")
+                return mtime
+            except Exception as e:
+                logging.error(f"Failed to get modification time for {path}: {e}")
+                raise
         else:
             logging.warning(f"File not found: {path}")
             return None
@@ -191,18 +232,29 @@ class RasUtils:
         
         plan_path = Path(current_plan_number_or_path)
         if plan_path.is_file():
+            logging.info(f"Using provided plan file path: {plan_path}")
             return plan_path
         
         try:
             current_plan_number = f"{int(current_plan_number_or_path):02d}"  # Ensure two-digit format
+            logging.info(f"Converted plan number to two-digit format: {current_plan_number}")
         except ValueError:
+            logging.error(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
             raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
         
         plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
-        return ras_obj.project_folder / plan_name
+        full_plan_path = ras_obj.project_folder / plan_name
+        logging.info(f"Constructed plan file path: {full_plan_path}")
+        return full_plan_path
 
     @staticmethod
-    def remove_with_retry(path: Path, max_attempts: int = 5, initial_delay: float = 1.0, is_folder: bool = True, ras_object=None) -> bool:
+    def remove_with_retry(
+        path: Path,
+        max_attempts: int = 5,
+        initial_delay: float = 1.0,
+        is_folder: bool = True,
+        ras_object=None
+    ) -> bool:
         """
         Attempts to remove a file or folder with retry logic and exponential backoff.
 
@@ -224,26 +276,43 @@ class RasUtils:
         ras_obj.check_initialized()
 
         path = Path(path)
-        for attempt in range(max_attempts):
+        for attempt in range(1, max_attempts + 1):
             try:
                 if path.exists():
                     if is_folder:
                         shutil.rmtree(path)
+                        logging.info(f"Folder removed: {path}")
                     else:
                         path.unlink()
+                        logging.info(f"File removed: {path}")
+                else:
+                    logging.info(f"Path does not exist, nothing to remove: {path}")
                 return True
-            except PermissionError:
-                if attempt < max_attempts - 1:
-                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
-                    logging.warning(f"Failed to remove {path}. Retrying in {delay} seconds...")
+            except PermissionError as pe:
+                if attempt < max_attempts:
+                    delay = initial_delay * (2 ** (attempt - 1))  # Exponential backoff
+                    logging.warning(
+                        f"PermissionError on attempt {attempt} to remove {path}: {pe}. "
+                        f"Retrying in {delay} seconds..."
+                    )
                     time.sleep(delay)
                 else:
-                    logging.error(f"Failed to remove {path} after {max_attempts} attempts. Skipping.")
+                    logging.error(
+                        f"Failed to remove {path} after {max_attempts} attempts due to PermissionError: {pe}. Skipping."
+                    )
                     return False
+            except Exception as e:
+                logging.error(f"Failed to remove {path} on attempt {attempt}: {e}")
+                return False
         return False
 
     @staticmethod
-    def update_plan_file(plan_number_or_path: Union[str, Path], file_type: str, entry_number: int, ras_object=None) -> None:
+    def update_plan_file(
+        plan_number_or_path: Union[str, Path],
+        file_type: str,
+        entry_number: int,
+        ras_object=None
+    ) -> None:
         """
         Update a plan file with a new file reference.
 
@@ -266,45 +335,95 @@ class RasUtils:
         
         valid_file_types = {'Geom': 'g', 'Flow': 'f', 'Unsteady': 'u'}
         if file_type not in valid_file_types:
-            raise ValueError(f"Invalid file_type. Expected one of: {', '.join(valid_file_types.keys())}")
+            logging.error(
+                f"Invalid file_type '{file_type}'. Expected one of: {', '.join(valid_file_types.keys())}"
+            )
+            raise ValueError(
+                f"Invalid file_type. Expected one of: {', '.join(valid_file_types.keys())}"
+            )
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
             plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+            if not plan_file_path.exists():
+                logging.error(f"Plan file not found: {plan_file_path}")
+                raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
         
-        if not plan_file_path.exists():
-            raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
-
         file_prefix = valid_file_types[file_type]
         search_pattern = f"{file_type} File="
-        entry_number = f"{int(entry_number):02d}"  # Ensure two-digit format
+        formatted_entry_number = f"{int(entry_number):02d}"  # Ensure two-digit format
 
-        RasUtils.check_file_access(plan_file_path, 'r')
-        with open(plan_file_path, 'r') as file:
-            lines = file.readlines()
+        try:
+            RasUtils.check_file_access(plan_file_path, 'r')
+            with plan_file_path.open('r') as file:
+                lines = file.readlines()
+        except Exception as e:
+            logging.error(f"Failed to read plan file {plan_file_path}: {e}")
+            raise
 
+        updated = False
         for i, line in enumerate(lines):
             if line.startswith(search_pattern):
-                lines[i] = f"{search_pattern}{file_prefix}{entry_number}\n"
-                logging.info(f"Updated {file_type} File in {plan_file_path} to {file_prefix}{entry_number}")
+                lines[i] = f"{search_pattern}{file_prefix}{formatted_entry_number}\n"
+                logging.info(
+                    f"Updated {file_type} File in {plan_file_path} to {file_prefix}{formatted_entry_number}"
+                )
+                updated = True
                 break
 
-        with plan_file_path.open('w') as file:
-            file.writelines(lines)
+        if not updated:
+            logging.warning(
+                f"Search pattern '{search_pattern}' not found in {plan_file_path}. No update performed."
+            )
 
-        logging.info(f"Successfully updated plan file: {plan_file_path}")
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        try:
+            with plan_file_path.open('w') as file:
+                file.writelines(lines)
+            logging.info(f"Successfully updated plan file: {plan_file_path}")
+        except Exception as e:
+            logging.error(f"Failed to write updates to plan file {plan_file_path}: {e}")
+            raise
+
+        # Refresh RasPrj dataframes
+        try:
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            logging.info("RAS object dataframes have been refreshed.")
+        except Exception as e:
+            logging.error(f"Failed to refresh RasPrj dataframes: {e}")
+            raise
 
     @staticmethod
-    def check_file_access(file_path, mode='r'):
+    def check_file_access(file_path: Path, mode: str = 'r') -> None:
+        """
+        Check if the file can be accessed with the specified mode.
+
+        Parameters:
+        file_path (Path): Path to the file
+        mode (str): Mode to check ('r' for read, 'w' for write, etc.)
+
+        Raises:
+        FileNotFoundError: If the file does not exist
+        PermissionError: If the required permissions are not met
+        """
         path = Path(file_path)
         if not path.exists():
+            logging.error(f"File not found: {file_path}")
             raise FileNotFoundError(f"File not found: {file_path}")
-        if mode in ('r', 'rb') and not os.access(path, os.R_OK):
-            raise PermissionError(f"Read permission denied for file: {file_path}")
-        if mode in ('w', 'wb', 'a', 'ab') and not os.access(path.parent, os.W_OK):
-            raise PermissionError(f"Write permission denied for directory: {path.parent}")
-
+        
+        if mode in ('r', 'rb'):
+            if not os.access(path, os.R_OK):
+                logging.error(f"Read permission denied for file: {file_path}")
+                raise PermissionError(f"Read permission denied for file: {file_path}")
+            else:
+                logging.debug(f"Read access granted for file: {file_path}")
+        
+        if mode in ('w', 'wb', 'a', 'ab'):
+            parent_dir = path.parent
+            if not os.access(parent_dir, os.W_OK):
+                logging.error(f"Write permission denied for directory: {parent_dir}")
+                raise PermissionError(f"Write permission denied for directory: {parent_dir}")
+            else:
+                logging.debug(f"Write access granted for directory: {parent_dir}")

@@ -5,7 +5,17 @@ from pathlib import Path
 from typing import List, Union
 from .RasPlan import RasPlan
 from .RasPrj import ras
+import logging
 import re
+
+# Configure logging at the module level
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    # You can add a filename parameter here to log to a file
+    # filename='rasgeo.log',
+    # Uncomment the above line to enable file logging
+)
 
 class RasGeo:
     """
@@ -62,27 +72,38 @@ class RasGeo:
             geom_preprocessor_file = plan_path.with_suffix(geom_preprocessor_suffix)
             if geom_preprocessor_file.exists():
                 try:
-                    print(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
+                    logging.info(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
                     geom_preprocessor_file.unlink()
-                    print("File deletion completed successfully.")
+                    logging.info("File deletion completed successfully.")
                 except PermissionError:
+                    logging.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}.")
                     raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
                 except OSError as e:
+                    logging.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
                     raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
             else:
-                print(f"No geometry preprocessor file found for: {plan_file}")
+                logging.warning(f"No geometry preprocessor file found for: {plan_file}")
         
         if plan_files is None:
-            print("Clearing all geometry preprocessor files in the project directory.")
+            logging.info("Clearing all geometry preprocessor files in the project directory.")
             plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
+            logging.info(f"Clearing geometry preprocessor file for single plan: {plan_files}")
         elif isinstance(plan_files, list):
             plan_files_to_clear = plan_files
+            logging.info(f"Clearing geometry preprocessor files for multiple plans: {plan_files}")
         else:
+            logging.error("Invalid input type for plan_files.")
             raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
         
         for plan_file in plan_files_to_clear:
             clear_single_file(plan_file, ras_obj)
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-
+        
+        # Update the geometry dataframe
+        try:
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            logging.info("Geometry dataframe updated successfully.")
+        except Exception as e:
+            logging.error(f"Failed to update geometry dataframe: {str(e)}")
+            raise
