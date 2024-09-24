@@ -15,6 +15,7 @@ from .RasUnsteady import RasUnsteady
 from .RasCmdr import RasCmdr
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
+from .RasHdf import RasHdf  # Add this line
 
 # Import all attributes from these modules
 from .RasPrj import *
@@ -24,6 +25,7 @@ from .RasUnsteady import *
 from .RasCmdr import *
 from .RasUtils import *
 from .RasExamples import *
+from .RasHdf import *  # Add this line
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
@@ -36,5 +38,6 @@ __all__ = [
     "RasUnsteady",
     "RasCmdr",
     "RasUtils",
-    "RasExamples"
+    "RasExamples",
+    "RasHdf"  # Add this line
 ]

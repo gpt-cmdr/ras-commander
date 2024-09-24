@@ -7,6 +7,13 @@ import pandas as pd
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
 
+
+from pathlib import Path
+from typing import Union, Any
+import logging
+import re
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -1033,3 +1040,181 @@ class RasPlan:
             else:
                 break
         return f"{next_number:02d}"
+
+
+    @staticmethod
+    def get_plan_value(
+        plan_number_or_path: Union[str, Path],
+        key: str,
+        ras_object=None
+    ) -> Any:
+        """
+        Retrieve a specific value from a HEC-RAS plan file.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        key (str): The key to retrieve from the plan file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Any: The value associated with the specified key
+
+        Raises:
+        ValueError: If an invalid key is provided or if the plan file is not found
+        IOError: If there's an error reading the plan file
+
+        Available keys and their expected types:
+        - 'description' (str): Plan description
+        - 'computation_interval' (str): Time value for computational time step (e.g., '5SEC', '2MIN')
+        - 'dss_file' (str): Name of the DSS file used
+        - 'flow_file' (str): Name of the flow input file
+        - 'friction_slope_method' (int): Method selection for friction slope (e.g., 1, 2)
+        - 'geom_file' (str): Name of the geometry input file
+        - 'mapping_interval' (str): Time interval for mapping output
+        - 'plan_file' (str): Name of the plan file
+        - 'plan_title' (str): Title of the simulation plan
+        - 'program_version' (str): Version number of HEC-RAS
+        - 'run_htab' (int): Flag to run HTab module (-1 or 1)
+        - 'run_post_process' (int): Flag to run post-processing (-1 or 1)
+        - 'run_sediment' (int): Flag to run sediment transport module (0 or 1)
+        - 'run_unet' (int): Flag to run unsteady network module (-1 or 1)
+        - 'run_wqnet' (int): Flag to run water quality module (0 or 1)
+        - 'short_identifier' (str): Short name or ID for the plan
+        - 'simulation_date' (str): Start and end dates/times for simulation
+        - 'unet_d1_cores' (int): Number of cores used in 1D calculations
+        - 'unet_use_existing_ib_tables' (int): Flag for using existing internal boundary tables (-1, 0, or 1)
+        - 'unet_1d_methodology' (str): 1D calculation methodology
+        - 'unet_d2_solver_type' (str): 2D solver type
+        - 'unet_d2_name' (str): Name of the 2D area
+
+        Example:
+        >>> computation_interval = RasPlan.get_plan_value("01", "computation_interval")
+        >>> print(f"Computation interval: {computation_interval}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        valid_keys = {
+            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
+            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
+            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
+            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
+            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name'
+        }
+
+        if key not in valid_keys:
+            raise ValueError(f"Invalid key: {key}. Valid keys are: {', '.join(valid_keys)}")
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object=ras_obj)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                content = file.read()
+        except IOError as e:
+            logging.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        if key == 'description':
+            match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            return match.group(1).strip() if match else None
+        else:
+            pattern = f"{key.replace('_', ' ').title()}=(.*)"
+            match = re.search(pattern, content)
+            return match.group(1).strip() if match else None
+
+    @staticmethod
+    def update_plan_value(
+        plan_number_or_path: Union[str, Path],
+        key: str,
+        value: Any,
+        ras_object=None
+    ) -> None:
+        """
+        Update a specific key-value pair in a HEC-RAS plan file.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        key (str): The key to update in the plan file
+        value (Any): The new value to set for the key
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Raises:
+        ValueError: If an invalid key is provided or if the plan file is not found
+        IOError: If there's an error reading or writing the plan file
+
+        Note: See the docstring of get_plan_value for a full list of available keys and their types.
+
+        Example:
+        >>> RasPlan.update_plan_value("01", "computation_interval", "10SEC")
+        >>> RasPlan.update_plan_value("/path/to/plan.p01", "run_htab", 1)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        valid_keys = {
+            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
+            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
+            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
+            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
+            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name'
+        }
+
+        if key not in valid_keys:
+            raise ValueError(f"Invalid key: {key}. Valid keys are: {', '.join(valid_keys)}")
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+        except IOError as e:
+            logging.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        # Special handling for description
+        if key == 'description':
+            description_start = None
+            description_end = None
+            for i, line in enumerate(lines):
+                if line.strip() == 'Begin DESCRIPTION':
+                    description_start = i
+                elif line.strip() == 'END DESCRIPTION':
+                    description_end = i
+                    break
+            if description_start is not None and description_end is not None:
+                lines[description_start+1:description_end] = [f"{value}\n"]
+            else:
+                lines.append(f"Begin DESCRIPTION\n{value}\nEND DESCRIPTION\n")
+        else:
+            # For other keys
+            pattern = f"{key.replace('_', ' ').title()}="
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith(pattern):
+                    lines[i] = f"{pattern}{value}\n"
+                    updated = True
+                    break
+            if not updated:
+                lines.append(f"{pattern}{value}\n")
+
+        try:
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+            logging.info(f"Updated {key} in plan file: {plan_file_path}")
+        except IOError as e:
+            logging.error(f"Error writing to plan file {plan_file_path}: {e}")
+            raise
+
+        # Refresh RasPrj dataframes
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()

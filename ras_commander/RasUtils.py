@@ -7,7 +7,9 @@ import logging
 import time
 from pathlib import Path
 from .RasPrj import ras
-from typing import Union, Optional
+from typing import Union, Optional, Dict
+import pandas as pd
+import numpy as np
 
 # Configure logging
 logging.basicConfig(
@@ -427,3 +429,183 @@ class RasUtils:
                 raise PermissionError(f"Write permission denied for directory: {parent_dir}")
             else:
                 logging.debug(f"Write access granted for directory: {parent_dir}")
+
+
+
+
+#  --------------------------   Functions below were imported from funkshuns.py  --------------------------
+#  --------------------------   Converted to ras-commander style guide   ----------------------------------
+
+
+
+
+    @staticmethod
+    def convert_to_dataframe(data_source: Union[pd.DataFrame, Path], **kwargs) -> pd.DataFrame:
+        """
+        Converts input to a pandas DataFrame. Supports existing DataFrames or file paths (CSV, Excel, TSV, Parquet).
+
+        Args:
+            data_source (Union[pd.DataFrame, Path]): The input to convert to a DataFrame. Can be a file path or an existing DataFrame.
+            **kwargs: Additional keyword arguments to pass to pandas read functions.
+
+        Returns:
+            pd.DataFrame: The resulting DataFrame.
+
+        Raises:
+            NotImplementedError: If the file type is unsupported or input type is invalid.
+
+        Example:
+            >>> df = RasUtils.convert_to_dataframe(Path("data.csv"))
+            >>> print(type(df))
+            <class 'pandas.core.frame.DataFrame'>
+            
+        Attribution Note: This function is sourced from funkshuns.py by Sean Micek, and converted to the ras-commander style guide.
+        """
+        if isinstance(data_source, pd.DataFrame):
+            return data_source.copy()
+        elif isinstance(data_source, Path):
+            ext = data_source.suffix.replace('.', '', 1)
+            if ext == 'csv':
+                return pd.read_csv(data_source, **kwargs)
+            elif ext.startswith('x'):
+                return pd.read_excel(data_source, **kwargs)
+            elif ext == "tsv":
+                return pd.read_csv(data_source, sep="\t", **kwargs)
+            elif ext in ["parquet", "pq", "parq"]:
+                return pd.read_parquet(data_source, **kwargs)
+            else:
+                raise NotImplementedError(f"Unsupported file type {ext}. Should be one of csv, tsv, parquet, or xlsx.")
+        else:
+            raise NotImplementedError(f"Unsupported type {type(data_source)}. Only file path / existing DataFrame supported at this time")
+
+    @staticmethod
+    def save_to_excel(dataframe: pd.DataFrame, excel_path: Path, **kwargs) -> None:
+        """
+        Saves a pandas DataFrame to an Excel file with retry functionality.
+
+        Args:
+            dataframe (pd.DataFrame): The DataFrame to save.
+            excel_path (Path): The path to the Excel file where the DataFrame will be saved.
+            **kwargs: Additional keyword arguments passed to `DataFrame.to_excel()`.
+
+        Raises:
+            IOError: If the file cannot be saved after multiple attempts.
+
+        Example:
+            >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]})
+            >>> RasUtils.save_to_excel(df, Path('output.xlsx'))
+            
+        Attribution Note: This function is sourced from funkshuns.py by Sean Micek, and converted to the ras-commander style guide.
+        """
+        saved = False
+        max_attempts = 3
+        attempt = 0
+
+        while not saved and attempt < max_attempts:
+            try:
+                dataframe.to_excel(excel_path, **kwargs)
+                print(f'DataFrame successfully saved to \n{excel_path}')
+                saved = True
+            except IOError as e:
+                attempt += 1
+                if attempt < max_attempts:
+                    print(f"Error saving file. Attempt {attempt} of {max_attempts}. Please close the Excel document if it's open.")
+                else:
+                    raise IOError(f"Failed to save {excel_path} after {max_attempts} attempts. Last error: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+#####  Statistical Metrics #####
+
+
+    @staticmethod
+    def calculate_rmse(observed_values: np.ndarray, predicted_values: np.ndarray, normalized: bool = True) -> float:
+        """
+        Calculate the Root Mean Squared Error (RMSE) between observed and predicted values.
+
+        Args:
+            observed_values (np.ndarray): Actual observations time series.
+            predicted_values (np.ndarray): Estimated/predicted time series.
+            normalized (bool, optional): Whether to normalize RMSE to a percentage of observed_values. Defaults to True.
+
+        Returns:
+            float: The calculated RMSE value.
+
+        Example:
+            >>> observed = np.array([1, 2, 3])
+            >>> predicted = np.array([1.1, 2.2, 2.9])
+            >>> RasUtils.calculate_rmse(observed, predicted)
+            0.06396394
+            
+        Attribution Note: This function is sourced from funkshuns.py by Sean Micek, and converted to the ras-commander style guide.
+        """
+        rmse = np.sqrt(np.mean((predicted_values - observed_values) ** 2))
+        
+        if normalized:
+            rmse = rmse / np.abs(np.mean(observed_values))
+        
+        return rmse
+
+    @staticmethod
+    def calculate_percent_bias(observed_values: np.ndarray, predicted_values: np.ndarray, as_percentage: bool = False) -> float:
+        """
+        Calculate the Percent Bias between observed and predicted values.
+
+        Args:
+            observed_values (np.ndarray): Actual observations time series.
+            predicted_values (np.ndarray): Estimated/predicted time series.
+            as_percentage (bool, optional): If True, return bias as a percentage. Defaults to False.
+
+        Returns:
+            float: The calculated Percent Bias.
+
+        Example:
+            >>> observed = np.array([1, 2, 3])
+            >>> predicted = np.array([1.1, 2.2, 2.9])
+            >>> RasUtils.calculate_percent_bias(observed, predicted, as_percentage=True)
+            3.33333333
+            
+        Attribution Note: This function is sourced from funkshuns.py by Sean Micek, and converted to the ras-commander style guide.
+        """
+        multiplier = 100 if as_percentage else 1
+        
+        percent_bias = multiplier * (np.mean(predicted_values) - np.mean(observed_values)) / np.mean(observed_values)
+        
+        return percent_bias
+
+    @staticmethod
+    def calculate_error_metrics(observed_values: np.ndarray, predicted_values: np.ndarray) -> Dict[str, float]:
+        """
+        Compute a trio of error metrics: correlation, RMSE, and Percent Bias.
+
+        Args:
+            observed_values (np.ndarray): Actual observations time series.
+            predicted_values (np.ndarray): Estimated/predicted time series.
+
+        Returns:
+            Dict[str, float]: A dictionary containing correlation ('cor'), RMSE ('rmse'), and Percent Bias ('pb').
+
+        Example:
+            >>> observed = np.array([1, 2, 3])
+            >>> predicted = np.array([1.1, 2.2, 2.9])
+            >>> RasUtils.calculate_error_metrics(observed, predicted)
+            {'cor': 0.9993, 'rmse': 0.06396, 'pb': 0.03333}
+            
+        Attribution Note: This function is sourced from funkshuns.py by Sean Micek, and converted to the ras-commander style guide.
+        """
+        correlation = np.corrcoef(observed_values, predicted_values)[0, 1]
+        rmse = RasUtils.calculate_rmse(observed_values, predicted_values)
+        percent_bias = RasUtils.calculate_percent_bias(observed_values, predicted_values)
+        
+        return {'cor': correlation, 'rmse': rmse, 'pb': percent_bias}
+
+
+
+

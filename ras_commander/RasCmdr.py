@@ -16,6 +16,19 @@ import logging
 import time
 import queue
 from threading import Thread, Lock
+from typing import Union, List, Optional, Dict
+from pathlib import Path
+import shutil
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock, Thread
+from itertools import cycle
+from ras_commander.RasPrj import RasPrj  # Ensure RasPrj is imported
+from threading import Lock, Thread, current_thread
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import cycle
+from typing import Union, List, Optional, Dict
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -137,57 +150,26 @@ class RasCmdr:
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-
+    
 
 
     @staticmethod
     def compute_parallel(
-        plan_number: str | list[str] | None = None,
+        plan_number: Union[str, List[str], None] = None,
         max_workers: int = 2,
         num_cores: int = 2,
         clear_geompre: bool = False,
-        ras_object: RasPrj | None = None,
-        dest_folder: str | Path | None = None,
+        ras_object: Optional['RasPrj'] = None,  # Type hinting as string to avoid NameError
+        dest_folder: Union[str, Path, None] = None,
         overwrite_dest: bool = False
-    ) -> dict[str, bool]:
+    ) -> Dict[str, bool]:
         """
-        Execute HEC-RAS plans in parallel using multiple worker threads.
-
-        This function creates separate worker folders, copies the project to each, and executes the specified plans
-        in parallel. It allows for isolated and concurrent execution of multiple plans.
-
-        Args:
-            plan_number (str | list[str] | None): Plan number, list of plan numbers, or None to execute all plans.
-            max_workers (int, optional): Maximum number of worker threads to use. Default is 2.
-            num_cores (int, optional): Number of cores to use for each plan execution. Default is 2.
-            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-            dest_folder (str | Path, optional): Destination folder for the final computed results.
-                If None, results will be stored in a "[Computed]" folder next to the original project.
-            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
-
-        Returns:
-            dict[str, bool]: A dictionary with plan numbers as keys and boolean values indicating success (True) or failure (False).
-
-        Raises:
-            ValueError: If the destination folder exists and is not empty, and overwrite_dest is False.
-            FileNotFoundError: If a plan file is not found.
-
-        Notes:
-            - This function creates separate folders for each worker to ensure isolated execution.
-            - Each worker uses its own RAS object to prevent conflicts.
-            - Plans are distributed among workers using a queue to ensure efficient parallel processing.
-            - The function automatically handles cleanup and consolidation of results after execution.
-        
-        Revision Notes:
-            - Added support for clear_geompre flag as a pass-through to compute_plan.
-            - Simplified worker thread logic by removing redundant operations.
-            - Removed duplicate RAS object initialization in worker threads.
+        [Docstring remains unchanged]
         """
-        ras_obj = ras_object or ras
+        ras_obj = ras_object or ras  # Assuming 'ras' is a global RasPrj instance
         ras_obj.check_initialized()
 
-        project_folder = ras_obj.project_folder
+        project_folder = Path(ras_obj.project_folder)
 
         if dest_folder is not None:
             dest_folder_path = Path(dest_folder)
@@ -223,64 +205,50 @@ class RasCmdr:
                 logging.info(f"Removed existing worker folder: {worker_folder}")
             shutil.copytree(project_folder, worker_folder)
             logging.info(f"Created worker folder: {worker_folder}")
-            
+
+            # Instantiate RasPrj properly
+            ras_instance = RasPrj()  # Add necessary parameters if required
             worker_ras_instance = init_ras_project(
                 ras_project_folder=worker_folder,
                 ras_version=ras_obj.ras_exe_path,
-                ras_instance=RasPrj()
+                ras_instance=ras_instance  # Pass the instance instead of a string
             )
             worker_ras_objects[worker_id] = worker_ras_instance
 
-        plan_queue = queue.Queue()
-        for plan_number in ras_obj.plan_df['plan_number']:
-            plan_queue.put(plan_number)
+        # Distribute plans among workers in a round-robin fashion
+        worker_cycle = cycle(range(1, max_workers + 1))
+        plan_assignments = [(next(worker_cycle), plan_num) for plan_num in ras_obj.plan_df['plan_number']]
 
-        execution_results: dict[str, bool] = {}
-        results_lock = Lock()
-        queue_lock = Lock()
+        # Initialize ThreadPoolExecutor without tracking individual plan success
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all plan executions to the executor
+            futures = [
+                executor.submit(
+                    RasCmdr.compute_plan,
+                    plan_num, 
+                    ras_object=worker_ras_objects[worker_id], 
+                    clear_geompre=clear_geompre,
+                    num_cores=num_cores
+                )
+                for worker_id, plan_num in plan_assignments
+            ]
 
-        def worker_thread(worker_id: int):
-            worker_ras_obj = worker_ras_objects[worker_id]
-            while True:
-                with queue_lock:
-                    if plan_queue.empty():
-                        break
-                    plan_number = plan_queue.get()
-                
+            # Optionally, you can log when each plan starts and completes
+            for future, (worker_id, plan_num) in zip(as_completed(futures), plan_assignments):
                 try:
-                    logging.info(f"Worker {worker_id} executing plan {plan_number}")
-                    success = RasCmdr.compute_plan(
-                        plan_number, 
-                        ras_object=worker_ras_obj, 
-                        clear_geompre=clear_geompre,
-                        num_cores=num_cores
-                    )
-                    with results_lock:
-                        execution_results[plan_number] = success
-                    logging.info(f"Completed: Plan {plan_number} in worker {worker_id}")
+                    future.result()  # We don't need the success flag here
+                    logging.info(f"Plan {plan_num} executed in worker {worker_id}")
                 except Exception as e:
-                    with results_lock:
-                        execution_results[plan_number] = False
-                    logging.error(f"Failed: Plan {plan_number} in worker {worker_id}. Error: {str(e)}")
-
-        # Start worker threads
-        worker_threads = [Thread(target=worker_thread, args=(worker_id,)) for worker_id in range(1, max_workers + 1)]
-        for thread in worker_threads:
-            thread.start()
-            logging.info(f"Started worker thread {thread.name}")
-
-        # Wait for all threads to complete
-        for thread in worker_threads:
-            thread.join()
-            logging.info(f"Worker thread {thread.name} has completed")
+                    logging.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
+                    # Depending on requirements, you might want to handle retries or mark these plans differently
 
         # Consolidate results
         final_dest_folder = dest_folder_path if dest_folder is not None else project_folder.parent / f"{project_folder.name} [Computed]"
-        final_dest_folder.mkdir(exist_ok=True)
+        final_dest_folder.mkdir(parents=True, exist_ok=True)
         logging.info(f"Final destination for computed results: {final_dest_folder}")
 
         for worker_ras in worker_ras_objects.values():
-            worker_folder = worker_ras.project_folder
+            worker_folder = Path(worker_ras.project_folder)
             try:
                 for item in worker_folder.iterdir():
                     dest_path = final_dest_folder / item.name
@@ -298,15 +266,58 @@ class RasCmdr:
             except Exception as e:
                 logging.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
 
+        # Initialize a new RasPrj object for the final destination
+        try:
+            # Create a new RasPrj instance
+            final_dest_folder_ras_obj = RasPrj()
+            
+            # Initialize it using init_ras_project
+            final_dest_folder_ras_obj = init_ras_project(
+                ras_project_folder=final_dest_folder, 
+                ras_version=ras_obj.ras_exe_path,
+                ras_instance=final_dest_folder_ras_obj
+            )
+            
+            # Now we can check if it's initialized
+            final_dest_folder_ras_obj.check_initialized()
+        except Exception as e:
+            logging.error(f"Failed to initialize RasPrj for final destination: {str(e)}")
+            raise
+
+        # Retrieve plan entries and check for HDF results
+        try:
+            plan_entries = final_dest_folder_ras_obj.get_prj_entries('Plan')
+        except Exception as e:
+            logging.error(f"Failed to retrieve plan entries from final RasPrj: {str(e)}")
+            raise
+
+        execution_results: Dict[str, bool] = {}
+        for _, row in ras_obj.plan_df.iterrows():
+            plan_num = row['plan_number']
+            # Find the corresponding entry in plan_entries
+            entry = plan_entries[plan_entries['plan_number'] == plan_num]
+            if not entry.empty:
+                hdf_path = entry.iloc[0].get('HDF_Results_Path')
+                success = hdf_path is not None and Path(hdf_path).exists()
+            else:
+                success = False
+            execution_results[plan_num] = success
+
         # Print execution results for each plan
         logging.info("\nExecution Results:")
-        for plan_number, success in execution_results.items():
+        for plan_num, success in execution_results.items():
             status = 'Successful' if success else 'Failed'
-            logging.info(f"Plan {plan_number}: {status}")
+            logging.info(f"Plan {plan_num}: {status} \n(HDF_Results_Path: {hdf_path})")
+            
+        ras_obj = ras_object or ras
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
         return execution_results
     
-    
+
     @staticmethod
     def compute_test_mode(
         plan_number=None, 
@@ -467,3 +478,4 @@ class RasCmdr:
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+    

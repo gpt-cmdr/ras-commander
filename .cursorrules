@@ -75,4 +75,4 @@ For geodataframes, use the 'union_all()' method instead of the deprecated 'unary
 
 Note for pandas >= 2.0: Use pd.concat instead of the removed append method.
 
-Always provide full code segments with no elides.
+Always provide full code segments or full script files with no elides.

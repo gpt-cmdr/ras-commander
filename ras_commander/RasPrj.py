@@ -18,11 +18,12 @@ Do not mix and match global 'ras' object instances and custom instances of RasPr
 
 # Example Terminal Output for RasPrj Functions:
 # logging.info("----- INSERT TEXT HERE -----")
-
+import re
 from pathlib import Path
 import pandas as pd
-import re
 import logging
+from typing import Union, Any, List, Dict, Tuple
+
 
 # Configure logging
 logging.basicConfig(
@@ -36,13 +37,15 @@ logging.basicConfig(
 class RasPrj:
     def __init__(self):
         self.initialized = False
+        self.boundaries_df = None  # New attribute to store boundary conditions
 
     def initialize(self, project_folder, ras_exe_path):
         """
         Initialize a RasPrj instance.
 
         This method sets up the RasPrj instance with the given project folder and RAS executable path.
-        It finds the project file, loads project data, and sets the initialization flag.
+        It finds the project file, loads project data, sets the initialization flag, and now also
+        extracts boundary conditions.
 
         Args:
             project_folder (str or Path): Path to the HEC-RAS project folder.
@@ -62,9 +65,12 @@ class RasPrj:
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
         self._load_project_data()
+        self.boundaries_df = self.get_boundary_conditions()  # Extract boundary conditions
         self.initialized = True
         logging.info(f"Initialization complete for project: {self.project_name}")
-        logging.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}")
+        logging.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
+                     f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
+                     f"Boundary conditions: {len(self.boundaries_df)}")
 
     def _load_project_data(self):
         """
@@ -79,6 +85,56 @@ class RasPrj:
         self.unsteady_df = self._get_prj_entries('Unsteady')
         self.geom_df = self._get_prj_entries('Geom')
 
+    def _parse_plan_file(self, plan_file_path):
+        """
+        Parse a plan file and extract critical information.
+        
+        Args:
+            plan_file_path (Path): Path to the plan file.
+        
+        Returns:
+            dict: Dictionary containing extracted plan information.
+        """
+        plan_info = {}
+        with open(plan_file_path, 'r') as file:
+            content = file.read()
+            
+            # Extract description
+            description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            if description_match:
+                plan_info['description'] = description_match.group(1).strip()
+            
+            # Extract other critical information
+            patterns = {
+                'computation_interval': r'Computation Interval=(.+)',
+                'dss_file': r'DSS File=(.+)',
+                'flow_file': r'Flow File=(.+)',
+                'friction_slope_method': r'Friction Slope Method=(.+)',
+                'geom_file': r'Geom File=(.+)',
+                'mapping_interval': r'Mapping Interval=(.+)',
+                'plan_title': r'Plan Title=(.+)',
+                'program_version': r'Program Version=(.+)',
+                'run_htab': r'Run HTab=(.+)',
+                'run_post_process': r'Run PostProcess=(.+)',
+                'run_sediment': r'Run Sediment=(.+)',
+                'run_unet': r'Run UNet=(.+)',
+                'run_wqnet': r'Run WQNet=(.+)',
+                'short_identifier': r'Short Identifier=(.+)',
+                'simulation_date': r'Simulation Date=(.+)',
+                'unet_d1_cores': r'UNET D1 Cores=(.+)',
+                'unet_use_existing_ib_tables': r'UNET Use Existing IB Tables=(.+)',
+                'unet_1d_methodology': r'UNET 1D Methodology=(.+)',
+                'unet_d2_solver_type': r'UNET D2 SolverType=(.+)',
+                'unet_d2_name': r'UNET D2 Name=(.+)'
+            }
+            
+            for key, pattern in patterns.items():
+                match = re.search(pattern, content)
+                if match:
+                    plan_info[key] = match.group(1).strip()
+        
+        return plan_info
+    
     def _get_prj_entries(self, entry_type):
         """
         Extract entries of a specific type from the HEC-RAS project file.
@@ -91,43 +147,76 @@ class RasPrj:
 
         Note:
             This method reads the project file and extracts entries matching the specified type.
-            For 'Plan' entries, it also checks for the existence of HDF results files.
+            For 'Unsteady' entries, it parses additional information from the unsteady file.
         """
-        # Initialize an empty list to store entries
         entries = []
-        # Create a regex pattern to match the specific entry type
         pattern = re.compile(rf"{entry_type} File=(\w+)")
 
-        # Open and read the project file
         try:
             with open(self.prj_file, 'r') as file:
                 for line in file:
-                    # Check if the line matches the pattern
                     match = pattern.match(line.strip())
                     if match:
-                        # Extract the file name from the matched pattern
                         file_name = match.group(1)
-                        # Create a dictionary for the current entry
+                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
                         entry = {
                             f'{entry_type.lower()}_number': file_name[1:],
-                            'full_path': str(self.project_folder / f"{self.project_name}.{file_name}")
+                            'full_path': full_path
                         }
 
-                        # Special handling for Plan entries
                         if entry_type == 'Plan':
-                            # Construct the path for the HDF results file
+                            plan_info = self._parse_plan_file(Path(full_path))
+                            entry.update(plan_info)
+                            
+                            # Add HDF results path if it exists
                             hdf_results_path = self.project_folder / f"{self.project_name}.p{file_name[1:]}.hdf"
-                            # Add the results_path to the entry, if the file exists
                             entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
 
-                        # Add the entry to the list
+                        if entry_type == 'Unsteady':
+                            unsteady_info = self._parse_unsteady_file(Path(full_path))
+                            entry.update(unsteady_info)
+
                         entries.append(entry)
         except Exception as e:
             logging.exception(f"Failed to read project file {self.prj_file}: {e}")
             raise
 
-        # Convert the list of entries to a DataFrame and return it
         return pd.DataFrame(entries)
+
+    def _parse_unsteady_file(self, unsteady_file_path):
+        """
+        Parse an unsteady flow file and extract critical information.
+        
+        Args:
+            unsteady_file_path (Path): Path to the unsteady flow file.
+        
+        Returns:
+            dict: Dictionary containing extracted unsteady flow information.
+        """
+        unsteady_info = {}
+        with open(unsteady_file_path, 'r') as file:
+            content = file.read()
+            
+            # Extract critical information
+            patterns = {
+                'flow_title': r'Flow Title=(.+)',
+                'program_version': r'Program Version=(.+)',
+                'use_restart': r'Use Restart=(.+)',
+                'precipitation_mode': r'Precipitation Mode=(.+)',
+                'wind_mode': r'Wind Mode=(.+)',
+                'precipitation_bc_mode': r'Met BC=Precipitation\|Mode=(.+)',
+                'evapotranspiration_bc_mode': r'Met BC=Evapotranspiration\|Mode=(.+)',
+                'precipitation_expanded_view': r'Met BC=Precipitation\|Expanded View=(.+)',
+                'precipitation_constant_units': r'Met BC=Precipitation\|Constant Units=(.+)',
+                'precipitation_gridded_source': r'Met BC=Precipitation\|Gridded Source=(.+)'
+            }
+            
+            for key, pattern in patterns.items():
+                match = re.search(pattern, content)
+                if match:
+                    unsteady_info[key] = match.group(1).strip()
+        
+        return unsteady_info
 
     @property
     def is_initialized(self):
@@ -290,8 +379,7 @@ class RasPrj:
         return hdf_entries
     
     def print_data(self):
-        """Print all RAS Object data for this instance.
-           If any objects are added, add them to the print statements below."""
+        """Print all RAS Object data for this instance."""
         self.check_initialized()
         logging.info(f"--- Data for {self.project_name} ---")
         logging.info(f"Project folder: {self.project_folder}")
@@ -307,10 +395,212 @@ class RasPrj:
         logging.info(f"\n{self.geom_df}")
         logging.info("HDF entries:")
         logging.info(f"\n{self.get_hdf_entries()}")
+        logging.info("Boundary conditions:")
+        logging.info(f"\n{self.boundaries_df}")
         logging.info("----------------------------")
+
+
+    @staticmethod
+    def get_plan_value(
+        plan_number_or_path: Union[str, Path],
+        key: str,
+        ras_object=None
+    ) -> Any:
+        """
+        Retrieve a specific value from a HEC-RAS plan file.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        key (str): The key to retrieve from the plan file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Any: The value associated with the specified key
+
+        Raises:
+        ValueError: If an invalid key is provided or if the plan file is not found
+        IOError: If there's an error reading the plan file
+
+        Note: See the docstring of update_plan_file for a full list of available keys and their types.
+
+        Example:
+        >>> computation_interval = RasUtils.get_plan_value("01", "computation_interval")
+        >>> print(f"Computation interval: {computation_interval}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        valid_keys = {
+            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
+            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
+            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
+            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
+            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name'
+        }
+
+        if key not in valid_keys:
+            raise ValueError(f"Invalid key: {key}. Valid keys are: {', '.join(valid_keys)}")
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+            if not plan_file_path.exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                content = file.read()
+        except IOError as e:
+            logging.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        if key == 'description':
+            import re
+            match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            return match.group(1).strip() if match else None
+        else:
+            pattern = f"{key.replace('_', ' ').title()}=(.*)"
+            import re
+            match = re.search(pattern, content)
+            return match.group(1).strip() if match else None
+
+    def get_boundary_conditions(self) -> pd.DataFrame:
+        """
+        Extract boundary conditions from unsteady flow files and create a DataFrame.
+
+        This method parses unsteady flow files to extract boundary condition information.
+        It creates a DataFrame with structured data for known boundary condition types
+        and parameters, and associates this information with the corresponding unsteady flow file.
+
+        Note:
+        Any lines in the boundary condition blocks that are not explicitly parsed and
+        incorporated into the DataFrame are captured in a multi-line string. This string
+        is logged at the DEBUG level for each boundary condition. This feature is crucial
+        for developers incorporating new boundary condition types or parameters, as it
+        allows them to see what information might be missing from the current parsing logic.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing detailed boundary condition information,
+                          linked to the unsteady flow files.
+
+        Usage:
+            To see the unparsed lines, set the logging level to DEBUG before calling this method:
+            
+            import logging
+            logging.getLogger().setLevel(logging.DEBUG)
+            
+            boundaries_df = ras_project.get_boundary_conditions()
+        """
+        boundary_data = []
+        
+        for _, row in self.unsteady_df.iterrows():
+            unsteady_file_path = row['full_path']
+            unsteady_number = row['unsteady_number']
+            
+            with open(unsteady_file_path, 'r') as file:
+                content = file.read()
+                
+            bc_blocks = re.split(r'(?=Boundary Location=)', content)[1:]
+            
+            for i, block in enumerate(bc_blocks, 1):
+                bc_info, unparsed_lines = self._parse_boundary_condition(block, unsteady_number, i)
+                boundary_data.append(bc_info)
+                
+                if unparsed_lines:
+                    logging.debug(f"Unparsed lines for boundary condition {i} in unsteady file {unsteady_number}:\n{unparsed_lines}")
+        
+        boundaries_df = pd.DataFrame(boundary_data)
+        
+        # Merge with unsteady_df to get relevant unsteady flow file information
+        merged_df = pd.merge(boundaries_df, self.unsteady_df, 
+                             left_on='unsteady_number', right_on='unsteady_number', how='left')
+        
+        return merged_df
+
+    def _parse_boundary_condition(self, block: str, unsteady_number: str, bc_number: int) -> Tuple[Dict, str]:
+        lines = block.split('\n')
+        bc_info = {
+            'unsteady_number': unsteady_number,
+            'boundary_condition_number': bc_number
+        }
+        
+        parsed_lines = set()
+        
+        # Parse Boundary Location
+        boundary_location = lines[0].split('=')[1].strip()
+        fields = [field.strip() for field in boundary_location.split(',')]
+        bc_info.update({
+            'river_reach_name': fields[0] if len(fields) > 0 else '',
+            'river_station': fields[1] if len(fields) > 1 else '',
+            'storage_area_name': fields[2] if len(fields) > 2 else '',
+            'pump_station_name': fields[3] if len(fields) > 3 else ''
+        })
+        parsed_lines.add(0)
+        
+        # Determine BC Type
+        bc_types = {
+            'Flow Hydrograph=': 'Flow Hydrograph',
+            'Lateral Inflow Hydrograph=': 'Lateral Inflow Hydrograph',
+            'Uniform Lateral Inflow Hydrograph=': 'Uniform Lateral Inflow Hydrograph',
+            'Stage Hydrograph=': 'Stage Hydrograph',
+            'Friction Slope=': 'Normal Depth',
+            'Gate Name=': 'Gate Opening'
+        }
+        
+        bc_info['bc_type'] = 'Unknown'
+        bc_info['hydrograph_type'] = None
+        for i, line in enumerate(lines[1:], 1):
+            for key, bc_type in bc_types.items():
+                if line.startswith(key):
+                    bc_info['bc_type'] = bc_type
+                    if 'Hydrograph' in bc_type:
+                        bc_info['hydrograph_type'] = bc_type
+                    parsed_lines.add(i)
+                    break
+            if bc_info['bc_type'] != 'Unknown':
+                break
+        
+        # Parse other fields
+        known_fields = ['Interval', 'DSS Path', 'Use DSS', 'Use Fixed Start Time', 'Fixed Start Date/Time',
+                        'Is Critical Boundary', 'Critical Boundary Flow', 'DSS File']
+        for i, line in enumerate(lines):
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                if key in known_fields:
+                    bc_info[key] = value.strip()
+                    parsed_lines.add(i)
+        
+        # Handle hydrograph values
+        bc_info['hydrograph_num_values'] = 0
+        if bc_info['hydrograph_type']:
+            hydrograph_key = f"{bc_info['hydrograph_type']}="
+            hydrograph_line = next((line for i, line in enumerate(lines) if line.startswith(hydrograph_key)), None)
+            if hydrograph_line:
+                hydrograph_index = lines.index(hydrograph_line)
+                values_count = int(hydrograph_line.split('=')[1].strip())
+                bc_info['hydrograph_num_values'] = values_count
+                if values_count > 0:
+                    values = ' '.join(lines[hydrograph_index + 1:]).split()[:values_count]
+                    bc_info['hydrograph_values'] = values
+                    parsed_lines.update(range(hydrograph_index, hydrograph_index + (values_count // 5) + 2))
+        
+        # Collect unparsed lines
+        unparsed_lines = '\n'.join(line for i, line in enumerate(lines) if i not in parsed_lines and line.strip())
+        
+        return bc_info, unparsed_lines
+
 
 # Create a global instance named 'ras'
 ras = RasPrj()
+
+# END OF CLASS DEFINITION
+
+
+
+
+# START OF FUNCTION DEFINITIONS
+
 
 def init_ras_project(ras_project_folder, ras_version, ras_instance=None):
     """

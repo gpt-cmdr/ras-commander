@@ -36,13 +36,46 @@ ras_examples.extract_project(["Balde Eagle Creek", "BaldEagleCrkMulti2D", "Munci
 # 2. The global 'ras' object is suitable for simple scripts working with a single project.
 # 3. Custom ras objects are recommended for complex scripts or when working with multiple projects.
 # 4. The init_ras_project function initializes a project and sets up the ras object.
-# 5. Each ras object contains information about its project, including plan, geometry, and flow files.
+# 5. Each ras object contains comprehensive information about its project, including plan, geometry, flow files, and boundary conditions.
 
 # Best Practices:
 # 1. For simple scripts working with a single project, using the global 'ras' object is fine.
 # 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
 # 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
 # 4. Use descriptive names for custom ras objects to clearly identify different projects.
+
+def print_ras_object_data(ras_obj, project_name):
+    print(f"\n{project_name} Project Data:")
+    print("=" * 50)
+    print(f"Project Name: {ras_obj.get_project_name()}")
+    print(f"Project Folder: {ras_obj.project_folder}")
+    print(f"PRJ File: {ras_obj.prj_file}")
+    print(f"HEC-RAS Executable Path: {ras_obj.ras_exe_path}")
+    
+    print("\nPlan Files DataFrame:")
+    print(ras_obj.plan_df)
+    
+    print("\nFlow Files DataFrame:")
+    print(ras_obj.flow_df)
+    
+    print("\nUnsteady Flow Files DataFrame:")
+    print(ras_obj.unsteady_df)
+    
+    print("\nGeometry Files DataFrame:")
+    print(ras_obj.geom_df)
+    
+    print("\nHDF Entries DataFrame:")
+    print(ras_obj.get_hdf_entries())
+    
+    print("\nBoundary Conditions DataFrame:")
+    print(ras_obj.get_boundary_conditions())
+    
+    print("\nMeteorological Data:")
+    for attr in ['precipitation_mode', 'wind_mode', 'precipitation_metadata', 'evapotranspiration_metadata']:
+        if hasattr(ras_obj, attr):
+            print(f"{attr.capitalize().replace('_', ' ')}: {getattr(ras_obj, attr)}")
+        else:
+            print(f"{attr.capitalize().replace('_', ' ')}: Not available")
 
 def main():
     # Get the current script's directory
@@ -59,33 +92,7 @@ def main():
     # Initialize using the global RAS instance
     print("Step 1: Initializing with global RAS instance")
     init_ras_project(bald_eagle_path, "6.5") # This will set the global 'ras' object
-    ras.print_data()  # Using the class method
-
-    # Demonstrate accessing specific data
-    print("\nStep 2: Demonstrating accessing specific data")
-    print("Global RAS instance (Bald Eagle Creek) first plan file:")
-    print(ras.plan_df.iloc[0] if not ras.plan_df.empty else "No plan files")
-    
-    print("\nStep 3: Accessing All RAS Object Data")
-    print(f"Project Name: {ras.get_project_name()}")
-    print(f"Project Folder: {ras.project_folder}")
-    print(f"PRJ File: {ras.prj_file}")
-    print(f"HEC-RAS Executable Path: {ras.ras_exe_path}")
-    
-    print("\nPlan Files DataFrame:")
-    print(ras.plan_df)
-    
-    print("\nFlow Files DataFrame:")
-    print(ras.flow_df)
-    
-    print("\nUnsteady Flow Files DataFrame:")
-    print(ras.unsteady_df)
-    
-    print("\nGeometry Files DataFrame:")
-    print(ras.geom_df)
-    
-    print("\nHDF Entries DataFrame:")
-    print(ras.get_hdf_entries())
+    print_ras_object_data(ras, "Global RAS Instance (Bald Eagle Creek)")
 
     print("\nExample Set 2: Using custom ras objects")
     print("-----------------------------------------------------")
@@ -95,39 +102,8 @@ def main():
     multi_2d_project = init_ras_project(multi_2d_path, "6.5")
     muncie_project = init_ras_project(muncie_path, "6.5")
 
-    print("\nMulti2D project data:")    
-    multi_2d_project.print_data()
-    print("\nMuncie project data:")
-    muncie_project.print_data()
-
-    # Demonstrate accessing specific data from custom ras objects
-    print("\nStep 2: Accessing specific data from custom ras objects")
-    print("Multi2D project first geometry file:")
-    print(multi_2d_project.geom_df.iloc[0] if not multi_2d_project.geom_df.empty else "No geometry files")
-    
-    print("\nMuncie project first unsteady flow file:")
-    print(muncie_project.unsteady_df.iloc[0] if not muncie_project.unsteady_df.empty else "No unsteady flow files")
-
-    print("\nStep 3: Accessing All RAS Object Data for Multi2D Project")
-    print(f"Project Name: {multi_2d_project.get_project_name()}")
-    print(f"Project Folder: {multi_2d_project.project_folder}")
-    print(f"PRJ File: {multi_2d_project.prj_file}")
-    print(f"HEC-RAS Executable Path: {multi_2d_project.ras_exe_path}")
-    
-    print("\nPlan Files DataFrame:")
-    print(multi_2d_project.plan_df)
-    
-    print("\nFlow Files DataFrame:")
-    print(multi_2d_project.flow_df)
-    
-    print("\nUnsteady Flow Files DataFrame:")
-    print(multi_2d_project.unsteady_df)
-    
-    print("\nGeometry Files DataFrame:")
-    print(multi_2d_project.geom_df)
-    
-    print("\nHDF Entries DataFrame:")
-    print(multi_2d_project.get_hdf_entries())
+    print_ras_object_data(multi_2d_project, "Multi2D Project")
+    print_ras_object_data(muncie_project, "Muncie Project")
 
     print("\nExample of simplified import (not recommended for complex scripts)")
     print("-----------------------------------------------------")
@@ -854,6 +830,8 @@ File: c:\GH\ras-commander\examples\08_parallel_execution.py
 import sys
 from pathlib import Path
 import shutil
+import psutil
+import math
 
 # Add the parent directory to the Python path
 current_file = Path(__file__).resolve()
@@ -863,7 +841,7 @@ sys.path.append(str(parent_directory))
 # Flexible imports to allow for development without installation
 try:
     # Try to import from the installed package
-    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj
 except ImportError:
     # If the import fails, add the parent directory to the Python path
     current_file = Path(__file__).resolve()
@@ -871,7 +849,7 @@ except ImportError:
     sys.path.append(str(parent_directory))
     
     # Now try to import again
-    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj
 
 # Extract specific projects
 ras_examples = RasExamples()
@@ -880,27 +858,29 @@ ras_examples.extract_project(["Balde Eagle Creek"])
 #### --- START OF SCRIPT --- ####
 
 # ras-commander Library Notes:
-# 1. This example uses the default global 'ras' object for simplicity.
-# 2. If you need to work with multiple projects, use separate ras objects for each project.
-# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
+# 1. This example uses separate RasPrj objects for each project/folder.
+# 2. Using separate RasPrj objects allows working with multiple projects or folders.
+# 3. We'll create new RasPrj objects for the original project and each output folder.
 # 4. For functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders.
 # 5. If you want your script to be repeatable, make sure to delete the folders before running again.
 
 # Best Practices:
-# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
-# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
-# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
-# 4. When using parallel execution, consider the number of cores available on your machine.
-# 5. Use the dest_folder argument to keep your project folder clean and organized.
+# 1. For complex scripts or when working with multiple projects/folders, create and use separate RasPrj objects.
+# 2. Be consistent in your approach: use non-global RasPrj objects throughout the script.
+# 3. When using parallel execution, consider the number of cores available on your machine.
+# 4. Use the dest_folder argument to keep your project folder clean and organized.
+
+def get_physical_core_count():
+    return psutil.cpu_count(logical=False)
 
 def main():
-    # Initialize the project using the global 'ras' object
+    # Initialize the project using a new RasPrj object
     current_dir = Path(__file__).parent
     project_path = current_dir / "example_projects" / "Balde Eagle Creek"
-    init_ras_project(project_path, "6.5")
+    source_project = init_ras_project(project_path, "6.5")
 
     print("Available plans:")
-    print(ras.plan_df)
+    print(source_project.plan_df)
     print()
 
     # Example 1: Parallel execution of all plans with overwrite_dest
@@ -910,11 +890,18 @@ def main():
         max_workers=3,
         num_cores=2,
         dest_folder=compute_folder,
-        overwrite_dest=True
+        overwrite_dest=True,
+        ras_object=source_project
     )
     print("Parallel execution of all plans results:")
     for plan_number, success in results_all.items():
         print(f"Plan {plan_number}: {'Successful' if success else 'Failed'}")
+    print()
+    
+    # Initialize a new RasPrj object for the compute_folder
+    compute_source_project = init_ras_project(compute_folder, "6.5")
+    print("Plan DataFrame after parallel execution of all plans:")
+    print(compute_source_project.plan_df)
     print()
 
     # Example 2: Parallel execution of specific plans with overwrite_dest
@@ -926,21 +913,37 @@ def main():
         max_workers=2,
         num_cores=2,
         dest_folder=specific_compute_folder,
-        overwrite_dest=True
+        overwrite_dest=True,
+        ras_object=source_project
     )
     print("Parallel execution of specific plans results:")
     for plan_number, success in results_specific.items():
         print(f"Plan {plan_number}: {'Successful' if success else 'Failed'}")
     print()
 
-    # Example 3: Get and print results paths
-    print("Example 3: Getting results paths")
-    for plan_number in specific_plans:
-        results_path = RasPlan.get_results_path(plan_number)
-        if results_path:
-            print(f"Results for plan {plan_number} are located at: {results_path}")
-        else:
-            print(f"No results found for plan {plan_number}")
+    # Example 3: Parallel execution with dynamic max_workers based on physical cores
+    print("Example 3: Parallel execution with dynamic max_workers")
+    num_cores = 2
+    physical_cores = get_physical_core_count()
+    max_workers = math.floor(physical_cores / num_cores)
+    
+    dynamic_compute_folder = project_path.parent / "compute_test_parallel_dynamic"
+    results_dynamic = RasCmdr.compute_parallel(
+        max_workers=max_workers,
+        num_cores=num_cores,
+        dest_folder=dynamic_compute_folder,
+        overwrite_dest=True,
+        ras_object=source_project
+    )
+    print(f"Parallel execution with {max_workers} workers and {num_cores} cores per worker:")
+    for plan_number, success in results_dynamic.items():
+        print(f"Plan {plan_number}: {'Successful' if success else 'Failed'}")
+    print()
+
+    # Get and print results paths
+    print("Results paths for dynamic execution:")
+    dynamic_compute_source_project = init_ras_project(dynamic_compute_folder, "6.5")
+    print(dynamic_compute_source_project.plan_df)
 
 if __name__ == "__main__":
     main()
@@ -1536,6 +1539,298 @@ File: c:\GH\ras-commander\examples\14_Core_Sensitivity.ipynb
  "nbformat": 4,
  "nbformat_minor": 2
 }
+
+==================================================
+
+File: c:\GH\ras-commander\examples\15_plan_key_operations.py
+==================================================
+# 15_plan_key_operations.py
+
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+
+# Extract specific projects
+ras_examples = RasExamples()
+ras_examples.extract_project(["Balde Eagle Creek"])
+
+#### --- START OF SCRIPT --- ####
+
+def main():
+    # Initialize the project
+    current_dir = Path(__file__).parent
+    project_path = current_dir / "example_projects" / "Balde Eagle Creek"
+    ras_obj = init_ras_project(project_path, "6.5")
+
+    print("Example 15: Getting and Setting Plan Keys")
+    print("------------------------------------------")
+
+    # Get the first plan number
+    plan_number = ras_obj.plan_df['plan_number'].iloc[0]
+    print(f"Working with Plan: {plan_number}")
+
+    # 1. Get and print multiple plan values
+    keys_to_check = ['computation_interval', 'simulation_date', 'short_identifier', 'unet_d1_cores']
+    print("\n1. Current Plan Values:")
+    for key in keys_to_check:
+        value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
+        print(f"  {key}: {value}")
+
+    # 2. Update plan values
+    print("\n2. Updating Plan Values:")
+    updates = {
+        'computation_interval': '30SEC',
+        'short_identifier': 'Updated_Plan',
+        'unet_d1_cores': '4'
+    }
+    for key, value in updates.items():
+        RasPlan.update_plan_value(plan_number, key, value, ras_object=ras_obj)
+        print(f"  Updated {key} to: {value}")
+
+    # 3. Verify updates
+    print("\n3. Verifying Updates:")
+    for key in updates.keys():
+        new_value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
+        print(f"  {key}: {new_value}")
+
+    # 4. Get and update description
+    print("\n4. Plan Description:")
+    current_description = RasPlan.get_plan_value(plan_number, 'description', ras_object=ras_obj)
+    print(f"  Current description: {current_description}")
+
+    new_description = "This is an updated plan description for Example 15."
+    RasPlan.update_plan_value(plan_number, 'description', new_description, ras_object=ras_obj)
+    print(f"  Updated description to: {new_description}")
+
+    # Verify description update
+    updated_description = RasPlan.get_plan_value(plan_number, 'description', ras_object=ras_obj)
+    print(f"  Verified updated description: {updated_description}")
+
+    # 5. Attempt to get and set an invalid key
+    print("\n5. Handling Invalid Keys:")
+    try:
+        RasPlan.get_plan_value(plan_number, 'invalid_key', ras_object=ras_obj)
+    except ValueError as e:
+        print(f"  Error when getting invalid key: {e}")
+
+    try:
+        RasPlan.update_plan_value(plan_number, 'invalid_key', 'some_value', ras_object=ras_obj)
+    except ValueError as e:
+        print(f"  Error when updating invalid key: {e}")
+
+    print("\nExample 15 completed.")
+
+if __name__ == "__main__":
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\16_scanning_ras_project_info.py
+==================================================
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    from ras_commander import init_ras_project, RasPrj, RasExamples
+except ImportError:
+    sys.path.append(str(parent_directory))
+    from ras_commander import init_ras_project, RasPrj, RasExamples
+
+import logging
+
+def generate_category_summary(category_path):
+    summary = []
+    summary.append(f"RAS-Commander Example Projects Summary for Category: {category_path.name}\n")
+    summary.append("=" * 80 + "\n\n")
+
+    for project_path in category_path.iterdir():
+        if project_path.is_dir():
+            summary.append(f"Project Folder: {project_path.name}")
+            summary.append(f"Full Path: {project_path.resolve()}\n")
+
+            try:
+                ras_project = init_ras_project(project_path, "6.5", ras_instance=RasPrj())
+                
+                summary.append(f"Project Name: {ras_project.get_project_name()}")
+                summary.append(f"PRJ File: {ras_project.prj_file}")
+                summary.append(f"RAS Executable: {ras_project.ras_exe_path}\n")
+
+                summary.append("Plan Files:")
+                summary.append(ras_project.plan_df.to_string())
+                summary.append("\n")
+
+                summary.append("Flow Files:")
+                summary.append(ras_project.flow_df.to_string())
+                summary.append("\n")
+
+                summary.append("Geometry Files:")
+                summary.append(ras_project.geom_df.to_string())
+                summary.append("\n")
+
+                summary.append("Unsteady Flow Files:")
+                summary.append(ras_project.unsteady_df.to_string())
+                summary.append("\n")
+
+                summary.append("Boundary Conditions:")
+                summary.append(ras_project.boundaries_df.to_string())
+                summary.append("\n")
+
+                # Add unparsed lines for each boundary condition
+                summary.append("Unparsed Boundary Condition Lines:")
+                for _, row in ras_project.boundaries_df.iterrows():
+                    bc_number = row['boundary_condition_number']
+                    unsteady_number = row['unsteady_number']
+                    unparsed_lines = ras_project._parse_boundary_condition(
+                        ras_project._get_boundary_condition_block(unsteady_number, bc_number),
+                        unsteady_number,
+                        bc_number
+                    )[1]
+                    if unparsed_lines:
+                        summary.append(f"BC {bc_number} in Unsteady File {unsteady_number}:")
+                        summary.append(unparsed_lines)
+                        summary.append("\n")
+                summary.append("\n")
+
+            except Exception as e:
+                summary.append(f"Error initializing RAS project: {str(e)}\n")
+
+            summary.append("-" * 80 + "\n\n")
+
+    return "\n".join(summary)
+
+def main():
+    # Set logging level to DEBUG to capture unparsed lines
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    ras_examples = RasExamples()
+    all_categories = ras_examples.list_categories()
+
+    base_dir = Path.cwd() / "ras_example_categories"
+    base_dir.mkdir(exist_ok=True)
+
+    for category in all_categories:
+        category_dir = base_dir / category
+        category_dir.mkdir(exist_ok=True)
+
+        projects = ras_examples.list_projects(category)
+        extracted_paths = ras_examples.extract_project(projects)
+
+        # Move extracted projects to the category directory
+        for path in extracted_paths:
+            new_path = category_dir / path.name
+            path.rename(new_path)
+
+        # Generate and save summary for this category
+        summary_text = generate_category_summary(category_dir)
+        output_file = base_dir / f"ras-commander {category} summary.txt"
+        with open(output_file, "w") as f:
+            f.write(summary_text)
+
+        print(f"Summary for category '{category}' has been written to: {output_file}")
+
+    print("All category summaries have been generated.")
+
+    # Clean up extracted projects
+    ras_examples.clean_projects_directory()
+    print("Cleaned up original extracted example projects.")
+
+if __name__ == "__main__":
+    main()
+==================================================
+
+File: c:\GH\ras-commander\examples\example_projects.csv
+==================================================
+Category,Project
+1D Sediment Transport,BSTEM - Simple Example
+1D Sediment Transport,Dredging Example
+1D Sediment Transport,Reservoir Video Tutorial
+1D Sediment Transport,SIAM Example
+1D Sediment Transport,Simple Sediment Transport Example
+1D Sediment Transport,Unsteady Sediment with Concentration Rules
+1D Sediment Transport,Video Tutorial (Sediment Intro)
+1D Steady Flow Hydraulics,Baxter RAS Mapper
+1D Steady Flow Hydraulics,Chapter 4 Example Data
+1D Steady Flow Hydraulics,ConSpan Culvert
+1D Steady Flow Hydraulics,Mixed Flow Regime Channel
+1D Steady Flow Hydraulics,Wailupe GeoRAS
+1D Unsteady Flow Hydraulics,Balde Eagle Creek
+1D Unsteady Flow Hydraulics,Bridge Hydraulics
+1D Unsteady Flow Hydraulics,ContractionExpansionMinorLosses
+1D Unsteady Flow Hydraulics,Culvert Hydraulics
+1D Unsteady Flow Hydraulics,Culverts with Flap Gates
+1D Unsteady Flow Hydraulics,Dam Breaching
+1D Unsteady Flow Hydraulics,Elevation Controled Gates
+1D Unsteady Flow Hydraulics,Inline Structure with Gated Spillways
+1D Unsteady Flow Hydraulics,Internal Stage and Flow Boundary Condition
+1D Unsteady Flow Hydraulics,JunctionHydraulics
+1D Unsteady Flow Hydraulics,Lateral Strcuture with Gates
+1D Unsteady Flow Hydraulics,Lateral Structure connected to a River Reach
+1D Unsteady Flow Hydraulics,Lateral Structure Overflow Weir
+1D Unsteady Flow Hydraulics,Lateral Structure with Culverts
+1D Unsteady Flow Hydraulics,Lateral Structure with Culverts and Gates
+1D Unsteady Flow Hydraulics,Levee Breaching
+1D Unsteady Flow Hydraulics,Mixed Flow Regime
+1D Unsteady Flow Hydraulics,Multiple Reaches with Hydraulic Structures
+1D Unsteady Flow Hydraulics,NavigationDam
+1D Unsteady Flow Hydraulics,Pumping Station
+1D Unsteady Flow Hydraulics,Pumping Station with Rules
+1D Unsteady Flow Hydraulics,Rule Operations
+1D Unsteady Flow Hydraulics,Simplified Physical Breaching
+1D Unsteady Flow Hydraulics,Storage Area Hydraulic Connection
+1D Unsteady Flow Hydraulics,UngagedAreaInflows
+1D Unsteady Flow Hydraulics,Unsteady Flow Encroachment Analysis
+2D Sediment Transport,Chippewa_2D
+2D Unsteady Flow Hydraulics,BaldEagleCrkMulti2D
+2D Unsteady Flow Hydraulics,Muncie
+Applications Guide,Example 1 - Critical Creek
+Applications Guide,Example 10 - Stream Junction
+Applications Guide,Example 11 - Bridge Scour
+Applications Guide,Example 12 - Inline Structure
+Applications Guide,Example 13 - Singler Bridge (WSPRO)
+Applications Guide,Example 14 - Ice Covered River
+Applications Guide,Example 15 - Split Flow Junction with Lateral Weir
+Applications Guide,Example 16 - Channel Modification
+Applications Guide,Example 17 - Unsteady Flow Application
+Applications Guide,Example 18 - Advanced Inline Structure
+Applications Guide,Example 19 - Hydrologic Routing - ModPuls
+Applications Guide,Example 2 - Beaver Creek
+Applications Guide,Example 20 - HagerLatWeir
+Applications Guide,Example 21 - Overflow Gates
+Applications Guide,Example 22 - Groundwater Interflow
+Applications Guide,Example 23 - Urban Modeling
+Applications Guide,Example 24 - Mannings-n-Calibration
+Applications Guide,Example 3 - Single Culvert
+Applications Guide,Example 4 - Multiple Culverts
+Applications Guide,Example 5 - Multiple Openings
+Applications Guide,Example 6 - Floodway Determination
+Applications Guide,Example 7 - Multiple Plans
+Applications Guide,Example 8 - Looped Network
+Applications Guide,Example 9 - Mixed Flow Analysis
+Water Quality,Nutrient Example
 
 ==================================================
 
