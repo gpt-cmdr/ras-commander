@@ -3,11 +3,11 @@
 RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under the [HEC-Commander tools repository](https://github.com/billk-FM/HEC-Commander).
 
 ## Contributors:
-William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com  
+William Katzenmeyer, P.E., C.F.M. 
 
-Sean Micek, P.E., C.F.M. - smicek@fenstermaker.com  
+Sean Micek, P.E., C.F.M. 
 
-Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com  
+Aaron Nichols, P.E., C.F.M. 
 
 (Additional Contributors Here)  
 
@@ -277,11 +277,8 @@ Additionally, we would like to acknowledge the following notable contributions a
 
 2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
 
-   Xiaofeng Liu, Ph.D., P.E.
-   Associate Professor
-   Department of Civil and Environmental Engineering
-   Institute of Computational and Data Sciences
-   Penn State University
+   Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
+   Institute of Computational and Data Sciences, Penn State University
 
 These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
 
