@@ -88,18 +88,21 @@ results = RasCmdr.compute_parallel(
 RasPlan.set_geom("01", "02")
 ```
 
+Certainly! I'll provide you with an updated Key Components section and Project Organization diagram based on the current structure of the ras-commander library.
+
 ## Key Components
 
-- `RasPrj`: Manages HEC-RAS projects
+- `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
 - `RasCmdr`: Handles execution of HEC-RAS simulations
 - `RasPlan`: Provides functions for modifying and updating plan files
 - `RasGeo`: Handles operations related to geometry files
 - `RasUnsteady`: Manages unsteady flow file operations
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
-
+- `RasHdf`: Provides utilities for working with HDF files in HEC-RAS projects
 
 ## Project Organization Diagram
+
 ```
 ras_commander
 ├── .github
@@ -107,9 +110,11 @@ ras_commander
 │       └── python-package.yml
 ├── ras_commander
 │   ├── __init__.py
+│   ├── _version.py
 │   ├── RasCmdr.py
 │   ├── RasExamples.py
 │   ├── RasGeo.py
+│   ├── RasHdf.py
 │   ├── RasPlan.py
 │   ├── RasPrj.py
 │   ├── RasUnsteady.py
@@ -127,7 +132,12 @@ ras_commander
 │   ├── 10_arguments_for_compute.py
 │   ├── 11_Using_RasExamples.ipynb
 │   ├── 12_plan_set_execution.py
-│   └── 13_multiple_project_operations.py
+│   ├── 13_multiple_project_operations.py
+│   ├── 14_Core_Sensitivity.ipynb
+│   ├── 15_plan_key_operations.py
+│   ├── 16_scanning_ras_project_info.py
+│   ├── 17_parallel_execution_ble.py
+│   └── HEC_RAS_2D_HDF_Analysis.ipynb
 ├── tests
 │   └── ... (test files)
 ├── .gitignore
@@ -162,7 +172,6 @@ projects = ras_examples.list_projects("Steady Flow")
 extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
 ```
 
-
 ## RasPrj
 
 The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
@@ -189,6 +198,28 @@ init_ras_project("/path/to/project", "6.5")
 custom_project = RasPrj()
 init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
 ```
+
+## RasHdf
+
+The `RasHdf` class provides utilities for working with HDF files in HEC-RAS projects, enabling easy access to simulation results and model data.
+
+Example usage:
+
+```python
+from ras_commander import RasHdf, init_ras_project, RasPrj
+
+# Initialize project with a custom ras object
+custom_ras = RasPrj()
+init_ras_project("/path/to/project", "6.5", ras_instance=custom_ras)
+
+# Get runtime data for a specific plan
+plan_number = "01"
+runtime_data = RasHdf.get_runtime_data(plan_number, ras_object=custom_ras)
+print(runtime_data)
+```
+
+This class simplifies the process of extracting and analyzing data from HEC-RAS HDF output files, supporting tasks such as post-processing and result visualization.
+
 
 ## Documentation
 
@@ -227,7 +258,30 @@ ras-commander is released under the MIT License. See the license file for detail
 
 ## Acknowledgments
 
-RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository.  In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4o, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+
+Additionally, we would like to acknowledge the following notable contributions and attributions for open source projects which significantly influenced the development of RAS Commander:
+
+1. Contributions: Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration, code examples and utility functions which were adapted with AI for use in RAS Commander. Sean has also contributed heavily to 
+
+- Development of additional HDF functions for detailed analysis and mapping of HEC-RAS results within the RasHdf class.
+- Development of the prototype `RasCmdr` class for executing HEC-RAS simulations.
+- Optimization examples and methods from (INSERT REFERENCE) for use in the Ras-Commander library examples
+
+2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
+
+   Xiaofeng Liu, Ph.D., P.E.
+   Associate Professor
+   Department of Civil and Environmental Engineering
+   Institute of Computational and Data Sciences
+   Penn State University
+
+These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
+
+3. Chris Goodell, "Breaking the HEC-RAS Code" - Studied and used as a reference for understanding the inner workings of HEC-RAS, providing valuable insights into the software's functionality and structure.
+
+4. [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
+
 
 ## Contact
 

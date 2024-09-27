@@ -105,11 +105,16 @@ RAS-Commander (`ras_commander`) is a Python library designed to automate and str
   - [Executing Plans](#executing-plans)
   - [Working with Multiple Projects](#working-with-multiple-projects)
   - [Performance Optimization](#performance-optimization)
+  - [Working with Boundary Conditions](#working-with-boundary-conditions)
+  - [Using RasUtils Statistical Methods](#using-rasutils-statistical-methods)
 - [Advanced Usage](#advanced-usage)
   - [RasExamples](#rasexamples)
   - [RasUtils](#rasutils)
   - [Artifact System](#artifact-system)
   - [AI-Driven Coding Tools](#ai-driven-coding-tools)
+  - [Working with Boundary Conditions](#working-with-boundary-conditions-1)
+  - [Advanced Data Processing with RasUtils](#advanced-data-processing-with-rasutils)
+- [RasHdf](#rashdf)
 - [Troubleshooting](#troubleshooting)
 - [Conclusion](#conclusion)
 
@@ -150,17 +155,35 @@ RAS-Commander (`ras_commander`) is a Python library designed to automate and str
 9. **AI-Driven Coding Tools**:
    - Integrates AI-powered tools like ChatGPT Assistant, LLM Summaries, Cursor IDE Integration, and Jupyter Notebook Assistant.
 
+10. **Boundary Conditions**:
+    - Represent the input conditions for HEC-RAS simulations, including flow hydrographs, stage hydrographs, and other hydraulic inputs. The `RasPrj` class now provides functionality to extract and manage boundary conditions from unsteady flow files.
+
 ---
+
+## Core Features of the Ras-Commander Repository
+
+1. Flexibility: All classes are designed to work with either a global 'ras' object + a plan number, with the option for custom project instances.
+2. Robust docstrings and comments throughout the codebase
+3. Error Handling: Emphasis on robust error checking and informative logging.
+4. File Path Management: Consistent use of pathlib for file and directory operations.
+5. Data Structure: Use of pandas DataFrames for structured data management.
+6. Modularity: Clear separation of concerns between project management (RasPrj), execution (RasCmdr) and results data retrieval (RasHdf).
+7. Structured, Consistent, and AI-Accessible: [Style Guide](https://github.com/billk-FM/ras-commander/blob/main/STYLE_GUIDE.md) that prioritizes code readability and consisency across the library, which provides easier in-context learning for large language models which will write the majority of the library's code. Clear contextual explanations are left to note inconsistencies and provide reasoning for reinforcement of desired outputs. 
+
+
+---
+
 
 ## Module Overview
 
-1. **RasPrj**: Manages HEC-RAS project initialization and data.
+1. **RasPrj**: Manages HEC-RAS project initialization and data, including boundary conditions.
 2. **RasCmdr**: Handles execution of HEC-RAS simulations.
 3. **RasPlan**: Provides functions for plan file operations.
 4. **RasGeo**: Manages geometry file operations.
 5. **RasUnsteady**: Handles unsteady flow file operations.
-6. **RasUtils**: Offers utility functions for common tasks.
+6. **RasUtils**: Offers utility functions for common tasks and statistical analysis.
 7. **RasExamples**: Manages example HEC-RAS projects.
+8. **RasHdf**: Provides utilities for working with HDF files in HEC-RAS projects.
 
 ---
 
@@ -262,7 +285,6 @@ RAS-Commander (`ras_commander`) is a Python library designed to automate and str
 ## Usage Patterns
 
 ### Initializing a Project
-
 ```python
 from ras_commander import init_ras_project, ras
 
@@ -346,6 +368,50 @@ for plan, success in results.items():
   - Organize outputs with `dest_folder`.
   - Use `clear_geompre=True` for clean computations.
 
+### Working with Boundary Conditions
+
+```python
+from ras_commander import init_ras_project
+
+# Initialize a project
+project = init_ras_project("/path/to/project", "6.5")
+
+# Access boundary conditions
+boundary_conditions = project.boundaries_df
+
+# Display boundary condition information
+print(boundary_conditions)
+
+# Filter boundary conditions for a specific river
+river_boundaries = boundary_conditions[boundary_conditions['river_reach_name'] == 'Main River']
+print(river_boundaries)
+```
+
+### Using RasUtils Statistical Methods
+
+```python
+from ras_commander import RasUtils
+import numpy as np
+
+# Example observed and predicted values
+observed = np.array([100, 120, 140, 160, 180])
+predicted = np.array([105, 125, 135, 165, 175])
+
+# Calculate error metrics
+metrics = RasUtils.calculate_error_metrics(observed, predicted)
+
+print(f"Correlation: {metrics['cor']:.4f}")
+print(f"RMSE: {metrics['rmse']:.4f}")
+print(f"Percent Bias: {metrics['pb']:.4f}")
+
+# Calculate individual metrics
+rmse = RasUtils.calculate_rmse(observed, predicted)
+percent_bias = RasUtils.calculate_percent_bias(observed, predicted, as_percentage=True)
+
+print(f"RMSE: {rmse:.4f}")
+print(f"Percent Bias: {percent_bias:.2f}%")
+```
+
 ---
 
 ## Advanced Usage
@@ -397,6 +463,7 @@ The `RasUtils` class provides utility functions for common tasks in the `ras_com
 - **File and Directory Operations**: Create, delete, and manage files and directories.
 - **Backup and Restoration**: Safeguard original files with backups.
 - **Error Handling and Retries**: Robust methods to handle common file system errors.
+- **Statistical Analysis**: Perform calculations such as RMSE, correlation, and percent bias.
 
 #### Usage Patterns
 
@@ -472,6 +539,230 @@ The artifact system in `ras_commander` is designed to handle substantial, self-c
 - **LLM Summaries**: Leverage when working with external AI models.
 - **IDE Integration**: Use Cursor IDE for the most integrated coding experience.
 - **Interactive Learning**: Explore the Jupyter Notebook Assistant for experimentation.
+
+### Working with Boundary Conditions
+
+The `RasPrj` class now provides detailed information about boundary conditions in HEC-RAS projects. This can be particularly useful for advanced analysis and automation tasks.
+
+```python
+from ras_commander import init_ras_project
+
+project = init_ras_project("/path/to/project", "6.5")
+
+# Get all boundary conditions
+all_boundaries = project.boundaries_df
+
+# Filter for specific boundary condition types
+flow_hydrographs = all_boundaries[all_boundaries['bc_type'] == 'Flow Hydrograph']
+stage_hydrographs = all_boundaries[all_boundaries['bc_type'] == 'Stage Hydrograph']
+
+# Analyze boundary conditions
+for _, boundary in flow_hydrographs.iterrows():
+    print(f"River: {boundary['river_reach_name']}")
+    print(f"Station: {boundary['river_station']}")
+    print(f"Number of values: {boundary['hydrograph_num_values']}")
+    print("---")
+
+# Access specific boundary condition details
+if 'hydrograph_values' in flow_hydrographs.columns:
+    first_hydrograph = flow_hydrographs.iloc[0]['hydrograph_values']
+    print("First 5 values of the first flow hydrograph:")
+    print(first_hydrograph[:5])
+```
+
+### Advanced Data Processing with RasUtils
+
+RasUtils now includes methods for data conversion and statistical analysis, which can be useful for post-processing HEC-RAS results.
+
+```python
+from ras_commander import RasUtils
+from pathlib import Path
+import pandas as pd
+import numpy as np
+
+# Convert various data sources to DataFrame
+csv_data = RasUtils.convert_to_dataframe(Path("results.csv"))
+excel_data = RasUtils.convert_to_dataframe(Path("data.xlsx"), sheet_name="Sheet1")
+
+# Combine data from different sources
+combined_data = pd.concat([csv_data, excel_data])
+
+# Perform statistical analysis
+observed = combined_data['observed_values'].values
+predicted = combined_data['predicted_values'].values
+
+metrics = RasUtils.calculate_error_metrics(observed, predicted)
+print("Error Metrics:", metrics)
+
+# Save results to Excel with retry functionality
+results_df = pd.DataFrame({
+    'Metric': ['Correlation', 'RMSE', 'Percent Bias'],
+    'Value': [metrics['cor'], metrics['rmse'], metrics['pb']]
+})
+RasUtils.save_to_excel(results_df, Path("analysis_results.xlsx"))
+```
+
+---
+
+## RasHdf
+
+The `RasHdf` class provides utilities for working with HDF (Hierarchical Data Format) files in HEC-RAS projects. HDF files are commonly used in HEC-RAS for storing large datasets and simulation results.
+
+### Key Features of `RasHdf`:
+
+1. **Reading HDF Tables**: Convert HDF5 datasets to pandas DataFrames.
+2. **Writing DataFrames to HDF**: Save pandas DataFrames as HDF5 datasets.
+3. **Spatial Operations**: Perform KDTree queries and find nearest neighbors.
+4. **Data Consolidation**: Merge duplicate values in DataFrames.
+5. **Byte String Handling**: Decode byte strings in DataFrames.
+
+### Example Usage:
+
+```python
+from ras_commander import RasHdf
+import h5py
+import pandas as pd
+
+# Read an HDF table
+with h5py.File('results.hdf', 'r') as f:
+    dataset = f['water_surface_elevations']
+    df = RasHdf.read_hdf_to_dataframe(dataset)
+
+print(df.head())
+
+# Save a DataFrame to HDF
+new_data = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
+with h5py.File('new_results.hdf', 'w') as f:
+    group = f.create_group('my_results')
+    RasHdf.save_dataframe_to_hdf(new_data, group, 'my_dataset')
+
+# Perform a KDTree query
+import numpy as np
+reference_points = np.array([[0, 0], [1, 1], [2, 2]])
+query_points = np.array([[0.5, 0.5], [1.5, 1.5]])
+results = RasHdf.perform_kdtree_query(reference_points, query_points)
+print("KDTree query results:", results)
+```
+
+
+
+
+## HDF Paths Supported
+
+This is a list of HDF paths that are directly supported by specialized library functions: 
+
+
+1. General Paths:
+   - '/Results/Summary/Compute Messages (text)'
+   - '/Plan Data/Plan Parameters'
+   - '/Results/Unsteady/Summary/Volume Accounting/Volume Accounting 2D'
+
+2. Geometry Paths:
+   - '/Geometry/2D Flow Areas'
+   - '/Geometry/2D Flow Areas/{area_name}/Cell Info'
+   - '/Geometry/2D Flow Areas/{area_name}/Cell Points'
+   - '/Geometry/2D Flow Areas/{area_name}/Polygon Info'
+   - '/Geometry/2D Flow Areas/{area_name}/Polygon Parts'
+   - '/Geometry/2D Flow Areas/{area_name}/Polygon Points'
+   - '/Geometry/2D Flow Areas/{area_name}/Cells Center Coordinate'
+   - '/Geometry/2D Flow Areas/{area_name}/Cells Center Manning\'s n'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces Area Elevation Values'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces Cell Indexes'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces FacePoint Indexes'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces Low Elevation Centroid'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces Minimum Elevation'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces NormalUnitVector and Length'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces Perimeter Info'
+   - '/Geometry/2D Flow Areas/{area_name}/Faces Perimeter Values'
+   - '/Geometry/2D Flow Areas/{area_name}/Face Points Coordinates'
+   - '/Geometry/2D Flow Areas/{area_name}/Perimeter'
+   - '/Geometry/Boundary Condition Lines/Attributes'
+
+3. Results Paths:
+   - '/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time'
+   - '/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time Date Stamp'
+   - '/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/{area_name}/Water Surface'  # PLACEHOLDER ONLY, DOES NOT WORK
+   - '/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/{area_name}/Face Velocity'  # PLACEHOLDER ONLY, DOES NOT WORK
+   - '/Results/Summary/Compute Processes'
+
+4. Infiltration Paths:
+   - '/Geometry/2D Flow Areas/{area_name}/Infiltration/Cell Center Classifications'
+   - '/Geometry/2D Flow Areas/{area_name}/Infiltration/Face Center Classifications'
+   - '/Geometry/2D Flow Areas/{area_name}/Infiltration/Initial Deficit'
+   - '/Geometry/2D Flow Areas/{area_name}/Infiltration/Maximum Deficit'
+   - '/Geometry/2D Flow Areas/{area_name}/Infiltration/Potential Percolation Rate'
+
+5. Percent Impervious Paths:
+   - '/Geometry/2D Flow Areas/{area_name}/Percent Impervious/Cell Center Classifications'
+   - '/Geometry/2D Flow Areas/{area_name}/Percent Impervious/Face Center Classifications'
+   - '/Geometry/2D Flow Areas/{area_name}/Percent Impervious/Percent Impervious'
+
+
+## RasHdf class structure, methods, decorators, and their significance:
+
+1. Class Structure:
+   - RasHdf is a utility class designed to work with HDF files produced by HEC-RAS.
+   - It contains only static methods, meaning no instance of the class needs to be created to use its functionality.
+   - The class serves as a namespace for grouping related HDF file operations.
+
+2. Primary Decorator:
+   - @staticmethod: Used on all methods in the class.
+   - Significance: Allows methods to be called on the class itself rather than an instance, fitting the utility nature of the class.
+
+3. Custom Decorator:
+   - @hdf_operation: A custom decorator defined within the RasHdf class.
+   - Purpose: Provides a consistent way to handle HDF file operations, including error handling and file opening/closing.
+   - Significance: Centralizes common HDF file handling logic, reducing code duplication and ensuring consistent error handling across methods.
+
+4. Key Methods and Their Purposes:
+   a. get_hdf_paths_with_properties(): Lists all paths in the HDF file with their properties.
+   b. get_runtime_data(): Extracts runtime and compute time data.
+   c. get_2d_flow_area_names(): Lists 2D Flow Area names.
+   d. get_2d_flow_area_attributes(): Extracts 2D Flow Area attributes.
+   e. get_cell_info(), get_cell_points(): Extract cell-related information.
+   f. get_polygon_info_and_parts(), get_polygon_points(): Handle polygon data.
+   g. get_cells_center_data(): Extracts cell center coordinates and Manning's n values.
+   h. get_faces_area_elevation_data(): Extracts face area elevation data.
+   i. load_2d_area_solutions(): Loads 2D area solutions including water surface elevations and velocities.
+   j. Methods for infiltration and percent impervious data extraction.
+
+5. Method Structure:
+   - Most methods follow a pattern of accepting an hdf_input (which can be a plan number or file path) and an optional ras_object.
+   - This structure allows flexibility in how the methods are called, supporting both plan-based and direct file path-based access.
+
+6. Error Handling:
+   - Centralized in the @hdf_operation decorator.
+   - Catches and logs exceptions, returning None on failure.
+   - Provides consistent error reporting across all HDF operations.
+
+7. Flexibility in Usage:
+   - Methods can be used with either a global RAS object, a custom RAS object, or by directly providing an HDF file path.
+   - This flexibility allows the class to be used in various contexts within the larger ras-commander library.
+
+8. Integration with RasPrj:
+   - Many methods rely on the RasPrj class to resolve plan numbers to actual file paths.
+   - This integration allows for a high-level, project-oriented approach to working with HDF data.
+
+9. Data Extraction and Conversion:
+   - Most methods extract data from the HDF file and convert it to pandas DataFrames.
+   - This approach makes the extracted data easily manipulable using standard pandas operations.
+
+10. Significance within the Library:
+    - RasHdf serves as the primary interface for extracting and analyzing HEC-RAS output data.
+    - It bridges the gap between raw HDF files and usable Python data structures.
+    - Enables advanced analysis and post-processing of HEC-RAS results within the ras-commander ecosystem.
+
+11. Extensibility:
+    - The class structure allows for easy addition of new methods to support additional HDF data extraction as needed.
+    - The @hdf_operation decorator makes it straightforward to add new HDF file operations while maintaining consistent error handling and file management.
+
+12. Performance Considerations:
+    - Methods are designed to work with potentially large datasets.
+    - Some methods (like load_2d_area_solutions) may be memory-intensive for large models and may require optimization for very large datasets.
+
+This structure makes RasHdf a powerful and flexible tool for working with HEC-RAS output data, providing a pythonic interface to the complex structure of HEC-RAS HDF files. Its integration with the broader ras-commander library allows for seamless incorporation of data analysis into HEC-RAS automation workflows.
+
+
 
 ---
 
@@ -635,18 +926,21 @@ results = RasCmdr.compute_parallel(
 RasPlan.set_geom("01", "02")
 ```
 
+Certainly! I'll provide you with an updated Key Components section and Project Organization diagram based on the current structure of the ras-commander library.
+
 ## Key Components
 
-- `RasPrj`: Manages HEC-RAS projects
+- `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
 - `RasCmdr`: Handles execution of HEC-RAS simulations
 - `RasPlan`: Provides functions for modifying and updating plan files
 - `RasGeo`: Handles operations related to geometry files
 - `RasUnsteady`: Manages unsteady flow file operations
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
-
+- `RasHdf`: Provides utilities for working with HDF files in HEC-RAS projects
 
 ## Project Organization Diagram
+
 ```
 ras_commander
 ├── .github
@@ -654,9 +948,11 @@ ras_commander
 │       └── python-package.yml
 ├── ras_commander
 │   ├── __init__.py
+│   ├── _version.py
 │   ├── RasCmdr.py
 │   ├── RasExamples.py
 │   ├── RasGeo.py
+│   ├── RasHdf.py
 │   ├── RasPlan.py
 │   ├── RasPrj.py
 │   ├── RasUnsteady.py
@@ -674,7 +970,12 @@ ras_commander
 │   ├── 10_arguments_for_compute.py
 │   ├── 11_Using_RasExamples.ipynb
 │   ├── 12_plan_set_execution.py
-│   └── 13_multiple_project_operations.py
+│   ├── 13_multiple_project_operations.py
+│   ├── 14_Core_Sensitivity.ipynb
+│   ├── 15_plan_key_operations.py
+│   ├── 16_scanning_ras_project_info.py
+│   ├── 17_parallel_execution_ble.py
+│   └── HEC_RAS_2D_HDF_Analysis.ipynb
 ├── tests
 │   └── ... (test files)
 ├── .gitignore
@@ -709,7 +1010,6 @@ projects = ras_examples.list_projects("Steady Flow")
 extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
 ```
 
-
 ## RasPrj
 
 The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
@@ -736,6 +1036,28 @@ init_ras_project("/path/to/project", "6.5")
 custom_project = RasPrj()
 init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
 ```
+
+## RasHdf
+
+The `RasHdf` class provides utilities for working with HDF files in HEC-RAS projects, enabling easy access to simulation results and model data.
+
+Example usage:
+
+```python
+from ras_commander import RasHdf, init_ras_project, RasPrj
+
+# Initialize project with a custom ras object
+custom_ras = RasPrj()
+init_ras_project("/path/to/project", "6.5", ras_instance=custom_ras)
+
+# Get runtime data for a specific plan
+plan_number = "01"
+runtime_data = RasHdf.get_runtime_data(plan_number, ras_object=custom_ras)
+print(runtime_data)
+```
+
+This class simplifies the process of extracting and analyzing data from HEC-RAS HDF output files, supporting tasks such as post-processing and result visualization.
+
 
 ## Documentation
 
@@ -774,7 +1096,30 @@ ras-commander is released under the MIT License. See the license file for detail
 
 ## Acknowledgments
 
-RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository.  In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4o, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+
+Additionally, we would like to acknowledge the following notable contributions and attributions for open source projects which significantly influenced the development of RAS Commander:
+
+1. Contributions: Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration, code examples and utility functions which were adapted with AI for use in RAS Commander. Sean has also contributed heavily to 
+
+- Development of additional HDF functions for detailed analysis and mapping of HEC-RAS results within the RasHdf class.
+- Development of the prototype `RasCmdr` class for executing HEC-RAS simulations.
+- Optimization examples and methods from (INSERT REFERENCE) for use in the Ras-Commander library examples
+
+2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
+
+   Xiaofeng Liu, Ph.D., P.E.
+   Associate Professor
+   Department of Civil and Environmental Engineering
+   Institute of Computational and Data Sciences
+   Penn State University
+
+These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
+
+3. Chris Goodell, "Breaking the HEC-RAS Code" - Studied and used as a reference for understanding the inner workings of HEC-RAS, providing valuable insights into the software's functionality and structure.
+
+4. [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
+
 
 ## Contact
 
@@ -815,13 +1160,50 @@ twine>=3.3.0
 File: c:\GH\ras-commander\setup.py
 ==================================================
 from setuptools import setup, find_packages
+from setuptools.command.build_py import build_py
+import subprocess
+from pathlib import Path
 
-setup(
-    name="ras-commander",
-    version="0.33.0",
-    packages=["ras_commander"],
-    include_package_data=True,
+class CustomBuildPy(build_py):
+    def run:
+    """Docs only, see 'run.py' for full function code"""
 )
+
+"""
+ras-commander setup.py
+
+This file is used to build and publish the ras-commander package to PyPI.
+
+To build and publish this package, follow these steps:
+
+1. Ensure you have the latest versions of setuptools, wheel, and twine installed:
+   pip install --upgrade setuptools wheel twine
+
+2. Update the version number in ras_commander/__init__.py (if not using automatic versioning)
+
+3. Create source distribution and wheel:
+   python setup.py sdist bdist_wheel
+
+4. Check the distribution:
+   twine check dist/*
+
+5. Upload to Test PyPI (optional):
+   twine upload --repository testpypi dist/*
+
+6. Install from Test PyPI to verify (optional):
+   pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple ras-commander
+
+7. Upload to PyPI:
+   twine upload dist/*
+
+8. Install from PyPI to verify:
+   pip install ras-commander
+
+Note: Ensure you have the necessary credentials and access rights to upload to PyPI.
+For more information, visit: https://packaging.python.org/tutorials/packaging-projects/
+
+"""
+
 ==================================================
 
 File: c:\GH\ras-commander\STYLE_GUIDE.md
@@ -1119,15 +1501,17 @@ File: c:\GH\ras-commander\.gitignore\.gitignore
 # Ignore the example_projects folder and all its subfolders
 examples/example_projects/
 
-# 
+# Ignore workspace, projects, and my_projects folders
 workspace/
 projects/
 my_projects/
 
+# Ignore FEMA BLE Models
+examples/FEMA_BLE_Models/
+examples/hdf_example_data/
 
-ignore egg info
+# Ignore Python egg info
 *.egg-info/
-
 .eggs/
 
 # Ignore the Example_Projects_6_5.zip file
@@ -1135,16 +1519,32 @@ Example_Projects_6_5.zip
 
 # Ignore the misc folder and all its subfolders
 misc/
-ras_commander/__pycache__/
+
+# Ignore Python cache files
 __pycache__/
 *.py[cod]
+
+# Ignore compiled Python files
 *.so
-*.egg-info/
+
+# Ignore distribution / packaging
 dist/
 build/
+
+# Ignore test cache
 .pytest_cache/
+
+# Ignore virtual environments
 .venv/
 venv/
+
+# Ignore IDE-specific files (optional, uncomment if needed)
+# .vscode/
+# .idea/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
 ==================================================
 
 File: c:\GH\ras-commander\examples\01_project_initialization.py
@@ -1817,6 +2217,32 @@ File: c:\GH\ras-commander\examples\14_Core_Sensitivity.ipynb
    "metadata": {},
    "outputs": [],
    "source": [
+    "import sys\n",
+    "from pathlib import Path\n",
+    "\n",
+    "# Flexible imports to allow for development without installation\n",
+    "try:\n",
+    "    # Try to import from the installed package\n",
+    "    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras\n",
+    "except ImportError:\n",
+    "    # If the import fails, add the parent directory to the Python path\n",
+    "    import os\n",
+    "    current_file = Path(os.getcwd()).resolve()\n",
+    "    parent_directory = current_file.parent\n",
+    "    sys.path.append(str(parent_directory))\n",
+    "    \n",
+    "    # Now try to import again\n",
+    "    from ras_commander import init_ras_project, RasExamples, RasCommander, RasPlan, RasGeo, RasUnsteady, RasUtils, ras\n",
+    "\n",
+    "print(\"ras_commander imported successfully\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
     "import time\n",
     "import pandas as pd\n",
     "import matplotlib.pyplot as plt\n",
@@ -1988,75 +2414,73 @@ def generate_category_summary:
     main()
 ==================================================
 
-File: c:\GH\ras-commander\examples\example_projects.csv
+File: c:\GH\ras-commander\examples\17_parallel_execution_ble.py
 ==================================================
-Category,Project
-1D Sediment Transport,BSTEM - Simple Example
-1D Sediment Transport,Dredging Example
-1D Sediment Transport,Reservoir Video Tutorial
-1D Sediment Transport,SIAM Example
-1D Sediment Transport,Simple Sediment Transport Example
-1D Sediment Transport,Unsteady Sediment with Concentration Rules
-1D Sediment Transport,Video Tutorial (Sediment Intro)
-1D Steady Flow Hydraulics,Baxter RAS Mapper
-1D Steady Flow Hydraulics,Chapter 4 Example Data
-1D Steady Flow Hydraulics,ConSpan Culvert
-1D Steady Flow Hydraulics,Mixed Flow Regime Channel
-1D Steady Flow Hydraulics,Wailupe GeoRAS
-1D Unsteady Flow Hydraulics,Balde Eagle Creek
-1D Unsteady Flow Hydraulics,Bridge Hydraulics
-1D Unsteady Flow Hydraulics,ContractionExpansionMinorLosses
-1D Unsteady Flow Hydraulics,Culvert Hydraulics
-1D Unsteady Flow Hydraulics,Culverts with Flap Gates
-1D Unsteady Flow Hydraulics,Dam Breaching
-1D Unsteady Flow Hydraulics,Elevation Controled Gates
-1D Unsteady Flow Hydraulics,Inline Structure with Gated Spillways
-1D Unsteady Flow Hydraulics,Internal Stage and Flow Boundary Condition
-1D Unsteady Flow Hydraulics,JunctionHydraulics
-1D Unsteady Flow Hydraulics,Lateral Strcuture with Gates
-1D Unsteady Flow Hydraulics,Lateral Structure connected to a River Reach
-1D Unsteady Flow Hydraulics,Lateral Structure Overflow Weir
-1D Unsteady Flow Hydraulics,Lateral Structure with Culverts
-1D Unsteady Flow Hydraulics,Lateral Structure with Culverts and Gates
-1D Unsteady Flow Hydraulics,Levee Breaching
-1D Unsteady Flow Hydraulics,Mixed Flow Regime
-1D Unsteady Flow Hydraulics,Multiple Reaches with Hydraulic Structures
-1D Unsteady Flow Hydraulics,NavigationDam
-1D Unsteady Flow Hydraulics,Pumping Station
-1D Unsteady Flow Hydraulics,Pumping Station with Rules
-1D Unsteady Flow Hydraulics,Rule Operations
-1D Unsteady Flow Hydraulics,Simplified Physical Breaching
-1D Unsteady Flow Hydraulics,Storage Area Hydraulic Connection
-1D Unsteady Flow Hydraulics,UngagedAreaInflows
-1D Unsteady Flow Hydraulics,Unsteady Flow Encroachment Analysis
-2D Sediment Transport,Chippewa_2D
-2D Unsteady Flow Hydraulics,BaldEagleCrkMulti2D
-2D Unsteady Flow Hydraulics,Muncie
-Applications Guide,Example 1 - Critical Creek
-Applications Guide,Example 10 - Stream Junction
-Applications Guide,Example 11 - Bridge Scour
-Applications Guide,Example 12 - Inline Structure
-Applications Guide,Example 13 - Singler Bridge (WSPRO)
-Applications Guide,Example 14 - Ice Covered River
-Applications Guide,Example 15 - Split Flow Junction with Lateral Weir
-Applications Guide,Example 16 - Channel Modification
-Applications Guide,Example 17 - Unsteady Flow Application
-Applications Guide,Example 18 - Advanced Inline Structure
-Applications Guide,Example 19 - Hydrologic Routing - ModPuls
-Applications Guide,Example 2 - Beaver Creek
-Applications Guide,Example 20 - HagerLatWeir
-Applications Guide,Example 21 - Overflow Gates
-Applications Guide,Example 22 - Groundwater Interflow
-Applications Guide,Example 23 - Urban Modeling
-Applications Guide,Example 24 - Mannings-n-Calibration
-Applications Guide,Example 3 - Single Culvert
-Applications Guide,Example 4 - Multiple Culverts
-Applications Guide,Example 5 - Multiple Openings
-Applications Guide,Example 6 - Floodway Determination
-Applications Guide,Example 7 - Multiple Plans
-Applications Guide,Example 8 - Looped Network
-Applications Guide,Example 9 - Mixed Flow Analysis
-Water Quality,Nutrient Example
+#### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
+
+import sys
+from pathlib import Path
+import shutil
+import psutil
+import math
+import logging
+
+# Add the parent directory to the Python path
+current_file = Path(__file__).resolve()
+parent_directory = current_file.parent.parent
+sys.path.append(str(parent_directory))
+
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set the logging level to INFO
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log message format
+    handlers=[
+        logging.StreamHandler()  # Log to stderr
+    ]
+)
+
+# Initialize RasExamples
+ras_examples = RasExamples()
+
+#### --- START OF SCRIPT --- ####
+
+# ras-commander Library Notes:
+# 1. This example uses separate RasPrj objects for each project/folder.
+# 2. Using separate RasPrj objects allows working with multiple projects or folders.
+# 3. We'll create new RasPrj objects for the original project and each output folder.
+# 4. For functions that do batched execution (sequential or parallel), they are careful not to overwrite existing folders.
+# 5. If you want your script to be repeatable, make sure to delete the folders before running again.
+
+# Best Practices:
+# 1. For complex scripts or when working with multiple projects/folders, create and use separate RasPrj objects.
+# 2. Be consistent in your approach: use non-global RasPrj objects throughout the script.
+# 3. When using parallel execution, consider the number of cores available on your machine.
+# 4. Use the dest_folder argument to keep your project folder clean and organized.
+
+##  WHISKY CHITTO DOES NOT WORK - BLE MODEL IS BROKEN AND REQUIRED FIXING BEFORE RUNNING
+
+def get_physical_core_count:
+    """Docs only, see 'get_physical_core_count.py' for full function code"""
+
+
+==================================================
+
+File: c:\GH\ras-commander\examples\HEC_RAS_2D_HDF_Analysis.ipynb
+==================================================
+{"cells":[{"cell_type":"markdown","metadata":{},"source":["# HEC-RAS 2D HDF Data Analysis Notebook\n","\n","This notebook demonstrates how to manipulate and analyze HEC-RAS 2D HDF data using the ras-commander library. It leverages the RasHdf and RasUtils classes to streamline data extraction, processing, and visualization."]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Import required Libraries\n","import subprocess\n","import sys\n","import os\n","from pathlib import Path\n","\n","def install_module(module_name):\n","    try:\n","        __import__(module_name)\n","    except ImportError:\n","        print(f\"{module_name} not found. Installing...\")\n","        subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-U\", module_name])\n","\n","# List of modules to check and install if necessary\n","modules = ['h5py', 'numpy', 'requests', 'geopandas', 'matplotlib', 'pandas']\n","for module in modules:\n","    install_module(module)\n","\n","# Import the rest of the required libraries\n","import pandas as pd\n","import numpy as np\n","import geopandas as gpd\n","import matplotlib.pyplot as plt\n"]},{"cell_type":"markdown","metadata":{},"source":["## Importing ras-commander flexibly (from package or local dev copy)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["import sys\n","from pathlib import Path\n","\n","# Flexible imports to allow for development without installation \n","#  ** Use this version with Jupyter Notebooks **\n","try:\n","    # Try to import from the installed package\n","    from ras_commander import init_ras_project, RasHdf, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj, ras\n","except ImportError:\n","    # If the import fails, add the parent directory to the Python path\n","    import os\n","    current_file = Path(os.getcwd()).resolve()\n","    parent_directory = current_file.parent\n","    sys.path.append(str(parent_directory))\n","    \n","    # Now try to import again\n","    from ras_commander import init_ras_project, RasHdf, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj, ras\n","\n","print(\"ras_commander imported successfully\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Define the path to the Muncie project\n","current_dir = Path.cwd()  # Adjust if your notebook is in a different directory\n","muncie_path = current_dir / \"example_projects\" / \"Muncie\"\n","bald_eagle_path = current_dir / \"example_projects\" / \"BaldEagleCrkMulti2D\"\n","import logging\n","# Check if Muncie.p03.hdf exists (so we don't have to re-run the simulation when re-running or debugging)\n","hdf_file = muncie_path / \"Muncie.p03.hdf\"\n","\n","if not hdf_file.exists():\n","    # Initialize RasExamples and extract the Muncie project\n","    ras_examples = RasExamples()\n","    ras_examples.extract_project([\"Muncie\", \"BaldEagleCrkMulti2D\"])\n","\n","    # Initialize custom Ras objects\n","    muncie = RasPrj()\n","    bald_eagle = RasPrj()\n","\n","    # Initialize the RAS projects using the custom ras objects\n","    muncie = init_ras_project(muncie_path, \"6.5\", ras_instance=muncie)\n","    logging.info(f\"Muncie project initialized with folder: {muncie.project_folder}\")\n","\n","    bald_eagle = init_ras_project(bald_eagle_path, \"6.5\", ras_instance=bald_eagle)\n","    logging.info(f\"Bald Eagle project initialized with folder: {bald_eagle.project_folder}\")\n","    \n","    logging.info(f\"Muncie object id: {id(muncie)}\")\n","    logging.info(f\"Bald Eagle object id: {id(bald_eagle)}\")\n","    \n","    # Define the plan number to execute\n","    plan_number = \"03\"\n","\n","    # Set plan keys for both projects\n","    for project in [muncie, bald_eagle]:\n","        RasPlan.update_plan_value(plan_number, \"Run HTab\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"Run UNet\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"Run PostProcess\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"Run RASMapper\", 0, ras_object=project)\n","\n","    # Execute Plan 03 using RasCmdr for Muncie\n","    print(f\"Executing Plan {plan_number} for the Muncie project...\")\n","    success_muncie = RasCmdr.compute_plan(plan_number, ras_object=muncie)\n","    if success_muncie:\n","        print(f\"Plan {plan_number} executed successfully for Muncie.\\n\")\n","    else:\n","        print(f\"Plan {plan_number} execution failed for Muncie.\\n\")\n","    \n","    # Execute Plan 03 using RasCmdr for Bald Eagle\n","    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n","    #success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n","    if success_bald_eagle:\n","        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n","    else:\n","        print(f\"Plan {plan_number} execution failed for Bald Eagle.\\n\")\n","else:\n","    print(\"Muncie.p03.hdf already exists. Skipping project extraction and plan execution.\")\n","    # Initialize the RAS project using the custom ras object\n","    muncie = RasPrj()\n","    bald_eagle = RasPrj()\n","    muncie = init_ras_project(muncie_path, \"6.5\", ras_instance=muncie)\n","    bald_eagle = init_ras_project(bald_eagle_path, \"6.5\", ras_instance=bald_eagle)\n","    plan_number = \"03\""]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Retrieve the HDF file path for Plan 03\n","results_path_muncie = RasPlan.get_results_path(plan_number, ras_object=muncie)\n","if results_path_muncie:\n","    print(f\"Results for Plan {plan_number} are located at: {results_path_muncie}\\n\")\n","else:\n","    print(f\"No results found for Plan {plan_number}.\\n\")\n","    \n","results_path_baldeagle = RasPlan.get_results_path(plan_number, ras_object=bald_eagle)\n","if results_path_baldeagle:\n","    print(f\"Results for Plan {plan_number} are located at: {results_path_baldeagle}\\n\")\n","else:\n","    print(f\"No results found for Plan {plan_number}.\\n\")    "]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Define the HDF input path as Plan Number\n","hdf_input = plan_number\n","\n","# Initialize RasHdf handler\n","hdf_handler = RasHdf()\n","\n","# The remainder of the examples only use muncie, so let's set results_path to muncie\n","results_path = results_path_muncie\n","\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 1: List all HDF paths with properties\n","print(\"Example 1: Listing all HDF paths with properties\")\n","hdf_paths_df = RasHdf.get_hdf_paths_with_properties(hdf_input, ras_object=muncie)\n","display(hdf_paths_df.head())"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 2: Extract runtime and compute time data\n","print(\"\\nExample 2: Extracting runtime and compute time data\")\n","runtime_df = RasHdf.get_runtime_data(hdf_input, ras_object=muncie)\n","if runtime_df is not None:\n","    display(runtime_df)\n","else:\n","    print(\"No runtime data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 3: Get 2D Flow Area Names\n","print(\"\\nExample 3: Listing 2D Flow Area Names\")\n","flow_area_names = RasHdf.get_2d_flow_area_names(hdf_input, ras_object=muncie)\n","print(\"2D Flow Area Names:\", flow_area_names)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 4: Extract 2D Flow Area Attributes\n","print(\"\\nExample 4: Extracting 2D Flow Area Attributes\")\n","flow_area_attributes_df = RasHdf.get_2d_flow_area_attributes(hdf_input, ras_object=muncie)\n","if flow_area_attributes_df is not None:\n","    display(flow_area_attributes_df.head())\n","else:\n","    print(\"No 2D Flow Area attributes found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 5: Extract Cell Info\n","print(\"\\nExample 5: Extracting Cell Info\")\n","cell_info_df = RasHdf.get_cell_info(hdf_input, ras_object=muncie)\n","if cell_info_df is not None:\n","    display(cell_info_df.head())\n","else:\n","    print(\"No Cell Info found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 6: Extract Cell Points\n","print(\"\\nExample 6: Extracting Cell Points\")\n","cell_points_df = RasHdf.get_cell_points(hdf_input, ras_object=muncie)\n","if cell_points_df is not None:\n","    display(cell_points_df.head())\n","else:\n","    print(\"No Cell Points found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 7: Extract Polygon Info and Parts\n","print(\"\\nExample 7: Extracting Polygon Info and Parts\")\n","polygon_info_df, polygon_parts_df = RasHdf.get_polygon_info_and_parts(hdf_input, ras_object=muncie)\n","print(\"Polygon Info:\")\n","if polygon_info_df is not None:\n","    display(polygon_info_df.head())\n","else:\n","    print(\"No Polygon Info found.\")\n","print(\"\\nPolygon Parts:\")\n","if polygon_parts_df is not None:\n","    display(polygon_parts_df.head())\n","else:\n","    print(\"No Polygon Parts found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 8: Extract Polygon Points\n","print(\"\\nExample 8: Extracting Polygon Points\")\n","polygon_points_df = RasHdf.get_polygon_points(hdf_input, ras_object=muncie)\n","if polygon_points_df is not None:\n","    display(polygon_points_df.head())\n","else:\n","    print(\"No Polygon Points found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 9: Extract Cells Center Coordinates and Manning's n\n","print(\"\\nExample 9: Extracting Cells Center Coordinates and Manning's n\")\n","cells_center_coord_df, cells_manning_n_df = RasHdf.get_cells_center_data(hdf_input, ras_object=muncie)\n","print(\"Cells Center Coordinates:\")\n","if cells_center_coord_df is not None:\n","    display(cells_center_coord_df.head())\n","else:\n","    print(\"No Cells Center Coordinates found.\")\n","print(\"\\nCells Manning's n:\")\n","if cells_manning_n_df is not None:\n","    display(cells_manning_n_df.head())\n","else:\n","    print(\"No Cells Manning's n found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 10: Extract Faces Area Elevation Data\n","print(\"\\nExample 10: Extracting Faces Area Elevation Data\")\n","faces_elev_df = RasHdf.get_faces_area_elevation_data(hdf_input, ras_object=muncie)\n","if faces_elev_df is not None:\n","    display(faces_elev_df.head())\n","else:\n","    print(\"No Faces Area Elevation Data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 11: Extract Compute Messages as String\n","print(\"\\nExample 11: Extracting Compute Messages\")\n","compute_messages = RasHdf.extract_string_from_hdf(hdf_input, '/Results/Summary/Compute Messages (text)')\n","print(\"Compute Messages:\")\n","print(compute_messages)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 12: Extract Plan Parameters and Volume Accounting\n","print(\"\\nExample 12: Extracting Plan Parameters and Volume Accounting Data\")\n","import h5py\n","import numpy as np\n","\n","# Extract plan parameters\n","with h5py.File(str(results_path), 'r') as hdf_file:\n","    plan_parameters = hdf_file['Plan Data/Plan Parameters']\n","    \n","    # List group attributes\n","    print(\"Plan Parameters Group Attributes:\")\n","    #for attr_name, attr_value in plan_parameters.attrs.items():\n","        #print(f\"{attr_name}: {attr_value}\")\n","    \n","    # Extract plan parameters as a DataFrame\n","    plan_parameters_df = pd.DataFrame([(attr_name, attr_value) for attr_name, attr_value in plan_parameters.attrs.items()], columns=['Attribute', 'Value'])\n","\n","# Construct the group path for volume accounting data\n","group_to_list = \"Results/Unsteady/Summary/Volume Accounting/Volume Accounting 2D\"\n","\n","# Extract volume accounting data as a DataFrame\n","volume_accounting_df = RasHdf.get_group_attributes_as_df(results_path, group_to_list)\n","\n","print(\"\\nPlan Parameters DataFrame:\")\n","display(plan_parameters_df)\n","\n","print(\"\\nVolume Accounting DataFrame:\")\n","display(volume_accounting_df)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 13: Listing 2D Flow Area Groups\n","print(\"\\nExample: Listing 2D Flow Area Groups\")\n","\n","# Get the names of all 2D Flow Area groups\n","flow_area_group_names = RasHdf.get_2d_flow_area_names(hdf_input, ras_object=muncie)\n","\n","print(\"2D Flow Area Groups:\")\n","if flow_area_group_names:\n","    for name in flow_area_group_names:\n","        print(f\"- {name}\")\n","else:\n","    print(\"No 2D Flow Area groups found in the HDF file.\")\n","\n","import h5py\n","\n","# Additional information about the first group (if any)\n","if flow_area_group_names:\n","    first_group = flow_area_group_names[0]\n","    print(f\"\\nDetailed information for the first group: {first_group}\")\n","    \n","    # Remember, use results_path because we are accessing the hdf file and hdf_input is the plan number\n","    with h5py.File(str(results_path), 'r') as hdf_file:\n","        group = hdf_file[f'Geometry/2D Flow Areas/{first_group}']\n","        print(\"Datasets in this group:\")\n","        for name, item in group.items():\n","            if isinstance(item, h5py.Dataset):\n","                print(f\"- {name}: Shape {item.shape}, Dtype {item.dtype}\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 14: Extract Faces Indexes\n","print(\"\\nExample 13: Extracting Faces Indexes\")\n","cell_indexes_df, facepoint_indexes_df = RasHdf.get_faces_indexes(hdf_input, ras_object=muncie)\n","print(\"Faces Cell Indexes:\")\n","if cell_indexes_df is not None:\n","    display(cell_indexes_df.head())\n","else:\n","    print(\"No Faces Cell Indexes found.\")\n","print(\"\\nFaces FacePoint Indexes:\")\n","if facepoint_indexes_df is not None:\n","    display(facepoint_indexes_df.head())\n","else:\n","    print(\"No Faces FacePoint Indexes found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 15: Extract Faces Elevation Data\n","print(\"\\nExample 14: Extracting Faces Elevation Data\")\n","low_elev_centroid_df, min_elevation_df = RasHdf.get_faces_elevation_data(hdf_input, ras_object=muncie)\n","print(\"Faces Low Elevation Centroid:\")\n","if low_elev_centroid_df is not None:\n","    display(low_elev_centroid_df.head())\n","else:\n","    print(\"No Faces Low Elevation Centroid found.\")\n","print(\"\\nFaces Minimum Elevation:\")\n","if min_elevation_df is not None:\n","    display(min_elevation_df.head())\n","else:\n","    print(\"No Faces Minimum Elevation found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 16: Extract Faces Vector Data\n","print(\"\\nExample 15: Extracting Faces Vector Data\")\n","faces_vector_df = RasHdf.get_faces_vector_data(hdf_input, ras_object=muncie)\n","if faces_vector_df is not None:\n","    display(faces_vector_df.head())\n","else:\n","    print(\"No Faces Vector Data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 17: Extract Faces Perimeter Data\n","print(\"\\nExample 16: Extracting Faces Perimeter Data\")\n","perimeter_info_df, perimeter_values_df = RasHdf.get_faces_perimeter_data(hdf_input, ras_object=muncie)\n","print(\"Faces Perimeter Info:\")\n","if perimeter_info_df is not None:\n","    display(perimeter_info_df.head())\n","else:\n","    print(\"No Faces Perimeter Info found.\")\n","print(\"\\nFaces Perimeter Values:\")\n","if perimeter_values_df is not None:\n","    display(perimeter_values_df.head())\n","else:\n","    print(\"No Faces Perimeter Values found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 18: Extract Infiltration Data\n","print(\"\\nExample 17: Extracting Infiltration Data\")\n","cell_classifications_df, face_classifications_df, initial_deficit_df, maximum_deficit_df, potential_percolation_rate_df = RasHdf.get_infiltration_data(hdf_input, ras_object=muncie)\n","print(\"Infiltration - Cell Classifications:\")\n","if cell_classifications_df is not None:\n","    display(cell_classifications_df.head())\n","else:\n","    print(\"No Infiltration Cell Classifications found.\")\n","print(\"\\nInfiltration - Face Classifications:\")\n","if face_classifications_df is not None:\n","    display(face_classifications_df.head())\n","else:\n","    print(\"No Infiltration Face Classifications found.\")\n","print(\"\\nInfiltration - Initial Deficit:\")\n","if initial_deficit_df is not None:\n","    display(initial_deficit_df.head())\n","else:\n","    print(\"No Infiltration Initial Deficit found.\")\n","print(\"\\nInfiltration - Maximum Deficit:\")\n","if maximum_deficit_df is not None:\n","    display(maximum_deficit_df.head())\n","else:\n","    print(\"No Infiltration Maximum Deficit found.\")\n","print(\"\\nInfiltration - Potential Percolation Rate:\")\n","if potential_percolation_rate_df is not None:\n","    display(potential_percolation_rate_df.head())\n","else:\n","    print(\"No Infiltration Potential Percolation Rate found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 19: Extract Percent Impervious Data\n","print(\"\\nExample 18: Extracting Percent Impervious Data\")\n","cell_classifications_df, face_classifications_df, percent_impervious_df = RasHdf.get_percent_impervious_data(hdf_input, ras_object=muncie)\n","print(\"Percent Impervious - Cell Classifications:\")\n","if cell_classifications_df is not None:\n","    display(cell_classifications_df.head())\n","else:\n","    print(\"No Percent Impervious Cell Classifications found.\")\n","print(\"\\nPercent Impervious - Face Classifications:\")\n","if face_classifications_df is not None:\n","    display(face_classifications_df.head())\n","else:\n","    print(\"No Percent Impervious Face Classifications found.\")\n","print(\"\\nPercent Impervious:\")\n","if percent_impervious_df is not None:\n","    display(percent_impervious_df.head())\n","else:\n","    print(\"No Percent Impervious data found.\")\n","    \n","    # Note: Does not exist in the Muncie Plan 3 example used. "]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 20: Extract Perimeter Data\n","print(\"\\nExample 19: Extracting Perimeter Data\")\n","perimeter_df = RasHdf.get_perimeter_data(hdf_input, ras_object=muncie)\n","print(\"Perimeter Data:\")\n","if perimeter_df is not None:\n","    display(perimeter_df.head())\n","else:\n","    print(\"No Perimeter Data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 21: Extract Boundary Condition Lines Attributes\n","print(\"\\nExample 20: Extracting Boundary Condition Lines Attributes\")\n","bc_lines_df = RasHdf.get_group_attributes_as_df(hdf_input, '/Geometry/Boundary Condition Lines/Attributes', ras_object=muncie)\n","if bc_lines_df is not None:\n","    display(bc_lines_df.head())\n","else:\n","    print(\"No Boundary Condition Lines Attributes found.\")\n","    \n","# None in Muncie plan 3, no output expected."]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 22: Extract Boundary Condition Time Series Data\n","print(\"\\nExample 22: Extracting Boundary Condition Time Series Data\")\n","bc_time_series_df = RasHdf.get_group_attributes_as_df(hdf_input, '/Geometry/Boundary Condition Lines/Attributes', ras_object=muncie)\n","if bc_time_series_df is not None:\n","    display(bc_time_series_df.head())\n","else:\n","    print(\"No Boundary Condition Time Series Data found.\")\n","\n","print(\"\\nAll RasHdf functions have been executed on Plan 03 HDF file.\")\n","\n","\n","# NOTE: Muncie does not have boundary conditions in the HDF file - see how errors are handled. "]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 23: Retrieving 2D Flow Area Solution Times\n","print(\"Example 23: Retrieving 2D Flow Area Solution Times\")\n","\n","solution_times = RasHdf.get_2d_area_solution_times(hdf_input, ras_object=muncie)\n","\n","if solution_times is not None:\n","    print(f\"Retrieved {len(solution_times)} solution times:\")\n","    print(solution_times)\n","else:\n","    print(\"No solution times found.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 24: Retrieving 2D Flow Area Solution Time Dates\n","print(\"\\nExample 24: Retrieving 2D Flow Area Solution Time Dates\")\n","\n","solution_time_dates = RasHdf.get_2d_area_solution_time_dates(hdf_input, ras_object=muncie)\n","\n","if solution_time_dates is not None:\n","    print(f\"Retrieved {len(solution_time_dates)} solution time dates:\")\n","    print(solution_time_dates)\n","else:\n","    print(\"No solution time dates found.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 25: Loading 2D Flow Area Solutions\n","print(\"\\nExample 25: Loading 2D Flow Area Solutions\")\n","\n","# Load 2D area solutions using the revised method\n","solutions = RasHdf.load_2d_area_solutions(hdf_input, ras_object=muncie)\n","\n","# Check if solutions were successfully loaded\n","if solutions:\n","    # Access and display solution times\n","    solution_times_df = solutions.get('solution_times')\n","    if solution_times_df is not None:\n","        print(\"Solution Times:\")\n","        print(solution_times_df.head())\n","    else:\n","        print(\"Solution times not found.\")\n","    \n","    # Iterate through each 2D Flow Area and display sample data\n","    for key in solutions:\n","        if key != 'solution_times':\n","            print(f\"\\nData for {key}:\")\n","            area_df = solutions[key]\n","            print(area_df.head(10))  # Display first 10 records\n","else:\n","    print(\"No solutions loaded.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 29: Building Face FacePoints\n","print(\"\\nExample 29: Building Face FacePoints\")\n","\n","face_facepoints_list = RasHdf.build_face_facepoints(hdf_input, ras_object=muncie)\n","\n","if face_facepoints_list:\n","    # Displaying face points indexes for the first face of the first 2D Flow Area\n","    print(\"FacePoints Indexes for the first face of the first 2D Flow Area:\")\n","    print(face_facepoints_list[0][0])  # Assuming at least one area and one face\n","else:\n","    print(\"No face facepoints built.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]}],"metadata":{"kernelspec":{"display_name":"Python 3","language":"python","name":"python3"},"language_info":{"codemirror_mode":{"name":"ipython","version":3},"file_extension":".py","mimetype":"text/x-python","name":"python","nbconvert_exporter":"python","pygments_lexer":"ipython3","version":"3.11.9"}},"nbformat":4,"nbformat_minor":2}
 
 ==================================================
 
@@ -2102,6 +2526,11 @@ ras_examples.extract_project(["Balde Eagle Creek"])
 def main:
     """Docs only, see 'main.py' for full function code"""
     main()
+==================================================
+
+File: c:\GH\ras-commander\examples\xx_hdf_data.py
+==================================================
+
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasCmdr.py
@@ -2182,7 +2611,8 @@ class RasCmdr:
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
         """
-        ras_obj = ras_object or ras
+        ras_obj = ras_object if ras_object is not None else ras
+        logging.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
         ras_obj.check_initialized()
         
         if dest_folder is not None:
@@ -2252,12 +2682,12 @@ class RasCmdr:
             logging.error(f"Error message: {e.output}")
             logging.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
             return False
-
-        ras_obj = ras_object or ras
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        finally:
+            # Update the RAS object's dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
     
 
 
@@ -2601,6 +3031,8 @@ from typing import Union, List
 import csv
 from datetime import datetime
 import logging
+import re
+from tqdm import tqdm
 
 # Configure logging
 logging.basicConfig(
@@ -2617,43 +3049,73 @@ class RasExamples:
 
     This class provides functionality to download, extract, and manage HEC-RAS example projects.
     It supports both default HEC-RAS example projects and custom projects from user-provided URLs.
+    Additionally, it includes functionality to download FEMA's Base Level Engineering (BLE) models
+    from CSV files provided by the FEMA Estimated Base Flood Elevation (BFE) Viewer.
 
-    Expected folder structure:              Notes:
-    ras-commander/
-    ├── examples/                           # This is examples_dir
-    │   ├── example_projects/               # This is projects_dir
-    │   │   ├── Balde Eagle Creek/          # Individual Projects from Zip file
-    │   │   ├── Muncie/                 
-    │   │   └── ...
-    │   ├── Example_Projects_6_5.zip        # HEC-RAS Example Projects zip file will be downloaded here
-    │   ├── example_projects.csv            # CSV file containing cached project metadata
-    │   └── 01_project_initialization.py    # ras-commander library examples are also at this level
-    │   └── ...
-    └── ras_commander/                      # Code for the ras-commander library
-
-    Attributes:
-        base_url (str): Base URL for downloading HEC-RAS example projects.
-        valid_versions (list): List of valid HEC-RAS versions for example projects.
-        base_dir (Path): Base directory for storing example projects.
-        examples_dir (Path): Directory for example projects and related files. (assumed to be parent )
-        projects_dir (Path): Directory where example projects are extracted.
-        zip_file_path (Path): Path to the downloaded zip file.
-        folder_df (pd.DataFrame): DataFrame containing folder structure information.
-        csv_file_path (Path): Path to the CSV file for caching project metadata.
-
-    Future Improvements:
-    - Implement the ability for user-provided example projects (provided as a zip file) for their own repeatable examples. 
-    - If the zip file is in the same folder structure as the HEC-RAS example projects, simple replace Example_Projects_6_5.zip and the folder structure will be automatically extracted from the zip file.
-    - The actual RAS example projects haven't been updated much, but there is the structure here to handle future versions. Although this version of the code is probably fine for a few years, until HEC-RAS 2025 comes out. 
+    [Documentation as previously provided]
     """
-    
+
     def __init__:
     """Docs only, see '__init__.py' for full function code"""
-# ras_examples = RasExamples()
-# extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
-# for path in extracted_paths:
-#     logging.info(f"Extracted to: {path}")
+### How to Use the Revised `RasExamples` Class
 
+1. **Instantiate the Class:**
+   ```python
+   ras_examples = RasExamples()
+   ```
+
+2. **Download FEMA BLE Models:**
+   - Ensure you have the required CSV files by visiting [FEMA's Estimated Base Flood Elevation (BFE) Viewer](https://webapps.usgs.gov/infrm/estBFE/) and using the "Download as Table" option for each BLE model you wish to access.
+   - Call the `download_fema_ble_models` method with the appropriate paths:
+     ```python
+     ras_examples.download_fema_ble_models('/path/to/csv/files', '/path/to/output/folder')
+     ```
+     - Replace `'/path/to/csv/files'` with the directory containing your CSV files.
+     - Replace `'/path/to/output/folder'` with the directory where you want the BLE models to be downloaded and organized.
+
+3. **Extract Projects (If Needed):**
+   - After downloading, you can extract specific projects using the existing `extract_project` method:
+     ```python
+     extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
+     for path in extracted_paths:
+         logging.info(f"Extracted to: {path}")
+     ```
+
+4. **Explore Projects and Categories:**
+   - List available categories:
+     ```python
+     categories = ras_examples.list_categories()
+     ```
+   - List projects within a specific category:
+     ```python
+     projects = ras_examples.list_projects(category='SomeCategory')
+     ```
+
+5. **Clean Projects Directory (If Needed):**
+   - To remove all extracted projects:
+     ```python
+     ras_examples.clean_projects_directory()
+     ```
+
+### Dependencies
+
+Ensure that the following Python packages are installed:
+
+- `pandas`
+- `requests`
+
+You can install them using `pip`:
+
+```bash
+pip install pandas requests
+```
+
+### Notes
+
+- The class uses Python's `logging` module to provide detailed information about its operations. Ensure that the logging level is set appropriately to capture the desired amount of detail.
+- The `download_fema_ble_models` method handles large file downloads by streaming data in chunks, which is memory-efficient.
+- All folder names are sanitized to prevent filesystem errors due to unsafe characters.
+"""
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasGeo.py
@@ -2772,253 +3234,127 @@ class RasGeo:
 
 File: c:\GH\ras-commander\ras_commander\RasHdf.py
 ==================================================
+"""
+RasHdf Module
 
+This module provides utilities for working with HDF files in HEC-RAS projects.
+It contains the RasHdf class, which offers various static methods for extracting,
+analyzing, and manipulating data from HEC-RAS HDF files.
 
+Note:
+    This method is decorated with @hdf_operation, which handles the opening and closing of the HDF file.
+    The decorator should be used for all methods that directly interact with HDF files.
+    It ensures proper file handling and error management.
+
+    When using the @hdf_operation decorator:
+    - The method receives an open h5py.File object as its first argument after 'cls'.
+    - Error handling for file operations is managed by the decorator.
+    - The HDF file is automatically closed after the method execution.
+
+    Methods without this decorator must manually handle file opening, closing, and error management.
+    Failure to use the decorator or properly manage the file can lead to resource leaks or file access errors.
+
+Example:
+    @classmethod
+    @hdf_operation
+    def example_method:
+    """Docs only, see 'example_method.py' for full function code"""
 import h5py
 import numpy as np
 import pandas as pd
-from typing import Union, List, Optional, Dict, Callable
+from typing import Union, List, Optional, Dict, Tuple, Any, Callable
 from scipy.spatial import KDTree
+from pathlib import Path
+from datetime import datetime
+import logging
+from functools import wraps
+from .RasPrj import RasPrj, ras, init_ras_project
+
+# If you're using RasPrj in type hints, you might need to use string literals to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .RasPrj import RasPrj
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ])
 
 class RasHdf:
     """
-    A class containing utility functions for working with HDF files in the ras-commander library.
+    A utility class for working with HDF files in HEC-RAS projects.
+
+    This class provides static methods for various operations on HDF files,
+    including listing paths, extracting data, and performing analyses on
+    HEC-RAS project data stored in HDF format.
     """
-
+        
     @staticmethod
-    def read_hdf_to_dataframe(hdf_dataset: h5py.Dataset, fill_value: Union[int, float, str] = -9999) -> pd.DataFrame:
-        """
-        Reads an HDF5 table using h5py and converts it into a pandas DataFrame, handling byte strings and missing values.
+    def hdf_operation:
+    """Docs only, see 'hdf_operation.py' for full function code"""
+) -> h5py.Dataset:
+    """
+    Save a pandas DataFrame to an HDF5 dataset within a specified parent group.
 
-        Args:
-            hdf_dataset (h5py.Dataset): The HDF5 table to read.
-            fill_value (Union[int, float, str], optional): The value to use for filling missing data. Defaults to -9999.
+    This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
 
-        Returns:
-            pd.DataFrame: The resulting DataFrame with byte strings decoded and missing values replaced.
+    Args:
+        dataframe (pd.DataFrame): The DataFrame to save.
+        hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
+        dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
+        attributes (Optional[Dict[str, Union[int, float, str]]]): A dictionary of attributes to add to the dataset.
+        fill_value (Union[int, float, str]): The value to use for filling missing data.
+        **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
 
-        Example:
-            >>> with h5py.File('data.h5', 'r') as f:
-            ...     dataset = f['my_dataset']
-            ...     df = RasHdf.read_hdf_to_dataframe(dataset)
-            >>> print(df.head())
-        """
-        df = RasHdf.convert_to_dataframe_array(hdf_dataset)
-        byte_cols = [col for col in df.columns if isinstance(df[col].iloc[0], (bytes, bytearray))]
-        test_byte_cols = [col for col in df.columns if isinstance(df[col].iloc[-1], (bytes, bytearray))]
-        assert byte_cols == test_byte_cols, "Inconsistent byte string columns detected"
-        
-        try:
-            df[byte_cols] = df[byte_cols].applymap(lambda x: x.decode('utf-8'))
-        except Exception as e:
-            print(f'WARNING: {e} while decoding byte strings in {hdf_dataset.name}, resuming')
-        
-        df = df.replace({fill_value: np.NaN})
-        return df
+    Returns:
+        h5py.Dataset: The created HDF5 dataset within the parent group.
 
-    @staticmethod
-    def save_dataframe_to_hdf(dataframe: pd.DataFrame, 
-                              hdf_parent_group: h5py.Group, 
-                              dataset_name: str, 
-                              attributes: Optional[Dict[str, Union[int, float, str]]] = None, 
-                              fill_value: Union[int, float, str] = -9999, 
-                              **kwargs: Union[int, float, str]) -> h5py.Dataset:
-        """
-        Saves a pandas DataFrame to an HDF5 dataset within a specified parent group.
+    Raises:
+        ValueError: If the DataFrame columns are not consistent.
 
-        This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
+    Example:
+        >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
+        >>> with h5py.File('data.h5', 'w') as f:
+        ...     group = f.create_group('my_group')
+        ...     dataset = save_dataframe_to_hdf(df, group, 'my_dataset')
+        >>> print(dataset)
+    """
+    df = dataframe.copy()
 
-        Args:
-            dataframe (pd.DataFrame): The DataFrame to save.
-            hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
-            dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
-            attributes (Optional[Dict[str, Union[int, float, str]]], optional): A dictionary of attributes to add to the dataset. Defaults to None.
-            fill_value (Union[int, float, str], optional): The value to use for filling missing data. Defaults to -9999.
-            **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
-
-        Returns:
-            h5py.Dataset: The created HDF5 dataset within the parent group.
-
-        Example:
-            >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
-            >>> with h5py.File('data.h5', 'w') as f:
-            ...     group = f.create_group('my_group')
-            ...     dataset = RasHdf.save_dataframe_to_hdf(df, group, 'my_dataset')
-            >>> print(dataset)
-        """
-        df = dataframe.copy()
-
-        if df.columns.dtype == 'O':
-            df.columns = df.columns.str.replace('/', '-')
-        
-        df = df.fillna(fill_value)
-        
-        string_cols = [col for col in df.columns if isinstance(df[col].iloc[0], str)]
-        test_string_cols = [col for col in df.columns if isinstance(df[col].iloc[-1], str)]
-        assert string_cols == test_string_cols, "Inconsistent string columns detected"
-        
-        df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
-
-        if isinstance(df.columns, pd.RangeIndex):
-            arr = df.values
-        else:
-            arr_dt = [(col, df[col].dtype) for col in df.columns]
-            arr = np.empty((len(df),), dtype=arr_dt)
-            for col in df.columns:
-                arr[col] = df[col].values
+    # Replace '/' in column names with '-' to avoid issues in HDF5
+    if df.columns.dtype == 'O':
+        df.columns = df.columns.str.replace('/', '-', regex=False)
     
-        if dataset_name in hdf_parent_group:
-            del hdf_parent_group[dataset_name]
-        
-        dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
-        
-        if attributes:
-            dataset.attrs.update(attributes)
-        
-        return dataset
+    # Fill missing values with the specified fill_value
+    df = df.fillna(fill_value)
+    
+    # Identify string columns and ensure consistency
+    string_cols = df.select_dtypes(include=['object']).columns
+    if not string_cols.equals(df.select_dtypes(include=['object']).columns):
+        raise ValueError("Inconsistent string columns detected")
+    
+    # Encode string columns to bytes
+    df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
 
-    @staticmethod
-    def perform_kdtree_query(reference_points: np.ndarray, query_points: np.ndarray, max_distance: float = 2.0) -> np.ndarray:
-        """
-        Performs a KDTree query between two datasets and returns indices with distances exceeding max_distance set to -1.
-
-        Args:
-            reference_points (np.ndarray): The reference dataset for KDTree.
-            query_points (np.ndarray): The query dataset to search against KDTree of reference_points.
-            max_distance (float, optional): The maximum distance threshold. Indices with distances greater than this are set to -1. Defaults to 2.0.
-
-        Returns:
-            np.ndarray: Array of indices from reference_points that are nearest to each point in query_points. 
-                        Indices with distances > max_distance are set to -1.
-
-        Example:
-            >>> ref_points = np.array([[0, 0], [1, 1], [2, 2]])
-            >>> query_points = np.array([[0.5, 0.5], [3, 3]])
-            >>> RasHdf.perform_kdtree_query(ref_points, query_points)
-            array([ 0, -1])
-        """
-        dist, snap = KDTree(reference_points).query(query_points, distance_upper_bound=max_distance)
-        snap[dist > max_distance] = -1
-        return snap
-
-    @staticmethod
-    def find_nearest_neighbors(points: np.ndarray, max_distance: float = 2.0) -> np.ndarray:
-        """
-        Creates a self KDTree for dataset points and finds nearest neighbors excluding self, 
-        with distances above max_distance set to -1.
-
-        Args:
-            points (np.ndarray): The dataset to build the KDTree from and query against itself.
-            max_distance (float, optional): The maximum distance threshold. Indices with distances 
-                                            greater than max_distance are set to -1. Defaults to 2.0.
-
-        Returns:
-            np.ndarray: Array of indices representing the nearest neighbor in points for each point in points. 
-                        Indices with distances > max_distance or self-matches are set to -1.
-
-        Example:
-            >>> points = np.array([[0, 0], [1, 1], [2, 2], [10, 10]])
-            >>> RasHdf.find_nearest_neighbors(points)
-            array([1, 0, 1, -1])
-        """
-        dist, snap = KDTree(points).query(points, k=2, distance_upper_bound=max_distance)
-        snap[dist > max_distance] = -1
-        
-        snp = pd.DataFrame(snap, index=np.arange(len(snap)))
-        snp = snp.replace(-1, np.nan)
-        snp.loc[snp[0] == snp.index, 0] = np.nan
-        snp.loc[snp[1] == snp.index, 1] = np.nan
-        filled = snp[0].fillna(snp[1])
-        snapped = filled.fillna(-1).astype(np.int64).to_numpy()
-        return snapped
-
-    @staticmethod
-    def consolidate_dataframe(dataframe: pd.DataFrame, 
-                              group_by: Optional[Union[str, List[str]]] = None, 
-                              pivot_columns: Optional[Union[str, List[str]]] = None, 
-                              level: Optional[int] = None, 
-                              n_dimensional: bool = False, 
-                              aggregation_method: Union[str, Callable] = 'list') -> pd.DataFrame:
-        """
-        Consolidate rows in a DataFrame by merging duplicate values into lists or using a specified aggregation function.
-
-        Args:
-            dataframe (pd.DataFrame): The DataFrame to consolidate.
-            group_by (Optional[Union[str, List[str]]], optional): Columns or indices to group by. Defaults to None.
-            pivot_columns (Optional[Union[str, List[str]]], optional): Columns to pivot. Defaults to None.
-            level (Optional[int], optional): Level of multi-index to group by. Defaults to None.
-            n_dimensional (bool, optional): If True, use a pivot table for N-Dimensional consolidation. Defaults to False.
-            aggregation_method (Union[str, Callable], optional): Aggregation method, e.g., 'list' to aggregate into lists. Defaults to 'list'.
-
-        Returns:
-            pd.DataFrame: The consolidated DataFrame.
-
-        Example:
-            >>> df = pd.DataFrame({'A': [1, 1, 2], 'B': [4, 5, 6], 'C': [7, 8, 9]})
-            >>> RasHdf.consolidate_dataframe(df, group_by='A')
-               B         C
-            A            
-            1  [4, 5]  [7, 8]
-            2  [6]     [9]
-        """
-        if aggregation_method == 'list':
-            agg_func = lambda x: tuple(x)
-        else:
-            agg_func = aggregation_method
-
-        if n_dimensional:
-            result = dataframe.pivot_table(group_by, pivot_columns, aggfunc=agg_func)
-        else:
-            result = dataframe.groupby(group_by, level=level).agg(agg_func).applymap(list)
-
-        return result
-
-    @staticmethod
-    def decode_byte_strings(dataframe: pd.DataFrame) -> pd.DataFrame:
-        """
-        Decodes byte strings in a DataFrame to regular string objects.
-
-        This function converts columns with byte-encoded strings (e.g., b'string') into UTF-8 decoded strings.
-
-        Args:
-            dataframe (pd.DataFrame): The DataFrame containing byte-encoded string columns.
-
-        Returns:
-            pd.DataFrame: The DataFrame with byte strings decoded to regular strings.
-
-        Example:
-            >>> df = pd.DataFrame({'A': [b'hello', b'world'], 'B': [1, 2]})
-            >>> RasHdf.decode_byte_strings(df)
-                 A  B
-            0  hello  1
-            1  world  2
-        """
-        str_df = dataframe.select_dtypes(['object'])
-        str_df = str_df.stack().str.decode('utf-8').unstack()
-        for col in str_df:
-            dataframe[col] = str_df[col]
-        return dataframe
-
-    @staticmethod
-    def find_nearest_value(array: Union[list, np.ndarray], target_value: Union[int, float]) -> Union[int, float]:
-        """
-        Finds the nearest value in a NumPy array to the specified target value.
-
-        Args:
-            array (Union[list, np.ndarray]): The array to search within.
-            target_value (Union[int, float]): The value to find the nearest neighbor to.
-
-        Returns:
-            Union[int, float]: The nearest value in the array to the specified target value.
-
-        Example:
-            >>> arr = np.array([1, 3, 5, 7, 9])
-            >>> RasHdf.find_nearest_value(arr, 6)
-            5
-        """
-        array = np.asarray(array)
-        idx = (np.abs(array - target_value)).argmin()
-        return array[idx]
+    # Prepare data for HDF5 dataset creation
+    arr = df.to_records(index=False) if not isinstance(df.columns, pd.RangeIndex) else df.values
+    
+    # Remove existing dataset if it exists
+    if dataset_name in hdf_parent_group:
+        del hdf_parent_group[dataset_name]
+    
+    # Create the dataset in the HDF5 file
+    dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
+    
+    # Update dataset attributes if provided
+    if attributes:
+        dataset.attrs.update(attributes)
+    
+    logging.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
+    return dataset
 
 
 ==================================================
@@ -3195,7 +3531,7 @@ ras = RasPrj()
 
 def init_ras_project:
     """Docs only, see 'init_ras_project.py' for full function code"""
-    )
+    
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py

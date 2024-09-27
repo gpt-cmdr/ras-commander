@@ -5,15 +5,15 @@ import re
 # Configuration
 OMIT_FOLDERS = [
     "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests",
-    "build", "dist", "ras_commander.egg-info", "venv",
-    "example_projects", "assistant_knowledge_bases", "misc", "ai_tools",
+    "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info",
+    "example_projects", "assistant_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models","hdf_example_data", "ras_example_categories"
 ]
 OMIT_FILES = [
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",
     ".bat", ".sh", ".log", ".tmp", ".bak", ".swp",
     ".DS_Store", "Thumbs.db", "example_projects.zip",
     "Example_Projects_6_5.zip", "example_projects.ipynb", "11_Using_RasExamples.ipynb", 
-    "future_dev_roadmap.ipynb",
+    "future_dev_roadmap.ipynb", "structures_attributes.csv", "example_projects.csv",
 ]
 SUMMARY_OUTPUT_DIR = "assistant_knowledge_bases"
 SCRIPT_NAME = Path(__file__).name

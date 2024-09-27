@@ -80,12 +80,12 @@ def main():
     logging.getLogger().setLevel(logging.DEBUG)
 
     ras_examples = RasExamples()
-    all_categories = ras_examples.list_categories()
+    selected_categories = ["1D Unsteady Flow Hydraulics", "2D Unsteady Flow Hydraulics"]
 
     base_dir = Path.cwd() / "ras_example_categories"
     base_dir.mkdir(exist_ok=True)
 
-    for category in all_categories:
+    for category in selected_categories:
         category_dir = base_dir / category
         category_dir.mkdir(exist_ok=True)
 

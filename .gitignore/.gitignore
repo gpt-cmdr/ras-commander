@@ -1,15 +1,17 @@
 # Ignore the example_projects folder and all its subfolders
 examples/example_projects/
 
-# 
+# Ignore workspace, projects, and my_projects folders
 workspace/
 projects/
 my_projects/
 
+# Ignore FEMA BLE Models
+examples/FEMA_BLE_Models/
+examples/hdf_example_data/
 
-ignore egg info
+# Ignore Python egg info
 *.egg-info/
-
 .eggs/
 
 # Ignore the Example_Projects_6_5.zip file
@@ -17,13 +19,29 @@ Example_Projects_6_5.zip
 
 # Ignore the misc folder and all its subfolders
 misc/
-ras_commander/__pycache__/
+
+# Ignore Python cache files
 __pycache__/
 *.py[cod]
+
+# Ignore compiled Python files
 *.so
-*.egg-info/
+
+# Ignore distribution / packaging
 dist/
 build/
+
+# Ignore test cache
 .pytest_cache/
+
+# Ignore virtual environments
 .venv/
 venv/
+
+# Ignore IDE-specific files (optional, uncomment if needed)
+# .vscode/
+# .idea/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db

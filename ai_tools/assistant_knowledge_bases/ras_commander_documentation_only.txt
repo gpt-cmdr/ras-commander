@@ -76,7 +76,8 @@ class RasCmdr:
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
         """
-        ras_obj = ras_object or ras
+        ras_obj = ras_object if ras_object is not None else ras
+        logging.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
         ras_obj.check_initialized()
         
         if dest_folder is not None:
@@ -146,12 +147,12 @@ class RasCmdr:
             logging.error(f"Error message: {e.output}")
             logging.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
             return False
-
-        ras_obj = ras_object or ras
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        finally:
+            # Update the RAS object's dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
     
 
 
@@ -495,6 +496,8 @@ from typing import Union, List
 import csv
 from datetime import datetime
 import logging
+import re
+from tqdm import tqdm
 
 # Configure logging
 logging.basicConfig(
@@ -511,43 +514,73 @@ class RasExamples:
 
     This class provides functionality to download, extract, and manage HEC-RAS example projects.
     It supports both default HEC-RAS example projects and custom projects from user-provided URLs.
+    Additionally, it includes functionality to download FEMA's Base Level Engineering (BLE) models
+    from CSV files provided by the FEMA Estimated Base Flood Elevation (BFE) Viewer.
 
-    Expected folder structure:              Notes:
-    ras-commander/
-    ├── examples/                           # This is examples_dir
-    │   ├── example_projects/               # This is projects_dir
-    │   │   ├── Balde Eagle Creek/          # Individual Projects from Zip file
-    │   │   ├── Muncie/                 
-    │   │   └── ...
-    │   ├── Example_Projects_6_5.zip        # HEC-RAS Example Projects zip file will be downloaded here
-    │   ├── example_projects.csv            # CSV file containing cached project metadata
-    │   └── 01_project_initialization.py    # ras-commander library examples are also at this level
-    │   └── ...
-    └── ras_commander/                      # Code for the ras-commander library
-
-    Attributes:
-        base_url (str): Base URL for downloading HEC-RAS example projects.
-        valid_versions (list): List of valid HEC-RAS versions for example projects.
-        base_dir (Path): Base directory for storing example projects.
-        examples_dir (Path): Directory for example projects and related files. (assumed to be parent )
-        projects_dir (Path): Directory where example projects are extracted.
-        zip_file_path (Path): Path to the downloaded zip file.
-        folder_df (pd.DataFrame): DataFrame containing folder structure information.
-        csv_file_path (Path): Path to the CSV file for caching project metadata.
-
-    Future Improvements:
-    - Implement the ability for user-provided example projects (provided as a zip file) for their own repeatable examples. 
-    - If the zip file is in the same folder structure as the HEC-RAS example projects, simple replace Example_Projects_6_5.zip and the folder structure will be automatically extracted from the zip file.
-    - The actual RAS example projects haven't been updated much, but there is the structure here to handle future versions. Although this version of the code is probably fine for a few years, until HEC-RAS 2025 comes out. 
+    [Documentation as previously provided]
     """
-    
+
     def __init__:
     """Docs only, see '__init__.py' for full function code"""
-# ras_examples = RasExamples()
-# extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
-# for path in extracted_paths:
-#     logging.info(f"Extracted to: {path}")
+### How to Use the Revised `RasExamples` Class
 
+1. **Instantiate the Class:**
+   ```python
+   ras_examples = RasExamples()
+   ```
+
+2. **Download FEMA BLE Models:**
+   - Ensure you have the required CSV files by visiting [FEMA's Estimated Base Flood Elevation (BFE) Viewer](https://webapps.usgs.gov/infrm/estBFE/) and using the "Download as Table" option for each BLE model you wish to access.
+   - Call the `download_fema_ble_models` method with the appropriate paths:
+     ```python
+     ras_examples.download_fema_ble_models('/path/to/csv/files', '/path/to/output/folder')
+     ```
+     - Replace `'/path/to/csv/files'` with the directory containing your CSV files.
+     - Replace `'/path/to/output/folder'` with the directory where you want the BLE models to be downloaded and organized.
+
+3. **Extract Projects (If Needed):**
+   - After downloading, you can extract specific projects using the existing `extract_project` method:
+     ```python
+     extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
+     for path in extracted_paths:
+         logging.info(f"Extracted to: {path}")
+     ```
+
+4. **Explore Projects and Categories:**
+   - List available categories:
+     ```python
+     categories = ras_examples.list_categories()
+     ```
+   - List projects within a specific category:
+     ```python
+     projects = ras_examples.list_projects(category='SomeCategory')
+     ```
+
+5. **Clean Projects Directory (If Needed):**
+   - To remove all extracted projects:
+     ```python
+     ras_examples.clean_projects_directory()
+     ```
+
+### Dependencies
+
+Ensure that the following Python packages are installed:
+
+- `pandas`
+- `requests`
+
+You can install them using `pip`:
+
+```bash
+pip install pandas requests
+```
+
+### Notes
+
+- The class uses Python's `logging` module to provide detailed information about its operations. Ensure that the logging level is set appropriately to capture the desired amount of detail.
+- The `download_fema_ble_models` method handles large file downloads by streaming data in chunks, which is memory-efficient.
+- All folder names are sanitized to prevent filesystem errors due to unsafe characters.
+"""
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasGeo.py
@@ -666,253 +699,127 @@ class RasGeo:
 
 File: c:\GH\ras-commander\ras_commander\RasHdf.py
 ==================================================
+"""
+RasHdf Module
 
+This module provides utilities for working with HDF files in HEC-RAS projects.
+It contains the RasHdf class, which offers various static methods for extracting,
+analyzing, and manipulating data from HEC-RAS HDF files.
 
+Note:
+    This method is decorated with @hdf_operation, which handles the opening and closing of the HDF file.
+    The decorator should be used for all methods that directly interact with HDF files.
+    It ensures proper file handling and error management.
+
+    When using the @hdf_operation decorator:
+    - The method receives an open h5py.File object as its first argument after 'cls'.
+    - Error handling for file operations is managed by the decorator.
+    - The HDF file is automatically closed after the method execution.
+
+    Methods without this decorator must manually handle file opening, closing, and error management.
+    Failure to use the decorator or properly manage the file can lead to resource leaks or file access errors.
+
+Example:
+    @classmethod
+    @hdf_operation
+    def example_method:
+    """Docs only, see 'example_method.py' for full function code"""
 import h5py
 import numpy as np
 import pandas as pd
-from typing import Union, List, Optional, Dict, Callable
+from typing import Union, List, Optional, Dict, Tuple, Any, Callable
 from scipy.spatial import KDTree
+from pathlib import Path
+from datetime import datetime
+import logging
+from functools import wraps
+from .RasPrj import RasPrj, ras, init_ras_project
+
+# If you're using RasPrj in type hints, you might need to use string literals to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .RasPrj import RasPrj
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ])
 
 class RasHdf:
     """
-    A class containing utility functions for working with HDF files in the ras-commander library.
+    A utility class for working with HDF files in HEC-RAS projects.
+
+    This class provides static methods for various operations on HDF files,
+    including listing paths, extracting data, and performing analyses on
+    HEC-RAS project data stored in HDF format.
     """
-
+        
     @staticmethod
-    def read_hdf_to_dataframe(hdf_dataset: h5py.Dataset, fill_value: Union[int, float, str] = -9999) -> pd.DataFrame:
-        """
-        Reads an HDF5 table using h5py and converts it into a pandas DataFrame, handling byte strings and missing values.
+    def hdf_operation:
+    """Docs only, see 'hdf_operation.py' for full function code"""
+) -> h5py.Dataset:
+    """
+    Save a pandas DataFrame to an HDF5 dataset within a specified parent group.
 
-        Args:
-            hdf_dataset (h5py.Dataset): The HDF5 table to read.
-            fill_value (Union[int, float, str], optional): The value to use for filling missing data. Defaults to -9999.
+    This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
 
-        Returns:
-            pd.DataFrame: The resulting DataFrame with byte strings decoded and missing values replaced.
+    Args:
+        dataframe (pd.DataFrame): The DataFrame to save.
+        hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
+        dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
+        attributes (Optional[Dict[str, Union[int, float, str]]]): A dictionary of attributes to add to the dataset.
+        fill_value (Union[int, float, str]): The value to use for filling missing data.
+        **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
 
-        Example:
-            >>> with h5py.File('data.h5', 'r') as f:
-            ...     dataset = f['my_dataset']
-            ...     df = RasHdf.read_hdf_to_dataframe(dataset)
-            >>> print(df.head())
-        """
-        df = RasHdf.convert_to_dataframe_array(hdf_dataset)
-        byte_cols = [col for col in df.columns if isinstance(df[col].iloc[0], (bytes, bytearray))]
-        test_byte_cols = [col for col in df.columns if isinstance(df[col].iloc[-1], (bytes, bytearray))]
-        assert byte_cols == test_byte_cols, "Inconsistent byte string columns detected"
-        
-        try:
-            df[byte_cols] = df[byte_cols].applymap(lambda x: x.decode('utf-8'))
-        except Exception as e:
-            print(f'WARNING: {e} while decoding byte strings in {hdf_dataset.name}, resuming')
-        
-        df = df.replace({fill_value: np.NaN})
-        return df
+    Returns:
+        h5py.Dataset: The created HDF5 dataset within the parent group.
 
-    @staticmethod
-    def save_dataframe_to_hdf(dataframe: pd.DataFrame, 
-                              hdf_parent_group: h5py.Group, 
-                              dataset_name: str, 
-                              attributes: Optional[Dict[str, Union[int, float, str]]] = None, 
-                              fill_value: Union[int, float, str] = -9999, 
-                              **kwargs: Union[int, float, str]) -> h5py.Dataset:
-        """
-        Saves a pandas DataFrame to an HDF5 dataset within a specified parent group.
+    Raises:
+        ValueError: If the DataFrame columns are not consistent.
 
-        This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
+    Example:
+        >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
+        >>> with h5py.File('data.h5', 'w') as f:
+        ...     group = f.create_group('my_group')
+        ...     dataset = save_dataframe_to_hdf(df, group, 'my_dataset')
+        >>> print(dataset)
+    """
+    df = dataframe.copy()
 
-        Args:
-            dataframe (pd.DataFrame): The DataFrame to save.
-            hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
-            dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
-            attributes (Optional[Dict[str, Union[int, float, str]]], optional): A dictionary of attributes to add to the dataset. Defaults to None.
-            fill_value (Union[int, float, str], optional): The value to use for filling missing data. Defaults to -9999.
-            **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
-
-        Returns:
-            h5py.Dataset: The created HDF5 dataset within the parent group.
-
-        Example:
-            >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
-            >>> with h5py.File('data.h5', 'w') as f:
-            ...     group = f.create_group('my_group')
-            ...     dataset = RasHdf.save_dataframe_to_hdf(df, group, 'my_dataset')
-            >>> print(dataset)
-        """
-        df = dataframe.copy()
-
-        if df.columns.dtype == 'O':
-            df.columns = df.columns.str.replace('/', '-')
-        
-        df = df.fillna(fill_value)
-        
-        string_cols = [col for col in df.columns if isinstance(df[col].iloc[0], str)]
-        test_string_cols = [col for col in df.columns if isinstance(df[col].iloc[-1], str)]
-        assert string_cols == test_string_cols, "Inconsistent string columns detected"
-        
-        df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
-
-        if isinstance(df.columns, pd.RangeIndex):
-            arr = df.values
-        else:
-            arr_dt = [(col, df[col].dtype) for col in df.columns]
-            arr = np.empty((len(df),), dtype=arr_dt)
-            for col in df.columns:
-                arr[col] = df[col].values
+    # Replace '/' in column names with '-' to avoid issues in HDF5
+    if df.columns.dtype == 'O':
+        df.columns = df.columns.str.replace('/', '-', regex=False)
     
-        if dataset_name in hdf_parent_group:
-            del hdf_parent_group[dataset_name]
-        
-        dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
-        
-        if attributes:
-            dataset.attrs.update(attributes)
-        
-        return dataset
+    # Fill missing values with the specified fill_value
+    df = df.fillna(fill_value)
+    
+    # Identify string columns and ensure consistency
+    string_cols = df.select_dtypes(include=['object']).columns
+    if not string_cols.equals(df.select_dtypes(include=['object']).columns):
+        raise ValueError("Inconsistent string columns detected")
+    
+    # Encode string columns to bytes
+    df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
 
-    @staticmethod
-    def perform_kdtree_query(reference_points: np.ndarray, query_points: np.ndarray, max_distance: float = 2.0) -> np.ndarray:
-        """
-        Performs a KDTree query between two datasets and returns indices with distances exceeding max_distance set to -1.
-
-        Args:
-            reference_points (np.ndarray): The reference dataset for KDTree.
-            query_points (np.ndarray): The query dataset to search against KDTree of reference_points.
-            max_distance (float, optional): The maximum distance threshold. Indices with distances greater than this are set to -1. Defaults to 2.0.
-
-        Returns:
-            np.ndarray: Array of indices from reference_points that are nearest to each point in query_points. 
-                        Indices with distances > max_distance are set to -1.
-
-        Example:
-            >>> ref_points = np.array([[0, 0], [1, 1], [2, 2]])
-            >>> query_points = np.array([[0.5, 0.5], [3, 3]])
-            >>> RasHdf.perform_kdtree_query(ref_points, query_points)
-            array([ 0, -1])
-        """
-        dist, snap = KDTree(reference_points).query(query_points, distance_upper_bound=max_distance)
-        snap[dist > max_distance] = -1
-        return snap
-
-    @staticmethod
-    def find_nearest_neighbors(points: np.ndarray, max_distance: float = 2.0) -> np.ndarray:
-        """
-        Creates a self KDTree for dataset points and finds nearest neighbors excluding self, 
-        with distances above max_distance set to -1.
-
-        Args:
-            points (np.ndarray): The dataset to build the KDTree from and query against itself.
-            max_distance (float, optional): The maximum distance threshold. Indices with distances 
-                                            greater than max_distance are set to -1. Defaults to 2.0.
-
-        Returns:
-            np.ndarray: Array of indices representing the nearest neighbor in points for each point in points. 
-                        Indices with distances > max_distance or self-matches are set to -1.
-
-        Example:
-            >>> points = np.array([[0, 0], [1, 1], [2, 2], [10, 10]])
-            >>> RasHdf.find_nearest_neighbors(points)
-            array([1, 0, 1, -1])
-        """
-        dist, snap = KDTree(points).query(points, k=2, distance_upper_bound=max_distance)
-        snap[dist > max_distance] = -1
-        
-        snp = pd.DataFrame(snap, index=np.arange(len(snap)))
-        snp = snp.replace(-1, np.nan)
-        snp.loc[snp[0] == snp.index, 0] = np.nan
-        snp.loc[snp[1] == snp.index, 1] = np.nan
-        filled = snp[0].fillna(snp[1])
-        snapped = filled.fillna(-1).astype(np.int64).to_numpy()
-        return snapped
-
-    @staticmethod
-    def consolidate_dataframe(dataframe: pd.DataFrame, 
-                              group_by: Optional[Union[str, List[str]]] = None, 
-                              pivot_columns: Optional[Union[str, List[str]]] = None, 
-                              level: Optional[int] = None, 
-                              n_dimensional: bool = False, 
-                              aggregation_method: Union[str, Callable] = 'list') -> pd.DataFrame:
-        """
-        Consolidate rows in a DataFrame by merging duplicate values into lists or using a specified aggregation function.
-
-        Args:
-            dataframe (pd.DataFrame): The DataFrame to consolidate.
-            group_by (Optional[Union[str, List[str]]], optional): Columns or indices to group by. Defaults to None.
-            pivot_columns (Optional[Union[str, List[str]]], optional): Columns to pivot. Defaults to None.
-            level (Optional[int], optional): Level of multi-index to group by. Defaults to None.
-            n_dimensional (bool, optional): If True, use a pivot table for N-Dimensional consolidation. Defaults to False.
-            aggregation_method (Union[str, Callable], optional): Aggregation method, e.g., 'list' to aggregate into lists. Defaults to 'list'.
-
-        Returns:
-            pd.DataFrame: The consolidated DataFrame.
-
-        Example:
-            >>> df = pd.DataFrame({'A': [1, 1, 2], 'B': [4, 5, 6], 'C': [7, 8, 9]})
-            >>> RasHdf.consolidate_dataframe(df, group_by='A')
-               B         C
-            A            
-            1  [4, 5]  [7, 8]
-            2  [6]     [9]
-        """
-        if aggregation_method == 'list':
-            agg_func = lambda x: tuple(x)
-        else:
-            agg_func = aggregation_method
-
-        if n_dimensional:
-            result = dataframe.pivot_table(group_by, pivot_columns, aggfunc=agg_func)
-        else:
-            result = dataframe.groupby(group_by, level=level).agg(agg_func).applymap(list)
-
-        return result
-
-    @staticmethod
-    def decode_byte_strings(dataframe: pd.DataFrame) -> pd.DataFrame:
-        """
-        Decodes byte strings in a DataFrame to regular string objects.
-
-        This function converts columns with byte-encoded strings (e.g., b'string') into UTF-8 decoded strings.
-
-        Args:
-            dataframe (pd.DataFrame): The DataFrame containing byte-encoded string columns.
-
-        Returns:
-            pd.DataFrame: The DataFrame with byte strings decoded to regular strings.
-
-        Example:
-            >>> df = pd.DataFrame({'A': [b'hello', b'world'], 'B': [1, 2]})
-            >>> RasHdf.decode_byte_strings(df)
-                 A  B
-            0  hello  1
-            1  world  2
-        """
-        str_df = dataframe.select_dtypes(['object'])
-        str_df = str_df.stack().str.decode('utf-8').unstack()
-        for col in str_df:
-            dataframe[col] = str_df[col]
-        return dataframe
-
-    @staticmethod
-    def find_nearest_value(array: Union[list, np.ndarray], target_value: Union[int, float]) -> Union[int, float]:
-        """
-        Finds the nearest value in a NumPy array to the specified target value.
-
-        Args:
-            array (Union[list, np.ndarray]): The array to search within.
-            target_value (Union[int, float]): The value to find the nearest neighbor to.
-
-        Returns:
-            Union[int, float]: The nearest value in the array to the specified target value.
-
-        Example:
-            >>> arr = np.array([1, 3, 5, 7, 9])
-            >>> RasHdf.find_nearest_value(arr, 6)
-            5
-        """
-        array = np.asarray(array)
-        idx = (np.abs(array - target_value)).argmin()
-        return array[idx]
+    # Prepare data for HDF5 dataset creation
+    arr = df.to_records(index=False) if not isinstance(df.columns, pd.RangeIndex) else df.values
+    
+    # Remove existing dataset if it exists
+    if dataset_name in hdf_parent_group:
+        del hdf_parent_group[dataset_name]
+    
+    # Create the dataset in the HDF5 file
+    dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
+    
+    # Update dataset attributes if provided
+    if attributes:
+        dataset.attrs.update(attributes)
+    
+    logging.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
+    return dataset
 
 
 ==================================================
@@ -1089,7 +996,7 @@ ras = RasPrj()
 
 def init_ras_project:
     """Docs only, see 'init_ras_project.py' for full function code"""
-    )
+    
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py

@@ -650,10 +650,6 @@ def init_ras_project(ras_project_folder, ras_version, ras_instance=None):
     Avoid mixing use of the global 'ras' object and custom instances to prevent
     confusion and potential bugs.
     """
-    logging.info(f"Initializing project in folder: {ras_project_folder}")
-    logging.info(f"Using ras_instance with id: {id(ras_instance)}")
-    
-
 
     if not Path(ras_project_folder).exists():
         logging.error(f"The specified RAS project folder does not exist: {ras_project_folder}. Please check the path and try again.")
@@ -670,8 +666,7 @@ def init_ras_project(ras_project_folder, ras_version, ras_instance=None):
 
     # Initialize the RasPrj instance
     ras_instance.initialize(ras_project_folder, ras_exe_path)
-    
-    logging.info(f"Project initialized. ras_instance project folder: {ras_instance.project_folder}")
+
     return ras_instance
 
 
@@ -735,4 +730,3 @@ def get_ras_exe(ras_version):
         f"Please provide a valid version number from {ras_version_numbers} "
         "or a full path to the HEC-RAS executable."
     )
-    
