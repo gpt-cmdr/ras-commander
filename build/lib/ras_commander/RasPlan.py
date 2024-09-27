@@ -1060,7 +1060,7 @@ class RasPlan:
         Any: The value associated with the specified key
 
         Raises:
-        ValueError: If an invalid key is provided or if the plan file is not found
+        ValueError: If the plan file is not found
         IOError: If there's an error reading the plan file
 
         Available keys and their expected types:
@@ -1086,6 +1086,7 @@ class RasPlan:
         - 'unet_1d_methodology' (str): 1D calculation methodology
         - 'unet_d2_solver_type' (str): 2D solver type
         - 'unet_d2_name' (str): Name of the 2D area
+        - 'run_rasmapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
 
         Example:
         >>> computation_interval = RasPlan.get_plan_value("01", "computation_interval")
@@ -1099,11 +1100,11 @@ class RasPlan:
             'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
             'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
             'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name'
+            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name', 'run_rasmapper'
         }
 
         if key not in valid_keys:
-            raise ValueError(f"Invalid key: {key}. Valid keys are: {', '.join(valid_keys)}")
+            logging.warning(f"Unknown key: {key}. Valid keys are: {', '.join(valid_keys)}\n Add more keys and explanations in get_plan_value() as needed.")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -1124,7 +1125,11 @@ class RasPlan:
         else:
             pattern = f"{key.replace('_', ' ').title()}=(.*)"
             match = re.search(pattern, content)
-            return match.group(1).strip() if match else None
+            if match:
+                return match.group(1).strip()
+            else:
+                logging.error(f"Key '{key}' not found in the plan file.")
+                return None
 
     @staticmethod
     def update_plan_value(
@@ -1143,7 +1148,7 @@ class RasPlan:
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Raises:
-        ValueError: If an invalid key is provided or if the plan file is not found
+        ValueError: If the plan file is not found
         IOError: If there's an error reading or writing the plan file
 
         Note: See the docstring of get_plan_value for a full list of available keys and their types.
@@ -1151,6 +1156,7 @@ class RasPlan:
         Example:
         >>> RasPlan.update_plan_value("01", "computation_interval", "10SEC")
         >>> RasPlan.update_plan_value("/path/to/plan.p01", "run_htab", 1)
+        >>> RasPlan.update_plan_value("01", "run_rasmapper", 0)  # Turn on Floodplain Mapping
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -1160,11 +1166,11 @@ class RasPlan:
             'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
             'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
             'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name'
+            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name', 'run_rasmapper'
         }
 
         if key not in valid_keys:
-            raise ValueError(f"Invalid key: {key}. Valid keys are: {', '.join(valid_keys)}")
+            logging.warning(f"Unknown key: {key}. Valid keys are: {', '.join(valid_keys)}")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -1203,7 +1209,8 @@ class RasPlan:
                     updated = True
                     break
             if not updated:
-                lines.append(f"{pattern}{value}\n")
+                logging.error(f"Key '{key}' not found in the plan file.")
+                return
 
         try:
             with open(plan_file_path, 'w') as file:

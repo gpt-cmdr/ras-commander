@@ -74,7 +74,8 @@ class RasCmdr:
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
         """
-        ras_obj = ras_object or ras
+        ras_obj = ras_object if ras_object is not None else ras
+        logging.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
         ras_obj.check_initialized()
         
         if dest_folder is not None:
@@ -144,12 +145,12 @@ class RasCmdr:
             logging.error(f"Error message: {e.output}")
             logging.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
             return False
-
-        ras_obj = ras_object or ras
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        finally:
+            # Update the RAS object's dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
     
 
 
