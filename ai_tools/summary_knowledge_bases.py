@@ -1,3 +1,39 @@
+"""
+This script generates summary knowledge bases for the ras-commander library.
+It processes the project files and creates the following output files:
+
+1. ras-commander_fullrepo.txt:
+   A comprehensive summary of all relevant project files, including their content
+   and structure. This file provides an overview of the entire codebase, including
+   all files and folders except those specified in OMIT_FOLDERS and OMIT_FILES.
+
+2. ras-commander_all_without_code.txt:
+   Similar to the comprehensive summary, but with the actual code inside functions
+   stripped out. This file focuses on the structure, documentation, and comments
+   of the codebase without including implementation details. It includes content
+   from all files, including examples and documentation files.
+
+3. ras_commander_documentation_only.txt:
+   Contains only the docstrings extracted from the project files, specifically
+   from the ras_commander folder. This file is useful for quickly reviewing the
+   documentation and purpose of various components without any implementation details
+   or examples.
+   
+   Notable Files:
+   - All markdown files: Comprehensive_Library_Guide.md, STYLE_GUIDE.md, Readme.md, etc.    
+   - logging_config.py
+
+4. examples.txt:
+   Includes the content of all files in the examples folder. This file helps in
+   understanding the usage and implementation of the ras-commander library through
+   practical examples.
+
+These output files are generated in the 'assistant_knowledge_bases' directory and
+serve different purposes for AI assistants or developers who need various levels
+of detail about the project structure, documentation, and examples.
+"""
+
+
 import os
 from pathlib import Path
 import re

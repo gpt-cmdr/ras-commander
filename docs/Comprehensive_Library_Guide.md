@@ -78,6 +78,8 @@ RAS-Commander (`ras_commander`) is a Python library designed to automate and str
 
 12. **Error Handling and Logging**:
     - Emphasis on robust error checking and informative logging throughout the library.
+    - Utilizes the `logging_config` module for consistent logging configuration.
+    - `@log_call` decorator applied to relevant functions for logging function calls.
 
 13. **AI-Accessibility**:
     - Structured, consistent codebase with clear documentation to facilitate easier learning and usage by AI models.

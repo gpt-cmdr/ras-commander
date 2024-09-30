@@ -24,7 +24,27 @@ Example:
     def example_method(cls, hdf_file: h5py.File, other_args):
         # Method implementation using hdf_file
         
+This module is part of the ras-commander library and uses a centralized logging configuration.
 
+Logging Configuration:
+- The logging is set up in the logging_config.py file.
+- A @log_call decorator is available to automatically log function calls.
+- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Logs are written to both console and a rotating file handler.
+- The default log file is 'ras_commander.log' in the 'logs' directory.
+- The default log level is INFO.
+
+To use logging in this module:
+1. Use the @log_call decorator for automatic function call logging.
+2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
+3. Obtain the logger using: logger = logging.getLogger(__name__)
+
+Example:
+    @log_call
+    def my_function():
+        logger = logging.getLogger(__name__)
+        logger.debug("Additional debug information")
+        # Function logic here
 """
 import h5py
 import numpy as np
@@ -41,14 +61,10 @@ from .RasPrj import RasPrj, ras, init_ras_project
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .RasPrj import RasPrj
+from ras_commander import get_logger
+from ras_commander.logging_config import log_call
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ])
+logger = get_logger(__name__)
 
 class RasHdf:
     """
@@ -58,53 +74,51 @@ class RasHdf:
     including listing paths, extracting data, and performing analyses on
     HEC-RAS project data stored in HDF format.
     """
-        
+    
+    
     @staticmethod
     def hdf_operation(func):
+        """
+        A decorator for HDF file operations in the RasHdf class.
+
+        This decorator wraps methods that perform operations on HDF files. It handles:
+        1. Resolving the HDF filename from various input types.
+        2. Opening and closing the HDF file.
+        3. Error handling and logging.
+        4. Applying the decorated function as a class method.
+
+        Args:
+            func (Callable): The function to be decorated.
+
+        Returns:
+            Callable: A wrapped version of the input function as a class method.
+
+        Raises:
+            ValueError: If the HDF file is not found.
+
+        Usage:
+            @RasHdf.hdf_operation
+            def some_hdf_method(cls, hdf_file, ...):
+                # Method implementation
+        """
         @wraps(func)
         def wrapper(cls, hdf_input: Union[str, Path], *args: Any, **kwargs: Any) -> Any:
             from ras_commander import ras  # Import here to avoid circular import
             ras_obj = kwargs.pop('ras_object', None) or ras
             try:
                 hdf_filename = cls._get_hdf_filename(hdf_input, ras_obj)
+                if hdf_filename is None:
+                    raise ValueError(f"HDF file {hdf_input} not found. Use a try-except block to catch this error.")
                 with h5py.File(hdf_filename, 'r') as hdf_file:
                     return func(cls, hdf_file, *args, **kwargs)
             except Exception as e:
-                logging.error(f"Error in {func.__name__}: {e}")
+                logger.error(f"Error in {func.__name__}: {e}")
                 return None
         return classmethod(wrapper)
+
     
     @classmethod
-    def get_hdf_paths_with_properties(cls, hdf_input: Union[str, Path], ras_object=None) -> pd.DataFrame:
-        """
-        List all paths in the HDF file with their properties.
-
-        Args:
-            hdf_input (Union[str, Path]): The plan number or full path to the HDF file.
-            ras_object (RasPrj, optional): The RAS project object. If None, uses the global ras instance.
-
-        Returns:
-            pd.DataFrame: DataFrame of all paths and their properties in the HDF file.
-
-        Example:
-            >>> paths_df = RasHdf.get_hdf_paths_with_properties("path/to/file.hdf")
-            >>> print(paths_df.head())
-        """
-        with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
-            paths = []
-            def visitor_func(name: str, node: h5py.Group) -> None:
-                path_info = {
-                    "HDF_Path": name,
-                    "Type": type(node).__name__,
-                    "Shape": getattr(node, "shape", None),
-                    "Size": getattr(node, "size", None),
-                    "Dtype": getattr(node, "dtype", None)
-                }
-                paths.append(path_info)
-            hdf_file.visititems(visitor_func)
-            return pd.DataFrame(paths)
-    
-    @classmethod
+    @log_call
     def get_runtime_data(cls, hdf_input: Union[str, Path], ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract runtime and compute time data from a single HDF file.
@@ -122,15 +136,15 @@ class RasHdf:
             ...     print(runtime_df.head())
         """
         with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
-            logging.info(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
+            logger.info(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
             plan_info = hdf_file.get('/Plan Data/Plan Information')
             if plan_info is None:
-                logging.warning("Group '/Plan Data/Plan Information' not found.")
+                logger.warning("Group '/Plan Data/Plan Information' not found.")
                 return None
 
             plan_name = plan_info.attrs.get('Plan Name', 'Unknown')
             plan_name = plan_name.decode('utf-8') if isinstance(plan_name, bytes) else plan_name
-            logging.info(f"Plan Name: {plan_name}")
+            logger.info(f"Plan Name: {plan_name}")
 
             start_time_str = plan_info.attrs.get('Simulation Start Time', 'Unknown')
             end_time_str = plan_info.attrs.get('Simulation End Time', 'Unknown')
@@ -142,13 +156,13 @@ class RasHdf:
             simulation_duration = end_time - start_time
             simulation_hours = simulation_duration.total_seconds() / 3600
 
-            logging.info(f"Simulation Start Time: {start_time_str}")
-            logging.info(f"Simulation End Time: {end_time_str}")
-            logging.info(f"Simulation Duration (hours): {simulation_hours}")
+            logger.info(f"Simulation Start Time: {start_time_str}")
+            logger.info(f"Simulation End Time: {end_time_str}")
+            logger.info(f"Simulation Duration (hours): {simulation_hours}")
 
             compute_processes = hdf_file.get('/Results/Summary/Compute Processes')
             if compute_processes is None:
-                logging.warning("Dataset '/Results/Summary/Compute Processes' not found.")
+                logger.warning("Dataset '/Results/Summary/Compute Processes' not found.")
                 return None
 
             process_names = [name.decode('utf-8') for name in compute_processes['Process'][:]]
@@ -163,8 +177,8 @@ class RasHdf:
                 'Compute Time (hours)': completion_times / (1000 * 3600)
             })
 
-            logging.debug("Compute processes DataFrame:")
-            logging.debug(compute_processes_df)
+            logger.debug("Compute processes DataFrame:")
+            logger.debug(compute_processes_df)
 
             compute_processes_summary = {
                 'Plan Name': [plan_name],
@@ -184,15 +198,15 @@ class RasHdf:
             compute_processes_summary['Complete Process Speed (hr/hr)'] = [simulation_hours / compute_processes_summary['Complete Process (hr)'][0] if compute_processes_summary['Complete Process (hr)'][0] != 'N/A' else 'N/A']
 
             compute_summary_df = pd.DataFrame(compute_processes_summary)
-            logging.debug("Compute summary DataFrame:")
-            logging.debug(compute_summary_df)
+            logger.debug("Compute summary DataFrame:")
+            logger.debug(compute_summary_df)
 
             return compute_summary_df
 
     # List 2D Flow Area Groups (needed for later functions that extract specific datasets)
     
     @classmethod
-    @hdf_operation
+    @log_call
     def get_2d_flow_area_names(cls, hdf_input: Union[str, Path], ras_object=None) -> Optional[List[str]]:
         """
         List 2D Flow Area names from the HDF file.
@@ -212,16 +226,15 @@ class RasHdf:
                 group = hdf_file['Geometry/2D Flow Areas']
                 group_names = [name for name in group.keys() if isinstance(group[name], h5py.Group)]
                 if not group_names:
-                    logging.warning("No 2D Flow Areas found in the HDF file")
+                    logger.warning("No 2D Flow Areas found in the HDF file")
                     return None
-                logging.info(f"Found {len(group_names)} 2D Flow Areas")
+                logger.info(f"Found {len(group_names)} 2D Flow Areas")
                 return group_names
             else:
-                logging.warning("No 2D Flow Areas found in the HDF file")
+                logger.warning("No 2D Flow Areas found in the HDF file")
                 return None
-            
     @classmethod
-    @hdf_operation
+    @log_call
     def get_2d_flow_area_attributes(cls, hdf_input: Union[str, Path], ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract 2D Flow Area Attributes from the HDF file.
@@ -244,14 +257,12 @@ class RasHdf:
             if 'Geometry/2D Flow Areas/Attributes' in hdf_file:
                 attributes = hdf_file['Geometry/2D Flow Areas/Attributes'][()]
                 attributes_df = pd.DataFrame(attributes)
-                logging.info(f"Extracted 2D Flow Area attributes: {attributes_df.shape[0]} rows, {attributes_df.shape[1]} columns")
                 return attributes_df
             else:
-                logging.warning("No 2D Flow Area attributes found in the HDF file")
                 return None
             
     @classmethod
-    @hdf_operation
+    @log_call
     def get_cell_info(cls, hdf_input: Union[str, Path], ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract Cell Info from the HDF file.
@@ -272,14 +283,10 @@ class RasHdf:
         """
         with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
             cell_info_df = cls._extract_dataset(hdf_file, 'Geometry/2D Flow Areas/Cell Info', ['Start', 'End'])
-            if cell_info_df is not None:
-                logging.info(f"Extracted Cell Info: {cell_info_df.shape[0]} rows, {cell_info_df.shape[1]} columns")
-            else:
-                logging.warning("No Cell Info found in the HDF file")
             return cell_info_df
         
     @classmethod
-    @hdf_operation
+    @log_call
     def get_cell_points(cls, hdf_input: Union[str, Path], ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract Cell Points from the HDF file.
@@ -300,14 +307,10 @@ class RasHdf:
         """
         with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
             cell_points_df = cls._extract_dataset(hdf_file, 'Geometry/2D Flow Areas/Cell Points', ['X', 'Y'])
-            if cell_points_df is not None:
-                logging.info(f"Extracted Cell Points: {cell_points_df.shape[0]} rows, {cell_points_df.shape[1]} columns")
-            else:
-                logging.warning("No Cell Points found in the HDF file")
             return cell_points_df
     
     @classmethod
-    @hdf_operation
+    @log_call
     def get_polygon_info_and_parts(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Extract Polygon Info and Parts from the HDF file.
@@ -334,24 +337,14 @@ class RasHdf:
             ...     print("Polygon data not found")
         """
         with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
-            # Retrieve the area name, defaulting to the first found if not provided
             area_name = cls._get_area_name(hdf_file, area_name, hdf_file.filename)
-
-            # Construct the base path for dataset extraction
             base_path = f'Geometry/2D Flow Areas'
-            
-            # Extract Polygon Info and Parts datasets
             polygon_info_df = cls._extract_dataset(hdf_file, f'{base_path}/Polygon Info', ['Column1', 'Column2', 'Column3', 'Column4'])
             polygon_parts_df = cls._extract_dataset(hdf_file, f'{base_path}/Polygon Parts', ['Start', 'Count'])
-
-            # Log warnings if no data is found
-            if polygon_info_df is None and polygon_parts_df is None:
-                logging.warning(f"No Polygon Info or Parts found for 2D Flow Area: {area_name}")
-
             return polygon_info_df, polygon_parts_df
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_polygon_points(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract Polygon Points from the HDF file.
@@ -367,19 +360,16 @@ class RasHdf:
         """
         with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
             area_name = cls._get_area_name(hdf_file, area_name, hdf_file.filename)
-            # This path does not include the area name
             polygon_points_path = f'Geometry/2D Flow Areas/Polygon Points'
             if polygon_points_path in hdf_file:
                 polygon_points = hdf_file[polygon_points_path][()]
                 polygon_points_df = pd.DataFrame(polygon_points, columns=['X', 'Y'])
-                logging.info(f"Extracted Polygon Points for 2D Flow Area {area_name}: {polygon_points_df.shape[0]} rows, {polygon_points_df.shape[1]} columns")
                 return polygon_points_df
             else:
-                logging.warning(f"No Polygon Points found for 2D Flow Area: {area_name}")
                 return None
             
     @classmethod
-    @hdf_operation
+    @log_call
     def get_cells_center_data(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Extract Cells Center Coordinates and Manning's n from the HDF file.
@@ -405,45 +395,21 @@ class RasHdf:
             ... else:
             ...     print("Cell center data not found")
         """
-        logging.info(f"Entering get_cells_center_data method")
-        logging.info(f"Input parameters: hdf_input={hdf_input}, area_name={area_name}")
-        
         try:
             hdf_filename = cls._get_hdf_filename(hdf_input, ras_object)
-            logging.info(f"HDF filename: {hdf_filename}")
-            
             with h5py.File(hdf_filename, 'r') as hdf_file:
-                logging.info(f"Successfully opened HDF file: {hdf_filename}")
-                
-                logging.info(f"Getting Cells Center Data for 2D Flow Area: {area_name}")
                 area_name = cls._get_area_name(hdf_file, area_name, hdf_file.filename)
-                logging.info(f"Area Name: {area_name}")
-                
                 base_path = f'Geometry/2D Flow Areas/{area_name}'
                 cells_center_coord_path = f'{base_path}/Cells Center Coordinate'
                 cells_manning_n_path = f'{base_path}/Cells Center Manning\'s n'
-                
-                logging.info(f"Extracting dataset from path: {cells_center_coord_path}")
                 cells_center_coord_df = cls._extract_dataset(hdf_file, cells_center_coord_path, ['X', 'Y'])
-                
-                logging.info(f"Extracting dataset from path: {cells_manning_n_path}")
                 cells_manning_n_df = cls._extract_dataset(hdf_file, cells_manning_n_path, ['Manning\'s n'])
-
-                if cells_center_coord_df is not None and cells_manning_n_df is not None:
-                    logging.info(f"Extracted Cells Center Data for 2D Flow Area: {area_name}")
-                    logging.info(f"Cells Center Coordinates shape: {cells_center_coord_df.shape}, dtype: {cells_center_coord_df.dtypes}")
-                    logging.info(f"Cells Manning's n shape: {cells_manning_n_df.shape}, dtype: {cells_manning_n_df.dtypes}")
-                else:
-                    logging.warning(f"Cells Center Data not found for 2D Flow Area: {area_name}")
-
                 return cells_center_coord_df, cells_manning_n_df
-        
         except Exception as e:
-            logging.error(f"Error in get_cells_center_data: {str(e)}", exc_info=True)
             return None, None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_faces_area_elevation_data(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract Faces Area Elevation Values from the HDF file.
@@ -472,17 +438,12 @@ class RasHdf:
             if area_elev_values_path in hdf_file:
                 area_elev_values = hdf_file[area_elev_values_path][()]
                 area_elev_values_df = pd.DataFrame(area_elev_values, columns=['Elevation', 'Area', 'Wetted Perimeter', 'Manning\'s n'])
-                
-                logging.info(f"Extracted Faces Area Elevation Values for 2D Flow Area: {area_name}")
-                logging.info(f"Faces Area Elevation Values shape: {area_elev_values.shape}, dtype: {area_elev_values.dtype}")
-                
                 return area_elev_values_df
             else:
-                logging.warning(f"Faces Area Elevation Values not found for 2D Flow Area: {area_name}")
                 return None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_faces_indexes(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Extract Faces Cell and FacePoint Indexes from the HDF file.
@@ -518,17 +479,10 @@ class RasHdf:
             cell_indexes_df = cls._extract_dataset(hdf_file, cell_indexes_path, ['Left Cell', 'Right Cell'])
             facepoint_indexes_df = cls._extract_dataset(hdf_file, facepoint_indexes_path, ['Start FacePoint', 'End FacePoint'])
 
-            if cell_indexes_df is not None and facepoint_indexes_df is not None:
-                logging.info(f"Extracted Faces Indexes for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Faces Indexes not found for 2D Flow Area: {area_name}")
-
             return cell_indexes_df, facepoint_indexes_df
         
-        
-        
     @classmethod
-    @hdf_operation
+    @log_call
     def get_faces_elevation_data(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Extract Faces Low Elevation Centroid and Minimum Elevation from the HDF file.
@@ -550,15 +504,10 @@ class RasHdf:
             low_elev_centroid = cls._extract_dataset(hdf_file, f'{base_path}/Faces Low Elevation Centroid', ['Low Elevation Centroid'])
             min_elevation = cls._extract_dataset(hdf_file, f'{base_path}/Faces Minimum Elevation', ['Minimum Elevation'])
 
-            if low_elev_centroid is not None and min_elevation is not None:
-                logging.info(f"Extracted Faces Elevation Data for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Faces Elevation Data not found for 2D Flow Area: {area_name}")
-
             return low_elev_centroid, min_elevation
     
     @classmethod
-    @hdf_operation
+    @log_call
     def get_faces_vector_data(
         cls,
         hdf_input: Union[str, Path],
@@ -583,15 +532,10 @@ class RasHdf:
             base_path = f'Geometry/2D Flow Areas/{area_name}'
             vector_data = cls._extract_dataset(hdf_file, f'{base_path}/Faces NormalUnitVector and Length', ['NormalX', 'NormalY', 'Length'])
 
-            if vector_data is not None:
-                logging.info(f"Extracted Faces Vector Data for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Faces Vector Data not found for 2D Flow Area: {area_name}")
-
             return vector_data
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_faces_perimeter_data(
         cls,
         hdf_input: Union[str, Path],
@@ -632,15 +576,10 @@ class RasHdf:
             perimeter_info = cls._extract_dataset(hdf_file, f'{base_path}/Faces Perimeter Info', ['Start', 'Count'])
             perimeter_values = cls._extract_dataset(hdf_file, f'{base_path}/Faces Perimeter Values', ['X', 'Y'])
 
-            if perimeter_info is not None and perimeter_values is not None:
-                logging.info(f"Extracted Faces Perimeter Data for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Faces Perimeter Data not found for 2D Flow Area: {area_name}")
-
             return perimeter_info, perimeter_values
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_infiltration_data(
         cls,
         hdf_input: Union[str, Path],
@@ -661,29 +600,20 @@ class RasHdf:
                 DataFrames containing various Infiltration Data
         """
         with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
-            # Retrieve the area name from the HDF file or use the first found
             area_name = cls._get_area_name(hdf_file, area_name, hdf_file.filename)
 
-            # Define the base path for the Infiltration data
             base_path = f'Geometry/2D Flow Areas/{area_name}/Infiltration'
             
-            # Extract various datasets related to infiltration
             cell_classifications = cls._extract_dataset(hdf_file, f'{base_path}/Cell Center Classifications', ['Cell Classification'])
             face_classifications = cls._extract_dataset(hdf_file, f'{base_path}/Face Center Classifications', ['Face Classification'])
             initial_deficit = cls._extract_dataset(hdf_file, f'{base_path}/Initial Deficit', ['Initial Deficit'])
             maximum_deficit = cls._extract_dataset(hdf_file, f'{base_path}/Maximum Deficit', ['Maximum Deficit'])
             potential_percolation_rate = cls._extract_dataset(hdf_file, f'{base_path}/Potential Percolation Rate', ['Potential Percolation Rate'])
 
-            # Log the extraction status
-            if all(df is not None for df in [cell_classifications, face_classifications, initial_deficit, maximum_deficit, potential_percolation_rate]):
-                logging.info(f"Extracted Infiltration Data for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Some or all Infiltration Data not found for 2D Flow Area: {area_name}")
-
             return cell_classifications, face_classifications, initial_deficit, maximum_deficit, potential_percolation_rate
         
     @classmethod
-    @hdf_operation
+    @log_call
     def get_percent_impervious_data(
         cls,
         hdf_input: Union[str, Path],
@@ -711,15 +641,10 @@ class RasHdf:
             face_classifications = cls._extract_dataset(hdf_file, f'{base_path}/Face Center Classifications', ['Face Classification'])
             percent_impervious = cls._extract_dataset(hdf_file, f'{base_path}/Percent Impervious', ['Percent Impervious'])
 
-            if all([df is not None for df in [cell_classifications, face_classifications, percent_impervious]]):
-                logging.info(f"Extracted Percent Impervious Data for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Some or all Percent Impervious Data not found for 2D Flow Area: {area_name}")
-
             return cell_classifications, face_classifications, percent_impervious
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_perimeter_data(
         cls,
         hdf_input: Union[str, Path],
@@ -751,17 +676,10 @@ class RasHdf:
             perimeter_path = f'Geometry/2D Flow Areas/{area_name}/Perimeter'
             perimeter_df = cls._extract_dataset(hdf_file, perimeter_path, ['X', 'Y'])
 
-            if perimeter_df is not None:
-                logging.info(f"Extracted Perimeter Data for 2D Flow Area: {area_name}")
-            else:
-                logging.warning(f"Perimeter Data not found for 2D Flow Area: {area_name}")
-
             return perimeter_df
 
-# Private Class Methods (to save code duplication)
-
-
     @classmethod
+    @log_call
     def _get_area_name(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> str:
         """
         Get the 2D Flow Area name from the HDF file.
@@ -783,14 +701,13 @@ class RasHdf:
                 if not area_names:
                     raise ValueError("No 2D Flow Areas found in the HDF file")
                 area_name = area_names[0]
-                logging.info(f"Using first 2D Flow Area found: {area_name}")
             else:
                 if area_name not in hdf_file['Geometry/2D Flow Areas']:
                     raise ValueError(f"2D Flow Area '{area_name}' not found in the HDF file")
-                logging.info(f"Using 2D Flow Area provided by user: {area_name}")
         return area_name
 
     @classmethod
+    @log_call
     def _extract_dataset(cls, hdf_input: Union[str, Path], dataset_path: str, column_names: List[str], ras_object=None) -> Optional[pd.DataFrame]:
         """
         Extract a dataset from the HDF file and convert it to a DataFrame.
@@ -808,13 +725,12 @@ class RasHdf:
             try:
                 dataset = hdf_file[dataset_path][()]
                 df = pd.DataFrame(dataset, columns=column_names)
-                logging.info(f"Extracted dataset: {dataset_path}")
                 return df
             except KeyError:
-                logging.warning(f"Dataset not found: {dataset_path}")
                 return None
+
     @classmethod
-    @hdf_operation
+    @log_call
     def read_hdf_to_dataframe(cls, hdf_input: Union[str, Path], dataset_path: str, fill_value: Union[int, float, str] = -9999, ras_object=None) -> pd.DataFrame:
         """
         Reads an HDF5 dataset and converts it into a pandas DataFrame, handling byte strings and missing values.
@@ -840,14 +756,12 @@ class RasHdf:
                 hdf_dataframe[byte_columns] = hdf_dataframe[byte_columns].applymap(lambda x: x.decode('utf-8') if isinstance(x, (bytes, bytearray)) else x)
                 hdf_dataframe = hdf_dataframe.replace({fill_value: np.NaN})
                 
-                logging.info(f"Successfully read dataset: {dataset_path}")
                 return hdf_dataframe
             except KeyError:
-                logging.error(f"Dataset not found: {dataset_path}")
                 raise
         
     @classmethod
-    @hdf_operation
+    @log_call
     def get_group_attributes_as_df(cls, hdf_input: Union[str, Path], group_path: str, ras_object=None) -> pd.DataFrame:
         """
         Convert attributes inside a given HDF group to a DataFrame.
@@ -894,14 +808,14 @@ class RasHdf:
                 
                 return pd.DataFrame(attributes)
             except KeyError:
-                logging.error(f"Group not found: {group_path}")
-                raise
+                logger.critical(f"Group path '{group_path}' not found in HDF file '{hdf_filename}'")
 
     # Last functions from PyHMT2D:
 
+    from ras_commander.logging_config import log_call
 
     @classmethod
-    @hdf_operation
+    @log_call
     def get_2d_area_solution_times(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Optional[np.ndarray]:
         """
         Retrieve solution times for a specified 2D Flow Area.
@@ -925,13 +839,12 @@ class RasHdf:
                     hdf_file['Results']['Unsteady']['Output']['Output Blocks']
                     ['Base Output']['Unsteady Time Series']['Time']
                 )
-                logging.info(f"Retrieved {len(solution_times)} solution times for 2D Flow Area: {area_name}")
                 return solution_times
             except KeyError:
-                logging.warning(f"Solution times not found for 2D Flow Area: {area_name}")
                 return None
+
     @classmethod
-    @hdf_operation
+    @log_call
     def get_2d_area_solution_time_dates(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Optional[np.ndarray]:
         """
         Retrieve solution time dates for a specified 2D Flow Area.
@@ -955,14 +868,12 @@ class RasHdf:
                     hdf_file['Results']['Unsteady']['Output']['Output Blocks']
                     ['Base Output']['Unsteady Time Series']['Time Date Stamp']
                 )
-                logging.info(f"Retrieved {len(solution_time_dates)} solution time dates for 2D Flow Area: {area_name}")
                 return solution_time_dates
             except KeyError:
-                logging.warning(f"Solution time dates not found for 2D Flow Area: {area_name}")
                 return None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def load_2d_area_solutions(
         cls,
         hdf_file: h5py.File,
@@ -988,51 +899,37 @@ class RasHdf:
                     - '{Area_Name}_Face_Velocity': Face Normal Velocity DataFrame.
         """
         try:
-            # Extract solution times
             solution_times_path = '/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time'
             if solution_times_path not in hdf_file:
-                logging.error(f"Solution times dataset not found at path: {solution_times_path}")
                 return None
 
             solution_times = hdf_file[solution_times_path][()]
             solution_times_df = pd.DataFrame({
                 'Time_Step': solution_times
             })
-            logging.info(f"Extracted Solution Times: {solution_times_df.shape[0]} time steps")
 
-            # Initialize dictionary to hold all dataframes
             solutions_dict = {
                 'solution_times': solution_times_df
             }
 
-            # Get list of 2D Flow Areas
             two_d_area_names = cls.get_2d_flow_area_names(hdf_file, ras_object=ras_object)
             if not two_d_area_names:
-                logging.error("No 2D Flow Areas found in the HDF file.")
                 return solutions_dict
 
             for area in two_d_area_names:
-                logging.info(f"Processing 2D Flow Area: {area}")
-
-                # Paths for WSE and Face Velocity datasets
                 wse_path = f'/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/{area}/Water Surface'
                 face_velocity_path = f'/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/{area}/Face Velocity'
 
-                # Extract Water Surface Elevation (WSE)
                 if wse_path not in hdf_file:
-                    logging.warning(f"WSE dataset not found for area '{area}' at path: {wse_path}")
                     continue
 
                 wse_data = hdf_file[wse_path][()]
-                # Assuming cell center coordinates are required for WSE
                 cell_center_coords_path = f'/Geometry/2D Flow Areas/{area}/Cell Center Coordinate'
                 if cell_center_coords_path not in hdf_file:
-                    logging.warning(f"Cell Center Coordinate dataset not found for area '{area}' at path: {cell_center_coords_path}")
                     continue
 
                 cell_center_coords = hdf_file[cell_center_coords_path][()]
                 if cell_center_coords.shape[0] != wse_data.shape[1]:
-                    logging.warning(f"Mismatch between Cell Center Coordinates and WSE data for area '{area}'.")
                     continue
 
                 wse_df = pd.DataFrame({
@@ -1043,23 +940,17 @@ class RasHdf:
                     'WSE': wse_data.flatten()
                 })
                 solutions_dict[f'{area}_WSE'] = wse_df
-                logging.info(f"Extracted WSE for area '{area}': {wse_df.shape[0]} records")
 
-                # Extract Face Normal Velocity
                 if face_velocity_path not in hdf_file:
-                    logging.warning(f"Face Velocity dataset not found for area '{area}' at path: {face_velocity_path}")
                     continue
 
                 face_velocity_data = hdf_file[face_velocity_path][()]
-                # Assuming face center points are required for velocities
                 face_center_coords_path = f'/Geometry/2D Flow Areas/{area}/Face Points Coordinates'
                 if face_center_coords_path not in hdf_file:
-                    logging.warning(f"Face Points Coordinates dataset not found for area '{area}' at path: {face_center_coords_path}")
                     continue
 
                 face_center_coords = hdf_file[face_center_coords_path][()]
                 if face_center_coords.shape[0] != face_velocity_data.shape[1]:
-                    logging.warning(f"Mismatch between Face Center Coordinates and Face Velocity data for area '{area}'.")
                     continue
 
                 face_velocity_df = pd.DataFrame({
@@ -1070,17 +961,14 @@ class RasHdf:
                     'Normal_Velocity_ft_s': face_velocity_data.flatten()
                 })
                 solutions_dict[f'{area}_Face_Velocity'] = face_velocity_df
-                logging.info(f"Extracted Face Velocity for area '{area}': {face_velocity_df.shape[0]} records")
 
             return solutions_dict
 
         except Exception as e:
-            logging.error(f"An error occurred while loading 2D area solutions: {e}", exc_info=True)
             return None
 
-
     @classmethod
-    @hdf_operation
+    @log_call
     def build_2d_area_face_hydraulic_information(cls, hdf_input: Union[str, Path, h5py.File], area_name: Optional[str] = None, ras_object=None) -> Optional[List[List[np.ndarray]]]:
         """
         Build face hydraulic information tables (elevation, area, wetted perimeter, Manning's n) for each face in 2D Flow Areas.
@@ -1115,18 +1003,16 @@ class RasHdf:
                         start_row, count = face
                         face_data = face_elev_values[start_row:start_row + count].copy()
                         area_hydraulic_info.append(face_data)
-                        logging.info(f"Processed hydraulic information for face {face} in 2D Flow Area: {area}")
                     
                     hydraulic_info_table.append(area_hydraulic_info)
 
                 return hydraulic_info_table
 
-        except KeyError as e:
-            logging.error(f"Error building face hydraulic information: {e}")
+        except KeyError:
             return None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def build_2d_area_face_point_coordinates_list(cls, hdf_input: Union[str, Path, h5py.File], area_name: Optional[str] = None, ras_object=None) -> Optional[List[np.ndarray]]:
         """
         Build a list of face point coordinates for each 2D Flow Area.
@@ -1152,16 +1038,14 @@ class RasHdf:
                 for area in two_d_area_names:
                     face_points = np.array(hdf_file[f'Geometry/2D Flow Areas/{area}/Face Points Coordinates'])
                     face_point_coords_list.append(face_points)
-                    logging.info(f"Built face point coordinates list for 2D Flow Area: {area}")
 
                 return face_point_coords_list
 
-        except KeyError as e:
-            logging.error(f"Error building face point coordinates list: {e}")
+        except KeyError:
             return None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def build_2d_area_face_profile(cls, hdf_input: Union[str, Path, h5py.File], area_name: Optional[str] = None, ras_object=None, n_face_profile_points: int = 10) -> Optional[List[np.ndarray]]:
         """
         Build face profiles representing sub-grid terrain for each face in 2D Flow Areas.
@@ -1183,8 +1067,6 @@ class RasHdf:
         try:
             with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
                 two_d_area_names = cls.get_2d_flow_area_names(hdf_file, ras_object=ras_object)
-                print(f"Building face profiles for {len(two_d_area_names)} 2D Flow Areas")
-                print(f"Area names: {two_d_area_names}")
                 face_profiles = []
 
                 for area in two_d_area_names:
@@ -1205,11 +1087,9 @@ class RasHdf:
                             for i in range(n_face_profile_points)
                         ])
                         
-                        # Interpolate Z coordinates (assuming a method exists)
                         interpolated_points = cls.interpolate_z_coords(interpolated_points)
                         
                         profile_points_all_faces.append(interpolated_points)
-                        logging.info(f"Built face profile for face {face} in 2D Flow Area: {area}")
 
                     face_profiles.append(profile_points_all_faces)
 
@@ -1220,7 +1100,7 @@ class RasHdf:
             return None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def build_face_facepoints(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Optional[List[np.ndarray]]:
         """
         Build face's facepoint list for each 2D Flow Area.
@@ -1246,16 +1126,16 @@ class RasHdf:
                 for area in two_d_area_names:
                     face_facepoints = np.array(hdf_file[f'Geometry/2D Flow Areas/{area}/Faces FacePoint Indexes'])
                     face_facepoints_list.append(face_facepoints)
-                    logging.info(f"Built face facepoints list for 2D Flow Area: {area}")
 
                 return face_facepoints_list
 
         except KeyError as e:
-            logging.error(f"Error building face facepoints list: {e}")
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error building face facepoints list: {e}")
             return None
 
     @classmethod
-    @hdf_operation
+    @log_call
     def build_2d_area_boundaries(cls, hdf_input: Union[str, Path], area_name: Optional[str] = None, ras_object=None) -> Optional[Tuple[int, np.ndarray, List[str], List[str], List[str], np.ndarray, np.ndarray]]:
         """
         Build boundaries with their point lists for each 2D Flow Area.
@@ -1289,7 +1169,8 @@ class RasHdf:
                 for area in two_d_area_names:
                     boundary_points = np.array(hdf_file[f'Geometry/2D Flow Areas/{area}/Boundary Points'])
                     if boundary_points.size == 0:
-                        logging.warning(f"No boundary points found for 2D Flow Area: {area}")
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"No boundary points found for 2D Flow Area: {area}")
                         continue
 
                     current_boundary_id = boundary_points[0][0]
@@ -1322,18 +1203,17 @@ class RasHdf:
                     boundary_points_list.append(np.array(current_boundary_points))
                     total_boundaries += 1
 
-                    logging.info(f"Built boundaries for 2D Flow Area: {area}, Total Boundaries: {total_boundaries}")
-
                 return (total_boundaries, np.array(boundary_ids), boundary_names, flow_area_names, boundary_types, np.array(total_points_per_boundary), np.array(boundary_points_list))
 
         except KeyError as e:
-            logging.error(f"Error building boundaries: {e}")
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error building boundaries: {e}")
             return None
 
     # Helper Methods for New Functionalities
 
-
     @classmethod
+    @log_call
     def horizontal_distance(cls, coord1: np.ndarray, coord2: np.ndarray) -> float:
         """
         Calculate the horizontal distance between two coordinate points.
@@ -1353,6 +1233,7 @@ class RasHdf:
         return np.linalg.norm(coord2 - coord1)
 
     @classmethod
+    @log_call
     def interpolate_z_coords(cls, points: np.ndarray) -> np.ndarray:
         """
         Interpolate Z coordinates for a set of points.
@@ -1373,16 +1254,9 @@ class RasHdf:
         # This should be replaced with the appropriate interpolation method
         z_coords = np.zeros((points.shape[0], 1))  # Assuming Z=0 for simplicity
         return np.hstack((points, z_coords))
-   
-
-
-
-
-
-
 
     @classmethod
-    @hdf_operation
+    @log_call
     def extract_string_from_hdf(
         cls,
         hdf_input: Union[str, Path],
@@ -1425,10 +1299,12 @@ class RasHdf:
                 else:
                     return f"Unsupported object type: {type(hdf_object)}"
             except KeyError:
+                logger = logging.getLogger(__name__)
+                logger.error(f"Path not found: {hdf_path}")
                 raise KeyError(f"Path not found: {hdf_path}")
 
     @classmethod
-    @staticmethod
+    @log_call
     def decode_byte_strings(dataframe: pd.DataFrame) -> pd.DataFrame:
         """
         Decodes byte strings in a DataFrame to regular string objects.
@@ -1456,7 +1332,7 @@ class RasHdf:
         return dataframe
 
     @classmethod
-    @staticmethod
+    @log_call
     def perform_kdtree_query(
         reference_points: np.ndarray,
         query_points: np.ndarray,
@@ -1486,7 +1362,7 @@ class RasHdf:
         return snap
 
     @classmethod
-    @staticmethod
+    @log_call
     def find_nearest_neighbors(points: np.ndarray, max_distance: float = 2.0) -> np.ndarray:
         """
         Creates a self KDTree for dataset points and finds nearest neighbors excluding self, 
@@ -1519,7 +1395,7 @@ class RasHdf:
         return snapped
 
     @classmethod
-    @staticmethod
+    @log_call
     def consolidate_dataframe(
         dataframe: pd.DataFrame,
         group_by: Optional[Union[str, List[str]]] = None,
@@ -1564,7 +1440,7 @@ class RasHdf:
         return result
     
     @classmethod
-    @staticmethod
+    @log_call
     def find_nearest_value(array: Union[list, np.ndarray], target_value: Union[int, float]) -> Union[int, float]:
         """
         Finds the nearest value in a NumPy array to the specified target value.
@@ -1587,7 +1463,8 @@ class RasHdf:
         return array[idx]
     
     @staticmethod
-    def _get_hdf_filename(hdf_input: Union[str, Path, h5py.File], ras_object=None) -> Path:
+    @log_call
+    def _get_hdf_filename(hdf_input: Union[str, Path, h5py.File], ras_object=None) -> Optional[Path]:
         """
         Get the HDF filename from the input.
 
@@ -1596,11 +1473,10 @@ class RasHdf:
             ras_object (RasPrj, optional): The RAS project object. If None, uses the global ras instance.
 
         Returns:
-            Path: The full path to the HDF file as a Path object.
+            Optional[Path]: The full path to the HDF file as a Path object, or None if an error occurs.
 
-        Raises:
-            ValueError: If no HDF file is found for the given plan number or if the input type is invalid.
-            FileNotFoundError: If the specified HDF file does not exist.
+        Note:
+            This method logs critical errors instead of raising exceptions.
         """
 
         # If hdf_input is already an h5py.File object, return its filename
@@ -1608,30 +1484,39 @@ class RasHdf:
             return Path(hdf_input.filename)
 
         # Convert to Path object if it's a string
-        hdf_input = Path(hdf_input)
+        if isinstance(hdf_input, str):
+            hdf_input = Path(hdf_input)
 
         # If hdf_input is a file path, return it directly
-        if hdf_input.is_file():
+        if isinstance(hdf_input, Path) and hdf_input.is_file():
             return hdf_input
 
         # If hdf_input is not a file path, assume it's a plan number and require ras_object
         ras_obj = ras_object or ras
         if not ras_obj.initialized:
-            raise ValueError("ras_object is not initialized. ras_object is required when hdf_input is not a direct file path.")
+            logger.critical("ras_object is not initialized. ras_object is required when hdf_input is not a direct file path.")
+            return None
 
         plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == str(hdf_input)]
         if plan_info.empty:
-            raise ValueError(f"No HDF file found for plan number {hdf_input}")
+            logger.critical(f"No HDF file found for plan number {hdf_input}")
+            return None
 
-        hdf_filename = Path(plan_info.iloc[0]['HDF_Results_Path'])
-        if not hdf_filename.is_file():
-            raise FileNotFoundError(f"HDF file not found: {hdf_filename}")
+        hdf_filename = plan_info.iloc[0]['HDF_Results_Path']
+        if hdf_filename is None:
+            logger.critical(f"HDF_Results_Path is None for plan number {hdf_input}")
+            return None
 
-        return hdf_filename
+        hdf_path = Path(hdf_filename)
+        if not hdf_path.is_file():
+            logger.critical(f"HDF file not found: {hdf_path}")
+            return None
+
+        return hdf_path
 
 
 
-
+@log_call
 def save_dataframe_to_hdf(
     dataframe: pd.DataFrame,
     hdf_parent_group: h5py.Group,
@@ -1678,6 +1563,7 @@ def save_dataframe_to_hdf(
     # Identify string columns and ensure consistency
     string_cols = df.select_dtypes(include=['object']).columns
     if not string_cols.equals(df.select_dtypes(include=['object']).columns):
+        logger.error("Inconsistent string columns detected")
         raise ValueError("Inconsistent string columns detected")
     
     # Encode string columns to bytes
@@ -1688,6 +1574,7 @@ def save_dataframe_to_hdf(
     
     # Remove existing dataset if it exists
     if dataset_name in hdf_parent_group:
+        logger.warning(f"Existing dataset {dataset_name} will be overwritten")
         del hdf_parent_group[dataset_name]
     
     # Create the dataset in the HDF5 file
@@ -1697,6 +1584,5 @@ def save_dataframe_to_hdf(
     if attributes:
         dataset.attrs.update(attributes)
     
-    logging.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
+    logger.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
     return dataset
-

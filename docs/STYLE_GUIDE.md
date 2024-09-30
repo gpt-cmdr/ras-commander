@@ -284,3 +284,56 @@ if not ras_examples.is_project_extracted("Bald Eagle Creek"):
 ```
 
 Remember, consistency is key. When in doubt, prioritize readability and clarity in your code. Always consider the maintainability and extensibility of the codebase when making design decisions.
+
+
+13. Logging
+
+Instructions for setting up a minimal logging decorator and applying it to functions:
+
+1. Create logging_config.py:
+```python
+import logging
+import functools
+
+def setup_logging(level=logging.INFO):
+    logging.basicConfig(level=level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+def log_call(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        logger = logging.getLogger(func.__module__)
+        logger.info(f"Calling {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+setup_logging()
+```
+
+2. In each module file (e.g., RasPrj.py, RasPlan.py):
+   - Add at the top: `from ras_commander.logging_config import log_call`
+   - Remove all existing logging configurations and logger instantiations
+
+3. Apply the decorator to functions:
+   - Replace existing logging statements with the `@log_call` decorator
+   - Remove any manual logging within the function body
+
+Example changes to functions:
+
+Before:
+```python
+def compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=False, num_cores=None):
+    logging.info(f"Computing plan {plan_number}")
+    # ... function logic ...
+    logging.info(f"Plan {plan_number} computation complete")
+    return result
+```
+
+After:
+```python
+@log_call
+def compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=False, num_cores=None):
+    # ... function logic ...
+    return result
+```
+
+Apply this pattern across all functions in the library. This approach will significantly reduce the code footprint while maintaining basic logging functionality.
