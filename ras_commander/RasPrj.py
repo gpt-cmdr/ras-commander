@@ -38,6 +38,7 @@ Example:
         logger.debug("Additional debug information")
         # Function logic here
 """
+import os
 import re
 from pathlib import Path
 import pandas as pd
@@ -122,31 +123,35 @@ class RasPrj:
                 if description_match:
                     plan_info['description'] = description_match.group(1).strip()
                 
+                # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
+                
                 # Extract other critical information
-                patterns = {
-                    'computation_interval': r'Computation Interval=(.+)',
-                    'dss_file': r'DSS File=(.+)',
-                    'flow_file': r'Flow File=(.+)',
-                    'friction_slope_method': r'Friction Slope Method=(.+)',
-                    'geom_file': r'Geom File=(.+)',
-                    'mapping_interval': r'Mapping Interval=(.+)',
-                    'plan_title': r'Plan Title=(.+)',
-                    'program_version': r'Program Version=(.+)',
-                    'run_htab': r'Run HTab=(.+)',
-                    'run_post_process': r'Run PostProcess=(.+)',
-                    'run_sediment': r'Run Sediment=(.+)',
-                    'run_unet': r'Run UNet=(.+)',
-                    'run_wqnet': r'Run WQNet=(.+)',
-                    'short_identifier': r'Short Identifier=(.+)',
-                    'simulation_date': r'Simulation Date=(.+)',
-                    'unet_d1_cores': r'UNET D1 Cores=(.+)',
-                    'unet_use_existing_ib_tables': r'UNET Use Existing IB Tables=(.+)',
-                    'unet_1d_methodology': r'UNET 1D Methodology=(.+)',
-                    'unet_d2_solver_type': r'UNET D2 SolverType=(.+)',
-                    'unet_d2_name': r'UNET D2 Name=(.+)'
+                supported_plan_keys = {
+                    'Computation Interval': r'Computation Interval=(.+)',
+                    'DSS File': r'DSS File=(.+)',
+                    'Flow File': r'Flow File=(.+)',
+                    'Friction Slope Method': r'Friction Slope Method=(.+)',
+                    'Geom File': r'Geom File=(.+)',
+                    'Mapping Interval': r'Mapping Interval=(.+)',
+                    'Plan Title': r'Plan Title=(.+)',
+                    'Program Version': r'Program Version=(.+)',
+                    'Run HTab': r'Run HTab=(.+)',
+                    'Run PostProcess': r'Run PostProcess=(.+)',
+                    'Run Sediment': r'Run Sediment=(.+)',
+                    'Run UNet': r'Run UNet=(.+)',
+                    'Run WQNet': r'Run WQNet=(.+)',
+                    'Short Identifier': r'Short Identifier=(.+)',
+                    'Simulation Date': r'Simulation Date=(.+)',
+                    'UNET D1 Cores': r'UNET D1 Cores=(.+)',
+                    'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
+                    'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
+                    'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
+                    'UNET D2 Name': r'UNET D2 Name=(.+)'
                 }
                 
-                for key, pattern in patterns.items():
+                # END Exception to Style Guide
+                
+                for key, pattern in supported_plan_keys.items():
                     match = re.search(pattern, content)
                     if match:
                         plan_info[key] = match.group(1).strip()
@@ -221,20 +226,24 @@ class RasPrj:
         with open(unsteady_file_path, 'r') as file:
             content = file.read()
             
-            patterns = {
-                'flow_title': r'Flow Title=(.+)',
-                'program_version': r'Program Version=(.+)',
-                'use_restart': r'Use Restart=(.+)',
-                'precipitation_mode': r'Precipitation Mode=(.+)',
-                'wind_mode': r'Wind Mode=(.+)',
-                'precipitation_bc_mode': r'Met BC=Precipitation\|Mode=(.+)',
-                'evapotranspiration_bc_mode': r'Met BC=Evapotranspiration\|Mode=(.+)',
-                'precipitation_expanded_view': r'Met BC=Precipitation\|Expanded View=(.+)',
-                'precipitation_constant_units': r'Met BC=Precipitation\|Constant Units=(.+)',
-                'precipitation_gridded_source': r'Met BC=Precipitation\|Gridded Source=(.+)'
+            # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the unsteady file keys.
+                
+            supported_unsteady_keys = {
+                'Flow Title': r'Flow Title=(.+)',
+                'Program Version': r'Program Version=(.+)',
+                'Use Restart': r'Use Restart=(.+)',
+                'Precipitation Mode': r'Precipitation Mode=(.+)',
+                'Wind Mode': r'Wind Mode=(.+)',
+                'Met BC=Precipitation|Mode': r'Met BC=Precipitation\|Mode=(.+)',
+                'Met BC=Evapotranspiration|Mode': r'Met BC=Evapotranspiration\|Mode=(.+)',
+                'Met BC=Precipitation|Expanded View': r'Met BC=Precipitation\|Expanded View=(.+)',
+                'Met BC=Precipitation|Constant Units': r'Met BC=Precipitation\|Constant Units=(.+)',
+                'Met BC=Precipitation|Gridded Source': r'Met BC=Precipitation\|Gridded Source=(.+)'
             }
             
-            for key, pattern in patterns.items():
+            # END Exception to Style Guide
+            
+            for key, pattern in supported_unsteady_keys.items():
                 match = re.search(pattern, content)
                 if match:
                     unsteady_info[key] = match.group(1).strip()

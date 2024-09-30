@@ -43,7 +43,7 @@ def main():
     print(f"Working with Plan: {plan_number}")
 
     # 1. Get and print multiple plan values
-    keys_to_check = ['computation_interval', 'simulation_date', 'short_identifier', 'unet_d1_cores']
+    keys_to_check = ['Computation Interval', 'Simulation Date', 'Short Identifier', 'UNET D1 Cores']
     print("\n1. Current Plan Values:")
     for key in keys_to_check:
         value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
@@ -52,9 +52,9 @@ def main():
     # 2. Update plan values
     print("\n2. Updating Plan Values:")
     updates = {
-        'computation_interval': '30SEC',
-        'short_identifier': 'Updated_Plan',
-        'unet_d1_cores': '4'
+        'Computation Interval': '30SEC',
+        'Short Identifier': 'Updated_Plan',
+        'UNET D1 Cores': '4'
     }
     for key, value in updates.items():
         RasPlan.update_plan_value(plan_number, key, value, ras_object=ras_obj)
@@ -66,30 +66,17 @@ def main():
         new_value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
         print(f"  {key}: {new_value}")
 
-    # 4. Get and update description
+    # 4. Get description
     print("\n4. Plan Description:")
-    current_description = RasPlan.get_plan_value(plan_number, 'description', ras_object=ras_obj)
+    current_description = RasPlan.get_plan_value(plan_number, 'Description', ras_object=ras_obj)
     print(f"  Current description: {current_description}")
-
-    new_description = "This is an updated plan description for Example 15."
-    RasPlan.update_plan_value(plan_number, 'description', new_description, ras_object=ras_obj)
-    print(f"  Updated description to: {new_description}")
-
-    # Verify description update
-    updated_description = RasPlan.get_plan_value(plan_number, 'description', ras_object=ras_obj)
-    print(f"  Verified updated description: {updated_description}")
+    # Updating descriptions is a multi-line operation that will need additional logic in update_plan_value
 
     # 5. Attempt to get and set an invalid key
     print("\n5. Handling Invalid Keys:")
-    try:
-        RasPlan.get_plan_value(plan_number, 'invalid_key', ras_object=ras_obj)
-    except ValueError as e:
-        print(f"  Error when getting invalid key: {e}")
+    RasPlan.get_plan_value(plan_number, 'Invalid Key', ras_object=ras_obj)
 
-    try:
-        RasPlan.update_plan_value(plan_number, 'invalid_key', 'some_value', ras_object=ras_obj)
-    except ValueError as e:
-        print(f"  Error when updating invalid key: {e}")
+    RasPlan.update_plan_value(plan_number, 'Invalid Key', 'some_value', ras_object=ras_obj)
 
     print("\nExample 15 completed.")
 

@@ -23,6 +23,7 @@ Example:
         logger.debug("Additional debug information")
         # Function logic here
 """
+import os
 from pathlib import Path
 from typing import List, Union
 from .RasPlan import RasPlan

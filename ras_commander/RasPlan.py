@@ -23,6 +23,7 @@ Example:
         logger.debug("Additional debug information")
         # Function logic here
 """
+import os
 import re
 import logging
 from pathlib import Path
@@ -1005,48 +1006,51 @@ class RasPlan:
         IOError: If there's an error reading the plan file
 
         Available keys and their expected types:
-        - 'description' (str): Plan description
-        - 'computation_interval' (str): Time value for computational time step (e.g., '5SEC', '2MIN')
-        - 'dss_file' (str): Name of the DSS file used
-        - 'flow_file' (str): Name of the flow input file
-        - 'friction_slope_method' (int): Method selection for friction slope (e.g., 1, 2)
-        - 'geom_file' (str): Name of the geometry input file
-        - 'mapping_interval' (str): Time interval for mapping output
-        - 'plan_file' (str): Name of the plan file
-        - 'plan_title' (str): Title of the simulation plan
-        - 'program_version' (str): Version number of HEC-RAS
-        - 'run_htab' (int): Flag to run HTab module (-1 or 1)
-        - 'run_post_process' (int): Flag to run post-processing (-1 or 1)
-        - 'run_sediment' (int): Flag to run sediment transport module (0 or 1)
-        - 'run_unet' (int): Flag to run unsteady network module (-1 or 1)
-        - 'run_wqnet' (int): Flag to run water quality module (0 or 1)
-        - 'short_identifier' (str): Short name or ID for the plan
-        - 'simulation_date' (str): Start and end dates/times for simulation
-        - 'unet_d1_cores' (int): Number of cores used in 1D calculations
-        - 'unet_use_existing_ib_tables' (int): Flag for using existing internal boundary tables (-1, 0, or 1)
-        - 'unet_1d_methodology' (str): 1D calculation methodology
-        - 'unet_d2_solver_type' (str): 2D solver type
-        - 'unet_d2_name' (str): Name of the 2D area
-        - 'run_rasmapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
+        - 'Computation Interval' (str): Time value for computational time step (e.g., '5SEC', '2MIN')
+        - 'DSS File' (str): Name of the DSS file used
+        - 'Flow File' (str): Name of the flow input file
+        - 'Friction Slope Method' (int): Method selection for friction slope (e.g., 1, 2)
+        - 'Geom File' (str): Name of the geometry input file
+        - 'Mapping Interval' (str): Time interval for mapping output
+        - 'Plan File' (str): Name of the plan file
+        - 'Plan Title' (str): Title of the simulation plan
+        - 'Program Version' (str): Version number of HEC-RAS
+        - 'Run HTAB' (int): Flag to run HTab module (-1 or 1)
+        - 'Run Post Process' (int): Flag to run post-processing (-1 or 1)
+        - 'Run Sediment' (int): Flag to run sediment transport module (0 or 1)
+        - 'Run UNET' (int): Flag to run unsteady network module (-1 or 1)
+        - 'Run WQNET' (int): Flag to run water quality module (0 or 1)
+        - 'Short Identifier' (str): Short name or ID for the plan
+        - 'Simulation Date' (str): Start and end dates/times for simulation
+        - 'UNET D1 Cores' (int): Number of cores used in 1D calculations
+        - 'UNET Use Existing IB Tables' (int): Flag for using existing internal boundary tables (-1, 0, or 1)
+        - 'UNET 1D Methodology' (str): 1D calculation methodology
+        - 'UNET D2 Solver Type' (str): 2D solver type
+        - 'UNET D2 Name' (str): Name of the 2D area
+        - 'Run RASMapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
+        
+        
+        Note: 
+        Writing Multi line keys like 'Description' are not supported by this function.
 
         Example:
-        >>> computation_interval = RasPlan.get_plan_value("01", "computation_interval")
+        >>> computation_interval = RasPlan.get_plan_value("01", "Computation Interval")
         >>> print(f"Computation interval: {computation_interval}")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        valid_keys = {
-            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
-            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
-            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
-            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name', 'run_rasmapper'
+        supported_plan_keys = {
+            'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
+            'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
+            'Run HTAB', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
+            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET Use Existing IB Tables',
+            'UNET 1D Methodology', 'UNET D2 Solver Type', 'UNET D2 Name', 'Run RASMapper'
         }
 
-        if key not in valid_keys:
+        if key not in supported_plan_keys:
             logger = logging.getLogger(__name__)
-            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(valid_keys)}\n Add more keys and explanations in get_plan_value() as needed.")
+            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(supported_plan_keys)}\n Add more keys and explanations in get_plan_value() as needed.")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -1062,11 +1066,11 @@ class RasPlan:
             logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
 
-        if key == 'description':
+        if key == 'Description':
             match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
             return match.group(1).strip() if match else None
         else:
-            pattern = f"{key.replace('_', ' ').title()}=(.*)"
+            pattern = f"{key}=(.*)"
             match = re.search(pattern, content)
             if match:
                 return match.group(1).strip()
@@ -1106,17 +1110,16 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        valid_keys = {
-            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
-            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
-            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
-            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name', 'run_rasmapper'
+        supported_plan_keys = {
+            'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
+            'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
+            'Run HTAB', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
+            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET Use Existing IB Tables',
+            'UNET 1D Methodology', 'UNET D2 Solver Type', 'UNET D2 Name', 'Run RASMapper'
         }
-
         logger = logging.getLogger(__name__)
-        if key not in valid_keys:
-            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(valid_keys)}")
+        if key not in supported_plan_keys:
+            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(supported_plan_keys)}")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():

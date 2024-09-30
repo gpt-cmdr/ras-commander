@@ -1,19 +1,14 @@
 import os
 import json
-import asyncio
 import uvicorn
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, String, Text, Integer
 from sqlalchemy.orm import declarative_base, sessionmaker
 from pathlib import Path
 import webbrowser
 from datetime import datetime
-import subprocess
-import sys
-import shutil
 import pandas as pd
 import anthropic
 from openai import OpenAI
@@ -22,18 +17,14 @@ import astor
 import ast
 import re
 import markdown
-import requests
 
-# Initialize FastAPI
+print("Initializing FastAPI")
 app = FastAPI()
 
-# Mount static files (if any)
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Set up Jinja2 templates
+print("Setting up Jinja2 templates")
 templates = Jinja2Templates(directory="templates")
 
-# Set up SQLite with SQLAlchemy
+print("Setting up SQLite with SQLAlchemy")
 DATABASE_URL = "sqlite:///./settings.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -55,117 +46,70 @@ class Settings(Base):
     followup_chunk_size = Column(Integer, default=16000)
 
 # Create the database tables
+print("Creating the database tables")
 Base.metadata.create_all(bind=engine)
 
-def init_settings():
-    db = SessionLocal()
-    settings = db.query(Settings).filter(Settings.id == "singleton").first()
-    if not settings:
-        settings = Settings(
-            id="singleton",
-            anthropic_api_key="",
-            openai_api_key="",
-            selected_model="",
-            context_mode="",
-            omit_folders=json.dumps([
-                "Bald Eagle Creek", 
-                "__pycache__", 
-                ".git", 
-                ".github", 
-                "tests", 
-                "build", 
-                "dist", 
-                "ras_commander.egg-info", 
-                "venv", 
-                "example_projects", 
-                "llm_summary", "misc", "future", "ai_tools"
-            ]),
-            omit_extensions=json.dumps([
-                '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',
-                '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-                '.zip', '.rar', '.7z', '.tar', '.gz',
-                '.exe', '.dll', '.so', '.dylib',
-                '.pyc', '.pyo', '.pyd',
-                '.class',
-                '.log', '.tmp', '.bak', '.swp',
-                '.bat', '.sh',
-            ]),
-            omit_files=json.dumps([
-                'FunctionList.md',
-                'DS_Store',
-                'Thumbs.db',
-                'llmsummarize',
-                'example_projects.zip',
-                '11_accessing_example_projects.ipynb',
-                'Example_Projects_6_5.zip',
-                'github_code_assistant.ipynb',
-                'example_projects.ipynb',
-                '11_Using_RasExamples.ipynb',
-                'example_projects.csv',
-                'rascommander_code_assistant.ipynb',
-                'RasExamples.py'
-            ]),
-            chunk_level="function",
-            initial_chunk_size=32000,
-            followup_chunk_size=16000
-        )
-        db.add(settings)
-        db.commit()
-    db.close()
+# Define default settings
+DEFAULT_SETTINGS = {
+    "anthropic_api_key": "",
+    "openai_api_key": "",
+    "selected_model": "",
+    "context_mode": "",
+    "omit_folders": [
+        "Bald Eagle Creek", 
+        "__pycache__", 
+        ".git", 
+        ".github", 
+        "tests", 
+        "build", 
+        "dist", 
+        "ras_commander.egg-info", 
+        "venv", 
+        "example_projects", 
+        "llm_summary", 
+        "misc", 
+        "future", 
+        "ai_tools"
+    ],
+    "omit_extensions": [
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+        '.zip', '.rar', '.7z', '.tar', '.gz',
+        '.exe', '.dll', '.so', '.dylib',
+        '.pyc', '.pyo', '.pyd',
+        '.class',
+        '.log', '.tmp', '.bak', '.swp',
+        '.bat', '.sh',
+    ],
+    "omit_files": [
+        'FunctionList.md',
+        'DS_Store',
+        'Thumbs.db',
+        'llmsummarize',
+        'example_projects.zip',
+        '11_accessing_example_projects.ipynb',
+        'Example_Projects_6_5.zip',
+        'github_code_assistant.ipynb',
+        'example_projects.ipynb',
+        '11_Using_RasExamples.ipynb',
+        'example_projects.csv',
+        'rascommander_code_assistant.ipynb',
+        'RasExamples.py'
+    ],
+    "chunk_level": "function",
+    "initial_chunk_size": 32000,
+    "followup_chunk_size": 16000
+}
 
-# Load existing settings
 def load_settings():
     db = SessionLocal()
     settings = db.query(Settings).filter(Settings.id == "singleton").first()
     if not settings:
-        # If settings don't exist, create them
+        # Initialize with default settings
         settings = Settings(
             id="singleton",
-            anthropic_api_key="",
-            openai_api_key="",
-            selected_model="",
-            context_mode="",
-            omit_folders=json.dumps([
-                "Bald Eagle Creek", 
-                "__pycache__", 
-                ".git", 
-                ".github", 
-                "tests", 
-                "build", 
-                "dist", 
-                "ras_commander.egg-info", 
-                "venv", 
-                "example_projects", 
-                "llm_summary", "misc", "future", "ai_tools"
-            ]),
-            omit_extensions=json.dumps([
-                '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',
-                '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-                '.zip', '.rar', '.7z', '.tar', '.gz',
-                '.exe', '.dll', '.so', '.dylib',
-                '.pyc', '.pyo', '.pyd',
-                '.class',
-                '.log', '.tmp', '.bak', '.swp',
-                '.bat', '.sh',
-            ]),
-            omit_files=json.dumps([
-                'FunctionList.md',
-                'DS_Store',
-                'Thumbs.db',
-                'llmsummarize',
-                'example_projects.zip',
-                '11_accessing_example_projects.ipynb',
-                'Example_Projects_6_5.zip',
-                'github_code_assistant.ipynb',
-                'example_projects.ipynb',
-                '11_Using_RasExamples.ipynb',
-                'example_projects.csv',
-                'rascommander_code_assistant.ipynb',
-                'RasExamples.py'
-            ]),
-            chunk_level="function",
-            initial_chunk_size=32000,
-            followup_chunk_size=16000
+            **{key: json.dumps(value) if isinstance(value, list) else value 
+               for key, value in DEFAULT_SETTINGS.items()}
         )
         db.add(settings)
         db.commit()
@@ -202,17 +146,12 @@ def get_openai_client():
 
 # Function to read system message from .cursorrules
 def read_system_message():
-    # Get the current script's directory
     current_dir = Path.cwd()
-    
-    # Path to the .cursorrules file (assuming it's in the parent directory)
     cursor_rules_path = current_dir.parent / '.cursorrules'
 
-    # Check if .cursorrules exists
     if not cursor_rules_path.exists():
         raise FileNotFoundError("This script expects to be in a directory within the ras_commander repo which has a .cursorrules file in its parent directory.")
 
-    # Read the .cursorrules file as plain text
     with open(cursor_rules_path, 'r') as f:
         system_message = f.read().strip()
 
@@ -223,37 +162,21 @@ def read_system_message():
 
 # Function to set the context folder
 def set_context_folder():
-    # Get the current script's directory
     current_dir = Path.cwd()
-    
-    # Set the context folder to the parent of the current directory
-    context_folder = current_dir.parent
-    
-    return context_folder
+    return current_dir.parent
 
 # Function to strip code from functions
 def strip_code_from_functions(content):
-    """
-    Strip the code from functions, leaving only function signatures and docstrings.
-    
-    Args:
-    content (str): The content of a Python file.
-    
-    Returns:
-    str: The content with function bodies removed.
-    """
     class FunctionStripper(ast.NodeTransformer):
         def visit_FunctionDef(self, node):
-            # Keep the function signature and docstring (if present)
             new_node = ast.FunctionDef(
                 name=node.name,
                 args=node.args,
-                body=[ast.Pass()],  # Replace the body with a pass statement
+                body=[ast.Pass()],
                 decorator_list=node.decorator_list,
                 returns=node.returns
             )
-            # If there's a docstring, keep it
-            if (len(node.body) > 0 and isinstance(node.body[0], ast.Expr) and
+            if (node.body and isinstance(node.body[0], ast.Expr) and
                 isinstance(node.body[0].value, ast.Str)):
                 new_node.body = [node.body[0], ast.Pass()]
             return new_node
@@ -263,8 +186,36 @@ def strip_code_from_functions(content):
         stripped_tree = FunctionStripper().visit(tree)
         return astor.to_source(stripped_tree)
     except SyntaxError:
-        # If parsing fails, return the original content
         return content
+
+# Function to handle Python files
+def handle_python_file(content, filepath, strip_code, chunk_level='function'):
+    header_end = content.find("class ") if "class " in content else len(content)
+    header = content[:header_end]
+    processed_content = f"\n\n----- {filepath.name} - header -----\n\n{header}\n\n----- End of header -----\n\n"
+    
+    if chunk_level == 'function':
+        function_chunks = re.findall(r"(def .*?(?=\ndef |\Z))", content[header_end:], re.DOTALL)
+        for chunk in function_chunks:
+            if strip_code:
+                chunk = strip_code_from_functions(chunk)
+            processed_content += f"\n\n----- {filepath.name} - chunk -----\n\n{chunk}\n\n----- End of chunk -----\n\n"
+    else:
+        content = strip_code_from_functions(content[header_end:]) if strip_code else content[header_end:]
+        processed_content += f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of full_file -----\n\n"
+    
+    return processed_content
+
+# Function to handle Markdown files
+def handle_markdown_file(content, filepath):
+    if filepath.name in ["Comprehensive_Library_Guide.md", "STYLE_GUIDE.md"]:
+        return f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of {filepath.name} -----\n\n"
+    
+    sections = re.split(r'\n#+ ', content)
+    processed_content = ""
+    for section in sections:
+        processed_content += f"\n\n----- {filepath.name} - section -----\n\n# {section}\n\n----- End of section -----\n\n"
+    return processed_content
 
 # Function to combine files
 def combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files, strip_code=False, chunk_level='function'):
@@ -272,13 +223,8 @@ def combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files
     file_token_counts = {}
     total_token_count = 0
     
-    # Get the name of this script
     this_script = Path(__file__).name
-
-    # Ensure summarize_subfolder is a Path object
     summarize_subfolder = Path(summarize_subfolder)
-
-    # Initialize tokenizer
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
     for filepath in summarize_subfolder.rglob('*'):
@@ -293,10 +239,8 @@ def combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files
                         content = infile.read()
                 except UnicodeDecodeError:
                     with open(filepath, 'rb') as infile:
-                        content = infile.read()
-                        content = content.decode('utf-8', errors='ignore')
+                        content = infile.read().decode('utf-8', errors='ignore')
                 
-                # Handle different file types
                 if filepath.suffix.lower() == '.py':
                     content = handle_python_file(content, filepath, strip_code, chunk_level)
                 elif filepath.suffix.lower() == '.md':
@@ -311,31 +255,11 @@ def combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files
 
     return combined_text, total_token_count, file_token_counts
 
-def handle_python_file(content, filepath, strip_code, chunk_level='function'):
-    # Extract file header, class definitions, and decorator functions
-    header_end = content.find("class ") if "class " in content else len(content)
-    header = content[:header_end]
-    
-    processed_content = f"\n\n----- {filepath.name} - header -----\n\n{header}\n\n----- End of header -----\n\n"
-    
-    if chunk_level == 'function':
-        # Split the rest of the content into functions
-        function_chunks = re.findall(r"(def .*?(?=\ndef |\Z))", content[header_end:], re.DOTALL)
-        
-        for chunk in function_chunks:
-            if strip_code:
-                chunk = strip_code_from_functions(chunk)
-            processed_content += f"\n\n----- {filepath.name} - chunk -----\n\n{chunk}\n\n----- End of chunk -----\n\n"
-    else:
-        # If not chunking by function, treat the whole file as one chunk
-        if strip_code:
-            content = strip_code_from_functions(content[header_end:])
-        else:
-            content = content[header_end:]
-        processed_content += f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of full_file -----\n\n"
-    
-    return processed_content
+# Function to rank chunks (placeholder for actual ranking logic)
+def rank_chunks(chunks):
+    return chunks  # Implement your ranking algorithm here
 
+# Function to chunk and rank combined text
 def chunk_and_rank(combined_text, chunk_size):
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
     chunks = []
@@ -357,32 +281,11 @@ def chunk_and_rank(combined_text, chunk_size):
     if current_chunk:
         chunks.append((current_file, current_chunk))
     
-    # Rank chunks (implement your ranking algorithm here)
     ranked_chunks = rank_chunks(chunks)
-    
     return ranked_chunks
 
-def rank_chunks(chunks):
-    # Implement your ranking algorithm here
-    # For now, we'll just return the chunks in their original order
-    return chunks
-
-def handle_markdown_file(content, filepath):
-    if filepath.name in ["Comprehensive_Library_Guide.md", "STYLE_GUIDE.md"]:
-        return f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of {filepath.name} -----\n\n"
-    
-    # Split markdown into sections
-    sections = re.split(r'\n#+ ', content)
-    processed_content = ""
-    
-    for section in sections:
-        processed_content += f"\n\n----- {filepath.name} - section -----\n\n# {section}\n\n----- End of section -----\n\n"
-    
-    return processed_content
-
 # Function to estimate cost
-def calculate_cost(input_tokens, output_tokens, pricing_df):
-    model = pricing_df['Model'].iloc[0]
+def estimate_cost(input_tokens, output_tokens, pricing_df):
     input_cost = (input_tokens / 1e6) * pricing_df['Input ($/1M Tokens)'].iloc[0]
     output_cost = (output_tokens / 1e6) * pricing_df['Output ($/1M Tokens)'].iloc[0]
     return input_cost + output_cost
@@ -413,25 +316,15 @@ def reconstruct_context(ranked_chunks, max_tokens):
     return context
 
 # Initialize conversation history
+print("Initializing conversation history")
 conversation_history = []
 
-# Function to add to conversation history
 def add_to_history(role, content):
     conversation_history.append({"role": role, "content": content})
 
-# Function to get full conversation as string
 def get_full_conversation():
-    full_conv = ""
-    for message in conversation_history:
-        if message["role"] == "system":
-            full_conv += f"System: {message['content']}\n"
-        elif message["role"] == "user":
-            full_conv += f"User: {message['content']}\n"
-        elif message["role"] == "assistant":
-            full_conv += f"Assistant: {message['content']}\n"
-    return full_conv
+    return "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in conversation_history])
 
-# Function to create pricing dataframe
 def create_pricing_df(model):
     if model.startswith("claude"):
         provider = "anthropic"
@@ -476,36 +369,9 @@ def create_pricing_df(model):
     pricing_df = pd.DataFrame(pricing_data)
     return {"pricing_df": pricing_df, "provider": provider}
 
-# Function to estimate cost
-def estimate_cost(input_tokens, output_tokens, pricing_df):
-    input_cost = (input_tokens / 1e6) * pricing_df['Input ($/1M Tokens)'].iloc[0]
-    output_cost = (output_tokens / 1e6) * pricing_df['Output ($/1M Tokens)'].iloc[0]
-    return input_cost + output_cost
-
-@app.post("/estimate_cost")
-async def estimate_cost_endpoint(request: Request, message: dict):
-    user_message = message.get("message")
-    if not user_message:
-        raise HTTPException(status_code=400, detail="No message provided.")
-    
-    settings = load_settings()
-    full_prompt = prepare_full_prompt(settings, user_message)
-    
-    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-    input_tokens = len(enc.encode(full_prompt))
-    output_tokens = 1000  # Assuming an average response length
-    
-    pricing_info = create_pricing_df(settings.selected_model)
-    pricing_df = pricing_info['pricing_df']
-    provider = pricing_info['provider']
-    estimated_cost = estimate_cost(input_tokens, output_tokens, pricing_df)
-    
-    return {"estimated_cost": f"${estimated_cost:.4f}", "provider": provider}
-
 # Function to send prompt and receive response for Anthropic
 def anthropic_stream_response(client, prompt, max_tokens=8000):
     response_text = ""
-    
     with client.messages.stream(
         max_tokens=max_tokens,
         messages=[
@@ -515,18 +381,12 @@ def anthropic_stream_response(client, prompt, max_tokens=8000):
     ) as stream:
         for text in stream.text_stream:
             response_text += text
-            # Note: In a web application, you'd typically use websockets or SSE to stream this to the client
-            # For now, we'll just accumulate the response
-    
     return response_text
 
+# Function to send prompt and receive response for OpenAI
 def openai_stream_response(model, messages, max_tokens=16000):
     response_text = ""
-    add_to_history("assistant", "")  # Placeholder for assistant response
-
-    print("Debug: Entering openai_stream_response function")
-    print(f"Debug: Using model: {model}")
-    print(f"Debug: Number of messages: {len(messages)}")
+    add_to_history("assistant", "")  # Placeholder
 
     try:
         openai_client = get_openai_client()
@@ -538,19 +398,15 @@ def openai_stream_response(model, messages, max_tokens=16000):
             messages=messages,
             max_tokens=max_tokens,
             temperature=0.7,
-            stream=False  # For simplicity; streaming can be implemented with SSE/WebSockets
+            stream=False
         )
-        
-        print("Debug: OpenAI API call completed")
         
         if response and response.choices:
             response_text = response.choices[0].message.content.strip()
-            print(f"Debug: Response received, length: {len(response_text)}")
         else:
-            print("Debug: No response or choices from OpenAI")
+            raise ValueError("No response or choices from OpenAI.")
     except Exception as e:
-        print(f"Debug: Error in OpenAI API call: {str(e)}")
-        raise
+        raise e
 
     # Update conversation history
     conversation_history[-1]["content"] = response_text
@@ -569,9 +425,17 @@ def stream_response(provider, model, prompt, messages=None, max_tokens=None):
 
 # Function to handle combining and preparing context
 def prepare_full_prompt(settings, user_query):
-    print("Debug: Entering prepare_full_prompt function")
-    
-    # Load settings
+    # This function can now be simplified or even removed
+    pass
+
+# Global variables to store context
+preprocessed_context = ""
+preprocessed_rag_context = ""
+
+def initialize_rag_context():
+    print("Initializing RAG context")
+    global preprocessed_context, preprocessed_rag_context
+    settings = load_settings()
     selected_model = settings.selected_model
     context_mode = settings.context_mode
     omit_folders = json.loads(settings.omit_folders)
@@ -581,15 +445,10 @@ def prepare_full_prompt(settings, user_query):
     initial_chunk_size = settings.initial_chunk_size
     followup_chunk_size = settings.followup_chunk_size
 
-    print(f"Debug: Settings loaded - Model: {selected_model}, Context Mode: {context_mode}, Chunk Level: {chunk_level}")
-    print(f"Debug: Initial chunk size: {initial_chunk_size}, Followup chunk size: {followup_chunk_size}")
-
-    # Set context folder
+    print("Setting context folder")
     context_folder = set_context_folder()
-    print(f"Debug: Context folder set to: {context_folder}")
-
-    # Combine files
-    combined_text, total_token_count, file_token_counts = combine_files(
+    print("Combining files")
+    combined_text, total_token_count, _ = combine_files(
         summarize_subfolder=context_folder, 
         omit_folders=omit_folders, 
         omit_extensions=omit_extensions, 
@@ -597,45 +456,28 @@ def prepare_full_prompt(settings, user_query):
         strip_code=True, 
         chunk_level=chunk_level
     )
-    print(f"Debug: Combined text length: {len(combined_text)}, Total token count: {total_token_count}")
 
-    # Read system message
+    print("Reading system message")
     system_message = read_system_message()
-    print(f"Debug: System message length: {len(system_message)}")
 
-    # Prepare context
-    print(f"Debug: Context mode: {context_mode}")
     if context_mode == 'full_context':
-        full_context = combined_text
-        print(f"Prepared Full Context characters: {len(full_context)}")
-        full_prompt = f"{system_message}\n\nContext:\n{full_context}\n\nUser Query: {user_query}"
-        print("Debug: Using full context mode")
-        print(f"Debug: Full prompt length: {len(full_prompt)}")
-        
-    else:  # RAG is the fallback
-        print(f"Debug: Initial RAG chunk size: {initial_chunk_size}")
-        print(f"Debug: Follow-up RAG chunk size: {followup_chunk_size}")
-        print(f"Preparing RAG chunks with sizes: Initial {initial_chunk_size}, Follow-up {followup_chunk_size}")
-        combined_rag = prepare_context(
-                       combined_text=combined_text, 
-                       mode='rag', 
-                       initial_chunk_size=initial_chunk_size, 
-                       followup_chunk_size=followup_chunk_size   )
-
-        print(f"Combined RAG characters: {len(combined_rag)}")
-        full_prompt = f"{system_message}\n\n<context>Context Chunks:\n{combined_rag}\n\n</context>\n The context above is provided for your use in responding to the user's query: \n\nUser Query: {user_query}"
-        print(f"Debug: Full prompt length with RAG: {len(full_prompt)}")
-    return full_prompt
+        print("Setting full context")
+        preprocessed_context = combined_text
+    else:  # RAG mode
+        print("Preparing RAG Chunks (takes 10-20 seconds)")
+        preprocessed_rag_context = prepare_context(
+            combined_text=combined_text, 
+            mode='rag', 
+            initial_chunk_size=initial_chunk_size, 
+            followup_chunk_size=followup_chunk_size
+        )
 
 # Define conversation endpoint
 @app.post("/chat")
 async def chat(request: Request, message: dict):
-    print("Debug: Entering chat endpoint")
     user_message = message.get("message")
     if not user_message:
         raise HTTPException(status_code=400, detail="No message provided.")
-    
-    print(f"Debug: Received user message: {user_message}")
     
     try:
         # Add user message to history
@@ -646,21 +488,19 @@ async def chat(request: Request, message: dict):
         selected_model = settings.selected_model
         context_mode = settings.context_mode
         
-        print(f"Debug: Loaded settings - Model: {selected_model}, Context Mode: {context_mode}")
-        
-        # Prepare the full prompt
-        full_prompt = prepare_full_prompt(settings, user_message)
-        
-        print(f"Debug: Prepared full prompt length: {len(full_prompt)}")
+        # Prepare the full prompt using preprocessed context
+        if context_mode == 'full_context':
+            full_prompt = f"{read_system_message()}\n\nContext:\n{preprocessed_context}\n\nUser Query: {user_message}"
+        else:  # RAG mode
+            full_prompt = (
+                f"{read_system_message()}\n\n<context>Context Chunks:\n{preprocessed_rag_context}\n\n</context>\n"
+                "The context above is provided for your use in responding to the user's query:\n\n"
+                f"User Query: {user_message}"
+            )
         
         # Estimate cost
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        if context_mode == 'full_context':
-            input_tokens = len(enc.encode(full_prompt))
-        elif context_mode == 'rag':
-            input_tokens = len(enc.encode(user_message)) + 32000
-        else:
-            input_tokens = len(enc.encode(full_prompt))
+        input_tokens = len(enc.encode(full_prompt)) if context_mode == 'full_context' else len(enc.encode(user_message)) + 32000
         output_tokens = 1000  # Assuming an average response length
         
         # Create pricing dataframe
@@ -668,21 +508,15 @@ async def chat(request: Request, message: dict):
         pricing_df = pricing_info["pricing_df"]
         provider = pricing_info["provider"]
         
-        print(f"Debug: Selected provider: {provider}")
-        
         estimated_cost = estimate_cost(input_tokens, output_tokens, pricing_df)
-        
-        print(f"Debug: Estimated cost: ${estimated_cost:.4f}")
 
         # Communicate with the selected model
         if provider == "anthropic":
-            anthropic_api_key = str(load_settings().anthropic_api_key)
-            print(anthropic_api_key)
+            anthropic_api_key = load_settings().anthropic_api_key
             client = anthropic.Anthropic(api_key=anthropic_api_key)
-            max_tokens = int(pricing_df['Response Max Tokens'].iloc[0])  # Convert to int
+            max_tokens = int(pricing_df['Response Max Tokens'].iloc[0])
             assistant_response = anthropic_stream_response(client, full_prompt, max_tokens=max_tokens)
         elif provider == "openai":
-            # Prepare messages for OpenAI
             messages = [
                 {"role": "system", "content": read_system_message()},
                 {"role": "user", "content": full_prompt}
@@ -691,15 +525,12 @@ async def chat(request: Request, message: dict):
         else:
             raise HTTPException(status_code=400, detail="Unsupported provider selected.")
         
-        print(f"Debug: Received assistant response length: {len(assistant_response)}")
-        
         # Ensure the response is in markdown format
         assistant_response = markdown.markdown(assistant_response)
         
         # Return response
-        return {"response": assistant_response}
+        return {"response": assistant_response, "estimated_cost": estimated_cost, "provider": provider}
     except Exception as e:
-        print(f"Debug: Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 # Define the homepage
@@ -711,7 +542,7 @@ async def read_root(request: Request):
         "settings": settings
     })
 
-# Handle form submission (now used for AJAX-based auto-saving)
+# Handle form submission (used for AJAX-based auto-saving)
 @app.post("/submit", response_class=JSONResponse)
 async def handle_submit(
     request: Request,
@@ -722,7 +553,6 @@ async def handle_submit(
     initial_chunk_size: int = Form(None),
     followup_chunk_size: int = Form(None),
 ):
-    # Prepare a dictionary with the updated settings
     updated_data = {}
     if anthropic_api_key is not None:
         updated_data["anthropic_api_key"] = anthropic_api_key
@@ -737,7 +567,6 @@ async def handle_submit(
     if followup_chunk_size is not None:
         updated_data["followup_chunk_size"] = followup_chunk_size
     
-    # Update settings in the database
     update_settings(updated_data)
     return {"status": "success"}
 
@@ -753,7 +582,7 @@ def save_conversation():
     
     return file_path
 
-# Add this new endpoint
+# Add endpoint to save conversation
 @app.post("/save_conversation")
 async def save_conversation_endpoint():
     try:
@@ -770,14 +599,53 @@ def open_browser():
 def run_app():
     uvicorn.run(app, host="127.0.0.1", port=8000)
 
+# Global variables to store context
+preprocessed_context = ""
+preprocessed_rag_context = ""
+
+def initialize_rag_context():
+    global preprocessed_context, preprocessed_rag_context
+    settings = load_settings()
+    selected_model = settings.selected_model
+    context_mode = settings.context_mode
+    omit_folders = json.loads(settings.omit_folders)
+    omit_extensions = json.loads(settings.omit_extensions)
+    omit_files = json.loads(settings.omit_files)
+    chunk_level = settings.chunk_level
+    initial_chunk_size = settings.initial_chunk_size
+    followup_chunk_size = settings.followup_chunk_size
+
+    context_folder = set_context_folder()
+    combined_text, total_token_count, _ = combine_files(
+        summarize_subfolder=context_folder, 
+        omit_folders=omit_folders, 
+        omit_extensions=omit_extensions, 
+        omit_files=omit_files, 
+        strip_code=True, 
+        chunk_level=chunk_level
+    )
+
+    system_message = read_system_message()
+
+    if context_mode == 'full_context':
+        preprocessed_context = combined_text
+    else:  # RAG mode
+        preprocessed_rag_context = prepare_context(
+            combined_text=combined_text, 
+            mode='rag', 
+            initial_chunk_size=initial_chunk_size, 
+            followup_chunk_size=followup_chunk_size
+        )
+
 # Main entry point
 if __name__ == "__main__":
-    # Ensure templates directory exists
-    if not Path("templates").exists():
-        Path("templates").mkdir(parents=True, exist_ok=True)
-
-    # Create index.html template
-    index_html = """
+    templates_dir = Path("templates")
+    if not templates_dir.exists():
+        templates_dir.mkdir(parents=True, exist_ok=True)
+    
+    index_html_path = templates_dir / "index.html"
+    if not index_html_path.exists():
+        index_html = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -815,9 +683,9 @@ if __name__ == "__main__":
         input[type=range] {
             -webkit-appearance: none;
             width: 100%;
-            height: 6px;
+            height: 10px;
             border-radius: 5px;
-            background: #ddd;
+            background: #d3d3d3;
             outline: none;
             margin-top: 10px;
         }
@@ -829,7 +697,8 @@ if __name__ == "__main__":
             border-radius: 50%;
             background: #0d6efd;
             cursor: pointer;
-            border: none;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }
         input[type=range]::-moz-range-thumb {
             width: 20px;
@@ -837,7 +706,22 @@ if __name__ == "__main__":
             border-radius: 50%;
             background: #0d6efd;
             cursor: pointer;
-            border: none;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 10px;
+            cursor: pointer;
+            background: #d3d3d3;
+            border-radius: 5px;
+        }
+        input[type=range]::-moz-range-track {
+            width: 100%;
+            height: 10px;
+            cursor: pointer;
+            background: #d3d3d3;
+            border-radius: 5px;
         }
         /* Collapsible Settings */
         .settings-header {
@@ -881,7 +765,7 @@ if __name__ == "__main__":
     <div class="container">
         <div class="settings-header mb-4" data-bs-toggle="collapse" data-bs-target="#settings-collapse" aria-expanded="false" aria-controls="settings-collapse">
             <h2>Settings</h2>
-            <button class="btn btn-secondary">Toggle Settings</button>
+            <button class="btn btn-secondary">Show Settings</button> <!-- Changed label -->
         </div>
         <div class="collapse" id="settings-collapse">
             <form id="settings-form">
@@ -917,16 +801,18 @@ if __name__ == "__main__":
 
                 <!-- RAG Sliders -->
                 <div id="rag_sliders" class="hidden">
-                    <div class="form-group row">
-                        <div class="col-md-6">
-                            <label for="initial_chunk_size">Initial RAG Context Size (tokens):</label>
-                            <input type="range" id="initial_chunk_size" name="initial_chunk_size" class="form-range" min="16000" max="96000" step="1000" value="{{ settings.initial_chunk_size }}">
-                            <span id="initial_chunk_size_value">{{ settings.initial_chunk_size }}</span>
+                    <div class="form-group">
+                        <label for="initial_chunk_size">Initial RAG Context Size (tokens):</label>
+                        <div class="d-flex align-items-center">
+                            <input type="range" id="initial_chunk_size" name="initial_chunk_size" class="form-range flex-grow-1" min="16000" max="96000" step="1000" value="{{ settings.initial_chunk_size }}">
+                            <span id="initial_chunk_size_value" class="ms-2">{{ settings.initial_chunk_size }}</span>
                         </div>
-                        <div class="col-md-6">
-                            <label for="followup_chunk_size">Follow-up RAG Context Size (tokens):</label>
-                            <input type="range" id="followup_chunk_size" name="followup_chunk_size" class="form-range" min="16000" max="64000" step="1000" value="{{ settings.followup_chunk_size }}">
-                            <span id="followup_chunk_size_value">{{ settings.followup_chunk_size }}</span>
+                    </div>
+                    <div class="form-group mt-3">
+                        <label for="followup_chunk_size">Follow-up RAG Context Size (tokens):</label>
+                        <div class="d-flex align-items-center">
+                            <input type="range" id="followup_chunk_size" name="followup_chunk_size" class="form-range flex-grow-1" min="16000" max="64000" step="1000" value="{{ settings.followup_chunk_size }}">
+                            <span id="followup_chunk_size_value" class="ms-2">{{ settings.followup_chunk_size }}</span>
                         </div>
                     </div>
                 </div>
@@ -1004,7 +890,7 @@ if __name__ == "__main__":
             });
 
             followupChunkSize.addEventListener('input', () => {
-                followupChunkSizeValue.textContent = followupChunkSize.value;
+                followupChunkSizeValue.textContent = followupChunkSize.value; // Corrected variable name
                 autoSaveSettings();
             });
 
@@ -1027,7 +913,18 @@ if __name__ == "__main__":
                 });
             }
 
-            // Update initial and follow-up chunk size values on load
+            // Update initial and follow-up chunk size values on load and input
+            initialChunkSize.addEventListener('input', () => {
+                initialChunkSizeValue.textContent = initialChunkSize.value;
+                autoSaveSettings();
+            });
+
+            followupChunkSize.addEventListener('input', () => {
+                followupChunkSizeValue.textContent = followupChunkSize.value; // Corrected variable name
+                autoSaveSettings();
+            });
+
+            // Initial update
             initialChunkSizeValue.textContent = initialChunkSize.value;
             followupChunkSizeValue.textContent = followupChunkSize.value;
 
@@ -1098,20 +995,7 @@ if __name__ == "__main__":
                     chatBox.scrollTop = chatBox.scrollHeight;
 
                     // Update cost display
-                    const costResponse = await fetch('/estimate_cost', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ message: message })
-                    });
-
-                    if (costResponse.ok) {
-                        const costData = await costResponse.json();
-                        costDisplay.textContent = `Estimated Cost: ${costData.estimated_cost} (${costData.provider})`;
-                    } else {
-                        costDisplay.textContent = 'Could not estimate cost.';
-                    }
+                    costDisplay.textContent = `Estimated Cost: $${data.estimated_cost.toFixed(6)} (${data.provider})`;
 
                 } catch (error) {
                     console.error('Error:', error);
@@ -1163,10 +1047,15 @@ if __name__ == "__main__":
 </body>
 </html>
 """
-
-    # Write the template to the templates directory
-    with open("templates/index.html", "w", encoding="utf-8") as f:
-        f.write(index_html)
+        with open(index_html_path, "w", encoding="utf-8") as f:
+            f.write(index_html)
+    
+    # Initialize RAG context at startup
+    try:
+        initialize_rag_context()
+        print("RAG context initialized successfully.")
+    except Exception as e:
+        print(f"Failed to initialize RAG context: {e}")
     
     # Open the browser
     open_browser()

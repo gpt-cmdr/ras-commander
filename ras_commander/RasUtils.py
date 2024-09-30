@@ -21,6 +21,7 @@ Example:
         logger.debug("Additional debug information")
         # Function logic here
 """
+import os
 from pathlib import Path
 from .RasPrj import ras
 from typing import Union, Optional, Dict

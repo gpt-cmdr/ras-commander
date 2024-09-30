@@ -22,6 +22,7 @@ Example:
         logger.debug("Additional debug information")
         # Function logic here
 """
+import os
 from pathlib import Path
 from .RasPrj import ras
 from ras_commander.logging_config import get_logger, log_call

@@ -68,7 +68,7 @@ RAS-Commander AI Assistant is a web-based interface built with FastAPI that leve
    *If `requirements.txt` is not provided, install dependencies manually:*
 
    ```bash
-   pip install fastapi uvicorn sqlalchemy jinja2 pandas anthropic openai tiktoken astor markdown requests
+   pip install fastapi uvicorn sqlalchemy jinja2 pandas anthropic openai tiktoken astor markdown requests python-multipart
    ```
 
 ## Configuration

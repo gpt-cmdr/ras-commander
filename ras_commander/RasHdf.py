@@ -969,6 +969,37 @@ class RasHdf:
 
     @classmethod
     @log_call
+    def get_hdf_paths_with_properties(cls, hdf_input: Union[str, Path], ras_object=None) -> pd.DataFrame:
+        """
+        List all paths in the HDF file with their properties.
+
+        Args:
+            hdf_input (Union[str, Path]): The plan number or full path to the HDF file.
+            ras_object (RasPrj, optional): The RAS project object. If None, uses the global ras instance.
+
+        Returns:
+            pd.DataFrame: DataFrame of all paths and their properties in the HDF file.
+
+        Example:
+            >>> paths_df = RasHdf.get_hdf_paths_with_properties("path/to/file.hdf")
+            >>> print(paths_df.head())
+        """
+        with h5py.File(cls._get_hdf_filename(hdf_input, ras_object), 'r') as hdf_file:
+            paths = []
+            def visitor_func(name: str, node: h5py.Group) -> None:
+                path_info = {
+                    "HDF_Path": name,
+                    "Type": type(node).__name__,
+                    "Shape": getattr(node, "shape", None),
+                    "Size": getattr(node, "size", None),
+                    "Dtype": getattr(node, "dtype", None)
+                }
+                paths.append(path_info)
+            hdf_file.visititems(visitor_func)
+            return pd.DataFrame(paths)
+        
+    @classmethod
+    @log_call
     def build_2d_area_face_hydraulic_information(cls, hdf_input: Union[str, Path, h5py.File], area_name: Optional[str] = None, ras_object=None) -> Optional[List[List[np.ndarray]]]:
         """
         Build face hydraulic information tables (elevation, area, wetted perimeter, Manning's n) for each face in 2D Flow Areas.
