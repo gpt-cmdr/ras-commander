@@ -1,21 +1,35 @@
 """
-Operations for handling unsteady flow files in HEC-RAS projects.
+RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
+
+This module is part of the ras-commander library and uses a centralized logging configuration.
+
+Logging Configuration:
+- The logging is set up in the logging_config.py file.
+- A @log_call decorator is available to automatically log function calls.
+- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Logs are written to both console and a rotating file handler.
+- The default log file is 'ras_commander.log' in the 'logs' directory.
+- The default log level is INFO.
+
+To use logging in this module:
+1. Use the @log_call decorator for automatic function call logging.
+2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
+
+
+Example:
+    @log_call
+    def my_function():
+        logger.debug("Additional debug information")
+        # Function logic here
 """
+import os
 from pathlib import Path
 from .RasPrj import ras
-import logging
-import re
+from ras_commander.logging_config import get_logger, log_call
 
-# Configure logging at the module level
-logging.basicConfig(
-    level=logging.INFO,  # Set to DEBUG for more detailed output
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Logs to console
-        # Uncomment the next line to enable logging to a file
-        # logging.FileHandler('ras_unsteady.log')
-    ]
-)
+logger = get_logger(__name__)
+
+# Module code starts here
 
 class RasUnsteady:
     """
@@ -23,6 +37,7 @@ class RasUnsteady:
     """
     
     @staticmethod
+    @log_call
     def update_unsteady_parameters(unsteady_file, modifications, ras_object=None):
         """
         Modify parameters in an unsteady flow file.
@@ -58,12 +73,12 @@ class RasUnsteady:
         try:
             with open(unsteady_path, 'r') as f:
                 lines = f.readlines()
-            logging.debug(f"Successfully read unsteady flow file: {unsteady_path}")
+            logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
         except FileNotFoundError:
-            logging.error(f"Unsteady flow file not found: {unsteady_path}")
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
         except PermissionError:
-            logging.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
             raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
         
         updated = False
@@ -73,21 +88,21 @@ class RasUnsteady:
                     old_value = line.strip().split('=')[1]
                     lines[i] = f"{param}={new_value}\n"
                     updated = True
-                    logging.info(f"Updated {param} from {old_value} to {new_value}")
+                    logger.info(f"Updated {param} from {old_value} to {new_value}")
         
         if updated:
             try:
                 with open(unsteady_path, 'w') as f:
                     f.writelines(lines)
-                logging.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
+                logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
             except PermissionError:
-                logging.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+                logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
                 raise PermissionError(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
             except IOError as e:
-                logging.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+                logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
                 raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
-            logging.info(f"Applied modifications to {unsteady_file}")
+            logger.info(f"Applied modifications to {unsteady_file}")
         else:
-            logging.warning(f"No matching parameters found in {unsteady_file}")
+            logger.warning(f"No matching parameters found in {unsteady_file}")
     
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()

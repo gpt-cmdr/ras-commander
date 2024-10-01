@@ -1,4 +1,4 @@
-File: c:\GH\ras-commander\ras_commander\logging_config.py
+File: C:\GH\ras-commander\ras_commander\logging_config.py
 ==================================================
 # logging_config.py
 
@@ -13,24 +13,16 @@ INFO = logging.INFO
 WARNING = logging.WARNING
 ERROR = logging.ERROR
 CRITICAL = logging.CRITICAL
-import logging
-from pathlib import Path
+
 
 _logging_setup_done = False
 
 def setup_logging:
     """Docs only, see 'setup_logging.py' for full function code"""
-# 1. Moved imports to the top of the function for better organization
-# 2. Added a get_logger() function to handle logger creation/validation
-# 3. Modified the decorator to use get_logger() for each call
-# 4. Added check for 'debug' method to ensure logger is valid
-# 5. Kept the existing behavior for @log_call vs @log_call() usage
-
-# Set up logging when this module is imported
 setup_logging()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+File: C:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -48,7 +40,6 @@ Logging Configuration:
 To use logging in this module:
 1. Use the @log_call decorator for automatic function call logging.
 2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
-3. Obtain the logger using: logger = logging.getLogger(__name__)
 
 Example:
     @log_call
@@ -80,8 +71,7 @@ from threading import Lock, Thread, current_thread
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
 from typing import Union, List, Optional, Dict
-from ras_commander import get_logger
-from ras_commander.logging_config import log_call
+from ras_commander.logging_config import get_logger, log_call
 
 logger = get_logger(__name__)
 
@@ -137,87 +127,93 @@ class RasCmdr:
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
         """
-        logger = logging.getLogger(__name__)
-        ras_obj = ras_object if ras_object is not None else ras
-        logger.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
-        ras_obj.check_initialized()
-        
-        if dest_folder is not None:
-            dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
-            
-            if dest_folder.exists():
-                if overwrite_dest:
-                    shutil.rmtree(dest_folder)
-                    logger.info(f"Destination folder '{dest_folder}' exists. Overwriting as per overwrite_dest=True.")
-                elif any(dest_folder.iterdir()):
-                    error_msg = f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite."
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
-            
-            dest_folder.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True)
-            logger.info(f"Copied project folder to destination: {dest_folder}")
-            
-            compute_ras = RasPrj()
-            compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
-            compute_prj_path = compute_ras.prj_file
-        else:
-            compute_ras = ras_obj
-            compute_prj_path = ras_obj.prj_file
-
-        # Determine the plan path
-        compute_plan_path = Path(plan_number) if isinstance(plan_number, (str, Path)) and Path(plan_number).is_file() else RasPlan.get_plan_path(plan_number, compute_ras)
-
-        if not compute_prj_path or not compute_plan_path:
-            logger.error(f"Could not find project file or plan file for plan {plan_number}")
-            return False
-
-        # Clear geometry preprocessor files if requested
-        if clear_geompre:
-            try:
-                RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
-                logger.info(f"Cleared geometry preprocessor files for plan: {plan_number}")
-            except Exception as e:
-                logger.error(f"Error clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
-
-        # Set the number of cores if specified
-        if num_cores is not None:
-            try:
-                RasPlan.set_num_cores(compute_plan_path, num_cores=num_cores, ras_object=compute_ras)
-                logger.info(f"Set number of cores to {num_cores} for plan: {plan_number}")
-            except Exception as e:
-                logger.error(f"Error setting number of cores for plan {plan_number}: {str(e)}")
-
-        # Prepare the command for HEC-RAS execution
-        cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
-        logger.info("Running HEC-RAS from the Command Line:")
-        logger.info(f"Running command: {cmd}")
-
-        # Execute the HEC-RAS command
-        start_time = time.time()
         try:
-            subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
-            end_time = time.time()
-            run_time = end_time - start_time
-            logger.info(f"HEC-RAS execution completed for plan: {plan_number}")
-            logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
-            return True
-        except subprocess.CalledProcessError as e:
-            end_time = time.time()
-            run_time = end_time - start_time
-            logger.error(f"Error running plan: {plan_number}")
-            logger.error(f"Error message: {e.output}")
-            logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+            ras_obj = ras_object if ras_object is not None else ras
+            logger.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
+            ras_obj.check_initialized()
+            
+            if dest_folder is not None:
+                dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
+                
+                if dest_folder.exists():
+                    if overwrite_dest:
+                        shutil.rmtree(dest_folder)
+                        logger.info(f"Destination folder '{dest_folder}' exists. Overwriting as per overwrite_dest=True.")
+                    elif any(dest_folder.iterdir()):
+                        error_msg = f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite."
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+                
+                dest_folder.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True)
+                logger.info(f"Copied project folder to destination: {dest_folder}")
+                
+                compute_ras = RasPrj()
+                compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+                compute_prj_path = compute_ras.prj_file
+            else:
+                compute_ras = ras_obj
+                compute_prj_path = ras_obj.prj_file
+
+            # Determine the plan path
+            compute_plan_path = Path(plan_number) if isinstance(plan_number, (str, Path)) and Path(plan_number).is_file() else RasPlan.get_plan_path(plan_number, compute_ras)
+
+            if not compute_prj_path or not compute_plan_path:
+                logger.error(f"Could not find project file or plan file for plan {plan_number}")
+                return False
+
+            # Clear geometry preprocessor files if requested
+            if clear_geompre:
+                try:
+                    RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
+                    logger.info(f"Cleared geometry preprocessor files for plan: {plan_number}")
+                except Exception as e:
+                    logger.error(f"Error clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
+
+            # Set the number of cores if specified
+            if num_cores is not None:
+                try:
+                    RasPlan.set_num_cores(compute_plan_path, num_cores=num_cores, ras_object=compute_ras)
+                    logger.info(f"Set number of cores to {num_cores} for plan: {plan_number}")
+                except Exception as e:
+                    logger.error(f"Error setting number of cores for plan {plan_number}: {str(e)}")
+
+            # Prepare the command for HEC-RAS execution
+            cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+            logger.info("Running HEC-RAS from the Command Line:")
+            logger.info(f"Running command: {cmd}")
+
+            # Execute the HEC-RAS command
+            start_time = time.time()
+            try:
+                subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+                end_time = time.time()
+                run_time = end_time - start_time
+                logger.info(f"HEC-RAS execution completed for plan: {plan_number}")
+                logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+                return True
+            except subprocess.CalledProcessError as e:
+                end_time = time.time()
+                run_time = end_time - start_time
+                logger.error(f"Error running plan: {plan_number}")
+                logger.error(f"Error message: {e.output}")
+                logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+                return False
+        except Exception as e:
+            logger.critical(f"Error in compute_plan: {str(e)}")
             return False
         finally:
             # Update the RAS object's dataframes
-            ras_obj.plan_df = ras_obj.get_plan_entries()
-            ras_obj.geom_df = ras_obj.get_geom_entries()
-            ras_obj.flow_df = ras_obj.get_flow_entries()
-            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            if ras_obj:
+                ras_obj.plan_df = ras_obj.get_plan_entries()
+                ras_obj.geom_df = ras_obj.get_geom_entries()
+                ras_obj.flow_df = ras_obj.get_flow_entries()
+                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
     
 
 
+    @staticmethod
+    @log_call
     @staticmethod
     @log_call
     def compute_parallel(
@@ -244,140 +240,136 @@ class RasCmdr:
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
         """
-        logger = logging.getLogger(__name__)
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
+        try:
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
 
-        project_folder = Path(ras_obj.project_folder)
+            project_folder = Path(ras_obj.project_folder)
 
-        if dest_folder is not None:
-            dest_folder_path = Path(dest_folder)
-            if dest_folder_path.exists():
-                if overwrite_dest:
-                    shutil.rmtree(dest_folder_path)
-                    logger.info(f"Destination folder '{dest_folder_path}' exists. Overwriting as per overwrite_dest=True.")
-                elif any(dest_folder_path.iterdir()):
-                    error_msg = f"Destination folder '{dest_folder_path}' exists and is not empty. Use overwrite_dest=True to overwrite."
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
-            dest_folder_path.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
-            logger.info(f"Copied project folder to destination: {dest_folder_path}")
-            project_folder = dest_folder_path
+            if dest_folder is not None:
+                dest_folder_path = Path(dest_folder)
+                if dest_folder_path.exists():
+                    if overwrite_dest:
+                        shutil.rmtree(dest_folder_path)
+                        logger.info(f"Destination folder '{dest_folder_path}' exists. Overwriting as per overwrite_dest=True.")
+                    elif any(dest_folder_path.iterdir()):
+                        error_msg = f"Destination folder '{dest_folder_path}' exists and is not empty. Use overwrite_dest=True to overwrite."
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+                dest_folder_path.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
+                logger.info(f"Copied project folder to destination: {dest_folder_path}")
+                project_folder = dest_folder_path
 
-        if plan_number:
-            if isinstance(plan_number, str):
-                plan_number = [plan_number]
-            ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
-            logger.info(f"Filtered plans to execute: {plan_number}")
+            if plan_number:
+                if isinstance(plan_number, str):
+                    plan_number = [plan_number]
+                ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
+                logger.info(f"Filtered plans to execute: {plan_number}")
 
-        num_plans = len(ras_obj.plan_df)
-        max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
-        logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans: {num_plans}")
+            num_plans = len(ras_obj.plan_df)
+            max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
+            logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans: {num_plans}")
 
-        worker_ras_objects = {}
-        for worker_id in range(1, max_workers + 1):
-            worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
-            if worker_folder.exists():
-                shutil.rmtree(worker_folder)
-                logger.info(f"Removed existing worker folder: {worker_folder}")
-            shutil.copytree(project_folder, worker_folder)
-            logger.info(f"Created worker folder: {worker_folder}")
+            worker_ras_objects = {}
+            for worker_id in range(1, max_workers + 1):
+                worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
+                if worker_folder.exists():
+                    shutil.rmtree(worker_folder)
+                    logger.info(f"Removed existing worker folder: {worker_folder}")
+                shutil.copytree(project_folder, worker_folder)
+                logger.info(f"Created worker folder: {worker_folder}")
 
-            ras_instance = RasPrj()
-            worker_ras_instance = init_ras_project(
-                ras_project_folder=worker_folder,
-                ras_version=ras_obj.ras_exe_path,
-                ras_instance=ras_instance
-            )
-            worker_ras_objects[worker_id] = worker_ras_instance
-
-        worker_cycle = cycle(range(1, max_workers + 1))
-        plan_assignments = [(next(worker_cycle), plan_num) for plan_num in ras_obj.plan_df['plan_number']]
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                executor.submit(
-                    RasCmdr.compute_plan,
-                    plan_num, 
-                    ras_object=worker_ras_objects[worker_id], 
-                    clear_geompre=clear_geompre,
-                    num_cores=num_cores
-                )
-                for worker_id, plan_num in plan_assignments
-            ]
-
-            for future, (worker_id, plan_num) in zip(as_completed(futures), plan_assignments):
                 try:
-                    future.result()
-                    logger.info(f"Plan {plan_num} executed in worker {worker_id}")
+                    ras_instance = RasPrj()
+                    worker_ras_instance = init_ras_project(
+                        ras_project_folder=worker_folder,
+                        ras_version=ras_obj.ras_exe_path,
+                        ras_instance=ras_instance
+                    )
+                    worker_ras_objects[worker_id] = worker_ras_instance
                 except Exception as e:
-                    logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
+                    logger.critical(f"Failed to initialize RAS project for worker {worker_id}: {str(e)}")
+                    worker_ras_objects[worker_id] = None
 
-        final_dest_folder = dest_folder_path if dest_folder is not None else project_folder.parent / f"{project_folder.name} [Computed]"
-        final_dest_folder.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Final destination for computed results: {final_dest_folder}")
+            worker_cycle = cycle(range(1, max_workers + 1))
+            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in ras_obj.plan_df['plan_number']]
 
-        for worker_ras in worker_ras_objects.values():
-            worker_folder = Path(worker_ras.project_folder)
+            execution_results: Dict[str, bool] = {}
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(
+                        RasCmdr.compute_plan,
+                        plan_num, 
+                        ras_object=worker_ras_objects[worker_id], 
+                        clear_geompre=clear_geompre,
+                        num_cores=num_cores
+                    )
+                    for worker_id, plan_num in plan_assignments
+                ]
+
+                for future, (worker_id, plan_num) in zip(as_completed(futures), plan_assignments):
+                    try:
+                        success = future.result()
+                        execution_results[plan_num] = success
+                        logger.info(f"Plan {plan_num} executed in worker {worker_id}: {'Successful' if success else 'Failed'}")
+                    except Exception as e:
+                        execution_results[plan_num] = False
+                        logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
+
+            final_dest_folder = dest_folder_path if dest_folder is not None else project_folder.parent / f"{project_folder.name} [Computed]"
+            final_dest_folder.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Final destination for computed results: {final_dest_folder}")
+
+            for worker_ras in worker_ras_objects.values():
+                if worker_ras is None:
+                    continue
+                worker_folder = Path(worker_ras.project_folder)
+                try:
+                    for item in worker_folder.iterdir():
+                        dest_path = final_dest_folder / item.name
+                        if dest_path.exists():
+                            if dest_path.is_dir():
+                                shutil.rmtree(dest_path)
+                                logger.debug(f"Removed existing directory at {dest_path}")
+                            else:
+                                dest_path.unlink()
+                                logger.debug(f"Removed existing file at {dest_path}")
+                        shutil.move(str(item), final_dest_folder)
+                        logger.debug(f"Moved {item} to {final_dest_folder}")
+                    shutil.rmtree(worker_folder)
+                    logger.info(f"Removed worker folder: {worker_folder}")
+                except Exception as e:
+                    logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
+
             try:
-                for item in worker_folder.iterdir():
-                    dest_path = final_dest_folder / item.name
-                    if dest_path.exists():
-                        if dest_path.is_dir():
-                            shutil.rmtree(dest_path)
-                            logger.debug(f"Removed existing directory at {dest_path}")
-                        else:
-                            dest_path.unlink()
-                            logger.debug(f"Removed existing file at {dest_path}")
-                    shutil.move(str(item), final_dest_folder)
-                    logger.debug(f"Moved {item} to {final_dest_folder}")
-                shutil.rmtree(worker_folder)
-                logger.info(f"Removed worker folder: {worker_folder}")
+                final_dest_folder_ras_obj = RasPrj()
+                final_dest_folder_ras_obj = init_ras_project(
+                    ras_project_folder=final_dest_folder, 
+                    ras_version=ras_obj.ras_exe_path,
+                    ras_instance=final_dest_folder_ras_obj
+                )
+                final_dest_folder_ras_obj.check_initialized()
             except Exception as e:
-                logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
+                logger.critical(f"Failed to initialize RasPrj for final destination: {str(e)}")
 
-        try:
-            final_dest_folder_ras_obj = RasPrj()
-            final_dest_folder_ras_obj = init_ras_project(
-                ras_project_folder=final_dest_folder, 
-                ras_version=ras_obj.ras_exe_path,
-                ras_instance=final_dest_folder_ras_obj
-            )
-            final_dest_folder_ras_obj.check_initialized()
+            logger.info("\nExecution Results:")
+            for plan_num, success in execution_results.items():
+                status = 'Successful' if success else 'Failed'
+                logger.info(f"Plan {plan_num}: {status}")
+
+            ras_obj = ras_object or ras
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+            return execution_results
+
         except Exception as e:
-            logger.error(f"Failed to initialize RasPrj for final destination: {str(e)}")
-            raise
-
-        try:
-            plan_entries = final_dest_folder_ras_obj.get_prj_entries('Plan')
-        except Exception as e:
-            logger.error(f"Failed to retrieve plan entries from final RasPrj: {str(e)}")
-            raise
-
-        execution_results: Dict[str, bool] = {}
-        for _, row in ras_obj.plan_df.iterrows():
-            plan_num = row['plan_number']
-            entry = plan_entries[plan_entries['plan_number'] == plan_num]
-            if not entry.empty:
-                hdf_path = entry.iloc[0].get('HDF_Results_Path')
-                success = hdf_path is not None and Path(hdf_path).exists()
-            else:
-                success = False
-            execution_results[plan_num] = success
-
-        logger.info("\nExecution Results:")
-        for plan_num, success in execution_results.items():
-            status = 'Successful' if success else 'Failed'
-            logger.info(f"Plan {plan_num}: {status}")
-
-        ras_obj = ras_object or ras
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-
-        return execution_results
+            logger.critical(f"Error in compute_parallel: {str(e)}")
+            return {}
 
     @staticmethod
     @log_call
@@ -390,11 +382,11 @@ class RasCmdr:
         overwrite_dest=False
     ):
         """
-        Execute HEC-RAS plans in test mode.  This is a re-creation of the HEC-RAS command line -test flag, 
+        Execute HEC-RAS plans in test mode. This is a re-creation of the HEC-RAS command line -test flag, 
         which does not work in recent versions of HEC-RAS.
         
         As a special-purpose function that emulates the original -test flag, it operates differently than the 
-        other two compute_ functions.  Per the original HEC-RAS test flag, it creates a separate test folder,
+        other two compute_ functions. Per the original HEC-RAS test flag, it creates a separate test folder,
         copies the project there, and executes the specified plans in sequential order.
         
         For most purposes, just copying a the project folder, initing that new folder, then running each plan 
@@ -415,7 +407,7 @@ class RasCmdr:
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
 
         Returns:
-            None
+            Dict[str, bool]: Dictionary of plan numbers and their execution success status.
 
         Example:
             Run all plans: RasCommander.compute_test_mode()
@@ -434,108 +426,115 @@ class RasCmdr:
             - Because copying the project is implicit, only a dest_folder_suffix option is provided.
             - For more flexible run management, use the compute_parallel or compute_sequential functions.
         """
-        logger = logging.getLogger(__name__)
-        
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        
-        logger.info("Starting the compute_test_mode...")
-           
-        project_folder = ras_obj.project_folder
+        try:
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            
+            logger.info("Starting the compute_test_mode...")
+               
+            project_folder = Path(ras_obj.project_folder)
 
-        if not project_folder.exists():
-            logger.error(f"Project folder '{project_folder}' does not exist.")
-            return
+            if not project_folder.exists():
+                logger.error(f"Project folder '{project_folder}' does not exist.")
+                return {}
 
-        compute_folder = project_folder.parent / f"{project_folder.name} {dest_folder_suffix}"
-        logger.info(f"Creating the test folder: {compute_folder}...")
+            compute_folder = project_folder.parent / f"{project_folder.name} {dest_folder_suffix}"
+            logger.info(f"Creating the test folder: {compute_folder}...")
 
-        if compute_folder.exists():
-            if overwrite_dest:
-                shutil.rmtree(compute_folder)
-                logger.info(f"Compute folder '{compute_folder}' exists. Overwriting as per overwrite_dest=True.")
-            elif any(compute_folder.iterdir()):
-                error_msg = (
-                    f"Compute folder '{compute_folder}' exists and is not empty. "
-                    "Use overwrite_dest=True to overwrite."
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-        else:
+            if compute_folder.exists():
+                if overwrite_dest:
+                    shutil.rmtree(compute_folder)
+                    logger.info(f"Compute folder '{compute_folder}' exists. Overwriting as per overwrite_dest=True.")
+                elif any(compute_folder.iterdir()):
+                    error_msg = (
+                        f"Compute folder '{compute_folder}' exists and is not empty. "
+                        "Use overwrite_dest=True to overwrite."
+                    )
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+
             try:
                 shutil.copytree(project_folder, compute_folder)
                 logger.info(f"Copied project folder to compute folder: {compute_folder}")
-            except FileNotFoundError:
-                logger.error(f"Unable to copy project folder. Source folder '{project_folder}' not found.")
-                return
-            except PermissionError:
-                logger.error(f"Permission denied when trying to create or copy to '{compute_folder}'.")
-                return
             except Exception as e:
-                logger.error(f"Error occurred while copying project folder: {str(e)}")
-                return
+                logger.critical(f"Error occurred while copying project folder: {str(e)}")
+                return {}
 
-        try:
-            compute_ras = RasPrj()
-            compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
-            compute_prj_path = compute_ras.prj_file
-            logger.info(f"Initialized RAS project in compute folder: {compute_prj_path}")
-        except Exception as e:
-            logger.error(f"Error initializing RAS project in compute folder: {str(e)}")
-            return
-
-        if not compute_prj_path:
-            logger.error("Project file not found.")
-            return
-
-        logger.info("Getting plan entries...")
-        try:
-            ras_compute_plan_entries = compute_ras.plan_df
-            logger.info("Retrieved plan entries successfully.")
-        except Exception as e:
-            logger.error(f"Error retrieving plan entries: {str(e)}")
-            return
-
-        if plan_number:
-            if isinstance(plan_number, str):
-                plan_number = [plan_number]
-            ras_compute_plan_entries = ras_compute_plan_entries[
-                ras_compute_plan_entries['plan_number'].isin(plan_number)
-            ]
-            logger.info(f"Filtered plans to execute: {plan_number}")
-
-        logger.info("Running selected plans sequentially...")
-        for _, plan in ras_compute_plan_entries.iterrows():
-            plan_number = plan["plan_number"]
-            start_time = time.time()
             try:
-                success = RasCmdr.compute_plan(
-                    plan_number,
-                    ras_object=compute_ras,
-                    clear_geompre=clear_geompre,
-                    num_cores=num_cores
-                )
-                if success:
-                    logger.info(f"Successfully computed plan {plan_number}")
-                else:
-                    logger.error(f"Failed to compute plan {plan_number}")
+                compute_ras = RasPrj()
+                compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
+                compute_prj_path = compute_ras.prj_file
+                logger.info(f"Initialized RAS project in compute folder: {compute_prj_path}")
             except Exception as e:
-                logger.error(f"Error computing plan {plan_number}: {str(e)}")
-            end_time = time.time()
-            run_time = end_time - start_time
-            logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+                logger.critical(f"Error initializing RAS project in compute folder: {str(e)}")
+                return {}
 
-        logger.info("All selected plans have been executed.")
-        logger.info("compute_test_mode completed.")
+            if not compute_prj_path:
+                logger.error("Project file not found.")
+                return {}
 
-        ras_obj = ras_object or ras
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            logger.info("Getting plan entries...")
+            try:
+                ras_compute_plan_entries = compute_ras.plan_df
+                logger.info("Retrieved plan entries successfully.")
+            except Exception as e:
+                logger.critical(f"Error retrieving plan entries: {str(e)}")
+                return {}
+
+            if plan_number:
+                if isinstance(plan_number, str):
+                    plan_number = [plan_number]
+                ras_compute_plan_entries = ras_compute_plan_entries[
+                    ras_compute_plan_entries['plan_number'].isin(plan_number)
+                ]
+                logger.info(f"Filtered plans to execute: {plan_number}")
+
+            execution_results = {}
+            logger.info("Running selected plans sequentially...")
+            for _, plan in ras_compute_plan_entries.iterrows():
+                plan_number = plan["plan_number"]
+                start_time = time.time()
+                try:
+                    success = RasCmdr.compute_plan(
+                        plan_number,
+                        ras_object=compute_ras,
+                        clear_geompre=clear_geompre,
+                        num_cores=num_cores
+                    )
+                    execution_results[plan_number] = success
+                    if success:
+                        logger.info(f"Successfully computed plan {plan_number}")
+                    else:
+                        logger.error(f"Failed to compute plan {plan_number}")
+                except Exception as e:
+                    execution_results[plan_number] = False
+                    logger.error(f"Error computing plan {plan_number}: {str(e)}")
+                finally:
+                    end_time = time.time()
+                    run_time = end_time - start_time
+                    logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+
+            logger.info("All selected plans have been executed.")
+            logger.info("compute_test_mode completed.")
+
+            logger.info("\nExecution Results:")
+            for plan_num, success in execution_results.items():
+                status = 'Successful' if success else 'Failed'
+                logger.info(f"Plan {plan_num}: {status}")
+
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+            return execution_results
+
+        except Exception as e:
+            logger.critical(f"Error in compute_test_mode: {str(e)}")
+            return {}
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasExamples.py
+File: C:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -650,7 +649,7 @@ pip install pandas requests
 """
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGeo.py
+File: C:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -675,6 +674,7 @@ Example:
     def my_function:
     """Docs only, see 'my_function.py' for full function code"""
 """
+import os
 from pathlib import Path
 from typing import List, Union
 from .RasPlan import RasPlan
@@ -771,7 +771,154 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasHdf.py
+File: C:\GH\ras-commander\ras_commander\RasGpt.py
+==================================================
+import os
+from pathlib import Path
+from typing import Optional
+from ras_commander import get_logger, log_call
+
+logger = get_logger(__name__)
+
+class RasGpt:
+    """
+    A class containing helper functions for the RAS Commander GPT.
+    """
+    
+    # READ Functions to allow GPT to read library files quickly 
+
+    @classmethod
+    @log_call
+    def read_library_guide(cls) -> Optional[str]:
+        """
+        Reads and returns the contents of the Comprehensive_Library_Guide.md file.
+
+        Returns:
+            Optional[str]: The contents of the file, or None if the file is not found.
+        """
+        file_path = Path(__file__).parent.parent / "docs" / "Comprehensive_Library_Guide.md"
+        return cls._read_file(file_path)
+
+
+    # ADD FOR read_reaadme and read_function_list
+    # Need to add a function list separate from the Library Guide
+    
+    # ADD for read_example_list which will read the example folder README.ModuleNotFoundError
+
+
+
+
+
+    @classmethod
+    @log_call
+    def read_style_guide(cls) -> Optional[str]:
+        """
+        Reads and returns the contents of the STYLE_GUIDE.md file.
+
+        Returns:
+            Optional[str]: The contents of the file, or None if the file is not found.
+        """
+        file_path = Path(__file__).parent.parent / "docs" / "STYLE_GUIDE.md"
+        return cls._read_file(file_path)
+    
+    
+    # READ CLASS FILE FUNCTIONS: 
+
+    @classmethod
+    @log_call
+    def read_class_rascmdr(cls) -> Optional[str]:
+        """
+        Reads and returns the contents of the RasCmdr.py file.
+
+        Returns:
+            Optional[str]: The contents of the file, or None if the file is not found.
+        """
+        file_path = Path(__file__).parent / "RasCmdr.py"
+        return cls._read_file(file_path)
+    
+    # add one for each class file 
+    
+    
+    
+    
+    
+    # Public Helper Functions: 
+    
+    
+    @classmethod
+    @log_call
+    def get_file_structure(cls, directory: Optional[str] = None) -> str:
+        """
+        Returns a string representation of the file structure of the ras_commander package.
+
+        Args:
+            directory (Optional[str]): The directory to start from. If None, uses the package root.
+
+        Returns:
+            str: A string representation of the file structure.
+        """
+        if directory is None:
+            directory = Path(__file__).parent
+
+        return cls._get_directory_structure(directory)
+    
+    
+      
+    
+    # Private Helper Functions: 
+    
+    @staticmethod
+    def _read_file(file_path: Path) -> Optional[str]:
+        """
+        Helper method to read the contents of a file.
+
+        Args:
+            file_path (Path): The path to the file to be read.
+
+        Returns:
+            Optional[str]: The contents of the file, or None if the file is not found.
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                return file.read()
+        except FileNotFoundError:
+            logger.error(f"File not found: {file_path}")
+            return None
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {str(e)}")
+            return None
+
+
+    @staticmethod
+    def _get_directory_structure(directory: Path, prefix: str = "") -> str:
+        """
+        Helper method to recursively build the directory structure string.
+
+        Args:
+            directory (Path): The directory to process.
+            prefix (str): The prefix to use for the current level.
+
+        Returns:
+            str: A string representation of the directory structure.
+        """
+        if not directory.is_dir():
+            return ""
+
+        output = []
+        for item in sorted(directory.iterdir()):
+            if item.name.startswith('.'):
+                continue
+            if item.is_dir():
+                output.append(f"{prefix}{item.name}/")
+                output.append(RasGpt._get_directory_structure(item, prefix + "  "))
+            else:
+                output.append(f"{prefix}{item.name}")
+
+        return "\n".join(output)
+
+==================================================
+
+File: C:\GH\ras-commander\ras_commander\RasHdf.py
 ==================================================
 """
 RasHdf Module
@@ -843,7 +990,8 @@ class RasHdf:
     including listing paths, extracting data, and performing analyses on
     HEC-RAS project data stored in HDF format.
     """
-        
+    
+    
     @staticmethod
     def hdf_operation:
     """Docs only, see 'hdf_operation.py' for full function code"""
@@ -919,7 +1067,7 @@ def save_dataframe_to_hdf(
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPlan.py
+File: C:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -944,6 +1092,7 @@ Example:
     def my_function:
     """Docs only, see 'my_function.py' for full function code"""
 """
+import os
 import re
 import logging
 from pathlib import Path
@@ -1054,7 +1203,7 @@ class RasPlan:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPrj.py
+File: C:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -1087,20 +1236,20 @@ Logging Configuration:
 To use logging in this module:
 1. Use the @log_call decorator for automatic function call logging.
 2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
-3. Obtain the logger using: logger = logging.getLogger(__name__)
+
 
 Example:
     @log_call
     def my_function:
     """Docs only, see 'my_function.py' for full function code"""
 """
+import os
 import re
 from pathlib import Path
 import pandas as pd
 from typing import Union, Any, List, Dict, Tuple
 import logging
-from ras_commander import get_logger
-from ras_commander.logging_config import log_call
+from ras_commander.logging_config import get_logger, log_call
 
 logger = get_logger(__name__)
 
@@ -1123,10 +1272,10 @@ def init_ras_project:
     """Docs only, see 'init_ras_project.py' for full function code"""
 def get_ras_exe:
     """Docs only, see 'get_ras_exe.py' for full function code"""
-    )
+
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -1144,17 +1293,17 @@ Logging Configuration:
 To use logging in this module:
 1. Use the @log_call decorator for automatic function call logging.
 2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
-3. Obtain the logger using: logger = logging.getLogger(__name__)
+
 
 Example:
     @log_call
     def my_function:
     """Docs only, see 'my_function.py' for full function code"""
 """
+import os
 from pathlib import Path
 from .RasPrj import ras
-from ras_commander import get_logger
-from ras_commander.logging_config import log_call
+from ras_commander.logging_config import get_logger, log_call
 
 logger = get_logger(__name__)
 
@@ -1172,7 +1321,7 @@ class RasUnsteady:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUtils.py
+File: C:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -1190,13 +1339,13 @@ Logging Configuration:
 To use logging in this module:
 1. Use the @log_call decorator for automatic function call logging.
 2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
-3. Obtain the logger using: logger = logging.getLogger(__name__)
 
 Example:
     @log_call
     def my_function:
     """Docs only, see 'my_function.py' for full function code"""
 """
+import os
 from pathlib import Path
 from .RasPrj import ras
 from typing import Union, Optional, Dict
@@ -1204,7 +1353,7 @@ import pandas as pd
 import numpy as np
 import shutil
 from ras_commander import get_logger
-from ras_commander.logging_config import log_call
+from ras_commander.logging_config import get_logger, log_call
 
 logger = get_logger(__name__)
 # Module code starts here
@@ -1393,7 +1542,7 @@ class RasUtils:
         >>> mtime = RasUtils.get_file_modification_time(Path("project.prj"))
         >>> print(f"Last modified: {mtime}")
         """
-        logger = logging.getLogger(__name__)
+        
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -1429,7 +1578,7 @@ class RasUtils:
         >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
         >>> print(f"Plan file path: {plan_path}")
         """
-        logger = logging.getLogger(__name__)
+        
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -1476,7 +1625,7 @@ class RasUtils:
         >>> success = RasUtils.remove_with_retry(Path("temp_folder"), is_folder=True)
         >>> print(f"Removal successful: {success}")
         """
-        logger = logging.getLogger(__name__)
+        
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
@@ -1536,7 +1685,7 @@ class RasUtils:
         >>> RasUtils.update_plan_file(1, "Geom", 2)
         >>> RasUtils.update_plan_file("path/to/plan.p01", "Geom", 2)
         """
-        logger = logging.getLogger(__name__)
+        
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -1616,7 +1765,7 @@ class RasUtils:
         FileNotFoundError: If the file does not exist
         PermissionError: If the required permissions are not met
         """
-        logger = logging.getLogger(__name__)
+        
         path = Path(file_path)
         if not path.exists():
             logger.error(f"File not found: {file_path}")
@@ -1803,10 +1952,10 @@ class RasUtils:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\__init__.py
+File: C:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
-from ras_commander.logging_config import setup_logging, log_call
+from .logging_config import setup_logging, get_logger, log_call
 
 try:
     __version__ = version("ras-commander")
@@ -1827,16 +1976,7 @@ from .RasCmdr import RasCmdr
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasHdf import RasHdf
-
-# Import all attributes from these modules
-from .RasPrj import *
-from .RasPlan import *
-from .RasGeo import *
-from .RasUnsteady import *
-from .RasCmdr import *
-from .RasUtils import *
-from .RasExamples import *
-from .RasHdf import *
+from .RasGpt import RasGpt
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
@@ -1851,15 +1991,9 @@ __all__ = [
     "RasUtils",
     "RasExamples",
     "RasHdf",
+    "RasGpt",
+    "get_logger",
     "log_call"
 ]
-
-from .logging_config import setup_logging, get_logger
-
-# Set up logging for the entire package
-setup_logging()
-
-# You can export get_logger if you want to use it in other modules
-__all__ = ['get_logger']
 ==================================================
 

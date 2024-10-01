@@ -1,3 +1,29 @@
+"""
+RasPlan - Operations for handling plan files in HEC-RAS projects
+
+This module is part of the ras-commander library and uses a centralized logging configuration.
+
+Logging Configuration:
+- The logging is set up in the logging_config.py file.
+- A @log_call decorator is available to automatically log function calls.
+- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Logs are written to both console and a rotating file handler.
+- The default log file is 'ras_commander.log' in the 'logs' directory.
+- The default log level is INFO.
+
+To use logging in this module:
+1. Use the @log_call decorator for automatic function call logging.
+2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
+3. Obtain the logger using: logger = logging.getLogger(__name__)
+
+Example:
+    @log_call
+    def my_function():
+        logger = logging.getLogger(__name__)
+        logger.debug("Additional debug information")
+        # Function logic here
+"""
+import os
 import re
 import logging
 from pathlib import Path
@@ -6,28 +32,20 @@ from typing import Union, Optional
 import pandas as pd
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
-
-
 from pathlib import Path
 from typing import Union, Any
 import logging
 import re
+from ras_commander import get_logger
+from ras_commander.logging_config import log_call
 
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
+logger = get_logger(__name__)
 
 class RasPlan:
     """
     A class for operations on HEC-RAS plan files.
     """
-
+    @log_call
     @staticmethod
     def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
@@ -110,6 +128,7 @@ class RasPlan:
         return ras_obj.plan_df
 
     @staticmethod
+    @log_call
     def set_steady(plan_number: str, new_steady_flow_number: str, ras_object=None):
         """
         Apply a steady flow file to a plan file.
@@ -132,7 +151,6 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        logging.info(f"Setting steady flow file to {new_steady_flow_number} in Plan {plan_number}")
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
                         
@@ -140,27 +158,23 @@ class RasPlan:
         ras_obj.flow_df = ras_obj.get_flow_entries()
         
         if new_steady_flow_number not in ras_obj.flow_df['flow_number'].values:
-            logging.error(f"Steady flow number {new_steady_flow_number} not found in project file.")
             raise ValueError(f"Steady flow number {new_steady_flow_number} not found in project file.")
         
         # Resolve the full path of the plan file
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
-            logging.error(f"Plan file not found: {plan_number}")
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
         try:
             with open(plan_file_path, 'r') as f:
                 lines = f.readlines()
         except FileNotFoundError:
-            logging.error(f"Plan file not found: {plan_file_path}")
-            raise
+            raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
         
         with open(plan_file_path, 'w') as f:
             for line in lines:
                 if line.startswith("Flow File=f"):
                     f.write(f"Flow File=f{new_steady_flow_number}\n")
-                    logging.info(f"Updated Flow File in {plan_file_path} to f{new_steady_flow_number}")
                 else:
                     f.write(line)
 
@@ -171,6 +185,7 @@ class RasPlan:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
+    @log_call
     def set_unsteady(plan_number: str, new_unsteady_flow_number: str, ras_object=None):
         """
         Apply an unsteady flow file to a plan file.
@@ -193,8 +208,6 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        logging.info(f"Setting unsteady flow file to {new_unsteady_flow_number} in Plan {plan_number}")
-        
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -202,21 +215,17 @@ class RasPlan:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         if new_unsteady_flow_number not in ras_obj.unsteady_df['unsteady_number'].values:
-            logging.error(f"Unsteady number {new_unsteady_flow_number} not found in project file.")
             raise ValueError(f"Unsteady number {new_unsteady_flow_number} not found in project file.")
         
         # Get the full path of the plan file
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
-            logging.error(f"Plan file not found: {plan_number}")
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
         try:
             RasUtils.update_plan_file(plan_file_path, 'Unsteady', new_unsteady_flow_number)
-            logging.info(f"Updated unsteady flow file in {plan_file_path} to u{new_unsteady_flow_number}")
         except Exception as e:
-            logging.error(f"Failed to update unsteady flow file: {e}")
-            raise
+            raise Exception(f"Failed to update unsteady flow file: {e}")
 
         # Update the ras object's dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -225,6 +234,7 @@ class RasPlan:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
+    @log_call
     def set_num_cores(plan_number, num_cores, ras_object=None):
         """
         Update the maximum number of cores to use in the HEC-RAS plan file.
@@ -253,8 +263,6 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        logging.info(f"Setting num_cores to {num_cores} in Plan {plan_number}")
-        
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -262,7 +270,6 @@ class RasPlan:
         if Path(plan_number).is_file():
             plan_file_path = Path(plan_number)
             if not plan_file_path.exists():
-                logging.error(f"Plan file not found: {plan_file_path}. Please provide a valid plan number or path.")
                 raise FileNotFoundError(f"Plan file not found: {plan_file_path}. Please provide a valid plan number or path.")
         else:
             # Update the plan dataframe in the ras instance to ensure it is current
@@ -271,7 +278,6 @@ class RasPlan:
             # Get the full path of the plan file
             plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
             if not plan_file_path:
-                logging.error(f"Plan file not found: {plan_number}. Please provide a valid plan number or path.")
                 raise FileNotFoundError(f"Plan file not found: {plan_number}. Please provide a valid plan number or path.")
         
         cores_pattern = re.compile(r"(UNET D1 Cores= )\d+")
@@ -279,17 +285,14 @@ class RasPlan:
             with open(plan_file_path, 'r') as file:
                 content = file.read()
         except FileNotFoundError:
-            logging.error(f"Plan file not found: {plan_file_path}")
-            raise
+            raise FileNotFoundError(f"Plan file not found: {plan_file_path}")
         
         new_content = cores_pattern.sub(rf"\g<1>{num_cores}", content)
         try:
             with open(plan_file_path, 'w') as file:
                 file.write(new_content)
-            logging.info(f"Updated {plan_file_path} with {num_cores} cores.")
         except IOError as e:
-            logging.error(f"Failed to write to plan file: {e}")
-            raise
+            raise IOError(f"Failed to write to plan file: {e}")
         
         # Update the ras object's dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -298,6 +301,7 @@ class RasPlan:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
+    @log_call
     def set_geom_preprocessor(file_path, run_htab, use_ib_tables, ras_object=None):
         """
         Update the simulation plan file to modify the `Run HTab` and `UNET Use Existing IB Tables` settings.
@@ -330,37 +334,27 @@ class RasPlan:
         ras_obj.check_initialized()
         
         if run_htab not in [-1, 0]:
-            logging.error("Invalid value for `Run HTab`. Expected `0` or `-1`.")
             raise ValueError("Invalid value for `Run HTab`. Expected `0` or `-1`.")
         if use_ib_tables not in [-1, 0]:
-            logging.error("Invalid value for `UNET Use Existing IB Tables`. Expected `0` or `-1`.")
             raise ValueError("Invalid value for `UNET Use Existing IB Tables`. Expected `0` or `-1`.")
         try:
-            logging.info(f"Reading the file: {file_path}")
             with open(file_path, 'r') as file:
                 lines = file.readlines()
-            logging.info("Updating the file with new settings...")
             updated_lines = []
             for line in lines:
                 if line.lstrip().startswith("Run HTab="):
                     updated_line = f"Run HTab= {run_htab} \n"
                     updated_lines.append(updated_line)
-                    logging.info(f"Updated 'Run HTab' to {run_htab}")
                 elif line.lstrip().startswith("UNET Use Existing IB Tables="):
                     updated_line = f"UNET Use Existing IB Tables= {use_ib_tables} \n"
                     updated_lines.append(updated_line)
-                    logging.info(f"Updated 'UNET Use Existing IB Tables' to {use_ib_tables}")
                 else:
                     updated_lines.append(line)
-            logging.info(f"Writing the updated settings back to the file: {file_path}")
             with open(file_path, 'w') as file:
                 file.writelines(updated_lines)
-            logging.info("File update completed successfully.")
         except FileNotFoundError:
-            logging.error(f"The file '{file_path}' does not exist.")
             raise FileNotFoundError(f"The file '{file_path}' does not exist.")
         except IOError as e:
-            logging.error(f"An error occurred while reading or writing the file: {e}")
             raise IOError(f"An error occurred while reading or writing the file: {e}")
 
         # Update the ras object's dataframes
@@ -369,9 +363,8 @@ class RasPlan:
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
-    # Get Functions to retrieve file paths for plan, flow, unsteady, geometry and results files
-
     @staticmethod
+    @log_call
     def get_results_path(plan_number: str, ras_object=None) -> Optional[str]:
         """
         Retrieve the results file path for a given HEC-RAS plan number.
@@ -403,24 +396,18 @@ class RasPlan:
         # Ensure plan_number is a string
         plan_number = str(plan_number).zfill(2)
         
-        # Log the plan dataframe for debugging
-        logging.debug("Plan DataFrame:")
-        logging.debug(ras_obj.plan_df)
-        
         plan_entry = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_number]
         if not plan_entry.empty:
             results_path = plan_entry['HDF_Results_Path'].iloc[0]
             if results_path and Path(results_path).exists():
-                logging.info(f"Results file for Plan number {plan_number} exists at: {results_path}")
                 return results_path
             else:
-                logging.warning(f"Results file for Plan number {plan_number} does not exist.")
                 return None
         else:
-            logging.warning(f"Plan number {plan_number} not found in the entries.")
             return None
 
     @staticmethod
+    @log_call
     def get_plan_path(plan_number: str, ras_object=None) -> Optional[str]:
         """
         Return the full path for a given plan number.
@@ -456,13 +443,12 @@ class RasPlan:
         
         if not plan_path.empty:
             full_path = plan_path['full_path'].iloc[0]
-            logging.info(f"Plan file for Plan number {plan_number} found at: {full_path}")
             return full_path
         else:
-            logging.warning(f"Plan number {plan_number} not found in the updated plan entries.")
             return None
 
     @staticmethod
+    @log_call
     def get_flow_path(flow_number: str, ras_object=None) -> Optional[str]:
         """
         Return the full path for a given flow number.
@@ -494,13 +480,12 @@ class RasPlan:
         flow_path = ras_obj.flow_df[ras_obj.flow_df['flow_number'] == flow_number]
         if not flow_path.empty:
             full_path = flow_path['full_path'].iloc[0]
-            logging.info(f"Flow file for Flow number {flow_number} found at: {full_path}")
             return full_path
         else:
-            logging.warning(f"Flow number {flow_number} not found in the updated flow entries.")
             return None
 
     @staticmethod
+    @log_call
     def get_unsteady_path(unsteady_number: str, ras_object=None) -> Optional[str]:
         """
         Return the full path for a given unsteady number.
@@ -532,13 +517,12 @@ class RasPlan:
         unsteady_path = ras_obj.unsteady_df[ras_obj.unsteady_df['unsteady_number'] == unsteady_number]
         if not unsteady_path.empty:
             full_path = unsteady_path['full_path'].iloc[0]
-            logging.info(f"Unsteady file for Unsteady number {unsteady_number} found at: {full_path}")
             return full_path
         else:
-            logging.warning(f"Unsteady number {unsteady_number} not found in the updated unsteady entries.")
             return None
 
     @staticmethod
+    @log_call
     def get_geom_path(geom_number: str, ras_object=None) -> Optional[str]:
         """
         Return the full path for a given geometry number.
@@ -570,15 +554,14 @@ class RasPlan:
         geom_path = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == geom_number]
         if not geom_path.empty:
             full_path = geom_path['full_path'].iloc[0]
-            logging.info(f"Geometry file for Geom number {geom_number} found at: {full_path}")
             return full_path
         else:
-            logging.warning(f"Geometry number {geom_number} not found in the updated geometry entries.")
             return None
 
     # Clone Functions to copy unsteady, flow, and geometry files from templates
 
     @staticmethod
+    @log_call
     def clone_plan(template_plan, new_plan_shortid=None, ras_object=None):
         """
         Create a new plan file based on a template and update the project file.
@@ -610,18 +593,15 @@ class RasPlan:
         new_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_plan_num}"
         
         if not template_plan_path.exists():
-            logging.error(f"Template plan file '{template_plan_path}' does not exist.")
             raise FileNotFoundError(f"Template plan file '{template_plan_path}' does not exist.")
 
         shutil.copy(template_plan_path, new_plan_path)
-        logging.info(f"Copied {template_plan_path} to {new_plan_path}")
 
         try:
             with open(new_plan_path, 'r') as f:
                 plan_lines = f.readlines()
         except FileNotFoundError:
-            logging.error(f"New plan file not found after copying: {new_plan_path}")
-            raise
+            raise FileNotFoundError(f"New plan file not found after copying: {new_plan_path}")
 
         shortid_pattern = re.compile(r'^Short Identifier=(.*)$', re.IGNORECASE)
         for i, line in enumerate(plan_lines):
@@ -633,23 +613,19 @@ class RasPlan:
                 else:
                     new_shortid = new_plan_shortid[:24]
                 plan_lines[i] = f"Short Identifier={new_shortid}\n"
-                logging.info(f"Updated 'Short Identifier' to '{new_shortid}' in {new_plan_path}")
                 break
 
         try:
             with open(new_plan_path, 'w') as f:
                 f.writelines(plan_lines)
-            logging.info(f"Updated short identifier in {new_plan_path}")
         except IOError as e:
-            logging.error(f"Failed to write updated short identifier to {new_plan_path}: {e}")
-            raise
+            raise IOError(f"Failed to write updated short identifier to {new_plan_path}: {e}")
 
         try:
             with open(ras_obj.prj_file, 'r') as f:
                 lines = f.readlines()
         except FileNotFoundError:
-            logging.error(f"Project file not found: {ras_obj.prj_file}")
-            raise
+            raise FileNotFoundError(f"Project file not found: {ras_obj.prj_file}")
 
         # Prepare the new Plan File entry line
         new_plan_line = f"Plan File=p{new_plan_num}\n"
@@ -669,27 +645,22 @@ class RasPlan:
 
         if insertion_index is not None:
             lines.insert(insertion_index, new_plan_line)
-            logging.info(f"Inserted new plan line at index {insertion_index}")
         else:
             # Try to insert after the last Plan File entry
             plan_indices = [i for i, line in enumerate(lines) if plan_file_pattern.match(line.strip())]
             if plan_indices:
                 last_plan_index = plan_indices[-1]
                 lines.insert(last_plan_index + 1, new_plan_line)
-                logging.info(f"Inserted new plan line after index {last_plan_index}")
             else:
                 # Append at the end if no Plan File entries exist
                 lines.append(new_plan_line)
-                logging.info(f"Appended new plan line at the end of the project file")
 
         try:
             # Write the updated lines back to the project file
             with open(ras_obj.prj_file, 'w') as f:
                 f.writelines(lines)
-            logging.info(f"Updated {ras_obj.prj_file} with new plan p{new_plan_num}")
         except IOError as e:
-            logging.error(f"Failed to write updated project file: {e}")
-            raise
+            raise IOError(f"Failed to write updated project file: {e}")
 
         new_plan = new_plan_num
         
@@ -704,6 +675,7 @@ class RasPlan:
         return new_plan
 
     @staticmethod
+    @log_call
     def clone_unsteady(template_unsteady, ras_object=None):
         """
         Copy unsteady flow files from a template, find the next unsteady number,
@@ -735,27 +707,21 @@ class RasPlan:
         new_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}"
 
         if not template_unsteady_path.exists():
-            logging.error(f"Template unsteady file '{template_unsteady_path}' does not exist.")
             raise FileNotFoundError(f"Template unsteady file '{template_unsteady_path}' does not exist.")
 
         shutil.copy(template_unsteady_path, new_unsteady_path)
-        logging.info(f"Copied {template_unsteady_path} to {new_unsteady_path}")
 
         # Copy the corresponding .hdf file if it exists
         template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}.hdf"
         new_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}.hdf"
         if template_hdf_path.exists():
             shutil.copy(template_hdf_path, new_hdf_path)
-            logging.info(f"Copied {template_hdf_path} to {new_hdf_path}")
-        else:
-            logging.warning(f"No corresponding .hdf file found for '{template_unsteady_path}'. Skipping '.hdf' copy.")
 
         try:
             with open(ras_obj.prj_file, 'r') as f:
                 lines = f.readlines()
         except FileNotFoundError:
-            logging.error(f"Project file not found: {ras_obj.prj_file}")
-            raise
+            raise FileNotFoundError(f"Project file not found: {ras_obj.prj_file}")
 
         # Prepare the new Unsteady Flow File entry line
         new_unsteady_line = f"Unsteady File=u{new_unsteady_num}\n"
@@ -775,27 +741,22 @@ class RasPlan:
 
         if insertion_index is not None:
             lines.insert(insertion_index, new_unsteady_line)
-            logging.info(f"Inserted new unsteady flow line at index {insertion_index}")
         else:
             # Try to insert after the last Unsteady Flow File entry
             unsteady_indices = [i for i, line in enumerate(lines) if unsteady_file_pattern.match(line.strip())]
             if unsteady_indices:
                 last_unsteady_index = unsteady_indices[-1]
                 lines.insert(last_unsteady_index + 1, new_unsteady_line)
-                logging.info(f"Inserted new unsteady flow line after index {last_unsteady_index}")
             else:
                 # Append at the end if no Unsteady Flow File entries exist
                 lines.append(new_unsteady_line)
-                logging.info(f"Appended new unsteady flow line at the end of the project file")
 
         try:
             # Write the updated lines back to the project file
             with open(ras_obj.prj_file, 'w') as f:
                 f.writelines(lines)
-            logging.info(f"Updated {ras_obj.prj_file} with new unsteady flow file u{new_unsteady_num}")
         except IOError as e:
-            logging.error(f"Failed to write updated project file: {e}")
-            raise
+            raise IOError(f"Failed to write updated project file: {e}")
 
         new_unsteady = new_unsteady_num
         
@@ -810,6 +771,7 @@ class RasPlan:
         return new_unsteady
 
     @staticmethod
+    @log_call
     def clone_steady(template_flow, ras_object=None):
         """
         Copy steady flow files from a template, find the next flow number,
@@ -841,19 +803,16 @@ class RasPlan:
         new_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_flow_num}"
 
         if not template_flow_path.exists():
-            logging.error(f"Template steady flow file '{template_flow_path}' does not exist.")
             raise FileNotFoundError(f"Template steady flow file '{template_flow_path}' does not exist.")
 
         shutil.copy(template_flow_path, new_flow_path)
-        logging.info(f"Copied {template_flow_path} to {new_flow_path}")
 
         # Read the contents of the project file
         try:
             with open(ras_obj.prj_file, 'r') as f:
                 lines = f.readlines()
         except FileNotFoundError:
-            logging.error(f"Project file not found: {ras_obj.prj_file}")
-            raise
+            raise FileNotFoundError(f"Project file not found: {ras_obj.prj_file}")
 
         # Prepare the new Steady Flow File entry line
         new_flow_line = f"Flow File=f{new_flow_num}\n"
@@ -873,27 +832,22 @@ class RasPlan:
 
         if insertion_index is not None:
             lines.insert(insertion_index, new_flow_line)
-            logging.info(f"Inserted new steady flow line at index {insertion_index}")
         else:
             # Try to insert after the last Steady Flow File entry
             flow_indices = [i for i, line in enumerate(lines) if flow_file_pattern.match(line.strip())]
             if flow_indices:
                 last_flow_index = flow_indices[-1]
                 lines.insert(last_flow_index + 1, new_flow_line)
-                logging.info(f"Inserted new steady flow line after index {last_flow_index}")
             else:
                 # Append at the end if no Steady Flow File entries exist
                 lines.append(new_flow_line)
-                logging.info(f"Appended new steady flow line at the end of the project file")
 
         try:
             # Write the updated lines back to the project file
             with open(ras_obj.prj_file, 'w') as f:
                 f.writelines(lines)
-            logging.info(f"Updated {ras_obj.prj_file} with new steady flow file f{new_flow_num}")
         except IOError as e:
-            logging.error(f"Failed to write updated project file: {e}")
-            raise
+            raise IOError(f"Failed to write updated project file: {e}")
 
         new_steady = new_flow_num
         
@@ -908,6 +862,7 @@ class RasPlan:
         return new_steady
 
     @staticmethod
+    @log_call
     def clone_geom(template_geom, ras_object=None):
         """
         Copy geometry files from a template, find the next geometry number,
@@ -928,13 +883,11 @@ class RasPlan:
 
         # Update geometry entries without reinitializing the entire project
         ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
-        logging.debug(f"Updated geometry entries:\n{ras_obj.geom_df}")
 
         template_geom_filename = f"{ras_obj.project_name}.g{template_geom}"
         template_geom_path = ras_obj.project_folder / template_geom_filename
 
         if not template_geom_path.is_file():
-            logging.error(f"Template geometry file '{template_geom_path}' does not exist.")
             raise FileNotFoundError(f"Template geometry file '{template_geom_path}' does not exist.")
 
         next_geom_number = RasPlan.get_next_number(ras_obj.geom_df['geom_number'])
@@ -943,23 +896,18 @@ class RasPlan:
         new_geom_path = ras_obj.project_folder / new_geom_filename
 
         shutil.copyfile(template_geom_path, new_geom_path)
-        logging.info(f"Copied '{template_geom_path}' to '{new_geom_path}'.")
 
         # Handle HDF file copy
         template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{template_geom}.hdf"
         new_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{next_geom_number}.hdf"
         if template_hdf_path.is_file():
             shutil.copyfile(template_hdf_path, new_hdf_path)
-            logging.info(f"Copied '{template_hdf_path}' to '{new_hdf_path}'.")
-        else:
-            logging.warning(f"Template geometry HDF file '{template_hdf_path}' does not exist. Skipping '.hdf' copy.")
 
         try:
             with open(ras_obj.prj_file, 'r') as file:
                 lines = file.readlines()
         except FileNotFoundError:
-            logging.error(f"Project file not found: {ras_obj.prj_file}")
-            raise
+            raise FileNotFoundError(f"Project file not found: {ras_obj.prj_file}")
 
         # Prepare the new Geometry File entry line
         new_geom_line = f"Geom File=g{next_geom_number}\n"
@@ -979,27 +927,22 @@ class RasPlan:
 
         if insertion_index is not None:
             lines.insert(insertion_index, new_geom_line)
-            logging.info(f"Inserted new geometry line at index {insertion_index}")
         else:
             # Try to insert after the last Geometry File entry
             geom_indices = [i for i, line in enumerate(lines) if geom_file_pattern.match(line.strip())]
             if geom_indices:
                 last_geom_index = geom_indices[-1]
                 lines.insert(last_geom_index + 1, new_geom_line)
-                logging.info(f"Inserted new geometry line after index {last_geom_index}")
             else:
                 # Append at the end if no Geometry File entries exist
                 lines.append(new_geom_line)
-                logging.info(f"Appended new geometry line at the end of the project file")
 
         try:
             # Write the updated lines back to the project file
             with open(ras_obj.prj_file, 'w') as file:
                 file.writelines(lines)
-            logging.info(f"Updated {ras_obj.prj_file} with new geometry file g{next_geom_number}")
         except IOError as e:
-            logging.error(f"Failed to write updated project file: {e}")
-            raise
+            raise IOError(f"Failed to write updated project file: {e}")
 
         new_geom = next_geom_number
         
@@ -1009,11 +952,10 @@ class RasPlan:
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
-        logging.debug(f"Updated geometry entries:\n{ras_obj.geom_df}")
-
         return new_geom
 
     @staticmethod
+    @log_call
     def get_next_number(existing_numbers):
         """
         Determine the next available number from a list of existing numbers.
@@ -1041,8 +983,8 @@ class RasPlan:
                 break
         return f"{next_number:02d}"
 
-
     @staticmethod
+    @log_call
     def get_plan_value(
         plan_number_or_path: Union[str, Path],
         key: str,
@@ -1064,47 +1006,51 @@ class RasPlan:
         IOError: If there's an error reading the plan file
 
         Available keys and their expected types:
-        - 'description' (str): Plan description
-        - 'computation_interval' (str): Time value for computational time step (e.g., '5SEC', '2MIN')
-        - 'dss_file' (str): Name of the DSS file used
-        - 'flow_file' (str): Name of the flow input file
-        - 'friction_slope_method' (int): Method selection for friction slope (e.g., 1, 2)
-        - 'geom_file' (str): Name of the geometry input file
-        - 'mapping_interval' (str): Time interval for mapping output
-        - 'plan_file' (str): Name of the plan file
-        - 'plan_title' (str): Title of the simulation plan
-        - 'program_version' (str): Version number of HEC-RAS
-        - 'run_htab' (int): Flag to run HTab module (-1 or 1)
-        - 'run_post_process' (int): Flag to run post-processing (-1 or 1)
-        - 'run_sediment' (int): Flag to run sediment transport module (0 or 1)
-        - 'run_unet' (int): Flag to run unsteady network module (-1 or 1)
-        - 'run_wqnet' (int): Flag to run water quality module (0 or 1)
-        - 'short_identifier' (str): Short name or ID for the plan
-        - 'simulation_date' (str): Start and end dates/times for simulation
-        - 'unet_d1_cores' (int): Number of cores used in 1D calculations
-        - 'unet_use_existing_ib_tables' (int): Flag for using existing internal boundary tables (-1, 0, or 1)
-        - 'unet_1d_methodology' (str): 1D calculation methodology
-        - 'unet_d2_solver_type' (str): 2D solver type
-        - 'unet_d2_name' (str): Name of the 2D area
-        - 'run_rasmapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
+        - 'Computation Interval' (str): Time value for computational time step (e.g., '5SEC', '2MIN')
+        - 'DSS File' (str): Name of the DSS file used
+        - 'Flow File' (str): Name of the flow input file
+        - 'Friction Slope Method' (int): Method selection for friction slope (e.g., 1, 2)
+        - 'Geom File' (str): Name of the geometry input file
+        - 'Mapping Interval' (str): Time interval for mapping output
+        - 'Plan File' (str): Name of the plan file
+        - 'Plan Title' (str): Title of the simulation plan
+        - 'Program Version' (str): Version number of HEC-RAS
+        - 'Run HTAB' (int): Flag to run HTab module (-1 or 1)
+        - 'Run Post Process' (int): Flag to run post-processing (-1 or 1)
+        - 'Run Sediment' (int): Flag to run sediment transport module (0 or 1)
+        - 'Run UNET' (int): Flag to run unsteady network module (-1 or 1)
+        - 'Run WQNET' (int): Flag to run water quality module (0 or 1)
+        - 'Short Identifier' (str): Short name or ID for the plan
+        - 'Simulation Date' (str): Start and end dates/times for simulation
+        - 'UNET D1 Cores' (int): Number of cores used in 1D calculations
+        - 'UNET Use Existing IB Tables' (int): Flag for using existing internal boundary tables (-1, 0, or 1)
+        - 'UNET 1D Methodology' (str): 1D calculation methodology
+        - 'UNET D2 Solver Type' (str): 2D solver type
+        - 'UNET D2 Name' (str): Name of the 2D area
+        - 'Run RASMapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
+        
+        
+        Note: 
+        Writing Multi line keys like 'Description' are not supported by this function.
 
         Example:
-        >>> computation_interval = RasPlan.get_plan_value("01", "computation_interval")
+        >>> computation_interval = RasPlan.get_plan_value("01", "Computation Interval")
         >>> print(f"Computation interval: {computation_interval}")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        valid_keys = {
-            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
-            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
-            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
-            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name', 'run_rasmapper'
+        supported_plan_keys = {
+            'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
+            'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
+            'Run HTAB', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
+            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET Use Existing IB Tables',
+            'UNET 1D Methodology', 'UNET D2 Solver Type', 'UNET D2 Name', 'Run RASMapper'
         }
 
-        if key not in valid_keys:
-            logging.warning(f"Unknown key: {key}. Valid keys are: {', '.join(valid_keys)}\n Add more keys and explanations in get_plan_value() as needed.")
+        if key not in supported_plan_keys:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(supported_plan_keys)}\n Add more keys and explanations in get_plan_value() as needed.")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -1116,22 +1062,25 @@ class RasPlan:
             with open(plan_file_path, 'r') as file:
                 content = file.read()
         except IOError as e:
-            logging.error(f"Error reading plan file {plan_file_path}: {e}")
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
 
-        if key == 'description':
+        if key == 'Description':
             match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
             return match.group(1).strip() if match else None
         else:
-            pattern = f"{key.replace('_', ' ').title()}=(.*)"
+            pattern = f"{key}=(.*)"
             match = re.search(pattern, content)
             if match:
                 return match.group(1).strip()
             else:
-                logging.error(f"Key '{key}' not found in the plan file.")
+                logger = logging.getLogger(__name__)
+                logger.error(f"Key '{key}' not found in the plan file.")
                 return None
 
     @staticmethod
+    @log_call
     def update_plan_value(
         plan_number_or_path: Union[str, Path],
         key: str,
@@ -1161,16 +1110,16 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        valid_keys = {
-            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
-            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
-            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
-            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name', 'run_rasmapper'
+        supported_plan_keys = {
+            'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
+            'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
+            'Run HTAB', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
+            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET Use Existing IB Tables',
+            'UNET 1D Methodology', 'UNET D2 Solver Type', 'UNET D2 Name', 'Run RASMapper'
         }
-
-        if key not in valid_keys:
-            logging.warning(f"Unknown key: {key}. Valid keys are: {', '.join(valid_keys)}")
+        logger = logging.getLogger(__name__)
+        if key not in supported_plan_keys:
+            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(supported_plan_keys)}")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -1182,7 +1131,7 @@ class RasPlan:
             with open(plan_file_path, 'r') as file:
                 lines = file.readlines()
         except IOError as e:
-            logging.error(f"Error reading plan file {plan_file_path}: {e}")
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
 
         # Special handling for description
@@ -1209,15 +1158,15 @@ class RasPlan:
                     updated = True
                     break
             if not updated:
-                logging.error(f"Key '{key}' not found in the plan file.")
+                logger.error(f"Key '{key}' not found in the plan file.")
                 return
 
         try:
             with open(plan_file_path, 'w') as file:
                 file.writelines(lines)
-            logging.info(f"Updated {key} in plan file: {plan_file_path}")
+            logger.info(f"Updated {key} in plan file: {plan_file_path}")
         except IOError as e:
-            logging.error(f"Error writing to plan file {plan_file_path}: {e}")
+            logger.error(f"Error writing to plan file {plan_file_path}: {e}")
             raise
 
         # Refresh RasPrj dataframes

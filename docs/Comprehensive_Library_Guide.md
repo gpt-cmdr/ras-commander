@@ -4,6 +4,12 @@
 
 RAS-Commander (`ras_commander`) is a Python library designed to automate and streamline operations with HEC-RAS projects. It provides a suite of tools for managing projects, executing simulations, and handling results. This guide offers a comprehensive overview of the library's key concepts, modules, best practices, and advanced usage patterns. RAS-Commander is designed to be flexible, robust, and AI-accessible, making it an ideal tool for both manual and automated HEC-RAS workflows.
 
+RAS-Commander can be installed with the following commands:
+```
+pip install h5py numpy pandas requests tqdm scipy
+pip install ras-commander
+```
+
 ---
 
 ## Table of Contents

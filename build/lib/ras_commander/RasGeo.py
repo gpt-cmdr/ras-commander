@@ -1,21 +1,37 @@
 """
-Operations for handling geometry files in HEC-RAS projects.
+RasGeo - Operations for handling geometry files in HEC-RAS projects
+
+This module is part of the ras-commander library and uses a centralized logging configuration.
+
+Logging Configuration:
+- The logging is set up in the logging_config.py file.
+- A @log_call decorator is available to automatically log function calls.
+- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Logs are written to both console and a rotating file handler.
+- The default log file is 'ras_commander.log' in the 'logs' directory.
+- The default log level is INFO.
+
+To use logging in this module:
+1. Use the @log_call decorator for automatic function call logging.
+2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
+3. Obtain the logger using: logger = logging.getLogger(__name__)
+
+Example:
+    @log_call
+    def my_function():
+        logger = logging.getLogger(__name__)
+        logger.debug("Additional debug information")
+        # Function logic here
 """
+import os
 from pathlib import Path
 from typing import List, Union
 from .RasPlan import RasPlan
 from .RasPrj import ras
-import logging
-import re
+from ras_commander import get_logger
+from ras_commander.logging_config import log_call
 
-# Configure logging at the module level
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    # You can add a filename parameter here to log to a file
-    # filename='rasgeo.log',
-    # Uncomment the above line to enable file logging
-)
+logger = get_logger(__name__)
 
 class RasGeo:
     """
@@ -23,6 +39,7 @@ class RasGeo:
     """
     
     @staticmethod
+    @log_call
     def clear_geompre_files(
         plan_files: Union[str, Path, List[Union[str, Path]]] = None,
         ras_object = None
@@ -58,11 +75,6 @@ class RasGeo:
         Note:
             This function updates the ras object's geometry dataframe after clearing the preprocessor files.
         """
-        ## Explicit Function Steps
-        # 1. Initialize the ras_object, defaulting to the global ras if not provided.
-        # 2. Define a helper function to clear a single geometry preprocessor file.
-        # 3. Determine the list of plan files to process based on the input.
-        # 4. Iterate over each plan file and clear its geometry preprocessor file.
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -72,38 +84,36 @@ class RasGeo:
             geom_preprocessor_file = plan_path.with_suffix(geom_preprocessor_suffix)
             if geom_preprocessor_file.exists():
                 try:
-                    logging.info(f"Deleting geometry preprocessor file: {geom_preprocessor_file}")
                     geom_preprocessor_file.unlink()
-                    logging.info("File deletion completed successfully.")
+                    logger.info(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
                 except PermissionError:
-                    logging.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}.")
+                    logger.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}")
                     raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
                 except OSError as e:
-                    logging.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
+                    logger.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
                     raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
             else:
-                logging.warning(f"No geometry preprocessor file found for: {plan_file}")
+                logger.warning(f"No geometry preprocessor file found for: {plan_file}")
         
         if plan_files is None:
-            logging.info("Clearing all geometry preprocessor files in the project directory.")
+            logger.info("Clearing all geometry preprocessor files in the project directory.")
             plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
-            logging.info(f"Clearing geometry preprocessor file for single plan: {plan_files}")
+            logger.info(f"Clearing geometry preprocessor file for single plan: {plan_files}")
         elif isinstance(plan_files, list):
             plan_files_to_clear = plan_files
-            logging.info(f"Clearing geometry preprocessor files for multiple plans: {plan_files}")
+            logger.info(f"Clearing geometry preprocessor files for multiple plans: {plan_files}")
         else:
-            logging.error("Invalid input type for plan_files.")
+            logger.error("Invalid input type for plan_files.")
             raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
         
         for plan_file in plan_files_to_clear:
             clear_single_file(plan_file, ras_obj)
         
-        # Update the geometry dataframe
         try:
             ras_obj.geom_df = ras_obj.get_geom_entries()
-            logging.info("Geometry dataframe updated successfully.")
+            logger.info("Geometry dataframe updated successfully.")
         except Exception as e:
-            logging.error(f"Failed to update geometry dataframe: {str(e)}")
+            logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise

@@ -1,46 +1,34 @@
 Metadata-Version: 2.1
 Name: ras-commander
-Version: 0.35.0
+Version: 0.40.0
 Summary: A Python library for automating HEC-RAS operations
 Home-page: https://github.com/billk-FM/ras-commander
 Author: William M. Katzenmeyer
 Author-email: billk@fenstermaker.com
-Classifier: Programming Language :: Python :: 3.10
-Classifier: Programming Language :: Python :: 3.11
-Classifier: License :: OSI Approved :: MIT License
-Classifier: Operating System :: OS Independent
-Requires-Python: >=3.9
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: pandas>=1.0.0
-Requires-Dist: numpy>=1.18.0
-Requires-Dist: h5py>=3.1.0
-Requires-Dist: requests>=2.25.0
-Requires-Dist: scipy>=1.5.0
-Requires-Dist: matplotlib>=3.3.0
-Requires-Dist: tqdm>=4.50.0
-Requires-Dist: psutil>=5.7.0
-Provides-Extra: dev
-Requires-Dist: pytest>=6.2.0; extra == "dev"
-Requires-Dist: flake8>=3.9.0; extra == "dev"
-Requires-Dist: black>=21.5b1; extra == "dev"
-Requires-Dist: sphinx>=3.5.0; extra == "dev"
-Requires-Dist: sphinx-rtd-theme>=0.5.0; extra == "dev"
-Requires-Dist: twine>=3.3.0; extra == "dev"
 
 # RAS Commander (ras-commander)
 
 RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under the [HEC-Commander tools repository](https://github.com/billk-FM/HEC-Commander).
 
 ## Contributors:
-William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com  
+William Katzenmeyer, P.E., C.F.M. 
 
-Sean Micek, P.E., C.F.M. - smicek@fenstermaker.com  
+Sean Micek, P.E., C.F.M. 
 
-Aaron Nichols, P.E., C.F.M. - anichols@fenstermaker.com  
+Aaron Nichols, P.E., C.F.M. 
 
 (Additional Contributors Here)  
 
+## Don't Ask Me, Ask ChatGPT!
+
+Before you read any further, you can [chat directly with ChatGPT on this topic.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results. 
+
+There are also [AI Assistant Knowledge Bases](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases) with various versions available to directly use with large context LLM models such as Anthropic's Claude, Google Gemini and OpenAI's GPT4o and o1 models.  
+
+FUTURE:  TEMPLATES are available to use with AI Assistant Notebooks to build your own automation tools.  When used with large context models, these templates allow you to ask GPT to build a workflow from scratch to automate your projects. 
 
 ## Background
 The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
@@ -300,11 +288,8 @@ Additionally, we would like to acknowledge the following notable contributions a
 
 2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
 
-   Xiaofeng Liu, Ph.D., P.E.
-   Associate Professor
-   Department of Civil and Environmental Engineering
-   Institute of Computational and Data Sciences
-   Penn State University
+   Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
+   Institute of Computational and Data Sciences, Penn State University
 
 These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
 

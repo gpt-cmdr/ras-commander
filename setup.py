@@ -14,36 +14,10 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.35.0",
+    version="0.40.0",
     packages=["ras_commander"],
     include_package_data=True,
-    install_requires=[
-        'pandas>=1.0.0',
-        'numpy>=1.18.0',
-        'h5py>=3.1.0',
-        'requests>=2.25.0',
-        'scipy>=1.5.0',
-        'matplotlib>=3.3.0',
-        'tqdm>=4.50.0',
-        'psutil>=5.7.0',
-    ],
-    extras_require={
-        'dev': [
-            'pytest>=6.2.0',
-            'flake8>=3.9.0',
-            'black>=21.5b1',
-            'sphinx>=3.5.0',
-            'sphinx-rtd-theme>=0.5.0',
-            'twine>=3.3.0',
-        ],
-    },
-    classifiers=[
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
-    python_requires='>=3.9',
+    python_requires='>=3.10',
     author="William M. Katzenmeyer",
     author_email="billk@fenstermaker.com",
     description="A Python library for automating HEC-RAS operations",
@@ -80,7 +54,8 @@ To build and publish this package, follow these steps:
    pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple ras-commander
 
 7. Upload to PyPI:
-   twine upload dist/*
+   twine upload dist/* --username __token__ --password <your_api_key>
+
 
 8. Install from PyPI to verify:
    pip install ras-commander
