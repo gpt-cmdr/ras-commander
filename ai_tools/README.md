@@ -36,30 +36,16 @@ RAS-Commander AI Assistant is a web-based interface built with FastAPI that leve
 
 either git clone the repository or grab the 'ras-commander_assistant.py' file 
 
-2. **Open an Anaconda Terminal and/or Activate Your Virtual Environment
+2. **Open an Anaconda Terminal and/or Activate Your Virtual Environment**
 
 Everyone has their favorite method, I just open anaconda and get a terminal, or use VS Code. 
 
-4. **Install Dependencies**
+3. **Install Dependencies**
 
    ```bash
    pip install fastapi uvicorn sqlalchemy jinja2 pandas anthropic openai tiktoken astor markdown requests python-multipart
    ```
-
-## Configuration
-All of the configuration is available inside the web interface and is saved as settings.db
-
-1. **API Keys**
-
-   - **OpenAI**: Obtain your API key from [OpenAI](https://platform.openai.com/account/api-keys).
-   - **Anthropic**: Obtain your API key from [Anthropic](https://www.anthropic.com/api).
-
-2. **Settings**
-
-   - Upon the first run, the application initializes default settings in `settings.db`.
-   - Access the web interface to input your API keys and configure other settings.
-
-## Running the Application
+4. **Running the Application**
 
 Execute the script using Python inside your virtual environment:
 
@@ -67,7 +53,6 @@ Execute the script using Python inside your virtual environment:
 python ras-commander_assistant.py
 ```
 
-*Replace `your_script_name.py` with the actual name of your Python script.*
 
 Upon running, the application will:
 
