@@ -33,7 +33,7 @@ def main():
     # Initialize the project
     current_dir = Path(__file__).parent
     project_path = current_dir / "example_projects" / "Balde Eagle Creek"
-    ras_obj = init_ras_project(project_path, "6.5")
+    ras_obj = init_ras_project(project_path, "6.6")
 
     print("Example 15: Getting and Setting Plan Keys")
     print("------------------------------------------")

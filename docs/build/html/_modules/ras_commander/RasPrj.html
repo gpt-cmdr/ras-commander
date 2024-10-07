@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ras_commander.RasPrj &mdash; RAS Commander 0.42 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=13150a28"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            RAS Commander
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../ras_commander.html">ras_commander package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">RAS Commander</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ras_commander.RasPrj</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ras_commander.RasPrj</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">RasPrj.py - Manages HEC-RAS projects within the ras-commander library</span>
+
+<span class="sd">This module provides a class for managing HEC-RAS projects.</span>
+
+<span class="sd">Classes:</span>
+<span class="sd">    RasPrj: A class for managing HEC-RAS projects.</span>
+
+<span class="sd">Functions:</span>
+<span class="sd">    init_ras_project: Initialize a RAS project.</span>
+<span class="sd">    get_ras_exe: Determine the HEC-RAS executable path based on the input.</span>
+
+<span class="sd">DEVELOPER NOTE:</span>
+<span class="sd">This class is used to initialize a RAS project and is used in conjunction with the RasCmdr class to manage the execution of RAS plans.</span>
+<span class="sd">By default, the RasPrj class is initialized with the global &#39;ras&#39; object.</span>
+<span class="sd">However, you can create multiple RasPrj instances to manage multiple projects.</span>
+<span class="sd">Do not mix and match global &#39;ras&#39; object instances and custom instances of RasPrj - it will cause errors.</span>
+
+<span class="sd">This module is part of the ras-commander library and uses a centralized logging configuration.</span>
+
+<span class="sd">Logging Configuration:</span>
+<span class="sd">- The logging is set up in the logging_config.py file.</span>
+<span class="sd">- A @log_call decorator is available to automatically log function calls.</span>
+<span class="sd">- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL</span>
+<span class="sd">- Logs are written to both console and a rotating file handler.</span>
+<span class="sd">- The default log file is &#39;ras_commander.log&#39; in the &#39;logs&#39; directory.</span>
+<span class="sd">- The default log level is INFO.</span>
+
+<span class="sd">To use logging in this module:</span>
+<span class="sd">1. Use the @log_call decorator for automatic function call logging.</span>
+<span class="sd">2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).</span>
+
+
+<span class="sd">Example:</span>
+<span class="sd">    @log_call</span>
+<span class="sd">    def my_function():</span>
+<span class="sd">        </span>
+<span class="sd">        logger.debug(&quot;Additional debug information&quot;)</span>
+<span class="sd">        # Function logic here</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">ras_commander.logging_config</span> <span class="kn">import</span> <span class="n">get_logger</span><span class="p">,</span> <span class="n">log_call</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RasPrj">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj">[docs]</a>
+<span class="k">class</span> <span class="nc">RasPrj</span><span class="p">:</span>
+    
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialized</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">boundaries_df</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># New attribute to store boundary conditions</span>
+
+<div class="viewcode-block" id="RasPrj.initialize">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.initialize">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">project_folder</span><span class="p">,</span> <span class="n">ras_exe_path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize a RasPrj instance.</span>
+
+<span class="sd">        This method sets up the RasPrj instance with the given project folder and RAS executable path.</span>
+<span class="sd">        It finds the project file, loads project data, sets the initialization flag, and now also</span>
+<span class="sd">        extracts boundary conditions.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            project_folder (str or Path): Path to the HEC-RAS project folder.</span>
+<span class="sd">            ras_exe_path (str or Path): Path to the HEC-RAS executable.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If no HEC-RAS project file is found in the specified folder.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            This method is intended for internal use. External users should use the init_ras_project function instead.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">project_folder</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prj_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_ras_prj</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prj_file</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No HEC-RAS project file found in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No HEC-RAS project file found in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_name</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prj_file</span><span class="p">)</span><span class="o">.</span><span class="n">stem</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ras_exe_path</span> <span class="o">=</span> <span class="n">ras_exe_path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_project_data</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">boundaries_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_boundary_conditions</span><span class="p">()</span>  <span class="c1"># Extract boundary conditions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialized</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialization complete for project: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan entries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">, Flow entries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flow_df</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;Unsteady entries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">, Geometry entries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;Boundary conditions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">_load_project_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Load project data from the HEC-RAS project file.</span>
+
+<span class="sd">        This method initializes DataFrames for plan, flow, unsteady, and geometry entries</span>
+<span class="sd">        by calling the _get_prj_entries method for each entry type.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Initialize DataFrames</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Plan&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flow_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Flow&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unsteady_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Unsteady&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">geom_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Geom&#39;</span><span class="p">)</span>
+
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">_parse_plan_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plan_file_path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parse a plan file and extract critical information.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            plan_file_path (Path): Path to the plan file.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            dict: Dictionary containing extracted plan information.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">plan_info</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">plan_file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+                
+                <span class="c1"># Extract description</span>
+                <span class="n">description_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;Begin DESCRIPTION(.*?)END DESCRIPTION&#39;</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">DOTALL</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">description_match</span><span class="p">:</span>
+                    <span class="n">plan_info</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">description_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                
+                <span class="c1"># BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.</span>
+                
+                <span class="c1"># Extract other critical information</span>
+                <span class="n">supported_plan_keys</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s1">&#39;Computation Interval&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Computation Interval=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;DSS File&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;DSS File=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Flow File&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Flow File=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Friction Slope Method&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Friction Slope Method=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Geom File&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Geom File=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Mapping Interval&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Mapping Interval=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Plan Title&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Plan Title=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Program Version&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Program Version=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Run HTab&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Run HTab=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Run PostProcess&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Run PostProcess=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Run Sediment&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Run Sediment=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Run UNet&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Run UNet=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Run WQNet&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Run WQNet=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Short Identifier&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Short Identifier=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Simulation Date&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Simulation Date=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;UNET D1 Cores&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;UNET D1 Cores=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;UNET Use Existing IB Tables&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;UNET Use Existing IB Tables=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;UNET 1D Methodology&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;UNET 1D Methodology=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;UNET D2 SolverType&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;UNET D2 SolverType=(.+)&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;UNET D2 Name&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;UNET D2 Name=(.+)&#39;</span>
+                <span class="p">}</span>
+                
+                <span class="c1"># END Exception to Style Guide</span>
+                
+                <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">supported_plan_keys</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                        <span class="n">plan_info</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parsed plan file: </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error parsing plan file </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">plan_info</span>
+    
+
+    
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">_get_prj_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Extract entries of a specific type from the HEC-RAS project file.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            entry_type (str): The type of entry to extract (e.g., &#39;Plan&#39;, &#39;Flow&#39;, &#39;Unsteady&#39;, &#39;Geom&#39;).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing the extracted entries.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            This method reads the project file and extracts entries matching the specified type.</span>
+<span class="sd">            For &#39;Unsteady&#39; entries, it parses additional information from the unsteady file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">entries</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">rf</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry_type</span><span class="si">}</span><span class="s2"> File=(\w+)&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prj_file</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="n">pattern</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+                    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                        <span class="n">file_name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="n">full_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="n">entry</span> <span class="o">=</span> <span class="p">{</span>
+                            <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">entry_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s1">_number&#39;</span><span class="p">:</span> <span class="n">file_name</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span>
+                            <span class="s1">&#39;full_path&#39;</span><span class="p">:</span> <span class="n">full_path</span>
+                        <span class="p">}</span>
+
+                        <span class="k">if</span> <span class="n">entry_type</span> <span class="o">==</span> <span class="s1">&#39;Plan&#39;</span><span class="p">:</span>
+                            <span class="n">plan_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_plan_file</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">full_path</span><span class="p">))</span>
+                            <span class="n">entry</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">plan_info</span><span class="p">)</span>
+                            
+                            <span class="n">hdf_results_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">file_name</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="si">}</span><span class="s2">.hdf&quot;</span>
+                            <span class="n">entry</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">hdf_results_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">hdf_results_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+
+                        <span class="k">if</span> <span class="n">entry_type</span> <span class="o">==</span> <span class="s1">&#39;Unsteady&#39;</span><span class="p">:</span>
+                            <span class="n">unsteady_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_unsteady_file</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">full_path</span><span class="p">))</span>
+                            <span class="n">entry</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">unsteady_info</span><span class="p">)</span>
+
+                        <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
+
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">_parse_unsteady_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">unsteady_file_path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parse an unsteady flow file and extract critical information.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            unsteady_file_path (Path): Path to the unsteady flow file.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            dict: Dictionary containing extracted unsteady flow information.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">unsteady_info</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">unsteady_file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            
+            <span class="c1"># BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the unsteady file keys.</span>
+                
+            <span class="n">supported_unsteady_keys</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;Flow Title&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Flow Title=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Program Version&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Program Version=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Use Restart&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Use Restart=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Precipitation Mode&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Precipitation Mode=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Wind Mode&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Wind Mode=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Met BC=Precipitation|Mode&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Met BC=Precipitation\|Mode=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Met BC=Evapotranspiration|Mode&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Met BC=Evapotranspiration\|Mode=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Met BC=Precipitation|Expanded View&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Met BC=Precipitation\|Expanded View=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Met BC=Precipitation|Constant Units&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Met BC=Precipitation\|Constant Units=(.+)&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Met BC=Precipitation|Gridded Source&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;Met BC=Precipitation\|Gridded Source=(.+)&#39;</span>
+            <span class="p">}</span>
+            
+            <span class="c1"># END Exception to Style Guide</span>
+            
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">supported_unsteady_keys</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="n">unsteady_info</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        
+        <span class="k">return</span> <span class="n">unsteady_info</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_initialized</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check if the RasPrj instance has been initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            bool: True if the instance has been initialized, False otherwise.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">initialized</span>
+
+<div class="viewcode-block" id="RasPrj.check_initialized">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.check_initialized">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">check_initialized</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Ensure that the RasPrj instance has been initialized.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">initialized</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Project not initialized. Call init_ras_project() first.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.find_ras_prj">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.find_ras_prj">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">find_ras_prj</span><span class="p">(</span><span class="n">folder_path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Find the appropriate HEC-RAS project file (.prj) in the given folder.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        folder_path (str or Path): Path to the folder containing HEC-RAS files.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">        Path: The full path of the selected .prj file or None if no suitable file is found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">folder_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">folder_path</span><span class="p">)</span>
+        <span class="n">prj_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">folder_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.prj&quot;</span><span class="p">))</span>
+        <span class="n">rasmap_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">folder_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.rasmap&quot;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">prj_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">prj_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">prj_files</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rasmap_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">base_filename</span> <span class="o">=</span> <span class="n">rasmap_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">stem</span>
+                <span class="n">prj_file</span> <span class="o">=</span> <span class="n">folder_path</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_filename</span><span class="si">}</span><span class="s2">.prj&quot;</span>
+                <span class="k">if</span> <span class="n">prj_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="k">return</span> <span class="n">prj_file</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">prj_file</span> <span class="ow">in</span> <span class="n">prj_files</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">prj_file</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                        <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="s2">&quot;Proj Title=&quot;</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+                            <span class="k">return</span> <span class="n">prj_file</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">continue</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="RasPrj.get_project_name">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_project_name">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_project_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the name of the HEC-RAS project.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            str: The name of the project.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_name</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_prj_entries">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_prj_entries">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_prj_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get entries of a specific type from the HEC-RAS project.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            entry_type (str): The type of entry to retrieve (e.g., &#39;Plan&#39;, &#39;Flow&#39;, &#39;Unsteady&#39;, &#39;Geom&#39;).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing the requested entries.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_plan_entries">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_plan_entries">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_plan_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get all plan entries from the HEC-RAS project.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing all plan entries.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Plan&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_flow_entries">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_flow_entries">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_flow_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get all flow entries from the HEC-RAS project.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing all flow entries.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Flow&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_unsteady_entries">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_unsteady_entries">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_unsteady_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get all unsteady flow entries from the HEC-RAS project.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing all unsteady flow entries.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Unsteady&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_geom_entries">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_geom_entries">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_geom_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get all geometry entries from the HEC-RAS project.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing all geometry entries.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RuntimeError: If the project has not been initialized.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_prj_entries</span><span class="p">(</span><span class="s1">&#39;Geom&#39;</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="RasPrj.get_hdf_entries">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_hdf_entries">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_hdf_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get HDF entries for plans that have results.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing plan entries with HDF results.</span>
+<span class="sd">                      Returns an empty DataFrame if no HDF entries are found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">hdf_entries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        
+        <span class="k">if</span> <span class="n">hdf_entries</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">hdf_entries</span></div>
+
+    
+    
+<div class="viewcode-block" id="RasPrj.print_data">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.print_data">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">print_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Print all RAS Object data for this instance.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;--- Data for </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2"> ---&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project folder: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PRJ file: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prj_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS executable: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Plan files:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">plan_df</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Flow files:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">flow_df</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Unsteady flow files:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">unsteady_df</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Geometry files:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">geom_df</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;HDF entries:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Boundary conditions:&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">boundaries_df</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;----------------------------&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_plan_value">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_plan_value">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_plan_value</span><span class="p">(</span>
+        <span class="n">plan_number_or_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span>
+        <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve a specific value from a HEC-RAS plan file.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file</span>
+<span class="sd">        key (str): The key to retrieve from the plan file</span>
+<span class="sd">        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Any: The value associated with the specified key</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">        ValueError: If an invalid key is provided or if the plan file is not found</span>
+<span class="sd">        IOError: If there&#39;s an error reading the plan file</span>
+
+<span class="sd">        Note: See the docstring of update_plan_file for a full list of available keys and their types.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; computation_interval = RasUtils.get_plan_value(&quot;01&quot;, &quot;computation_interval&quot;)</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Computation interval: {computation_interval}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+
+        <span class="n">valid_keys</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="s1">&#39;computation_interval&#39;</span><span class="p">,</span> <span class="s1">&#39;dss_file&#39;</span><span class="p">,</span> <span class="s1">&#39;flow_file&#39;</span><span class="p">,</span> <span class="s1">&#39;friction_slope_method&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;geom_file&#39;</span><span class="p">,</span> <span class="s1">&#39;mapping_interval&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_file&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;program_version&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;run_htab&#39;</span><span class="p">,</span> <span class="s1">&#39;run_post_process&#39;</span><span class="p">,</span> <span class="s1">&#39;run_sediment&#39;</span><span class="p">,</span> <span class="s1">&#39;run_unet&#39;</span><span class="p">,</span> <span class="s1">&#39;run_wqnet&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;short_identifier&#39;</span><span class="p">,</span> <span class="s1">&#39;simulation_date&#39;</span><span class="p">,</span> <span class="s1">&#39;unet_d1_cores&#39;</span><span class="p">,</span> <span class="s1">&#39;unet_use_existing_ib_tables&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;unet_1d_methodology&#39;</span><span class="p">,</span> <span class="s1">&#39;unet_d2_solver_type&#39;</span><span class="p">,</span> <span class="s1">&#39;unet_d2_name&#39;</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_keys</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid key: </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid key: </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">. Valid keys are: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">valid_keys</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">plan_file_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_number_or_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">plan_file_path</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+            <span class="n">plan_file_path</span> <span class="o">=</span> <span class="n">RasUtils</span><span class="o">.</span><span class="n">get_plan_path</span><span class="p">(</span><span class="n">plan_number_or_path</span><span class="p">,</span> <span class="n">ras_object</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">plan_file_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan file not found: </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan file not found: </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">plan_file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error reading plan file </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+
+        <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span>
+            <span class="kn">import</span> <span class="nn">re</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;Begin DESCRIPTION(.*?)END DESCRIPTION&#39;</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">DOTALL</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">pattern</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39; &#39;</span><span class="p">)</span><span class="o">.</span><span class="n">title</span><span class="p">()</span><span class="si">}</span><span class="s2">=(.*)&quot;</span>
+            <span class="kn">import</span> <span class="nn">re</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="RasPrj.get_boundary_conditions">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.RasPrj.get_boundary_conditions">[docs]</a>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_boundary_conditions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Extract boundary conditions from unsteady flow files and create a DataFrame.</span>
+
+<span class="sd">        This method parses unsteady flow files to extract boundary condition information.</span>
+<span class="sd">        It creates a DataFrame with structured data for known boundary condition types</span>
+<span class="sd">        and parameters, and associates this information with the corresponding unsteady flow file.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">        Any lines in the boundary condition blocks that are not explicitly parsed and</span>
+<span class="sd">        incorporated into the DataFrame are captured in a multi-line string. This string</span>
+<span class="sd">        is logged at the DEBUG level for each boundary condition. This feature is crucial</span>
+<span class="sd">        for developers incorporating new boundary condition types or parameters, as it</span>
+<span class="sd">        allows them to see what information might be missing from the current parsing logic.</span>
+<span class="sd">        If no unsteady flow files are present, it returns an empty DataFrame.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: A DataFrame containing detailed boundary condition information,</span>
+<span class="sd">                                      linked to the unsteady flow files.</span>
+
+<span class="sd">        Usage:</span>
+<span class="sd">            To see the unparsed lines, set the logging level to DEBUG before calling this method:</span>
+<span class="sd">            </span>
+<span class="sd">            import logging</span>
+<span class="sd">            getLogger().setLevel(logging.DEBUG)</span>
+<span class="sd">            </span>
+<span class="sd">            boundaries_df = ras_project.get_boundary_conditions()</span>
+<span class="sd">                          linked to the unsteady flow files. Returns an empty DataFrame if</span>
+<span class="sd">                          no unsteady flow files are present.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">boundary_data</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="c1"># Check if unsteady_df is empty</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unsteady_df</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No unsteady flow files found in the project.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>  <span class="c1"># Return an empty DataFrame</span>
+        
+        <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unsteady_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">unsteady_file_path</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span>
+            <span class="n">unsteady_number</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">]</span>
+            
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">unsteady_file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                    <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error reading unsteady file </span><span class="si">{</span><span class="n">unsteady_file_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+                
+            <span class="n">bc_blocks</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;(?=Boundary Location=)&#39;</span><span class="p">,</span> <span class="n">content</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
+            
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">block</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bc_blocks</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">bc_info</span><span class="p">,</span> <span class="n">unparsed_lines</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_boundary_condition</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="n">unsteady_number</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+                <span class="n">boundary_data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bc_info</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="n">unparsed_lines</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unparsed lines for boundary condition </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> in unsteady file </span><span class="si">{</span><span class="n">unsteady_number</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="si">{</span><span class="n">unparsed_lines</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">boundary_data</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No boundary conditions found in unsteady flow files.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>  <span class="c1"># Return an empty DataFrame if no boundary conditions were found</span>
+        
+        <span class="n">boundaries_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">boundary_data</span><span class="p">)</span>
+        
+        <span class="c1"># Merge with unsteady_df to get relevant unsteady flow file information</span>
+        <span class="n">merged_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">boundaries_df</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">,</span> 
+                             <span class="n">left_on</span><span class="o">=</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">merged_df</span></div>
+
+
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">_parse_boundary_condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">unsteady_number</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">bc_number</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">bc_info</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;unsteady_number&#39;</span><span class="p">:</span> <span class="n">unsteady_number</span><span class="p">,</span>
+            <span class="s1">&#39;boundary_condition_number&#39;</span><span class="p">:</span> <span class="n">bc_number</span>
+        <span class="p">}</span>
+        
+        <span class="n">parsed_lines</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        
+        <span class="c1"># Parse Boundary Location</span>
+        <span class="n">boundary_location</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span><span class="n">field</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">boundary_location</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)]</span>
+        <span class="n">bc_info</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+            <span class="s1">&#39;river_reach_name&#39;</span><span class="p">:</span> <span class="n">fields</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;river_station&#39;</span><span class="p">:</span> <span class="n">fields</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;storage_area_name&#39;</span><span class="p">:</span> <span class="n">fields</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;pump_station_name&#39;</span><span class="p">:</span> <span class="n">fields</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="p">})</span>
+        <span class="n">parsed_lines</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        
+        <span class="c1"># Determine BC Type</span>
+        <span class="n">bc_types</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Flow Hydrograph=&#39;</span><span class="p">:</span> <span class="s1">&#39;Flow Hydrograph&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Lateral Inflow Hydrograph=&#39;</span><span class="p">:</span> <span class="s1">&#39;Lateral Inflow Hydrograph&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Uniform Lateral Inflow Hydrograph=&#39;</span><span class="p">:</span> <span class="s1">&#39;Uniform Lateral Inflow Hydrograph&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Stage Hydrograph=&#39;</span><span class="p">:</span> <span class="s1">&#39;Stage Hydrograph&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Friction Slope=&#39;</span><span class="p">:</span> <span class="s1">&#39;Normal Depth&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Gate Name=&#39;</span><span class="p">:</span> <span class="s1">&#39;Gate Opening&#39;</span>
+        <span class="p">}</span>
+        
+        <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Unknown&#39;</span>
+        <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">bc_type</span> <span class="ow">in</span> <span class="n">bc_types</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+                    <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bc_type</span>
+                    <span class="k">if</span> <span class="s1">&#39;Hydrograph&#39;</span> <span class="ow">in</span> <span class="n">bc_type</span><span class="p">:</span>
+                        <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bc_type</span>
+                    <span class="n">parsed_lines</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;Unknown&#39;</span><span class="p">:</span>
+                <span class="k">break</span>
+        
+        <span class="c1"># Parse other fields</span>
+        <span class="n">known_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Interval&#39;</span><span class="p">,</span> <span class="s1">&#39;DSS Path&#39;</span><span class="p">,</span> <span class="s1">&#39;Use DSS&#39;</span><span class="p">,</span> <span class="s1">&#39;Use Fixed Start Time&#39;</span><span class="p">,</span> <span class="s1">&#39;Fixed Start Date/Time&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;Is Critical Boundary&#39;</span><span class="p">,</span> <span class="s1">&#39;Critical Boundary Flow&#39;</span><span class="p">,</span> <span class="s1">&#39;DSS File&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s1">&#39;=&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">known_fields</span><span class="p">:</span>
+                    <span class="n">bc_info</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="n">parsed_lines</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        
+        <span class="c1"># Handle hydrograph values</span>
+        <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_num_values&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_type&#39;</span><span class="p">]:</span>
+            <span class="n">hydrograph_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">=&quot;</span>
+            <span class="n">hydrograph_line</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">line</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">hydrograph_key</span><span class="p">)),</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">hydrograph_line</span><span class="p">:</span>
+                <span class="n">hydrograph_index</span> <span class="o">=</span> <span class="n">lines</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">hydrograph_line</span><span class="p">)</span>
+                <span class="n">values_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hydrograph_line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+                <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_num_values&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values_count</span>
+                <span class="k">if</span> <span class="n">values_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">values</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="n">hydrograph_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:])</span><span class="o">.</span><span class="n">split</span><span class="p">()[:</span><span class="n">values_count</span><span class="p">]</span>
+                    <span class="n">bc_info</span><span class="p">[</span><span class="s1">&#39;hydrograph_values&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+                    <span class="n">parsed_lines</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">hydrograph_index</span><span class="p">,</span> <span class="n">hydrograph_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">values_count</span> <span class="o">//</span> <span class="mi">5</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">))</span>
+        
+        <span class="c1"># Collect unparsed lines</span>
+        <span class="n">unparsed_lines</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">line</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">parsed_lines</span> <span class="ow">and</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+        
+        <span class="k">if</span> <span class="n">unparsed_lines</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unparsed lines for boundary condition </span><span class="si">{</span><span class="n">bc_number</span><span class="si">}</span><span class="s2"> in unsteady file </span><span class="si">{</span><span class="n">unsteady_number</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="si">{</span><span class="n">unparsed_lines</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">bc_info</span><span class="p">,</span> <span class="n">unparsed_lines</span></div>
+
+
+
+<span class="c1"># Create a global instance named &#39;ras&#39;</span>
+<span class="c1"># Defining the global instance allows the init_ras_project function to initialize the project.</span>
+<span class="c1"># This only happens on the library initialization, not when the user calls init_ras_project.</span>
+<span class="n">ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+
+<span class="c1"># END OF CLASS DEFINITION</span>
+
+
+<span class="c1"># START OF FUNCTION DEFINITIONS</span>
+
+
+<div class="viewcode-block" id="init_ras_project">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.init_ras_project">[docs]</a>
+<span class="nd">@log_call</span>
+<span class="k">def</span> <span class="nf">init_ras_project</span><span class="p">(</span><span class="n">ras_project_folder</span><span class="p">,</span> <span class="n">ras_version</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ras_instance</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Initialize a RAS project.</span>
+
+<span class="sd">    USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.</span>
+<span class="sd">    The initialize method of the RasPrj class only modifies the global &#39;ras&#39; object.</span>
+
+<span class="sd">    This function creates or initializes a RasPrj instance, providing a safer and more</span>
+<span class="sd">    flexible interface than directly using the &#39;initialize&#39; method.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    ras_project_folder : str</span>
+<span class="sd">        The path to the RAS project folder.</span>
+<span class="sd">    ras_version : str, optional</span>
+<span class="sd">        The version of RAS to use (e.g., &quot;6.5&quot;).</span>
+<span class="sd">        The version can also be a full path to the Ras.exe file. (Useful when calling ras objects for folder copies.)</span>
+<span class="sd">        If None, the function will attempt to use the version from the global &#39;ras&#39; object or a default path.</span>
+<span class="sd">        You MUST specify a version number via init at some point or ras will not run.  </span>
+<span class="sd">        Once the ras_version is specified once it should auto-fill from the global &#39;ras&#39; object.</span>
+<span class="sd">        The RAS Commander Library Assistant can ignore this argument since it does not have Ras.exe present, but all of other operations are fully working.</span>
+<span class="sd">    ras_instance : RasPrj, optional</span>
+<span class="sd">        An instance of RasPrj to initialize. If None, the global &#39;ras&#39; instance is used.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    RasPrj</span>
+<span class="sd">        An initialized RasPrj instance.</span>
+
+<span class="sd">    Usage:</span>
+<span class="sd">    ------</span>
+<span class="sd">    1. For general use with a single project:</span>
+<span class="sd">        init_ras_project(&quot;/path/to/project&quot;)</span>
+<span class="sd">        # Use the global &#39;ras&#39; object after initialization</span>
+
+<span class="sd">    2. For managing multiple projects:</span>
+<span class="sd">        project1 = init_ras_project(&quot;/path/to/project1&quot;, &quot;6.5&quot;, ras_instance=RasPrj())</span>
+<span class="sd">        project2 = init_ras_project(&quot;/path/to/project2&quot;, ras_instance=RasPrj())</span>
+
+<span class="sd">    Notes:</span>
+<span class="sd">    ------</span>
+<span class="sd">    - This function is preferred over directly calling the &#39;initialize&#39; method.</span>
+<span class="sd">    - It supports both the global &#39;ras&#39; object and custom instances.</span>
+<span class="sd">    - Be consistent in your approach: stick to either the global &#39;ras&#39; object</span>
+<span class="sd">      or custom instances throughout your script or application.</span>
+<span class="sd">    - Document your choice of approach clearly in your code.</span>
+<span class="sd">    - If ras_version is not provided, the function will attempt to use the version</span>
+<span class="sd">      from the global &#39;ras&#39; object or a default path.</span>
+
+<span class="sd">    Warnings:</span>
+<span class="sd">    ---------</span>
+<span class="sd">    Avoid mixing use of the global &#39;ras&#39; object and custom instances to prevent</span>
+<span class="sd">    confusion and potential bugs.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">Path</span><span class="p">(</span><span class="n">ras_project_folder</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The specified RAS project folder does not exist: </span><span class="si">{</span><span class="n">ras_project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The specified RAS project folder does not exist: </span><span class="si">{</span><span class="n">ras_project_folder</span><span class="si">}</span><span class="s2">. Please check the path and try again.&quot;</span><span class="p">)</span>
+
+    <span class="n">ras_exe_path</span> <span class="o">=</span> <span class="n">get_ras_exe</span><span class="p">(</span><span class="n">ras_version</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ras_instance</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Initializing global &#39;ras&#39; object via init_ras_project function.&quot;</span><span class="p">)</span>
+        <span class="n">ras_instance</span> <span class="o">=</span> <span class="n">ras</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ras_instance</span><span class="p">,</span> <span class="n">RasPrj</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Provided ras_instance is not an instance of RasPrj.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;ras_instance must be an instance of RasPrj or None.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Initialize the RasPrj instance</span>
+    <span class="n">ras_instance</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">ras_project_folder</span><span class="p">,</span> <span class="n">ras_exe_path</span><span class="p">)</span>
+    
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project initialized. ras_instance project folder: </span><span class="si">{</span><span class="n">ras_instance</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ras_instance</span></div>
+
+
+<div class="viewcode-block" id="get_ras_exe">
+<a class="viewcode-back" href="../../ras_commander.RasPrj.html#ras_commander.get_ras_exe">[docs]</a>
+<span class="nd">@log_call</span>
+<span class="k">def</span> <span class="nf">get_ras_exe</span><span class="p">(</span><span class="n">ras_version</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Determine the HEC-RAS executable path based on the input.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.</span>
+<span class="sd">                                     If None, the function will attempt to use the version from the global &#39;ras&#39; object</span>
+<span class="sd">                                     or a default path.</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        str: The full path to the HEC-RAS executable.</span>
+<span class="sd">    </span>
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If the input is neither a valid version number nor a valid file path.</span>
+<span class="sd">    </span>
+<span class="sd">    Notes:</span>
+<span class="sd">        - If ras_version is not provided, the function will first check the global &#39;ras&#39; object for a path.</span>
+<span class="sd">        - If the global &#39;ras&#39; object is not initialized or doesn&#39;t have a path, a default path will be used.</span>
+<span class="sd">        - The default path allows the library to function in environments without HEC-RAS installed.</span>
+<span class="sd">        - This enables the HEC-Commander GPT to operate without stopping, even if HEC-RAS is not present.</span>
+<span class="sd">        - End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># If ras_version is not provided, use the version of the global &#39;ras&#39; object.</span>
+    <span class="c1"># If the global &#39;ras&#39; object is not initialized, use the default path: default_path = Path(&quot;/path/to/Ras.exe&quot;)</span>
+    <span class="c1"># This default path allows the library to function in environments without HEC-RAS installed.</span>
+    <span class="c1"># It enables our HEC-Commander GPT to operate without stopping, even though HEC-RAS is not present.</span>
+    <span class="c1"># End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.</span>
+    <span class="k">if</span> <span class="n">ras_version</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">ras</span><span class="p">,</span> <span class="s1">&#39;ras_exe_path&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ras</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using HEC-RAS executable from global &#39;ras&#39; object: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ras</span><span class="o">.</span><span class="n">ras_exe_path</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">default_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;Ras.exe&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No HEC-RAS version specified and global &#39;ras&#39; object not initialized or missing ras_exe_path. Using default path: </span><span class="si">{</span><span class="n">default_path</span><span class="si">}</span><span class="s2">. The RAS Commander (ras-commander) Library Assistant can ignore this error since it does not have HEC-RAS installed.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">default_path</span><span class="p">)</span>
+    
+    <span class="n">ras_version_numbers</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="s2">&quot;6.4.1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.3.1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.3&quot;</span><span class="p">,</span> <span class="s2">&quot;6.2&quot;</span><span class="p">,</span> <span class="s2">&quot;6.1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.0&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;5.0.7&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.6&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.5&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.4&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.3&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.1&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;4.1&quot;</span><span class="p">,</span> <span class="s2">&quot;4.0&quot;</span><span class="p">,</span> <span class="s2">&quot;3.1.3&quot;</span><span class="p">,</span> <span class="s2">&quot;3.1.2&quot;</span><span class="p">,</span> <span class="s2">&quot;3.1.1&quot;</span><span class="p">,</span> <span class="s2">&quot;3.0&quot;</span><span class="p">,</span> <span class="s2">&quot;2.2&quot;</span>
+    <span class="p">]</span>
+    
+    <span class="n">hecras_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">ras_version</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">hecras_path</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span> <span class="ow">and</span> <span class="n">hecras_path</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;.exe&#39;</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS executable found at specified path: </span><span class="si">{</span><span class="n">hecras_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">hecras_path</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">ras_version</span> <span class="ow">in</span> <span class="n">ras_version_numbers</span><span class="p">:</span>
+        <span class="n">default_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;C:/Program Files (x86)/HEC/HEC-RAS/</span><span class="si">{</span><span class="n">ras_version</span><span class="si">}</span><span class="s2">/Ras.exe&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">default_path</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS executable found at default path: </span><span class="si">{</span><span class="n">default_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">default_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS executable not found at the expected path: </span><span class="si">{</span><span class="n">default_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">version_float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">ras_version</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">version_float</span> <span class="o">&gt;</span> <span class="nb">max</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">ras_version_numbers</span><span class="p">):</span>
+            <span class="n">newer_version_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;C:/Program Files (x86)/HEC/HEC-RAS/</span><span class="si">{</span><span class="n">ras_version</span><span class="si">}</span><span class="s2">/Ras.exe&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">newer_version_path</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Newer version of HEC-RAS executable found at: </span><span class="si">{</span><span class="n">newer_version_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">newer_version_path</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s2">&quot;Newer version of HEC-RAS was specified, but the executable was not found.&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    
+    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid HEC-RAS version or path: </span><span class="si">{</span><span class="n">ras_version</span><span class="si">}</span><span class="s2">, returning default path: </span><span class="si">{</span><span class="n">default_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="c1">#raise ValueError(f&quot;Invalid HEC-RAS version or path: {ras_version}&quot;) # don&#39;t raise an error here, just return the default path</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">default_path</span><span class="p">)</span></div>
+
+    
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, William Katzenmeyer, P.E., C.F.M..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

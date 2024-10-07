@@ -92,7 +92,7 @@ def main():
     print()
     
     # Initialize a new RasPrj object for the compute_folder
-    compute_source_project = init_ras_project(compute_folder, "6.5")
+    compute_source_project = init_ras_project(compute_folder, "6.6")
     print("Plan DataFrame after parallel execution of all plans:")
     print(compute_source_project.plan_df)
     print()
@@ -135,7 +135,7 @@ def main():
     
     # Get and print results paths
     print("Results paths for dynamic execution:")
-    dynamic_compute_source_project = init_ras_project(dynamic_compute_folder, "6.5")
+    dynamic_compute_source_project = init_ras_project(dynamic_compute_folder, "6.6")
     print(dynamic_compute_source_project.plan_df)
 
 if __name__ == "__main__":

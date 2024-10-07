@@ -1,4 +1,4 @@
-File: C:\GH\ras-commander\ras_commander\logging_config.py
+File: c:\GH\ras-commander\ras_commander\logging_config.py
 ==================================================
 # logging_config.py
 
@@ -22,7 +22,7 @@ def setup_logging:
 setup_logging()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasCmdr.py
+File: c:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -534,7 +534,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasExamples.py
+File: c:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -649,7 +649,7 @@ pip install pandas requests
 """
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGeo.py
+File: c:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -769,9 +769,17 @@ class RasGeo:
             logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise
 
+
+
+
+
+
+
+
+
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGpt.py
+File: c:\GH\ras-commander\ras_commander\RasGpt.py
 ==================================================
 import os
 from pathlib import Path
@@ -918,14 +926,14 @@ class RasGpt:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasHdf.py
+File: c:\GH\ras-commander\ras_commander\RasHdf.py
 ==================================================
 """
 RasHdf Module
 
-This module provides utilities for working with HDF files in HEC-RAS projects.
+This module provides utilities for working with RESULTS (Plan) HDF files in HEC-RAS projects.
 It contains the RasHdf class, which offers various static methods for extracting,
-analyzing, and manipulating data from HEC-RAS HDF files.
+analyzing, and manipulating data from HEC-RAS RESULTS HDF files.
 
 Note:
     This method is decorated with @hdf_operation, which handles the opening and closing of the HDF file.
@@ -995,79 +1003,10 @@ class RasHdf:
     @staticmethod
     def hdf_operation:
     """Docs only, see 'hdf_operation.py' for full function code"""
-def save_dataframe_to_hdf(
-    dataframe: pd.DataFrame,
-    hdf_parent_group: h5py.Group,
-    dataset_name: str,
-    attributes: Optional[Dict[str, Union[int, float, str]]] = None,
-    fill_value: Union[int, float, str] = -9999,
-    **kwargs: Any
-) -> h5py.Dataset:
-    """
-    Save a pandas DataFrame to an HDF5 dataset within a specified parent group.
-
-    This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
-
-    Args:
-        dataframe (pd.DataFrame): The DataFrame to save.
-        hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
-        dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
-        attributes (Optional[Dict[str, Union[int, float, str]]]): A dictionary of attributes to add to the dataset.
-        fill_value (Union[int, float, str]): The value to use for filling missing data.
-        **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
-
-    Returns:
-        h5py.Dataset: The created HDF5 dataset within the parent group.
-
-    Raises:
-        ValueError: If the DataFrame columns are not consistent.
-
-    Example:
-        >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
-        >>> with h5py.File('data.h5', 'w') as f:
-        ...     group = f.create_group('my_group')
-        ...     dataset = save_dataframe_to_hdf(df, group, 'my_dataset')
-        >>> print(dataset)
-    """
-    df = dataframe.copy()
-
-    # Replace '/' in column names with '-' to avoid issues in HDF5
-    if df.columns.dtype == 'O':
-        df.columns = df.columns.str.replace('/', '-', regex=False)
-    
-    # Fill missing values with the specified fill_value
-    df = df.fillna(fill_value)
-    
-    # Identify string columns and ensure consistency
-    string_cols = df.select_dtypes(include=['object']).columns
-    if not string_cols.equals(df.select_dtypes(include=['object']).columns):
-        logger.error("Inconsistent string columns detected")
-        raise ValueError("Inconsistent string columns detected")
-    
-    # Encode string columns to bytes
-    df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
-
-    # Prepare data for HDF5 dataset creation
-    arr = df.to_records(index=False) if not isinstance(df.columns, pd.RangeIndex) else df.values
-    
-    # Remove existing dataset if it exists
-    if dataset_name in hdf_parent_group:
-        logger.warning(f"Existing dataset {dataset_name} will be overwritten")
-        del hdf_parent_group[dataset_name]
-    
-    # Create the dataset in the HDF5 file
-    dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
-    
-    # Update dataset attributes if provided
-    if attributes:
-        dataset.attrs.update(attributes)
-    
-    logger.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
-    return dataset
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPlan.py
+File: c:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -1114,8 +1053,9 @@ class RasPlan:
     """
     A class for operations on HEC-RAS plan files.
     """
-    @log_call
+    
     @staticmethod
+    @log_call
     def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
         Set the geometry for the specified plan.
@@ -1147,49 +1087,20 @@ class RasPlan:
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
-        # Log the current geometry DataFrame for debugging
-        logging.debug("Current geometry DataFrame within the function:")
-        logging.debug(ras_obj.geom_df)
-
         if new_geom not in ras_obj.geom_df['geom_number'].values:
-            logging.error(f"Geometry {new_geom} not found in project.")
+            logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
         # Update the geometry for the specified plan
         ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
 
-        logging.info(f"Geometry for plan {plan_number} set to {new_geom}")
-        logging.debug("Updated plan DataFrame:")
-        logging.debug(ras_obj.plan_df)
+        logger.info(f"Geometry for plan {plan_number} set to {new_geom}")
+        logger.debug("Updated plan DataFrame:")
+        logger.debug(ras_obj.plan_df)
 
         # Update the project file
         prj_file_path = ras_obj.prj_file
-        try:
-            with open(prj_file_path, 'r') as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            logging.error(f"Project file not found: {prj_file_path}")
-            raise
-
-        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
-        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
-        
-        for i, line in enumerate(lines):
-            if plan_pattern.match(line):
-                for j in range(i+1, len(lines)):
-                    if geom_pattern.match(lines[j]):
-                        lines[j] = f"Geom File=g{new_geom}\n"
-                        logging.info(f"Updated Geom File in project file to g{new_geom} for plan {plan_number}")
-                        break
-                break
-
-        try:
-            with open(prj_file_path, 'w') as f:
-                f.writelines(lines)
-            logging.info(f"Updated project file with new geometry for plan {plan_number}")
-        except IOError as e:
-            logging.error(f"Failed to write to project file: {e}")
-            raise
+        RasUtils.update_file(prj_file_path, RasPlan._update_geom_in_file, plan_number, new_geom)
 
         # Re-initialize the ras object to reflect changes
         ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
@@ -1197,13 +1108,12 @@ class RasPlan:
         return ras_obj.plan_df
 
     @staticmethod
-    @log_call
-    def set_steady:
-    """Docs only, see 'set_steady.py' for full function code"""
+    def _update_geom_in_file:
+    """Docs only, see '_update_geom_in_file.py' for full function code"""
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPrj.py
+File: c:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -1275,7 +1185,7 @@ def get_ras_exe:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -1321,7 +1231,7 @@ class RasUnsteady:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUtils.py
+File: c:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -1348,12 +1258,13 @@ Example:
 import os
 from pathlib import Path
 from .RasPrj import ras
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, Callable
 import pandas as pd
 import numpy as np
 import shutil
 from ras_commander import get_logger
 from ras_commander.logging_config import get_logger, log_call
+import re
 
 logger = get_logger(__name__)
 # Module code starts here
@@ -1946,13 +1857,27 @@ class RasUtils:
         logger.info(f"Calculated error metrics: {metrics}")
         return metrics
 
+    @staticmethod
+    @log_call
+    def update_file(file_path: Path, update_function: Callable, *args) -> None:
+        """
+        Generic method to update a file.
 
+        Parameters:
+        file_path (Path): Path to the file to be updated
+        update_function (Callable): Function to update the file contents
+        *args: Additional arguments to pass to the update_function
 
+        Raises:
+        Exception: If there's an error updating the file
 
+        Example:
+        >>> def update_content:
+    """Docs only, see 'update_content.py' for full function code"""
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\__init__.py
+File: c:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
 from .logging_config import setup_logging, get_logger, log_call

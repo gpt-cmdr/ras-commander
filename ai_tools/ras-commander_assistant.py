@@ -69,7 +69,8 @@ DEFAULT_SETTINGS = {
         "llm_summary", 
         "misc", 
         "future", 
-        "ai_tools"
+        "ai_tools",
+        "docs"
     ],
     "omit_extensions": [
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',

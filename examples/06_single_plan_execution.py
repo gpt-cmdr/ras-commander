@@ -49,7 +49,7 @@ def main():
     # Initialize the project using the global 'ras' object
     current_dir = Path(__file__).parent
     project_path = current_dir / "example_projects" / "Balde Eagle Creek"
-    init_ras_project(project_path, "6.5")
+    init_ras_project(project_path, "6.6")
 
     print("Available plans:")
     print(ras.plan_df)

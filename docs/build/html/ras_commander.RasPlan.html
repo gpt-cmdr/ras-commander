@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ras_commander.RasPlan module &mdash; RAS Commander 0.42 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=13150a28"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="ras_commander.RasGeo module" href="ras_commander.RasGeo.html" />
+    <link rel="prev" title="ras_commander.RasPrj module" href="ras_commander.RasPrj.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            RAS Commander
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="ras_commander.html">ras_commander package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="ras_commander.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasPrj.html">ras_commander.RasPrj module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">ras_commander.RasPlan module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ras_commander.RasPlan.RasPlan"><code class="docutils literal notranslate"><span class="pre">RasPlan</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasGeo.html">ras_commander.RasGeo module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasUnsteady.html">ras_commander.RasUnsteady module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasCmdr.html">ras_commander.RasCmdr module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasUtils.html">ras_commander.RasUtils module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasExamples.html">ras_commander.RasExamples module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasHdf.html">ras_commander.RasHdf module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasGpt.html">ras_commander.RasGpt module</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="ras_commander.html#module-ras_commander">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">RAS Commander</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="ras_commander.html">ras_commander package</a></li>
+      <li class="breadcrumb-item active">ras_commander.RasPlan module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/ras_commander.RasPlan.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-ras_commander.RasPlan">
+<span id="ras-commander-rasplan-module"></span><h1>ras_commander.RasPlan module<a class="headerlink" href="#module-ras_commander.RasPlan" title="Link to this heading"></a></h1>
+<p>RasPlan - Operations for handling plan files in HEC-RAS projects</p>
+<p>This module is part of the ras-commander library and uses a centralized logging configuration.</p>
+<p>Logging Configuration:
+- The logging is set up in the logging_config.py file.
+- A &#64;log_call decorator is available to automatically log function calls.
+- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Logs are written to both console and a rotating file handler.
+- The default log file is ‘ras_commander.log’ in the ‘logs’ directory.
+- The default log level is INFO.</p>
+<p>To use logging in this module:
+1. Use the &#64;log_call decorator for automatic function call logging.
+2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).
+3. Obtain the logger using: logger = logging.getLogger(__name__)</p>
+<p class="rubric">Example</p>
+<p>&#64;log_call
+def my_function():</p>
+<blockquote>
+<div><p>logger = logging.getLogger(__name__)
+logger.debug(“Additional debug information”)
+# Function logic here</p>
+</div></blockquote>
+<dl class="py class">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ras_commander.RasPlan.</span></span><span class="sig-name descname"><span class="pre">RasPlan</span></span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A class for operations on HEC-RAS plan files.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.set_geom">
+<span class="sig-name descname"><span class="pre">set_geom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_geom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.set_geom"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.set_geom" title="Link to this definition"></a></dt>
+<dd><p>Set the geometry for the specified plan.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – The plan number to update.</p></li>
+<li><p><strong>new_geom</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – The new geometry number to set.</p></li>
+<li><p><strong>ras_object</strong> – An optional RAS object instance.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The updated geometry DataFrame.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>updated_geom_df = RasPlan.set_geom(‘02’, ‘03’)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.set_steady">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">set_steady</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_steady_flow_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.set_steady"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.set_steady" title="Link to this definition"></a></dt>
+<dd><p>Apply a steady flow file to a plan file.</p>
+<p>Parameters:
+plan_number (str): Plan number (e.g., ‘02’)
+new_steady_flow_number (str): Steady flow number to apply (e.g., ‘01’)
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+None</p>
+<p>Raises:
+ValueError: If the specified steady flow number is not found in the project file
+FileNotFoundError: If the specified plan file is not found</p>
+<p>Example:
+&gt;&gt;&gt; RasPlan.set_steady(‘02’, ‘01’)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number</strong> (<em>str</em>)</p></li>
+<li><p><strong>new_steady_flow_number</strong> (<em>str</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.set_unsteady">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">set_unsteady</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_unsteady_flow_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.set_unsteady"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.set_unsteady" title="Link to this definition"></a></dt>
+<dd><p>Apply an unsteady flow file to a plan file.</p>
+<p>Parameters:
+plan_number (str): Plan number (e.g., ‘04’)
+new_unsteady_flow_number (str): Unsteady flow number to apply (e.g., ‘01’)
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+None</p>
+<p>Raises:
+ValueError: If the specified unsteady number is not found in the project file
+FileNotFoundError: If the specified plan file is not found</p>
+<p>Example:
+&gt;&gt;&gt; RasPlan.set_unsteady(‘04’, ‘01’)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number</strong> (<em>str</em>)</p></li>
+<li><p><strong>new_unsteady_flow_number</strong> (<em>str</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.set_num_cores">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">set_num_cores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_cores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.set_num_cores"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.set_num_cores" title="Link to this definition"></a></dt>
+<dd><p>Update the maximum number of cores to use in the HEC-RAS plan file.</p>
+<p>Parameters:
+plan_number (str): Plan number (e.g., ‘02’) or full path to the plan file
+num_cores (int): Maximum number of cores to use
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+None</p>
+<p>Notes on setting num_cores in HEC-RAS:
+The recommended setting for num_cores is 2 (most efficient) to 8 (most performant)
+More details in the HEC-Commander Repository Blog “Benchmarking is All You Need”
+<a class="reference external" href="https://github.com/billk-FM/HEC-Commander/blob/main/Blog/7._Benchmarking_Is_All_You_Need.md">https://github.com/billk-FM/HEC-Commander/blob/main/Blog/7._Benchmarking_Is_All_You_Need.md</a></p>
+<p>Microsoft Windows has a maximum of 64 cores that can be allocated to a single Ras.exe process.</p>
+<p>Example:
+&gt;&gt;&gt; # Using plan number
+&gt;&gt;&gt; RasPlan.set_num_cores(‘02’, 4)
+&gt;&gt;&gt; # Using full path to plan file
+&gt;&gt;&gt; RasPlan.set_num_cores(‘/path/to/project.p02’, 4)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.set_geom_preprocessor">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">set_geom_preprocessor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_htab</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_ib_tables</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.set_geom_preprocessor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.set_geom_preprocessor" title="Link to this definition"></a></dt>
+<dd><p>Update the simulation plan file to modify the <cite>Run HTab</cite> and <cite>UNET Use Existing IB Tables</cite> settings.</p>
+<p>Parameters:
+file_path (str): Path to the simulation plan file (.p06 or similar) that you want to modify.
+run_htab (int): Value for the <cite>Run HTab</cite> setting:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><cite>0</cite> : Do not run the geometry preprocessor, use existing geometry tables.</p></li>
+<li><p><cite>-1</cite> : Run the geometry preprocessor, forcing a recomputation of the geometry tables.</p></li>
+</ul>
+</div></blockquote>
+<dl class="simple">
+<dt>use_ib_tables (int): Value for the <cite>UNET Use Existing IB Tables</cite> setting:</dt><dd><ul class="simple">
+<li><p><cite>0</cite> : Use existing interpolation/boundary (IB) tables without recomputing them.</p></li>
+<li><p><cite>-1</cite> : Do not use existing IB tables, force a recomputation.</p></li>
+</ul>
+</dd>
+</dl>
+<p>ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+None</p>
+<p>Raises:
+ValueError: If <cite>run_htab</cite> or <cite>use_ib_tables</cite> are not integers or not within the accepted values (<cite>0</cite> or <cite>-1</cite>).
+FileNotFoundError: If the specified file does not exist.
+IOError: If there is an error reading or writing the file.</p>
+<p>Example:
+&gt;&gt;&gt; RasPlan.set_geom_preprocessor(‘/path/to/project.p06’, run_htab=-1, use_ib_tables=0)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_results_path">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_results_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_results_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_results_path" title="Link to this definition"></a></dt>
+<dd><p>Retrieve the results file path for a given HEC-RAS plan number.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number</strong> (<em>str</em>) – The HEC-RAS plan number for which to find the results path.</p></li>
+<li><p><strong>ras_object</strong> (<a class="reference internal" href="ras_commander.RasPrj.html#ras_commander.RasPrj.RasPrj" title="ras_commander.RasPrj.RasPrj"><em>RasPrj</em></a><em>, </em><em>optional</em>) – Specific RAS object to use. If None, uses the global ras instance.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The full path to the results file if found and the file exists, or None if not found.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>RuntimeError</strong> – If the project is not initialized.</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ras_plan</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">results_path</span> <span class="o">=</span> <span class="n">ras_plan</span><span class="o">.</span><span class="n">get_results_path</span><span class="p">(</span><span class="s1">&#39;01&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">if</span> <span class="n">results_path</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results file found at: </span><span class="si">{</span><span class="n">results_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="gp">... </span><span class="k">else</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Results file not found.&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_plan_path">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_plan_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_plan_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_plan_path" title="Link to this definition"></a></dt>
+<dd><p>Return the full path for a given plan number.</p>
+<p>This method ensures that the latest plan entries are included by refreshing
+the plan dataframe before searching for the requested plan number.</p>
+<p>Args:
+plan_number (str): The plan number to search for.
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+Optional[str]: The full path of the plan file if found, None otherwise.</p>
+<p>Raises:
+RuntimeError: If the project is not initialized.</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; plan_path = ras_plan.get_plan_path(‘01’)
+&gt;&gt;&gt; if plan_path:
+…     print(f”Plan file found at: {plan_path}”)
+… else:
+…     print(“Plan file not found.”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>plan_number</strong> (<em>str</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_flow_path">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_flow_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flow_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_flow_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_flow_path" title="Link to this definition"></a></dt>
+<dd><p>Return the full path for a given flow number.</p>
+<p>Args:
+flow_number (str): The flow number to search for.
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+Optional[str]: The full path of the flow file if found, None otherwise.</p>
+<p>Raises:
+RuntimeError: If the project is not initialized.</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; flow_path = ras_plan.get_flow_path(‘01’)
+&gt;&gt;&gt; if flow_path:
+…     print(f”Flow file found at: {flow_path}”)
+… else:
+…     print(“Flow file not found.”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>flow_number</strong> (<em>str</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_unsteady_path">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_unsteady_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">unsteady_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_unsteady_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_unsteady_path" title="Link to this definition"></a></dt>
+<dd><p>Return the full path for a given unsteady number.</p>
+<p>Args:
+unsteady_number (str): The unsteady number to search for.
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+Optional[str]: The full path of the unsteady file if found, None otherwise.</p>
+<p>Raises:
+RuntimeError: If the project is not initialized.</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; unsteady_path = ras_plan.get_unsteady_path(‘01’)
+&gt;&gt;&gt; if unsteady_path:
+…     print(f”Unsteady file found at: {unsteady_path}”)
+… else:
+…     print(“Unsteady file not found.”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>unsteady_number</strong> (<em>str</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_geom_path">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_geom_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">geom_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_geom_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_geom_path" title="Link to this definition"></a></dt>
+<dd><p>Return the full path for a given geometry number.</p>
+<p>Args:
+geom_number (str): The geometry number to search for.
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+Optional[str]: The full path of the geometry file if found, None otherwise.</p>
+<p>Raises:
+RuntimeError: If the project is not initialized.</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; geom_path = ras_plan.get_geom_path(‘01’)
+&gt;&gt;&gt; if geom_path:
+…     print(f”Geometry file found at: {geom_path}”)
+… else:
+…     print(“Geometry file not found.”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>geom_number</strong> (<em>str</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.clone_plan">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">clone_plan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template_plan</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_plan_shortid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.clone_plan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.clone_plan" title="Link to this definition"></a></dt>
+<dd><p>Create a new plan file based on a template and update the project file.</p>
+<p>Parameters:
+template_plan (str): Plan number to use as template (e.g., ‘01’)
+new_plan_shortid (str, optional): New short identifier for the plan file
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+str: New plan number</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; new_plan_number = ras_plan.clone_plan(‘01’, new_plan_shortid=’New Plan’)
+&gt;&gt;&gt; print(f”New plan created with number: {new_plan_number}”)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.clone_unsteady">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">clone_unsteady</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template_unsteady</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.clone_unsteady"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.clone_unsteady" title="Link to this definition"></a></dt>
+<dd><p>Copy unsteady flow files from a template, find the next unsteady number,
+and update the project file accordingly.</p>
+<p>Parameters:
+template_unsteady (str): Unsteady flow number to be used as a template (e.g., ‘01’)
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+str: New unsteady flow number (e.g., ‘03’)</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; new_unsteady_num = ras_plan.clone_unsteady(‘01’)
+&gt;&gt;&gt; print(f”New unsteady flow file created: u{new_unsteady_num}”)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.clone_steady">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">clone_steady</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template_flow</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.clone_steady"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.clone_steady" title="Link to this definition"></a></dt>
+<dd><p>Copy steady flow files from a template, find the next flow number,
+and update the project file accordingly.</p>
+<p>Parameters:
+template_flow (str): Flow number to be used as a template (e.g., ‘01’)
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+str: New flow number (e.g., ‘03’)</p>
+<p>Example:
+&gt;&gt;&gt; ras_plan = RasPlan()
+&gt;&gt;&gt; new_flow_num = ras_plan.clone_steady(‘01’)
+&gt;&gt;&gt; print(f”New steady flow file created: f{new_flow_num}”)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.clone_geom">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">clone_geom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template_geom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.clone_geom"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.clone_geom" title="Link to this definition"></a></dt>
+<dd><p>Copy geometry files from a template, find the next geometry number,
+and update the project file accordingly.</p>
+<p>Parameters:
+template_geom (str): Geometry number to be used as a template (e.g., ‘01’)
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+str: New geometry number (e.g., ‘03’)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function updates the ras object’s dataframes after modifying the project structure.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_next_number">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_next_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">existing_numbers</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_next_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_next_number" title="Link to this definition"></a></dt>
+<dd><p>Determine the next available number from a list of existing numbers.</p>
+<p>Parameters:
+existing_numbers (list): List of existing numbers as strings</p>
+<p>Returns:
+str: Next available number as a zero-padded string</p>
+<p>Example:
+&gt;&gt;&gt; existing_numbers = [‘01’, ‘02’, ‘04’]
+&gt;&gt;&gt; RasPlan.get_next_number(existing_numbers)
+‘03’
+&gt;&gt;&gt; existing_numbers = [‘01’, ‘02’, ‘03’]
+&gt;&gt;&gt; RasPlan.get_next_number(existing_numbers)
+‘04’</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.get_plan_value">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_plan_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number_or_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.get_plan_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.get_plan_value" title="Link to this definition"></a></dt>
+<dd><p>Retrieve a specific value from a HEC-RAS plan file.</p>
+<p>Parameters:
+plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+key (str): The key to retrieve from the plan file
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+Any: The value associated with the specified key</p>
+<p>Raises:
+ValueError: If the plan file is not found
+IOError: If there’s an error reading the plan file</p>
+<p>Available keys and their expected types:
+- ‘Computation Interval’ (str): Time value for computational time step (e.g., ‘5SEC’, ‘2MIN’)
+- ‘DSS File’ (str): Name of the DSS file used
+- ‘Flow File’ (str): Name of the flow input file
+- ‘Friction Slope Method’ (int): Method selection for friction slope (e.g., 1, 2)
+- ‘Geom File’ (str): Name of the geometry input file
+- ‘Mapping Interval’ (str): Time interval for mapping output
+- ‘Plan File’ (str): Name of the plan file
+- ‘Plan Title’ (str): Title of the simulation plan
+- ‘Program Version’ (str): Version number of HEC-RAS
+- ‘Run HTAB’ (int): Flag to run HTab module (-1 or 1)
+- ‘Run Post Process’ (int): Flag to run post-processing (-1 or 1)
+- ‘Run Sediment’ (int): Flag to run sediment transport module (0 or 1)
+- ‘Run UNET’ (int): Flag to run unsteady network module (-1 or 1)
+- ‘Run WQNET’ (int): Flag to run water quality module (0 or 1)
+- ‘Short Identifier’ (str): Short name or ID for the plan
+- ‘Simulation Date’ (str): Start and end dates/times for simulation
+- ‘UNET D1 Cores’ (int): Number of cores used in 1D calculations
+- ‘UNET Use Existing IB Tables’ (int): Flag for using existing internal boundary tables (-1, 0, or 1)
+- ‘UNET 1D Methodology’ (str): 1D calculation methodology
+- ‘UNET D2 Solver Type’ (str): 2D solver type
+- ‘UNET D2 Name’ (str): Name of the 2D area
+- ‘Run RASMapper’ (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)</p>
+<p>Note:
+Writing Multi line keys like ‘Description’ are not supported by this function.</p>
+<p>Example:
+&gt;&gt;&gt; computation_interval = RasPlan.get_plan_value(“01”, “Computation Interval”)
+&gt;&gt;&gt; print(f”Computation interval: {computation_interval}”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number_or_path</strong> (<em>str</em><em> | </em><em>Path</em>)</p></li>
+<li><p><strong>key</strong> (<em>str</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Any</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPlan.RasPlan.update_plan_value">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">update_plan_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number_or_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPlan.html#RasPlan.update_plan_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPlan.RasPlan.update_plan_value" title="Link to this definition"></a></dt>
+<dd><p>Update a specific key-value pair in a HEC-RAS plan file.</p>
+<p>Parameters:
+plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+key (str): The key to update in the plan file
+value (Any): The new value to set for the key
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Raises:
+ValueError: If the plan file is not found
+IOError: If there’s an error reading or writing the plan file</p>
+<p>Note: See the docstring of get_plan_value for a full list of available keys and their types.</p>
+<p>Example:
+&gt;&gt;&gt; RasPlan.update_plan_value(“01”, “computation_interval”, “10SEC”)
+&gt;&gt;&gt; RasPlan.update_plan_value(“/path/to/plan.p01”, “run_htab”, 1)
+&gt;&gt;&gt; RasPlan.update_plan_value(“01”, “run_rasmapper”, 0)  # Turn on Floodplain Mapping</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number_or_path</strong> (<em>str</em><em> | </em><em>Path</em>)</p></li>
+<li><p><strong>key</strong> (<em>str</em>)</p></li>
+<li><p><strong>value</strong> (<em>Any</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="ras_commander.RasPrj.html" class="btn btn-neutral float-left" title="ras_commander.RasPrj module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ras_commander.RasGeo.html" class="btn btn-neutral float-right" title="ras_commander.RasGeo module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, William Katzenmeyer, P.E., C.F.M..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

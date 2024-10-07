@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ras_commander.RasCmdr &mdash; RAS Commander 0.42 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=13150a28"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            RAS Commander
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../ras_commander.html">ras_commander package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">RAS Commander</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ras_commander.RasCmdr</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ras_commander.RasCmdr</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">RasCmdr - Execution operations for running HEC-RAS simulations</span>
+
+<span class="sd">This module is part of the ras-commander library and uses a centralized logging configuration.</span>
+
+<span class="sd">Logging Configuration:</span>
+<span class="sd">- The logging is set up in the logging_config.py file.</span>
+<span class="sd">- A @log_call decorator is available to automatically log function calls.</span>
+<span class="sd">- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL</span>
+<span class="sd">- Logs are written to both console and a rotating file handler.</span>
+<span class="sd">- The default log file is &#39;ras_commander.log&#39; in the &#39;logs&#39; directory.</span>
+<span class="sd">- The default log level is INFO.</span>
+
+<span class="sd">To use logging in this module:</span>
+<span class="sd">1. Use the @log_call decorator for automatic function call logging.</span>
+<span class="sd">2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).</span>
+
+<span class="sd">Example:</span>
+<span class="sd">    @log_call</span>
+<span class="sd">    def my_function():</span>
+<span class="sd">        </span>
+<span class="sd">        logger.debug(&quot;Additional debug information&quot;)</span>
+<span class="sd">        # Function logic here</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span><span class="p">,</span> <span class="n">as_completed</span>
+<span class="kn">from</span> <span class="nn">.RasPrj</span> <span class="kn">import</span> <span class="n">ras</span><span class="p">,</span> <span class="n">RasPrj</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">get_ras_exe</span>
+<span class="kn">from</span> <span class="nn">.RasPlan</span> <span class="kn">import</span> <span class="n">RasPlan</span>
+<span class="kn">from</span> <span class="nn">.RasGeo</span> <span class="kn">import</span> <span class="n">RasGeo</span>
+<span class="kn">from</span> <span class="nn">.RasUtils</span> <span class="kn">import</span> <span class="n">RasUtils</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">queue</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="kn">import</span> <span class="n">Thread</span><span class="p">,</span> <span class="n">Lock</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span><span class="p">,</span> <span class="n">as_completed</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="kn">import</span> <span class="n">Lock</span><span class="p">,</span> <span class="n">Thread</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">cycle</span>
+<span class="kn">from</span> <span class="nn">ras_commander.RasPrj</span> <span class="kn">import</span> <span class="n">RasPrj</span>  <span class="c1"># Ensure RasPrj is imported</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="kn">import</span> <span class="n">Lock</span><span class="p">,</span> <span class="n">Thread</span><span class="p">,</span> <span class="n">current_thread</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span><span class="p">,</span> <span class="n">as_completed</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">cycle</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">ras_commander.logging_config</span> <span class="kn">import</span> <span class="n">get_logger</span><span class="p">,</span> <span class="n">log_call</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># Module code starts here</span>
+
+<span class="c1"># TODO: Future Enhancements</span>
+<span class="c1"># 1. Alternate Run Mode for compute_plan and compute_parallel:</span>
+<span class="c1">#    - Use Powershell to execute HEC-RAS command</span>
+<span class="c1">#    - Hide RAS window and all child windows</span>
+<span class="c1">#    - Note: This mode may prevent execution if the plan has a popup</span>
+<span class="c1">#    - Intended for background runs or popup-free scenarios</span>
+<span class="c1">#    - Limit to non-commercial use</span>
+<span class="c1">#</span>
+<span class="c1"># 2. Implement compute_plan_remote:</span>
+<span class="c1">#    - Execute compute_plan on a remote machine via psexec</span>
+<span class="c1">#    - Use keyring package for secure credential storage</span>
+<span class="c1">#    - Implement psexec command for remote HEC-RAS execution</span>
+<span class="c1">#    - Create remote_worker objects to store machine details:</span>
+<span class="c1">#      (machine name, username, password, ras_exe_path, local folder path, etc.)</span>
+<span class="c1">#    - Develop RasRemote class for remote_worker management and abstractions</span>
+<span class="c1">#    - Implement compute_plan_remote in RasCmdr as a thin wrapper around RasRemote</span>
+<span class="c1">#      (similar to existing compute_plan functions but for remote execution)</span>
+
+
+<div class="viewcode-block" id="RasCmdr">
+<a class="viewcode-back" href="../../ras_commander.RasCmdr.html#ras_commander.RasCmdr">[docs]</a>
+<span class="k">class</span> <span class="nc">RasCmdr</span><span class="p">:</span>
+    
+<div class="viewcode-block" id="RasCmdr.compute_plan">
+<a class="viewcode-back" href="../../ras_commander.RasCmdr.html#ras_commander.RasCmdr.compute_plan">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">compute_plan</span><span class="p">(</span>
+        <span class="n">plan_number</span><span class="p">,</span>
+        <span class="n">dest_folder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+        <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">clear_geompre</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">num_cores</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">overwrite_dest</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute a HEC-RAS plan.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            plan_number (str, Path): The plan number to execute (e.g., &quot;01&quot;, &quot;02&quot;) or the full path to the plan file.</span>
+<span class="sd">            dest_folder (str, Path, optional): Name of the folder or full path for computation.</span>
+<span class="sd">                If a string is provided, it will be created in the same parent directory as the project folder.</span>
+<span class="sd">                If a full path is provided, it will be used as is.</span>
+<span class="sd">            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</span>
+<span class="sd">            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.</span>
+<span class="sd">            num_cores (int, optional): Number of cores to use for the plan execution. If None, the current setting is not changed.</span>
+<span class="sd">            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            bool: True if the execution was successful, False otherwise.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="k">if</span> <span class="n">ras_object</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">ras</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using ras_object with project folder: </span><span class="si">{</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="n">dest_folder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">dest_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">dest_folder</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dest_folder</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">dest_folder</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="n">dest_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">overwrite_dest</span><span class="p">:</span>
+                        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">dest_folder</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Destination folder &#39;</span><span class="si">{</span><span class="n">dest_folder</span><span class="si">}</span><span class="s2">&#39; exists. Overwriting as per overwrite_dest=True.&quot;</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="nb">any</span><span class="p">(</span><span class="n">dest_folder</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+                        <span class="n">error_msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Destination folder &#39;</span><span class="si">{</span><span class="n">dest_folder</span><span class="si">}</span><span class="s2">&#39; exists and is not empty. Use overwrite_dest=True to overwrite.&quot;</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+                
+                <span class="n">dest_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">dest_folder</span><span class="p">,</span> <span class="n">dirs_exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Copied project folder to destination: </span><span class="si">{</span><span class="n">dest_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                
+                <span class="n">compute_ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+                <span class="n">compute_ras</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">dest_folder</span><span class="p">,</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="p">)</span>
+                <span class="n">compute_prj_path</span> <span class="o">=</span> <span class="n">compute_ras</span><span class="o">.</span><span class="n">prj_file</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">compute_ras</span> <span class="o">=</span> <span class="n">ras_obj</span>
+                <span class="n">compute_prj_path</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">prj_file</span>
+
+            <span class="c1"># Determine the plan path</span>
+            <span class="n">compute_plan_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">))</span> <span class="ow">and</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span> <span class="k">else</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_path</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">compute_ras</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">compute_prj_path</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">compute_plan_path</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not find project file or plan file for plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+
+            <span class="c1"># Clear geometry preprocessor files if requested</span>
+            <span class="k">if</span> <span class="n">clear_geompre</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">(</span><span class="n">compute_plan_path</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">compute_ras</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cleared geometry preprocessor files for plan: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error clearing geometry preprocessor files for plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Set the number of cores if specified</span>
+            <span class="k">if</span> <span class="n">num_cores</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">RasPlan</span><span class="o">.</span><span class="n">set_num_cores</span><span class="p">(</span><span class="n">compute_plan_path</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="n">num_cores</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">compute_ras</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Set number of cores to </span><span class="si">{</span><span class="n">num_cores</span><span class="si">}</span><span class="s2"> for plan: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error setting number of cores for plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Prepare the command for HEC-RAS execution</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">compute_ras</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="si">}</span><span class="s1">&quot; -c &quot;</span><span class="si">{</span><span class="n">compute_prj_path</span><span class="si">}</span><span class="s1">&quot; &quot;</span><span class="si">{</span><span class="n">compute_plan_path</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running HEC-RAS from the Command Line:&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running command: </span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Execute the HEC-RAS command</span>
+            <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">run_time</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS execution completed for plan: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total run time for plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">run_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">run_time</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error running plan: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error message: </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total run time for plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">run_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in compute_plan: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="c1"># Update the RAS object&#39;s dataframes</span>
+            <span class="k">if</span> <span class="n">ras_obj</span><span class="p">:</span>
+                <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>
+                <span class="n">ras_obj</span><span class="o">.</span><span class="n">geom_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_geom_entries</span><span class="p">()</span>
+                <span class="n">ras_obj</span><span class="o">.</span><span class="n">flow_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_flow_entries</span><span class="p">()</span>
+                <span class="n">ras_obj</span><span class="o">.</span><span class="n">unsteady_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_unsteady_entries</span><span class="p">()</span></div>
+
+    
+
+
+<div class="viewcode-block" id="RasCmdr.compute_parallel">
+<a class="viewcode-back" href="../../ras_commander.RasCmdr.html#ras_commander.RasCmdr.compute_parallel">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">compute_parallel</span><span class="p">(</span>
+        <span class="n">plan_number</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">max_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">num_cores</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">clear_geompre</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">ras_object</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s1">&#39;RasPrj&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dest_folder</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">overwrite_dest</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute multiple HEC-RAS plans in parallel.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            plan_number (Union[str, List[str], None]): Plan number(s) to compute. If None, all plans are computed.</span>
+<span class="sd">            max_workers (int): Maximum number of parallel workers.</span>
+<span class="sd">            num_cores (int): Number of cores to use per plan computation.</span>
+<span class="sd">            clear_geompre (bool): Whether to clear geometry preprocessor files.</span>
+<span class="sd">            ras_object (Optional[RasPrj]): RAS project object. If None, uses global instance.</span>
+<span class="sd">            dest_folder (Union[str, Path, None]): Destination folder for computed results.</span>
+<span class="sd">            overwrite_dest (bool): Whether to overwrite existing destination folder.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict[str, bool]: Dictionary of plan numbers and their execution success status.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+
+            <span class="n">project_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">dest_folder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">dest_folder_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">dest_folder</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">dest_folder_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">overwrite_dest</span><span class="p">:</span>
+                        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">dest_folder_path</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Destination folder &#39;</span><span class="si">{</span><span class="n">dest_folder_path</span><span class="si">}</span><span class="s2">&#39; exists. Overwriting as per overwrite_dest=True.&quot;</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="nb">any</span><span class="p">(</span><span class="n">dest_folder_path</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+                        <span class="n">error_msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Destination folder &#39;</span><span class="si">{</span><span class="n">dest_folder_path</span><span class="si">}</span><span class="s2">&#39; exists and is not empty. Use overwrite_dest=True to overwrite.&quot;</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+                <span class="n">dest_folder_path</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">dest_folder_path</span><span class="p">,</span> <span class="n">dirs_exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Copied project folder to destination: </span><span class="si">{</span><span class="n">dest_folder_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">project_folder</span> <span class="o">=</span> <span class="n">dest_folder_path</span>
+
+            <span class="k">if</span> <span class="n">plan_number</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">plan_number</span> <span class="o">=</span> <span class="p">[</span><span class="n">plan_number</span><span class="p">]</span>
+                <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)]</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Filtered plans to execute: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">num_plans</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
+            <span class="n">max_workers</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">max_workers</span><span class="p">,</span> <span class="n">num_plans</span><span class="p">)</span> <span class="k">if</span> <span class="n">num_plans</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Adjusted max_workers to </span><span class="si">{</span><span class="n">max_workers</span><span class="si">}</span><span class="s2"> based on the number of plans: </span><span class="si">{</span><span class="n">num_plans</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">worker_ras_objects</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">worker_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_workers</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">worker_folder</span> <span class="o">=</span> <span class="n">project_folder</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">project_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> [Worker </span><span class="si">{</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">]&quot;</span>
+                <span class="k">if</span> <span class="n">worker_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">worker_folder</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed existing worker folder: </span><span class="si">{</span><span class="n">worker_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">worker_folder</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created worker folder: </span><span class="si">{</span><span class="n">worker_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">ras_instance</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+                    <span class="n">worker_ras_instance</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span>
+                        <span class="n">ras_project_folder</span><span class="o">=</span><span class="n">worker_folder</span><span class="p">,</span>
+                        <span class="n">ras_version</span><span class="o">=</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="p">,</span>
+                        <span class="n">ras_instance</span><span class="o">=</span><span class="n">ras_instance</span>
+                    <span class="p">)</span>
+                    <span class="n">worker_ras_objects</span><span class="p">[</span><span class="n">worker_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">worker_ras_instance</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to initialize RAS project for worker </span><span class="si">{</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="n">worker_ras_objects</span><span class="p">[</span><span class="n">worker_id</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+            <span class="n">worker_cycle</span> <span class="o">=</span> <span class="n">cycle</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_workers</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="n">plan_assignments</span> <span class="o">=</span> <span class="p">[(</span><span class="nb">next</span><span class="p">(</span><span class="n">worker_cycle</span><span class="p">),</span> <span class="n">plan_num</span><span class="p">)</span> <span class="k">for</span> <span class="n">plan_num</span> <span class="ow">in</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]]</span>
+
+            <span class="n">execution_results</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+                <span class="n">futures</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">executor</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                        <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">,</span>
+                        <span class="n">plan_num</span><span class="p">,</span> 
+                        <span class="n">ras_object</span><span class="o">=</span><span class="n">worker_ras_objects</span><span class="p">[</span><span class="n">worker_id</span><span class="p">],</span> 
+                        <span class="n">clear_geompre</span><span class="o">=</span><span class="n">clear_geompre</span><span class="p">,</span>
+                        <span class="n">num_cores</span><span class="o">=</span><span class="n">num_cores</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">worker_id</span><span class="p">,</span> <span class="n">plan_num</span> <span class="ow">in</span> <span class="n">plan_assignments</span>
+                <span class="p">]</span>
+
+                <span class="k">for</span> <span class="n">future</span><span class="p">,</span> <span class="p">(</span><span class="n">worker_id</span><span class="p">,</span> <span class="n">plan_num</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">),</span> <span class="n">plan_assignments</span><span class="p">):</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">success</span> <span class="o">=</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+                        <span class="n">execution_results</span><span class="p">[</span><span class="n">plan_num</span><span class="p">]</span> <span class="o">=</span> <span class="n">success</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2"> executed in worker </span><span class="si">{</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="s1">&#39;Successful&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">success</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;Failed&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="n">execution_results</span><span class="p">[</span><span class="n">plan_num</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2"> failed in worker </span><span class="si">{</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">final_dest_folder</span> <span class="o">=</span> <span class="n">dest_folder_path</span> <span class="k">if</span> <span class="n">dest_folder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">project_folder</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">project_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> [Computed]&quot;</span>
+            <span class="n">final_dest_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Final destination for computed results: </span><span class="si">{</span><span class="n">final_dest_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">worker_ras</span> <span class="ow">in</span> <span class="n">worker_ras_objects</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">worker_ras</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">worker_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">worker_ras</span><span class="o">.</span><span class="n">project_folder</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">worker_folder</span><span class="o">.</span><span class="n">iterdir</span><span class="p">():</span>
+                        <span class="n">dest_path</span> <span class="o">=</span> <span class="n">final_dest_folder</span> <span class="o">/</span> <span class="n">item</span><span class="o">.</span><span class="n">name</span>
+                        <span class="k">if</span> <span class="n">dest_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                            <span class="k">if</span> <span class="n">dest_path</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                                <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">dest_path</span><span class="p">)</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed existing directory at </span><span class="si">{</span><span class="n">dest_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">dest_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed existing file at </span><span class="si">{</span><span class="n">dest_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">),</span> <span class="n">final_dest_folder</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Moved </span><span class="si">{</span><span class="n">item</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">final_dest_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">worker_folder</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed worker folder: </span><span class="si">{</span><span class="n">worker_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error moving results from </span><span class="si">{</span><span class="n">worker_folder</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">final_dest_folder</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">final_dest_folder_ras_obj</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+                <span class="n">final_dest_folder_ras_obj</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span>
+                    <span class="n">ras_project_folder</span><span class="o">=</span><span class="n">final_dest_folder</span><span class="p">,</span> 
+                    <span class="n">ras_version</span><span class="o">=</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="p">,</span>
+                    <span class="n">ras_instance</span><span class="o">=</span><span class="n">final_dest_folder_ras_obj</span>
+                <span class="p">)</span>
+                <span class="n">final_dest_folder_ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to initialize RasPrj for final destination: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">plan_num</span><span class="p">,</span> <span class="n">success</span> <span class="ow">in</span> <span class="n">execution_results</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">status</span> <span class="o">=</span> <span class="s1">&#39;Successful&#39;</span> <span class="k">if</span> <span class="n">success</span> <span class="k">else</span> <span class="s1">&#39;Failed&#39;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">geom_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_geom_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">flow_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_flow_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">unsteady_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_unsteady_entries</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="n">execution_results</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in compute_parallel: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span></div>
+
+
+<div class="viewcode-block" id="RasCmdr.compute_test_mode">
+<a class="viewcode-back" href="../../ras_commander.RasCmdr.html#ras_commander.RasCmdr.compute_test_mode">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">compute_test_mode</span><span class="p">(</span>
+        <span class="n">plan_number</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+        <span class="n">dest_folder_suffix</span><span class="o">=</span><span class="s2">&quot;[Test]&quot;</span><span class="p">,</span> 
+        <span class="n">clear_geompre</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+        <span class="n">num_cores</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+        <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">overwrite_dest</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute HEC-RAS plans in test mode. This is a re-creation of the HEC-RAS command line -test flag, </span>
+<span class="sd">        which does not work in recent versions of HEC-RAS.</span>
+<span class="sd">        </span>
+<span class="sd">        As a special-purpose function that emulates the original -test flag, it operates differently than the </span>
+<span class="sd">        other two compute_ functions. Per the original HEC-RAS test flag, it creates a separate test folder,</span>
+<span class="sd">        copies the project there, and executes the specified plans in sequential order.</span>
+<span class="sd">        </span>
+<span class="sd">        For most purposes, just copying a the project folder, initing that new folder, then running each plan </span>
+<span class="sd">        with compute_plan is a simpler and more flexible approach.  This is shown in the examples provided</span>
+<span class="sd">        in the ras-commander library.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            plan_number (str, list[str], optional): Plan number or list of plan numbers to execute. </span>
+<span class="sd">                If None, all plans will be executed. Default is None.</span>
+<span class="sd">            dest_folder_suffix (str, optional): Suffix to append to the test folder name to create dest_folder. </span>
+<span class="sd">                Defaults to &quot;[Test]&quot;.</span>
+<span class="sd">                dest_folder is always created in the project folder&#39;s parent directory.</span>
+<span class="sd">            clear_geompre (bool, optional): Whether to clear geometry preprocessor files.</span>
+<span class="sd">                Defaults to False.</span>
+<span class="sd">            num_cores (int, optional): Maximum number of cores to use for each plan.</span>
+<span class="sd">                If None, the current setting is not changed. Default is None.</span>
+<span class="sd">            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</span>
+<span class="sd">            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict[str, bool]: Dictionary of plan numbers and their execution success status.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            Run all plans: RasCommander.compute_test_mode()</span>
+<span class="sd">            Run a specific plan: RasCommander.compute_test_mode(plan_number=&quot;01&quot;)</span>
+<span class="sd">            Run multiple plans: RasCommander.compute_test_mode(plan_number=[&quot;01&quot;, &quot;03&quot;, &quot;05&quot;])</span>
+<span class="sd">            Run plans with a custom folder suffix: RasCommander.compute_test_mode(dest_folder_suffix=&quot;[TestRun]&quot;)</span>
+<span class="sd">            Run plans and clear geometry preprocessor files: RasCommander.compute_test_mode(clear_geompre=True)</span>
+<span class="sd">            Run plans with a specific number of cores: RasCommander.compute_test_mode(num_cores=4)</span>
+<span class="sd">            </span>
+<span class="sd">        Notes:</span>
+<span class="sd">            - This function executes plans in a separate folder for isolated testing.</span>
+<span class="sd">            - If plan_number is not provided, all plans in the project will be executed.</span>
+<span class="sd">            - The function does not change the geometry preprocessor and IB tables settings.  </span>
+<span class="sd">                - To force recomputing of geometry preprocessor and IB tables, use the clear_geompre=True option.</span>
+<span class="sd">            - Plans are executed sequentially.</span>
+<span class="sd">            - Because copying the project is implicit, only a dest_folder_suffix option is provided.</span>
+<span class="sd">            - For more flexible run management, use the compute_parallel or compute_sequential functions.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+            
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting the compute_test_mode...&quot;</span><span class="p">)</span>
+               
+            <span class="n">project_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">project_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project folder &#39;</span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&#39; does not exist.&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="p">{}</span>
+
+            <span class="n">compute_folder</span> <span class="o">=</span> <span class="n">project_folder</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">project_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">dest_folder_suffix</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Creating the test folder: </span><span class="si">{</span><span class="n">compute_folder</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">compute_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">overwrite_dest</span><span class="p">:</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">compute_folder</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Compute folder &#39;</span><span class="si">{</span><span class="n">compute_folder</span><span class="si">}</span><span class="s2">&#39; exists. Overwriting as per overwrite_dest=True.&quot;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="nb">any</span><span class="p">(</span><span class="n">compute_folder</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+                    <span class="n">error_msg</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Compute folder &#39;</span><span class="si">{</span><span class="n">compute_folder</span><span class="si">}</span><span class="s2">&#39; exists and is not empty. &quot;</span>
+                        <span class="s2">&quot;Use overwrite_dest=True to overwrite.&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">compute_folder</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Copied project folder to compute folder: </span><span class="si">{</span><span class="n">compute_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error occurred while copying project folder: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="p">{}</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">compute_ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+                <span class="n">compute_ras</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">compute_folder</span><span class="p">,</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="p">)</span>
+                <span class="n">compute_prj_path</span> <span class="o">=</span> <span class="n">compute_ras</span><span class="o">.</span><span class="n">prj_file</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialized RAS project in compute folder: </span><span class="si">{</span><span class="n">compute_prj_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error initializing RAS project in compute folder: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="p">{}</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">compute_prj_path</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Project file not found.&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="p">{}</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Getting plan entries...&quot;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">ras_compute_plan_entries</span> <span class="o">=</span> <span class="n">compute_ras</span><span class="o">.</span><span class="n">plan_df</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Retrieved plan entries successfully.&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error retrieving plan entries: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="p">{}</span>
+
+            <span class="k">if</span> <span class="n">plan_number</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">plan_number</span> <span class="o">=</span> <span class="p">[</span><span class="n">plan_number</span><span class="p">]</span>
+                <span class="n">ras_compute_plan_entries</span> <span class="o">=</span> <span class="n">ras_compute_plan_entries</span><span class="p">[</span>
+                    <span class="n">ras_compute_plan_entries</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span>
+                <span class="p">]</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Filtered plans to execute: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">execution_results</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running selected plans sequentially...&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">plan</span> <span class="ow">in</span> <span class="n">ras_compute_plan_entries</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+                <span class="n">plan_number</span> <span class="o">=</span> <span class="n">plan</span><span class="p">[</span><span class="s2">&quot;plan_number&quot;</span><span class="p">]</span>
+                <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">success</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span>
+                        <span class="n">plan_number</span><span class="p">,</span>
+                        <span class="n">ras_object</span><span class="o">=</span><span class="n">compute_ras</span><span class="p">,</span>
+                        <span class="n">clear_geompre</span><span class="o">=</span><span class="n">clear_geompre</span><span class="p">,</span>
+                        <span class="n">num_cores</span><span class="o">=</span><span class="n">num_cores</span>
+                    <span class="p">)</span>
+                    <span class="n">execution_results</span><span class="p">[</span><span class="n">plan_number</span><span class="p">]</span> <span class="o">=</span> <span class="n">success</span>
+                    <span class="k">if</span> <span class="n">success</span><span class="p">:</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Successfully computed plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to compute plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">execution_results</span><span class="p">[</span><span class="n">plan_number</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error computing plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">finally</span><span class="p">:</span>
+                    <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                    <span class="n">run_time</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total run time for plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">run_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;All selected plans have been executed.&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;compute_test_mode completed.&quot;</span><span class="p">)</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">plan_num</span><span class="p">,</span> <span class="n">success</span> <span class="ow">in</span> <span class="n">execution_results</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">status</span> <span class="o">=</span> <span class="s1">&#39;Successful&#39;</span> <span class="k">if</span> <span class="n">success</span> <span class="k">else</span> <span class="s1">&#39;Failed&#39;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">geom_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_geom_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">flow_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_flow_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">unsteady_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_unsteady_entries</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="n">execution_results</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in compute_test_mode: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, William Katzenmeyer, P.E., C.F.M..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

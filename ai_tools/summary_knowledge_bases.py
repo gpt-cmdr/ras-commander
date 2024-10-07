@@ -40,7 +40,7 @@ import re
 
 # Configuration
 OMIT_FOLDERS = [
-    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests",
+    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs",
     "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info",
     "example_projects", "assistant_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models","hdf_example_data", "ras_example_categories"
 ]

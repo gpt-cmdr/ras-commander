@@ -398,8 +398,8 @@ class RasPrj:
         Get HDF entries for plans that have results.
         
         Returns:
-        pd.DataFrame: A DataFrame containing plan entries with HDF results.
-                  Returns an empty DataFrame if no HDF entries are found.
+            pd.DataFrame: A DataFrame containing plan entries with HDF results.
+                      Returns an empty DataFrame if no HDF entries are found.
         """
         self.check_initialized()
         
@@ -676,7 +676,7 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_instance=None):
     ras_project_folder : str
         The path to the RAS project folder.
     ras_version : str, optional
-        The version of RAS to use (e.g., "6.5").
+        The version of RAS to use (e.g., "6.6").
         The version can also be a full path to the Ras.exe file. (Useful when calling ras objects for folder copies.)
         If None, the function will attempt to use the version from the global 'ras' object or a default path.
         You MUST specify a version number via init at some point or ras will not run.  
@@ -697,7 +697,7 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_instance=None):
         # Use the global 'ras' object after initialization
 
     2. For managing multiple projects:
-        project1 = init_ras_project("/path/to/project1", "6.5", ras_instance=RasPrj())
+        project1 = init_ras_project("/path/to/project1", "6.6", ras_instance=RasPrj())
         project2 = init_ras_project("/path/to/project2", ras_instance=RasPrj())
 
     Notes:
@@ -740,28 +740,23 @@ def get_ras_exe(ras_version=None):
     Determine the HEC-RAS executable path based on the input.
     
     Args:
-    ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
-                                 If None, the function will attempt to use the version from the global 'ras' object
-                                 or a default path.
+        ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
+                                     If None, the function will attempt to use the version from the global 'ras' object
+                                     or a default path.
     
     Returns:
-    str: The full path to the HEC-RAS executable.
+        str: The full path to the HEC-RAS executable.
     
     Raises:
-    ValueError: If the input is neither a valid version number nor a valid file path.
+        ValueError: If the input is neither a valid version number nor a valid file path.
     
     Notes:
-    - If ras_version is not provided, the function will first check the global 'ras' object for a path.
-    - If the global 'ras' object is not initialized or doesn't have a path, a default path will be used.
-    - The default path allows the library to function in environments without HEC-RAS installed.
-    - This enables the HEC-Commander GPT to operate without stopping, even if HEC-RAS is not present.
-    - End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.
+        - If ras_version is not provided, the function will first check the global 'ras' object for a path.
+        - If the global 'ras' object is not initialized or doesn't have a path, a default path will be used.
+        - The default path allows the library to function in environments without HEC-RAS installed.
+        - This enables the HEC-Commander GPT to operate without stopping, even if HEC-RAS is not present.
+        - End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.
     """
-    # If ras_version is not provided, use the version of the global 'ras' object.
-    # If the global 'ras' object is not initialized, use the default path: default_path = Path("/path/to/Ras.exe")
-    # This default path allows the library to function in environments without HEC-RAS installed.
-    # It enables our HEC-Commander GPT to operate without stopping, even though HEC-RAS is not present.
-    # End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.
     if ras_version is None:
         if hasattr(ras, 'ras_exe_path') and ras.ras_exe_path:
             logger.info(f"Using HEC-RAS executable from global 'ras' object: {ras.ras_exe_path}")
@@ -772,7 +767,7 @@ def get_ras_exe(ras_version=None):
             return str(default_path)
     
     ras_version_numbers = [
-        "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
         "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
     ]

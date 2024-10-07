@@ -45,7 +45,7 @@ def main():
     # Initialize the project
     current_dir = Path(__file__).parent
     project_path = current_dir / "example_projects" / "Muncie"
-    init_ras_project(project_path, "6.5")
+    init_ras_project(project_path, "6.6")
 
     print("Initial plan files:")
     print(ras.plan_df)

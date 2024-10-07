@@ -24,12 +24,13 @@ Example:
 import os
 from pathlib import Path
 from .RasPrj import ras
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, Callable
 import pandas as pd
 import numpy as np
 import shutil
 from ras_commander import get_logger
 from ras_commander.logging_config import get_logger, log_call
+import re
 
 logger = get_logger(__name__)
 # Module code starts here
@@ -622,6 +623,118 @@ class RasUtils:
         logger.info(f"Calculated error metrics: {metrics}")
         return metrics
 
+    
+    @staticmethod
+    @log_call
+    def update_file(file_path: Path, update_function: Callable, *args) -> None:
+        """
+        Generic method to update a file.
 
+        Parameters:
+        file_path (Path): Path to the file to be updated
+        update_function (Callable): Function to update the file contents
+        *args: Additional arguments to pass to the update_function
 
+        Raises:
+        Exception: If there's an error updating the file
 
+        Example:
+        >>> def update_content(lines, new_value):
+        ...     lines[0] = f"New value: {new_value}\\n"
+        ...     return lines
+        >>> RasUtils.update_file(Path("example.txt"), update_content, "Hello")
+        """
+        try:
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+            
+            updated_lines = update_function(lines, *args) if args else update_function(lines)
+            
+            with open(file_path, 'w') as f:
+                f.writelines(updated_lines)
+            logger.info(f"Successfully updated file: {file_path}")
+        except Exception as e:
+            logger.exception(f"Failed to update file {file_path}")
+            raise
+
+    @staticmethod
+    @log_call
+    def get_next_number(existing_numbers: list) -> str:
+        """
+        Determine the next available number from a list of existing numbers.
+
+        Parameters:
+        existing_numbers (list): List of existing numbers as strings
+
+        Returns:
+        str: Next available number as a zero-padded string
+
+        Example:
+        >>> RasUtils.get_next_number(["01", "02", "04"])
+        "05"
+        """
+        existing_numbers = sorted(int(num) for num in existing_numbers)
+        next_number = max(existing_numbers, default=0) + 1
+        return f"{next_number:02d}"
+
+    @staticmethod
+    @log_call
+    def clone_file(template_path: Path, new_path: Path, update_function: Optional[Callable] = None, *args) -> None:
+        """
+        Generic method to clone a file and optionally update it.
+
+        Parameters:
+        template_path (Path): Path to the template file
+        new_path (Path): Path where the new file will be created
+        update_function (Optional[Callable]): Function to update the cloned file
+        *args: Additional arguments to pass to the update_function
+
+        Raises:
+        FileNotFoundError: If the template file doesn't exist
+
+        Example:
+        >>> def update_content(lines, new_value):
+        ...     lines[0] = f"New value: {new_value}\\n"
+        ...     return lines
+        >>> RasUtils.clone_file(Path("template.txt"), Path("new.txt"), update_content, "Hello")
+        """
+        if not template_path.exists():
+            logger.error(f"Template file '{template_path}' does not exist.")
+            raise FileNotFoundError(f"Template file '{template_path}' does not exist.")
+
+        shutil.copy(template_path, new_path)
+        logger.info(f"File cloned from {template_path} to {new_path}")
+
+        if update_function:
+            RasUtils.update_file(new_path, update_function, *args)
+    @staticmethod
+    @log_call
+    def update_project_file(prj_file: Path, file_type: str, new_num: str, ras_object=None) -> None:
+        """
+        Update the project file with a new entry.
+
+        Parameters:
+        prj_file (Path): Path to the project file
+        file_type (str): Type of file being added (e.g., 'Plan', 'Geom')
+        new_num (str): Number of the new file entry
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Example:
+        >>> RasUtils.update_project_file(Path("project.prj"), "Plan", "02")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        try:
+            with open(prj_file, 'r') as f:
+                lines = f.readlines()
+            
+            new_line = f"{file_type} File={file_type[0].lower()}{new_num}\n"
+            lines.append(new_line)
+            
+            with open(prj_file, 'w') as f:
+                f.writelines(lines)
+            logger.info(f"Project file updated with new {file_type} entry: {new_num}")
+        except Exception as e:
+            logger.exception(f"Failed to update project file {prj_file}")
+            raise

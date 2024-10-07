@@ -44,8 +44,8 @@ def main():
     bald_eagle_path = current_dir / "example_projects" / "Balde Eagle Creek"
     muncie_path = current_dir / "example_projects" / "Muncie"
     
-    bald_eagle = init_ras_project(bald_eagle_path, "6.5")
-    muncie = init_ras_project(muncie_path, "6.5")
+    bald_eagle = init_ras_project(bald_eagle_path, "6.6")
+    muncie = init_ras_project(muncie_path, "6.6")
 
     print("Available plans in Bald Eagle Creek project:")
     print(bald_eagle.plan_df)

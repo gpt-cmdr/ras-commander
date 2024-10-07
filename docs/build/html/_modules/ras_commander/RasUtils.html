@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ras_commander.RasUtils &mdash; RAS Commander 0.42 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=13150a28"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            RAS Commander
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../ras_commander.html">ras_commander package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">RAS Commander</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ras_commander.RasUtils</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ras_commander.RasUtils</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">RasUtils - Utility functions for the ras-commander library</span>
+
+<span class="sd">This module is part of the ras-commander library and uses a centralized logging configuration.</span>
+
+<span class="sd">Logging Configuration:</span>
+<span class="sd">- The logging is set up in the logging_config.py file.</span>
+<span class="sd">- A @log_call decorator is available to automatically log function calls.</span>
+<span class="sd">- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL</span>
+<span class="sd">- Logs are written to both console and a rotating file handler.</span>
+<span class="sd">- The default log file is &#39;ras_commander.log&#39; in the &#39;logs&#39; directory.</span>
+<span class="sd">- The default log level is INFO.</span>
+
+<span class="sd">To use logging in this module:</span>
+<span class="sd">1. Use the @log_call decorator for automatic function call logging.</span>
+<span class="sd">2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).</span>
+
+<span class="sd">Example:</span>
+<span class="sd">    @log_call</span>
+<span class="sd">    def my_function():</span>
+<span class="sd">        logger.debug(&quot;Additional debug information&quot;)</span>
+<span class="sd">        # Function logic here</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">.RasPrj</span> <span class="kn">import</span> <span class="n">ras</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">from</span> <span class="nn">ras_commander</span> <span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span> <span class="nn">ras_commander.logging_config</span> <span class="kn">import</span> <span class="n">get_logger</span><span class="p">,</span> <span class="n">log_call</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="c1"># Module code starts here</span>
+
+<div class="viewcode-block" id="RasUtils">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils">[docs]</a>
+<span class="k">class</span> <span class="nc">RasUtils</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A class containing utility functions for the ras-commander library.</span>
+<span class="sd">    When integrating new functions that do not clearly fit into other classes, add them here.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="RasUtils.create_backup">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.create_backup">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">create_backup</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">backup_suffix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;_backup&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a backup of the specified file.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        file_path (Path): Path to the file to be backed up</span>
+<span class="sd">        backup_suffix (str): Suffix to append to the backup file name</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Path: Path to the created backup file</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; backup_path = RasUtils.create_backup(Path(&quot;project.prj&quot;))</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Backup created at: {backup_path}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">original_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        <span class="n">backup_path</span> <span class="o">=</span> <span class="n">original_path</span><span class="o">.</span><span class="n">with_name</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">original_path</span><span class="o">.</span><span class="n">stem</span><span class="si">}{</span><span class="n">backup_suffix</span><span class="si">}{</span><span class="n">original_path</span><span class="o">.</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">original_path</span><span class="p">,</span> <span class="n">backup_path</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup created: </span><span class="si">{</span><span class="n">backup_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to create backup for </span><span class="si">{</span><span class="n">original_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">return</span> <span class="n">backup_path</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.restore_from_backup">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.restore_from_backup">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">restore_from_backup</span><span class="p">(</span><span class="n">backup_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">remove_backup</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Restore a file from its backup.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        backup_path (Path): Path to the backup file</span>
+<span class="sd">        remove_backup (bool): Whether to remove the backup file after restoration</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Path: Path to the restored file</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; restored_path = RasUtils.restore_from_backup(Path(&quot;project_backup.prj&quot;))</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;File restored to: {restored_path}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">backup_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">backup_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;_backup&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">backup_path</span><span class="o">.</span><span class="n">stem</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup suffix &#39;_backup&#39; not found in </span><span class="si">{</span><span class="n">backup_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup suffix &#39;_backup&#39; not found in </span><span class="si">{</span><span class="n">backup_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="n">original_stem</span> <span class="o">=</span> <span class="n">backup_path</span><span class="o">.</span><span class="n">stem</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;_backup&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">original_path</span> <span class="o">=</span> <span class="n">backup_path</span><span class="o">.</span><span class="n">with_name</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">original_stem</span><span class="si">}{</span><span class="n">backup_path</span><span class="o">.</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">backup_path</span><span class="p">,</span> <span class="n">original_path</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File restored: </span><span class="si">{</span><span class="n">original_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">remove_backup</span><span class="p">:</span>
+                <span class="n">backup_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup removed: </span><span class="si">{</span><span class="n">backup_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to restore from backup </span><span class="si">{</span><span class="n">backup_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">return</span> <span class="n">original_path</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.create_directory">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.create_directory">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">create_directory</span><span class="p">(</span><span class="n">directory_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Ensure that a directory exists, creating it if necessary.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        directory_path (Path): Path to the directory</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Path: Path to the ensured directory</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; ensured_dir = RasUtils.create_directory(Path(&quot;output&quot;))</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Directory ensured: {ensured_dir}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">directory_path</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">path</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Directory ensured: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to create directory </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">return</span> <span class="n">path</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.find_files_by_extension">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.find_files_by_extension">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">find_files_by_extension</span><span class="p">(</span><span class="n">extension</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        List all files in the project directory with a specific extension.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        extension (str): File extension to filter (e.g., &#39;.prj&#39;)</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        list: List of file paths matching the extension</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; prj_files = RasUtils.find_files_by_extension(&#39;.prj&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Found {len(prj_files)} .prj files&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;*</span><span class="si">{</span><span class="n">extension</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
+            <span class="n">file_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">file</span><span class="p">)</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">files</span><span class="p">]</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">file_list</span><span class="p">)</span><span class="si">}</span><span class="s2"> files with extension &#39;</span><span class="si">{</span><span class="n">extension</span><span class="si">}</span><span class="s2">&#39; in </span><span class="si">{</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">file_list</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to find files with extension &#39;</span><span class="si">{</span><span class="n">extension</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.get_file_size">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.get_file_size">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_file_size</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the size of a file in bytes.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        file_path (Path): Path to the file</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Optional[int]: Size of the file in bytes, or None if the file does not exist</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; size = RasUtils.get_file_size(Path(&quot;project.prj&quot;))</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;File size: {size} bytes&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">size</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Size of </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2"> bytes&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">size</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to get size for </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.get_file_modification_time">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.get_file_modification_time">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_file_modification_time</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the last modification time of a file.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        file_path (Path): Path to the file</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Optional[float]: Last modification time as a timestamp, or None if the file does not exist</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; mtime = RasUtils.get_file_modification_time(Path(&quot;project.prj&quot;))</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Last modified: {mtime}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">mtime</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_mtime</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Last modification time of </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">mtime</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">mtime</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to get modification time for </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.get_plan_path">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.get_plan_path">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">get_plan_path</span><span class="p">(</span><span class="n">current_plan_number_or_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span> <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the path for a plan file with a given plan number or path.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        current_plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        Path: Full path to the plan file</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; plan_path = RasUtils.get_plan_path(1)</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Plan file path: {plan_path}&quot;)</span>
+<span class="sd">        &gt;&gt;&gt; plan_path = RasUtils.get_plan_path(&quot;path/to/plan.p01&quot;)</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Plan file path: {plan_path}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">plan_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">current_plan_number_or_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">plan_path</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using provided plan file path: </span><span class="si">{</span><span class="n">plan_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">plan_path</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">current_plan_number</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">current_plan_number_or_path</span><span class="p">)</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2">&quot;</span>  <span class="c1"># Ensure two-digit format</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converted plan number to two-digit format: </span><span class="si">{</span><span class="n">current_plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid plan number: </span><span class="si">{</span><span class="n">current_plan_number_or_path</span><span class="si">}</span><span class="s2">. Expected a number from 1 to 99.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid plan number: </span><span class="si">{</span><span class="n">current_plan_number_or_path</span><span class="si">}</span><span class="s2">. Expected a number from 1 to 99.&quot;</span><span class="p">)</span>
+        
+        <span class="n">plan_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras_obj</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">current_plan_number</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">full_plan_path</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="n">plan_name</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Constructed plan file path: </span><span class="si">{</span><span class="n">full_plan_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">full_plan_path</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.remove_with_retry">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.remove_with_retry">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">remove_with_retry</span><span class="p">(</span>
+        <span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="n">initial_delay</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">is_folder</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Attempts to remove a file or folder with retry logic and exponential backoff.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        path (Path): Path to the file or folder to be removed.</span>
+<span class="sd">        max_attempts (int): Maximum number of removal attempts.</span>
+<span class="sd">        initial_delay (float): Initial delay between attempts in seconds.</span>
+<span class="sd">        is_folder (bool): If True, the path is treated as a folder; if False, it&#39;s treated as a file.</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        bool: True if the file or folder was successfully removed, False otherwise.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; success = RasUtils.remove_with_retry(Path(&quot;temp_folder&quot;), is_folder=True)</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Removal successful: {success}&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_attempts</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">is_folder</span><span class="p">:</span>
+                        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder removed: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File removed: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Path does not exist, nothing to remove: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="ne">PermissionError</span> <span class="k">as</span> <span class="n">pe</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">attempt</span> <span class="o">&lt;</span> <span class="n">max_attempts</span><span class="p">:</span>
+                    <span class="n">delay</span> <span class="o">=</span> <span class="n">initial_delay</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">attempt</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># Exponential backoff</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;PermissionError on attempt </span><span class="si">{</span><span class="n">attempt</span><span class="si">}</span><span class="s2"> to remove </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">pe</span><span class="si">}</span><span class="s2">. &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;Retrying in </span><span class="si">{</span><span class="n">delay</span><span class="si">}</span><span class="s2"> seconds...&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Failed to remove </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> after </span><span class="si">{</span><span class="n">max_attempts</span><span class="si">}</span><span class="s2"> attempts due to PermissionError: </span><span class="si">{</span><span class="n">pe</span><span class="si">}</span><span class="s2">. Skipping.&quot;</span>
+                    <span class="p">)</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to remove </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> on attempt </span><span class="si">{</span><span class="n">attempt</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.update_plan_file">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.update_plan_file">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">update_plan_file</span><span class="p">(</span>
+        <span class="n">plan_number_or_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span>
+        <span class="n">file_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">entry_number</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">ras_object</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Update a plan file with a new file reference.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file</span>
+<span class="sd">        file_type (str): Type of file to update (&#39;Geom&#39;, &#39;Flow&#39;, or &#39;Unsteady&#39;)</span>
+<span class="sd">        entry_number (int): Number (from 1 to 99) to set</span>
+<span class="sd">        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">        ValueError: If an invalid file_type is provided</span>
+<span class="sd">        FileNotFoundError: If the plan file doesn&#39;t exist</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">        &gt;&gt;&gt; RasUtils.update_plan_file(1, &quot;Geom&quot;, 2)</span>
+<span class="sd">        &gt;&gt;&gt; RasUtils.update_plan_file(&quot;path/to/plan.p01&quot;, &quot;Geom&quot;, 2)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">ras_object</span> <span class="ow">or</span> <span class="n">ras</span>
+        <span class="n">ras_obj</span><span class="o">.</span><span class="n">check_initialized</span><span class="p">()</span>
+        
+        <span class="n">valid_file_types</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Geom&#39;</span><span class="p">:</span> <span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;Flow&#39;</span><span class="p">:</span> <span class="s1">&#39;f&#39;</span><span class="p">,</span> <span class="s1">&#39;Unsteady&#39;</span><span class="p">:</span> <span class="s1">&#39;u&#39;</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">file_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_file_types</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Invalid file_type &#39;</span><span class="si">{</span><span class="n">file_type</span><span class="si">}</span><span class="s2">&#39;. Expected one of: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">valid_file_types</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Invalid file_type. Expected one of: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">valid_file_types</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">plan_file_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_number_or_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">plan_file_path</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+            <span class="n">plan_file_path</span> <span class="o">=</span> <span class="n">RasUtils</span><span class="o">.</span><span class="n">get_plan_path</span><span class="p">(</span><span class="n">plan_number_or_path</span><span class="p">,</span> <span class="n">ras_object</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">plan_file_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan file not found: </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan file not found: </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="n">file_prefix</span> <span class="o">=</span> <span class="n">valid_file_types</span><span class="p">[</span><span class="n">file_type</span><span class="p">]</span>
+        <span class="n">search_pattern</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">file_type</span><span class="si">}</span><span class="s2"> File=&quot;</span>
+        <span class="n">formatted_entry_number</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">entry_number</span><span class="p">)</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2">&quot;</span>  <span class="c1"># Ensure two-digit format</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">RasUtils</span><span class="o">.</span><span class="n">check_file_access</span><span class="p">(</span><span class="n">plan_file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span>
+            <span class="k">with</span> <span class="n">plan_file_path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">lines</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to read plan file </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+
+        <span class="n">updated</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">search_pattern</span><span class="p">):</span>
+                <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">search_pattern</span><span class="si">}{</span><span class="n">file_prefix</span><span class="si">}{</span><span class="n">formatted_entry_number</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Updated </span><span class="si">{</span><span class="n">file_type</span><span class="si">}</span><span class="s2"> File in </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">file_prefix</span><span class="si">}{</span><span class="n">formatted_entry_number</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">updated</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">updated</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Search pattern &#39;</span><span class="si">{</span><span class="n">search_pattern</span><span class="si">}</span><span class="s2">&#39; not found in </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">. No update performed.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">plan_file_path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">file</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Successfully updated plan file: </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to write updates to plan file </span><span class="si">{</span><span class="n">plan_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span>
+
+        <span class="c1"># Refresh RasPrj dataframes</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">geom_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_geom_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">flow_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_flow_entries</span><span class="p">()</span>
+            <span class="n">ras_obj</span><span class="o">.</span><span class="n">unsteady_df</span> <span class="o">=</span> <span class="n">ras_obj</span><span class="o">.</span><span class="n">get_unsteady_entries</span><span class="p">()</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;RAS object dataframes have been refreshed.&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to refresh RasPrj dataframes&quot;</span><span class="p">)</span>
+            <span class="k">raise</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.check_file_access">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.check_file_access">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">check_file_access</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check if the file can be accessed with the specified mode.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        file_path (Path): Path to the file</span>
+<span class="sd">        mode (str): Mode to check (&#39;r&#39; for read, &#39;w&#39; for write, etc.)</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">        FileNotFoundError: If the file does not exist</span>
+<span class="sd">        PermissionError: If the required permissions are not met</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">access</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">R_OK</span><span class="p">):</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read permission denied for file: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">PermissionError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read permission denied for file: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read access granted for file: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;ab&#39;</span><span class="p">):</span>
+            <span class="n">parent_dir</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">parent</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">access</span><span class="p">(</span><span class="n">parent_dir</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">W_OK</span><span class="p">):</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write permission denied for directory: </span><span class="si">{</span><span class="n">parent_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">PermissionError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write permission denied for directory: </span><span class="si">{</span><span class="n">parent_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write access granted for directory: </span><span class="si">{</span><span class="n">parent_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="RasUtils.convert_to_dataframe">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.convert_to_dataframe">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">convert_to_dataframe</span><span class="p">(</span><span class="n">data_source</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Converts input to a pandas DataFrame. Supports existing DataFrames or file paths (CSV, Excel, TSV, Parquet).</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            data_source (Union[pd.DataFrame, Path]): The input to convert to a DataFrame. Can be a file path or an existing DataFrame.</span>
+<span class="sd">            **kwargs: Additional keyword arguments to pass to pandas read functions.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: The resulting DataFrame.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            NotImplementedError: If the file type is unsupported or input type is invalid.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            &gt;&gt;&gt; df = RasUtils.convert_to_dataframe(Path(&quot;data.csv&quot;))</span>
+<span class="sd">            &gt;&gt;&gt; print(type(df))</span>
+<span class="sd">            &lt;class &#39;pandas.core.frame.DataFrame&#39;&gt;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data_source</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Input is already a DataFrame, returning a copy.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">data_source</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data_source</span><span class="p">,</span> <span class="n">Path</span><span class="p">):</span>
+            <span class="n">ext</span> <span class="o">=</span> <span class="n">data_source</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converting file with extension &#39;</span><span class="si">{</span><span class="n">ext</span><span class="si">}</span><span class="s2">&#39; to DataFrame.&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">data_source</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">ext</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">data_source</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">ext</span> <span class="o">==</span> <span class="s2">&quot;tsv&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">data_source</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">ext</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;parquet&quot;</span><span class="p">,</span> <span class="s2">&quot;pq&quot;</span><span class="p">,</span> <span class="s2">&quot;parq&quot;</span><span class="p">]:</span>
+                <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="n">data_source</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported file type: </span><span class="si">{</span><span class="n">ext</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported file type </span><span class="si">{</span><span class="n">ext</span><span class="si">}</span><span class="s2">. Should be one of csv, tsv, parquet, or xlsx.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported input type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data_source</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data_source</span><span class="p">)</span><span class="si">}</span><span class="s2">. Only file path / existing DataFrame supported at this time&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.save_to_excel">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.save_to_excel">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">save_to_excel</span><span class="p">(</span><span class="n">dataframe</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">excel_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Saves a pandas DataFrame to an Excel file with retry functionality.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dataframe (pd.DataFrame): The DataFrame to save.</span>
+<span class="sd">            excel_path (Path): The path to the Excel file where the DataFrame will be saved.</span>
+<span class="sd">            **kwargs: Additional keyword arguments passed to `DataFrame.to_excel()`.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            IOError: If the file cannot be saved after multiple attempts.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            &gt;&gt;&gt; df = pd.DataFrame({&#39;A&#39;: [1, 2, 3], &#39;B&#39;: [4, 5, 6]})</span>
+<span class="sd">            &gt;&gt;&gt; RasUtils.save_to_excel(df, Path(&#39;output.xlsx&#39;))</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">saved</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">max_attempts</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="n">attempt</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">saved</span> <span class="ow">and</span> <span class="n">attempt</span> <span class="o">&lt;</span> <span class="n">max_attempts</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">dataframe</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">excel_path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;DataFrame successfully saved to </span><span class="si">{</span><span class="n">excel_path</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="n">saved</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">attempt</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">attempt</span> <span class="o">&lt;</span> <span class="n">max_attempts</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error saving file. Attempt </span><span class="si">{</span><span class="n">attempt</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">max_attempts</span><span class="si">}</span><span class="s2">. Please close the Excel document if it&#39;s open.&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to save </span><span class="si">{</span><span class="n">excel_path</span><span class="si">}</span><span class="s2"> after </span><span class="si">{</span><span class="n">max_attempts</span><span class="si">}</span><span class="s2"> attempts.&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to save </span><span class="si">{</span><span class="n">excel_path</span><span class="si">}</span><span class="s2"> after </span><span class="si">{</span><span class="n">max_attempts</span><span class="si">}</span><span class="s2"> attempts. Last error: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.calculate_rmse">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.calculate_rmse">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">calculate_rmse</span><span class="p">(</span><span class="n">observed_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">predicted_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">normalized</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate the Root Mean Squared Error (RMSE) between observed and predicted values.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            observed_values (np.ndarray): Actual observations time series.</span>
+<span class="sd">            predicted_values (np.ndarray): Estimated/predicted time series.</span>
+<span class="sd">            normalized (bool, optional): Whether to normalize RMSE to a percentage of observed_values. Defaults to True.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            float: The calculated RMSE value.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            &gt;&gt;&gt; observed = np.array([1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt; predicted = np.array([1.1, 2.2, 2.9])</span>
+<span class="sd">            &gt;&gt;&gt; RasUtils.calculate_rmse(observed, predicted)</span>
+<span class="sd">            0.06396394</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">rmse</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">predicted_values</span> <span class="o">-</span> <span class="n">observed_values</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>
+        
+        <span class="k">if</span> <span class="n">normalized</span><span class="p">:</span>
+            <span class="n">rmse</span> <span class="o">=</span> <span class="n">rmse</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">observed_values</span><span class="p">))</span>
+        
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calculated RMSE: </span><span class="si">{</span><span class="n">rmse</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rmse</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.calculate_percent_bias">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.calculate_percent_bias">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">calculate_percent_bias</span><span class="p">(</span><span class="n">observed_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">predicted_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">as_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate the Percent Bias between observed and predicted values.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            observed_values (np.ndarray): Actual observations time series.</span>
+<span class="sd">            predicted_values (np.ndarray): Estimated/predicted time series.</span>
+<span class="sd">            as_percentage (bool, optional): If True, return bias as a percentage. Defaults to False.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            float: The calculated Percent Bias.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            &gt;&gt;&gt; observed = np.array([1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt; predicted = np.array([1.1, 2.2, 2.9])</span>
+<span class="sd">            &gt;&gt;&gt; RasUtils.calculate_percent_bias(observed, predicted, as_percentage=True)</span>
+<span class="sd">            3.33333333</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">multiplier</span> <span class="o">=</span> <span class="mi">100</span> <span class="k">if</span> <span class="n">as_percentage</span> <span class="k">else</span> <span class="mi">1</span>
+        
+        <span class="n">percent_bias</span> <span class="o">=</span> <span class="n">multiplier</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">predicted_values</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">observed_values</span><span class="p">))</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">observed_values</span><span class="p">)</span>
+        
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calculated Percent Bias: </span><span class="si">{</span><span class="n">percent_bias</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">percent_bias</span></div>
+
+
+<div class="viewcode-block" id="RasUtils.calculate_error_metrics">
+<a class="viewcode-back" href="../../ras_commander.html#ras_commander.RasUtils.calculate_error_metrics">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="nd">@log_call</span>
+    <span class="k">def</span> <span class="nf">calculate_error_metrics</span><span class="p">(</span><span class="n">observed_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">predicted_values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute a trio of error metrics: correlation, RMSE, and Percent Bias.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            observed_values (np.ndarray): Actual observations time series.</span>
+<span class="sd">            predicted_values (np.ndarray): Estimated/predicted time series.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict[str, float]: A dictionary containing correlation (&#39;cor&#39;), RMSE (&#39;rmse&#39;), and Percent Bias (&#39;pb&#39;).</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            &gt;&gt;&gt; observed = np.array([1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt; predicted = np.array([1.1, 2.2, 2.9])</span>
+<span class="sd">            &gt;&gt;&gt; RasUtils.calculate_error_metrics(observed, predicted)</span>
+<span class="sd">            {&#39;cor&#39;: 0.9993, &#39;rmse&#39;: 0.06396, &#39;pb&#39;: 0.03333}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">correlation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">observed_values</span><span class="p">,</span> <span class="n">predicted_values</span><span class="p">)[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">rmse</span> <span class="o">=</span> <span class="n">RasUtils</span><span class="o">.</span><span class="n">calculate_rmse</span><span class="p">(</span><span class="n">observed_values</span><span class="p">,</span> <span class="n">predicted_values</span><span class="p">)</span>
+        <span class="n">percent_bias</span> <span class="o">=</span> <span class="n">RasUtils</span><span class="o">.</span><span class="n">calculate_percent_bias</span><span class="p">(</span><span class="n">observed_values</span><span class="p">,</span> <span class="n">predicted_values</span><span class="p">)</span>
+        
+        <span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;cor&#39;</span><span class="p">:</span> <span class="n">correlation</span><span class="p">,</span> <span class="s1">&#39;rmse&#39;</span><span class="p">:</span> <span class="n">rmse</span><span class="p">,</span> <span class="s1">&#39;pb&#39;</span><span class="p">:</span> <span class="n">percent_bias</span><span class="p">}</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calculated error metrics: </span><span class="si">{</span><span class="n">metrics</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">metrics</span></div>
+</div>
+
+
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, William Katzenmeyer, P.E., C.F.M..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

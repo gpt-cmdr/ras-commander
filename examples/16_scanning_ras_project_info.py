@@ -26,7 +26,7 @@ def generate_category_summary(category_path):
             summary.append(f"Full Path: {project_path.resolve()}\n")
 
             try:
-                ras_project = init_ras_project(project_path, "6.5", ras_instance=RasPrj())
+                ras_project = init_ras_project(project_path, "6.6", ras_instance=RasPrj())
                 
                 summary.append(f"Project Name: {ras_project.get_project_name()}")
                 summary.append(f"PRJ File: {ras_project.prj_file}")

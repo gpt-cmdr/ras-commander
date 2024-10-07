@@ -1,4 +1,4 @@
-File: C:\GH\ras-commander\.cursorrules
+File: c:\GH\ras-commander\.cursorrules
 ==================================================
 # RAS Commander (ras-commander) Coding Assistant
 
@@ -57,456 +57,22 @@ Use 'union_all()' for geodataframes. For pandas >= 2.0, use pd.concat instead of
 Provide full code segments or scripts with no elides.
 ==================================================
 
-Folder: C:\GH\ras-commander\.gitignore
+Folder: c:\GH\ras-commander\.gitignore
 ==================================================
 
-Folder: C:\GH\ras-commander\docs
-==================================================
-
-Folder: C:\GH\ras-commander\examples
-==================================================
-
-File: C:\GH\ras-commander\LICENSE
-==================================================
-MIT License
-
-Copyright (c) 2024 William M. Katzenmeyer
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
-
-==================================================
-
-File: C:\GH\ras-commander\pyproject.toml
-==================================================
-[build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta:__legacy__"
-
-==================================================
-
-Folder: C:\GH\ras-commander\ras_commander
-==================================================
-
-File: C:\GH\ras-commander\README.md
-==================================================
-# RAS Commander (ras-commander)
-
-RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under the [HEC-Commander tools repository](https://github.com/billk-FM/HEC-Commander).
-
-## Contributors:
-William Katzenmeyer, P.E., C.F.M. 
-
-Sean Micek, P.E., C.F.M. 
-
-Aaron Nichols, P.E., C.F.M. 
-
-(Additional Contributors Here)  
-
-## Don't Ask Me, Ask ChatGPT!
-
-Before you read any further, you can [chat directly with ChatGPT on this topic.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results. 
-
-There are also [AI Assistant Knowledge Bases](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases) with various versions available to directly use with large context LLM models such as Anthropic's Claude, Google Gemini and OpenAI's GPT4o and o1 models.  
-
-FUTURE:  TEMPLATES are available to use with AI Assistant Notebooks to build your own automation tools.  When used with large context models, these templates allow you to ask GPT to build a workflow from scratch to automate your projects. 
-
-## Background
-The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
-
-## Features
-
-- Automate HEC-RAS project management and simulations
-- Support for both single and multiple project instances
-- Parallel execution of HEC-RAS plans
-- Utilities for managing geometry, plan, and unsteady flow files
-- Example project management for testing and development
-- Two primary operation modes: "Run Missing" and "Build from DSS"
-
-## AI-Driven Coding Experience
-
-ras-commander provides several AI-powered tools to enhance the coding experience:
-
-1. **ChatGPT Assistant: [RAS Commander Library Assistant](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
-
-2. **[Purpose-Built Knowledge Base Summaries](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.
-
-3. **[Cursor IDE Integration](https://github.com/billk-FM/ras-commander/blob/main/.cursorrules)**: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.  
-4. **[AI Assistant Notebook](https://github.com/billk-FM/ras-commander/blob/main/ai_tools/rascommander_code_assistant.ipynb)**: A notebook for dynamic code summarization and API interaction (bring your own API Key).  Currently, this only does a single-shot message on the Claude Sonnet 3.5 API, which can be up to 50 cents per request.  Future revisions will include the ability to select which knowledge base file to include, a choice of SOTA models + multi turn conversations to build automation notebooks interactively.  
-
-These tools aim to streamline development and provide intelligent assistance when modeling with, and working with and revising the ras-commander library.
-
-## Installation
-
-Create a virtual environment with conda or venv (ask ChatGPT if you need help)
-
-In your virtual environment, install ras-commander using pip:
-```
-pip install pandas requests pathlib
-pip install ras-commander
-```
-
-   
-
-## Requirements
-
-- Tested with Python 3.11
-- HEC-RAS 6.2 or later (other versions may work, all testing was done with version 6.2 and above)
-- Detailed project workflows and/or existing libraries and code where ras-commander can be integrated.
-
-For a full list of dependencies, see the `requirements.txt` file.
-
-## Quick Start
-```
-from ras_commander import init_ras_project, RasCmdr, RasPlan
-```
-
-# Initialize a project
-```
-init_ras_project(r"/path/to/project", "6.5")
-```
-
-# Execute a single plan
-```
-RasCmdr.compute_plan("01", dest_folder=r"/path/to/results", overwrite_dest=True)
-```
-
-# Execute plans in parallel
-```
-results = RasCmdr.compute_parallel(
-    plan_numbers=["01", "02"],
-    max_workers=2,
-    cores_per_run=2,
-    dest_folder=r"/path/to/results",
-    overwrite_dest=True
-)
-```
-
-# Modify a plan
-```
-RasPlan.set_geom("01", "02")
-```
-
-Certainly! I'll provide you with an updated Key Components section and Project Organization diagram based on the current structure of the ras-commander library.
-
-## Key Components
-
-- `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
-- `RasCmdr`: Handles execution of HEC-RAS simulations
-- `RasPlan`: Provides functions for modifying and updating plan files
-- `RasGeo`: Handles operations related to geometry files
-- `RasUnsteady`: Manages unsteady flow file operations
-- `RasUtils`: Contains utility functions for file operations and data management
-- `RasExamples`: Manages and loads HEC-RAS example projects
-- `RasHdf`: Provides utilities for working with HDF files in HEC-RAS projects
-
-## Project Organization Diagram
-
-```
-ras_commander
-├── .github
-│   └── workflows
-│       └── python-package.yml
-├── ras_commander
-│   ├── __init__.py
-│   ├── _version.py
-│   ├── RasCmdr.py
-│   ├── RasExamples.py
-│   ├── RasGeo.py
-│   ├── RasHdf.py
-│   ├── RasPlan.py
-│   ├── RasPrj.py
-│   ├── RasUnsteady.py
-│   └── RasUtils.py
-├── examples
-│   ├── 01_project_initialization.py
-│   ├── 02_plan_operations.py
-│   ├── 03_geometry_operations.py
-│   ├── 04_unsteady_flow_operations.py
-│   ├── 05_utility_functions.py
-│   ├── 06_single_plan_execution.py
-│   ├── 07_sequential_plan_execution.py
-│   ├── 08_parallel_execution.py
-│   ├── 09_specifying_plans.py
-│   ├── 10_arguments_for_compute.py
-│   ├── 11_Using_RasExamples.ipynb
-│   ├── 12_plan_set_execution.py
-│   ├── 13_multiple_project_operations.py
-│   ├── 14_Core_Sensitivity.ipynb
-│   ├── 15_plan_key_operations.py
-│   ├── 16_scanning_ras_project_info.py
-│   ├── 17_parallel_execution_ble.py
-│   └── HEC_RAS_2D_HDF_Analysis.ipynb
-├── tests
-│   └── ... (test files)
-├── .gitignore
-├── LICENSE
-├── README.md
-├── STYLE_GUIDE.md
-├── Comprehensive_Library_Guide.md
-├── pyproject.toml
-├── setup.cfg
-├── setup.py
-└── requirements.txt
-```
-
-## Accessing HEC Examples through RasExamples
-
-The `RasExamples` class provides functionality for quickly loading and managing HEC-RAS example projects. This is particularly useful for testing and development purposes.
-
-Key features:
-- Download and extract HEC-RAS example projects
-- List available project categories and projects
-- Extract specific projects for use
-- Manage example project data efficiently
-
-Example usage:
-from ras_commander import RasExamples
-
-```
-ras_examples = RasExamples()
-ras_examples.get_example_projects()  # Downloads example projects if not already present
-categories = ras_examples.list_categories()
-projects = ras_examples.list_projects("Steady Flow")
-extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
-```
-
-## RasPrj
-
-The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
-
-Key features:
-- Initialize HEC-RAS projects
-- Load and manage project data (plans, geometries, flows, etc.)
-- Provide easy access to project files and information
-
-Note: While a global `ras` object is available for convenience, you can create multiple `RasPrj` instances to manage several projects simultaneously.
-
-Example usage:
-```
-from ras_commander import RasPrj, init_ras_project
-```
-
-### Using the global ras object
-```
-init_ras_project("/path/to/project", "6.5")
-```
-
-### Creating a custom RasPrj instance
-```
-custom_project = RasPrj()
-init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
-```
-
-## RasHdf
-
-The `RasHdf` class provides utilities for working with HDF files in HEC-RAS projects, enabling easy access to simulation results and model data.
-
-Example usage:
-
-```python
-from ras_commander import RasHdf, init_ras_project, RasPrj
-
-# Initialize project with a custom ras object
-custom_ras = RasPrj()
-init_ras_project("/path/to/project", "6.5", ras_instance=custom_ras)
-
-# Get runtime data for a specific plan
-plan_number = "01"
-runtime_data = RasHdf.get_runtime_data(plan_number, ras_object=custom_ras)
-print(runtime_data)
-```
-
-This class simplifies the process of extracting and analyzing data from HEC-RAS HDF output files, supporting tasks such as post-processing and result visualization.
-
-
-## Documentation
-
-For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
-
-## Examples
-
-Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
-
-## Future Development
-
-The ras-commander library is an ongoing project. Future plans include:
-- Integration of more advanced AI-driven features
-- Expansion of HMS and DSS functionalities
-- Enhanced GPU support for computational tasks
-- Community-driven development of new modules and features
-
-## Related Resources
-
-- [HEC-Commander Blog](https://github.com/billk-FM/HEC-Commander/tree/main/Blog)
-- [GPT-Commander YouTube Channel](https://www.youtube.com/@GPT_Commander)
-- [ChatGPT Examples for Water Resources Engineers](https://github.com/billk-FM/HEC-Commander/tree/main/ChatGPT%20Examples)
-
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
-
-## Style Guide
-
-This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
-
-## License
-
-ras-commander is released under the MIT License. See the license file for details.
-
-## Acknowledgments
-
-RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
-
-Additionally, we would like to acknowledge the following notable contributions and attributions for open source projects which significantly influenced the development of RAS Commander:
-
-1. Contributions: Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration, code examples and utility functions which were adapted with AI for use in RAS Commander. Sean has also contributed heavily to 
-
-- Development of additional HDF functions for detailed analysis and mapping of HEC-RAS results within the RasHdf class.
-- Development of the prototype `RasCmdr` class for executing HEC-RAS simulations.
-- Optimization examples and methods from (INSERT REFERENCE) for use in the Ras-Commander library examples
-
-2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
-
-   Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
-   Institute of Computational and Data Sciences, Penn State University
-
-These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
-
-3. Chris Goodell, "Breaking the HEC-RAS Code" - Studied and used as a reference for understanding the inner workings of HEC-RAS, providing valuable insights into the software's functionality and structure.
-
-4. [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
-
-
-## Contact
-
-For questions, suggestions, or support, please contact:
-William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
-
-==================================================
-
-File: C:\GH\ras-commander\requirements.txt
-==================================================
-# Core dependencies
-pandas
-numpy
-requests
-
-# Data handling
-h5py
-
-# Plotting (optional)
-matplotlib
-==================================================
-
-File: C:\GH\ras-commander\setup.py
-==================================================
-from setuptools import setup, find_packages
-from setuptools.command.build_py import build_py
-import subprocess
-from pathlib import Path
-
-class CustomBuildPy(build_py):
-    def run:
-    """Docs only, see 'run.py' for full function code"""
-)
-
-"""
-ras-commander setup.py
-
-This file is used to build and publish the ras-commander package to PyPI.
-
-To build and publish this package, follow these steps:
-
-1. Ensure you have the latest versions of setuptools, wheel, and twine installed:
-   pip install --upgrade setuptools wheel twine
-
-2. Update the version number in ras_commander/__init__.py (if not using automatic versioning)
-
-3. Create source distribution and wheel:
-   python setup.py sdist bdist_wheel
-
-4. Check the distribution:
-   twine check dist/*
-
-5. Upload to Test PyPI (optional):
-   twine upload --repository testpypi dist/*
-
-6. Install from Test PyPI to verify (optional):
-   pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple ras-commander
-
-7. Upload to PyPI:
-   twine upload dist/* --username __token__ --password <your_api_key>
-
-
-8. Install from PyPI to verify:
-   pip install ras-commander
-
-Note: Ensure you have the necessary credentials and access rights to upload to PyPI.
-For more information, visit: https://packaging.python.org/tutorials/packaging-projects/
-
-"""
-
-==================================================
-
-File: C:\GH\ras-commander\.gitignore\.gitignore
-==================================================
-# Ignore the example_projects folder and all its subfolders
-examples/example_projects/
-
-# Ignore workspace, projects, and my_projects folders
-workspace/
-projects/
-my_projects/
-
-# Ignore FEMA BLE Models
-examples/FEMA_BLE_Models/
-examples/hdf_example_data/
-
-# Ignore Python egg info
-*.egg-info/
-.eggs/
-
-# Ignore the Example_Projects_6_5.zip file
-Example_Projects_6_5.zip
-
-# Ignore the misc folder and all its subfolders
-misc/
-
-# Ignore Python cache files
-__pycache__/
-*.py[cod]
-
-# Ignore compiled Python files
-*.so
-
-# Ignore distribution / packaging
-dist/
-build/
-
-# Ignore test cache
-.pytest_cache/
-
-# Ignore virtual environments
-.venv/
-venv/
-
-# Ignore IDE-specific files (optional, uncomment if needed)
-# .vscode/
-# .idea/
-
-# Ignore OS-specific files
-.DS_Store
-Thumbs.db
-==================================================
-
-File: C:\GH\ras-commander\docs\Comprehensive_Library_Guide.md
+File: c:\GH\ras-commander\Comprehensive_Library_Guide.md
 ==================================================
 # Comprehensive RAS-Commander Library Guide
 
 ## Introduction
 
 RAS-Commander (`ras_commander`) is a Python library designed to automate and streamline operations with HEC-RAS projects. It provides a suite of tools for managing projects, executing simulations, and handling results. This guide offers a comprehensive overview of the library's key concepts, modules, best practices, and advanced usage patterns. RAS-Commander is designed to be flexible, robust, and AI-accessible, making it an ideal tool for both manual and automated HEC-RAS workflows.
+
+RAS-Commander can be installed with the following commands:
+```
+pip install h5py numpy pandas requests tqdm scipy
+pip install ras-commander
+```
 
 ---
 
@@ -1539,7 +1105,520 @@ For further assistance, bug reports, or feature requests, please refer to the li
 **Happy Modeling!**
 ==================================================
 
-File: C:\GH\ras-commander\docs\STYLE_GUIDE.md
+Folder: c:\GH\ras-commander\examples
+==================================================
+
+File: c:\GH\ras-commander\LICENSE
+==================================================
+MIT License
+
+Copyright (c) 2024 William M. Katzenmeyer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
+
+==================================================
+
+File: c:\GH\ras-commander\pyproject.toml
+==================================================
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+==================================================
+
+Folder: c:\GH\ras-commander\ras_commander
+==================================================
+
+File: c:\GH\ras-commander\README.md
+==================================================
+# RAS Commander (ras-commander)
+
+RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application previously released under the [HEC-Commander tools repository](https://github.com/billk-FM/HEC-Commander).
+
+## Contributors:
+William Katzenmeyer, P.E., C.F.M. 
+
+Sean Micek, P.E., C.F.M. 
+
+Aaron Nichols, P.E., C.F.M. 
+
+(Additional Contributors Here)  
+
+## Don't Ask Me, Ask ChatGPT!
+
+Before you read any further, you can [chat directly with ChatGPT on this topic.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results. 
+
+There are also [AI Assistant Knowledge Bases](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases) with various versions available to directly use with large context LLM models such as Anthropic's Claude, Google Gemini and OpenAI's GPT4o and o1 models.  
+
+FUTURE:  TEMPLATES are available to use with AI Assistant Notebooks to build your own automation tools.  When used with large context models, these templates allow you to ask GPT to build a workflow from scratch to automate your projects. 
+
+## Background
+The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
+
+## Features
+
+- Automate HEC-RAS project management and simulations
+- Support for both single and multiple project instances
+- Parallel execution of HEC-RAS plans
+- Utilities for managing geometry, plan, and unsteady flow files
+- Example project management for testing and development
+- Two primary operation modes: "Run Missing" and "Build from DSS"
+
+## AI-Driven Coding Experience
+
+ras-commander provides several AI-powered tools to enhance the coding experience:
+
+1. **ChatGPT Assistant: [RAS Commander Library Assistant](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized GPT model trained on the ras-commander codebase, available for answering queries and providing code suggestions.
+
+2. **[Purpose-Built Knowledge Base Summaries](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.
+
+3. **[Cursor IDE Integration](https://github.com/billk-FM/ras-commander/blob/main/.cursorrules)**: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.  
+4. **[AI Assistant Notebook](https://github.com/billk-FM/ras-commander/blob/main/ai_tools/rascommander_code_assistant.ipynb)**: A notebook for dynamic code summarization and API interaction (bring your own API Key).  Currently, this only does a single-shot message on the Claude Sonnet 3.5 API, which can be up to 50 cents per request.  Future revisions will include the ability to select which knowledge base file to include, a choice of SOTA models + multi turn conversations to build automation notebooks interactively.  
+
+These tools aim to streamline development and provide intelligent assistance when modeling with, and working with and revising the ras-commander library.
+
+## Installation
+
+Create a virtual environment with conda or venv (ask ChatGPT if you need help)
+
+In your virtual environment, install ras-commander using pip:
+```
+pip install h5py numpy pandas requests tqdm scipy
+pip install ras-commander
+```
+
+If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
+   
+
+## Requirements
+
+- Tested with Python 3.11
+- HEC-RAS 6.2 or later (other versions may work, all testing was done with version 6.2 and above)
+- Detailed project workflows and/or existing libraries and code where ras-commander can be integrated.
+
+For a full list of dependencies, see the `requirements.txt` file.
+
+## Quick Start
+```
+from ras_commander import init_ras_project, RasCmdr, RasPlan
+```
+
+# Initialize a project
+```
+init_ras_project(r"/path/to/project", "6.5")
+```
+
+# Execute a single plan
+```
+RasCmdr.compute_plan("01", dest_folder=r"/path/to/results", overwrite_dest=True)
+```
+
+# Execute plans in parallel
+```
+results = RasCmdr.compute_parallel(
+    plan_numbers=["01", "02"],
+    max_workers=2,
+    cores_per_run=2,
+    dest_folder=r"/path/to/results",
+    overwrite_dest=True
+)
+```
+
+# Modify a plan
+```
+RasPlan.set_geom("01", "02")
+```
+
+Certainly! I'll provide you with an updated Key Components section and Project Organization diagram based on the current structure of the ras-commander library.
+
+## Key Components
+
+- `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
+- `RasCmdr`: Handles execution of HEC-RAS simulations
+- `RasPlan`: Provides functions for modifying and updating plan files
+- `RasGeo`: Handles operations related to geometry files
+- `RasUnsteady`: Manages unsteady flow file operations
+- `RasUtils`: Contains utility functions for file operations and data management
+- `RasExamples`: Manages and loads HEC-RAS example projects
+- `RasHdf`: Provides utilities for working with HDF files in HEC-RAS projects
+
+## Project Organization Diagram
+
+```
+ras_commander
+├── .github
+│   └── workflows
+│       └── python-package.yml
+├── ras_commander
+│   ├── __init__.py
+│   ├── _version.py
+│   ├── RasCmdr.py
+│   ├── RasExamples.py
+│   ├── RasGeo.py
+│   ├── RasHdf.py
+│   ├── RasPlan.py
+│   ├── RasPrj.py
+│   ├── RasUnsteady.py
+│   └── RasUtils.py
+├── examples
+│   ├── 01_project_initialization.py
+│   ├── 02_plan_operations.py
+│   ├── 03_geometry_operations.py
+│   ├── 04_unsteady_flow_operations.py
+│   ├── 05_utility_functions.py
+│   ├── 06_single_plan_execution.py
+│   ├── 07_sequential_plan_execution.py
+│   ├── 08_parallel_execution.py
+│   ├── 09_specifying_plans.py
+│   ├── 10_arguments_for_compute.py
+│   ├── 11_Using_RasExamples.ipynb
+│   ├── 12_plan_set_execution.py
+│   ├── 13_multiple_project_operations.py
+│   ├── 14_Core_Sensitivity.ipynb
+│   ├── 15_plan_key_operations.py
+│   ├── 16_scanning_ras_project_info.py
+│   ├── 17_parallel_execution_ble.py
+│   └── HEC_RAS_2D_HDF_Analysis.ipynb
+├── tests
+│   └── ... (test files)
+├── .gitignore
+├── LICENSE
+├── README.md
+├── STYLE_GUIDE.md
+├── Comprehensive_Library_Guide.md
+├── pyproject.toml
+├── setup.cfg
+├── setup.py
+└── requirements.txt
+```
+
+## Accessing HEC Examples through RasExamples
+
+The `RasExamples` class provides functionality for quickly loading and managing HEC-RAS example projects. This is particularly useful for testing and development purposes.
+
+Key features:
+- Download and extract HEC-RAS example projects
+- List available project categories and projects
+- Extract specific projects for use
+- Manage example project data efficiently
+
+Example usage:
+from ras_commander import RasExamples
+
+```
+ras_examples = RasExamples()
+ras_examples.get_example_projects()  # Downloads example projects if not already present
+categories = ras_examples.list_categories()
+projects = ras_examples.list_projects("Steady Flow")
+extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
+```
+
+## RasPrj
+
+The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
+
+Key features:
+- Initialize HEC-RAS projects
+- Load and manage project data (plans, geometries, flows, etc.)
+- Provide easy access to project files and information
+
+Note: While a global `ras` object is available for convenience, you can create multiple `RasPrj` instances to manage several projects simultaneously.
+
+Example usage:
+```
+from ras_commander import RasPrj, init_ras_project
+```
+
+### Using the global ras object
+```
+init_ras_project("/path/to/project", "6.5")
+```
+
+### Creating a custom RasPrj instance
+```
+custom_project = RasPrj()
+init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
+```
+
+## RasHdf
+
+The `RasHdf` class provides utilities for working with HDF files in HEC-RAS projects, enabling easy access to simulation results and model data.
+
+Example usage:
+
+```python
+from ras_commander import RasHdf, init_ras_project, RasPrj
+
+# Initialize project with a custom ras object
+custom_ras = RasPrj()
+init_ras_project("/path/to/project", "6.5", ras_instance=custom_ras)
+
+# Get runtime data for a specific plan
+plan_number = "01"
+runtime_data = RasHdf.get_runtime_data(plan_number, ras_object=custom_ras)
+print(runtime_data)
+```
+
+This class simplifies the process of extracting and analyzing data from HEC-RAS HDF output files, supporting tasks such as post-processing and result visualization.
+
+
+## Documentation
+
+For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
+
+## Examples
+
+Check out the `examples/` directory for sample scripts demonstrating various features of ras-commander.
+
+## Future Development
+
+The ras-commander library is an ongoing project. Future plans include:
+- Integration of more advanced AI-driven features
+- Expansion of HMS and DSS functionalities
+- Enhanced GPU support for computational tasks
+- Community-driven development of new modules and features
+
+## Related Resources
+
+- [HEC-Commander Blog](https://github.com/billk-FM/HEC-Commander/tree/main/Blog)
+- [GPT-Commander YouTube Channel](https://www.youtube.com/@GPT_Commander)
+- [ChatGPT Examples for Water Resources Engineers](https://github.com/billk-FM/HEC-Commander/tree/main/ChatGPT%20Examples)
+
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
+
+## Style Guide
+
+This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
+
+## License
+
+ras-commander is released under the MIT License. See the license file for details.
+
+## Acknowledgments
+
+RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+
+Additionally, we would like to acknowledge the following notable contributions and attributions for open source projects which significantly influenced the development of RAS Commander:
+
+1. Contributions: Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration, code examples and utility functions which were adapted with AI for use in RAS Commander. Sean has also contributed heavily to 
+
+- Development of additional HDF functions for detailed analysis and mapping of HEC-RAS results within the RasHdf class.
+- Development of the prototype `RasCmdr` class for executing HEC-RAS simulations.
+- Optimization examples and methods from (INSERT REFERENCE) for use in the Ras-Commander library examples
+
+2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
+
+   Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
+   Institute of Computational and Data Sciences, Penn State University
+
+These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
+
+3. Chris Goodell, "Breaking the HEC-RAS Code" - Studied and used as a reference for understanding the inner workings of HEC-RAS, providing valuable insights into the software's functionality and structure.
+
+4. [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
+
+
+## Contact
+
+For questions, suggestions, or support, please contact:
+William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
+
+==================================================
+
+File: c:\GH\ras-commander\requirements.txt
+==================================================
+aider-chat @ git+https://github.com/paul-gauthier/aider.git@00d5348ee6295662c78a8ece31d71632145d9746
+alabaster==0.7.16
+annotated-types==0.6.0
+anyio==3.7.1
+asttokens @ file:///home/conda/feedstock_root/build_artifacts/asttokens_1698341106958/work
+attrs==23.1.0
+babel==2.16.0
+backoff==2.2.1
+backports.tarfile==1.2.0
+black==24.8.0
+boto3==1.35.25
+botocore==1.35.25
+certifi==2023.11.17
+cffi==1.16.0
+charset-normalizer==3.3.2
+click==8.1.7
+colorama==0.4.6
+comm @ file:///home/conda/feedstock_root/build_artifacts/comm_1710320294760/work
+ConfigArgParse==1.7
+contourpy==1.3.0
+cycler==0.12.1
+debugpy @ file:///D:/bld/debugpy_1725269345345/work
+decorator @ file:///home/conda/feedstock_root/build_artifacts/decorator_1641555617451/work
+diff-match-patch==20230430
+diskcache==5.6.3
+distro==1.8.0
+docutils==0.20.1
+exceptiongroup @ file:///home/conda/feedstock_root/build_artifacts/exceptiongroup_1720869315914/work
+executing @ file:///home/conda/feedstock_root/build_artifacts/executing_1725214404607/work
+flake8==7.1.1
+fonttools==4.53.1
+geopandas==1.0.1
+gitdb==4.0.11
+GitPython==3.1.40
+grep-ast==0.2.4
+h11==0.14.0
+h5py==3.11.0
+httpcore==1.0.2
+idna==3.6
+imagesize==1.4.1
+importlib_metadata @ file:///home/conda/feedstock_root/build_artifacts/importlib-metadata_1726082825846/work
+iniconfig==2.0.0
+ipykernel @ file:///D:/bld/ipykernel_1719845595208/work
+ipython @ file:///D:/bld/ipython_1725050320818/work
+jaraco.classes==3.4.0
+jaraco.context==6.0.1
+jaraco.functools==4.1.0
+jedi @ file:///home/conda/feedstock_root/build_artifacts/jedi_1696326070614/work
+Jinja2==3.1.4
+jmespath==1.0.1
+jsonschema==4.20.0
+jsonschema-specifications==2023.11.2
+jupyter_client @ file:///home/conda/feedstock_root/build_artifacts/jupyter_client_1726610684920/work
+jupyter_core @ file:///D:/bld/jupyter_core_1710257313664/work
+keyring==25.4.1
+kiwisolver==1.4.7
+markdown-it-py==3.0.0
+MarkupSafe==2.1.5
+matplotlib==3.9.2
+matplotlib-inline @ file:///home/conda/feedstock_root/build_artifacts/matplotlib-inline_1713250518406/work
+mccabe==0.7.0
+mdurl==0.1.2
+more-itertools==10.5.0
+mypy-extensions==1.0.0
+nest_asyncio @ file:///home/conda/feedstock_root/build_artifacts/nest-asyncio_1705850609492/work
+networkx==3.2.1
+nh3==0.2.18
+numpy==1.26.2
+packaging==23.2
+pandas==2.2.3
+parso @ file:///home/conda/feedstock_root/build_artifacts/parso_1712320355065/work
+pathlib==1.0.1
+pathspec==0.11.2
+pickleshare @ file:///home/conda/feedstock_root/build_artifacts/pickleshare_1602536217715/work
+pillow==10.4.0
+pkginfo==1.10.0
+platformdirs @ file:///home/conda/feedstock_root/build_artifacts/platformdirs_1726613481435/work
+pluggy==1.5.0
+prompt-toolkit==3.0.41
+psutil @ file:///D:/bld/psutil_1725737996000/work
+pure_eval @ file:///home/conda/feedstock_root/build_artifacts/pure_eval_1721585709575/work
+pycodestyle==2.12.1
+pycparser==2.21
+pydantic==2.5.2
+pydantic_core==2.14.5
+pyflakes==3.2.0
+Pygments==2.17.2
+pyogrio==0.9.0
+pyparsing==3.1.4
+pyproj==3.6.1
+pytest==8.3.3
+python-dateutil @ file:///home/conda/feedstock_root/build_artifacts/python-dateutil_1709299778482/work
+pytz==2024.2
+pywin32==306
+pywin32-ctypes==0.2.3
+PyYAML==6.0.1
+pyzmq @ file:///D:/bld/pyzmq_1725449086441/work
+readme_renderer==43.0
+referencing==0.31.1
+regex==2023.10.3
+requests==2.32.3
+requests-toolbelt==1.0.0
+rfc3986==2.0.0
+rich==13.7.0
+rpds-py==0.13.2
+s3transfer==0.10.2
+scipy==1.11.4
+shapely==2.0.6
+six @ file:///home/conda/feedstock_root/build_artifacts/six_1620240208055/work
+smmap==5.0.1
+sniffio==1.3.0
+snowballstemmer==2.2.0
+sounddevice==0.4.6
+soundfile==0.12.1
+Sphinx==7.4.7
+sphinx-rtd-theme==2.0.0
+sphinxcontrib-applehelp==2.0.0
+sphinxcontrib-devhelp==2.0.0
+sphinxcontrib-htmlhelp==2.1.0
+sphinxcontrib-jquery==4.1
+sphinxcontrib-jsmath==1.0.1
+sphinxcontrib-qthelp==2.0.0
+sphinxcontrib-serializinghtml==2.0.0
+stack-data @ file:///home/conda/feedstock_root/build_artifacts/stack_data_1669632077133/work
+tornado @ file:///D:/bld/tornado_1724956185692/work
+tqdm==4.66.1
+traitlets @ file:///home/conda/feedstock_root/build_artifacts/traitlets_1713535121073/work
+tree-sitter==0.20.4
+tree-sitter-languages==1.8.0
+twine==5.1.1
+typing_extensions @ file:///home/conda/feedstock_root/build_artifacts/typing_extensions_1717802530399/work
+tzdata==2024.1
+urllib3==2.2.3
+wcwidth==0.2.12
+zipp @ file:///home/conda/feedstock_root/build_artifacts/zipp_1726248574750/work
+
+==================================================
+
+File: c:\GH\ras-commander\setup.py
+==================================================
+from setuptools import setup, find_packages
+from setuptools.command.build_py import build_py
+import subprocess
+from pathlib import Path
+
+class CustomBuildPy(build_py):
+    def run:
+    """Docs only, see 'run.py' for full function code"""
+)
+
+"""
+ras-commander setup.py
+
+This file is used to build and publish the ras-commander package to PyPI.
+
+To build and publish this package, follow these steps:
+
+1. Ensure you have the latest versions of setuptools, wheel, and twine installed:
+   pip install --upgrade setuptools wheel twine
+
+2. Update the version number in ras_commander/__init__.py (if not using automatic versioning)
+
+3. Create source distribution and wheel:
+   python setup.py sdist bdist_wheel
+
+4. Check the distribution:
+   twine check dist/*
+
+5. Upload to Test PyPI (optional):
+   twine upload --repository testpypi dist/*
+
+6. Install from Test PyPI to verify (optional):
+   pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple ras-commander
+
+7. Upload to PyPI:
+   twine upload dist/* --username __token__ --password <your_api_key>
+
+
+8. Install from PyPI to verify:
+   pip install ras-commander
+
+Note: Ensure you have the necessary credentials and access rights to upload to PyPI.
+For more information, visit: https://packaging.python.org/tutorials/packaging-projects/
+
+"""
+
+==================================================
+
+File: c:\GH\ras-commander\STYLE_GUIDE.md
 ==================================================
 # RAS Commander (ras-commander) Style Guide
 
@@ -1882,7 +1961,58 @@ def compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=F
 Apply this pattern across all functions in the library. This approach will significantly reduce the code footprint while maintaining basic logging functionality.
 ==================================================
 
-File: C:\GH\ras-commander\examples\01_project_initialization.py
+File: c:\GH\ras-commander\.gitignore\.gitignore
+==================================================
+# Ignore the example_projects folder and all its subfolders
+examples/example_projects/
+
+# Ignore workspace, projects, and my_projects folders
+workspace/
+projects/
+my_projects/
+
+# Ignore FEMA BLE Models
+examples/FEMA_BLE_Models/
+examples/hdf_example_data/
+
+# Ignore Python egg info
+*.egg-info/
+.eggs/
+
+# Ignore the Example_Projects_6_5.zip file
+Example_Projects_6_5.zip
+
+# Ignore the misc folder and all its subfolders
+misc/
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+
+# Ignore compiled Python files
+*.so
+
+# Ignore distribution / packaging
+dist/
+build/
+
+# Ignore test cache
+.pytest_cache/
+
+# Ignore virtual environments
+.venv/
+venv/
+
+# Ignore IDE-specific files (optional, uncomment if needed)
+# .vscode/
+# .idea/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+==================================================
+
+File: c:\GH\ras-commander\examples\01_project_initialization.py
 ==================================================
 # 01_project_initialization.py
 
@@ -1933,7 +2063,7 @@ def print_ras_object_data:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\02_plan_operations.py
+File: c:\GH\ras-commander\examples\02_plan_operations.py
 ==================================================
 # 02_plan_operations.py
 
@@ -2006,7 +2136,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\03_geometry_operations.py
+File: c:\GH\ras-commander\examples\03_geometry_operations.py
 ==================================================
 # 03_geometry_operations.py
 
@@ -2056,7 +2186,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\04_unsteady_flow_operations.py
+File: c:\GH\ras-commander\examples\04_unsteady_flow_operations.py
 ==================================================
 # 04_unsteady_flow_operations.py
 
@@ -2107,7 +2237,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\05_utility_functions.py
+File: c:\GH\ras-commander\examples\05_utility_functions.py
 ==================================================
 # 05_utility_functions.py
 
@@ -2156,7 +2286,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\06_single_plan_execution.py
+File: c:\GH\ras-commander\examples\06_single_plan_execution.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2210,7 +2340,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\07_sequential_plan_execution.py
+File: c:\GH\ras-commander\examples\07_sequential_plan_execution.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2278,7 +2408,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\08_parallel_execution.py
+File: c:\GH\ras-commander\examples\08_parallel_execution.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2330,7 +2460,7 @@ def get_physical_core_count:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\09_specifying_plans.py
+File: c:\GH\ras-commander\examples\09_specifying_plans.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2400,7 +2530,7 @@ def main:
 
 ==================================================
 
-File: C:\GH\ras-commander\examples\10_arguments_for_compute.py
+File: c:\GH\ras-commander\examples\10_arguments_for_compute.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2456,7 +2586,7 @@ def main:
 
 ==================================================
 
-File: C:\GH\ras-commander\examples\12_plan_set_execution.py
+File: c:\GH\ras-commander\examples\12_plan_set_execution.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2495,7 +2625,7 @@ def create_plan_set:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\13_multiple_project_operations.py
+File: c:\GH\ras-commander\examples\13_multiple_project_operations.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2533,7 +2663,7 @@ def execute_plan:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\14_Core_Sensitivity.ipynb
+File: c:\GH\ras-commander\examples\14_Core_Sensitivity.ipynb
 ==================================================
 {
  "cells": [
@@ -2724,7 +2854,7 @@ File: C:\GH\ras-commander\examples\14_Core_Sensitivity.ipynb
 
 ==================================================
 
-File: C:\GH\ras-commander\examples\15_plan_key_operations.py
+File: c:\GH\ras-commander\examples\15_plan_key_operations.py
 ==================================================
 # 15_plan_key_operations.py
 
@@ -2762,7 +2892,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\16_scanning_ras_project_info.py
+File: c:\GH\ras-commander\examples\16_scanning_ras_project_info.py
 ==================================================
 import sys
 from pathlib import Path
@@ -2786,7 +2916,7 @@ def generate_category_summary:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\examples\17_parallel_execution_ble.py
+File: c:\GH\ras-commander\examples\17_parallel_execution_ble.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -2850,21 +2980,29 @@ def get_physical_core_count:
 
 ==================================================
 
-File: C:\GH\ras-commander\examples\18_2d_hdf_data_extraction.ipynb
+File: c:\GH\ras-commander\examples\18_2d_hdf_data_extraction.ipynb
 ==================================================
-{"cells":[{"cell_type":"markdown","metadata":{},"source":["# HEC-RAS 2D HDF Data Analysis Notebook\n","\n","This notebook demonstrates how to manipulate and analyze HEC-RAS 2D HDF data using the ras-commander library. It leverages the RasHdf and RasUtils classes to streamline data extraction, processing, and visualization."]},{"cell_type":"code","execution_count":1,"metadata":{},"outputs":[],"source":["# Import required Libraries\n","import subprocess\n","import sys\n","import os\n","from pathlib import Path\n","\n","def install_module(module_name):\n","    try:\n","        __import__(module_name)\n","    except ImportError:\n","        print(f\"{module_name} not found. Installing...\")\n","        subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-U\", module_name])\n","\n","# List of modules to check and install if necessary\n","modules = ['h5py', 'numpy', 'requests', 'geopandas', 'matplotlib', 'pandas']\n","for module in modules:\n","    install_module(module)\n","\n","# Import the rest of the required libraries\n","import pandas as pd\n","import numpy as np\n","import geopandas as gpd\n","import matplotlib.pyplot as plt\n"]},{"cell_type":"markdown","metadata":{},"source":["## Importing ras-commander flexibly (from package or local dev copy)"]},{"cell_type":"code","execution_count":2,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["ras_commander imported successfully\n"]}],"source":["import sys\n","from pathlib import Path\n","\n","# Flexible imports to allow for development without installation \n","#  ** Use this version with Jupyter Notebooks **\n","try:\n","    # Try to import from the installed package\n","    from ras_commander import init_ras_project, RasHdf, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj, RasGpt, ras\n","except ImportError:\n","    # If the import fails, add the parent directory to the Python path\n","    import os\n","    current_file = Path(os.getcwd()).resolve()\n","    parent_directory = current_file.parent\n","    sys.path.append(str(parent_directory))\n","    \n","    # Now try to import again\n","    from ras_commander import init_ras_project, RasHdf, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj, RasGpt, ras\n","\n","print(\"ras_commander imported successfully\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]},{"cell_type":"code","execution_count":3,"metadata":{},"outputs":[{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:15,487 - ras_commander.RasPrj - INFO - HEC-RAS executable found at default path: C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.5\\Ras.exe\n","2024-09-30 16:18:15,499 - ras_commander.RasPrj - INFO - Initialization complete for project: Muncie\n","2024-09-30 16:18:15,500 - ras_commander.RasPrj - INFO - Plan entries: 3, Flow entries: 1, Unsteady entries: 1, Geometry entries: 3, Boundary conditions: 2\n","2024-09-30 16:18:15,500 - ras_commander.RasPrj - INFO - Project initialized. ras_instance project folder: c:\\GH\\ras-commander\\examples\\example_projects\\Muncie\n","2024-09-30 16:18:15,501 - ras_commander.RasPrj - INFO - HEC-RAS executable found at default path: C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.5\\Ras.exe\n","2024-09-30 16:18:15,522 - ras_commander.RasPrj - INFO - Initialization complete for project: BaldEagleDamBrk\n","2024-09-30 16:18:15,522 - ras_commander.RasPrj - INFO - Plan entries: 11, Flow entries: 0, Unsteady entries: 10, Geometry entries: 10, Boundary conditions: 51\n","2024-09-30 16:18:15,523 - ras_commander.RasPrj - INFO - Project initialized. ras_instance project folder: c:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\n"]},{"name":"stdout","output_type":"stream","text":["Muncie.p03.hdf already exists. Skipping project extraction and plan execution.\n"]}],"source":["# Define the path to the Muncie project\n","current_dir = Path.cwd()  # Adjust if your notebook is in a different directory\n","muncie_path = current_dir / \"example_projects\" / \"Muncie\"\n","bald_eagle_path = current_dir / \"example_projects\" / \"BaldEagleCrkMulti2D\"\n","import logging\n","# Check if Muncie.p03.hdf exists (so we don't have to re-run the simulation when re-running or debugging)\n","hdf_file = muncie_path / \"Muncie.p03.hdf\"\n","\n","if not hdf_file.exists():\n","    # Initialize RasExamples and extract the Muncie project\n","    ras_examples = RasExamples()\n","    ras_examples.extract_project([\"Muncie\", \"BaldEagleCrkMulti2D\"])\n","\n","    # Initialize custom Ras objects\n","    muncie = RasPrj()\n","    bald_eagle = RasPrj()\n","\n","    # Initialize the RAS projects using the custom ras objects\n","    muncie = init_ras_project(muncie_path, \"6.5\", ras_instance=muncie)\n","    logging.info(f\"Muncie project initialized with folder: {muncie.project_folder}\")\n","\n","    bald_eagle = init_ras_project(bald_eagle_path, \"6.5\", ras_instance=bald_eagle)\n","    logging.info(f\"Bald Eagle project initialized with folder: {bald_eagle.project_folder}\")\n","    \n","    logging.info(f\"Muncie object id: {id(muncie)}\")\n","    logging.info(f\"Bald Eagle object id: {id(bald_eagle)}\")\n","    \n","    # Define the plan number to execute\n","    plan_number = \"03\"\n","\n","    # Set plan keys for both projects\n","    for project in [muncie, bald_eagle]:\n","        RasPlan.update_plan_value(plan_number, \"run_htab\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"run_unet\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"run_postProcess\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"run_rasmapper\", 0, ras_object=project)\n","\n","    # Execute Plan 03 using RasCmdr for Muncie\n","    print(f\"Executing Plan {plan_number} for the Muncie project...\")\n","    success_muncie = RasCmdr.compute_plan(plan_number, ras_object=muncie)\n","    if success_muncie:\n","        print(f\"Plan {plan_number} executed successfully for Muncie.\\n\")\n","    else:\n","        print(f\"Plan {plan_number} execution failed for Muncie.\\n\")\n","    \n","    # Execute Plan 03 using RasCmdr for Bald Eagle\n","    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n","    success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n","    if success_bald_eagle:\n","        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n","    else:\n","        print(f\"Plan {plan_number} execution failed for Bald Eagle.\\n\")\n","else:\n","    print(\"Muncie.p03.hdf already exists. Skipping project extraction and plan execution.\")\n","    # Initialize the RAS project using the custom ras object\n","    muncie = RasPrj()\n","    bald_eagle = RasPrj()\n","    muncie = init_ras_project(muncie_path, \"6.5\", ras_instance=muncie)\n","    bald_eagle = init_ras_project(bald_eagle_path, \"6.5\", ras_instance=bald_eagle)\n","    plan_number = \"03\""]},{"cell_type":"code","execution_count":4,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["Results for Plan 03 are located at: c:\\GH\\ras-commander\\examples\\example_projects\\Muncie\\Muncie.p03.hdf\n","\n","Results for Plan 03 are located at: c:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p03.hdf\n","\n"]}],"source":["# Retrieve the HDF file path for Plan 03\n","results_path_muncie = RasPlan.get_results_path(plan_number, ras_object=muncie)\n","if results_path_muncie:\n","    print(f\"Results for Plan {plan_number} are located at: {results_path_muncie}\\n\")\n","else:\n","    print(f\"No results found for Plan {plan_number}.\\n\")\n","    \n","results_path_baldeagle = RasPlan.get_results_path(plan_number, ras_object=bald_eagle)\n","if results_path_baldeagle:\n","    print(f\"Results for Plan {plan_number} are located at: {results_path_baldeagle}\\n\")\n","else:\n","    print(f\"No results found for Plan {plan_number}.\\n\")    "]},{"cell_type":"code","execution_count":5,"metadata":{},"outputs":[],"source":["# Define the HDF input path as Plan Number\n","hdf_input = plan_number\n","\n","# Initialize RasHdf handler\n","hdf_handler = RasHdf()\n","\n","# The remainder of the examples only use muncie, so let's set results_path to muncie\n","results_path = results_path_muncie\n","\n"]},{"cell_type":"code","execution_count":6,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["Example 1: Listing all HDF paths with properties\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>HDF_Path</th>\n","      <th>Type</th>\n","      <th>Shape</th>\n","      <th>Size</th>\n","      <th>Dtype</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>Event Conditions</td>\n","      <td>Group</td>\n","      <td>None</td>\n","      <td>NaN</td>\n","      <td>None</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>Event Conditions/Unsteady</td>\n","      <td>Group</td>\n","      <td>None</td>\n","      <td>NaN</td>\n","      <td>None</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>Event Conditions/Unsteady/Boundary Conditions</td>\n","      <td>Group</td>\n","      <td>None</td>\n","      <td>NaN</td>\n","      <td>None</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>Event Conditions/Unsteady/Boundary Conditions/...</td>\n","      <td>Group</td>\n","      <td>None</td>\n","      <td>NaN</td>\n","      <td>None</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>Event Conditions/Unsteady/Boundary Conditions/...</td>\n","      <td>Dataset</td>\n","      <td>(25, 2)</td>\n","      <td>50.0</td>\n","      <td>float32</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["                                            HDF_Path     Type    Shape  Size  \\\n","0                                   Event Conditions    Group     None   NaN   \n","1                          Event Conditions/Unsteady    Group     None   NaN   \n","2      Event Conditions/Unsteady/Boundary Conditions    Group     None   NaN   \n","3  Event Conditions/Unsteady/Boundary Conditions/...    Group     None   NaN   \n","4  Event Conditions/Unsteady/Boundary Conditions/...  Dataset  (25, 2)  50.0   \n","\n","     Dtype  \n","0     None  \n","1     None  \n","2     None  \n","3     None  \n","4  float32  "]},"metadata":{},"output_type":"display_data"}],"source":["# Example 1: List all HDF paths with properties\n","print(\"Example 1: Listing all HDF paths with properties\")\n","hdf_paths_df = RasHdf.get_hdf_paths_with_properties(hdf_input, ras_object=muncie)\n","display(hdf_paths_df.head())"]},{"cell_type":"code","execution_count":7,"metadata":{},"outputs":[{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:15,723 - ras_commander.RasHdf - INFO - Extracting Plan Information from: Muncie.p03.hdf\n","2024-09-30 16:18:15,724 - ras_commander.RasHdf - INFO - Plan Name: Unsteady Run with 2D 50ft Grid\n","2024-09-30 16:18:15,725 - ras_commander.RasHdf - INFO - Simulation Start Time: 02Jan1900 00:00:00\n","2024-09-30 16:18:15,726 - ras_commander.RasHdf - INFO - Simulation End Time: 03Jan1900 00:00:00\n","2024-09-30 16:18:15,726 - ras_commander.RasHdf - INFO - Simulation Duration (hours): 24.0\n"]},{"name":"stdout","output_type":"stream","text":["\n","Example 2: Extracting runtime and compute time data\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Plan Name</th>\n","      <th>File Name</th>\n","      <th>Simulation Start Time</th>\n","      <th>Simulation End Time</th>\n","      <th>Simulation Duration (s)</th>\n","      <th>Simulation Time (hr)</th>\n","      <th>Completing Geometry (hr)</th>\n","      <th>Preprocessing Geometry (hr)</th>\n","      <th>Completing Event Conditions (hr)</th>\n","      <th>Unsteady Flow Computations (hr)</th>\n","      <th>Complete Process (hr)</th>\n","      <th>Unsteady Flow Speed (hr/hr)</th>\n","      <th>Complete Process Speed (hr/hr)</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>Unsteady Run with 2D 50ft Grid</td>\n","      <td>Muncie.p03.hdf</td>\n","      <td>02Jan1900 00:00:00</td>\n","      <td>03Jan1900 00:00:00</td>\n","      <td>86400.0</td>\n","      <td>24.0</td>\n","      <td>N/A</td>\n","      <td>0.000256</td>\n","      <td>N/A</td>\n","      <td>0.008737</td>\n","      <td>0.010864</td>\n","      <td>2746.955775</td>\n","      <td>2209.153669</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["                        Plan Name       File Name Simulation Start Time  \\\n","0  Unsteady Run with 2D 50ft Grid  Muncie.p03.hdf    02Jan1900 00:00:00   \n","\n","  Simulation End Time  Simulation Duration (s)  Simulation Time (hr)  \\\n","0  03Jan1900 00:00:00                  86400.0                  24.0   \n","\n","  Completing Geometry (hr)  Preprocessing Geometry (hr)  \\\n","0                      N/A                     0.000256   \n","\n","  Completing Event Conditions (hr)  Unsteady Flow Computations (hr)  \\\n","0                              N/A                         0.008737   \n","\n","   Complete Process (hr)  Unsteady Flow Speed (hr/hr)  \\\n","0               0.010864                  2746.955775   \n","\n","   Complete Process Speed (hr/hr)  \n","0                     2209.153669  "]},"metadata":{},"output_type":"display_data"}],"source":["# Example 2: Extract runtime and compute time data\n","print(\"\\nExample 2: Extracting runtime and compute time data\")\n","runtime_df = RasHdf.get_runtime_data(hdf_input, ras_object=muncie)\n","if runtime_df is not None:\n","    display(runtime_df)\n","else:\n","    print(\"No runtime data found.\")"]},{"cell_type":"code","execution_count":8,"metadata":{},"outputs":[{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:15,748 - ras_commander.RasHdf - INFO - Found 1 2D Flow Areas\n"]},{"name":"stdout","output_type":"stream","text":["\n","Example 3: Listing 2D Flow Area Names\n","2D Flow Area Names: ['2D Interior Area']\n"]}],"source":["# Example 3: Get 2D Flow Area Names\n","print(\"\\nExample 3: Listing 2D Flow Area Names\")\n","flow_area_names = RasHdf.get_2d_flow_area_names(hdf_input, ras_object=muncie)\n","print(\"2D Flow Area Names:\", flow_area_names)"]},{"cell_type":"code","execution_count":9,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 4: Extracting 2D Flow Area Attributes\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Name</th>\n","      <th>Mann</th>\n","      <th>Multiple Face Mann n</th>\n","      <th>Composite LC</th>\n","      <th>Cell Vol Tol</th>\n","      <th>Cell Min Area Fraction</th>\n","      <th>Face Profile Tol</th>\n","      <th>Face Area Tol</th>\n","      <th>Face Conv Ratio</th>\n","      <th>Laminar Depth</th>\n","      <th>Spacing dx</th>\n","      <th>Spacing dy</th>\n","      <th>Shift dx</th>\n","      <th>Shift dy</th>\n","      <th>Cell Count</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>b'2D Interior Area'</td>\n","      <td>0.06</td>\n","      <td>0</td>\n","      <td>0</td>\n","      <td>0.01</td>\n","      <td>0.01</td>\n","      <td>0.01</td>\n","      <td>0.01</td>\n","      <td>0.02</td>\n","      <td>0.2</td>\n","      <td>50.0</td>\n","      <td>50.0</td>\n","      <td>NaN</td>\n","      <td>NaN</td>\n","      <td>5391</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["                  Name  Mann  Multiple Face Mann n  Composite LC  \\\n","0  b'2D Interior Area'  0.06                     0             0   \n","\n","   Cell Vol Tol  Cell Min Area Fraction  Face Profile Tol  Face Area Tol  \\\n","0          0.01                    0.01              0.01           0.01   \n","\n","   Face Conv Ratio  Laminar Depth  Spacing dx  Spacing dy  Shift dx  Shift dy  \\\n","0             0.02            0.2        50.0        50.0       NaN       NaN   \n","\n","   Cell Count  \n","0        5391  "]},"metadata":{},"output_type":"display_data"}],"source":["# Example 4: Extract 2D Flow Area Attributes\n","print(\"\\nExample 4: Extracting 2D Flow Area Attributes\")\n","flow_area_attributes_df = RasHdf.get_2d_flow_area_attributes(hdf_input, ras_object=muncie)\n","if flow_area_attributes_df is not None:\n","    display(flow_area_attributes_df.head())\n","else:\n","    print(\"No 2D Flow Area attributes found.\")"]},{"cell_type":"code","execution_count":10,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 5: Extracting Cell Info\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Start</th>\n","      <th>End</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>0</td>\n","      <td>5391</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Start   End\n","0      0  5391"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 5: Extract Cell Info\n","print(\"\\nExample 5: Extracting Cell Info\")\n","cell_info_df = RasHdf.get_cell_info(hdf_input, ras_object=muncie)\n","if cell_info_df is not None:\n","    display(cell_info_df.head())\n","else:\n","    print(\"No Cell Info found.\")"]},{"cell_type":"code","execution_count":11,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 6: Extracting Cell Points\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>X</th>\n","      <th>Y</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>406000.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>406050.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>406100.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>406150.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>406200.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["          X          Y\n","0  406000.0  1805000.0\n","1  406050.0  1805000.0\n","2  406100.0  1805000.0\n","3  406150.0  1805000.0\n","4  406200.0  1805000.0"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 6: Extract Cell Points\n","print(\"\\nExample 6: Extracting Cell Points\")\n","cell_points_df = RasHdf.get_cell_points(hdf_input, ras_object=muncie)\n","if cell_points_df is not None:\n","    display(cell_points_df.head())\n","else:\n","    print(\"No Cell Points found.\")"]},{"cell_type":"code","execution_count":12,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 7: Extracting Polygon Info and Parts\n","Polygon Info:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Column1</th>\n","      <th>Column2</th>\n","      <th>Column3</th>\n","      <th>Column4</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>0</td>\n","      <td>170</td>\n","      <td>0</td>\n","      <td>1</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Column1  Column2  Column3  Column4\n","0        0      170        0        1"]},"metadata":{},"output_type":"display_data"},{"name":"stdout","output_type":"stream","text":["\n","Polygon Parts:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Start</th>\n","      <th>Count</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>0</td>\n","      <td>170</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Start  Count\n","0      0    170"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 7: Extract Polygon Info and Parts\n","print(\"\\nExample 7: Extracting Polygon Info and Parts\")\n","polygon_info_df, polygon_parts_df = RasHdf.get_polygon_info_and_parts(hdf_input, ras_object=muncie)\n","print(\"Polygon Info:\")\n","if polygon_info_df is not None:\n","    display(polygon_info_df.head())\n","else:\n","    print(\"No Polygon Info found.\")\n","print(\"\\nPolygon Parts:\")\n","if polygon_parts_df is not None:\n","    display(polygon_parts_df.head())\n","else:\n","    print(\"No Polygon Parts found.\")"]},{"cell_type":"code","execution_count":13,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 8: Extracting Polygon Points\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>X</th>\n","      <th>Y</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>409537.1821</td>\n","      <td>1802597.314</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>409645.1430</td>\n","      <td>1802591.258</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>409737.8005</td>\n","      <td>1802600.670</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>409762.3667</td>\n","      <td>1802605.741</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>409846.7495</td>\n","      <td>1802629.917</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["             X            Y\n","0  409537.1821  1802597.314\n","1  409645.1430  1802591.258\n","2  409737.8005  1802600.670\n","3  409762.3667  1802605.741\n","4  409846.7495  1802629.917"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 8: Extract Polygon Points\n","print(\"\\nExample 8: Extracting Polygon Points\")\n","polygon_points_df = RasHdf.get_polygon_points(hdf_input, ras_object=muncie)\n","if polygon_points_df is not None:\n","    display(polygon_points_df.head())\n","else:\n","    print(\"No Polygon Points found.\")"]},{"cell_type":"code","execution_count":14,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 9: Extracting Cells Center Coordinates and Manning's n\n","Cells Center Coordinates:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>X</th>\n","      <th>Y</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>406000.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>406050.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>406100.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>406150.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>406200.0</td>\n","      <td>1805000.0</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["          X          Y\n","0  406000.0  1805000.0\n","1  406050.0  1805000.0\n","2  406100.0  1805000.0\n","3  406150.0  1805000.0\n","4  406200.0  1805000.0"]},"metadata":{},"output_type":"display_data"},{"name":"stdout","output_type":"stream","text":["\n","Cells Manning's n:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Manning's n</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>0.06</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Manning's n\n","0         0.06\n","1         0.06\n","2         0.06\n","3         0.06\n","4         0.06"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 9: Extract Cells Center Coordinates and Manning's n\n","print(\"\\nExample 9: Extracting Cells Center Coordinates and Manning's n\")\n","cells_center_coord_df, cells_manning_n_df = RasHdf.get_cells_center_data(hdf_input, ras_object=muncie)\n","print(\"Cells Center Coordinates:\")\n","if cells_center_coord_df is not None:\n","    display(cells_center_coord_df.head())\n","else:\n","    print(\"No Cells Center Coordinates found.\")\n","print(\"\\nCells Manning's n:\")\n","if cells_manning_n_df is not None:\n","    display(cells_manning_n_df.head())\n","else:\n","    print(\"No Cells Manning's n found.\")"]},{"cell_type":"code","execution_count":15,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 10: Extracting Faces Area Elevation Data\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Elevation</th>\n","      <th>Area</th>\n","      <th>Wetted Perimeter</th>\n","      <th>Manning's n</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>939.428467</td>\n","      <td>0.000000</td>\n","      <td>0.000000</td>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>939.628479</td>\n","      <td>0.314608</td>\n","      <td>3.152243</td>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>939.756226</td>\n","      <td>0.838549</td>\n","      <td>5.068435</td>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>939.760376</td>\n","      <td>0.859697</td>\n","      <td>5.130248</td>\n","      <td>0.06</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>939.979004</td>\n","      <td>2.336330</td>\n","      <td>8.406319</td>\n","      <td>0.06</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["    Elevation      Area  Wetted Perimeter  Manning's n\n","0  939.428467  0.000000          0.000000         0.06\n","1  939.628479  0.314608          3.152243         0.06\n","2  939.756226  0.838549          5.068435         0.06\n","3  939.760376  0.859697          5.130248         0.06\n","4  939.979004  2.336330          8.406319         0.06"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 10: Extract Faces Area Elevation Data\n","print(\"\\nExample 10: Extracting Faces Area Elevation Data\")\n","faces_elev_df = RasHdf.get_faces_area_elevation_data(hdf_input, ras_object=muncie)\n","if faces_elev_df is not None:\n","    display(faces_elev_df.head())\n","else:\n","    print(\"No Faces Area Elevation Data found.\")"]},{"cell_type":"code","execution_count":16,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 11: Extracting Compute Messages\n","Compute Messages:\n","['Plan: \\'Unsteady Run with 2D 50ft Grid\\' (Muncie.p03)\\r\\nSimulation started at: 30Sep2024 03:54:37 PM\\r\\n\\r\\nWriting Plan GIS Data...\\r\\nCompleted Writing Plan GIS Data\\r\\nWriting Geometry...\\r\\nComputing Bank Lines\\r\\nBank lines generated in 87 ms\\r\\nComputing Edge Lines\\r\\nEdge Lines generated in 69 ms\\r\\nComputing XS Interpolation Surface\\r\\nXS Interpolation Surface generated in 112 ms\\r\\nGeometry \\'Geometry\\' association was set to the first valid terrain layer (Terrain)\\r\\nComputing 2D Flow Area \\'2D Interior Area\\' tables: Property tables do not exist.\\r\\n2D Flow Area \\'2D Interior Area\\' tables complete 2.27 sec\\r\\nCompleted Writing Geometry\\r\\nWriting Event Conditions ...\\r\\nCompleted Writing Event Condition Data\\r\\n\\r\\n\\t\\r\\nGeometric Preprocessor HEC-RAS 6.5 February 2024\\r\\n \\r\\n\\r\\nFinished Processing Geometry\\r\\n\\r\\n\\r\\nPerforming Unsteady Flow Simulation  HEC-RAS 6.5 February 2024\\r\\n \\r\\n\\t\\r\\nUnsteady Input Summary:\\r\\n     1D Unsteady Finite Difference Numerical Solution\\r\\n     Number of warm up time steps:   20\\r\\n     2D Unsteady Diffusion Wave Equation Set (fastest)\\r\\n     2D number of Solver Cores:    4\\r\\nBreach at   White Muncie 13214   at   02JAN1900 02:56:00\\r\\n\\r\\nOverall Volume Accounting Error in Acre Feet:     -2.0322622764\\r\\nOverall Volume Accounting Error as percentage:          0.005497\\r\\nPlease review \"Computational Log File\" output for volume accounting details\\r\\n\\r\\nWriting Results to DSS\\r\\n\\r\\nFinished Unsteady Flow Simulation\\r\\n\\r\\nReading Unsteady Data for Post Process...\\r\\nCompleted Reading Unsteady Data for Post Process\\r\\n\\r\\n\\t\\r\\nRunning Post Processor  HEC-RAS 6.5 February 2024\\r\\n \\r\\n\\r\\nFinished Post Processing\\r\\n\\r\\n\\r\\nGenerating Time Series Post Process File ...\\r\\nWriting 1D Data: Water-Surface\\r\\nWriting 1D Data: Flow\\r\\nWriting 2D Data: Water-Surface\\r\\nWriting 2D Data: Velocity\\r\\nTime Series Post Process file generated [1140 ms]\\r\\n\\r\\nComputations Summary\\r\\n\\r\\nComputation Task\\tTime(hh:mm:ss)\\r\\nCompleting Geometry, Flow and Plan\\t       4\\r\\nPreprocessing Geometry\\t<1\\r\\nUnsteady Flow Computations\\t      31\\r\\nPost-Processing\\t<1\\r\\nGenerating Time Series Post Process\\t       1\\r\\nComplete Process\\t      39\\r\\n\\r\\nComputation Speed\\tSimulation/Runtime\\r\\nUnsteady Flow Computations\\t2747x\\r\\nComplete Process\\t2199x\\r\\n']\n"]}],"source":["# Example 11: Extract Compute Messages as String\n","print(\"\\nExample 11: Extracting Compute Messages\")\n","compute_messages = RasHdf.extract_string_from_hdf(hdf_input, '/Results/Summary/Compute Messages (text)', ras_object=muncie)\n","print(\"Compute Messages:\")\n","print(compute_messages)"]},{"cell_type":"code","execution_count":17,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 12: Extracting Plan Parameters and Volume Accounting Data\n","Plan Parameters Group Attributes:\n","\n","Plan Parameters DataFrame:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Attribute</th>\n","      <th>Value</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>1D Cores</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>1D Flow Tolerance</td>\n","      <td>NaN</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>1D Maximum Iterations</td>\n","      <td>20</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>1D Maximum Iterations Without Improvement</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>1D Maximum Water Surface Error To Abort</td>\n","      <td>100.0</td>\n","    </tr>\n","    <tr>\n","      <th>5</th>\n","      <td>1D Methodology</td>\n","      <td>b'Finite Difference'</td>\n","    </tr>\n","    <tr>\n","      <th>6</th>\n","      <td>1D Storage Area Elevation Tolerance</td>\n","      <td>0.01</td>\n","    </tr>\n","    <tr>\n","      <th>7</th>\n","      <td>1D Theta</td>\n","      <td>1.0</td>\n","    </tr>\n","    <tr>\n","      <th>8</th>\n","      <td>1D Theta Warmup</td>\n","      <td>1.0</td>\n","    </tr>\n","    <tr>\n","      <th>9</th>\n","      <td>1D Water Surface Elevation Tolerance</td>\n","      <td>0.01</td>\n","    </tr>\n","    <tr>\n","      <th>10</th>\n","      <td>1D-2D Flow Tolerance</td>\n","      <td>0.1</td>\n","    </tr>\n","    <tr>\n","      <th>11</th>\n","      <td>1D-2D Gate Flow Submergence Decay Exponent</td>\n","      <td>1.0</td>\n","    </tr>\n","    <tr>\n","      <th>12</th>\n","      <td>1D-2D IS Stablity Factor</td>\n","      <td>1.0</td>\n","    </tr>\n","    <tr>\n","      <th>13</th>\n","      <td>1D-2D LS Stablity Factor</td>\n","      <td>2.0</td>\n","    </tr>\n","    <tr>\n","      <th>14</th>\n","      <td>1D-2D Maximum Iterations</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>15</th>\n","      <td>1D-2D Maximum Number of Time Slices</td>\n","      <td>20</td>\n","    </tr>\n","    <tr>\n","      <th>16</th>\n","      <td>1D-2D Minimum Flow Tolerance</td>\n","      <td>1.0</td>\n","    </tr>\n","    <tr>\n","      <th>17</th>\n","      <td>1D-2D Minimum Time Step for Slicing(hours)</td>\n","      <td>0.0</td>\n","    </tr>\n","    <tr>\n","      <th>18</th>\n","      <td>1D-2D Number of Warmup Steps</td>\n","      <td>20</td>\n","    </tr>\n","    <tr>\n","      <th>19</th>\n","      <td>1D-2D Warmup Time Step (hours)</td>\n","      <td>0.0</td>\n","    </tr>\n","    <tr>\n","      <th>20</th>\n","      <td>1D-2D Water Surface Tolerance</td>\n","      <td>0.01</td>\n","    </tr>\n","    <tr>\n","      <th>21</th>\n","      <td>1D-2D Weir Flow Submergence Decay Exponent</td>\n","      <td>3.0</td>\n","    </tr>\n","    <tr>\n","      <th>22</th>\n","      <td>2D Boundary Condition Ramp Up Fraction</td>\n","      <td>[0.5]</td>\n","    </tr>\n","    <tr>\n","      <th>23</th>\n","      <td>2D Boundary Condition Volume Check</td>\n","      <td>[b'False']</td>\n","    </tr>\n","    <tr>\n","      <th>24</th>\n","      <td>2D Cores (per mesh)</td>\n","      <td>[4]</td>\n","    </tr>\n","    <tr>\n","      <th>25</th>\n","      <td>2D Coriolis</td>\n","      <td>b'False'</td>\n","    </tr>\n","    <tr>\n","      <th>26</th>\n","      <td>2D Equation Set</td>\n","      <td>[b'Diffusion Wave']</td>\n","    </tr>\n","    <tr>\n","      <th>27</th>\n","      <td>2D Initial Conditions Ramp Up Time (hrs)</td>\n","      <td>[0.0]</td>\n","    </tr>\n","    <tr>\n","      <th>28</th>\n","      <td>2D Latitude for Coriolis</td>\n","      <td>[3.4028235e+38]</td>\n","    </tr>\n","    <tr>\n","      <th>29</th>\n","      <td>2D Longitudinal Mixing Coefficient</td>\n","      <td>[0.0]</td>\n","    </tr>\n","    <tr>\n","      <th>30</th>\n","      <td>2D Matrix Solver</td>\n","      <td>[b'Pardiso']</td>\n","    </tr>\n","    <tr>\n","      <th>31</th>\n","      <td>2D Maximum Iterations</td>\n","      <td>[20]</td>\n","    </tr>\n","    <tr>\n","      <th>32</th>\n","      <td>2D Names</td>\n","      <td>[b'2D Interior Area']</td>\n","    </tr>\n","    <tr>\n","      <th>33</th>\n","      <td>2D Number of Time Slices</td>\n","      <td>[1]</td>\n","    </tr>\n","    <tr>\n","      <th>34</th>\n","      <td>2D Only</td>\n","      <td>b'False'</td>\n","    </tr>\n","    <tr>\n","      <th>35</th>\n","      <td>2D Smagorinsky Mixing Coefficient</td>\n","      <td>[0.0]</td>\n","    </tr>\n","    <tr>\n","      <th>36</th>\n","      <td>2D Theta</td>\n","      <td>[1.0]</td>\n","    </tr>\n","    <tr>\n","      <th>37</th>\n","      <td>2D Theta Warmup</td>\n","      <td>[1.0]</td>\n","    </tr>\n","    <tr>\n","      <th>38</th>\n","      <td>2D Transverse Mixing Coefficient</td>\n","      <td>[0.0]</td>\n","    </tr>\n","    <tr>\n","      <th>39</th>\n","      <td>2D Turbulence Formulation</td>\n","      <td>[b'None']</td>\n","    </tr>\n","    <tr>\n","      <th>40</th>\n","      <td>2D Volume Tolerance</td>\n","      <td>[0.01]</td>\n","    </tr>\n","    <tr>\n","      <th>41</th>\n","      <td>2D Water Surface Tolerance</td>\n","      <td>[0.01]</td>\n","    </tr>\n","    <tr>\n","      <th>42</th>\n","      <td>Friction Slope Average Method (BR)</td>\n","      <td>b'Average Conveyance'</td>\n","    </tr>\n","    <tr>\n","      <th>43</th>\n","      <td>Friction Slope Average Method (XS)</td>\n","      <td>b'Average Friction Slope'</td>\n","    </tr>\n","    <tr>\n","      <th>44</th>\n","      <td>Gravity</td>\n","      <td>32.174049</td>\n","    </tr>\n","    <tr>\n","      <th>45</th>\n","      <td>HDF Chunk Size</td>\n","      <td>1.0</td>\n","    </tr>\n","    <tr>\n","      <th>46</th>\n","      <td>HDF Compression</td>\n","      <td>1</td>\n","    </tr>\n","    <tr>\n","      <th>47</th>\n","      <td>HDF Fixed Rows</td>\n","      <td>1</td>\n","    </tr>\n","    <tr>\n","      <th>48</th>\n","      <td>HDF Flush Buffer</td>\n","      <td>b'False'</td>\n","    </tr>\n","    <tr>\n","      <th>49</th>\n","      <td>HDF Spatial Parts</td>\n","      <td>1</td>\n","    </tr>\n","    <tr>\n","      <th>50</th>\n","      <td>HDF Use Max Rows</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>51</th>\n","      <td>HDF Write Time Slices</td>\n","      <td>b'False'</td>\n","    </tr>\n","    <tr>\n","      <th>52</th>\n","      <td>HDF Write Warmup</td>\n","      <td>b'False'</td>\n","    </tr>\n","    <tr>\n","      <th>53</th>\n","      <td>Pardiso Solver</td>\n","      <td>b'False'</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["                                     Attribute                      Value\n","0                                     1D Cores                          0\n","1                            1D Flow Tolerance                        NaN\n","2                        1D Maximum Iterations                         20\n","3    1D Maximum Iterations Without Improvement                          0\n","4      1D Maximum Water Surface Error To Abort                      100.0\n","5                               1D Methodology       b'Finite Difference'\n","6          1D Storage Area Elevation Tolerance                       0.01\n","7                                     1D Theta                        1.0\n","8                              1D Theta Warmup                        1.0\n","9         1D Water Surface Elevation Tolerance                       0.01\n","10                        1D-2D Flow Tolerance                        0.1\n","11  1D-2D Gate Flow Submergence Decay Exponent                        1.0\n","12                    1D-2D IS Stablity Factor                        1.0\n","13                    1D-2D LS Stablity Factor                        2.0\n","14                    1D-2D Maximum Iterations                          0\n","15         1D-2D Maximum Number of Time Slices                         20\n","16                1D-2D Minimum Flow Tolerance                        1.0\n","17  1D-2D Minimum Time Step for Slicing(hours)                        0.0\n","18                1D-2D Number of Warmup Steps                         20\n","19              1D-2D Warmup Time Step (hours)                        0.0\n","20               1D-2D Water Surface Tolerance                       0.01\n","21  1D-2D Weir Flow Submergence Decay Exponent                        3.0\n","22      2D Boundary Condition Ramp Up Fraction                      [0.5]\n","23          2D Boundary Condition Volume Check                 [b'False']\n","24                         2D Cores (per mesh)                        [4]\n","25                                 2D Coriolis                   b'False'\n","26                             2D Equation Set        [b'Diffusion Wave']\n","27    2D Initial Conditions Ramp Up Time (hrs)                      [0.0]\n","28                    2D Latitude for Coriolis            [3.4028235e+38]\n","29          2D Longitudinal Mixing Coefficient                      [0.0]\n","30                            2D Matrix Solver               [b'Pardiso']\n","31                       2D Maximum Iterations                       [20]\n","32                                    2D Names      [b'2D Interior Area']\n","33                    2D Number of Time Slices                        [1]\n","34                                     2D Only                   b'False'\n","35           2D Smagorinsky Mixing Coefficient                      [0.0]\n","36                                    2D Theta                      [1.0]\n","37                             2D Theta Warmup                      [1.0]\n","38            2D Transverse Mixing Coefficient                      [0.0]\n","39                   2D Turbulence Formulation                  [b'None']\n","40                         2D Volume Tolerance                     [0.01]\n","41                  2D Water Surface Tolerance                     [0.01]\n","42          Friction Slope Average Method (BR)      b'Average Conveyance'\n","43          Friction Slope Average Method (XS)  b'Average Friction Slope'\n","44                                     Gravity                  32.174049\n","45                              HDF Chunk Size                        1.0\n","46                             HDF Compression                          1\n","47                              HDF Fixed Rows                          1\n","48                            HDF Flush Buffer                   b'False'\n","49                           HDF Spatial Parts                          1\n","50                            HDF Use Max Rows                          0\n","51                       HDF Write Time Slices                   b'False'\n","52                            HDF Write Warmup                   b'False'\n","53                              Pardiso Solver                   b'False'"]},"metadata":{},"output_type":"display_data"},{"name":"stdout","output_type":"stream","text":["\n","Volume Accounting DataFrame:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Attribute</th>\n","      <th>Value</th>\n","      <th>Type</th>\n","      <th>Shape</th>\n","      <th>Size</th>\n","      <th>Dtype</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>Vol Accounting in</td>\n","      <td>Acre Feet</td>\n","      <td>bytes_</td>\n","      <td>None</td>\n","      <td>None</td>\n","      <td>None</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["           Attribute      Value    Type Shape  Size Dtype\n","0  Vol Accounting in  Acre Feet  bytes_  None  None  None"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 12: Extract Plan Parameters and Volume Accounting\n","print(\"\\nExample 12: Extracting Plan Parameters and Volume Accounting Data\")\n","import h5py\n","import numpy as np\n","\n","# Extract plan parameters\n","with h5py.File(str(results_path), 'r') as hdf_file:\n","    plan_parameters = hdf_file['Plan Data/Plan Parameters']\n","    \n","    # List group attributes\n","    print(\"Plan Parameters Group Attributes:\")\n","    #for attr_name, attr_value in plan_parameters.attrs.items():\n","        #print(f\"{attr_name}: {attr_value}\")\n","    \n","    # Extract plan parameters as a DataFrame\n","    plan_parameters_df = pd.DataFrame([(attr_name, attr_value) for attr_name, attr_value in plan_parameters.attrs.items()], columns=['Attribute', 'Value'])\n","\n","# Construct the group path for volume accounting data\n","group_to_list = \"Results/Unsteady/Summary/Volume Accounting/Volume Accounting 2D\"\n","\n","# Extract volume accounting data as a DataFrame\n","volume_accounting_df = RasHdf.get_group_attributes_as_df(results_path, group_to_list)\n","\n","print(\"\\nPlan Parameters DataFrame:\")\n","display(plan_parameters_df)\n","\n","print(\"\\nVolume Accounting DataFrame:\")\n","display(volume_accounting_df)"]},{"cell_type":"code","execution_count":18,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example: Listing 2D Flow Area Groups\n"]},{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:15,952 - ras_commander.RasHdf - INFO - Found 1 2D Flow Areas\n"]},{"name":"stdout","output_type":"stream","text":["2D Flow Area Groups:\n","- 2D Interior Area\n","\n","Detailed information for the first group: 2D Interior Area\n","Datasets in this group:\n","- Cells Center Coordinate: Shape (5765, 2), Dtype float64\n","- Cells Center Manning's n: Shape (5765,), Dtype float32\n","- Cells Face and Orientation Info: Shape (5765, 2), Dtype int32\n","- Cells Face and Orientation Values: Shape (22328, 2), Dtype int32\n","- Cells FacePoint Indexes: Shape (5765, 7), Dtype int32\n","- Cells Minimum Elevation: Shape (5765,), Dtype float32\n","- Cells Surface Area: Shape (5765,), Dtype float32\n","- Cells Volume Elevation Info: Shape (5765, 2), Dtype int32\n","- Cells Volume Elevation Values: Shape (37912, 2), Dtype float32\n","- FacePoints Cell Index Values: Shape (22702,), Dtype int32\n","- FacePoints Cell Info: Shape (5774, 2), Dtype int32\n","- FacePoints Coordinate: Shape (5774, 2), Dtype float64\n","- FacePoints Face and Orientation Info: Shape (5774, 2), Dtype int32\n","- FacePoints Face and Orientation Values: Shape (22328, 2), Dtype int32\n","- FacePoints Is Perimeter: Shape (5774,), Dtype int32\n","- Faces Area Elevation Info: Shape (11164, 2), Dtype int32\n","- Faces Area Elevation Values: Shape (47055, 4), Dtype float32\n","- Faces Cell Indexes: Shape (11164, 2), Dtype int32\n","- Faces FacePoint Indexes: Shape (11164, 2), Dtype int32\n","- Faces Low Elevation Centroid: Shape (11164,), Dtype float32\n","- Faces Minimum Elevation: Shape (11164,), Dtype float32\n","- Faces NormalUnitVector and Length: Shape (11164, 3), Dtype float32\n","- Faces Perimeter Info: Shape (11164, 2), Dtype int32\n","- Faces Perimeter Values: Shape (201, 2), Dtype float64\n","- Perimeter: Shape (170, 2), Dtype float64\n"]}],"source":["# Example 13: Listing 2D Flow Area Groups\n","print(\"\\nExample: Listing 2D Flow Area Groups\")\n","\n","# Get the names of all 2D Flow Area groups\n","flow_area_group_names = RasHdf.get_2d_flow_area_names(hdf_input, ras_object=muncie)\n","\n","print(\"2D Flow Area Groups:\")\n","if flow_area_group_names:\n","    for name in flow_area_group_names:\n","        print(f\"- {name}\")\n","else:\n","    print(\"No 2D Flow Area groups found in the HDF file.\")\n","\n","import h5py\n","\n","# Additional information about the first group (if any)\n","if flow_area_group_names:\n","    first_group = flow_area_group_names[0]\n","    print(f\"\\nDetailed information for the first group: {first_group}\")\n","    \n","    # Remember, use results_path because we are accessing the hdf file and hdf_input is the plan number\n","    with h5py.File(str(results_path), 'r') as hdf_file:\n","        group = hdf_file[f'Geometry/2D Flow Areas/{first_group}']\n","        print(\"Datasets in this group:\")\n","        for name, item in group.items():\n","            if isinstance(item, h5py.Dataset):\n","                print(f\"- {name}: Shape {item.shape}, Dtype {item.dtype}\")"]},{"cell_type":"code","execution_count":19,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 13: Extracting Faces Indexes\n","Faces Cell Indexes:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Left Cell</th>\n","      <th>Right Cell</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>1</td>\n","      <td>2</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>1</td>\n","      <td>5391</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>1</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>1</td>\n","      <td>13</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>2</td>\n","      <td>14</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Left Cell  Right Cell\n","0          1           2\n","1          1        5391\n","2          1           0\n","3          1          13\n","4          2          14"]},"metadata":{},"output_type":"display_data"},{"name":"stdout","output_type":"stream","text":["\n","Faces FacePoint Indexes:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Start FacePoint</th>\n","      <th>End FacePoint</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>4</td>\n","      <td>5</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>5</td>\n","      <td>1</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>1</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>0</td>\n","      <td>4</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>4</td>\n","      <td>6</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Start FacePoint  End FacePoint\n","0                4              5\n","1                5              1\n","2                1              0\n","3                0              4\n","4                4              6"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 14: Extract Faces Indexes\n","print(\"\\nExample 13: Extracting Faces Indexes\")\n","cell_indexes_df, facepoint_indexes_df = RasHdf.get_faces_indexes(hdf_input, ras_object=muncie)\n","print(\"Faces Cell Indexes:\")\n","if cell_indexes_df is not None:\n","    display(cell_indexes_df.head())\n","else:\n","    print(\"No Faces Cell Indexes found.\")\n","print(\"\\nFaces FacePoint Indexes:\")\n","if facepoint_indexes_df is not None:\n","    display(facepoint_indexes_df.head())\n","else:\n","    print(\"No Faces FacePoint Indexes found.\")"]},{"cell_type":"code","execution_count":20,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 14: Extracting Faces Elevation Data\n","Faces Low Elevation Centroid:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Low Elevation Centroid</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>1.450514</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>18.177126</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>36.361233</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>44.354172</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>37.621490</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Low Elevation Centroid\n","0                1.450514\n","1               18.177126\n","2               36.361233\n","3               44.354172\n","4               37.621490"]},"metadata":{},"output_type":"display_data"},{"name":"stdout","output_type":"stream","text":["\n","Faces Minimum Elevation:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Minimum Elevation</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>939.428467</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>940.156250</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>940.156250</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>939.428467</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>939.091248</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Minimum Elevation\n","0         939.428467\n","1         940.156250\n","2         940.156250\n","3         939.428467\n","4         939.091248"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 15: Extract Faces Elevation Data\n","print(\"\\nExample 14: Extracting Faces Elevation Data\")\n","low_elev_centroid_df, min_elevation_df = RasHdf.get_faces_elevation_data(hdf_input, ras_object=muncie)\n","print(\"Faces Low Elevation Centroid:\")\n","if low_elev_centroid_df is not None:\n","    display(low_elev_centroid_df.head())\n","else:\n","    print(\"No Faces Low Elevation Centroid found.\")\n","print(\"\\nFaces Minimum Elevation:\")\n","if min_elevation_df is not None:\n","    display(min_elevation_df.head())\n","else:\n","    print(\"No Faces Minimum Elevation found.\")"]},{"cell_type":"code","execution_count":21,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 15: Extracting Faces Vector Data\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>NormalX</th>\n","      <th>NormalY</th>\n","      <th>Length</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>1.00000</td>\n","      <td>-0.000000</td>\n","      <td>43.544975</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>-0.06601</td>\n","      <td>0.997819</td>\n","      <td>50.109291</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>-1.00000</td>\n","      <td>-0.000000</td>\n","      <td>40.237263</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>-0.00000</td>\n","      <td>-1.000000</td>\n","      <td>50.000000</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>-0.00000</td>\n","      <td>-1.000000</td>\n","      <td>50.000000</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   NormalX   NormalY     Length\n","0  1.00000 -0.000000  43.544975\n","1 -0.06601  0.997819  50.109291\n","2 -1.00000 -0.000000  40.237263\n","3 -0.00000 -1.000000  50.000000\n","4 -0.00000 -1.000000  50.000000"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 16: Extract Faces Vector Data\n","print(\"\\nExample 15: Extracting Faces Vector Data\")\n","faces_vector_df = RasHdf.get_faces_vector_data(hdf_input, ras_object=muncie)\n","if faces_vector_df is not None:\n","    display(faces_vector_df.head())\n","else:\n","    print(\"No Faces Vector Data found.\")"]},{"cell_type":"code","execution_count":22,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 16: Extracting Faces Perimeter Data\n","Faces Perimeter Info:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>Start</th>\n","      <th>Count</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>0</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>0</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>0</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>0</td>\n","      <td>0</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>0</td>\n","      <td>0</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["   Start  Count\n","0      0      0\n","1      0      0\n","2      0      0\n","3      0      0\n","4      0      0"]},"metadata":{},"output_type":"display_data"},{"name":"stdout","output_type":"stream","text":["\n","Faces Perimeter Values:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>X</th>\n","      <th>Y</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>407715.3687</td>\n","      <td>1804189.615</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>407784.1551</td>\n","      <td>1804114.051</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>407778.0565</td>\n","      <td>1804118.342</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>407773.5300</td>\n","      <td>1804118.765</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>406001.1427</td>\n","      <td>1805013.659</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["             X            Y\n","0  407715.3687  1804189.615\n","1  407784.1551  1804114.051\n","2  407778.0565  1804118.342\n","3  407773.5300  1804118.765\n","4  406001.1427  1805013.659"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 17: Extract Faces Perimeter Data\n","print(\"\\nExample 16: Extracting Faces Perimeter Data\")\n","perimeter_info_df, perimeter_values_df = RasHdf.get_faces_perimeter_data(hdf_input, ras_object=muncie)\n","print(\"Faces Perimeter Info:\")\n","if perimeter_info_df is not None:\n","    display(perimeter_info_df.head())\n","else:\n","    print(\"No Faces Perimeter Info found.\")\n","print(\"\\nFaces Perimeter Values:\")\n","if perimeter_values_df is not None:\n","    display(perimeter_values_df.head())\n","else:\n","    print(\"No Faces Perimeter Values found.\")"]},{"cell_type":"code","execution_count":23,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 17: Extracting Infiltration Data\n","Infiltration - Cell Classifications:\n","No Infiltration Cell Classifications found.\n","\n","Infiltration - Face Classifications:\n","No Infiltration Face Classifications found.\n","\n","Infiltration - Initial Deficit:\n","No Infiltration Initial Deficit found.\n","\n","Infiltration - Maximum Deficit:\n","No Infiltration Maximum Deficit found.\n","\n","Infiltration - Potential Percolation Rate:\n","No Infiltration Potential Percolation Rate found.\n"]}],"source":["# Example 18: Extract Infiltration Data\n","print(\"\\nExample 17: Extracting Infiltration Data\")\n","cell_classifications_df, face_classifications_df, initial_deficit_df, maximum_deficit_df, potential_percolation_rate_df = RasHdf.get_infiltration_data(hdf_input, ras_object=muncie)\n","print(\"Infiltration - Cell Classifications:\")\n","if cell_classifications_df is not None:\n","    display(cell_classifications_df.head())\n","else:\n","    print(\"No Infiltration Cell Classifications found.\")\n","print(\"\\nInfiltration - Face Classifications:\")\n","if face_classifications_df is not None:\n","    display(face_classifications_df.head())\n","else:\n","    print(\"No Infiltration Face Classifications found.\")\n","print(\"\\nInfiltration - Initial Deficit:\")\n","if initial_deficit_df is not None:\n","    display(initial_deficit_df.head())\n","else:\n","    print(\"No Infiltration Initial Deficit found.\")\n","print(\"\\nInfiltration - Maximum Deficit:\")\n","if maximum_deficit_df is not None:\n","    display(maximum_deficit_df.head())\n","else:\n","    print(\"No Infiltration Maximum Deficit found.\")\n","print(\"\\nInfiltration - Potential Percolation Rate:\")\n","if potential_percolation_rate_df is not None:\n","    display(potential_percolation_rate_df.head())\n","else:\n","    print(\"No Infiltration Potential Percolation Rate found.\")"]},{"cell_type":"code","execution_count":24,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 18: Extracting Percent Impervious Data\n","Percent Impervious - Cell Classifications:\n","No Percent Impervious Cell Classifications found.\n","\n","Percent Impervious - Face Classifications:\n","No Percent Impervious Face Classifications found.\n","\n","Percent Impervious:\n","No Percent Impervious data found.\n"]}],"source":["# Example 19: Extract Percent Impervious Data\n","print(\"\\nExample 18: Extracting Percent Impervious Data\")\n","cell_classifications_df, face_classifications_df, percent_impervious_df = RasHdf.get_percent_impervious_data(hdf_input, ras_object=muncie)\n","print(\"Percent Impervious - Cell Classifications:\")\n","if cell_classifications_df is not None:\n","    display(cell_classifications_df.head())\n","else:\n","    print(\"No Percent Impervious Cell Classifications found.\")\n","print(\"\\nPercent Impervious - Face Classifications:\")\n","if face_classifications_df is not None:\n","    display(face_classifications_df.head())\n","else:\n","    print(\"No Percent Impervious Face Classifications found.\")\n","print(\"\\nPercent Impervious:\")\n","if percent_impervious_df is not None:\n","    display(percent_impervious_df.head())\n","else:\n","    print(\"No Percent Impervious data found.\")\n","    \n","    # Note: Does not exist in the Muncie Plan 3 example used. "]},{"cell_type":"code","execution_count":25,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 19: Extracting Perimeter Data\n","Perimeter Data:\n"]},{"data":{"text/html":["<div>\n","<style scoped>\n","    .dataframe tbody tr th:only-of-type {\n","        vertical-align: middle;\n","    }\n","\n","    .dataframe tbody tr th {\n","        vertical-align: top;\n","    }\n","\n","    .dataframe thead th {\n","        text-align: right;\n","    }\n","</style>\n","<table border=\"1\" class=\"dataframe\">\n","  <thead>\n","    <tr style=\"text-align: right;\">\n","      <th></th>\n","      <th>X</th>\n","      <th>Y</th>\n","    </tr>\n","  </thead>\n","  <tbody>\n","    <tr>\n","      <th>0</th>\n","      <td>409537.1821</td>\n","      <td>1802597.314</td>\n","    </tr>\n","    <tr>\n","      <th>1</th>\n","      <td>409426.1403</td>\n","      <td>1802614.326</td>\n","    </tr>\n","    <tr>\n","      <th>2</th>\n","      <td>409315.2430</td>\n","      <td>1802638.443</td>\n","    </tr>\n","    <tr>\n","      <th>3</th>\n","      <td>409133.8857</td>\n","      <td>1802742.001</td>\n","    </tr>\n","    <tr>\n","      <th>4</th>\n","      <td>409053.8968</td>\n","      <td>1802841.512</td>\n","    </tr>\n","  </tbody>\n","</table>\n","</div>"],"text/plain":["             X            Y\n","0  409537.1821  1802597.314\n","1  409426.1403  1802614.326\n","2  409315.2430  1802638.443\n","3  409133.8857  1802742.001\n","4  409053.8968  1802841.512"]},"metadata":{},"output_type":"display_data"}],"source":["# Example 20: Extract Perimeter Data\n","print(\"\\nExample 19: Extracting Perimeter Data\")\n","perimeter_df = RasHdf.get_perimeter_data(hdf_input, ras_object=muncie)\n","print(\"Perimeter Data:\")\n","if perimeter_df is not None:\n","    display(perimeter_df.head())\n","else:\n","    print(\"No Perimeter Data found.\")"]},{"cell_type":"code","execution_count":26,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 20: Extracting Boundary Condition Lines Attributes\n"]},{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:16,087 - ras_commander.RasHdf - CRITICAL - Group path '/Geometry/Boundary Condition Lines/Attributes' not found in HDF file 'c:\\GH\\ras-commander\\examples\\example_projects\\Muncie\\Muncie.p03.hdf'\n"]},{"name":"stdout","output_type":"stream","text":["No Boundary Condition Lines Attributes found.\n"]}],"source":["# Example 21: Extract Boundary Condition Lines Attributes\n","print(\"\\nExample 20: Extracting Boundary Condition Lines Attributes\")\n","bc_lines_df = RasHdf.get_group_attributes_as_df(hdf_input, '/Geometry/Boundary Condition Lines/Attributes', ras_object=muncie)\n","if bc_lines_df is not None:\n","    display(bc_lines_df.head())\n","else:\n","    print(\"No Boundary Condition Lines Attributes found.\")\n","    \n","# None in Muncie plan 3, no output expected."]},{"cell_type":"code","execution_count":27,"metadata":{},"outputs":[{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:16,097 - ras_commander.RasHdf - CRITICAL - Group path '/Geometry/Boundary Condition Lines/Attributes' not found in HDF file 'c:\\GH\\ras-commander\\examples\\example_projects\\Muncie\\Muncie.p03.hdf'\n"]},{"name":"stdout","output_type":"stream","text":["\n","Example 22: Extracting Boundary Condition Time Series Data\n","No Boundary Condition Time Series Data found.\n","\n","All RasHdf functions have been executed on Plan 03 HDF file.\n"]}],"source":["# Example 22: Extract Boundary Condition Time Series Data\n","print(\"\\nExample 22: Extracting Boundary Condition Time Series Data\")\n","bc_time_series_df = RasHdf.get_group_attributes_as_df(hdf_input, '/Geometry/Boundary Condition Lines/Attributes', ras_object=muncie)\n","if bc_time_series_df is not None:\n","    display(bc_time_series_df.head())\n","else:\n","    print(\"No Boundary Condition Time Series Data found.\")\n","\n","print(\"\\nAll RasHdf functions have been executed on Plan 03 HDF file.\")\n","\n","\n","# NOTE: Muncie does not have boundary conditions in the HDF file - see how errors are handled. "]},{"cell_type":"code","execution_count":28,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["Example 23: Retrieving 2D Flow Area Solution Times\n","Retrieved 289 solution times:\n","[0.         0.00347222 0.00694444 0.01041667 0.01388889 0.01736111\n"," 0.02083333 0.02430556 0.02777778 0.03125    0.03472222 0.03819444\n"," 0.04166667 0.04513889 0.04861111 0.05208333 0.05555556 0.05902778\n"," 0.0625     0.06597222 0.06944444 0.07291667 0.07638889 0.07986111\n"," 0.08333333 0.08680556 0.09027778 0.09375    0.09722222 0.10069444\n"," 0.10416667 0.10763889 0.11111111 0.11458333 0.11805556 0.12152778\n"," 0.125      0.12847222 0.13194444 0.13541667 0.13888889 0.14236111\n"," 0.14583333 0.14930556 0.15277778 0.15625    0.15972222 0.16319444\n"," 0.16666667 0.17013889 0.17361111 0.17708333 0.18055556 0.18402778\n"," 0.1875     0.19097222 0.19444444 0.19791667 0.20138889 0.20486111\n"," 0.20833333 0.21180556 0.21527778 0.21875    0.22222222 0.22569444\n"," 0.22916667 0.23263889 0.23611111 0.23958333 0.24305556 0.24652778\n"," 0.25       0.25347222 0.25694444 0.26041667 0.26388889 0.26736111\n"," 0.27083333 0.27430556 0.27777778 0.28125    0.28472222 0.28819444\n"," 0.29166667 0.29513889 0.29861111 0.30208333 0.30555556 0.30902778\n"," 0.3125     0.31597222 0.31944444 0.32291667 0.32638889 0.32986111\n"," 0.33333333 0.33680556 0.34027778 0.34375    0.34722222 0.35069444\n"," 0.35416667 0.35763889 0.36111111 0.36458333 0.36805556 0.37152778\n"," 0.375      0.37847222 0.38194444 0.38541667 0.38888889 0.39236111\n"," 0.39583333 0.39930556 0.40277778 0.40625    0.40972222 0.41319444\n"," 0.41666667 0.42013889 0.42361111 0.42708333 0.43055556 0.43402778\n"," 0.4375     0.44097222 0.44444444 0.44791667 0.45138889 0.45486111\n"," 0.45833333 0.46180556 0.46527778 0.46875    0.47222222 0.47569444\n"," 0.47916667 0.48263889 0.48611111 0.48958333 0.49305556 0.49652778\n"," 0.5        0.50347222 0.50694444 0.51041667 0.51388889 0.51736111\n"," 0.52083333 0.52430556 0.52777778 0.53125    0.53472222 0.53819444\n"," 0.54166667 0.54513889 0.54861111 0.55208333 0.55555556 0.55902778\n"," 0.5625     0.56597222 0.56944444 0.57291667 0.57638889 0.57986111\n"," 0.58333333 0.58680556 0.59027778 0.59375    0.59722222 0.60069444\n"," 0.60416667 0.60763889 0.61111111 0.61458333 0.61805556 0.62152778\n"," 0.625      0.62847222 0.63194444 0.63541667 0.63888889 0.64236111\n"," 0.64583333 0.64930556 0.65277778 0.65625    0.65972222 0.66319444\n"," 0.66666667 0.67013889 0.67361111 0.67708333 0.68055556 0.68402778\n"," 0.6875     0.69097222 0.69444444 0.69791667 0.70138889 0.70486111\n"," 0.70833333 0.71180556 0.71527778 0.71875    0.72222222 0.72569444\n"," 0.72916667 0.73263889 0.73611111 0.73958333 0.74305556 0.74652778\n"," 0.75       0.75347222 0.75694444 0.76041667 0.76388889 0.76736111\n"," 0.77083333 0.77430556 0.77777778 0.78125    0.78472222 0.78819444\n"," 0.79166667 0.79513889 0.79861111 0.80208333 0.80555556 0.80902778\n"," 0.8125     0.81597222 0.81944444 0.82291667 0.82638889 0.82986111\n"," 0.83333333 0.83680556 0.84027778 0.84375    0.84722222 0.85069444\n"," 0.85416667 0.85763889 0.86111111 0.86458333 0.86805556 0.87152778\n"," 0.875      0.87847222 0.88194444 0.88541667 0.88888889 0.89236111\n"," 0.89583333 0.89930556 0.90277778 0.90625    0.90972222 0.91319444\n"," 0.91666667 0.92013889 0.92361111 0.92708333 0.93055556 0.93402778\n"," 0.9375     0.94097222 0.94444444 0.94791667 0.95138889 0.95486111\n"," 0.95833333 0.96180556 0.96527778 0.96875    0.97222222 0.97569444\n"," 0.97916667 0.98263889 0.98611111 0.98958333 0.99305556 0.99652778\n"," 1.        ]\n"]}],"source":["# Example 23: Retrieving 2D Flow Area Solution Times\n","print(\"Example 23: Retrieving 2D Flow Area Solution Times\")\n","\n","solution_times = RasHdf.get_2d_area_solution_times(hdf_input, ras_object=muncie)\n","\n","if solution_times is not None:\n","    print(f\"Retrieved {len(solution_times)} solution times:\")\n","    print(solution_times)\n","else:\n","    print(\"No solution times found.\")\n"]},{"cell_type":"code","execution_count":29,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 24: Retrieving 2D Flow Area Solution Time Dates\n","Retrieved 289 solution time dates:\n","[b'02JAN1900 00:00:00' b'02JAN1900 00:05:00' b'02JAN1900 00:10:00'\n"," b'02JAN1900 00:15:00' b'02JAN1900 00:20:00' b'02JAN1900 00:25:00'\n"," b'02JAN1900 00:30:00' b'02JAN1900 00:35:00' b'02JAN1900 00:40:00'\n"," b'02JAN1900 00:45:00' b'02JAN1900 00:50:00' b'02JAN1900 00:55:00'\n"," b'02JAN1900 01:00:00' b'02JAN1900 01:05:00' b'02JAN1900 01:10:00'\n"," b'02JAN1900 01:15:00' b'02JAN1900 01:20:00' b'02JAN1900 01:25:00'\n"," b'02JAN1900 01:30:00' b'02JAN1900 01:35:00' b'02JAN1900 01:40:00'\n"," b'02JAN1900 01:45:00' b'02JAN1900 01:50:00' b'02JAN1900 01:55:00'\n"," b'02JAN1900 02:00:00' b'02JAN1900 02:05:00' b'02JAN1900 02:10:00'\n"," b'02JAN1900 02:15:00' b'02JAN1900 02:20:00' b'02JAN1900 02:25:00'\n"," b'02JAN1900 02:30:00' b'02JAN1900 02:35:00' b'02JAN1900 02:40:00'\n"," b'02JAN1900 02:45:00' b'02JAN1900 02:50:00' b'02JAN1900 02:55:00'\n"," b'02JAN1900 03:00:00' b'02JAN1900 03:05:00' b'02JAN1900 03:10:00'\n"," b'02JAN1900 03:15:00' b'02JAN1900 03:20:00' b'02JAN1900 03:25:00'\n"," b'02JAN1900 03:30:00' b'02JAN1900 03:35:00' b'02JAN1900 03:40:00'\n"," b'02JAN1900 03:45:00' b'02JAN1900 03:50:00' b'02JAN1900 03:55:00'\n"," b'02JAN1900 04:00:00' b'02JAN1900 04:05:00' b'02JAN1900 04:10:00'\n"," b'02JAN1900 04:15:00' b'02JAN1900 04:20:00' b'02JAN1900 04:25:00'\n"," b'02JAN1900 04:30:00' b'02JAN1900 04:35:00' b'02JAN1900 04:40:00'\n"," b'02JAN1900 04:45:00' b'02JAN1900 04:50:00' b'02JAN1900 04:55:00'\n"," b'02JAN1900 05:00:00' b'02JAN1900 05:05:00' b'02JAN1900 05:10:00'\n"," b'02JAN1900 05:15:00' b'02JAN1900 05:20:00' b'02JAN1900 05:25:00'\n"," b'02JAN1900 05:30:00' b'02JAN1900 05:35:00' b'02JAN1900 05:40:00'\n"," b'02JAN1900 05:45:00' b'02JAN1900 05:50:00' b'02JAN1900 05:55:00'\n"," b'02JAN1900 06:00:00' b'02JAN1900 06:05:00' b'02JAN1900 06:10:00'\n"," b'02JAN1900 06:15:00' b'02JAN1900 06:20:00' b'02JAN1900 06:25:00'\n"," b'02JAN1900 06:30:00' b'02JAN1900 06:35:00' b'02JAN1900 06:40:00'\n"," b'02JAN1900 06:45:00' b'02JAN1900 06:50:00' b'02JAN1900 06:55:00'\n"," b'02JAN1900 07:00:00' b'02JAN1900 07:05:00' b'02JAN1900 07:10:00'\n"," b'02JAN1900 07:15:00' b'02JAN1900 07:20:00' b'02JAN1900 07:25:00'\n"," b'02JAN1900 07:30:00' b'02JAN1900 07:35:00' b'02JAN1900 07:40:00'\n"," b'02JAN1900 07:45:00' b'02JAN1900 07:50:00' b'02JAN1900 07:55:00'\n"," b'02JAN1900 08:00:00' b'02JAN1900 08:05:00' b'02JAN1900 08:10:00'\n"," b'02JAN1900 08:15:00' b'02JAN1900 08:20:00' b'02JAN1900 08:25:00'\n"," b'02JAN1900 08:30:00' b'02JAN1900 08:35:00' b'02JAN1900 08:40:00'\n"," b'02JAN1900 08:45:00' b'02JAN1900 08:50:00' b'02JAN1900 08:55:00'\n"," b'02JAN1900 09:00:00' b'02JAN1900 09:05:00' b'02JAN1900 09:10:00'\n"," b'02JAN1900 09:15:00' b'02JAN1900 09:20:00' b'02JAN1900 09:25:00'\n"," b'02JAN1900 09:30:00' b'02JAN1900 09:35:00' b'02JAN1900 09:40:00'\n"," b'02JAN1900 09:45:00' b'02JAN1900 09:50:00' b'02JAN1900 09:55:00'\n"," b'02JAN1900 10:00:00' b'02JAN1900 10:05:00' b'02JAN1900 10:10:00'\n"," b'02JAN1900 10:15:00' b'02JAN1900 10:20:00' b'02JAN1900 10:25:00'\n"," b'02JAN1900 10:30:00' b'02JAN1900 10:35:00' b'02JAN1900 10:40:00'\n"," b'02JAN1900 10:45:00' b'02JAN1900 10:50:00' b'02JAN1900 10:55:00'\n"," b'02JAN1900 11:00:00' b'02JAN1900 11:05:00' b'02JAN1900 11:10:00'\n"," b'02JAN1900 11:15:00' b'02JAN1900 11:20:00' b'02JAN1900 11:25:00'\n"," b'02JAN1900 11:30:00' b'02JAN1900 11:35:00' b'02JAN1900 11:40:00'\n"," b'02JAN1900 11:45:00' b'02JAN1900 11:50:00' b'02JAN1900 11:55:00'\n"," b'02JAN1900 12:00:00' b'02JAN1900 12:05:00' b'02JAN1900 12:10:00'\n"," b'02JAN1900 12:15:00' b'02JAN1900 12:20:00' b'02JAN1900 12:25:00'\n"," b'02JAN1900 12:30:00' b'02JAN1900 12:35:00' b'02JAN1900 12:40:00'\n"," b'02JAN1900 12:45:00' b'02JAN1900 12:50:00' b'02JAN1900 12:55:00'\n"," b'02JAN1900 13:00:00' b'02JAN1900 13:05:00' b'02JAN1900 13:10:00'\n"," b'02JAN1900 13:15:00' b'02JAN1900 13:20:00' b'02JAN1900 13:25:00'\n"," b'02JAN1900 13:30:00' b'02JAN1900 13:35:00' b'02JAN1900 13:40:00'\n"," b'02JAN1900 13:45:00' b'02JAN1900 13:50:00' b'02JAN1900 13:55:00'\n"," b'02JAN1900 14:00:00' b'02JAN1900 14:05:00' b'02JAN1900 14:10:00'\n"," b'02JAN1900 14:15:00' b'02JAN1900 14:20:00' b'02JAN1900 14:25:00'\n"," b'02JAN1900 14:30:00' b'02JAN1900 14:35:00' b'02JAN1900 14:40:00'\n"," b'02JAN1900 14:45:00' b'02JAN1900 14:50:00' b'02JAN1900 14:55:00'\n"," b'02JAN1900 15:00:00' b'02JAN1900 15:05:00' b'02JAN1900 15:10:00'\n"," b'02JAN1900 15:15:00' b'02JAN1900 15:20:00' b'02JAN1900 15:25:00'\n"," b'02JAN1900 15:30:00' b'02JAN1900 15:35:00' b'02JAN1900 15:40:00'\n"," b'02JAN1900 15:45:00' b'02JAN1900 15:50:00' b'02JAN1900 15:55:00'\n"," b'02JAN1900 16:00:00' b'02JAN1900 16:05:00' b'02JAN1900 16:10:00'\n"," b'02JAN1900 16:15:00' b'02JAN1900 16:20:00' b'02JAN1900 16:25:00'\n"," b'02JAN1900 16:30:00' b'02JAN1900 16:35:00' b'02JAN1900 16:40:00'\n"," b'02JAN1900 16:45:00' b'02JAN1900 16:50:00' b'02JAN1900 16:55:00'\n"," b'02JAN1900 17:00:00' b'02JAN1900 17:05:00' b'02JAN1900 17:10:00'\n"," b'02JAN1900 17:15:00' b'02JAN1900 17:20:00' b'02JAN1900 17:25:00'\n"," b'02JAN1900 17:30:00' b'02JAN1900 17:35:00' b'02JAN1900 17:40:00'\n"," b'02JAN1900 17:45:00' b'02JAN1900 17:50:00' b'02JAN1900 17:55:00'\n"," b'02JAN1900 18:00:00' b'02JAN1900 18:05:00' b'02JAN1900 18:10:00'\n"," b'02JAN1900 18:15:00' b'02JAN1900 18:20:00' b'02JAN1900 18:25:00'\n"," b'02JAN1900 18:30:00' b'02JAN1900 18:35:00' b'02JAN1900 18:40:00'\n"," b'02JAN1900 18:45:00' b'02JAN1900 18:50:00' b'02JAN1900 18:55:00'\n"," b'02JAN1900 19:00:00' b'02JAN1900 19:05:00' b'02JAN1900 19:10:00'\n"," b'02JAN1900 19:15:00' b'02JAN1900 19:20:00' b'02JAN1900 19:25:00'\n"," b'02JAN1900 19:30:00' b'02JAN1900 19:35:00' b'02JAN1900 19:40:00'\n"," b'02JAN1900 19:45:00' b'02JAN1900 19:50:00' b'02JAN1900 19:55:00'\n"," b'02JAN1900 20:00:00' b'02JAN1900 20:05:00' b'02JAN1900 20:10:00'\n"," b'02JAN1900 20:15:00' b'02JAN1900 20:20:00' b'02JAN1900 20:25:00'\n"," b'02JAN1900 20:30:00' b'02JAN1900 20:35:00' b'02JAN1900 20:40:00'\n"," b'02JAN1900 20:45:00' b'02JAN1900 20:50:00' b'02JAN1900 20:55:00'\n"," b'02JAN1900 21:00:00' b'02JAN1900 21:05:00' b'02JAN1900 21:10:00'\n"," b'02JAN1900 21:15:00' b'02JAN1900 21:20:00' b'02JAN1900 21:25:00'\n"," b'02JAN1900 21:30:00' b'02JAN1900 21:35:00' b'02JAN1900 21:40:00'\n"," b'02JAN1900 21:45:00' b'02JAN1900 21:50:00' b'02JAN1900 21:55:00'\n"," b'02JAN1900 22:00:00' b'02JAN1900 22:05:00' b'02JAN1900 22:10:00'\n"," b'02JAN1900 22:15:00' b'02JAN1900 22:20:00' b'02JAN1900 22:25:00'\n"," b'02JAN1900 22:30:00' b'02JAN1900 22:35:00' b'02JAN1900 22:40:00'\n"," b'02JAN1900 22:45:00' b'02JAN1900 22:50:00' b'02JAN1900 22:55:00'\n"," b'02JAN1900 23:00:00' b'02JAN1900 23:05:00' b'02JAN1900 23:10:00'\n"," b'02JAN1900 23:15:00' b'02JAN1900 23:20:00' b'02JAN1900 23:25:00'\n"," b'02JAN1900 23:30:00' b'02JAN1900 23:35:00' b'02JAN1900 23:40:00'\n"," b'02JAN1900 23:45:00' b'02JAN1900 23:50:00' b'02JAN1900 23:55:00'\n"," b'03JAN1900 00:00:00']\n"]}],"source":["# Example 24: Retrieving 2D Flow Area Solution Time Dates\n","print(\"\\nExample 24: Retrieving 2D Flow Area Solution Time Dates\")\n","\n","solution_time_dates = RasHdf.get_2d_area_solution_time_dates(hdf_input, ras_object=muncie)\n","\n","if solution_time_dates is not None:\n","    print(f\"Retrieved {len(solution_time_dates)} solution time dates:\")\n","    print(solution_time_dates)\n","else:\n","    print(\"No solution time dates found.\")\n"]},{"cell_type":"code","execution_count":30,"metadata":{},"outputs":[{"name":"stdout","output_type":"stream","text":["\n","Example 25: Loading 2D Flow Area Solutions\n","No solutions loaded.\n"]}],"source":["# Example 25: Loading 2D Flow Area Solutions\n","print(\"\\nExample 25: Loading 2D Flow Area Solutions\")\n","\n","# Load 2D area solutions using the revised method\n","solutions = RasHdf.load_2d_area_solutions(hdf_input, ras_object=muncie)\n","\n","# Check if solutions were successfully loaded\n","if solutions:\n","    # Access and display solution times\n","    solution_times_df = solutions.get('solution_times')\n","    if solution_times_df is not None:\n","        print(\"Solution Times:\")\n","        print(solution_times_df.head())\n","    else:\n","        print(\"Solution times not found.\")\n","    \n","    # Iterate through each 2D Flow Area and display sample data\n","    for key in solutions:\n","        if key != 'solution_times':\n","            print(f\"\\nData for {key}:\")\n","            area_df = solutions[key]\n","            print(area_df.head(10))  # Display first 10 records\n","else:\n","    print(\"No solutions loaded.\")\n"]},{"cell_type":"code","execution_count":31,"metadata":{},"outputs":[{"name":"stderr","output_type":"stream","text":["2024-09-30 16:18:16,142 - ras_commander.RasHdf - INFO - Found 1 2D Flow Areas\n"]},{"name":"stdout","output_type":"stream","text":["\n","Example 29: Building Face FacePoints\n","FacePoints Indexes for the first face of the first 2D Flow Area:\n","[4 5]\n"]}],"source":["# Example 29: Building Face FacePoints\n","print(\"\\nExample 29: Building Face FacePoints\")\n","\n","face_facepoints_list = RasHdf.build_face_facepoints(hdf_input, ras_object=muncie)\n","\n","if face_facepoints_list:\n","    # Displaying face points indexes for the first face of the first 2D Flow Area\n","    print(\"FacePoints Indexes for the first face of the first 2D Flow Area:\")\n","    print(face_facepoints_list[0][0])  # Assuming at least one area and one face\n","else:\n","    print(\"No face facepoints built.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]}],"metadata":{"kernelspec":{"display_name":"Python 3","language":"python","name":"python3"},"language_info":{"codemirror_mode":{"name":"ipython","version":3},"file_extension":".py","mimetype":"text/x-python","name":"python","nbconvert_exporter":"python","pygments_lexer":"ipython3","version":"3.11.9"}},"nbformat":4,"nbformat_minor":2}
+{"cells":[{"cell_type":"markdown","metadata":{},"source":["# HEC-RAS 2D HDF Data Analysis Notebook\n","\n","This notebook demonstrates how to manipulate and analyze HEC-RAS 2D HDF data using the ras-commander library. It leverages the RasHdf and RasUtils classes to streamline data extraction, processing, and visualization."]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Import required Libraries\n","import subprocess\n","import sys\n","import os\n","from pathlib import Path\n","\n","def install_module(module_name):\n","    try:\n","        __import__(module_name)\n","    except ImportError:\n","        print(f\"{module_name} not found. Installing...\")\n","        subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-U\", module_name])\n","\n","# List of modules to check and install if necessary\n","modules = ['h5py', 'numpy', 'requests', 'geopandas', 'matplotlib', 'pandas']\n","for module in modules:\n","    install_module(module)\n","\n","# Import the rest of the required libraries\n","import pandas as pd\n","import numpy as np\n","import geopandas as gpd\n","import matplotlib.pyplot as plt\n"]},{"cell_type":"markdown","metadata":{},"source":["## Importing ras-commander flexibly (from package or local dev copy)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["import sys\n","from pathlib import Path\n","\n","# Flexible imports to allow for development without installation \n","#  ** Use this version with Jupyter Notebooks **\n","try:\n","    # Try to import from the installed package\n","    from ras_commander import init_ras_project, RasHdf, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj, RasGpt, ras\n","except ImportError:\n","    # If the import fails, add the parent directory to the Python path\n","    import os\n","    current_file = Path(os.getcwd()).resolve()\n","    parent_directory = current_file.parent\n","    sys.path.append(str(parent_directory))\n","    \n","    # Now try to import again\n","    from ras_commander import init_ras_project, RasHdf, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, RasPrj, RasGpt, ras\n","\n","print(\"ras_commander imported successfully\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Define the path to the Muncie project\n","current_dir = Path.cwd()  # Adjust if your notebook is in a different directory\n","muncie_path = current_dir / \"example_projects\" / \"Muncie\"\n","bald_eagle_path = current_dir / \"example_projects\" / \"BaldEagleCrkMulti2D\"\n","import logging\n","# Check if Muncie.p03.hdf exists (so we don't have to re-run the simulation when re-running or debugging)\n","hdf_file = muncie_path / \"Muncie.p03.hdf\"\n","\n","if not hdf_file.exists():\n","    # Initialize RasExamples and extract the Muncie project\n","    ras_examples = RasExamples()\n","    ras_examples.extract_project([\"Muncie\", \"BaldEagleCrkMulti2D\"])\n","\n","    # Initialize custom Ras objects\n","    muncie = RasPrj()\n","    bald_eagle = RasPrj()\n","\n","    # Initialize the RAS projects using the custom ras objects\n","    muncie = init_ras_project(muncie_path, \"6.5\", ras_instance=muncie)\n","    logging.info(f\"Muncie project initialized with folder: {muncie.project_folder}\")\n","\n","    bald_eagle = init_ras_project(bald_eagle_path, \"6.5\", ras_instance=bald_eagle)\n","    logging.info(f\"Bald Eagle project initialized with folder: {bald_eagle.project_folder}\")\n","    \n","    logging.info(f\"Muncie object id: {id(muncie)}\")\n","    logging.info(f\"Bald Eagle object id: {id(bald_eagle)}\")\n","    \n","    # Define the plan number to execute\n","    plan_number = \"03\"\n","\n","    # Set plan keys for both projects\n","    for project in [muncie, bald_eagle]:\n","        RasPlan.update_plan_value(plan_number, \"run_htab\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"run_unet\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"run_postProcess\", 1, ras_object=project)\n","        RasPlan.update_plan_value(plan_number, \"run_rasmapper\", 0, ras_object=project)\n","\n","    # Execute Plan 03 using RasCmdr for Muncie\n","    print(f\"Executing Plan {plan_number} for the Muncie project...\")\n","    success_muncie = RasCmdr.compute_plan(plan_number, ras_object=muncie)\n","    if success_muncie:\n","        print(f\"Plan {plan_number} executed successfully for Muncie.\\n\")\n","    else:\n","        print(f\"Plan {plan_number} execution failed for Muncie.\\n\")\n","    \n","    # Execute Plan 03 using RasCmdr for Bald Eagle\n","    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n","    success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n","    if success_bald_eagle:\n","        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n","    else:\n","        print(f\"Plan {plan_number} execution failed for Bald Eagle.\\n\")\n","else:\n","    print(\"Muncie.p03.hdf already exists. Skipping project extraction and plan execution.\")\n","    # Initialize the RAS project using the custom ras object\n","    muncie = RasPrj()\n","    bald_eagle = RasPrj()\n","    muncie = init_ras_project(muncie_path, \"6.5\", ras_instance=muncie)\n","    bald_eagle = init_ras_project(bald_eagle_path, \"6.5\", ras_instance=bald_eagle)\n","    plan_number = \"03\""]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Retrieve the HDF file path for Plan 03\n","results_path_muncie = RasPlan.get_results_path(plan_number, ras_object=muncie)\n","if results_path_muncie:\n","    print(f\"Results for Plan {plan_number} are located at: {results_path_muncie}\\n\")\n","else:\n","    print(f\"No results found for Plan {plan_number}.\\n\")\n","    \n","results_path_baldeagle = RasPlan.get_results_path(plan_number, ras_object=bald_eagle)\n","if results_path_baldeagle:\n","    print(f\"Results for Plan {plan_number} are located at: {results_path_baldeagle}\\n\")\n","else:\n","    print(f\"No results found for Plan {plan_number}.\\n\")    "]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Define the HDF input path as Plan Number\n","hdf_input = plan_number\n","\n","# Initialize RasHdf handler\n","hdf_handler = RasHdf()\n","\n","# The remainder of the examples only use muncie, so let's set results_path to muncie\n","results_path = results_path_muncie\n","\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 1: List all HDF paths with properties\n","print(\"Example 1: Listing all HDF paths with properties\")\n","hdf_paths_df = RasHdf.get_hdf_paths_with_properties(hdf_input, ras_object=muncie)\n","display(hdf_paths_df.head())"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 2: Extract runtime and compute time data\n","print(\"\\nExample 2: Extracting runtime and compute time data\")\n","runtime_df = RasHdf.get_runtime_data(hdf_input, ras_object=muncie)\n","if runtime_df is not None:\n","    display(runtime_df)\n","else:\n","    print(\"No runtime data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 3: Get 2D Flow Area Names\n","print(\"\\nExample 3: Listing 2D Flow Area Names\")\n","flow_area_names = RasHdf.get_2d_flow_area_names(hdf_input, ras_object=muncie)\n","print(\"2D Flow Area Names:\", flow_area_names)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 4: Extract 2D Flow Area Attributes\n","print(\"\\nExample 4: Extracting 2D Flow Area Attributes\")\n","flow_area_attributes_df = RasHdf.get_2d_flow_area_attributes(hdf_input, ras_object=muncie)\n","if flow_area_attributes_df is not None:\n","    display(flow_area_attributes_df.head())\n","else:\n","    print(\"No 2D Flow Area attributes found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 5: Extract Cell Info\n","print(\"\\nExample 5: Extracting Cell Info\")\n","cell_info_df = RasHdf.get_cell_info(hdf_input, ras_object=muncie)\n","if cell_info_df is not None:\n","    display(cell_info_df.head())\n","else:\n","    print(\"No Cell Info found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 6: Extract Cell Points\n","print(\"\\nExample 6: Extracting Cell Points\")\n","cell_points_df = RasHdf.get_cell_points(hdf_input, ras_object=muncie)\n","if cell_points_df is not None:\n","    display(cell_points_df.head())\n","else:\n","    print(\"No Cell Points found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 7: Extract Polygon Info and Parts\n","print(\"\\nExample 7: Extracting Polygon Info and Parts\")\n","polygon_info_df, polygon_parts_df = RasHdf.get_polygon_info_and_parts(hdf_input, ras_object=muncie)\n","print(\"Polygon Info:\")\n","if polygon_info_df is not None:\n","    display(polygon_info_df.head())\n","else:\n","    print(\"No Polygon Info found.\")\n","print(\"\\nPolygon Parts:\")\n","if polygon_parts_df is not None:\n","    display(polygon_parts_df.head())\n","else:\n","    print(\"No Polygon Parts found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 8: Extract Polygon Points\n","print(\"\\nExample 8: Extracting Polygon Points\")\n","polygon_points_df = RasHdf.get_polygon_points(hdf_input, ras_object=muncie)\n","if polygon_points_df is not None:\n","    display(polygon_points_df.head())\n","else:\n","    print(\"No Polygon Points found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 9: Extract Cells Center Coordinates and Manning's n\n","print(\"\\nExample 9: Extracting Cells Center Coordinates and Manning's n\")\n","cells_center_coord_df, cells_manning_n_df = RasHdf.get_cells_center_data(hdf_input, ras_object=muncie)\n","print(\"Cells Center Coordinates:\")\n","if cells_center_coord_df is not None:\n","    display(cells_center_coord_df.head())\n","else:\n","    print(\"No Cells Center Coordinates found.\")\n","print(\"\\nCells Manning's n:\")\n","if cells_manning_n_df is not None:\n","    display(cells_manning_n_df.head())\n","else:\n","    print(\"No Cells Manning's n found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 10: Extract Faces Area Elevation Data\n","print(\"\\nExample 10: Extracting Faces Area Elevation Data\")\n","faces_elev_df = RasHdf.get_faces_area_elevation_data(hdf_input, ras_object=muncie)\n","if faces_elev_df is not None:\n","    display(faces_elev_df.head())\n","else:\n","    print(\"No Faces Area Elevation Data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 11: Extract Compute Messages as String\n","print(\"\\nExample 11: Extracting Compute Messages\")\n","compute_messages = RasHdf.extract_string_from_hdf(hdf_input, '/Results/Summary/Compute Messages (text)', ras_object=muncie)\n","print(\"Compute Messages:\")\n","print(compute_messages)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 12: Extract Plan Parameters and Volume Accounting\n","print(\"\\nExample 12: Extracting Plan Parameters and Volume Accounting Data\")\n","import h5py\n","import numpy as np\n","\n","# Extract plan parameters\n","with h5py.File(str(results_path), 'r') as hdf_file:\n","    plan_parameters = hdf_file['Plan Data/Plan Parameters']\n","    \n","    # List group attributes\n","    print(\"Plan Parameters Group Attributes:\")\n","    #for attr_name, attr_value in plan_parameters.attrs.items():\n","        #print(f\"{attr_name}: {attr_value}\")\n","    \n","    # Extract plan parameters as a DataFrame\n","    plan_parameters_df = pd.DataFrame([(attr_name, attr_value) for attr_name, attr_value in plan_parameters.attrs.items()], columns=['Attribute', 'Value'])\n","\n","# Construct the group path for volume accounting data\n","group_to_list = \"Results/Unsteady/Summary/Volume Accounting/Volume Accounting 2D\"\n","\n","# Extract volume accounting data as a DataFrame\n","volume_accounting_df = RasHdf.get_group_attributes_as_df(results_path, group_to_list)\n","\n","print(\"\\nPlan Parameters DataFrame:\")\n","display(plan_parameters_df)\n","\n","print(\"\\nVolume Accounting DataFrame:\")\n","display(volume_accounting_df)"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 13: Listing 2D Flow Area Groups\n","print(\"\\nExample: Listing 2D Flow Area Groups\")\n","\n","# Get the names of all 2D Flow Area groups\n","flow_area_group_names = RasHdf.get_2d_flow_area_names(hdf_input, ras_object=muncie)\n","\n","print(\"2D Flow Area Groups:\")\n","if flow_area_group_names:\n","    for name in flow_area_group_names:\n","        print(f\"- {name}\")\n","else:\n","    print(\"No 2D Flow Area groups found in the HDF file.\")\n","\n","import h5py\n","\n","# Additional information about the first group (if any)\n","if flow_area_group_names:\n","    first_group = flow_area_group_names[0]\n","    print(f\"\\nDetailed information for the first group: {first_group}\")\n","    \n","    # Remember, use results_path because we are accessing the hdf file and hdf_input is the plan number\n","    with h5py.File(str(results_path), 'r') as hdf_file:\n","        group = hdf_file[f'Geometry/2D Flow Areas/{first_group}']\n","        print(\"Datasets in this group:\")\n","        for name, item in group.items():\n","            if isinstance(item, h5py.Dataset):\n","                print(f\"- {name}: Shape {item.shape}, Dtype {item.dtype}\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 14: Extract Faces Indexes\n","print(\"\\nExample 13: Extracting Faces Indexes\")\n","cell_indexes_df, facepoint_indexes_df = RasHdf.get_faces_indexes(hdf_input, ras_object=muncie)\n","print(\"Faces Cell Indexes:\")\n","if cell_indexes_df is not None:\n","    display(cell_indexes_df.head())\n","else:\n","    print(\"No Faces Cell Indexes found.\")\n","print(\"\\nFaces FacePoint Indexes:\")\n","if facepoint_indexes_df is not None:\n","    display(facepoint_indexes_df.head())\n","else:\n","    print(\"No Faces FacePoint Indexes found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 15: Extract Faces Elevation Data\n","print(\"\\nExample 14: Extracting Faces Elevation Data\")\n","low_elev_centroid_df, min_elevation_df = RasHdf.get_faces_elevation_data(hdf_input, ras_object=muncie)\n","print(\"Faces Low Elevation Centroid:\")\n","if low_elev_centroid_df is not None:\n","    display(low_elev_centroid_df.head())\n","else:\n","    print(\"No Faces Low Elevation Centroid found.\")\n","print(\"\\nFaces Minimum Elevation:\")\n","if min_elevation_df is not None:\n","    display(min_elevation_df.head())\n","else:\n","    print(\"No Faces Minimum Elevation found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 16: Extract Faces Vector Data\n","print(\"\\nExample 15: Extracting Faces Vector Data\")\n","faces_vector_df = RasHdf.get_faces_vector_data(hdf_input, ras_object=muncie)\n","if faces_vector_df is not None:\n","    display(faces_vector_df.head())\n","else:\n","    print(\"No Faces Vector Data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 17: Extract Faces Perimeter Data\n","print(\"\\nExample 16: Extracting Faces Perimeter Data\")\n","perimeter_info_df, perimeter_values_df = RasHdf.get_faces_perimeter_data(hdf_input, ras_object=muncie)\n","print(\"Faces Perimeter Info:\")\n","if perimeter_info_df is not None:\n","    display(perimeter_info_df.head())\n","else:\n","    print(\"No Faces Perimeter Info found.\")\n","print(\"\\nFaces Perimeter Values:\")\n","if perimeter_values_df is not None:\n","    display(perimeter_values_df.head())\n","else:\n","    print(\"No Faces Perimeter Values found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 18: Extract Infiltration Data\n","print(\"\\nExample 17: Extracting Infiltration Data\")\n","cell_classifications_df, face_classifications_df, initial_deficit_df, maximum_deficit_df, potential_percolation_rate_df = RasHdf.get_infiltration_data(hdf_input, ras_object=muncie)\n","print(\"Infiltration - Cell Classifications:\")\n","if cell_classifications_df is not None:\n","    display(cell_classifications_df.head())\n","else:\n","    print(\"No Infiltration Cell Classifications found.\")\n","print(\"\\nInfiltration - Face Classifications:\")\n","if face_classifications_df is not None:\n","    display(face_classifications_df.head())\n","else:\n","    print(\"No Infiltration Face Classifications found.\")\n","print(\"\\nInfiltration - Initial Deficit:\")\n","if initial_deficit_df is not None:\n","    display(initial_deficit_df.head())\n","else:\n","    print(\"No Infiltration Initial Deficit found.\")\n","print(\"\\nInfiltration - Maximum Deficit:\")\n","if maximum_deficit_df is not None:\n","    display(maximum_deficit_df.head())\n","else:\n","    print(\"No Infiltration Maximum Deficit found.\")\n","print(\"\\nInfiltration - Potential Percolation Rate:\")\n","if potential_percolation_rate_df is not None:\n","    display(potential_percolation_rate_df.head())\n","else:\n","    print(\"No Infiltration Potential Percolation Rate found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 19: Extract Percent Impervious Data\n","print(\"\\nExample 18: Extracting Percent Impervious Data\")\n","cell_classifications_df, face_classifications_df, percent_impervious_df = RasHdf.get_percent_impervious_data(hdf_input, ras_object=muncie)\n","print(\"Percent Impervious - Cell Classifications:\")\n","if cell_classifications_df is not None:\n","    display(cell_classifications_df.head())\n","else:\n","    print(\"No Percent Impervious Cell Classifications found.\")\n","print(\"\\nPercent Impervious - Face Classifications:\")\n","if face_classifications_df is not None:\n","    display(face_classifications_df.head())\n","else:\n","    print(\"No Percent Impervious Face Classifications found.\")\n","print(\"\\nPercent Impervious:\")\n","if percent_impervious_df is not None:\n","    display(percent_impervious_df.head())\n","else:\n","    print(\"No Percent Impervious data found.\")\n","    \n","    # Note: Does not exist in the Muncie Plan 3 example used. "]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 20: Extract Perimeter Data\n","print(\"\\nExample 19: Extracting Perimeter Data\")\n","perimeter_df = RasHdf.get_perimeter_data(hdf_input, ras_object=muncie)\n","print(\"Perimeter Data:\")\n","if perimeter_df is not None:\n","    display(perimeter_df.head())\n","else:\n","    print(\"No Perimeter Data found.\")"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 21: Extract Boundary Condition Lines Attributes\n","print(\"\\nExample 20: Extracting Boundary Condition Lines Attributes\")\n","bc_lines_df = RasHdf.get_group_attributes_as_df(hdf_input, '/Geometry/Boundary Condition Lines/Attributes', ras_object=muncie)\n","if bc_lines_df is not None:\n","    display(bc_lines_df.head())\n","else:\n","    print(\"No Boundary Condition Lines Attributes found.\")\n","    \n","# None in Muncie plan 3, no output expected."]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 22: Extract Boundary Condition Time Series Data\n","print(\"\\nExample 22: Extracting Boundary Condition Time Series Data\")\n","bc_time_series_df = RasHdf.get_group_attributes_as_df(hdf_input, '/Geometry/Boundary Condition Lines/Attributes', ras_object=muncie)\n","if bc_time_series_df is not None:\n","    display(bc_time_series_df.head())\n","else:\n","    print(\"No Boundary Condition Time Series Data found.\")\n","\n","print(\"\\nAll RasHdf functions have been executed on Plan 03 HDF file.\")\n","\n","\n","# NOTE: Muncie does not have boundary conditions in the HDF file - see how errors are handled. "]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 23: Retrieving 2D Flow Area Solution Times\n","print(\"Example 23: Retrieving 2D Flow Area Solution Times\")\n","\n","solution_times = RasHdf.get_2d_area_solution_times(hdf_input, ras_object=muncie)\n","\n","if solution_times is not None:\n","    print(f\"Retrieved {len(solution_times)} solution times:\")\n","    print(solution_times)\n","else:\n","    print(\"No solution times found.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 24: Retrieving 2D Flow Area Solution Time Dates\n","print(\"\\nExample 24: Retrieving 2D Flow Area Solution Time Dates\")\n","\n","solution_time_dates = RasHdf.get_2d_area_solution_time_dates(hdf_input, ras_object=muncie)\n","\n","if solution_time_dates is not None:\n","    print(f\"Retrieved {len(solution_time_dates)} solution time dates:\")\n","    print(solution_time_dates)\n","else:\n","    print(\"No solution time dates found.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 25: Loading 2D Flow Area Solutions\n","print(\"\\nExample 25: Loading 2D Flow Area Solutions\")\n","\n","# Load 2D area solutions using the revised method\n","solutions = RasHdf.load_2d_area_solutions(hdf_input, ras_object=muncie)\n","\n","# Check if solutions were successfully loaded\n","if solutions:\n","    # Access and display solution times\n","    solution_times_df = solutions.get('solution_times')\n","    if solution_times_df is not None:\n","        print(\"Solution Times:\")\n","        print(solution_times_df.head())\n","    else:\n","        print(\"Solution times not found.\")\n","    \n","    # Iterate through each 2D Flow Area and display sample data\n","    for key in solutions:\n","        if key != 'solution_times':\n","            print(f\"\\nData for {key}:\")\n","            area_df = solutions[key]\n","            print(area_df.head(10))  # Display first 10 records\n","else:\n","    print(\"No solutions loaded.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":["# Example 29: Building Face FacePoints\n","print(\"\\nExample 29: Building Face FacePoints\")\n","\n","face_facepoints_list = RasHdf.build_face_facepoints(hdf_input, ras_object=muncie)\n","\n","if face_facepoints_list:\n","    # Displaying face points indexes for the first face of the first 2D Flow Area\n","    print(\"FacePoints Indexes for the first face of the first 2D Flow Area:\")\n","    print(face_facepoints_list[0][0])  # Assuming at least one area and one face\n","else:\n","    print(\"No face facepoints built.\")\n"]},{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],"source":[]}],"metadata":{"kernelspec":{"display_name":"Python 3","language":"python","name":"python3"},"language_info":{"codemirror_mode":{"name":"ipython","version":3},"file_extension":".py","mimetype":"text/x-python","name":"python","nbconvert_exporter":"python","pygments_lexer":"ipython3","version":"3.11.9"}},"nbformat":4,"nbformat_minor":2}
 
 ==================================================
 
-File: C:\GH\ras-commander\examples\run_all_example_projects.ipynb
+File: c:\GH\ras-commander\examples\run_all_HEC_example_projects.ipynb
 ==================================================
 {
  "cells": [
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 1,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "ras_commander imported successfully\n"
+     ]
+    }
+   ],
    "source": [
     "import sys\n",
     "from pathlib import Path\n",
@@ -2950,9 +3088,31 @@ File: C:\GH\ras-commander\examples\run_all_example_projects.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 2,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Starting script execution\n",
+      "Parent folder set to: C:\\GH\\ras-commander\\examples\\example_projects\n",
+      "Starting to process projects\n"
+     ]
+    },
+    {
+     "ename": "FileNotFoundError",
+     "evalue": "[WinError 3] The system cannot find the path specified: 'C:\\\\GH\\\\ras-commander\\\\examples\\\\example_projects'",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[1;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[1;31mFileNotFoundError\u001b[0m                         Traceback (most recent call last)",
+      "Cell \u001b[1;32mIn[2], line 51\u001b[0m\n\u001b[0;32m     49\u001b[0m \u001b[38;5;66;03m# Process each second-level subfolder as a project\u001b[39;00m\n\u001b[0;32m     50\u001b[0m \u001b[38;5;28mprint\u001b[39m(\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mStarting to process projects\u001b[39m\u001b[38;5;124m\"\u001b[39m)\n\u001b[1;32m---> 51\u001b[0m \u001b[38;5;28;43;01mfor\u001b[39;49;00m\u001b[43m \u001b[49m\u001b[43mcategory_folder\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;129;43;01min\u001b[39;49;00m\u001b[43m \u001b[49m\u001b[43mparent_folder\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43miterdir\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\u001b[43m:\u001b[49m\n\u001b[0;32m     52\u001b[0m \u001b[43m    \u001b[49m\u001b[38;5;28;43;01mif\u001b[39;49;00m\u001b[43m \u001b[49m\u001b[43mcategory_folder\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mis_dir\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\u001b[43m:\u001b[49m\n\u001b[0;32m     53\u001b[0m \u001b[43m        \u001b[49m\u001b[38;5;28;43mprint\u001b[39;49m\u001b[43m(\u001b[49m\u001b[38;5;124;43mf\u001b[39;49m\u001b[38;5;124;43m\"\u001b[39;49m\u001b[38;5;124;43mProcessing category: \u001b[39;49m\u001b[38;5;132;43;01m{\u001b[39;49;00m\u001b[43mcategory_folder\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mname\u001b[49m\u001b[38;5;132;43;01m}\u001b[39;49;00m\u001b[38;5;124;43m\"\u001b[39;49m\u001b[43m)\u001b[49m\n",
+      "File \u001b[1;32mc:\\Users\\billk\\AppData\\Local\\anaconda3\\envs\\cmdrnopip\\Lib\\pathlib.py:931\u001b[0m, in \u001b[0;36mPath.iterdir\u001b[1;34m(self)\u001b[0m\n\u001b[0;32m    927\u001b[0m \u001b[38;5;28;01mdef\u001b[39;00m \u001b[38;5;21miterdir\u001b[39m(\u001b[38;5;28mself\u001b[39m):\n\u001b[0;32m    928\u001b[0m \u001b[38;5;250m    \u001b[39m\u001b[38;5;124;03m\"\"\"Iterate over the files in this directory.  Does not yield any\u001b[39;00m\n\u001b[0;32m    929\u001b[0m \u001b[38;5;124;03m    result for the special paths '.' and '..'.\u001b[39;00m\n\u001b[0;32m    930\u001b[0m \u001b[38;5;124;03m    \"\"\"\u001b[39;00m\n\u001b[1;32m--> 931\u001b[0m     \u001b[38;5;28;01mfor\u001b[39;00m name \u001b[38;5;129;01min\u001b[39;00m \u001b[43mos\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mlistdir\u001b[49m\u001b[43m(\u001b[49m\u001b[38;5;28;43mself\u001b[39;49m\u001b[43m)\u001b[49m:\n\u001b[0;32m    932\u001b[0m         \u001b[38;5;28;01myield\u001b[39;00m \u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39m_make_child_relpath(name)\n",
+      "\u001b[1;31mFileNotFoundError\u001b[0m: [WinError 3] The system cannot find the path specified: 'C:\\\\GH\\\\ras-commander\\\\examples\\\\example_projects'"
+     ]
+    }
+   ],
    "source": [
     "import pandas as pd\n",
     "from pathlib import Path\n",
@@ -3042,7 +3202,7 @@ File: C:\GH\ras-commander\examples\run_all_example_projects.ipynb
 
 ==================================================
 
-File: C:\GH\ras-commander\examples\xx_edge_cases.py
+File: c:\GH\ras-commander\examples\xx_edge_cases.py
 ==================================================
 #### --- IMPORTS AND EXAMPLE PROJECT SETUP --- ####
 
@@ -3086,7 +3246,7 @@ def main:
     main()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\logging_config.py
+File: c:\GH\ras-commander\ras_commander\logging_config.py
 ==================================================
 # logging_config.py
 
@@ -3110,7 +3270,7 @@ def setup_logging:
 setup_logging()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasCmdr.py
+File: c:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -3622,7 +3782,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasExamples.py
+File: c:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -3737,7 +3897,7 @@ pip install pandas requests
 """
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGeo.py
+File: c:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -3857,9 +4017,17 @@ class RasGeo:
             logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise
 
+
+
+
+
+
+
+
+
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGpt.py
+File: c:\GH\ras-commander\ras_commander\RasGpt.py
 ==================================================
 import os
 from pathlib import Path
@@ -4006,14 +4174,14 @@ class RasGpt:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasHdf.py
+File: c:\GH\ras-commander\ras_commander\RasHdf.py
 ==================================================
 """
 RasHdf Module
 
-This module provides utilities for working with HDF files in HEC-RAS projects.
+This module provides utilities for working with RESULTS (Plan) HDF files in HEC-RAS projects.
 It contains the RasHdf class, which offers various static methods for extracting,
-analyzing, and manipulating data from HEC-RAS HDF files.
+analyzing, and manipulating data from HEC-RAS RESULTS HDF files.
 
 Note:
     This method is decorated with @hdf_operation, which handles the opening and closing of the HDF file.
@@ -4083,79 +4251,10 @@ class RasHdf:
     @staticmethod
     def hdf_operation:
     """Docs only, see 'hdf_operation.py' for full function code"""
-def save_dataframe_to_hdf(
-    dataframe: pd.DataFrame,
-    hdf_parent_group: h5py.Group,
-    dataset_name: str,
-    attributes: Optional[Dict[str, Union[int, float, str]]] = None,
-    fill_value: Union[int, float, str] = -9999,
-    **kwargs: Any
-) -> h5py.Dataset:
-    """
-    Save a pandas DataFrame to an HDF5 dataset within a specified parent group.
-
-    This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
-
-    Args:
-        dataframe (pd.DataFrame): The DataFrame to save.
-        hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
-        dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
-        attributes (Optional[Dict[str, Union[int, float, str]]]): A dictionary of attributes to add to the dataset.
-        fill_value (Union[int, float, str]): The value to use for filling missing data.
-        **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
-
-    Returns:
-        h5py.Dataset: The created HDF5 dataset within the parent group.
-
-    Raises:
-        ValueError: If the DataFrame columns are not consistent.
-
-    Example:
-        >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
-        >>> with h5py.File('data.h5', 'w') as f:
-        ...     group = f.create_group('my_group')
-        ...     dataset = save_dataframe_to_hdf(df, group, 'my_dataset')
-        >>> print(dataset)
-    """
-    df = dataframe.copy()
-
-    # Replace '/' in column names with '-' to avoid issues in HDF5
-    if df.columns.dtype == 'O':
-        df.columns = df.columns.str.replace('/', '-', regex=False)
-    
-    # Fill missing values with the specified fill_value
-    df = df.fillna(fill_value)
-    
-    # Identify string columns and ensure consistency
-    string_cols = df.select_dtypes(include=['object']).columns
-    if not string_cols.equals(df.select_dtypes(include=['object']).columns):
-        logger.error("Inconsistent string columns detected")
-        raise ValueError("Inconsistent string columns detected")
-    
-    # Encode string columns to bytes
-    df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
-
-    # Prepare data for HDF5 dataset creation
-    arr = df.to_records(index=False) if not isinstance(df.columns, pd.RangeIndex) else df.values
-    
-    # Remove existing dataset if it exists
-    if dataset_name in hdf_parent_group:
-        logger.warning(f"Existing dataset {dataset_name} will be overwritten")
-        del hdf_parent_group[dataset_name]
-    
-    # Create the dataset in the HDF5 file
-    dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
-    
-    # Update dataset attributes if provided
-    if attributes:
-        dataset.attrs.update(attributes)
-    
-    logger.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
-    return dataset
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPlan.py
+File: c:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -4202,8 +4301,9 @@ class RasPlan:
     """
     A class for operations on HEC-RAS plan files.
     """
-    @log_call
+    
     @staticmethod
+    @log_call
     def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
         Set the geometry for the specified plan.
@@ -4235,49 +4335,20 @@ class RasPlan:
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
-        # Log the current geometry DataFrame for debugging
-        logging.debug("Current geometry DataFrame within the function:")
-        logging.debug(ras_obj.geom_df)
-
         if new_geom not in ras_obj.geom_df['geom_number'].values:
-            logging.error(f"Geometry {new_geom} not found in project.")
+            logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
         # Update the geometry for the specified plan
         ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
 
-        logging.info(f"Geometry for plan {plan_number} set to {new_geom}")
-        logging.debug("Updated plan DataFrame:")
-        logging.debug(ras_obj.plan_df)
+        logger.info(f"Geometry for plan {plan_number} set to {new_geom}")
+        logger.debug("Updated plan DataFrame:")
+        logger.debug(ras_obj.plan_df)
 
         # Update the project file
         prj_file_path = ras_obj.prj_file
-        try:
-            with open(prj_file_path, 'r') as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            logging.error(f"Project file not found: {prj_file_path}")
-            raise
-
-        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
-        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
-        
-        for i, line in enumerate(lines):
-            if plan_pattern.match(line):
-                for j in range(i+1, len(lines)):
-                    if geom_pattern.match(lines[j]):
-                        lines[j] = f"Geom File=g{new_geom}\n"
-                        logging.info(f"Updated Geom File in project file to g{new_geom} for plan {plan_number}")
-                        break
-                break
-
-        try:
-            with open(prj_file_path, 'w') as f:
-                f.writelines(lines)
-            logging.info(f"Updated project file with new geometry for plan {plan_number}")
-        except IOError as e:
-            logging.error(f"Failed to write to project file: {e}")
-            raise
+        RasUtils.update_file(prj_file_path, RasPlan._update_geom_in_file, plan_number, new_geom)
 
         # Re-initialize the ras object to reflect changes
         ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
@@ -4285,13 +4356,12 @@ class RasPlan:
         return ras_obj.plan_df
 
     @staticmethod
-    @log_call
-    def set_steady:
-    """Docs only, see 'set_steady.py' for full function code"""
+    def _update_geom_in_file:
+    """Docs only, see '_update_geom_in_file.py' for full function code"""
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPrj.py
+File: c:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -4363,7 +4433,7 @@ def get_ras_exe:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -4409,7 +4479,7 @@ class RasUnsteady:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUtils.py
+File: c:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -4436,12 +4506,13 @@ Example:
 import os
 from pathlib import Path
 from .RasPrj import ras
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, Callable
 import pandas as pd
 import numpy as np
 import shutil
 from ras_commander import get_logger
 from ras_commander.logging_config import get_logger, log_call
+import re
 
 logger = get_logger(__name__)
 # Module code starts here
@@ -5034,13 +5105,27 @@ class RasUtils:
         logger.info(f"Calculated error metrics: {metrics}")
         return metrics
 
+    @staticmethod
+    @log_call
+    def update_file(file_path: Path, update_function: Callable, *args) -> None:
+        """
+        Generic method to update a file.
 
+        Parameters:
+        file_path (Path): Path to the file to be updated
+        update_function (Callable): Function to update the file contents
+        *args: Additional arguments to pass to the update_function
 
+        Raises:
+        Exception: If there's an error updating the file
 
+        Example:
+        >>> def update_content:
+    """Docs only, see 'update_content.py' for full function code"""
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\__init__.py
+File: c:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
 from .logging_config import setup_logging, get_logger, log_call

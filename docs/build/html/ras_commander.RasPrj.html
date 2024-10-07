@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ras_commander.RasPrj module &mdash; RAS Commander 0.42 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=13150a28"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="ras_commander.RasPlan module" href="ras_commander.RasPlan.html" />
+    <link rel="prev" title="ras_commander package" href="ras_commander.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            RAS Commander
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="ras_commander.html">ras_commander package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="ras_commander.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">ras_commander.RasPrj module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ras_commander.RasPrj.RasPrj"><code class="docutils literal notranslate"><span class="pre">RasPrj</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ras_commander.RasPrj.init_ras_project"><code class="docutils literal notranslate"><span class="pre">init_ras_project()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ras_commander.RasPrj.get_ras_exe"><code class="docutils literal notranslate"><span class="pre">get_ras_exe()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasPlan.html">ras_commander.RasPlan module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasGeo.html">ras_commander.RasGeo module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasUnsteady.html">ras_commander.RasUnsteady module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasCmdr.html">ras_commander.RasCmdr module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasUtils.html">ras_commander.RasUtils module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasExamples.html">ras_commander.RasExamples module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasHdf.html">ras_commander.RasHdf module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ras_commander.RasGpt.html">ras_commander.RasGpt module</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="ras_commander.html#module-ras_commander">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">RAS Commander</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="ras_commander.html">ras_commander package</a></li>
+      <li class="breadcrumb-item active">ras_commander.RasPrj module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/ras_commander.RasPrj.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-ras_commander.RasPrj">
+<span id="ras-commander-rasprj-module"></span><h1>ras_commander.RasPrj module<a class="headerlink" href="#module-ras_commander.RasPrj" title="Link to this heading"></a></h1>
+<p>RasPrj.py - Manages HEC-RAS projects within the ras-commander library</p>
+<p>This module provides a class for managing HEC-RAS projects.</p>
+<dl class="simple">
+<dt>Classes:</dt><dd><p>RasPrj: A class for managing HEC-RAS projects.</p>
+</dd>
+<dt>Functions:</dt><dd><p>init_ras_project: Initialize a RAS project.
+get_ras_exe: Determine the HEC-RAS executable path based on the input.</p>
+</dd>
+</dl>
+<p>DEVELOPER NOTE:
+This class is used to initialize a RAS project and is used in conjunction with the RasCmdr class to manage the execution of RAS plans.
+By default, the RasPrj class is initialized with the global ‘ras’ object.
+However, you can create multiple RasPrj instances to manage multiple projects.
+Do not mix and match global ‘ras’ object instances and custom instances of RasPrj - it will cause errors.</p>
+<p>This module is part of the ras-commander library and uses a centralized logging configuration.</p>
+<p>Logging Configuration:
+- The logging is set up in the logging_config.py file.
+- A &#64;log_call decorator is available to automatically log function calls.
+- Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Logs are written to both console and a rotating file handler.
+- The default log file is ‘ras_commander.log’ in the ‘logs’ directory.
+- The default log level is INFO.</p>
+<p>To use logging in this module:
+1. Use the &#64;log_call decorator for automatic function call logging.
+2. For additional logging, use logger.[level]() calls (e.g., logger.info(), logger.debug()).</p>
+<p class="rubric">Example</p>
+<p>&#64;log_call
+def my_function():</p>
+<blockquote>
+<div><p>logger.debug(“Additional debug information”)
+# Function logic here</p>
+</div></blockquote>
+<dl class="py class">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ras_commander.RasPrj.</span></span><span class="sig-name descname"><span class="pre">RasPrj</span></span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_exe_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.initialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.initialize" title="Link to this definition"></a></dt>
+<dd><p>Initialize a RasPrj instance.</p>
+<p>This method sets up the RasPrj instance with the given project folder and RAS executable path.
+It finds the project file, loads project data, sets the initialization flag, and now also
+extracts boundary conditions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>project_folder</strong> (<em>str</em><em> or </em><em>Path</em>) – Path to the HEC-RAS project folder.</p></li>
+<li><p><strong>ras_exe_path</strong> (<em>str</em><em> or </em><em>Path</em>) – Path to the HEC-RAS executable.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If no HEC-RAS project file is found in the specified folder.</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is intended for internal use. External users should use the init_ras_project function instead.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.is_initialized">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_initialized</span></span><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.is_initialized" title="Link to this definition"></a></dt>
+<dd><p>Check if the RasPrj instance has been initialized.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>True if the instance has been initialized, False otherwise.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.check_initialized">
+<span class="sig-name descname"><span class="pre">check_initialized</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.check_initialized"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.check_initialized" title="Link to this definition"></a></dt>
+<dd><p>Ensure that the RasPrj instance has been initialized.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.find_ras_prj">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">find_ras_prj</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.find_ras_prj"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.find_ras_prj" title="Link to this definition"></a></dt>
+<dd><p>Find the appropriate HEC-RAS project file (.prj) in the given folder.</p>
+<p>Parameters:
+folder_path (str or Path): Path to the folder containing HEC-RAS files.</p>
+<p>Returns:
+Path: The full path of the selected .prj file or None if no suitable file is found.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_project_name">
+<span class="sig-name descname"><span class="pre">get_project_name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_project_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_project_name" title="Link to this definition"></a></dt>
+<dd><p>Get the name of the HEC-RAS project.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The name of the project.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_prj_entries">
+<span class="sig-name descname"><span class="pre">get_prj_entries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_prj_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_prj_entries" title="Link to this definition"></a></dt>
+<dd><p>Get entries of a specific type from the HEC-RAS project.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>entry_type</strong> (<em>str</em>) – The type of entry to retrieve (e.g., ‘Plan’, ‘Flow’, ‘Unsteady’, ‘Geom’).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A DataFrame containing the requested entries.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_plan_entries">
+<span class="sig-name descname"><span class="pre">get_plan_entries</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_plan_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_plan_entries" title="Link to this definition"></a></dt>
+<dd><p>Get all plan entries from the HEC-RAS project.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A DataFrame containing all plan entries.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_flow_entries">
+<span class="sig-name descname"><span class="pre">get_flow_entries</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_flow_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_flow_entries" title="Link to this definition"></a></dt>
+<dd><p>Get all flow entries from the HEC-RAS project.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A DataFrame containing all flow entries.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_unsteady_entries">
+<span class="sig-name descname"><span class="pre">get_unsteady_entries</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_unsteady_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_unsteady_entries" title="Link to this definition"></a></dt>
+<dd><p>Get all unsteady flow entries from the HEC-RAS project.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A DataFrame containing all unsteady flow entries.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_geom_entries">
+<span class="sig-name descname"><span class="pre">get_geom_entries</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_geom_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_geom_entries" title="Link to this definition"></a></dt>
+<dd><p>Get all geometry entries from the HEC-RAS project.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A DataFrame containing all geometry entries.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – If the project has not been initialized.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_hdf_entries">
+<span class="sig-name descname"><span class="pre">get_hdf_entries</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_hdf_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_hdf_entries" title="Link to this definition"></a></dt>
+<dd><p>Get HDF entries for plans that have results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A DataFrame containing plan entries with HDF results.</dt><dd><p>Returns an empty DataFrame if no HDF entries are found.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.print_data">
+<span class="sig-name descname"><span class="pre">print_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.print_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.print_data" title="Link to this definition"></a></dt>
+<dd><p>Print all RAS Object data for this instance.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_plan_value">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_plan_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plan_number_or_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_plan_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_plan_value" title="Link to this definition"></a></dt>
+<dd><p>Retrieve a specific value from a HEC-RAS plan file.</p>
+<p>Parameters:
+plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+key (str): The key to retrieve from the plan file
+ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.</p>
+<p>Returns:
+Any: The value associated with the specified key</p>
+<p>Raises:
+ValueError: If an invalid key is provided or if the plan file is not found
+IOError: If there’s an error reading the plan file</p>
+<p>Note: See the docstring of update_plan_file for a full list of available keys and their types.</p>
+<p>Example:
+&gt;&gt;&gt; computation_interval = RasUtils.get_plan_value(“01”, “computation_interval”)
+&gt;&gt;&gt; print(f”Computation interval: {computation_interval}”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plan_number_or_path</strong> (<em>str</em><em> | </em><em>Path</em>)</p></li>
+<li><p><strong>key</strong> (<em>str</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Any</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.RasPrj.get_boundary_conditions">
+<span class="sig-name descname"><span class="pre">get_boundary_conditions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#RasPrj.get_boundary_conditions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.RasPrj.get_boundary_conditions" title="Link to this definition"></a></dt>
+<dd><p>Extract boundary conditions from unsteady flow files and create a DataFrame.</p>
+<p>This method parses unsteady flow files to extract boundary condition information.
+It creates a DataFrame with structured data for known boundary condition types
+and parameters, and associates this information with the corresponding unsteady flow file.</p>
+<p>Note:
+Any lines in the boundary condition blocks that are not explicitly parsed and
+incorporated into the DataFrame are captured in a multi-line string. This string
+is logged at the DEBUG level for each boundary condition. This feature is crucial
+for developers incorporating new boundary condition types or parameters, as it
+allows them to see what information might be missing from the current parsing logic.
+If no unsteady flow files are present, it returns an empty DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>A DataFrame containing detailed boundary condition information,</dt><dd><p>linked to the unsteady flow files.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+</dl>
+<dl>
+<dt>Usage:</dt><dd><p>To see the unparsed lines, set the logging level to DEBUG before calling this method:</p>
+<p>import logging
+getLogger().setLevel(logging.DEBUG)</p>
+<dl class="simple">
+<dt>boundaries_df = ras_project.get_boundary_conditions()</dt><dd><p>linked to the unsteady flow files. Returns an empty DataFrame if
+no unsteady flow files are present.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.init_ras_project">
+<span class="sig-prename descclassname"><span class="pre">ras_commander.RasPrj.</span></span><span class="sig-name descname"><span class="pre">init_ras_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ras_project_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ras_instance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#init_ras_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.init_ras_project" title="Link to this definition"></a></dt>
+<dd><p>Initialize a RAS project.</p>
+<p>USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
+The initialize method of the RasPrj class only modifies the global ‘ras’ object.</p>
+<p>This function creates or initializes a RasPrj instance, providing a safer and more
+flexible interface than directly using the ‘initialize’ method.</p>
+<section id="parameters">
+<h2>Parameters:<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt>ras_project_folder<span class="classifier">str</span></dt><dd><p>The path to the RAS project folder.</p>
+</dd>
+<dt>ras_version<span class="classifier">str, optional</span></dt><dd><p>The version of RAS to use (e.g., “6.5”).
+The version can also be a full path to the Ras.exe file. (Useful when calling ras objects for folder copies.)
+If None, the function will attempt to use the version from the global ‘ras’ object or a default path.
+You MUST specify a version number via init at some point or ras will not run.
+Once the ras_version is specified once it should auto-fill from the global ‘ras’ object.
+The RAS Commander Library Assistant can ignore this argument since it does not have Ras.exe present, but all of other operations are fully working.</p>
+</dd>
+<dt>ras_instance<span class="classifier">RasPrj, optional</span></dt><dd><p>An instance of RasPrj to initialize. If None, the global ‘ras’ instance is used.</p>
+</dd>
+</dl>
+</section>
+<section id="returns">
+<h2>Returns:<a class="headerlink" href="#returns" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt>RasPrj</dt><dd><p>An initialized RasPrj instance.</p>
+</dd>
+</dl>
+</section>
+<section id="usage">
+<h2>Usage:<a class="headerlink" href="#usage" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>For general use with a single project:</dt><dd><p>init_ras_project(“/path/to/project”)
+# Use the global ‘ras’ object after initialization</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>For managing multiple projects:</dt><dd><p>project1 = init_ras_project(“/path/to/project1”, “6.5”, ras_instance=RasPrj())
+project2 = init_ras_project(“/path/to/project2”, ras_instance=RasPrj())</p>
+</dd>
+</dl>
+</li>
+</ol>
+</section>
+<section id="notes">
+<h2>Notes:<a class="headerlink" href="#notes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This function is preferred over directly calling the ‘initialize’ method.</p></li>
+<li><p>It supports both the global ‘ras’ object and custom instances.</p></li>
+<li><p>Be consistent in your approach: stick to either the global ‘ras’ object
+or custom instances throughout your script or application.</p></li>
+<li><p>Document your choice of approach clearly in your code.</p></li>
+<li><p>If ras_version is not provided, the function will attempt to use the version
+from the global ‘ras’ object or a default path.</p></li>
+</ul>
+</section>
+<section id="warnings">
+<h2>Warnings:<a class="headerlink" href="#warnings" title="Link to this heading"></a></h2>
+<p>Avoid mixing use of the global ‘ras’ object and custom instances to prevent
+confusion and potential bugs.</p>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ras_commander.RasPrj.get_ras_exe">
+<span class="sig-prename descclassname"><span class="pre">ras_commander.RasPrj.</span></span><span class="sig-name descname"><span class="pre">get_ras_exe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ras_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ras_commander/RasPrj.html#get_ras_exe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ras_commander.RasPrj.get_ras_exe" title="Link to this definition"></a></dt>
+<dd><p>Determine the HEC-RAS executable path based on the input.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ras_version</strong> (<em>str</em><em>, </em><em>optional</em>) – Either a version number or a full path to the HEC-RAS executable.
+If None, the function will attempt to use the version from the global ‘ras’ object
+or a default path.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The full path to the HEC-RAS executable.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If the input is neither a valid version number nor a valid file path.</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>If ras_version is not provided, the function will first check the global ‘ras’ object for a path.</p></li>
+<li><p>If the global ‘ras’ object is not initialized or doesn’t have a path, a default path will be used.</p></li>
+<li><p>The default path allows the library to function in environments without HEC-RAS installed.</p></li>
+<li><p>This enables the HEC-Commander GPT to operate without stopping, even if HEC-RAS is not present.</p></li>
+<li><p>End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.</p></li>
+</ul>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="ras_commander.html" class="btn btn-neutral float-left" title="ras_commander package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ras_commander.RasPlan.html" class="btn btn-neutral float-right" title="ras_commander.RasPlan module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, William Katzenmeyer, P.E., C.F.M..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
