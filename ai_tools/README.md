@@ -32,66 +32,27 @@ RAS-Commander AI Assistant is a web-based interface built with FastAPI that leve
 
 ### Setup
 
-1. **Clone the Repository**
+1. **Download the Python File**
 
-   ```bash
-   git clone https://github.com/yourusername/ras-commander-ai-assistant.git
-   cd ras-commander-ai-assistant
-   ```
+either git clone the repository or grab the 'ras-commander_assistant.py' file 
 
-2. **Create a Virtual Environment**
+2. **Open an Anaconda Terminal and/or Activate Your Virtual Environment**
 
-   ```bash
-   python -m venv venv
-   ```
+Everyone has their favorite method, I just open anaconda and get a terminal, or use VS Code. 
 
-3. **Activate the Virtual Environment**
-
-   - **Windows**
-
-     ```bash
-     venv\Scripts\activate
-     ```
-
-   - **macOS/Linux**
-
-     ```bash
-     source venv/bin/activate
-     ```
-
-4. **Install Dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-   *If `requirements.txt` is not provided, install dependencies manually:*
+3. **Install Dependencies**
 
    ```bash
    pip install fastapi uvicorn sqlalchemy jinja2 pandas anthropic openai tiktoken astor markdown requests python-multipart
    ```
+4. **Running the Application**
 
-## Configuration
-
-1. **API Keys**
-
-   - **OpenAI**: Obtain your API key from [OpenAI](https://platform.openai.com/account/api-keys).
-   - **Anthropic**: Obtain your API key from [Anthropic](https://www.anthropic.com/api).
-
-2. **Settings**
-
-   - Upon the first run, the application initializes default settings in `settings.db`.
-   - Access the web interface to input your API keys and configure other settings.
-
-## Running the Application
-
-Execute the script using Python:
+Execute the script using Python inside your virtual environment:
 
 ```bash
-python your_script_name.py
+python ras-commander_assistant.py
 ```
 
-*Replace `your_script_name.py` with the actual name of your Python script.*
 
 Upon running, the application will:
 
