@@ -1,4 +1,4 @@
-File: c:\GH\ras-commander\ras_commander\logging_config.py
+File: C:\GH\ras-commander\ras_commander\logging_config.py
 ==================================================
 # logging_config.py
 
@@ -22,7 +22,7 @@ def setup_logging:
 setup_logging()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+File: C:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -534,7 +534,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasExamples.py
+File: C:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -649,7 +649,7 @@ pip install pandas requests
 """
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGeo.py
+File: C:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -779,7 +779,7 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGpt.py
+File: C:\GH\ras-commander\ras_commander\RasGpt.py
 ==================================================
 import os
 from pathlib import Path
@@ -926,14 +926,14 @@ class RasGpt:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasHdf.py
+File: C:\GH\ras-commander\ras_commander\RasHdf.py
 ==================================================
 """
 RasHdf Module
 
-This module provides utilities for working with RESULTS (Plan) HDF files in HEC-RAS projects.
+This module provides utilities for working with HDF files in HEC-RAS projects.
 It contains the RasHdf class, which offers various static methods for extracting,
-analyzing, and manipulating data from HEC-RAS RESULTS HDF files.
+analyzing, and manipulating data from HEC-RAS HDF files.
 
 Note:
     This method is decorated with @hdf_operation, which handles the opening and closing of the HDF file.
@@ -1003,10 +1003,78 @@ class RasHdf:
     @staticmethod
     def hdf_operation:
     """Docs only, see 'hdf_operation.py' for full function code"""
+def save_dataframe_to_hdf(
+    dataframe: pd.DataFrame,
+    hdf_parent_group: h5py.Group,
+    dataset_name: str,
+    attributes: Optional[Dict[str, Union[int, float, str]]] = None,
+    fill_value: Union[int, float, str] = -9999,
+    **kwargs: Any
+) -> h5py.Dataset:
+    """
+    Save a pandas DataFrame to an HDF5 dataset within a specified parent group.
 
+    This function addresses limitations of `pd.to_hdf()` by using h5py to create and save datasets.
+
+    Args:
+        dataframe (pd.DataFrame): The DataFrame to save.
+        hdf_parent_group (h5py.Group): The parent HDF5 group where the dataset will be created.
+        dataset_name (str): The name of the new dataset to add in the HDF5 parent group.
+        attributes (Optional[Dict[str, Union[int, float, str]]]): A dictionary of attributes to add to the dataset.
+        fill_value (Union[int, float, str]): The value to use for filling missing data.
+        **kwargs: Additional keyword arguments passed to `hdf_parent_group.create_dataset()`.
+
+    Returns:
+        h5py.Dataset: The created HDF5 dataset within the parent group.
+
+    Raises:
+        ValueError: If the DataFrame columns are not consistent.
+
+    Example:
+        >>> df = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
+        >>> with h5py.File('data.h5', 'w') as f:
+        ...     group = f.create_group('my_group')
+        ...     dataset = save_dataframe_to_hdf(df, group, 'my_dataset')
+        >>> print(dataset)
+    """
+    df = dataframe.copy()
+
+    # Replace '/' in column names with '-' to avoid issues in HDF5
+    if df.columns.dtype == 'O':
+        df.columns = df.columns.str.replace('/', '-', regex=False)
+    
+    # Fill missing values with the specified fill_value
+    df = df.fillna(fill_value)
+    
+    # Identify string columns and ensure consistency
+    string_cols = df.select_dtypes(include=['object']).columns
+    if not string_cols.equals(df.select_dtypes(include=['object']).columns):
+        logger.error("Inconsistent string columns detected")
+        raise ValueError("Inconsistent string columns detected")
+    
+    # Encode string columns to bytes
+    df[string_cols] = df[string_cols].applymap(lambda x: x.encode('utf-8')).astype('bytes')
+
+    # Prepare data for HDF5 dataset creation
+    arr = df.to_records(index=False) if not isinstance(df.columns, pd.RangeIndex) else df.values
+    
+    # Remove existing dataset if it exists
+    if dataset_name in hdf_parent_group:
+        logger.warning(f"Existing dataset {dataset_name} will be overwritten")
+        del hdf_parent_group[dataset_name]
+    
+    # Create the dataset in the HDF5 file
+    dataset = hdf_parent_group.create_dataset(dataset_name, data=arr, **kwargs)
+    
+    # Update dataset attributes if provided
+    if attributes:
+        dataset.attrs.update(attributes)
+    
+    logger.info(f"Successfully saved DataFrame to dataset: {dataset_name}")
+    return dataset
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPlan.py
+File: C:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -1113,7 +1181,7 @@ class RasPlan:
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPrj.py
+File: C:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -1185,7 +1253,7 @@ def get_ras_exe:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -1231,7 +1299,7 @@ class RasUnsteady:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUtils.py
+File: C:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -1857,6 +1925,7 @@ class RasUtils:
         logger.info(f"Calculated error metrics: {metrics}")
         return metrics
 
+    
     @staticmethod
     @log_call
     def update_file(file_path: Path, update_function: Callable, *args) -> None:
@@ -1877,7 +1946,7 @@ class RasUtils:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\__init__.py
+File: C:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
 from .logging_config import setup_logging, get_logger, log_call
