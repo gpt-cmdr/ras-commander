@@ -1,5 +1,6 @@
 from importlib.metadata import version, PackageNotFoundError
-from .logging_config import setup_logging, get_logger, log_call
+from .LoggingConfig import setup_logging, get_logger
+from .Decorators import log_call, standardize_input
 
 try:
     __version__ = version("ras-commander")
@@ -11,19 +12,40 @@ except PackageNotFoundError:
 setup_logging()
 
 # Import all necessary functions and classes directly
-from .RasPrj import ras, init_ras_project, get_ras_exe
-from .RasPrj import RasPrj
+from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras
 from .RasPlan import RasPlan
 from .RasGeo import RasGeo
 from .RasUnsteady import RasUnsteady
-from .RasCmdr import RasCmdr
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
-from .RasHdf import RasHdf
+from .RasCmdr import RasCmdr
 from .RasGpt import RasGpt
+
+# Import the Hdf* classes
+from .HdfBase import HdfBase
+from .HdfBndry import HdfBndry
+from .HdfMesh import HdfMesh
+from .HdfPlan import HdfPlan
+from .HdfResultsMesh import HdfResultsMesh
+from .HdfResultsPlan import HdfResultsPlan
+from .HdfResultsXsec import HdfResultsXsec
+from .HdfStruc import HdfStruc
+from .HdfUtils import HdfUtils
+from .HdfXsec import HdfXsec
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
+    "HdfBase",
+    "HdfBndry",
+    "HdfMesh",
+    "HdfPlan",
+    "HdfResultsMesh",
+    "HdfResultsPlan",
+    "HdfResultsXsec",
+    "HdfStruc",
+    "HdfUtils",
+    "HdfXsec",
+    "standardize_input",
     "ras",
     "init_ras_project",
     "get_ras_exe",
@@ -34,8 +56,8 @@ __all__ = [
     "RasCmdr",
     "RasUtils",
     "RasExamples",
-    "RasHdf",
-    "RasGpt",
     "get_logger",
-    "log_call"
+    "log_call",
 ]
+
+__version__ = "0.1.0"

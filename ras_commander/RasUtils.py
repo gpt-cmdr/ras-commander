@@ -24,13 +24,19 @@ Example:
 import os
 from pathlib import Path
 from .RasPrj import ras
-from typing import Union, Optional, Dict, Callable
+from typing import Union, Optional, Dict, Callable, List, Tuple, Any
 import pandas as pd
 import numpy as np
 import shutil
-from ras_commander import get_logger
-from ras_commander.logging_config import get_logger, log_call
 import re
+from scipy.spatial import KDTree
+import datetime
+import time
+import h5py
+from datetime import timedelta
+from .LoggingConfig import get_logger
+from .Decorators import log_call
+
 
 logger = get_logger(__name__)
 # Module code starts here
@@ -40,76 +46,6 @@ class RasUtils:
     A class containing utility functions for the ras-commander library.
     When integrating new functions that do not clearly fit into other classes, add them here.
     """
-
-    @staticmethod
-    @log_call
-    def create_backup(file_path: Path, backup_suffix: str = "_backup", ras_object=None) -> Path:
-        """
-        Create a backup of the specified file.
-
-        Parameters:
-        file_path (Path): Path to the file to be backed up
-        backup_suffix (str): Suffix to append to the backup file name
-        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
-
-        Returns:
-        Path: Path to the created backup file
-
-        Example:
-        >>> backup_path = RasUtils.create_backup(Path("project.prj"))
-        >>> print(f"Backup created at: {backup_path}")
-        """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        
-        original_path = Path(file_path)
-        backup_path = original_path.with_name(f"{original_path.stem}{backup_suffix}{original_path.suffix}")
-        try:
-            shutil.copy2(original_path, backup_path)
-            logger.info(f"Backup created: {backup_path}")
-        except Exception as e:
-            logger.error(f"Failed to create backup for {original_path}: {e}")
-            raise
-        return backup_path
-
-    @staticmethod
-    @log_call
-    def restore_from_backup(backup_path: Path, remove_backup: bool = True, ras_object=None) -> Path:
-        """
-        Restore a file from its backup.
-
-        Parameters:
-        backup_path (Path): Path to the backup file
-        remove_backup (bool): Whether to remove the backup file after restoration
-        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
-
-        Returns:
-        Path: Path to the restored file
-
-        Example:
-        >>> restored_path = RasUtils.restore_from_backup(Path("project_backup.prj"))
-        >>> print(f"File restored to: {restored_path}")
-        """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        
-        backup_path = Path(backup_path)
-        if '_backup' not in backup_path.stem:
-            logger.error(f"Backup suffix '_backup' not found in {backup_path.name}")
-            raise ValueError(f"Backup suffix '_backup' not found in {backup_path.name}")
-        
-        original_stem = backup_path.stem.rsplit('_backup', 1)[0]
-        original_path = backup_path.with_name(f"{original_stem}{backup_path.suffix}")
-        try:
-            shutil.copy2(backup_path, original_path)
-            logger.info(f"File restored: {original_path}")
-            if remove_backup:
-                backup_path.unlink()
-                logger.info(f"Backup removed: {backup_path}")
-        except Exception as e:
-            logger.error(f"Failed to restore from backup {backup_path}: {e}")
-            raise
-        return original_path
 
     @staticmethod
     @log_call
@@ -738,3 +674,192 @@ class RasUtils:
         except Exception as e:
             logger.exception(f"Failed to update project file {prj_file}")
             raise
+        
+  
+        
+        
+    # From FunkShuns
+        
+    @staticmethod
+    @log_call
+    def decode_byte_strings(dataframe: pd.DataFrame) -> pd.DataFrame:
+        """
+        Decodes byte strings in a DataFrame to regular string objects.
+
+        This function converts columns with byte-encoded strings (e.g., b'string') into UTF-8 decoded strings.
+
+        Args:
+            dataframe (pd.DataFrame): The DataFrame containing byte-encoded string columns.
+
+        Returns:
+            pd.DataFrame: The DataFrame with byte strings decoded to regular strings.
+
+        Example:
+            >>> df = pd.DataFrame({'A': [b'hello', b'world'], 'B': [1, 2]})
+            >>> decoded_df = RasUtils.decode_byte_strings(df)
+            >>> print(decoded_df)
+                A  B
+            0  hello  1
+            1  world  2
+        """
+        str_df = dataframe.select_dtypes(['object'])
+        str_df = str_df.stack().str.decode('utf-8').unstack()
+        for col in str_df:
+            dataframe[col] = str_df[col]
+        return dataframe
+
+    @staticmethod
+    @log_call
+    def perform_kdtree_query(
+        reference_points: np.ndarray,
+        query_points: np.ndarray,
+        max_distance: float = 2.0
+    ) -> np.ndarray:
+        """
+        Performs a KDTree query between two datasets and returns indices with distances exceeding max_distance set to -1.
+
+        Args:
+            reference_points (np.ndarray): The reference dataset for KDTree.
+            query_points (np.ndarray): The query dataset to search against KDTree of reference_points.
+            max_distance (float, optional): The maximum distance threshold. Indices with distances greater than this are set to -1. Defaults to 2.0.
+
+        Returns:
+            np.ndarray: Array of indices from reference_points that are nearest to each point in query_points. 
+                        Indices with distances > max_distance are set to -1.
+
+        Example:
+            >>> ref_points = np.array([[0, 0], [1, 1], [2, 2]])
+            >>> query_points = np.array([[0.5, 0.5], [3, 3]])
+            >>> result = RasUtils.perform_kdtree_query(ref_points, query_points)
+            >>> print(result)
+            array([ 0, -1])
+        """
+        dist, snap = KDTree(reference_points).query(query_points, distance_upper_bound=max_distance)
+        snap[dist > max_distance] = -1
+        return snap
+
+    @staticmethod
+    @log_call
+    def find_nearest_neighbors(points: np.ndarray, max_distance: float = 2.0) -> np.ndarray:
+        """
+        Creates a self KDTree for dataset points and finds nearest neighbors excluding self, 
+        with distances above max_distance set to -1.
+
+        Args:
+            points (np.ndarray): The dataset to build the KDTree from and query against itself.
+            max_distance (float, optional): The maximum distance threshold. Indices with distances 
+                                            greater than max_distance are set to -1. Defaults to 2.0.
+
+        Returns:
+            np.ndarray: Array of indices representing the nearest neighbor in points for each point in points. 
+                        Indices with distances > max_distance or self-matches are set to -1.
+
+        Example:
+            >>> points = np.array([[0, 0], [1, 1], [2, 2], [10, 10]])
+            >>> result = RasUtils.find_nearest_neighbors(points)
+            >>> print(result)
+            array([1, 0, 1, -1])
+        """
+        dist, snap = KDTree(points).query(points, k=2, distance_upper_bound=max_distance)
+        snap[dist > max_distance] = -1
+        
+        snp = pd.DataFrame(snap, index=np.arange(len(snap)))
+        snp = snp.replace(-1, np.nan)
+        snp.loc[snp[0] == snp.index, 0] = np.nan
+        snp.loc[snp[1] == snp.index, 1] = np.nan
+        filled = snp[0].fillna(snp[1])
+        snapped = filled.fillna(-1).astype(np.int64).to_numpy()
+        return snapped
+
+    @staticmethod
+    @log_call
+    def consolidate_dataframe(
+        dataframe: pd.DataFrame,
+        group_by: Optional[Union[str, List[str]]] = None,
+        pivot_columns: Optional[Union[str, List[str]]] = None,
+        level: Optional[int] = None,
+        n_dimensional: bool = False,
+        aggregation_method: Union[str, Callable] = 'list'
+    ) -> pd.DataFrame:
+        """
+        Consolidate rows in a DataFrame by merging duplicate values into lists or using a specified aggregation function.
+
+        Args:
+            dataframe (pd.DataFrame): The DataFrame to consolidate.
+            group_by (Optional[Union[str, List[str]]]): Columns or indices to group by.
+            pivot_columns (Optional[Union[str, List[str]]]): Columns to pivot.
+            level (Optional[int]): Level of multi-index to group by.
+            n_dimensional (bool): If True, use a pivot table for N-Dimensional consolidation.
+            aggregation_method (Union[str, Callable]): Aggregation method, e.g., 'list' to aggregate into lists.
+
+        Returns:
+            pd.DataFrame: The consolidated DataFrame.
+
+        Example:
+            >>> df = pd.DataFrame({'A': [1, 1, 2], 'B': [4, 5, 6], 'C': [7, 8, 9]})
+            >>> result = RasUtils.consolidate_dataframe(df, group_by='A')
+            >>> print(result)
+            B         C
+            A            
+            1  [4, 5]  [7, 8]
+            2  [6]     [9]
+        """
+        if aggregation_method == 'list':
+            agg_func = lambda x: tuple(x)
+        else:
+            agg_func = aggregation_method
+
+        if n_dimensional:
+            result = dataframe.pivot_table(group_by, pivot_columns, aggfunc=agg_func)
+        else:
+            result = dataframe.groupby(group_by, level=level).agg(agg_func).applymap(list)
+
+        return result
+
+    @staticmethod
+    @log_call
+    def find_nearest_value(array: Union[list, np.ndarray], target_value: Union[int, float]) -> Union[int, float]:
+        """
+        Finds the nearest value in a NumPy array to the specified target value.
+
+        Args:
+            array (Union[list, np.ndarray]): The array to search within.
+            target_value (Union[int, float]): The value to find the nearest neighbor to.
+
+        Returns:
+            Union[int, float]: The nearest value in the array to the specified target value.
+
+        Example:
+            >>> arr = np.array([1, 3, 5, 7, 9])
+            >>> result = RasUtils.find_nearest_value(arr, 6)
+            >>> print(result)
+            5
+        """
+        array = np.asarray(array)
+        idx = (np.abs(array - target_value)).argmin()
+        return array[idx]
+    
+    @classmethod
+    @log_call
+    def horizontal_distance(cls, coord1: np.ndarray, coord2: np.ndarray) -> float:
+        """
+        Calculate the horizontal distance between two coordinate points.
+        
+        Args:
+            coord1 (np.ndarray): First coordinate point [X, Y].
+            coord2 (np.ndarray): Second coordinate point [X, Y].
+        
+        Returns:
+            float: Horizontal distance.
+        
+        Example:
+            >>> distance = RasUtils.horizontal_distance(np.array([0, 0]), np.array([3, 4]))
+            >>> print(distance)
+            5.0
+        """
+        return np.linalg.norm(coord2 - coord1)
+    
+    
+    
+    
+    

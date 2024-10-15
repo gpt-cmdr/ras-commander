@@ -8,30 +8,286 @@ This Assistant helps you write efficient Python code for HEC-RAS projects using 
 
 ## Classes, Functions and Arguments
 
-Class/Function | Required Arguments | Optional Arguments
----------------|--------------------|--------------------|
-RasPrj | | |
-init_ras_project | ras_project_folder, ras_version | ras_instance
-RasPlan | | |
-set_geom, set_steady, set_unsteady, set_num_cores | plan_number, new_value | ras_object
-clone_plan | template_plan | new_plan_shortid, ras_object
-RasGeo | | |
-clear_geompre_files | | plan_files, ras_object
-RasUnsteady | | |
-update_unsteady_parameters | unsteady_file, modifications | ras_object
-RasCmdr | | |
-compute_plan, compute_parallel, compute_test_mode | plan_number | various optional args
-RasUtils | | |
-create_backup, restore_from_backup, update_plan_file | various | ras_object
-RasExamples | | |
-extract_project | project_names | -
-RasHdf | | |
-get_hdf_paths_with_properties, get_runtime_data | hdf_input | ras_object
-get_2d_flow_area_names, get_2d_flow_area_attributes | hdf_input | ras_object
-get_cell_info, get_cell_points | hdf_input | ras_object
-get_polygon_info_and_parts, get_polygon_points | hdf_input | area_name, ras_object
-get_cells_center_data, get_faces_area_elevation_data | hdf_input | area_name, ras_object
-load_2d_area_solutions | hdf_input | ras_object
+
+
+
+Certainly! I'll summarize the decorators, provide tables for each class showing the decorators used and arguments, and give a summary of each class's function.
+
+Decorator Summaries:
+
+1. @log_call: Logs function calls, including entry and exit times, and any exceptions raised.
+2. @standardize_input: Standardizes input for HDF file operations, handling different input types and ensuring consistent file paths.
+3. @hdf_operation: Handles opening and closing of HDF files, and manages error handling for HDF operations.
+
+Now, lets go through each class:
+
+
+1. RasPrj Class:
+
+| Function Name | @log_call | @standardize_input | @hdf_operation | Arguments |
+|---------------|-----------|--------------------|--------------------|-----------|
+| initialize | X | | | project_folder, ras_exe_path |
+| _load_project_data | X | | | |
+| _get_geom_file_for_plan | X | | | plan_number |
+| _parse_plan_file | X | | | plan_file_path |
+| _get_prj_entries | X | | | entry_type |
+| _parse_unsteady_file | X | | | unsteady_file_path |
+| check_initialized | X | | | |
+| find_ras_prj | X | | | folder_path |
+| get_project_name | X | | | |
+| get_prj_entries | X | | | entry_type |
+| get_plan_entries | X | | | |
+| get_flow_entries | X |
+1. RasPrj Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| initialize | X | | project_folder, ras_exe_path |
+| _load_project_data | X | | |
+| _get_geom_file_for_plan | X | | plan_number |
+| _parse_plan_file | X | | plan_file_path |
+| _get_prj_entries | X | | entry_type |
+| _parse_unsteady_file | X | | unsteady_file_path |
+| check_initialized | X | | |
+| find_ras_prj | X | | folder_path |
+| get_project_name | X | | |
+| get_prj_entries | X | | entry_type |
+| get_plan_entries | X | | |
+| get_flow_entries | X | | |
+| get_unsteady_entries | X | | |
+| get_geom_entries | X | | |
+| get_hdf_entries | X | | |
+| print_data | X | | |
+| get_plan_value | X | X | plan_number_or_path, key, ras_object |
+| get_boundary_conditions | X | | |
+| _parse_boundary_condition | X | | block, unsteady_number, bc_number |
+
+2. RasPlan Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| set_geom | X | | plan_number, new_geom, ras_object |
+| set_steady | X | | plan_number, new_steady_flow_number, ras_object |
+| set_unsteady | X | | plan_number, new_unsteady_flow_number, ras_object |
+| set_num_cores | X | | plan_number, num_cores, ras_object |
+| set_geom_preprocessor | X | | file_path, run_htab, use_ib_tables, ras_object |
+| get_results_path | X | X | plan_number, ras_object |
+| get_plan_path | X | X | plan_number, ras_object |
+| get_flow_path | X | X | flow_number, ras_object |
+| get_unsteady_path | X | X | unsteady_number, ras_object |
+| get_geom_path | X | X | geom_number, ras_object |
+| clone_plan | X | | template_plan, new_plan_shortid, ras_object |
+| clone_unsteady | X | | template_unsteady, ras_object |
+| clone_steady | X | | template_flow, ras_object |
+| clone_geom | X | | template_geom, ras_object |
+| get_next_number | X | | existing_numbers |
+| get_plan_value | X | X | plan_number_or_path, key, ras_object |
+| update_plan_value | X | X | plan_number_or_path, key, value, ras_object |
+
+3. RasGeo Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| clear_geompre_files | X | | plan_files, ras_object |
+
+4. RasUnsteady Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| update_unsteady_parameters | X | | unsteady_file, modifications, ras_object |
+
+5. RasCmdr Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| compute_plan | X | | plan_number, dest_folder, ras_object, clear_geompre, num_cores, overwrite_dest |
+| compute_parallel | X | | plan_number, max_workers, num_cores, clear_geompre, ras_object, dest_folder, overwrite_dest |
+| compute_test_mode | X | | plan_number, dest_folder_suffix, clear_geompre, num_cores, ras_object, overwrite_dest |
+
+6. RasUtils Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| create_directory | X | | directory_path, ras_object |
+| find_files_by_extension | X | | extension, ras_object |
+| get_file_size | X | | file_path, ras_object |
+| get_file_modification_time | X | | file_path, ras_object |
+| get_plan_path | X | | current_plan_number_or_path, ras_object |
+| remove_with_retry | X | | path, max_attempts, initial_delay, is_folder, ras_object |
+| update_plan_file | X | | plan_number_or_path, file_type, entry_number, ras_object |
+| check_file_access | X | | file_path, mode |
+| convert_to_dataframe | X | | data_source, **kwargs |
+| save_to_excel | X | | dataframe, excel_path, **kwargs |
+| calculate_rmse | X | | observed_values, predicted_values, normalized |
+| calculate_percent_bias | X | | observed_values, predicted_values, as_percentage |
+| calculate_error_metrics | X | | observed_values, predicted_values |
+| update_file | X | | file_path, update_function, *args |
+| get_next_number | X | | existing_numbers |
+| clone_file | X | | template_path, new_path, update_function, *args |
+| update_project_file | X | | prj_file, file_type, new_num, ras_object |
+| decode_byte_strings | X | | dataframe |
+| perform_kdtree_query | X | | reference_points, query_points, max_distance |
+| find_nearest_neighbors | X | | points, max_distance |
+| consolidate_dataframe | X | | dataframe, group_by, pivot_columns, level, n_dimensional, aggregation_method |
+| find_nearest_value | X | | array, target_value |
+| horizontal_distance | X | | coord1, coord2 |
+
+7. HdfBase Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| _get_simulation_start_time | | | hdf_file |
+| _get_unsteady_datetimes | | | hdf_file |
+| _get_2d_flow_area_names_and_counts | | | hdf_file |
+| _parse_ras_datetime | | | datetime_str |
+| _parse_ras_simulation_window_datetime | | | datetime_str |
+| _parse_duration | | | duration_str |
+| _parse_ras_datetime_ms | | | datetime_str |
+| _convert_ras_hdf_string | | | value |
+
+8. HdfBndry Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| bc_lines | | X (plan_hdf) | hdf_path |
+| breaklines | | X (plan_hdf) | hdf_path |
+| refinement_regions | | X (plan_hdf) | hdf_path |
+| reference_lines_names | | X (plan_hdf) | hdf_path, mesh_name |
+| reference_points_names | | X (plan_hdf) | hdf_path, mesh_name |
+| reference_lines | | X (plan_hdf) | hdf_path |
+| reference_points | | X (plan_hdf) | hdf_path |
+| get_boundary_attributes | | X (plan_hdf) | hdf_path, boundary_type |
+| get_boundary_count | | X (plan_hdf) | hdf_path, boundary_type |
+| get_boundary_names | | X (plan_hdf) | hdf_path, boundary_type |
+
+9. HdfMesh Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| mesh_area_names | | X (plan_hdf) | hdf_path |
+| mesh_areas | | X (geom_hdf) | hdf_path |
+| mesh_cell_polygons | | X (geom_hdf) | hdf_path |
+| mesh_cell_points | | X (plan_hdf) | hdf_path |
+| mesh_cell_faces | | X (plan_hdf) | hdf_path |
+| get_geom_2d_flow_area_attrs | | X (geom_hdf) | hdf_path |
+
+10. HdfPlan Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| get_simulation_start_time | X | X (plan_hdf) | hdf_path |
+| get_simulation_end_time | X | X (plan_hdf) | hdf_path |
+| get_unsteady_datetimes | X | X (plan_hdf) | hdf_path |
+| get_plan_info_attrs | X | X (plan_hdf) | hdf_path |
+| get_plan_param_attrs | X | X (plan_hdf) | hdf_path |
+| get_meteorology_precip_attrs | X | X (plan_hdf) | hdf_path |
+| get_geom_attrs | X | X (plan_hdf) | hdf_path |
+
+11. HdfResultsMesh Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| mesh_summary_output | X | X (plan_hdf) | hdf_path, var, round_to |
+| mesh_timeseries_output | X | X (plan_hdf) | hdf_path, mesh_name, var, truncate |
+| mesh_faces_timeseries_output | X | X (plan_hdf) | hdf_path, mesh_name |
+| mesh_cells_timeseries_output | X | X (plan_hdf) | hdf_path, mesh_names, var, truncate, ras_object |
+| mesh_last_iter | X | X (plan_hdf) | hdf_path |
+| mesh_max_ws | X | X (plan_hdf) | hdf_path, round_to |
+| mesh_min_ws | X | X (plan_hdf) | hdf_path, round_to |
+| mesh_max_face_v | X | X (plan_hdf) | hdf_path, round_to |
+| mesh_min_face_v | X | X (plan_hdf) | hdf_path, round_to |
+| mesh_max_ws_err | X | X (plan_hdf) | hdf_path, round_to |
+| mesh_max_iter | X | X (plan_hdf) | hdf_path, round_to |
+
+12. HdfResultsPlan Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| get_results_unsteady_attrs | X | X (plan_hdf) | hdf_path |
+| get_results_unsteady_summary_attrs | X | X (plan_hdf) | hdf_path |
+| get_results_volume_accounting_attrs | X | X (plan_hdf) | hdf_path |
+| get_runtime_data | | X (plan_hdf) | hdf_path |
+| reference_timeseries_output | X | X (plan_hdf) | hdf_path, reftype |
+| reference_lines_timeseries_output | X | X (plan_hdf) | hdf_path |
+| reference_points_timeseries_output | X | X (plan_hdf) | hdf_path |
+| reference_summary_output | X | X (plan_hdf) | hdf_path, reftype |
+
+13. HdfResultsXsec Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| steady_profile_xs_output | | X (plan_hdf) | hdf_path, var, round_to |
+| cross_sections_wsel | | X (plan_hdf) | hdf_path |
+| cross_sections_flow | | X (plan_hdf) | hdf_path |
+| cross_sections_energy_grade | | X (plan_hdf) | hdf_path |
+| cross_sections_additional_enc_station_left | | X (plan_hdf) | hdf_path |
+| cross_sections_additional_enc_station_right | | X (plan_hdf) | hdf_path |
+| cross_sections_additional_area_total | | X (plan_hdf) | hdf_path |
+| cross_sections_additional_velocity_total | | X (plan_hdf) | hdf_path |
+
+14. HdfStruc Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| structures | X | X (geom_hdf) | hdf_path, datetime_to_str |
+| get_geom_structures_attrs | X | X (geom_hdf) | hdf_path |
+
+15. HdfUtils Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| get_hdf_filename | | X (plan_hdf) | hdf_input, ras_object |
+| get_root_attrs | | X (plan_hdf) | hdf_path |
+| get_attrs | | X (plan_hdf) | hdf_path, attr_path |
+| get_hdf_paths_with_properties | | X (plan_hdf) | hdf_path |
+| get_group_attributes_as_df | | X (plan_hdf) | hdf_path, group_path |
+| get_2d_flow_area_names_and_counts | | X (plan_hdf) | hdf_path |
+| projection | | X (plan_hdf) | hdf_path |
+
+16. HdfXsec Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| cross_sections | X | X (geom_hdf) | hdf_path, datetime_to_str |
+| cross_sections_elevations | X | X (geom_hdf) | hdf_path, round_to |
+| river_reaches | X | X (geom_hdf) | hdf_path, datetime_to_str |
+
+17. RasExamples Class:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| __init__ | X | | |
+| get_example_projects | X | | version_number |
+| _load_project_data | X | | |
+| _find_zip_file | X | | |
+| _extract_folder_structure | X | | |
+| _save_to_csv | X | | |
+| list_categories | X | | |
+| list_projects | X | | category |
+| extract_project | X | | project_names |
+| is_project_extracted | X | | project_name |
+| clean_projects_directory | X | | |
+| download_fema_ble_model | X | | huc8, output_dir |
+| _make_safe_folder_name | X | | name |
+| _download_file_with_progress | X | | url, dest_folder, file_size |
+| _convert_size_to_bytes | X | | size_str |
+
+18. RasGpt Class:
+
+This class is mentioned in the code but has no implemented methods yet.
+
+19. Standalone functions:
+
+| Function Name | @log_call | @standardize_input | Arguments |
+|---------------|-----------|--------------------|--------------------|
+| init_ras_project | X | | ras_project_folder, ras_version, ras_instance |
+| get_ras_exe | X | | ras_version |
+
+
+
+
+Overall, the ras-commander library provides a comprehensive set of tools for working with HEC-RAS projects, including project management, file operations, data extraction, and simulation execution. The library makes extensive use of logging and input standardization through decorators, ensuring consistent behavior and traceability across its various components.
+
 
 ## Coding Assistance Rules:
 
@@ -46,10 +302,30 @@ load_2d_area_solutions | hdf_input | ras_object
 9. Highlight parallel execution best practices.
 10. Suggest RasExamples for testing when appropriate.
 11. Utilize RasHdf for HDF file operations and data extraction.
+12. Use type hints for function arguments and return values.
+13. Apply the @log_call decorator for automatic function logging.
+14. Emphasize proper error handling and logging in all functions.
+15. When working with RasHdfGeom, always use the @standardize_input decorator for methods that interact with HDF files.
+16. Remember that RasHdfGeom methods often return GeoDataFrames, which combine geometric data with attribute information.
+17. When dealing with cross-sections or river reaches, consider using the datetime_to_str parameter to convert datetime objects to strings if needed.
+18. For methods that accept a mesh_name parameter, remember that they can return either a dictionary of lists or a single list depending on whether a specific mesh is specified.
+19. Use 'union_all()' for geodataframes. For pandas >= 2.0, use pd.concat instead of append.
+20. Provide full code segments or scripts with no elides.
+21. When importing from the Decorators module, use:
+    ```python
+    from .Decorators import standardize_input, log_call
+    ```
+22. When importing from the LoggingConfig module, use:
+    ```python
+    from .LoggingConfig import setup_logging, get_logger
+    ```
+23. Be aware that while the code will work with capitalized module names (Decorators.py and LoggingConfig.py), it's generally recommended to stick to lowercase names for modules as per PEP 8.
+24. When revising code, label planning steps as:
+    ## Explicit Planning and Reasoning for Revisions
 
-When revising, label planning steps as:
-## Explicit Planning and Reasoning for Revisions
-
-Use 'union_all()' for geodataframes. For pandas >= 2.0, use pd.concat instead of append.
-
-Provide full code segments or scripts with no elides.
+25. Always consider the implications of file renaming on import statements throughout the project.
+26. When working with GeoDataFrames, remember to use appropriate geometric operations and consider spatial relationships.
+27. For HDF file operations, always use the standardize_input decorator to ensure consistent handling of file paths.
+28. When dealing with large datasets, consider using chunking or iterative processing to manage memory usage.
+29. Utilize the RasExamples class for testing and demonstrating functionality with sample projects.
+30. When working with the RasGpt class, be aware that it's mentioned but currently has no implemented methods.

@@ -36,7 +36,7 @@ import logging
 import re
 from tqdm import tqdm
 from ras_commander import get_logger
-from ras_commander.logging_config import log_call
+from ras_commander.LoggingConfig import log_call
 
 logger = get_logger(__name__)
 
@@ -56,7 +56,7 @@ class RasExamples:
         """
         self.base_url = 'https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/'
         self.valid_versions = [
-            "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+            "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
             "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
@@ -70,6 +70,41 @@ class RasExamples:
         self.projects_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Example projects folder: {self.projects_dir}")
         self._load_project_data()
+
+    @log_call
+    def get_example_projects(self, version_number='6.6'):
+        """
+        Download and extract HEC-RAS example projects for a specified version.
+        """
+        logger.info(f"Getting example projects for version {version_number}")
+        if version_number not in self.valid_versions:
+            error_msg = f"Invalid version number. Valid versions are: {', '.join(self.valid_versions)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        zip_url = f"{self.base_url}1.0.33/Example_Projects_{version_number.replace('.', '_')}.zip"
+        
+        self.examples_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.zip_file_path = self.examples_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
+
+        if not self.zip_file_path.exists():
+            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}. \nThe file is over 400 MB, so it may take a few minutes to download....")
+            try:
+                response = requests.get(zip_url, stream=True)
+                response.raise_for_status()
+                with open(self.zip_file_path, 'wb') as file:
+                    shutil.copyfileobj(response.raw, file)
+                logger.info(f"Downloaded to {self.zip_file_path}")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to download the zip file: {e}")
+                raise
+        else:
+            logger.info("HEC-RAS Example Projects zip file already exists. Skipping download.")
+
+        self._load_project_data()
+        return self.projects_dir
+
 
     @log_call
     def _load_project_data(self):
@@ -129,10 +164,10 @@ class RasExamples:
             with zipfile.ZipFile(self.zip_file_path, 'r') as zip_ref:
                 for file in zip_ref.namelist():
                     parts = Path(file).parts
-                    if len(parts) > 2:
+                    if len(parts) > 1:
                         folder_data.append({
-                            'Category': parts[1],
-                            'Project': parts[2]
+                            'Category': parts[0],
+                            'Project': parts[1]
                         })
         
             self.folder_df = pd.DataFrame(folder_data).drop_duplicates()
@@ -157,39 +192,6 @@ class RasExamples:
         else:
             logger.warning("No folder data to save to CSV.")
 
-    @log_call
-    def get_example_projects(self, version_number='6.5'):
-        """
-        Download and extract HEC-RAS example projects for a specified version.
-        """
-        logger.info(f"Getting example projects for version {version_number}")
-        if version_number not in self.valid_versions:
-            error_msg = f"Invalid version number. Valid versions are: {', '.join(self.valid_versions)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        zip_url = f"{self.base_url}1.0.31/Example_Projects_{version_number.replace('.', '_')}.zip"
-        
-        self.examples_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.zip_file_path = self.examples_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
-
-        if not self.zip_file_path.exists():
-            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}. \nThe file is over 400 MB, so it may take a few minutes to download....")
-            try:
-                response = requests.get(zip_url, stream=True)
-                response.raise_for_status()
-                with open(self.zip_file_path, 'wb') as file:
-                    shutil.copyfileobj(response.raw, file)
-                logger.info(f"Downloaded to {self.zip_file_path}")
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Failed to download the zip file: {e}")
-                raise
-        else:
-            logger.info("HEC-RAS Example Projects zip file already exists. Skipping download.")
-
-        self._load_project_data()
-        return self.projects_dir
 
     @log_call
     def list_categories(self):
@@ -232,12 +234,12 @@ class RasExamples:
         for project_name in project_names:
             logger.info("----- RasExamples Extracting Project -----")
             logger.info(f"Extracting project '{project_name}'")
-            project_path = self.projects_dir / project_name
+            project_path = self.projects_dir
 
-            if project_path.exists():
+            if (project_path / project_name).exists():
                 logger.info(f"Project '{project_name}' already exists. Deleting existing folder...")
                 try:
-                    shutil.rmtree(project_path)
+                    shutil.rmtree(project_path / project_name)
                     logger.info(f"Existing folder for project '{project_name}' has been deleted.")
                 except Exception as e:
                     logger.error(f"Failed to delete existing project folder '{project_name}': {e}")
@@ -263,9 +265,9 @@ class RasExamples:
                 with zipfile.ZipFile(self.zip_file_path, 'r') as zip_ref:
                     for file in zip_ref.namelist():
                         parts = Path(file).parts
-                        if len(parts) > 2 and parts[2] == project_name:
-                            # Remove the first two levels (category and project name)
-                            relative_path = Path(*parts[3:])
+                        if len(parts) > 1 and parts[1] == project_name:
+                            # Remove the first level (category)
+                            relative_path = Path(*parts[1:])
                             extract_path = project_path / relative_path
                             if file.endswith('/'):
                                 extract_path.mkdir(parents=True, exist_ok=True)
@@ -274,8 +276,8 @@ class RasExamples:
                                 with zip_ref.open(file) as source, open(extract_path, "wb") as target:
                                     shutil.copyfileobj(source, target)
 
-                logger.info(f"Successfully extracted project '{project_name}' to {project_path}")
-                extracted_paths.append(project_path)
+                logger.info(f"Successfully extracted project '{project_name}' to {project_path / project_name}")
+                extracted_paths.append(project_path / project_name)
             except zipfile.BadZipFile:
                 logger.error(f"Error: The file {self.zip_file_path} is not a valid zip file.")
             except FileNotFoundError:
@@ -377,72 +379,3 @@ class RasExamples:
         
         number, unit = float(re.findall(r'[\d\.]+', size_str)[0]), re.findall(r'[BKMGT]B?', size_str)[0]
         return int(number * units[unit])
-
-    # Example usage:
-    # ras_examples = RasExamples()
-    # ras_examples.download_fema_ble_models('/path/to/csv/files', '/path/to/output/folder')
-    # extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
-    # for path in extracted_paths:
-    #     logger.info(f"Extracted to: {path}")
-
-
-"""
-### How to Use the Revised `RasExamples` Class
-
-1. **Instantiate the Class:**
-   ```python
-   ras_examples = RasExamples()
-   ```
-
-2. **Download FEMA BLE Models:**
-   - Ensure you have the required CSV files by visiting [FEMA's Estimated Base Flood Elevation (BFE) Viewer](https://webapps.usgs.gov/infrm/estBFE/) and using the "Download as Table" option for each BLE model you wish to access.
-   - Call the `download_fema_ble_models` method with the appropriate paths:
-     ```python
-     ras_examples.download_fema_ble_models('/path/to/csv/files', '/path/to/output/folder')
-     ```
-     - Replace `'/path/to/csv/files'` with the directory containing your CSV files.
-     - Replace `'/path/to/output/folder'` with the directory where you want the BLE models to be downloaded and organized.
-
-3. **Extract Projects (If Needed):**
-   - After downloading, you can extract specific projects using the existing `extract_project` method:
-     ```python
-     extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "BaldEagleCrkMulti2D", "Muncie"])
-     for path in extracted_paths:
-         logging.info(f"Extracted to: {path}")
-     ```
-
-4. **Explore Projects and Categories:**
-   - List available categories:
-     ```python
-     categories = ras_examples.list_categories()
-     ```
-   - List projects within a specific category:
-     ```python
-     projects = ras_examples.list_projects(category='SomeCategory')
-     ```
-
-5. **Clean Projects Directory (If Needed):**
-   - To remove all extracted projects:
-     ```python
-     ras_examples.clean_projects_directory()
-     ```
-
-### Dependencies
-
-Ensure that the following Python packages are installed:
-
-- `pandas`
-- `requests`
-
-You can install them using `pip`:
-
-```bash
-pip install pandas requests
-```
-
-### Notes
-
-- The class uses Python's `logging` module to provide detailed information about its operations. Ensure that the logging level is set appropriately to capture the desired amount of detail.
-- The `download_fema_ble_models` method handles large file downloads by streaming data in chunks, which is memory-efficient.
-- All folder names are sanitized to prevent filesystem errors due to unsafe characters.
-"""

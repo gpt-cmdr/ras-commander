@@ -25,7 +25,8 @@ Example:
 import os
 from pathlib import Path
 from .RasPrj import ras
-from ras_commander.logging_config import get_logger, log_call
+from .LoggingConfig import get_logger
+from .Decorators import log_call
 
 logger = get_logger(__name__)
 

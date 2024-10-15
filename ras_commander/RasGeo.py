@@ -28,8 +28,8 @@ from pathlib import Path
 from typing import List, Union
 from .RasPlan import RasPlan
 from .RasPrj import ras
-from ras_commander import get_logger
-from ras_commander.logging_config import log_call
+from .LoggingConfig import get_logger
+from .Decorators import log_call
 
 logger = get_logger(__name__)
 

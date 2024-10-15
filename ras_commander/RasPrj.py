@@ -44,7 +44,8 @@ from pathlib import Path
 import pandas as pd
 from typing import Union, Any, List, Dict, Tuple
 import logging
-from ras_commander.logging_config import get_logger, log_call
+from ras_commander.LoggingConfig import get_logger
+from ras_commander.Decorators import log_call
 
 logger = get_logger(__name__)
 
@@ -87,6 +88,7 @@ class RasPrj:
         logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
                      f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
                      f"Boundary conditions: {len(self.boundaries_df)}")
+        logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
 
     @log_call
     def _load_project_data(self):
@@ -100,7 +102,36 @@ class RasPrj:
         self.plan_df = self._get_prj_entries('Plan')
         self.flow_df = self._get_prj_entries('Flow')
         self.unsteady_df = self._get_prj_entries('Unsteady')
-        self.geom_df = self._get_prj_entries('Geom')
+        self.geom_df = self.get_geom_entries()  # Use get_geom_entries instead of _get_prj_entries
+        
+        # Add Geom_File to plan_df
+        self.plan_df['Geom_File'] = self.plan_df.apply(lambda row: self._get_geom_file_for_plan(row['plan_number']), axis=1)
+
+    @log_call
+    def _get_geom_file_for_plan(self, plan_number):
+        """
+        Get the geometry file path for a given plan number.
+        
+        Args:
+            plan_number (str): The plan number to find the geometry file for.
+        
+        Returns:
+            str: The full path to the geometry HDF file, or None if not found.
+        """
+        plan_file_path = self.project_folder / f"{self.project_name}.p{plan_number}"
+        try:
+            with open(plan_file_path, 'r') as plan_file:
+                for line in plan_file:
+                    if line.startswith("Geom File="):
+                        geom_file = line.strip().split('=')[1]
+                        geom_hdf_path = self.project_folder / f"{self.project_name}.{geom_file}.hdf"
+                        if geom_hdf_path.exists():
+                            return str(geom_hdf_path)
+                        else:
+                            return None
+        except Exception as e:
+            logger.error(f"Error reading plan file for geometry: {e}")
+        return None
 
     @log_call
     def _parse_plan_file(self, plan_file_path):
@@ -381,16 +412,31 @@ class RasPrj:
     @log_call
     def get_geom_entries(self):
         """
-        Get all geometry entries from the HEC-RAS project.
+        Get geometry entries from the project file.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all geometry entries.
-
-        Raises:
-            RuntimeError: If the project has not been initialized.
+            pd.DataFrame: DataFrame containing geometry entries.
         """
-        self.check_initialized()
-        return self._get_prj_entries('Geom')
+        geom_pattern = re.compile(r'Geom File=(\w+)')
+        geom_entries = []
+
+        try:
+            with open(self.prj_file, 'r') as f:
+                for line in f:
+                    match = geom_pattern.search(line)
+                    if match:
+                        geom_entries.append(match.group(1))
+        
+            geom_df = pd.DataFrame({'geom_file': geom_entries})
+            geom_df['geom_number'] = geom_df['geom_file'].str.extract(r'(\d+)$')
+            geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
+            geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
+            
+            logger.info(f"Found {len(geom_df)} geometry entries")
+            return geom_df
+        except Exception as e:
+            logger.error(f"Error reading geometry entries from project file: {e}")
+            raise
     
     @log_call
     def get_hdf_entries(self):

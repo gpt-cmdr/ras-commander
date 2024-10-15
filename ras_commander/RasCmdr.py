@@ -47,7 +47,8 @@ from threading import Lock, Thread, current_thread
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
 from typing import Union, List, Optional, Dict
-from ras_commander.logging_config import get_logger, log_call
+from .LoggingConfig import get_logger
+from .Decorators import log_call
 
 logger = get_logger(__name__)
 
