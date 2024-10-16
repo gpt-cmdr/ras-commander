@@ -347,30 +347,27 @@ class HdfUtils:
         return parsed_dt
 
     @staticmethod
-    def _ras_timesteps_to_datetimes(timesteps: np.ndarray, start_time: datetime, time_unit: str, round_to: str = "0.1 s") -> List[datetime]:
+    def _ras_timesteps_to_datetimes(timesteps: np.ndarray, start_time: datetime, time_unit: str = "days", round_to: str = "100ms") -> pd.DatetimeIndex:
         """
-        Convert an array of RAS timesteps into a list of datetime objects.
+        Convert RAS timesteps to datetime objects.
 
         Args:
-            timesteps (np.ndarray): An array of RAS timesteps.
-            start_time (datetime): The start time of the simulation.
-            time_unit (str): The time unit of the timesteps.
-            round_to (str): The time unit to round the datetimes to. Default is "0.1 s".
+            timesteps (np.ndarray): Array of timesteps.
+            start_time (datetime): Start time of the simulation.
+            time_unit (str): Unit of the timesteps. Default is "days".
+            round_to (str): Frequency string to round the times to. Default is "100ms" (100 milliseconds).
 
         Returns:
-            List[datetime]: A list of datetime objects corresponding to the timesteps.
-
-        Note:
-            The `round_to` parameter uses Pandas time string notation. For example:
-            - "0.1 s" means round to the nearest 0.1 seconds
-            - "1 s" means round to the nearest second
-            - "1 min" means round to the nearest minute
-            For more options, see Pandas documentation on time string notation.
+            pd.DatetimeIndex: DatetimeIndex of converted and rounded datetimes.
         """
-        return [
-            start_time + pd.Timedelta(timestep, unit=time_unit).round(round_to)
-            for timestep in timesteps.astype(np.float64)
-        ]
+        if time_unit == "days":
+            datetimes = start_time + pd.to_timedelta(timesteps, unit='D')
+        elif time_unit == "hours":
+            datetimes = start_time + pd.to_timedelta(timesteps, unit='H')
+        else:
+            raise ValueError(f"Unsupported time unit: {time_unit}")
+
+        return pd.DatetimeIndex(datetimes).round(round_to)
 
     @staticmethod
     def _hdf5_attrs_to_dict(attrs: Union[h5py.AttributeManager, Dict], prefix: Optional[str] = None) -> Dict:

@@ -17,9 +17,8 @@ from .Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
 from .HdfResultsXsec import HdfResultsXsec
 from .LoggingConfig import get_logger
-import dask.array as da
-from datetime import datetime
 import numpy as np
+from datetime import datetime
 
 logger = get_logger(__name__)
 
@@ -293,10 +292,7 @@ class HdfResultsPlan:
             group = reference_group.get(var)
             if group is None:
                 continue
-            try:
-                values = da.from_array(group, chunks=group.chunks)
-            except ImportError:
-                values = group[:]
+            values = group[:]
             units = group.attrs["Units"].decode("utf-8")
             da = xr.DataArray(
                 values,

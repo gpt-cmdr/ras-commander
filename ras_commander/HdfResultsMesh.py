@@ -47,14 +47,14 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_summary_output(hdf_path: Path, var: str, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_summary_output(hdf_path: Path, var: str, round_to: str = "100ms") -> pd.DataFrame:
         """
         Return the summary output data for a given variable.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
             var (str): The summary output variable to retrieve.
-            round_to (str): The time unit to round the datetimes to. Default: "0.1 s" (seconds).
+            round_to (str): The time unit to round the datetimes to. Default: "100ms" (100 milliseconds).
 
         Returns:
             pd.DataFrame: DataFrame containing the summary output data.
@@ -176,68 +176,47 @@ class HdfResultsMesh:
         """
         return HdfResultsMesh._get_mesh_summary_output(hdf_path, "Cell Last Iteration")
 
+
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_max_ws(hdf_path: Path, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_max_ws(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
-        Get maximum water surface elevation for each mesh cell.
+        Get maximum iteration count for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
-            round_to (str): Time rounding specification (default "0.1 s").
+            round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing maximum water surface elevations.
+            pd.DataFrame: DataFrame containing maximum iteration counts.
 
         Raises:
-            ValueError: If there's an error processing the maximum water surface data.
+            ValueError: If there's an error processing the maximum iteration data.
+            
+        Note: The Maximum Iteration is labeled as "Cell Last Iteration" in the HDF file 
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                start_time = HdfBase._get_simulation_start_time(hdf_file)
-                dfs = []
-                for mesh_name, cell_count in HdfBase._get_2d_flow_area_names_and_counts(hdf_file):
-                    group = HdfResultsMesh._get_mesh_summary_output_group(hdf_file, mesh_name, "Maximum Water Surface")
-                    
-                    # Check the structure of the group
-                    if isinstance(group, h5py.Dataset):
-                        data = group[:]
-                        if data.ndim > 1:
-                            values = data[:, 0]  # Assume first column is values
-                            times = data[:, 1] if data.shape[1] > 1 else np.arange(len(values))
-                        else:
-                            values = data
-                            times = np.arange(len(values))
-                    else:
-                        values = group['Values'][:] if 'Values' in group else group[:]
-                        times = group['Time'][:] if 'Time' in group else np.arange(len(values))
-                    
-                    times = HdfUtils._ras_timesteps_to_datetimes(times, start_time, time_unit="days", round_to=round_to)
-                    df = pd.DataFrame({
-                        "mesh_name": [mesh_name] * len(values),
-                        "cell_id": range(len(values)),
-                        "maximum_water_surface": values,
-                        "maximum_water_surface_time": times
-                    })
-                    dfs.append(df)
-            
-            return pd.concat(dfs, ignore_index=True)
+                return HdfResultsMesh._get_mesh_summary_output(hdf_file, "Maximum Water Surface", round_to)
         except Exception as e:
             logger.error(f"Error in mesh_max_ws: {str(e)}")
-            logger.error(f"Data structure: {group.shape if isinstance(group, h5py.Dataset) else [k for k in group.keys()]}")
             raise ValueError(f"Failed to get maximum water surface: {str(e)}")
+        
+
+
+
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_min_ws(hdf_path: Path, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_min_ws(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get minimum water surface elevation for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
-            round_to (str): Time rounding specification (default "0.1 s").
+            round_to (str): Time rounding specification (default "100ms").
 
         Returns:
             pd.DataFrame: DataFrame containing minimum water surface elevations.
@@ -252,13 +231,13 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_max_face_v(hdf_path: Path, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_max_face_v(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get maximum face velocity for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
-            round_to (str): Time rounding specification (default "0.1 s").
+            round_to (str): Time rounding specification (default "100ms").
 
         Returns:
             pd.DataFrame: DataFrame containing maximum face velocities.
@@ -276,13 +255,13 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_min_face_v(hdf_path: Path, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_min_face_v(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get minimum face velocity for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
-            round_to (str): Time rounding specification (default "0.1 s").
+            round_to (str): Time rounding specification (default "100ms").
 
         Returns:
             pd.DataFrame: DataFrame containing minimum face velocities.
@@ -300,13 +279,13 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_max_ws_err(hdf_path: Path, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_max_ws_err(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get maximum water surface error for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
-            round_to (str): Time rounding specification (default "0.1 s").
+            round_to (str): Time rounding specification (default "100ms").
 
         Returns:
             pd.DataFrame: DataFrame containing maximum water surface errors.
@@ -325,13 +304,13 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def mesh_max_iter(hdf_path: Path, round_to: str = "0.1 s") -> pd.DataFrame:
+    def mesh_max_iter(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get maximum iteration count for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
-            round_to (str): Time rounding specification (default "0.1 s").
+            round_to (str): Time rounding specification (default "100ms").
 
         Returns:
             pd.DataFrame: DataFrame containing maximum iteration counts.
@@ -351,63 +330,6 @@ class HdfResultsMesh:
         
         
 
-    @staticmethod
-    def _get_mesh_timeseries_output(hdf_file: h5py.File, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
-        """
-        Get timeseries output for a specific mesh and variable.
-
-        Args:
-            hdf_file (h5py.File): Open HDF file object.
-            mesh_name (str): Name of the mesh.
-            var (str): Variable name to retrieve. Valid options include:
-                "Water Surface", "Face Velocity", "Cell Velocity X", "Cell Velocity Y",
-                "Face Flow", "Face Water Surface", "Cell Volume", "Cell Volume Error",
-                "Cell Water Surface Error", "Cell Courant", "Face Courant",
-                "Cell Hydraulic Depth", "Cell Invert Depth",
-                "Cell Cumulative Precipitation Depth", "Cell Divergence Term",
-                "Cell Eddy Viscosity X", "Cell Eddy Viscosity Y", "Cell Flow Balance",
-                "Cell Storage Term", "Cell Water Source Term", "Face Cumulative Volume",
-                "Face Eddy Viscosity", "Face Flow Period Average", "Face Friction Term",
-                "Face Pressure Gradient Term", "Face Shear Stress", "Face Tangential Velocity"
-            truncate (bool): Whether to truncate the output to remove trailing zeros (default True).
-
-        Returns:
-            xr.DataArray: DataArray containing the timeseries output.
-
-        Raises:
-            ValueError: If the specified path is not found in the HDF file or if there's an error processing the data.
-        """
-        try:
-            path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
-            
-            if path not in hdf_file:
-                raise ValueError(f"Path {path} not found in HDF file")
-
-            values, units = HdfResultsMesh._get_mesh_timeseries_output_values_units(hdf_file, mesh_name, var)
-            times = HdfBase._get_unsteady_datetimes(hdf_file)
-
-            if truncate:
-                non_zero = np.nonzero(values)[0]
-                if len(non_zero) > 0:
-                    start, end = non_zero[0], non_zero[-1] + 1
-                    values = values[start:end]
-                    times = times[start:end]
-
-            # Check if values is 2D and adjust accordingly
-            if values.ndim == 2:
-                dims = ["time", "cell"]
-            else:
-                dims = ["time"]
-
-            return xr.DataArray(
-                values,
-                coords={"time": times},
-                dims=dims,
-                attrs={"units": units, "mesh_name": mesh_name, "variable": var},
-            )
-        except Exception as e:
-            logger.error(f"Error in get_mesh_timeseries_output: {str(e)}")
-            raise ValueError(f"Failed to get timeseries output: {str(e)}")
 
     @staticmethod
     def _get_mesh_timeseries_output_path(mesh_name: str, var_name: str) -> str:
@@ -423,26 +345,6 @@ class HdfResultsMesh:
         """
         return f"Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/{mesh_name}/{var_name}"
 
-    @staticmethod
-    def _get_mesh_timeseries_output_values_units(hdf_file: h5py.File, mesh_name: str, var: str) -> Tuple[np.ndarray, str]:
-        """
-        Get the mesh timeseries output values and units for a specific variable from the HDF file.
-
-        Args:
-            hdf_file (h5py.File): Open HDF file object.
-            mesh_name (str): Name of the mesh.
-            var (str): Variable name to retrieve.
-
-        Returns:
-            Tuple[np.ndarray, str]: A tuple containing the output values and units.
-        """
-        path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
-        group = hdf_file[path]
-        values = group[:]
-        units = group.attrs.get("Units")
-        if units is not None:
-            units = units.decode("utf-8")
-        return values, units
 
     @staticmethod
     def _mesh_cells_timeseries_output(hdf_file: h5py.File, mesh_names: Optional[Union[str, List[str]]] = None, var: Optional[str] = None, truncate: bool = False) -> Dict[str, xr.Dataset]:
@@ -502,11 +404,10 @@ class HdfResultsMesh:
                 data_vars = {}
                 for variable in variables:
                     try:
-                        values, units = HdfResultsMesh._get_mesh_timeseries_output_values_units(hdf_file, mesh_name, variable)
-                        logger.info(f"Variable: {variable}")
-                        logger.info(f"Original values shape: {values.shape}")
-                        logger.info(f"Units: {units}")
-                        logger.info(f"Number of time stamps: {len(time_stamps)}")
+                        path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, variable)
+                        dataset = hdf_file[path]
+                        values = dataset[:]
+                        units = dataset.attrs.get("Units", "").decode("utf-8")
 
                         if truncate:
                             last_nonzero = np.max(np.nonzero(values)[1]) + 1 if values.size > 0 else 0
@@ -515,12 +416,9 @@ class HdfResultsMesh:
                         else:
                             truncated_time_stamps = time_stamps
 
-                        # Ensure the data shape matches our expectations
                         if values.shape[0] != len(truncated_time_stamps):
                             logger.warning(f"Mismatch between number of time steps ({len(truncated_time_stamps)}) and data shape ({values.shape}) for variable {variable}")
                             continue
-
-                        logger.info(f"Final values shape: {values.shape}")
 
                         data_vars[variable] = xr.DataArray(
                             data=values,
@@ -546,6 +444,92 @@ class HdfResultsMesh:
             logger.error(f"Error in _mesh_cells_timeseries_output: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
 
+
+
+    @staticmethod
+    def _get_mesh_timeseries_output(hdf_file: h5py.File, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
+        """
+        Get timeseries output for a specific mesh and variable.
+
+        Args:
+            hdf_file (h5py.File): Open HDF file object.
+            mesh_name (str): Name of the mesh.
+            var (str): Variable name to retrieve. Valid options include:
+                "Water Surface", "Face Velocity", "Cell Velocity X", "Cell Velocity Y",
+                "Face Flow", "Face Water Surface", "Cell Volume", "Cell Volume Error",
+                "Cell Water Surface Error", "Cell Courant", "Face Courant",
+                "Cell Hydraulic Depth", "Cell Invert Depth",
+                "Cell Cumulative Precipitation Depth", "Cell Divergence Term",
+                "Cell Eddy Viscosity X", "Cell Eddy Viscosity Y", "Cell Flow Balance",
+                "Cell Storage Term", "Cell Water Source Term", "Face Cumulative Volume",
+                "Face Eddy Viscosity", "Face Flow Period Average", "Face Friction Term",
+                "Face Pressure Gradient Term", "Face Shear Stress", "Face Tangential Velocity"
+            truncate (bool): Whether to truncate the output to remove trailing zeros (default True).
+
+        Returns:
+            xr.DataArray: DataArray containing the timeseries output.
+
+        Raises:
+            ValueError: If the specified path is not found in the HDF file or if there's an error processing the data.
+        """
+        try:
+            path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
+            
+            if path not in hdf_file:
+                raise ValueError(f"Path {path} not found in HDF file")
+
+            # Use h5py to get the dataset
+            dataset = hdf_file[path]
+            values = dataset[:]
+            units = dataset.attrs.get("Units", "").decode("utf-8")
+            times = HdfBase._get_unsteady_datetimes(hdf_file)
+
+            if truncate:
+                non_zero = np.nonzero(values)[0]
+                if len(non_zero) > 0:
+                    start, end = non_zero[0], non_zero[-1] + 1
+                    values = values[start:end]
+                    times = times[start:end]
+
+            # Create xarray DataArray
+            dims = ["time", "cell"] if values.ndim == 2 else ["time"]
+            coords = {"time": times}
+            if values.ndim == 2:
+                coords["cell"] = np.arange(values.shape[1])
+
+            return xr.DataArray(
+                values,
+                coords=coords,
+                dims=dims,
+                attrs={"units": units, "mesh_name": mesh_name, "variable": var},
+            )
+        except Exception as e:
+            logger.error(f"Error in get_mesh_timeseries_output: {str(e)}")
+            raise ValueError(f"Failed to get timeseries output: {str(e)}")
+
+
+    @staticmethod
+    def _get_mesh_timeseries_output_values_units(hdf_file: h5py.File, mesh_name: str, var: str) -> Tuple[np.ndarray, str]:
+        """
+        Get the mesh timeseries output values and units for a specific variable from the HDF file.
+
+        Args:
+            hdf_file (h5py.File): Open HDF file object.
+            mesh_name (str): Name of the mesh.
+            var (str): Variable name to retrieve.
+
+        Returns:
+            Tuple[np.ndarray, str]: A tuple containing the output values and units.
+        """
+        path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
+        group = hdf_file[path]
+        values = group[:]
+        units = group.attrs.get("Units")
+        if units is not None:
+            units = units.decode("utf-8")
+        return values, units
+
+
     @staticmethod
     def _get_available_meshes(hdf_file: h5py.File) -> List[str]:
         """
@@ -565,23 +549,22 @@ class HdfResultsMesh:
                     mesh_names.append(name)
         return mesh_names
 
-
     @staticmethod
-    def _get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "0.1 s") -> pd.DataFrame:
+    def _get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get the summary output data for a given variable from the HDF file.
 
         This method retrieves summary output data for all 2D flow areas (meshes) in the HDF file
-        for a specified variable. It handles different data structures that may be present in
-        different versions of HEC-RAS HDF files.
+        for a specified variable. It handles both 1D and 2D datasets.
+        Group attributes are added as metadata to the DataFrame.
 
         Args:
             hdf_file (h5py.File): Open HDF file object.
             var (str): The summary output variable to retrieve.
-            round_to (str): The time unit to round the datetimes to. Default is "0.1 s".
+            round_to (str): The time unit to round the datetimes to. Default is "100ms".
 
         Returns:
-            pd.DataFrame: A DataFrame containing the summary output data.
+            pd.DataFrame: A DataFrame containing the summary output data with attributes as metadata.
 
         Raises:
             ValueError: If the HDF file cannot be opened or read, or if the requested data is not found.
@@ -595,45 +578,66 @@ class HdfResultsMesh:
                 logger.debug(f"Processing mesh: {mesh_name} with {cell_count} cells")
                 group = HdfResultsMesh._get_mesh_summary_output_group(hdf_file, mesh_name, var)
                 
-                # Handle different data structures
-                if isinstance(group, h5py.Dataset):
-                    data = group[:]
-                    if data.ndim == 2:
-                        values = data[:cell_count, 0]
-                        times = data[:cell_count, 1] if data.shape[1] > 1 else np.arange(cell_count)
-                    else:
-                        values = data[:cell_count]
-                        times = np.arange(cell_count)
+                data = group[:]
+                logger.debug(f"Data shape for {var} in {mesh_name}: {data.shape}")
+                logger.debug(f"Data type: {data.dtype}")
+                logger.debug(f"Attributes: {dict(group.attrs)}")
+                
+                if data.ndim == 2 and data.shape[0] == 2:
+                    # This is the case for "Maximum Water Surface"
+                    row_variables = group.attrs.get('Row Variables', [b'Value', b'Time'])
+                    row_variables = [v.decode('utf-8').strip() for v in row_variables]
+                    
+                    df = pd.DataFrame({
+                        "mesh_name": [mesh_name] * data.shape[1],
+                        "cell_id": range(data.shape[1]),
+                        f"{var.lower().replace(' ', '_')}": data[0, :],
+                        f"{var.lower().replace(' ', '_')}_time": HdfUtils._ras_timesteps_to_datetimes(
+                            data[1, :], start_time, time_unit="days", round_to=round_to
+                        )
+                    })
+                elif data.ndim == 1:
+                    # Handle 1D datasets (like Cell Last Iteration)
+                    df = pd.DataFrame({
+                        "mesh_name": [mesh_name] * len(data),
+                        "cell_id": range(len(data)),
+                        var.lower().replace(' ', '_'): data
+                    })
                 else:
-                    try:
-                        values = group['Values'][:cell_count]
-                        times = group['Time'][:cell_count]
-                    except KeyError:
-                        # If 'Values' and 'Time' don't exist, assume it's a simple dataset
-                        values = group[:][:cell_count]
-                        times = np.arange(cell_count)
+                    raise ValueError(f"Unexpected data shape for {var} in {mesh_name}. "
+                                     f"Got shape {data.shape}")
                 
-                # Convert times to datetime objects
-                times = HdfUtils._ras_timesteps_to_datetimes(times, start_time, time_unit="days", round_to=round_to)
+                # Add group attributes as metadata
+                df.attrs['mesh_name'] = mesh_name
+                for attr_name, attr_value in group.attrs.items():
+                    if isinstance(attr_value, bytes):
+                        attr_value = attr_value.decode('utf-8')
+                    elif isinstance(attr_value, np.ndarray):
+                        attr_value = attr_value.tolist()
+                    df.attrs[attr_name] = attr_value
                 
-                # Create DataFrame for this mesh
-                df = pd.DataFrame({
-                    "mesh_name": [mesh_name] * len(values),
-                    "cell_id": range(len(values)),
-                    f"{var.lower().replace(' ', '_')}": values,
-                    f"{var.lower().replace(' ', '_')}_time": times
-                })
                 dfs.append(df)
             
-            # Combine all mesh DataFrames
             result = pd.concat(dfs, ignore_index=True)
+            
+            # Combine attributes from all meshes
+            combined_attrs = {}
+            for df in dfs:
+                for key, value in df.attrs.items():
+                    if key not in combined_attrs:
+                        combined_attrs[key] = value
+                    elif combined_attrs[key] != value:
+                        combined_attrs[key] = f"Multiple values: {combined_attrs[key]}, {value}"
+            
+            result.attrs.update(combined_attrs)
+            
             logger.info(f"Processed {len(result)} rows of summary output data")
             return result
         
         except (KeyError, ValueError, AttributeError) as e:
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
-
+        
 
     @staticmethod
     def _get_mesh_summary_output_group(hdf_file: h5py.File, mesh_name: str, var: str) -> Union[h5py.Group, h5py.Dataset]:

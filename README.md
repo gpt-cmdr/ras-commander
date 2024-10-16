@@ -51,7 +51,7 @@ Create a virtual environment with conda or venv (ask ChatGPT if you need help)
 In your virtual environment, install ras-commander using pip:
 ```
 pip install h5py numpy pandas requests tqdm scipy
-pip install ras-commander
+pip install --upgrade ras-commander
 ```
 
 If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  

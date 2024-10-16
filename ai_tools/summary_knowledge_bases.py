@@ -28,6 +28,9 @@ It processes the project files and creates the following output files:
    understanding the usage and implementation of the ras-commander library through
    practical examples.
 
+5. ras-commander_gpt.txt:
+   A summary of the project files, excluding certain files and folders.
+
 These output files are generated in the 'assistant_knowledge_bases' directory and
 serve different purposes for AI assistants or developers who need various levels
 of detail about the project structure, documentation, and examples.
@@ -205,6 +208,41 @@ def generate_full_docsonly_summary(summarize_subfolder, output_dir):
 
     print(f"Full documentation-only summary created at '{output_file_path}'")
 
+def generate_gpt_summary(summarize_subfolder, output_dir):
+    output_file_name = "ras-commander_gpt.txt"
+    output_file_path = output_dir / output_file_name
+    print(f"Generating GPT Summary: {output_file_path}")
+
+    excluded_files = [
+        "Comprehensive_Library_Guide.md",
+        "STYLE_GUIDE.md",
+        "README.md",
+        "future_dev_roadmap.ipynb"
+    ]
+    excluded_folders = ["ai_tools", "library_assistant"]
+
+    with open(output_file_path, 'w', encoding='utf-8') as outfile:
+        for filepath in summarize_subfolder.rglob('*'):
+            if should_omit(filepath):
+                continue
+            if any(folder in filepath.parts for folder in excluded_folders):
+                continue
+            if filepath.name in excluded_files:
+                continue
+            if filepath.is_file():
+                outfile.write(f"File: {filepath}\n")
+                outfile.write("="*50 + "\n")
+                content = read_file_contents(filepath)
+                outfile.write(content)
+                outfile.write("\n" + "="*50 + "\n\n")
+                print(f"Added file to GPT summary: {filepath}")
+            elif filepath.is_dir():
+                outfile.write(f"Folder: {filepath}\n")
+                outfile.write("="*50 + "\n\n")
+                print(f"Added folder to GPT summary: {filepath}")
+
+    print(f"GPT summary created at '{output_file_path}'")
+
 def main():
     # Get the name of this script
     this_script = SCRIPT_NAME
@@ -222,8 +260,9 @@ def main():
     generate_split_summary(summarize_subfolder, output_dir)
     generate_documentation_only_summary(summarize_subfolder, output_dir)
     generate_full_docsonly_summary(summarize_subfolder, output_dir)
+    generate_gpt_summary(summarize_subfolder, output_dir)
 
-    print(f"All summaries have been generated in '{output_dir}'")
+    print(f"All summaries, including GPT summary, have been generated in '{output_dir}'")
 
 if __name__ == "__main__":
     main()
