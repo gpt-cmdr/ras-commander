@@ -724,6 +724,84 @@ class HdfBndry:
             return []
 ==================================================
 
+File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+==================================================
+from typing import Dict, List, Tuple
+import pandas as pd
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from collections import defaultdict
+from rtree import index
+from shapely.geometry import LineString, MultiLineString
+from tqdm import tqdm
+
+from .HdfMesh import HdfMesh
+from .HdfUtils import HdfUtils
+
+class HdfFluvialPluvial:
+    """
+    A class for analyzing and visualizing fluvial-pluvial boundaries in HEC-RAS 2D model results.
+
+    This class provides methods to process and visualize HEC-RAS 2D model outputs,
+    specifically focusing on the delineation of fluvial and pluvial flood areas.
+    It includes functionality for plotting maximum water surface elevations,
+    extracting cell polygons, and calculating fluvial-pluvial boundaries based on
+    the timing of maximum water surface elevations.
+
+    Key Features:
+    - Plotting maximum water surface elevations and their timing
+    - Extracting and visualizing 2D flow area cell polygons
+    - Calculating and visualizing fluvial-pluvial boundaries
+
+    Data Requirements:
+    1. For plotting maximum water surface:
+       - Use HdfResultsMesh.mesh_max_ws(hdf_path) to get max_ws_df
+       - Use HdfResultsMesh.mesh_timeseries_output(hdf_path, mesh_name, 'water_surface') 
+         to get time series data
+
+    2. For extracting cell polygons:
+       - Use HdfMesh.mesh_cell_polygons(geom_hdf_path) to get cell_polygons_df
+       - Use HdfUtils.projection(hdf_path) to get the projection
+
+    3. For calculating fluvial-pluvial boundary:
+       - Requires cell_polygons_gdf (from step 2)
+       - Requires max_ws_df with 'cell_id' and 'max_wsel_time' columns
+         (can be derived from HdfResultsMesh.mesh_max_ws(hdf_path))
+
+    Usage:
+    To use this class effectively, first initialize a RasPrj object and load the
+    necessary HDF files. Then, use the methods provided to analyze and visualize
+    the fluvial-pluvial characteristics of your 2D model results.
+
+    Example:
+        ras = RasPrj()
+        ras = init_ras_project(project_path, ras_version)
+        hdf_path = ras.get_plan_value(plan_number, 'Results_Output')
+        
+        # Get maximum water surface data
+        max_ws_df = HdfResultsMesh.mesh_max_ws(hdf_path)
+        
+        # Plot maximum water surface
+        HdfFluvialPluvial.plot_max_water_surface(max_ws_df)
+        
+        # Extract cell polygons
+        cell_polygons_df = HdfMesh.mesh_cell_polygons(hdf_path)
+        projection = HdfUtils.projection(hdf_path)
+        cell_polygons_gdf = HdfFluvialPluvial.plot_cell_polygons(cell_polygons_df, projection)
+        
+        # Calculate fluvial-pluvial boundary
+        boundary_gdf = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(cell_polygons_gdf, max_ws_df)
+
+    Note: Ensure that you have the necessary permissions and have initialized
+    the RAS project correctly before attempting to access HDF files.
+    """
+
+    @staticmethod
+    def plot_max_water_surface:
+    """Docs only, see 'plot_max_water_surface.py' for full function code"""
+
+==================================================
+
 File: c:\GH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
@@ -767,10 +845,784 @@ class HdfMesh:
     Note: This class relies on HdfBase and HdfUtils for some underlying operations.
     """
 
-    FLOW_AREA_2D_PATH = "Geometry/2D Flow Areas"
-
     def __init__:
     """Docs only, see '__init__.py' for full function code"""
+            return {}
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\HdfPipe.py
+==================================================
+import h5py
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import xarray as xr
+from pathlib import Path
+from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiPolygon
+from typing import List, Dict, Any, Optional, Union, Tuple
+from .HdfBase import HdfBase
+from .HdfUtils import HdfUtils
+from .Decorators import standardize_input, log_call
+from .LoggingConfig import get_logger
+from .HdfResultsMesh import HdfResultsMesh
+import logging  
+
+logger = get_logger(__name__)
+
+class HdfPipe:
+    """
+    A class for handling pipe network related data from HEC-RAS HDF files.
+    """
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_conduits(hdf_path: Path, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+        """
+        Combines hdf5 datasets from /Geometry/Pipe Conduits/ into a single GeoDataFrame.
+
+        Parameters:
+        - hdf_path: Path to the HDF5 file.
+        - crs: Coordinate Reference System for the GeoDataFrame. Default is "EPSG:4326".
+
+        Returns:
+        - A GeoDataFrame with attributes, Polyline geometries, and Terrain Profiles as separate columns.
+        """
+        with h5py.File(hdf_path, 'r') as f:
+            group = f['/Geometry/Pipe Conduits/']
+            
+            # --- Read and Process Attributes ---
+            attributes = group['Attributes'][:]
+            attr_df = pd.DataFrame(attributes)
+            
+            # Decode byte string fields to UTF-8 strings
+            string_columns = attr_df.select_dtypes([object]).columns
+            for col in string_columns:
+                attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+            
+            # --- Read Polyline Data ---
+            polyline_info = group['Polyline Info'][:]  # Shape (132,4) - point_start_idx, point_count, part_start_idx, part_count
+            polyline_points = group['Polyline Points'][:]  # Shape (396,2) - x,y coordinates
+            
+            polyline_geometries = []
+            for info in polyline_info:
+                point_start_idx = info[0]
+                point_count = info[1]
+                
+                # Extract coordinates for this polyline directly using start index and count
+                coords = polyline_points[point_start_idx:point_start_idx + point_count]
+                
+                if len(coords) < 2:
+                    polyline_geometries.append(None)
+                else:
+                    polyline_geometries.append(LineString(coords))
+            
+            # --- Read Terrain Profiles Data ---
+            terrain_info = group['Terrain Profiles Info'][:]
+            terrain_values = group['Terrain Profiles Values'][:]
+            
+            # Create a list of (Station, Elevation) tuples for Terrain Profiles
+            terrain_coords = list(zip(terrain_values[:, 0], terrain_values[:, 1]))
+            
+            terrain_profiles_list: List[List[Tuple[float, float]]] = []
+            
+            for i in range(len(terrain_info)):
+                info = terrain_info[i]
+                start_idx = info[0]
+                count = info[1]
+                
+                # Extract (Station, Elevation) pairs
+                segment = terrain_coords[start_idx : start_idx + count]
+                
+                terrain_profiles_list.append(segment)  # Store the list of (Station, Elevation) tuples
+            
+            # --- Combine Data into GeoDataFrame ---
+            attr_df['Polyline'] = polyline_geometries
+            attr_df['Terrain_Profiles'] = terrain_profiles_list
+            
+            # Initialize GeoDataFrame with Polyline geometries
+            gdf = gpd.GeoDataFrame(attr_df, geometry='Polyline', crs=crs)
+            
+            return gdf
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_nodes(hdf_path: Path) -> gpd.GeoDataFrame:
+        """
+        Creates a GeoDataFrame for Pipe Node points and their attributes from an HDF5 file.
+        
+        Parameters:
+        - hdf_path: Path to the HDF5 file.
+        
+        Returns:
+        - A GeoDataFrame containing pipe node attributes and their geometries.
+        """
+        with h5py.File(hdf_path, 'r') as f:
+            group = f['/Geometry/Pipe Nodes/']
+            
+            # --- Read and Process Attributes ---
+            attributes = group['Attributes'][:]
+            attr_df = pd.DataFrame(attributes)
+            
+            # Decode byte string fields to UTF-8 strings
+            string_columns = attr_df.select_dtypes([object]).columns  # Changed 'S' to object
+            for col in string_columns:
+                attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+            
+            # --- Read Points Data ---
+            points = group['Points'][:]
+            # Create Shapely Point geometries
+            geometries = [Point(xy) for xy in points]
+            
+            # --- Combine Attributes and Geometries into GeoDataFrame ---
+            gdf = gpd.GeoDataFrame(attr_df, geometry=geometries)
+            
+            return gdf
+        
+        
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_network(hdf_path: Path, pipe_network_name: Optional[str] = None, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+        """
+        Creates a GeoDataFrame for a specified pipe network from an HDF5 file.
+        
+        Parameters:
+        - hdf_path: Path to the HDF5 file.
+        - pipe_network_name: Name of the pipe network to extract. If None, the first network is used.
+        - crs: Coordinate Reference System for the GeoDataFrame. Default is "EPSG:4326".
+        
+        Returns:
+        - A GeoDataFrame containing cell polygons, face polylines, node points, and their associated attributes.
+        """
+        with h5py.File(hdf_path, 'r') as f:
+            pipe_networks_group = f['/Geometry/Pipe Networks/']
+            
+            # --- Determine Pipe Network to Use ---
+            attributes = pipe_networks_group['Attributes'][:]
+            attr_df = pd.DataFrame(attributes)
+            
+            # Decode 'Name' from byte strings to UTF-8
+            attr_df['Name'] = attr_df['Name'].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+            
+            if pipe_network_name:
+                if pipe_network_name not in attr_df['Name'].values:
+                    raise ValueError(f"Pipe network '{pipe_network_name}' not found in the HDF5 file.")
+                network_idx = attr_df.index[attr_df['Name'] == pipe_network_name][0]
+            else:
+                network_idx = 0  # Default to first network
+            
+            # Get the name of the selected pipe network
+            selected_network_name = attr_df.at[network_idx, 'Name']
+            logging.info(f"Selected Pipe Network: {selected_network_name}")
+            
+            # Access the selected pipe network group
+            network_group_path = f"/Geometry/Pipe Networks/{selected_network_name}/"
+            network_group = f[network_group_path]
+            
+            # --- Helper Functions ---
+            def decode_bytes(df: pd.DataFrame) -> pd.DataFrame:
+                """Decode byte string columns to UTF-8."""
+                string_columns = df.select_dtypes([object]).columns
+                for col in string_columns:
+                    df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+                return df
+            
+            def build_polygons(info, parts, points) -> List[Optional[Polygon or MultiPolygon]]:
+                """Build Shapely Polygon or MultiPolygon geometries from HDF5 datasets."""
+                poly_coords = list(zip(points[:, 0], points[:, 1]))
+                geometries = []
+                for i in range(len(info)):
+                    cell_info = info[i]
+                    point_start_idx = cell_info[0]
+                    point_count = cell_info[1]
+                    part_start_idx = cell_info[2]
+                    part_count = cell_info[3]
+                    
+                    parts_list = []
+                    for p in range(part_start_idx, part_start_idx + part_count):
+                        if p >= len(parts):
+                            continue  # Prevent index out of range
+                        part_info = parts[p]
+                        part_point_start = part_info[0]
+                        part_point_count = part_info[1]
+                        
+                        coords = poly_coords[part_point_start : part_point_start + part_point_count]
+                        if len(coords) < 3:
+                            continue  # Not a valid polygon part
+                        parts_list.append(coords)
+                    
+                    if not parts_list:
+                        geometries.append(None)
+                    elif len(parts_list) == 1:
+                        try:
+                            geometries.append(Polygon(parts_list[0]))
+                        except ValueError:
+                            geometries.append(None)
+                    else:
+                        try:
+                            geometries.append(MultiPolygon([Polygon(p) for p in parts_list if len(p) >= 3]))
+                        except ValueError:
+                            geometries.append(None)
+                return geometries
+            
+            def build_multilinestring(info, parts, points) -> List[Optional[LineString or MultiLineString]]:
+                """Build Shapely LineString or MultiLineString geometries from HDF5 datasets."""
+                line_coords = list(zip(points[:, 0], points[:, 1]))
+                geometries = []
+                for i in range(len(info)):
+                    face_info = info[i]
+                    point_start_idx = face_info[0]
+                    point_count = face_info[1]
+                    part_start_idx = face_info[2]
+                    part_count = face_info[3]
+                    
+                    parts_list = []
+                    for p in range(part_start_idx, part_start_idx + part_count):
+                        if p >= len(parts):
+                            continue  # Prevent index out of range
+                        part_info = parts[p]
+                        part_point_start = part_info[0]
+                        part_point_count = part_info[1]
+                        
+                        coords = line_coords[part_point_start : part_point_start + part_point_count]
+                        if len(coords) < 2:
+                            continue  # Cannot form LineString with fewer than 2 points
+                        parts_list.append(coords)
+                    
+                    if not parts_list:
+                        geometries.append(None)
+                    elif len(parts_list) == 1:
+                        geometries.append(LineString(parts_list[0]))
+                    else:
+                        geometries.append(MultiLineString(parts_list))
+                return geometries
+            
+            # --- Read and Process Cell Polygons ---
+            cell_polygons_info = network_group['Cell Polygons Info'][:]
+            cell_polygons_parts = network_group['Cell Polygons Parts'][:]
+            cell_polygons_points = network_group['Cell Polygons Points'][:]
+            
+            cell_polygons_geometries = build_polygons(cell_polygons_info, cell_polygons_parts, cell_polygons_points)
+            
+            # --- Read and Process Face Polylines ---
+            face_polylines_info = network_group['Face Polylines Info'][:]
+            face_polylines_parts = network_group['Face Polylines Parts'][:]
+            face_polylines_points = network_group['Face Polylines Points'][:]
+            
+            face_polylines_geometries = build_multilinestring(face_polylines_info, face_polylines_parts, face_polylines_points)
+            
+            # --- Read and Process Node Points ---
+            node_surface_connectivity_group = network_group.get('Node Surface Connectivity', None)
+            if node_surface_connectivity_group is not None:
+                node_surface_connectivity = node_surface_connectivity_group[:]
+            else:
+                node_surface_connectivity = None
+            
+            # Assuming Node Connectivity Info and Values contain node coordinates
+            node_connectivity_info = network_group['Node Connectivity Info'][:]
+            node_connectivity_values = network_group['Node Connectivity Values'][:]
+            node_indices = network_group['Node Indices'][:]
+            node_surface_connectivity = network_group['Node Surface Connectivity'][:]
+            
+            # For simplicity, assuming that node connectivity includes X and Y coordinates
+            # This may need to be adjusted based on actual data structure
+            # Here, we'll create dummy points as placeholder
+            # Replace with actual coordinate extraction logic as per data structure
+            # For demonstration, we'll create random points
+            # You should replace this with actual data extraction
+            # Example:
+            # node_points = network_group['Node Coordinates'][:]
+            # node_geometries = [Point(x, y) for x, y in node_points]
+            
+            # Placeholder for node geometries
+            # Assuming node_indices contains Node IDs and coordinates
+            # Adjust based on actual dataset structure
+            # Here, we assume that node_indices has columns: [Node ID, X, Y]
+            # But based on the log, Node Surface Connectivity has ['Node ID', 'Layer', 'Layer ID', 'Sublayer ID']
+            # No coordinates are provided, so we cannot create Point geometries unless coordinates are available elsewhere
+            # Therefore, this part may need to be adapted based on actual data
+            # For now, we'll skip node points geometries
+            node_geometries = [None] * len(node_indices)  # Placeholder
+            
+            # --- Read and Process Cell Property Table ---
+            cell_property_table = network_group['Cell Property Table'][:]
+            cell_property_df = pd.DataFrame(cell_property_table)
+            
+            # Decode byte strings if any
+            cell_property_df = decode_bytes(cell_property_df)
+            
+            # --- Read and Process Cells DS Face Indices ---
+            cells_ds_face_info = network_group['Cells DS Face Indices Info'][:]
+            cells_ds_face_values = network_group['Cells DS Face Indices Values'][:]
+            
+            # Create lists of DS Face Indices per cell
+            cells_ds_face_indices = []
+            for i in range(len(cells_ds_face_info)):
+                info = cells_ds_face_info[i]
+                start_idx, count = info
+                indices = cells_ds_face_values[start_idx : start_idx + count]
+                cells_ds_face_indices.append(indices.tolist())
+            
+            # --- Read and Process Cells Face Indices ---
+            cells_face_info = network_group['Cells Face Indices Info'][:]
+            cells_face_values = network_group['Cells Face Indices Values'][:]
+            
+            # Create lists of Face Indices per cell
+            cells_face_indices = []
+            for i in range(len(cells_face_info)):
+                info = cells_face_info[i]
+                start_idx, count = info
+                indices = cells_face_values[start_idx : start_idx + count]
+                cells_face_indices.append(indices.tolist())
+            
+            # --- Read and Process Cells Minimum Elevations ---
+            cells_min_elevations = network_group['Cells Minimum Elevations'][:]
+            cells_min_elevations_df = pd.DataFrame(cells_min_elevations, columns=['Minimum_Elevation'])
+            
+            # --- Read and Process Cells Node and Conduit IDs ---
+            cells_node_conduit_ids = network_group['Cells Node and Conduit IDs'][:]
+            cells_node_conduit_df = pd.DataFrame(cells_node_conduit_ids, columns=['Node_ID', 'Conduit_ID'])
+            
+            # --- Read and Process Cells US Face Indices ---
+            cells_us_face_info = network_group['Cells US Face Indices Info'][:]
+            cells_us_face_values = network_group['Cells US Face Indices Values'][:]
+            
+            # Create lists of US Face Indices per cell
+            cells_us_face_indices = []
+            for i in range(len(cells_us_face_info)):
+                info = cells_us_face_info[i]
+                start_idx, count = info
+                indices = cells_us_face_values[start_idx : start_idx + count]
+                cells_us_face_indices.append(indices.tolist())
+            
+            # --- Read and Process Conduit Indices ---
+            conduit_indices = network_group['Conduit Indices'][:]
+            conduit_indices_df = pd.DataFrame(conduit_indices, columns=['Conduit_ID'])
+            
+            # --- Read and Process Face Property Table ---
+            face_property_table = network_group['Face Property Table'][:]
+            face_property_df = pd.DataFrame(face_property_table)
+            
+            # Decode byte strings if any
+            face_property_df = decode_bytes(face_property_df)
+            
+            # --- Read and Process Face Conduit ID and Stations ---
+            faces_conduit_id_stations = network_group['Faces Conduit ID and Stations'][:]
+            faces_conduit_df = pd.DataFrame(faces_conduit_id_stations, columns=['ConduitID', 'ConduitStation', 'CellUS', 'CellDS', 'Elevation'])
+            
+            # --- Read and Process Node Connectivity Info and Values ---
+            node_connectivity_info = network_group['Node Connectivity Info'][:]
+            node_connectivity_values = network_group['Node Connectivity Values'][:]
+            
+            # Create lists of connected nodes per node
+            node_connectivity = []
+            for i in range(len(node_connectivity_info)):
+                info = node_connectivity_info[i]
+                start_idx, count = info
+                connections = node_connectivity_values[start_idx : start_idx + count]
+                node_connectivity.append(connections.tolist())
+            
+            # --- Read and Process Node Indices ---
+            node_indices = network_group['Node Indices'][:]
+            node_indices_df = pd.DataFrame(node_indices, columns=['Node_ID'])
+            
+            # --- Read and Process Node Surface Connectivity ---
+            node_surface_connectivity = network_group['Node Surface Connectivity'][:]
+            node_surface_connectivity_df = pd.DataFrame(node_surface_connectivity, columns=['Node_ID', 'Layer', 'Layer_ID', 'Sublayer_ID'])
+            
+            # --- Combine All Cell-Related Data ---
+            cells_df = pd.DataFrame({
+                'Cell_ID': range(len(cell_polygons_geometries)),
+                'Conduit_ID': cells_node_conduit_df['Conduit_ID'],
+                'Node_ID': cells_node_conduit_df['Node_ID'],
+                'Minimum_Elevation': cells_min_elevations_df['Minimum_Elevation'],
+                'DS_Face_Indices': cells_ds_face_indices,
+                'Face_Indices': cells_face_indices,
+                'US_Face_Indices': cells_us_face_indices,
+                'Cell_Property_Info_Index': cell_property_df['Info Index'],
+                # Add other cell properties as needed
+            })
+            
+            # Merge with cell property table
+            cells_df = cells_df.merge(cell_property_df, left_on='Cell_Property_Info_Index', right_index=True, how='left')
+            
+            # --- Combine All Face-Related Data ---
+            faces_df = pd.DataFrame({
+                'Face_ID': range(len(face_polylines_geometries)),
+                'Conduit_ID': faces_conduit_df['ConduitID'],
+                'Conduit_Station': faces_conduit_df['ConduitStation'],
+                'Cell_US': faces_conduit_df['CellUS'],
+                'Cell_DS': faces_conduit_df['CellDS'],
+                'Elevation': faces_conduit_df['Elevation'],
+                'Face_Property_Info_Index': face_property_df['Info Index'],
+                # Add other face properties as needed
+            })
+            
+            # Merge with face property table
+            faces_df = faces_df.merge(face_property_df, left_on='Face_Property_Info_Index', right_index=True, how='left')
+            
+            # --- Combine All Node-Related Data ---
+            nodes_df = pd.DataFrame({
+                'Node_ID': node_indices_df['Node_ID'],
+                'Connected_Nodes': node_connectivity,
+                # Add other node properties as needed
+            })
+            
+            # Merge with node surface connectivity
+            nodes_df = nodes_df.merge(node_surface_connectivity_df, on='Node_ID', how='left')
+            
+            # --- Create GeoDataFrame ---
+            # Main DataFrame will be cells with their polygons
+            cells_df['Cell_Polygon'] = cell_polygons_geometries
+            
+            # Add face polylines as a separate column (list of geometries)
+            cells_df['Face_Polylines'] = cells_df['Face_Indices'].apply(lambda indices: [face_polylines_geometries[i] for i in indices if i < len(face_polylines_geometries)])
+            
+            # Add node points if geometries are available
+            # Currently, node_geometries are placeholders (None). Replace with actual geometries if available.
+            cells_df['Node_Point'] = cells_df['Node_ID'].apply(lambda nid: node_geometries[nid] if nid < len(node_geometries) else None)
+            
+            # Initialize GeoDataFrame with Cell Polygons
+            gdf = gpd.GeoDataFrame(cells_df, geometry='Cell_Polygon', crs=crs)
+            
+            # Optionally, add Face Polylines and Node Points as separate columns
+            # Note: GeoPandas primarily supports one geometry column, so these are stored as object columns
+            gdf['Face_Polylines'] = cells_df['Face_Polylines']
+            gdf['Node_Point'] = cells_df['Node_Point']
+            
+            # You can further expand this GeoDataFrame by merging with faces_df and nodes_df if needed
+            
+            return gdf
+        
+        
+        
+        
+        
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_network_timeseries(hdf_path: Path, variable: str) -> xr.DataArray:
+        """
+        Extract timeseries data for a specific variable in the pipe network.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+            variable (str): Variable to extract (e.g., "Cell Courant", "Cell Water Surface").
+
+        Returns:
+            xr.DataArray: DataArray containing the timeseries data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
+            ValueError: If an invalid variable is specified.
+        """
+        valid_variables = [
+            "Cell Courant", "Cell Water Surface", "Face Flow", "Face Velocity",
+            "Face Water Surface", "Pipes/Pipe Flow DS", "Pipes/Pipe Flow US",
+            "Pipes/Vel DS", "Pipes/Vel US", "Nodes/Depth", "Nodes/Drop Inlet Flow",
+            "Nodes/Water Surface"
+        ]
+
+        if variable not in valid_variables:
+            raise ValueError(f"Invalid variable. Must be one of: {', '.join(valid_variables)}")
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract timeseries data
+                data_path = f"/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Pipe Networks/Davis/{variable}"
+                data = hdf[data_path][()]
+
+                # Extract time information
+                time = HdfBase._get_unsteady_datetimes(hdf)
+
+                # Create DataArray
+                da = xr.DataArray(
+                    data=data,
+                    dims=['time', 'location'],
+                    coords={'time': time, 'location': range(data.shape[1])},
+                    name=variable
+                )
+
+                # Add attributes
+                da.attrs['units'] = hdf[data_path].attrs.get('Units', b'').decode('utf-8')
+                da.attrs['variable'] = variable
+
+                return da
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting pipe network timeseries data: {e}")
+            raise
+
+
+
+
+
+
+
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_network_summary(hdf_path: Path) -> pd.DataFrame:
+        """
+        Extract summary data for pipe networks from the HDF file.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+
+        Returns:
+            pd.DataFrame: DataFrame containing pipe network summary data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract summary data
+                summary_path = "/Results/Unsteady/Summary/Pipe Network"
+                if summary_path not in hdf:
+                    logger.warning("Pipe Network summary data not found in HDF file")
+                    return pd.DataFrame()
+
+                summary_data = hdf[summary_path][()]
+                
+                # Create DataFrame
+                df = pd.DataFrame(summary_data)
+
+                # Convert column names
+                df.columns = [col.decode('utf-8') for col in df.columns]
+
+                return df
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting pipe network summary data: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_profile(hdf_path: Path, conduit_id: int) -> pd.DataFrame:
+        """
+        Extract the profile data for a specific pipe conduit.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+            conduit_id (int): ID of the conduit to extract profile for.
+
+        Returns:
+            pd.DataFrame: DataFrame containing the pipe profile data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
+            IndexError: If the specified conduit_id is out of range.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Get conduit info
+                terrain_profiles_info = hdf['/Geometry/Pipe Conduits/Terrain Profiles Info'][()]
+                
+                if conduit_id >= len(terrain_profiles_info):
+                    raise IndexError(f"conduit_id {conduit_id} is out of range")
+
+                start, count = terrain_profiles_info[conduit_id]
+
+                # Extract profile data
+                profile_values = hdf['/Geometry/Pipe Conduits/Terrain Profiles Values'][start:start+count]
+
+                # Create DataFrame
+                df = pd.DataFrame(profile_values, columns=['Station', 'Elevation'])
+
+                return df
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except IndexError as e:
+            logger.error(f"Invalid conduit_id: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting pipe profile data: {e}")
+            raise
+        
+        
+# New functions from the AWS webinar where the code was developed
+# Some of these may be duplicative of the above, always use the above
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def extract_wsel_for_cell(plan_hdf_path: Path, cell_id: int) -> Dict[str, Any]:
+        """
+        Extract water surface elevation time series for a specific 2D cell.
+        
+        Parameters:
+        -----------
+        plan_hdf_path : Path
+            Path to HEC-RAS results HDF file
+        cell_id : int
+            ID of the cell to extract data for
+            
+        Returns:
+        --------
+        Dict containing:
+            'time_values': array of time values
+            'wsel_timeseries': water surface elevation time series
+            'peak_value': maximum water surface elevation
+            'peak_time': time of maximum water surface elevation
+        """
+        try:
+            cells_timeseries_ds = HdfResultsMesh.mesh_cells_timeseries_output(plan_hdf_path)
+            water_surface = cells_timeseries_ds['area2']['Water Surface']
+            time_values = water_surface.coords['time'].values
+            wsel_timeseries = water_surface.sel(cell_id=cell_id)
+            
+            peak_value = wsel_timeseries.max().item()
+            peak_index = wsel_timeseries.argmax().item()
+            
+            return {
+                'time_values': time_values,
+                'wsel_timeseries': wsel_timeseries,
+                'peak_value': peak_value,
+                'peak_time': time_values[peak_index]
+            }
+        except Exception as e:
+            logger.error(f"Error extracting water surface elevation for cell {cell_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def extract_pipe_network_data(plan_hdf_path: Path) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+        """
+        Extract pipe nodes and conduits data from HEC-RAS results.
+        
+        Parameters:
+        -----------
+        plan_hdf_path : Path
+            Path to HEC-RAS results HDF file
+        
+        Returns:
+        --------
+        Tuple[GeoDataFrame, GeoDataFrame]:
+            First GeoDataFrame contains pipe nodes data
+            Second GeoDataFrame contains pipe conduits data
+        """
+        try:
+            pipe_nodes_gdf = HdfPipe.get_pipe_nodes(plan_hdf_path)
+            pipe_conduits_gdf = HdfPipe.get_pipe_conduits(plan_hdf_path)
+            
+            return pipe_nodes_gdf, pipe_conduits_gdf
+        except Exception as e:
+            logger.error(f"Error extracting pipe network data: {str(e)}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def extract_timeseries_for_node(plan_hdf_path: Path, node_id: int) -> Dict[str, xr.DataArray]:
+        """
+        Extract time series data for a specific node.
+        
+        Parameters:
+        -----------
+        plan_hdf_path : Path
+            Path to HEC-RAS results HDF file
+        node_id : int
+            ID of the node to extract data for
+            
+        Returns:
+        --------
+        Dict[str, xr.DataArray]: Dictionary containing time series data for:
+            - Depth
+            - Drop Inlet Flow
+            - Water Surface
+        """
+        try:
+            node_variables = ["Nodes/Depth", "Nodes/Drop Inlet Flow", "Nodes/Water Surface"]
+            node_data = {}
+
+            for variable in node_variables:
+                data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+                node_data[variable] = data.sel(location=node_id)
+            
+            return node_data
+        except Exception as e:
+            logger.error(f"Error extracting time series data for node {node_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def extract_timeseries_for_conduit(plan_hdf_path: Path, conduit_id: int) -> Dict[str, xr.DataArray]:
+        """
+        Extract time series data for a specific conduit.
+        
+        Parameters:
+        -----------
+        plan_hdf_path : Path
+            Path to HEC-RAS results HDF file
+        conduit_id : int
+            ID of the conduit to extract data for
+            
+        Returns:
+        --------
+        Dict[str, xr.DataArray]: Dictionary containing time series data for:
+            - Pipe Flow (US/DS)
+            - Velocity (US/DS)
+        """
+        try:
+            conduit_variables = ["Pipes/Pipe Flow DS", "Pipes/Pipe Flow US", 
+                                "Pipes/Vel DS", "Pipes/Vel US"]
+            conduit_data = {}
+
+            for variable in conduit_variables:
+                data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+                conduit_data[variable] = data.sel(location=conduit_id)
+            
+            return conduit_data
+        except Exception as e:
+            logger.error(f"Error extracting time series data for conduit {conduit_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_profile(plan_hdf_path: Path, conduit_id: int) -> pd.DataFrame:
+        """
+        Get profile data for a specific pipe conduit.
+        
+        Parameters:
+        -----------
+        plan_hdf_path : Path
+            Path to HEC-RAS results HDF file
+        conduit_id : int
+            ID of the conduit to get profile for
+            
+        Returns:
+        --------
+        pd.DataFrame: DataFrame containing station and elevation data
+        """
+        try:
+            pipe_profile_df = HdfPipe.get_pipe_profile(plan_hdf_path, conduit_id)
+            return pipe_profile_df
+        except Exception as e:
+            logger.error(f"Error getting pipe profile for conduit {conduit_id}: {str(e)}")
+            raise
+
 
 ==================================================
 
@@ -977,6 +1829,124 @@ class HdfPlan:
         except Exception as e:
             raise ValueError(f"Failed to get geometry attributes: {str(e)}")
 
+
+
+
+
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\HdfPump.py
+==================================================
+import h5py
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import xarray as xr
+from pathlib import Path
+from shapely.geometry import Point
+from typing import List, Dict, Any, Optional, Union
+from .HdfUtils import HdfUtils
+from .HdfBase import HdfBase
+from .Decorators import standardize_input, log_call
+from .LoggingConfig import get_logger
+
+logger = get_logger(__name__)
+
+class HdfPump:
+    """
+    A class for handling pump station related data from HEC-RAS HDF files.
+    """
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pump_stations(hdf_path: Path) -> gpd.GeoDataFrame:
+        """
+        Extract pump station data from the HDF file.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+
+        Returns:
+            gpd.GeoDataFrame: GeoDataFrame containing pump station data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract pump station data
+                attributes = hdf['/Geometry/Pump Stations/Attributes'][()]
+                points = hdf['/Geometry/Pump Stations/Points'][()]
+
+                # Create geometries
+                geometries = [Point(x, y) for x, y in points]
+
+                # Create GeoDataFrame
+                gdf = gpd.GeoDataFrame(geometry=geometries)
+                gdf['station_id'] = range(len(gdf))
+
+                # Add attributes and decode byte strings
+                attr_df = pd.DataFrame(attributes)
+                string_columns = attr_df.select_dtypes([object]).columns
+                for col in string_columns:
+                    attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+                
+                for col in attr_df.columns:
+                    gdf[col] = attr_df[col]
+
+                # Set CRS if available
+                crs = HdfUtils.projection(hdf_path)
+                if crs:
+                    gdf.set_crs(crs, inplace=True)
+
+                return gdf
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting pump station data: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pump_groups(hdf_path: Path) -> pd.DataFrame:
+        """
+        Extract pump group data from the HDF file.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+
+        Returns:
+            pd.DataFrame: DataFrame containing pump group data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract pump group data
+                attributes = hdf['/Geometry/Pump Stations/Pump Groups/Attributes'][()]
+                efficiency_curves_info = hdf['/Geometry/Pump Stations/Pump Groups/Efficiency Curves Info'][()]
+                efficiency_curves_values = hdf['/Geometry/Pump Stations/Pump Groups/Efficiency Curves Values'][()]
+
+                # Create DataFrame and decode byte strings
+                df = pd.DataFrame(attributes)
+                string_columns = df.select_dtypes([object]).columns
+                for col in string_columns:
+                    df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+
+                # Add efficiency curve data
+                df['efficiency_curve_start'] = efficiency_curves_info[:, 0]
+                df['efficiency_curve_count'] = efficiency_curves_info[:, 1]
+
+                # Process efficiency curves
+                def get_efficiency_curve:
+    """Docs only, see 'get_efficiency_curve.py' for full function code"""
+            raise
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
@@ -997,7 +1967,7 @@ import xarray as xr
 from pathlib import Path
 import h5py
 from typing import Union, List, Optional, Dict, Any, Tuple
-
+from .HdfMesh import HdfMesh
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .Decorators import log_call, standardize_input
@@ -1216,7 +2186,7 @@ class HdfResultsMesh:
     @standardize_input(file_type='plan_hdf')
     def mesh_max_face_v(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
         """
-        Get maximum face velocity for each mesh cell.
+        Get maximum face velocity for each mesh face.
 
         Args:
             hdf_path (Path): Path to the HDF file.
@@ -1346,27 +2316,22 @@ class HdfResultsMesh:
         Raises:
             ValueError: If there's an error processing the timeseries output data.
         """
-        TIME_SERIES_OUTPUT_VARS_CELLS = [
-            "Water Surface",
-            "Depth",
-            "Velocity",
-            "Velocity X",
-            "Velocity Y",
-            "Froude Number",
-            "Courant Number",
-            "Shear Stress",
-            "Bed Elevation",
-            "Precipitation Rate",
-            "Infiltration Rate",
-            "Evaporation Rate",
-            "Percolation Rate",
-            "Groundwater Elevation",
-            "Groundwater Depth",
-            "Groundwater Flow",
-            "Groundwater Velocity",
-            "Groundwater Velocity X",
-            "Groundwater Velocity Y",
-        ]
+        TIME_SERIES_OUTPUT_VARS = {
+            "cell": [
+                "Water Surface", "Depth", "Velocity", "Velocity X", "Velocity Y",
+                "Froude Number", "Courant Number", "Shear Stress", "Bed Elevation",
+                "Precipitation Rate", "Infiltration Rate", "Evaporation Rate",
+                "Percolation Rate", "Groundwater Elevation", "Groundwater Depth",
+                "Groundwater Flow", "Groundwater Velocity", "Groundwater Velocity X",
+                "Groundwater Velocity Y"
+            ],
+            "face": [
+                "Face Velocity", "Face Flow", "Face Water Surface", "Face Courant",
+                "Face Cumulative Volume", "Face Eddy Viscosity", "Face Flow Period Average",
+                "Face Friction Term", "Face Pressure Gradient Term", "Face Shear Stress",
+                "Face Tangential Velocity"
+            ]
+        }
 
         try:
             start_time = HdfBase._get_simulation_start_time(hdf_file)
@@ -1380,7 +2345,7 @@ class HdfResultsMesh:
             if var:
                 variables = [var]
             else:
-                variables = TIME_SERIES_OUTPUT_VARS_CELLS
+                variables = TIME_SERIES_OUTPUT_VARS["cell"] + TIME_SERIES_OUTPUT_VARS["face"]
 
             datasets = {}
             for mesh_name in mesh_names:
@@ -1400,13 +2365,16 @@ class HdfResultsMesh:
                             truncated_time_stamps = time_stamps
 
                         if values.shape[0] != len(truncated_time_stamps):
-                            logger.warning(f"Mismatch between number of time steps ({len(truncated_time_stamps)}) and data shape ({values.shape}) for variable {variable}")
+                            logger.warning(f"Mismatch between time steps ({len(truncated_time_stamps)}) and data shape ({values.shape}) for variable {variable}")
                             continue
+
+                        # Determine if this is a face-based or cell-based variable
+                        id_dim = "face_id" if any(face_var in variable for face_var in TIME_SERIES_OUTPUT_VARS["face"]) else "cell_id"
 
                         data_vars[variable] = xr.DataArray(
                             data=values,
-                            dims=['time', 'cell_id'],
-                            coords={'time': truncated_time_stamps, 'cell_id': np.arange(values.shape[1])},
+                            dims=['time', id_dim],
+                            coords={'time': truncated_time_stamps, id_dim: np.arange(values.shape[1])},
                             attrs={'units': units}
                         )
                     except KeyError:
@@ -1437,16 +2405,7 @@ class HdfResultsMesh:
         Args:
             hdf_file (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
-            var (str): Variable name to retrieve. Valid options include:
-                "Water Surface", "Face Velocity", "Cell Velocity X", "Cell Velocity Y",
-                "Face Flow", "Face Water Surface", "Cell Volume", "Cell Volume Error",
-                "Cell Water Surface Error", "Cell Courant", "Face Courant",
-                "Cell Hydraulic Depth", "Cell Invert Depth",
-                "Cell Cumulative Precipitation Depth", "Cell Divergence Term",
-                "Cell Eddy Viscosity X", "Cell Eddy Viscosity Y", "Cell Flow Balance",
-                "Cell Storage Term", "Cell Water Source Term", "Face Cumulative Volume",
-                "Face Eddy Viscosity", "Face Flow Period Average", "Face Friction Term",
-                "Face Pressure Gradient Term", "Face Shear Stress", "Face Tangential Velocity"
+            var (str): Variable name to retrieve.
             truncate (bool): Whether to truncate the output to remove trailing zeros (default True).
 
         Returns:
@@ -1461,7 +2420,6 @@ class HdfResultsMesh:
             if path not in hdf_file:
                 raise ValueError(f"Path {path} not found in HDF file")
 
-            # Use h5py to get the dataset
             dataset = hdf_file[path]
             values = dataset[:]
             units = dataset.attrs.get("Units", "").decode("utf-8")
@@ -1474,11 +2432,12 @@ class HdfResultsMesh:
                     values = values[start:end]
                     times = times[start:end]
 
-            # Create xarray DataArray
-            dims = ["time", "cell"] if values.ndim == 2 else ["time"]
+            # Determine if this is a face-based or cell-based variable
+            id_dim = "face_id" if "Face" in var else "cell_id"
+            dims = ["time", id_dim] if values.ndim == 2 else ["time"]
             coords = {"time": times}
             if values.ndim == 2:
-                coords["cell"] = np.arange(values.shape[1])
+                coords[id_dim] = np.arange(values.shape[1])
 
             return xr.DataArray(
                 values,
@@ -1531,26 +2490,30 @@ class HdfResultsMesh:
                 if isinstance(hdf_file[f"{base_path}/{name}"], h5py.Group):
                     mesh_names.append(name)
         return mesh_names
-
+    
     @staticmethod
     def _get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "100ms") -> pd.DataFrame:
         """
         Get the summary output data for a given variable from the HDF file.
 
-        This method retrieves summary output data for all 2D flow areas (meshes) in the HDF file
-        for a specified variable. It handles both 1D and 2D datasets.
-        Group attributes are added as metadata to the DataFrame.
+        Parameters
+        ----------
+        hdf_file : h5py.File
+            Open HDF file object.
+        var : str
+            The summary output variable to retrieve.
+        round_to : str, optional
+            The time unit to round the datetimes to. Default is "100ms".
 
-        Args:
-            hdf_file (h5py.File): Open HDF file object.
-            var (str): The summary output variable to retrieve.
-            round_to (str): The time unit to round the datetimes to. Default is "100ms".
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing the summary output data with attributes as metadata.
 
-        Returns:
-            pd.DataFrame: A DataFrame containing the summary output data with attributes as metadata.
-
-        Raises:
-            ValueError: If the HDF file cannot be opened or read, or if the requested data is not found.
+        Raises
+        ------
+        ValueError
+            If the HDF file cannot be opened or read, or if the requested data is not found.
         """
         try:
             dfs = []
@@ -1567,28 +2530,44 @@ class HdfResultsMesh:
                 logger.debug(f"Attributes: {dict(group.attrs)}")
                 
                 if data.ndim == 2 and data.shape[0] == 2:
-                    # This is the case for "Maximum Water Surface"
+                    # Handle 2D datasets (e.g. Maximum Water Surface)
                     row_variables = group.attrs.get('Row Variables', [b'Value', b'Time'])
                     row_variables = [v.decode('utf-8').strip() for v in row_variables]
                     
                     df = pd.DataFrame({
                         "mesh_name": [mesh_name] * data.shape[1],
-                        "cell_id": range(data.shape[1]),
+                        "cell_id" if "Face" not in var else "face_id": range(data.shape[1]),
                         f"{var.lower().replace(' ', '_')}": data[0, :],
                         f"{var.lower().replace(' ', '_')}_time": HdfUtils._ras_timesteps_to_datetimes(
                             data[1, :], start_time, time_unit="days", round_to=round_to
                         )
                     })
+                    
                 elif data.ndim == 1:
-                    # Handle 1D datasets (like Cell Last Iteration)
+                    # Handle 1D datasets (e.g. Cell Last Iteration)
                     df = pd.DataFrame({
                         "mesh_name": [mesh_name] * len(data),
-                        "cell_id": range(len(data)),
+                        "cell_id" if "Face" not in var else "face_id": range(len(data)),
                         var.lower().replace(' ', '_'): data
                     })
+                    
                 else:
                     raise ValueError(f"Unexpected data shape for {var} in {mesh_name}. "
-                                     f"Got shape {data.shape}")
+                                  f"Got shape {data.shape}")
+                
+                # Add geometry based on variable type
+                if "Face" in var:
+                    face_df = HdfMesh.mesh_cell_faces(hdf_file)
+                    if not face_df.empty:
+                        df = df.merge(face_df[['mesh_name', 'face_id', 'geometry']], 
+                                    on=['mesh_name', 'face_id'], 
+                                    how='left')
+                else:
+                    cell_df = HdfMesh.mesh_cell_points(hdf_file)
+                    if not cell_df.empty:
+                        df = df.merge(cell_df[['mesh_name', 'cell_id', 'geometry']], 
+                                    on=['mesh_name', 'cell_id'], 
+                                    how='left')
                 
                 # Add group attributes as metadata
                 df.attrs['mesh_name'] = mesh_name
@@ -1601,6 +2580,9 @@ class HdfResultsMesh:
                 
                 dfs.append(df)
             
+            if not dfs:
+                return pd.DataFrame()
+                
             result = pd.concat(dfs, ignore_index=True)
             
             # Combine attributes from all meshes
@@ -1617,7 +2599,7 @@ class HdfResultsMesh:
             logger.info(f"Processed {len(result)} rows of summary output data")
             return result
         
-        except (KeyError, ValueError, AttributeError) as e:
+        except Exception as e:
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
         
@@ -1643,6 +2625,67 @@ class HdfResultsMesh:
         if output_item is None:
             raise ValueError(f"Could not find HDF group or dataset at path '{output_path}'")
         return output_item
+
+    @staticmethod
+    def plot_mesh_variable(variable_df: pd.DataFrame, variable_name: str, colormap: str = 'viridis', point_size: int = 10) -> None:
+        """
+        Plot any mesh variable with consistent styling.
+        
+        Args:
+            variable_df (pd.DataFrame): DataFrame containing the variable data
+            variable_name (str): Name of the variable (for labels)
+            colormap (str): Matplotlib colormap to use. Default: 'viridis'
+            point_size (int): Size of the scatter points. Default: 10
+
+        Returns:
+            None
+
+        Raises:
+            ImportError: If matplotlib is not installed
+            ValueError: If required columns are missing from variable_df
+        """
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            logger.error("matplotlib is required for plotting. Please install it with 'pip install matplotlib'")
+            raise ImportError("matplotlib is required for plotting")
+
+        # Get cell coordinates if not in variable_df
+        if 'geometry' not in variable_df.columns:
+            cell_coords = HdfMesh.mesh_cell_points(plan_hdf_path)
+            merged_df = pd.merge(variable_df, cell_coords, on=['mesh_name', 'cell_id'])
+        else:
+            merged_df = variable_df
+            
+        # Extract coordinates, handling None values
+        merged_df = merged_df.dropna(subset=['geometry'])
+        merged_df['x'] = merged_df['geometry'].apply(lambda geom: geom.x if geom is not None else None)
+        merged_df['y'] = merged_df['geometry'].apply(lambda geom: geom.y if geom is not None else None)
+        
+        # Drop any rows with None coordinates
+        merged_df = merged_df.dropna(subset=['x', 'y'])
+        
+        if len(merged_df) == 0:
+            logger.error("No valid coordinates found for plotting")
+            raise ValueError("No valid coordinates found for plotting")
+            
+        # Create plot
+        fig, ax = plt.subplots(figsize=(12, 8))
+        scatter = ax.scatter(merged_df['x'], merged_df['y'], 
+                           c=merged_df[variable_name], 
+                           cmap=colormap, 
+                           s=point_size)
+        
+        # Customize plot
+        ax.set_title(f'{variable_name} per Cell')
+        ax.set_xlabel('X Coordinate')
+        ax.set_ylabel('Y Coordinate')
+        plt.colorbar(scatter, label=variable_name)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        plt.rcParams.update({'font.size': 12})
+        plt.tight_layout()
+        plt.show()
+
 
 ==================================================
 
@@ -2047,6 +3090,9 @@ class HdfResultsPlan:
             logger.error(f"Error in reference_summary_output: {str(e)}")
             return pd.DataFrame()  # Return an empty DataFrame on general error
 
+
+
+
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
@@ -2061,19 +3107,20 @@ released under MIT license and Copyright (c) 2024 fema-ffrd
 The file has been forked and modified for use in RAS Commander.
 """
 
+from pathlib import Path
+from typing import Union, Optional, List, Dict, Tuple
+
 import h5py
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Union, Optional, List
+import xarray as xr
+
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
-import xarray as xr
+from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
-
 
 class HdfResultsXsec:
     """
@@ -2089,204 +3136,238 @@ class HdfResultsXsec:
     Attributes:
         None
 
-    Methods:
-        steady_profile_xs_output: Extract steady profile cross-section output for a specified variable.
-        cross_sections_wsel: Get water surface elevation data for cross-sections.
-        cross_sections_flow: Get flow data for cross-sections.
-        cross_sections_energy_grade: Get energy grade data for cross-sections.
-        cross_sections_additional_enc_station_left: Get left encroachment station data for cross-sections.
-        cross_sections_additional_enc_station_right: Get right encroachment station data for cross-sections.
-        cross_sections_additional_area_total: Get total ineffective area data for cross-sections.
-        cross_sections_additional_velocity_total: Get total velocity data for cross-sections.
+    
     """
 
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def steady_profile_xs_output(hdf_path: Path, var: str, round_to: int = 2) -> pd.DataFrame:
-        """
-        Create a DataFrame from steady cross section results based on the specified variable.
 
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-        var : str
-            The variable to extract from the steady cross section results.
-        round_to : int, optional
-            Number of decimal places to round the results to (default is 2).
+
+
+
+
+
+
+
+
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pump_station_profile_output(hdf_path: Path) -> pd.DataFrame:
+        """
+        Extract pump station profile output data from the HDF file.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
 
         Returns:
-        -------
-        pd.DataFrame
-            DataFrame containing the steady cross section results for the specified variable.
+            pd.DataFrame: DataFrame containing pump station profile output data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
         """
-        XS_STEADY_OUTPUT_ADDITIONAL = [
-            "Additional Encroachment Station Left",
-            "Additional Encroachment Station Right",
-            "Additional Area Ineffective Total",
-            "Additional Velocity Total",
-        ]
-                
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                # Determine the correct path based on the variable
-                if var in XS_STEADY_OUTPUT_ADDITIONAL:
-                    path = f"/Results/Steady/Cross Sections/Additional Output/{var}"
-                else:
-                    path = f"/Results/Steady/Cross Sections/{var}"
-                
-                # Check if the path exists in the HDF file
-                if path not in hdf_file:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract profile output data
+                profile_path = "/Results/Unsteady/Output/Output Blocks/DSS Profile Output/Unsteady Time Series/Pumping Stations"
+                if profile_path not in hdf:
+                    logger.warning("Pump Station profile output data not found in HDF file")
                     return pd.DataFrame()
 
-                # Get the profile names
-                profiles = HdfBase.steady_flow_names(hdf_path)
-                
-                # Extract the steady data
-                steady_data = hdf_file[path]
-                
-                # Create a DataFrame with profiles as index
-                df = pd.DataFrame(steady_data, index=profiles)
-                
-                # Transpose the DataFrame and round values
-                df_t = df.T.copy()
-                for p in profiles:
-                    df_t[p] = df_t[p].apply(lambda x: round(x, round_to))
+                # Initialize an empty list to store data from all pump stations
+                all_data = []
 
-                return df_t
+                # Iterate through all pump stations
+                for station in hdf[profile_path].keys():
+                    station_path = f"{profile_path}/{station}/Structure Variables"
+                    
+                    data = hdf[station_path][()]
+                    
+                    # Create a DataFrame for this pump station
+                    df = pd.DataFrame(data, columns=['Flow', 'Stage HW', 'Stage TW', 'Pump Station', 'Pumps on'])
+                    df['Station'] = station
+                    
+                    all_data.append(df)
+
+                # Concatenate all DataFrames
+                result_df = pd.concat(all_data, ignore_index=True)
+
+                # Add time information
+                time = HdfBase._get_unsteady_datetimes(hdf)
+                result_df['Time'] = [time[i] for i in result_df.index]
+
+                return result_df
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
         except Exception as e:
-            HdfUtils.logger.error(f"Failed to get steady profile cross section output: {str(e)}")
-            return pd.DataFrame()
+            logger.error(f"Error extracting pump station profile output data: {e}")
+            raise
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
-    def cross_sections_wsel(hdf_path: Path) -> pd.DataFrame:
+    def get_pump_station_summary(hdf_path: Path) -> pd.DataFrame:
         """
-        Return the water surface elevation information for each 1D Cross Section.
+        Extract summary data for pump stations from the HDF file.
 
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
+        Args:
+            hdf_path (Path): Path to the HDF file.
 
         Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the water surface elevations for each cross section and event.
+            pd.DataFrame: DataFrame containing pump station summary data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
         """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Water Surface")
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract summary data
+                summary_path = "/Results/Unsteady/Summary/Pump Station"
+                if summary_path not in hdf:
+                    logger.warning("Pump Station summary data not found in HDF file")
+                    return pd.DataFrame()
+
+                summary_data = hdf[summary_path][()]
+                
+                # Create DataFrame
+                df = pd.DataFrame(summary_data)
+
+                # Convert column names
+                df.columns = [col.decode('utf-8') if isinstance(col, bytes) else col for col in df.columns]
+
+                # Convert byte string values to regular strings
+                for col in df.columns:
+                    if df[col].dtype == object:
+                        df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+
+                return df
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting pump station summary data: {e}")
+            raise
+
+
+
+
+# Tested functions from AWS webinar where the code was developed
+# Need to add examples
+
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
-    def cross_sections_flow(hdf_path: Path) -> pd.DataFrame:
+    def extract_cross_section_results(hdf_path: Path) -> xr.Dataset:
         """
-        Return the Flow information for each 1D Cross Section.
+        Extract Water Surface, Velocity Total, Velocity Channel, Flow Lateral, and Flow data from HEC-RAS HDF file.
+        Includes Cross Section Only and Cross Section Attributes as coordinates in the xarray.Dataset.
+        Also calculates maximum values for key parameters.
 
         Parameters:
-        ----------
+        -----------
         hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
+            Path to the HEC-RAS results HDF file
 
         Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the flow for each cross section and event.
+        --------
+        xr.Dataset
+            Xarray Dataset containing the extracted cross-section results with appropriate coordinates and attributes.
+            Includes maximum values for Water Surface, Flow, Channel Velocity, Total Velocity, and Lateral Flow.
         """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Flow")
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Define base paths
+                base_output_path = "/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/"
+                time_stamp_path = "/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time Date Stamp (ms)"
+                
+                # Extract Cross Section Attributes
+                attrs_dataset = hdf_file[f"{base_output_path}Cross Section Attributes"][:]
+                rivers = [attr['River'].decode('utf-8').strip() for attr in attrs_dataset]
+                reaches = [attr['Reach'].decode('utf-8').strip() for attr in attrs_dataset]
+                stations = [attr['Station'].decode('utf-8').strip() for attr in attrs_dataset]
+                names = [attr['Name'].decode('utf-8').strip() for attr in attrs_dataset]
+                
+                # Extract Cross Section Only (Unique Names)
+                cross_section_only_dataset = hdf_file[f"{base_output_path}Cross Section Only"][:]
+                cross_section_names = [cs.decode('utf-8').strip() for cs in cross_section_only_dataset]
+                
+                # Extract Time Stamps and convert to datetime
+                time_stamps = hdf_file[time_stamp_path][:]
+                if any(isinstance(ts, bytes) for ts in time_stamps):
+                    time_stamps = [ts.decode('utf-8') for ts in time_stamps]
+                # Convert RAS format timestamps to datetime
+                times = pd.to_datetime(time_stamps, format='%d%b%Y %H:%M:%S:%f')
+                
+                # Extract Required Datasets
+                water_surface = hdf_file[f"{base_output_path}Water Surface"][:]
+                velocity_total = hdf_file[f"{base_output_path}Velocity Total"][:]
+                velocity_channel = hdf_file[f"{base_output_path}Velocity Channel"][:]
+                flow_lateral = hdf_file[f"{base_output_path}Flow Lateral"][:]
+                flow = hdf_file[f"{base_output_path}Flow"][:]
+                
+                # Calculate maximum values along time axis
+                max_water_surface = np.max(water_surface, axis=0)
+                max_flow = np.max(flow, axis=0)
+                max_velocity_channel = np.max(velocity_channel, axis=0)
+                max_velocity_total = np.max(velocity_total, axis=0)
+                max_flow_lateral = np.max(flow_lateral, axis=0)
+                
+                # Create Xarray Dataset
+                ds = xr.Dataset(
+                    {
+                        'Water_Surface': (['time', 'cross_section'], water_surface),
+                        'Velocity_Total': (['time', 'cross_section'], velocity_total),
+                        'Velocity_Channel': (['time', 'cross_section'], velocity_channel),
+                        'Flow_Lateral': (['time', 'cross_section'], flow_lateral),
+                        'Flow': (['time', 'cross_section'], flow),
+                    },
+                    coords={
+                        'time': times,
+                        'cross_section': cross_section_names,
+                        'River': ('cross_section', rivers),
+                        'Reach': ('cross_section', reaches),
+                        'Station': ('cross_section', stations),
+                        'Name': ('cross_section', names),
+                        'Maximum_Water_Surface': ('cross_section', max_water_surface),
+                        'Maximum_Flow': ('cross_section', max_flow),
+                        'Maximum_Channel_Velocity': ('cross_section', max_velocity_channel),
+                        'Maximum_Velocity_Total': ('cross_section', max_velocity_total),
+                        'Maximum_Flow_Lateral': ('cross_section', max_flow_lateral)
+                    },
+                    attrs={
+                        'description': 'Cross-section results extracted from HEC-RAS HDF file',
+                        'source_file': str(hdf_path)
+                    }
+                )
+                
+                return ds
 
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_energy_grade(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the energy grade information for each 1D Cross Section.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the energy grade for each cross section and event.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Energy Grade")
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_enc_station_left(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the left side encroachment information for a floodway plan hdf.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the cross sections left side encroachment stations.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(
-            hdf_path, "Encroachment Station Left"
-        )
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_enc_station_right(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the right side encroachment information for a floodway plan hdf.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the cross sections right side encroachment stations.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(
-            hdf_path, "Encroachment Station Right"
-        )
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_area_total(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the 1D cross section area for each profile.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the wet area inside the cross sections.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Area Ineffective Total")
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_velocity_total(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the 1D cross section velocity for each profile.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the velocity inside the cross sections.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Velocity Total")
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting cross section results: {e}")
+            raise
 
 
 ==================================================
@@ -2333,79 +3414,177 @@ class HdfStruc:
 
     Note: This class contains static methods and does not require instantiation.
     """
-
-    GEOM_STRUCTURES_PATH = "Geometry/Structures"
-
+    
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
     def structures(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
         """
-        Return the model structures.
+        Extracts structure data from a HEC-RAS geometry HDF5 file and returns it as a GeoDataFrame.
 
-        This method extracts structure data from the HDF file, including geometry
-        and attributes, and returns it as a GeoDataFrame.
+        This function excludes Property Tables, Pier and Abutment Data/Attributes, and Gate Groups.
+        It includes Table Info, Centerlines as LineStrings, Structures Attributes, Bridge Coefficient Attributes,
+        and Profile Data (as a list of station and elevation values for each structure).
 
         Parameters
         ----------
         hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
+            Path to the HEC-RAS geometry HDF5 file.
         datetime_to_str : bool, optional
-            If True, convert datetime objects to strings. Default is False.
+            Convert datetime objects to strings, by default False.
 
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the structures, with columns for attributes
-            and geometry.
-
-        Raises
-        ------
-        Exception
-            If there's an error reading the structures data from the HDF file.
+            A GeoDataFrame containing all relevant structure data with geometries and attributes.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                # Check if the structures path exists in the HDF file
-                if HdfStruc.GEOM_STRUCTURES_PATH not in hdf_file:
-                    logger.info(f"No structures found in the geometry file: {hdf_path}")
+            with h5py.File(hdf_path, 'r') as hdf:
+                if "Geometry/Structures" not in hdf:
+                    logger.info(f"No structures found in: {hdf_path}")
                     return GeoDataFrame()
+
+                def get_dataset_df(path: str) -> pd.DataFrame:
+                    """
+                    Helper function to convert an HDF5 dataset to a pandas DataFrame.
+
+                    Parameters
+                    ----------
+                    path : str
+                        The path to the dataset within the HDF5 file.
+
+                    Returns
+                    -------
+                    pd.DataFrame
+                        DataFrame representation of the dataset.
+                    """
+                    if path not in hdf:
+                        logger.warning(f"Dataset not found: {path}")
+                        return pd.DataFrame()
+
+                    data = hdf[path][()]
+                    
+                    if data.dtype.names:
+                        df = pd.DataFrame(data)
+                        # Decode byte strings to UTF-8
+                        for col in df.columns:
+                            if df[col].dtype.kind in {'S', 'a'}:  # Byte strings
+                                df[col] = df[col].str.decode('utf-8', errors='ignore')
+                        return df
+                    else:
+                        # If no named fields, assign generic column names
+                        return pd.DataFrame(data, columns=[f'Value_{i}' for i in range(data.shape[1])])
+
+                # Extract relevant datasets
+                struct_attrs = get_dataset_df("Geometry/Structures/Attributes")
+                bridge_coef = get_dataset_df("Geometry/Structures/Bridge Coefficient Attributes")
+                table_info = get_dataset_df("Geometry/Structures/Table Info")
+                profile_data = get_dataset_df("Geometry/Structures/Profile Data")
+
+                # Assign 'Structure ID' based on index (starting from 1)
+                struct_attrs.reset_index(drop=True, inplace=True)
+                struct_attrs['Structure ID'] = range(1, len(struct_attrs) + 1)
+                logger.debug(f"Assigned Structure IDs: {struct_attrs['Structure ID'].tolist()}")
+
+                # Check if 'Structure ID' was successfully assigned
+                if 'Structure ID' not in struct_attrs.columns:
+                    logger.error("'Structure ID' column could not be assigned to Structures/Attributes.")
+                    return GeoDataFrame()
+
+                # Get centerline geometry
+                centerline_info = hdf["Geometry/Structures/Centerline Info"][()]
+                centerline_points = hdf["Geometry/Structures/Centerline Points"][()]
                 
-                struct_data = hdf_file[HdfStruc.GEOM_STRUCTURES_PATH]
-                v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
-                sd_attrs = struct_data["Attributes"][()]
-                
-                # Create a dictionary to store structure data
-                struct_dict = {"struct_id": range(sd_attrs.shape[0])}
-                struct_dict.update(
-                    {name: v_conv_val(sd_attrs[name]) for name in sd_attrs.dtype.names}
-                )
-                
-                # Get structure geometries
-                geoms = HdfXsec._get_polylines(
-                    hdf_path,
-                    HdfStruc.GEOM_STRUCTURES_PATH,
-                    info_name="Centerline Info",
-                    parts_name="Centerline Parts",
-                    points_name="Centerline Points"
-                )
-                
-                # Create GeoDataFrame
+                # Create LineString geometries for each structure
+                geoms = []
+                for i in range(len(centerline_info)):
+                    start_idx = centerline_info[i][0]  # Point Starting Index
+                    point_count = centerline_info[i][1]  # Point Count
+                    points = centerline_points[start_idx:start_idx + point_count]
+                    if len(points) >= 2:
+                        geoms.append(LineString(points))
+                    else:
+                        logger.warning(f"Insufficient points for LineString in structure index {i}.")
+                        geoms.append(None)
+
+                # Create base GeoDataFrame with Structures Attributes and geometries
                 struct_gdf = GeoDataFrame(
-                    struct_dict,
+                    struct_attrs,
                     geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path),
+                    crs=HdfUtils.projection(hdf_path)
                 )
-                
-                # Convert datetime to string if requested
-                if datetime_to_str:
-                    struct_gdf["Last Edited"] = struct_gdf["Last Edited"].apply(
-                        lambda x: pd.Timestamp.isoformat(x) if pd.notnull(x) else None
+
+                # Drop entries with invalid geometries
+                initial_count = len(struct_gdf)
+                struct_gdf = struct_gdf.dropna(subset=['geometry']).reset_index(drop=True)
+                final_count = len(struct_gdf)
+                if final_count < initial_count:
+                    logger.warning(f"Dropped {initial_count - final_count} structures due to invalid geometries.")
+
+                # Merge Bridge Coefficient Attributes on 'Structure ID'
+                if not bridge_coef.empty and 'Structure ID' in bridge_coef.columns:
+                    struct_gdf = struct_gdf.merge(
+                        bridge_coef,
+                        on='Structure ID',
+                        how='left',
+                        suffixes=('', '_bridge_coef')
                     )
-                
+                    logger.debug("Merged Bridge Coefficient Attributes successfully.")
+                else:
+                    logger.warning("Bridge Coefficient Attributes missing or 'Structure ID' not present.")
+
+                # Merge Table Info based on the DataFrame index (one-to-one correspondence)
+                if not table_info.empty:
+                    if len(table_info) != len(struct_gdf):
+                        logger.warning("Table Info count does not match Structures count. Skipping merge.")
+                    else:
+                        struct_gdf = pd.concat([struct_gdf, table_info.reset_index(drop=True)], axis=1)
+                        logger.debug("Merged Table Info successfully.")
+                else:
+                    logger.warning("Table Info dataset is empty or missing.")
+
+                # Process Profile Data based on Table Info
+                if not profile_data.empty and not table_info.empty:
+                    # Assuming 'Centerline Profile (Index)' and 'Centerline Profile (Count)' are in 'Table Info'
+                    if ('Centerline Profile (Index)' in table_info.columns and
+                        'Centerline Profile (Count)' in table_info.columns):
+                        struct_gdf['Profile_Data'] = struct_gdf.apply(
+                            lambda row: [
+                                {'Station': float(profile_data.iloc[i, 0]),
+                                 'Elevation': float(profile_data.iloc[i, 1])}
+                                for i in range(
+                                    int(row['Centerline Profile (Index)']),
+                                    int(row['Centerline Profile (Index)']) + int(row['Centerline Profile (Count)'])
+                                )
+                            ],
+                            axis=1
+                        )
+                        logger.debug("Processed Profile Data successfully.")
+                    else:
+                        logger.warning("Required columns for Profile Data not found in Table Info.")
+                else:
+                    logger.warning("Profile Data dataset is empty or Table Info is missing.")
+
+                # Convert datetime columns to string if requested
+                if datetime_to_str:
+                    datetime_cols = struct_gdf.select_dtypes(include=['datetime64']).columns
+                    for col in datetime_cols:
+                        struct_gdf[col] = struct_gdf[col].dt.isoformat()
+                        logger.debug(f"Converted datetime column '{col}' to string.")
+
+                # Ensure all byte strings are decoded (if any remain)
+                for col in struct_gdf.columns:
+                    if struct_gdf[col].dtype == object:
+                        struct_gdf[col] = struct_gdf[col].apply(
+                            lambda x: x.decode('utf-8', errors='ignore') if isinstance(x, bytes) else x
+                        )
+
+                # Final GeoDataFrame
+                logger.info("Successfully extracted structures GeoDataFrame.")
                 return struct_gdf
+
         except Exception as e:
-            logger.error(f"Error reading structures: {str(e)}")
+            logger.error(f"Error reading structures from {hdf_path}: {str(e)}")
             raise
 
     @staticmethod
@@ -2433,10 +3612,10 @@ class HdfStruc:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                if HdfStruc.GEOM_STRUCTURES_PATH not in hdf_file:
+                if "Geometry/Structures" not in hdf_file:
                     logger.info(f"No structures found in the geometry file: {hdf_path}")
                     return {}
-                return HdfUtils.get_attrs(hdf_file, HdfStruc.GEOM_STRUCTURES_PATH)
+                return HdfUtils.get_attrs(hdf_file, "Geometry/Structures")
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
             return {}
@@ -2463,6 +3642,7 @@ from datetime import datetime, timedelta
 from typing import Union, Optional, Dict, List, Tuple, Any
 from scipy.spatial import KDTree
 import re
+
 
 from .Decorators import standardize_input, log_call 
 from .LoggingConfig import setup_logging, get_logger
@@ -2579,7 +3759,7 @@ class HdfUtils:
         """
         def get_item_properties:
     """Docs only, see 'get_item_properties.py' for full function code"""
-
+            print(f"Error exploring HDF5 file: {e}")
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\HdfXsec.py
@@ -2599,12 +3779,16 @@ import h5py
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
+import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString
 from typing import List  # Import List to avoid NameError
 from .Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .LoggingConfig import get_logger
+import logging
+
+
 
 logger = get_logger(__name__)
 
@@ -2623,219 +3807,189 @@ class HdfXsec:
     Note:
         This class is designed to work with HEC-RAS geometry HDF files and requires them to have
         a specific structure and naming convention for the data groups and attributes.
-    """
-
+        """
     @staticmethod
     @log_call
-    @standardize_input(file_type='geom_hdf')
-    def cross_sections(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def cross_sections(hdf_path: str, datetime_to_str: bool = True, ras_object=None) -> gpd.GeoDataFrame:
         """
-        Return the model 1D cross sections.
-
-        This method extracts cross-section data from the HEC-RAS geometry HDF file,
-        including attributes and geometry information.
-
+        Extract cross sections from HDF geometry file and return as GeoDataFrame
+        
         Parameters
         ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
+        hdf_path : str
+            Path to HDF file
         datetime_to_str : bool, optional
-            If True, convert datetime objects to strings. Default is False.
-
+            Convert datetime objects to strings, by default True
+        ras_object : RasPrj, optional
+            RAS project object, by default None
+            
         Returns
         -------
-        GeoDataFrame
-            A GeoDataFrame containing the cross sections with their attributes and geometries.
-
-        Raises
-        ------
-        KeyError
-            If the required datasets are not found in the HDF file.
+        gpd.GeoDataFrame
+            GeoDataFrame containing cross section geometries and attributes including:
+            - River name
+            - Reach name 
+            - River station
+            - Name
+            - Description
+            - Left/Channel/Right lengths
+            - Bank stations
+            - Friction mode
+            - Contraction/Expansion coefficients
+            - Levee information
+            - Hydraulic property parameters
+            - Block modes
+            - Last edited timestamp
+            - Manning's n values and stations
+            - Ineffective blocks data
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                xs_data = hdf_file["Geometry/Cross Sections"]
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract datasets
+                poly_info = hdf['/Geometry/Cross Sections/Polyline Info'][:]
+                poly_parts = hdf['/Geometry/Cross Sections/Polyline Parts'][:]
+                poly_points = hdf['/Geometry/Cross Sections/Polyline Points'][:]
                 
-                if "Attributes" not in xs_data:
-                    logger.warning(f"No 'Attributes' dataset group in {hdf_path}")
-                    return GeoDataFrame()
+                station_info = hdf['/Geometry/Cross Sections/Station Elevation Info'][:]
+                station_values = hdf['/Geometry/Cross Sections/Station Elevation Values'][:]
+                
+                # Get attributes for cross sections
+                xs_attrs = hdf['/Geometry/Cross Sections/Attributes'][:]
+                
+                # Get Manning's n data
+                mann_info = hdf["/Geometry/Cross Sections/Manning's n Info"][:]
+                mann_values = hdf["/Geometry/Cross Sections/Manning's n Values"][:]
+                
+                # Get ineffective blocks data
+                ineff_blocks = hdf['/Geometry/Cross Sections/Ineffective Blocks'][:]
+                ineff_info = hdf['/Geometry/Cross Sections/Ineffective Info'][:]
+                
+                # Initialize lists to store data
+                geometries = []
+                station_elevations = []
+                mannings_n = []
+                ineffective_blocks = []
+                
+                # Process each cross section
+                for i in range(len(poly_info)):
+                    # Extract polyline info
+                    point_start_idx = poly_info[i][0]
+                    point_count = poly_info[i][1]
+                    part_start_idx = poly_info[i][2]
+                    part_count = poly_info[i][3]
+                    
+                    # Extract parts for current polyline
+                    parts = poly_parts[part_start_idx:part_start_idx + part_count]
+                    
+                    # Collect all points for this cross section
+                    xs_points = []
+                    for part in parts:
+                        part_point_start = point_start_idx + part[0]
+                        part_point_count = part[1]
+                        points = poly_points[part_point_start:part_point_start + part_point_count]
+                        xs_points.extend(points)
+                    
+                    # Create LineString geometry
+                    if len(xs_points) >= 2:
+                        geometry = LineString(xs_points)
+                        geometries.append(geometry)
+                        
+                        # Extract station-elevation data
+                        start_idx = station_info[i][0]
+                        count = station_info[i][1]
+                        station_elev = station_values[start_idx:start_idx + count]
+                        station_elevations.append(station_elev)
+                        
+                        # Extract Manning's n data
+                        mann_start_idx = mann_info[i][0]
+                        mann_count = mann_info[i][1]
+                        mann_n_section = mann_values[mann_start_idx:mann_start_idx + mann_count]
+                        mann_n_dict = {
+                            'Station': mann_n_section[:, 0].tolist(),
+                            'Mann n': mann_n_section[:, 1].tolist()
+                        }
+                        mannings_n.append(mann_n_dict)
+                        
+                        # Extract ineffective blocks data
+                        ineff_start_idx = ineff_info[i][0]
+                        ineff_count = ineff_info[i][1]
+                        if ineff_count > 0:
+                            blocks = ineff_blocks[ineff_start_idx:ineff_start_idx + ineff_count]
+                            blocks_list = []
+                            for block in blocks:
+                                block_dict = {
+                                    'Left Sta': float(block['Left Sta']),
+                                    'Right Sta': float(block['Right Sta']), 
+                                    'Elevation': float(block['Elevation']),
+                                    'Permanent': bool(block['Permanent'])
+                                }
+                                blocks_list.append(block_dict)
+                            ineffective_blocks.append(blocks_list)
+                        else:
+                            ineffective_blocks.append([])
+                
+                # Create GeoDataFrame
+                if geometries:
+                    # Create DataFrame from attributes
+                    data = {
+                        'geometry': geometries,
+                        'station_elevation': station_elevations,
+                        'mannings_n': mannings_n,
+                        'ineffective_blocks': ineffective_blocks,
+                        'River': [x['River'].decode('utf-8').strip() for x in xs_attrs],
+                        'Reach': [x['Reach'].decode('utf-8').strip() for x in xs_attrs],
+                        'RS': [x['RS'].decode('utf-8').strip() for x in xs_attrs],
+                        'Name': [x['Name'].decode('utf-8').strip() for x in xs_attrs],
+                        'Description': [x['Description'].decode('utf-8').strip() for x in xs_attrs],
+                        'Len Left': xs_attrs['Len Left'],
+                        'Len Channel': xs_attrs['Len Channel'],
+                        'Len Right': xs_attrs['Len Right'], 
+                        'Left Bank': xs_attrs['Left Bank'],
+                        'Right Bank': xs_attrs['Right Bank'],
+                        'Friction Mode': [x['Friction Mode'].decode('utf-8').strip() for x in xs_attrs],
+                        'Contr': xs_attrs['Contr'],
+                        'Expan': xs_attrs['Expan'],
+                        'Left Levee Sta': xs_attrs['Left Levee Sta'],
+                        'Left Levee Elev': xs_attrs['Left Levee Elev'],
+                        'Right Levee Sta': xs_attrs['Right Levee Sta'],
+                        'Right Levee Elev': xs_attrs['Right Levee Elev'],
+                        'HP Count': xs_attrs['HP Count'],
+                        'HP Start Elev': xs_attrs['HP Start Elev'],
+                        'HP Vert Incr': xs_attrs['HP Vert Incr'],
+                        'HP LOB Slices': xs_attrs['HP LOB Slices'],
+                        'HP Chan Slices': xs_attrs['HP Chan Slices'],
+                        'HP ROB Slices': xs_attrs['HP ROB Slices'],
+                        'Ineff Block Mode': xs_attrs['Ineff Block Mode'],
+                        'Obstr Block Mode': xs_attrs['Obstr Block Mode'],
+                        'Default Centerline': xs_attrs['Default Centerline'],
+                        'Last Edited': [x['Last Edited'].decode('utf-8').strip() for x in xs_attrs]
+                    }
+                
+                    gdf = gpd.GeoDataFrame(data)
+                    
+                    # Set CRS if available
+                    if 'Projection' in hdf['/Geometry'].attrs:
+                        proj = hdf['/Geometry'].attrs['Projection']
+                        if isinstance(proj, bytes):
+                            proj = proj.decode('utf-8')
+                        gdf.set_crs(proj, allow_override=True)
+                    
+                    return gdf
+                
+                return gpd.GeoDataFrame()
+                
+        except Exception as e:
+            logging.error(f"Error processing cross-section data: {str(e)}")
+            return gpd.GeoDataFrame()
 
-                # Convert attribute values
-                v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
-                xs_attrs = xs_data["Attributes"][()]
-                xs_dict = {"xs_id": range(xs_attrs.shape[0])}
-                xs_dict.update(
-                    {name: v_conv_val(xs_attrs[name]) for name in xs_attrs.dtype.names}
-                )
-
-                xs_df = pd.DataFrame(xs_dict)
-                
-                # Create geometry from coordinate pairs
-                xs_df['geometry'] = xs_df.apply(lambda row: LineString([
-                    (row['XS_X_Coord_1'], row['XS_Y_Coord_1']),
-                    (row['XS_X_Coord_2'], row['XS_Y_Coord_2'])
-                ]), axis=1)
-                
-                # Convert to GeoDataFrame
-                gdf = GeoDataFrame(xs_df, geometry='geometry', crs=HdfUtils.projection(hdf_path))
-                
-                # Convert datetime columns to strings if requested
-                if datetime_to_str:
-                    gdf = HdfUtils.df_datetimes_to_str(gdf)
-                
-                return gdf
-
-        except KeyError as e:
-            logger.error(f"Error accessing cross-section data in {hdf_path}: {str(e)}")
-            return GeoDataFrame()
 
     @staticmethod
     @log_call
-    @standardize_input(file_type='geom_hdf')
-    def cross_sections_elevations(hdf_path: Path, round_to: int = 2) -> pd.DataFrame:
-        """
-        Return the model cross section elevation information.
-
-        This method extracts cross-section elevation data from the HEC-RAS geometry HDF file,
-        including station-elevation pairs for each cross-section.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        round_to : int, optional
-            Number of decimal places to round to. Default is 2.
-
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame containing the cross section elevation information.
-
-        Raises
-        ------
-        KeyError
-            If the required datasets are not found in the HDF file.
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                path = "/Geometry/Cross Sections"
-                if path not in hdf_file:
-                    logger.warning(f"No 'Cross Sections' group found in {hdf_path}")
-                    return pd.DataFrame()
-
-                xselev_data = hdf_file[path]
-                
-                if "Station Elevation Info" not in xselev_data or "Station Elevation Values" not in xselev_data:
-                    logger.warning(f"Required datasets not found in Cross Sections group in {hdf_path}")
-                    return pd.DataFrame()
-
-                # Get cross-section data
-                xs_df = HdfXsec.cross_sections(hdf_path)
-                if xs_df.empty:
-                    return pd.DataFrame()
-
-                # Extract elevation data
-                elevations = []
-                for part_start, part_cnt in xselev_data["Station Elevation Info"][()]:
-                    xzdata = xselev_data["Station Elevation Values"][()][
-                        part_start : part_start + part_cnt
-                    ]
-                    elevations.append(xzdata)
-
-                # Create DataFrame with elevation info
-                xs_elev_df = xs_df[
-                    ["xs_id", "River", "Reach", "RS", "Left Bank", "Right Bank"]
-                ].copy()
-                xs_elev_df["Left Bank"] = xs_elev_df["Left Bank"].round(round_to).astype(str)
-                xs_elev_df["Right Bank"] = xs_elev_df["Right Bank"].round(round_to).astype(str)
-                xs_elev_df["elevation info"] = elevations
-
-                return xs_elev_df
-
-        except KeyError as e:
-            logger.error(f"Error accessing cross-section elevation data in {hdf_path}: {str(e)}")
-            return pd.DataFrame()
-        except Exception as e:
-            logger.error(f"Unexpected error in cross_sections_elevations: {str(e)}")
-            return pd.DataFrame()
-
-    @staticmethod
-    @log_call
-    @standardize_input(file_type='geom_hdf')
-    def river_reaches(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
-        """
-        Return the model 1D river reach lines.
-
-        This method extracts river reach data from the HEC-RAS geometry HDF file,
-        including attributes and geometry information.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        datetime_to_str : bool, optional
-            If True, convert datetime objects to strings. Default is False.
-
-        Returns
-        -------
-        GeoDataFrame
-            A GeoDataFrame containing the river reaches with their attributes and geometries.
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                if "Geometry/River Centerlines" not in hdf_file:
-                    return GeoDataFrame()
-
-                river_data = hdf_file["Geometry/River Centerlines"]
-                v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
-                river_attrs = river_data["Attributes"][()]
-                river_dict = {"river_id": range(river_attrs.shape[0])}
-                river_dict.update(
-                    {name: v_conv_val(river_attrs[name]) for name in river_attrs.dtype.names}
-                )
-                
-                # Get polylines for river reaches
-                geoms = HdfXsec._get_polylines(hdf_path, "Geometry/River Centerlines")
-                
-                river_gdf = GeoDataFrame(
-                    river_dict,
-                    geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path),
-                )
-                if datetime_to_str:
-                    river_gdf["Last Edited"] = river_gdf["Last Edited"].apply(
-                        lambda x: pd.Timestamp.isoformat(x)
-                    )
-                return river_gdf
-        except Exception as e:
-            logger.error(f"Error reading river reaches: {str(e)}")
-            return GeoDataFrame()
-
-    @staticmethod
     def _get_polylines(hdf_path: Path, path: str, info_name: str = "Polyline Info", parts_name: str = "Polyline Parts", points_name: str = "Polyline Points") -> List[LineString]:
         """
         Helper method to extract polylines from HDF file.
-
-        This method is used internally to extract polyline geometries for various features
-        such as river reaches.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        path : str
-            Path within the HDF file to the polyline data.
-        info_name : str, optional
-            Name of the dataset containing polyline info. Default is "Polyline Info".
-        parts_name : str, optional
-            Name of the dataset containing polyline parts. Default is "Polyline Parts".
-        points_name : str, optional
-            Name of the dataset containing polyline points. Default is "Polyline Points".
-
-        Returns
-        -------
-        List[LineString]
-            A list of LineString geometries representing the polylines.
+        
+        [rest of docstring remains the same]
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -2866,6 +4020,165 @@ class HdfXsec:
         except Exception as e:
             logger.error(f"Error getting polylines: {str(e)}")
             return []
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def river_centerlines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+        """
+        Extract river centerlines from HDF geometry file.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file
+        datetime_to_str : bool, optional
+            Convert datetime objects to strings, by default False
+
+        Returns
+        -------
+        GeoDataFrame
+            GeoDataFrame containing river centerline geometries and attributes including:
+            - River Name
+            - Reach Name
+            - Upstream Type and Name
+            - Downstream Type and Name
+            - Junction distances
+            - Geometry
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if "Geometry/River Centerlines" not in hdf_file:
+                    logger.warning("No river centerlines found in geometry file")
+                    return GeoDataFrame()
+
+                centerline_data = hdf_file["Geometry/River Centerlines"]
+                
+                # Get attributes
+                attrs = centerline_data["Attributes"][()]
+                v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
+                
+                # Create dictionary of attributes
+                centerline_dict = {"centerline_id": range(attrs.shape[0])}
+                centerline_dict.update(
+                    {name: v_conv_val(attrs[name]) for name in attrs.dtype.names}
+                )
+
+                # Get polyline geometries
+                geoms = HdfXsec._get_polylines(
+                    hdf_path, 
+                    "Geometry/River Centerlines",
+                    info_name="Polyline Info",
+                    parts_name="Polyline Parts",
+                    points_name="Polyline Points"
+                )
+
+                # Create GeoDataFrame
+                centerline_gdf = GeoDataFrame(
+                    centerline_dict,
+                    geometry=geoms,
+                    crs=HdfUtils.projection(hdf_path)
+                )
+
+                # Decode string columns after creation
+                str_columns = ['River Name', 'Reach Name', 'US Type', 
+                             'US Name', 'DS Type', 'DS Name']
+                for col in str_columns:
+                    if col in centerline_gdf.columns:
+                        centerline_gdf[col] = centerline_gdf[col].apply(
+                            lambda x: x.decode('utf-8').strip() if isinstance(x, bytes) else x
+                        )
+
+                # Clean up column names and add length calculation
+                if not centerline_gdf.empty:
+                    # Calculate length in project units
+                    centerline_gdf['length'] = centerline_gdf.geometry.length
+                    
+                    # Clean string columns
+                    str_columns = ['River Name', 'Reach Name', 'US Type',
+                                 'US Name', 'DS Type', 'DS Name']
+                    for col in str_columns:
+                        if col in centerline_gdf.columns:
+                            centerline_gdf[col] = centerline_gdf[col].str.strip()
+
+                return centerline_gdf
+
+        except Exception as e:
+            logger.error(f"Error reading river centerlines: {str(e)}")
+            return GeoDataFrame()
+
+
+
+    @staticmethod
+    @log_call
+    def get_river_stationing(centerlines_gdf: GeoDataFrame) -> GeoDataFrame:
+        """
+        Calculate river stationing along centerlines.
+
+        Parameters
+        ----------
+        centerlines_gdf : GeoDataFrame
+            GeoDataFrame containing river centerline geometries from river_centerlines()
+
+        Returns
+        -------
+        GeoDataFrame
+            Original GeoDataFrame with additional columns:
+            - station_start: Starting station for each reach
+            - station_end: Ending station for each reach
+            - stations: Array of stations along the centerline
+            - points: Array of point geometries along the centerline
+        """
+        if centerlines_gdf.empty:
+            logger.warning("Empty centerlines GeoDataFrame provided")
+            return centerlines_gdf
+
+        try:
+            # Create copy to avoid modifying original
+            result_gdf = centerlines_gdf.copy()
+            
+            # Initialize new columns
+            result_gdf['station_start'] = 0.0
+            result_gdf['station_end'] = 0.0
+            result_gdf['stations'] = None
+            result_gdf['points'] = None
+            
+            # Process each centerline
+            for idx, row in result_gdf.iterrows():
+                # Get line geometry
+                line = row.geometry
+                
+                # Calculate length
+                total_length = line.length
+                
+                # Generate points along the line
+                distances = np.linspace(0, total_length, num=100)  # Adjust num for desired density
+                points = [line.interpolate(distance) for distance in distances]
+                
+                # Store results
+                result_gdf.at[idx, 'station_start'] = 0.0
+                result_gdf.at[idx, 'station_end'] = total_length
+                result_gdf.at[idx, 'stations'] = distances
+                result_gdf.at[idx, 'points'] = points
+                
+                # Add stationing direction based on upstream/downstream info
+                if row['upstream_type'] == 'Junction' and row['downstream_type'] != 'Junction':
+                    # Reverse stationing if upstream is junction
+                    result_gdf.at[idx, 'station_start'] = total_length
+                    result_gdf.at[idx, 'station_end'] = 0.0
+                    result_gdf.at[idx, 'stations'] = total_length - distances
+            
+            return result_gdf
+
+        except Exception as e:
+            logger.error(f"Error calculating river stationing: {str(e)}")
+            return centerlines_gdf
+
+    @staticmethod
+    def _interpolate_station:
+    """Docs only, see '_interpolate_station.py' for full function code"""
+
 
 ==================================================
 
@@ -3653,6 +4966,8 @@ from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
 from pathlib import Path
 from typing import Union, Any
+from datetime import datetime
+
 import logging
 import re
 from .LoggingConfig import get_logger
@@ -3721,7 +5036,8 @@ class RasPlan:
     @staticmethod
     def _update_geom_in_file:
     """Docs only, see '_update_geom_in_file.py' for full function code"""
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasPrj.py
@@ -3797,6 +5113,31 @@ def get_ras_exe:
 
 ==================================================
 
+File: c:\GH\ras-commander\ras_commander\RasToGo.py
+==================================================
+"""
+RasToGo module provides functions to interface HEC-RAS with go-consequences.
+This module helps prepare and format RAS data for use with go-consequences.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Tuple, Union
+import pandas as pd
+import numpy as np
+
+from .Decorators import log_call, standardize_input
+from .LoggingConfig import setup_logging, get_logger
+
+logger = get_logger(__name__)
+
+class RasToGo:
+    """Class containing functions to interface HEC-RAS with go-consequences."""
+
+    #@staticmethod
+    #@log_call 
+==================================================
+
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
@@ -3827,6 +5168,12 @@ from pathlib import Path
 from .RasPrj import ras
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+import pandas as pd
+import numpy as np
+import re
+from typing import Union, Optional, Any, Tuple, Dict, List
+
+
 
 logger = get_logger(__name__)
 
@@ -3836,11 +5183,672 @@ class RasUnsteady:
     """
     Class for all operations related to HEC-RAS unsteady flow files.
     """
-    
     @staticmethod
     @log_call
-    def update_unsteady_parameters:
-    """Docs only, see 'update_unsteady_parameters.py' for full function code"""
+    def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
+        """
+        Update the Flow Title in an unsteady flow file.
+        
+        Parameters:
+        unsteady_file (str): Full path to the unsteady flow file
+        new_title (str): New flow title (max 24 characters)
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Note:
+            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
+        
+        Example:
+            from ras_commander import RasCmdr
+            
+            # Initialize RAS project
+            ras_cmdr = RasCmdr()
+            ras_cmdr.init_ras_project(project_folder, ras_version)
+            
+            # Update flow title
+            unsteady_file = r"path/to/unsteady_file.u01"
+            new_title = "New Flow Title"
+            RasUnsteady.update_flow_title(unsteady_file, new_title, ras_object=ras_cmdr.ras)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        unsteady_path = Path(unsteady_file)
+        new_title = new_title[:24]  # Truncate to 24 characters if longer
+        
+        try:
+            with open(unsteady_path, 'r') as f:
+                lines = f.readlines()
+            logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+        
+        updated = False
+        for i, line in enumerate(lines):
+            if line.startswith("Flow Title="):
+                old_title = line.strip().split('=')[1]
+                lines[i] = f"Flow Title={new_title}\n"
+                updated = True
+                logger.info(f"Updated Flow Title from '{old_title}' to '{new_title}'")
+                break
+        
+        if updated:
+            try:
+                with open(unsteady_path, 'w') as f:
+                    f.writelines(lines)
+                logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
+            except PermissionError:
+                logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+                raise PermissionError(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+            except IOError as e:
+                logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+                raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+            logger.info(f"Applied Flow Title modification to {unsteady_file}")
+        else:
+            logger.warning(f"Flow Title not found in {unsteady_file}")
+    
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    @log_call
+    def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
+        """
+        Update the Use Restart settings in an unsteady flow file.
+        
+        Parameters:
+        unsteady_file (str): Full path to the unsteady flow file
+        use_restart (bool): Whether to use restart (True) or not (False)
+        restart_filename (str, optional): Name of the restart file (required if use_restart is True)
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        None
+
+        Note:
+            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
+        
+        Example:
+            from ras_commander import RasCmdr
+            
+            # Initialize RAS project
+            ras_cmdr = RasCmdr()
+            ras_cmdr.init_ras_project(project_folder, ras_version)
+            
+            # Update restart settings
+            unsteady_file = r"path/to/unsteady_file.u01"
+            RasUnsteady.update_restart_settings(unsteady_file, True, "restartfile.rst", ras_object=ras_cmdr.ras)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        
+        unsteady_path = Path(unsteady_file)
+        
+        try:
+            with open(unsteady_path, 'r') as f:
+                lines = f.readlines()
+            logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+        
+        updated = False
+        restart_line_index = None
+        for i, line in enumerate(lines):
+            if line.startswith("Use Restart="):
+                restart_line_index = i
+                old_value = line.strip().split('=')[1]
+                new_value = "-1" if use_restart else "0"
+                lines[i] = f"Use Restart={new_value}\n"
+                updated = True
+                logger.info(f"Updated Use Restart from {old_value} to {new_value}")
+                break
+        
+        if use_restart:
+            if not restart_filename:
+                logger.error("Restart filename must be specified when enabling restart.")
+                raise ValueError("Restart filename must be specified when enabling restart.")
+            if restart_line_index is not None:
+                lines.insert(restart_line_index + 1, f"Restart Filename={restart_filename}\n")
+                logger.info(f"Added Restart Filename: {restart_filename}")
+            else:
+                logger.warning("Could not find 'Use Restart' line to insert 'Restart Filename'")
+        
+        if updated:
+            try:
+                with open(unsteady_path, 'w') as f:
+                    f.writelines(lines)
+                logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
+            except PermissionError:
+                logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+                raise PermissionError(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+            except IOError as e:
+                logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+                raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+            logger.info(f"Applied restart settings modification to {unsteady_file}")
+        else:
+            logger.warning(f"Use Restart setting not found in {unsteady_file}")
+    
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    @log_call
+    def extract_boundary_and_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> pd.DataFrame:
+        """
+        Extracts Boundary Location blocks, DSS File entries, and their associated 
+        fixed-width tables from the specified unsteady file.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        unsteady_path = Path(unsteady_file)
+        table_types = [
+            'Flow Hydrograph=', 
+            'Gate Openings=', 
+            'Stage Hydrograph=',
+            'Uniform Lateral Inflow=', 
+            'Lateral Inflow Hydrograph='
+        ]
+        
+        try:
+            with open(unsteady_path, 'r') as file:
+                lines = file.readlines()
+            logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise
+        
+        # Initialize variables
+        boundary_data = []
+        current_boundary = None
+        current_tables = {}
+        current_table = None
+        table_values = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Check for Boundary Location line
+            if line.startswith("Boundary Location="):
+                # Save previous boundary if it exists
+                if current_boundary is not None:
+                    if current_table and table_values:
+                        # Process any remaining table
+                        try:
+                            df = pd.DataFrame({'Value': table_values})
+                            current_tables[current_table_name] = df
+                        except Exception as e:
+                            logger.warning(f"Error processing table {current_table_name}: {e}")
+                    current_boundary['Tables'] = current_tables
+                    boundary_data.append(current_boundary)
+                
+                # Start new boundary
+                current_boundary = {
+                    'Boundary Location': line.split('=', 1)[1].strip(),
+                    'DSS File': '',
+                    'Tables': {}
+                }
+                current_tables = {}
+                current_table = None
+                table_values = []
+                
+            # Check for DSS File line
+            elif line.startswith("DSS File=") and current_boundary is not None:
+                current_boundary['DSS File'] = line.split('=', 1)[1].strip()
+                
+            # Check for table headers
+            elif any(line.startswith(t) for t in table_types) and current_boundary is not None:
+                # If we were processing a table, save it
+                if current_table and table_values:
+                    try:
+                        df = pd.DataFrame({'Value': table_values})
+                        current_tables[current_table_name] = df
+                    except Exception as e:
+                        logger.warning(f"Error processing previous table: {e}")
+                
+                # Start new table
+                try:
+                    current_table = line.split('=')
+                    current_table_name = current_table[0].strip()
+                    num_values = int(current_table[1])
+                    table_values = []
+                    
+                    # Read the table values
+                    rows_needed = (num_values + 9) // 10  # Round up division
+                    for _ in range(rows_needed):
+                        i += 1
+                        if i >= len(lines):
+                            break
+                        row = lines[i].strip()
+                        # Parse fixed-width values (8 characters each)
+                        j = 0
+                        while j < len(row):
+                            value_str = row[j:j+8].strip()
+                            if value_str:
+                                try:
+                                    value = float(value_str)
+                                    table_values.append(value)
+                                except ValueError:
+                                    # Try splitting merged values
+                                    parts = re.findall(r'-?\d+\.?\d*', value_str)
+                                    table_values.extend([float(p) for p in parts])
+                            j += 8
+                
+                except (ValueError, IndexError) as e:
+                    logger.error(f"Error processing table at line {i}: {e}")
+                    current_table = None
+                    
+            i += 1
+        
+        # Add the last boundary if it exists
+        if current_boundary is not None:
+            if current_table and table_values:
+                try:
+                    df = pd.DataFrame({'Value': table_values})
+                    current_tables[current_table_name] = df
+                except Exception as e:
+                    logger.warning(f"Error processing final table: {e}")
+            current_boundary['Tables'] = current_tables
+            boundary_data.append(current_boundary)
+        
+        # Create DataFrame
+        boundaries_df = pd.DataFrame(boundary_data)
+        if not boundaries_df.empty:
+            # Split boundary location into components
+            location_columns = ['River Name', 'Reach Name', 'River Station', 
+                              'Downstream River Station', 'Storage Area Connection',
+                              'Storage Area Name', 'Pump Station Name', 
+                              'Blank 1', 'Blank 2']
+            split_locations = boundaries_df['Boundary Location'].str.split(',', expand=True)
+            # Ensure we have the right number of columns
+            for i, col in enumerate(location_columns):
+                if i < split_locations.shape[1]:
+                    boundaries_df[col] = split_locations[i].str.strip()
+                else:
+                    boundaries_df[col] = ''
+            boundaries_df = boundaries_df.drop(columns=['Boundary Location'])
+        
+        logger.info(f"Successfully extracted boundaries and tables from {unsteady_path}")
+        return boundaries_df
+
+    @staticmethod
+    @log_call
+    def print_boundaries_and_tables(boundaries_df: pd.DataFrame) -> None:
+        """
+        Prints the boundaries and their associated tables from the extracted DataFrame.
+        
+        Parameters:
+        - boundaries_df: DataFrame containing boundary information and nested tables data
+        """
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.max_rows', None)
+        print("\nBoundaries and Tablesin boundaries_df:")
+        for idx, row in boundaries_df.iterrows():
+            print(f"\nBoundary {idx+1}:")
+            print(f"River Name: {row['River Name']}")
+            print(f"Reach Name: {row['Reach Name']}")
+            print(f"River Station: {row['River Station']}")
+            print(f"DSS File: {row['DSS File']}")
+            
+            if row['Tables']:
+                print("\nTables for this boundary:")
+                for table_name, table_df in row['Tables'].items():
+                    print(f"\n{table_name}:")
+                    print(table_df.to_string())
+            print("-" * 80)
+
+
+
+
+
+# Additional functions from the AWS webinar where the code was developed
+# Need to add examples
+
+    @staticmethod
+    @log_call
+    def identify_tables(lines: List[str]) -> List[Tuple[str, int, int]]:
+        """
+        Identify the start and end of each table in the unsteady flow file.
+        
+        Parameters:
+        lines (List[str]): List of file lines
+        
+        Returns:
+        List[Tuple[str, int, int]]: List of tuples containing (table_name, start_line, end_line)
+        """
+        table_types = [
+            'Flow Hydrograph=', 
+            'Gate Openings=', 
+            'Stage Hydrograph=',
+            'Uniform Lateral Inflow=', 
+            'Lateral Inflow Hydrograph='
+        ]
+        tables = []
+        current_table = None
+        
+        for i, line in enumerate(lines):
+            if any(table_type in line for table_type in table_types):
+                if current_table:
+                    tables.append((current_table[0], current_table[1], i-1))
+                table_name = line.strip().split('=')[0] + '='
+                try:
+                    num_values = int(line.strip().split('=')[1])
+                    current_table = (table_name, i+1, num_values)
+                except (ValueError, IndexError) as e:
+                    logger.error(f"Error parsing table header at line {i}: {e}")
+                    continue
+        
+        if current_table:
+            tables.append((current_table[0], current_table[1], 
+                          current_table[1] + (current_table[2] + 9) // 10))
+        
+        logger.debug(f"Identified {len(tables)} tables in the file")
+        return tables
+
+    @staticmethod
+    @log_call
+    def parse_fixed_width_table(lines: List[str], start: int, end: int) -> pd.DataFrame:
+        """
+        Parse a fixed-width table into a pandas DataFrame.
+        
+        Parameters:
+        lines (List[str]): List of file lines
+        start (int): Starting line number for table
+        end (int): Ending line number for table
+        
+        Returns:
+        pd.DataFrame: DataFrame containing parsed table values
+        """
+        data = []
+        for line in lines[start:end]:
+            # Split the line into 8-character columns
+            values = [line[i:i+8].strip() for i in range(0, len(line), 8)]
+            # Convert to float and handle cases where values are run together
+            parsed_values = []
+            for value in values:
+                try:
+                    if len(value) > 8:  # If values are run together
+                        parts = re.findall(r'-?\d+\.?\d*', value)
+                        parsed_values.extend([float(p) for p in parts])
+                    elif value:  # Only add non-empty values
+                        parsed_values.append(float(value))
+                except ValueError as e:
+                    logger.warning(f"Could not parse value '{value}': {e}")
+                    continue
+            data.extend(parsed_values)
+        
+        return pd.DataFrame(data, columns=['Value'])
+
+    @staticmethod
+    @log_call
+    def extract_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> Dict[str, pd.DataFrame]:
+        """
+        Extract all tables from the unsteady file and return them as DataFrames.
+        
+        Parameters:
+        unsteady_file (str): Path to the unsteady flow file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        
+        Returns:
+        Dict[str, pd.DataFrame]: Dictionary of table names to DataFrames
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        unsteady_path = Path(unsteady_file)
+        try:
+            with open(unsteady_path, 'r') as file:
+                lines = file.readlines()
+            logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise
+        
+        tables = RasBndry.identify_tables(lines)
+        extracted_tables = {}
+        
+        for table_name, start, end in tables:
+            df = RasBndry.parse_fixed_width_table(lines, start, end)
+            extracted_tables[table_name] = df
+            logger.debug(f"Extracted table '{table_name}' with {len(df)} values")
+        
+        return extracted_tables
+
+    @staticmethod
+    @log_call
+    def write_table_to_file(unsteady_file: str, table_name: str, df: pd.DataFrame, 
+                           start_line: int, ras_object: Optional[Any] = None) -> None:
+        """
+        Write updated table back to file in fixed-width format.
+        
+        Parameters:
+        unsteady_file (str): Path to the unsteady flow file
+        table_name (str): Name of the table to update
+        df (pd.DataFrame): DataFrame containing the updated values
+        start_line (int): Line number where the table starts
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        
+        unsteady_path = Path(unsteady_file)
+        try:
+            with open(unsteady_path, 'r') as file:
+                lines = file.readlines()
+            logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise
+        
+        # Format values into fixed-width strings
+        formatted_values = []
+        for i in range(0, len(df), 10):
+            row = df['Value'].iloc[i:i+10]
+            formatted_row = ''.join(f'{value:8.0f}' for value in row)
+            formatted_values.append(formatted_row + '\n')
+        
+        # Replace old table with new formatted values
+        lines[start_line:start_line+len(formatted_values)] = formatted_values
+        
+        try:
+            with open(unsteady_path, 'w') as file:
+                file.writelines(lines)
+            logger.info(f"Successfully updated table '{table_name}' in {unsteady_path}")
+        except PermissionError:
+            logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
+            raise
+        except IOError as e:
+            logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
+            raise
+
+
+
+
+
+
+
+
+'''
+
+
+
+Flow Title=Single 2D Area with Bridges
+Program Version=6.60
+Use Restart= 0 
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DSNormalDepth                   ,                                
+Friction Slope=0.0003,0
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DS2NormalD                      ,                                
+Friction Slope=0.0003,0
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,Upstream Inflow                 ,                                
+Interval=1HOUR
+Flow Hydrograph= 200 
+    1000    3000    6500    8000    9500   11000   12500   14000   15500   17000
+   18500   20000   22000   24000   26000   28000   30000   34000   38000   42000
+   46000   50000   54000   58000   62000   66000   70000   73000   76000   79000
+   82000   85000   87200   89400   91600   93800   96000   96800   97600   98400
+   99200  100000   99600   99200   98800   98400   98000   96400   94800   93200
+   91600   90000   88500   87000   85500   84000   82500   81000   79500   78000
+   76500   75000   73500   7200070666.6669333.34   6800066666.6665333.33   64000
+62666.6761333.33   6000058666.6757333.33   5600054666.6753333.33   5200050666.67
+49333.33   4800046666.6745333.33   4400042666.6741333.33   4000039166.6738333.33
+   3750036666.6735833.33   3500034166.6733333.33   3250031666.6730833.33   30000
+29166.6728333.33   2750026666.6725833.33   2500024166.6723333.33   2250021666.67
+20833.33   2000019655.1719310.3518965.5218620.6918275.8617931.0417586.2117241.38
+16896.5516551.72 16206.915862.0715517.2415172.4114827.5914482.7614137.93 13793.1
+13448.2813103.4512758.6212413.7912068.9711724.1411379.3111034.4810689.6610344.83
+   10000 9915.25 9830.51 9745.76 9661.02 9576.27 9491.53 9406.78 9322.03 9237.29
+ 9152.54  9067.8 8983.05 8898.31 8813.56 8728.81 8644.07 8559.32 8474.58 8389.83
+ 8305.09 8220.34 8135.59 8050.85  7966.1 7881.36 7796.61 7711.86 7627.12 7542.37
+ 7457.63 7372.88 7288.14 7203.39 7118.64  7033.9 6949.15 6864.41 6779.66 6694.92
+ 6610.17 6525.42 6440.68 6355.93 6271.19 6186.44  6101.7 6016.95  5932.2 5847.46
+ 5762.71 5677.97 5593.22 5508.48 5423.73 5338.98 5254.24 5169.49 5084.75    5000
+Stage Hydrograph TW Check=0
+Flow Hydrograph QMult= 0.5 
+Flow Hydrograph Slope= 0.0005 
+DSS Path=
+Use DSS=False
+Use Fixed Start Time=False
+Fixed Start Date/Time=,
+Is Critical Boundary=False
+Critical Boundary Flow=
+Boundary Location=                ,                ,        ,        ,Sayers Dam      ,                ,                ,                                ,                                
+Gate Name=Gate #1     
+Gate DSS Path=
+Gate Use DSS=False
+Gate Time Interval=1HOUR
+Gate Use Fixed Start Time=False
+Gate Fixed Start Date/Time=,
+Gate Openings= 100 
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DS2NormalDepth                  ,                                
+Friction Slope=0.0003,0
+Met Point Raster Parameters=,,,,
+Precipitation Mode=Disable
+Wind Mode=No Wind Forces
+Air Density Mode=
+Wave Mode=No Wave Forcing
+Met BC=Precipitation|Expanded View=0
+Met BC=Precipitation|Point Interpolation=Nearest
+Met BC=Precipitation|Gridded Source=DSS
+Met BC=Precipitation|Gridded Interpolation=
+Met BC=Evapotranspiration|Expanded View=0
+Met BC=Evapotranspiration|Point Interpolation=Nearest
+Met BC=Evapotranspiration|Gridded Source=DSS
+Met BC=Evapotranspiration|Gridded Interpolation=
+Met BC=Wind Speed|Expanded View=0
+Met BC=Wind Speed|Constant Units=ft/s
+Met BC=Wind Speed|Point Interpolation=Nearest
+Met BC=Wind Speed|Gridded Source=DSS
+Met BC=Wind Speed|Gridded Interpolation=
+Met BC=Wind Direction|Expanded View=0
+Met BC=Wind Direction|Point Interpolation=Nearest
+Met BC=Wind Direction|Gridded Source=DSS
+Met BC=Wind Direction|Gridded Interpolation=
+Met BC=Wind Velocity X|Expanded View=0
+Met BC=Wind Velocity X|Constant Units=ft/s
+Met BC=Wind Velocity X|Point Interpolation=Nearest
+Met BC=Wind Velocity X|Gridded Source=DSS
+Met BC=Wind Velocity X|Gridded Interpolation=
+Met BC=Wind Velocity Y|Expanded View=0
+Met BC=Wind Velocity Y|Constant Units=ft/s
+Met BC=Wind Velocity Y|Point Interpolation=Nearest
+Met BC=Wind Velocity Y|Gridded Source=DSS
+Met BC=Wind Velocity Y|Gridded Interpolation=
+Met BC=Wave Forcing X|Expanded View=0
+Met BC=Wave Forcing X|Point Interpolation=Nearest
+Met BC=Wave Forcing X|Gridded Source=DSS
+Met BC=Wave Forcing X|Gridded Interpolation=
+Met BC=Wave Forcing Y|Expanded View=0
+Met BC=Wave Forcing Y|Point Interpolation=Nearest
+Met BC=Wave Forcing Y|Gridded Source=DSS
+Met BC=Wave Forcing Y|Gridded Interpolation=
+Met BC=Air Density|Mode=Constant
+Met BC=Air Density|Expanded View=0
+Met BC=Air Density|Constant Value=1.225
+Met BC=Air Density|Constant Units=kg/m3
+Met BC=Air Density|Point Interpolation=Nearest
+Met BC=Air Density|Gridded Source=DSS
+Met BC=Air Density|Gridded Interpolation=
+Met BC=Air Temperature|Expanded View=0
+Met BC=Air Temperature|Point Interpolation=Nearest
+Met BC=Air Temperature|Gridded Source=DSS
+Met BC=Air Temperature|Gridded Interpolation=
+Met BC=Humidity|Expanded View=0
+Met BC=Humidity|Point Interpolation=Nearest
+Met BC=Humidity|Gridded Source=DSS
+Met BC=Humidity|Gridded Interpolation=
+Met BC=Air Pressure|Mode=Constant
+Met BC=Air Pressure|Expanded View=0
+Met BC=Air Pressure|Constant Value=1013.2
+Met BC=Air Pressure|Constant Units=mb
+Met BC=Air Pressure|Point Interpolation=Nearest
+Met BC=Air Pressure|Gridded Source=DSS
+Met BC=Air Pressure|Gridded Interpolation=
+Non-Newtonian Method= 0 , 
+Non-Newtonian Constant Vol Conc=0
+Non-Newtonian Yield Method= 0 , 
+Non-Newtonian Yield Coef=0, 0
+User Yeild=   0
+Non-Newtonian Sed Visc= 0 , 
+Non-Newtonian Obrian B=0
+User Viscosity=0
+User Viscosity Ratio=0
+Herschel-Bulkley Coef=0, 0
+Clastic Method= 0 , 
+Coulomb Phi=0
+Voellmy X=0
+Non-Newtonian Hindered FV= 0 
+Non-Newtonian FV K=0
+Non-Newtonian ds=0
+Non-Newtonian Max Cv=0
+Non-Newtonian Bulking Method= 0 , 
+Non-Newtonian High C Transport= 0 , 
+Lava Activation= 0 
+Temperature=1300,15,,15,14,980
+Heat Ballance=1,1200,0.5,1,70,0.95
+Viscosity=1000,,,
+Yield Strength=,,,
+Consistency Factor=,,,
+Profile Coefficient=4,1.3,
+Lava Param=,2500,
+
+
+
+
+'''
+
+
+
+
 
 ==================================================
 
@@ -4450,7 +6458,9 @@ from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
-from .RasGpt import RasGpt
+from .RasGpt import RasGpt  
+from .RasToGo import RasToGo
+from .HdfFluvialPluvial import HdfFluvialPluvial
 
 # Import the Hdf* classes
 from .HdfBase import HdfBase
@@ -4463,6 +6473,8 @@ from .HdfResultsXsec import HdfResultsXsec
 from .HdfStruc import HdfStruc
 from .HdfUtils import HdfUtils
 from .HdfXsec import HdfXsec
+from .HdfPump import HdfPump
+from .HdfPipe import HdfPipe
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
@@ -4476,6 +6488,8 @@ __all__ = [
     "HdfStruc",
     "HdfUtils",
     "HdfXsec",
+    "HdfPump",
+    "HdfPipe",
     "standardize_input",
     "ras",
     "init_ras_project",

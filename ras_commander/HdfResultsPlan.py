@@ -396,3 +396,6 @@ class HdfResultsPlan:
         except Exception as e:
             logger.error(f"Error in reference_summary_output: {str(e)}")
             return pd.DataFrame()  # Return an empty DataFrame on general error
+
+
+

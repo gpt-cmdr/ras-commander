@@ -92,6 +92,8 @@ pip install ras-commander
 15. **HdfStruc**: Manages structure data in HDF files.
 16. **HdfUtils**: Provides utility functions for HDF file operations.
 17. **HdfXsec**: Handles cross-section data in HDF files.
+18. **HdfPipe**: Handles pipe network related data in HDF files.
+19. **HdfPump**: Manages pump station related data in HDF files.
 
 ## Best Practices
 
@@ -348,6 +350,82 @@ RAS Commander provides extensive support for working with HDF files through vari
    ```
 
 These classes provide a high-level interface to HDF data, making it easier to extract and analyze HEC-RAS results programmatically.
+
+
+### Working with Pipe Networks and Pump Stations
+
+
+RAS Commander provides specialized classes for handling pipe networks and pump stations data from HEC-RAS HDF files.
+
+1. **Pipe Network Operations**:
+   Use `HdfPipe` to extract and analyze pipe network data:
+
+   ```python
+   from ras_commander import HdfPipe
+   from pathlib import Path
+
+   hdf_path = Path("path/to/your/hdf_file.hdf")
+
+   # Extract pipe conduit data
+   pipe_conduits = HdfPipe.get_pipe_conduits(hdf_path)
+   print(pipe_conduits)
+
+   # Extract pipe node data
+   pipe_nodes = HdfPipe.get_pipe_nodes(hdf_path)
+   print(pipe_nodes)
+
+   # Get pipe network timeseries data
+   water_surface = HdfPipe.get_pipe_network_timeseries(hdf_path, "Cell Water Surface")
+   print(water_surface)
+
+   # Get pipe network summary
+   summary = HdfPipe.get_pipe_network_summary(hdf_path)
+   print(summary)
+
+   # Get pipe profile for a specific conduit
+   profile = HdfPipe.get_pipe_profile(hdf_path, conduit_id=0)
+   print(profile)
+   ```
+
+
+2. **Pump Station Operations**:
+
+
+   Use `HdfPump` to work with pump station data:
+
+   ```python
+   from ras_commander import HdfPump
+   from pathlib import Path
+
+   hdf_path = Path("path/to/your/hdf_file.hdf")
+
+   # Extract pump station data
+   pump_stations = HdfPump.get_pump_stations(hdf_path)
+   print(pump_stations)
+
+   # Get pump group data
+   pump_groups = HdfPump.get_pump_groups(hdf_path)
+   print(pump_groups)
+
+   # Get pump station timeseries data
+   pump_data = HdfPump.get_pump_station_timeseries(hdf_path, "Pump Station 1")
+   print(pump_data)
+
+   # Get pump station summary
+   summary = HdfPump.get_pump_station_summary(hdf_path)
+   print(summary)
+
+   # Get pump operation data
+   operation_data = HdfPump.get_pump_operation_data(hdf_path, "Pump Station 1")
+   print(operation_data)
+   ```
+
+These classes provide powerful tools for analyzing and visualizing pipe network and pump station data from HEC-RAS simulations. They allow you to easily access geometric information, time series data, and summary statistics for these hydraulic structures.
+
+
+
+
+
 
 ### Performance Optimization
 

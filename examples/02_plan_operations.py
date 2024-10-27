@@ -4,6 +4,7 @@
 
 import sys
 from pathlib import Path
+import datetime
 
 # Add the parent directory to the Python path
 current_file = Path(__file__).resolve()
@@ -42,27 +43,10 @@ Process Flow:
    b. Set the cloned unsteady flow for the new plan.
    c. Update the number of cores to be used for the new plan.
    d. Configure geometry preprocessor options for the new plan.
-6. Plan Computation: Compute the new plan and verify successful execution.
-7. Results Verification: Check the HDF entries to confirm that results were written.
-
-Additional operations that could be demonstrated:
-8. Plan Modification: Update specific parameters in the plan file (e.g., simulation time, output intervals).
-9. Geometry Editing: Modify cross-sections, manning's n values, or other geometry data.
-10. Unsteady Flow Modification: Adjust boundary conditions or initial conditions.
-11. Batch Operations: Perform operations on multiple plans simultaneously.
-12. Error Handling: Demonstrate how to handle and report errors during plan operations.
-13. Results Analysis: Extract and analyze key output values from the computed plan.
+6. Update Simulation Parameters: Modify various simulation parameters in the new plan.
+7. Plan Computation: Compute the new plan and verify successful execution.
+8. Results Verification: Check the HDF entries to confirm that results were written.
 """
-
-# RAS Commander Library Notes:
-# 1. This example uses the default global 'ras' object for simplicity.
-# 2. If you need to work with multiple projects, use separate ras objects for each project.
-# 3. Once you start using non-global ras objects, stick with that approach throughout your script.
-
-# Best Practices:
-# 1. For simple scripts working with a single project, using the global 'ras' object is fine.
-# 2. For complex scripts or when working with multiple projects, create and use separate ras objects.
-# 3. Be consistent in your approach: don't mix global and non-global ras object usage in the same script.
 
 def main():
     # Initialize the project
@@ -122,9 +106,47 @@ def main():
     print("Step 7: Setting geometry preprocessor options")
     RasPlan.set_geom_preprocessor(plan_path, run_htab=-1, use_ib_tables=-1)
     print(f"Updated geometry preprocessor options for plan {new_plan_number}")
-    
-    # Step 8: Compute the cloned plan
-    print("Step 8: Computing the cloned plan")
+    print()
+
+    # Step 8: Update simulation parameters
+    print("Step 8: Updating simulation parameters")
+
+    # Import the datetime module
+    from datetime import datetime
+
+    # Update simulation date
+    start_date = datetime(2023, 1, 1, 0, 0)
+    end_date = datetime(2023, 1, 5, 23, 59)
+    RasPlan.update_simulation_date(new_plan_number, start_date, end_date)
+
+    # Update plan intervals
+    RasPlan.update_plan_intervals(
+        new_plan_number,
+        computation_interval="1MIN",
+        output_interval="15MIN",
+        mapping_interval="30MIN"
+    )
+
+    # Update run flags
+    RasPlan.update_run_flags(
+        new_plan_number,
+        geometry_preprocessor=True,
+        unsteady_flow_simulation=True,
+        post_processor=True,
+        floodplain_mapping=True
+    )
+
+    # Update plan description
+    new_description = "Updated plan with modified simulation parameters"
+    RasPlan.update_plan_description(new_plan_number, new_description)
+
+
+    print("Updated simulation parameters")
+    print()
+
+
+    # Step 9: Compute the cloned plan
+    print("Step 10: Computing the cloned plan")
     success = RasCmdr.compute_plan(new_plan_number)
     print(f"Computing plan {new_plan_number}")
     if success:
@@ -133,8 +155,8 @@ def main():
         print(f"Failed to compute plan {new_plan_number}")
     print()
     
-    # Step 9: Get the HDF entries for the cloned plan to prove that the results were written
-    print("Step 9: Retrieving HDF entries for the cloned plan")
+    # Step 11: Get the HDF entries for the cloned plan to prove that the results were written
+    print("Step 11: Retrieving HDF entries for the cloned plan")
     # Refresh the plan entries to ensure we have the latest data
     ras.plan_df = ras.get_plan_entries()
     hdf_entries = ras.get_hdf_entries()

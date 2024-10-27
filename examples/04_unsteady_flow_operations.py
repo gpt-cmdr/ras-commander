@@ -30,77 +30,51 @@ ras_examples.extract_project(["Balde Eagle Creek"])
 #### --- START OF SCRIPT --- ####
 
 """
-This script demonstrates the process of initializing a HEC-RAS project and performing various operations on unsteady flow plans using the ras-commander library.
+This script demonstrates the process of initializing a HEC-RAS project and performing various operations on unsteady flow files using the RasUnsteady class.
 
 Process Flow:
 1. Project Initialization: Initialize a HEC-RAS project by specifying the project path and version.
-2. Plan Cloning: Clone an existing plan, creating a new plan entry.
-3. Unsteady Flow Parameter Updates: Modify various unsteady flow parameters in the new plan.
-4. Plan Computation: Compute the new plan and verify successful execution.
-
-Note: This example uses the default global 'ras' object for simplicity. For complex scripts or when working with
-multiple projects, it's recommended to create and use separate ras objects.
+2. Extract Boundary and Tables: Extract boundary conditions and associated tables from an unsteady flow file.
+3. Print Boundaries and Tables: Display the extracted boundary conditions and tables.
+4. Update Unsteady Parameters: Modify parameters in the unsteady flow file.
+5. Verify Changes: Check the updated unsteady flow file to confirm the changes.
 """
 
 def main():
-    # Initialize the project using the global 'ras' object
+    # Initialize the project
     current_dir = Path(__file__).parent
     project_path = current_dir / "example_projects" / "Balde Eagle Creek"
     init_ras_project(project_path, "6.6")
 
-    print("Initial plan files:")
-    print(ras.plan_df)
+    print("Initial unsteady flow files:")
+    print(ras.unsteady_df)
     print()
 
-    # Step 1: Clone a plan
-    print("Step 1: Cloning a plan")
-    new_plan_number = RasPlan.clone_plan("01")
-    print(f"New plan created: {new_plan_number}")
-    print("Updated plan files:")
-    print(ras.plan_df)
+    # Step 1: Extract boundary and tables
+    print("Step 1: Extracting boundary conditions and tables")
+    unsteady_file = RasPlan.get_unsteady_path("02")  # Using unsteady flow file "02"
+    print(f"Unsteady file: {unsteady_file}")
+    boundaries_df = RasUnsteady.extract_boundary_and_tables(unsteady_file)
+    print("Extracted boundary conditions and tables")
+    #print(boundaries_df)
+
+    # Step 2: Print boundaries and tables
+    print("Step 2: Printing boundaries and tables")
+    RasUnsteady.print_boundaries_and_tables(boundaries_df)
     print()
 
-    # Step 2: Get the plan file path
-    plan_path = RasPlan.get_plan_path(new_plan_number)
+    # Step 3: Update unsteady parameters
+    #print("Step 3: Updating unsteady flow parameters")
+    #modifications = {
+    #    "Computation Interval": "30SEC",
+    #    "Output Interval": "10MIN",
+    #    "Mapping Interval": "1HOUR"
+    #}
+    #RasUnsteady.update_unsteady_parameters(unsteady_file, modifications)
+    #print("Updated unsteady flow parameters")
+    #print()
 
-    # Step 3: Update unsteady flow parameters individually
-    print("Step 3: Updating unsteady flow parameters individually")
-    RasUnsteady.update_unsteady_parameters(plan_path, {"Simulation Date": "01JAN2023,0000,05JAN2023,2400"})
-    RasUnsteady.update_unsteady_parameters(plan_path, {"Computation Interval": "1MIN"})
-    RasUnsteady.update_unsteady_parameters(plan_path, {"Output Interval": "15MIN"})
-    print("Updated parameters individually")
-    print()
-
-    # Step 4: Update unsteady flow parameters in batch
-    print("Step 4: Updating unsteady flow parameters in batch")
-    batch_modifications = {
-        "Mapping Interval": "30MIN",
-        "Hydrograph Output Interval": "1HOUR",
-        "Detailed Output Interval": "1HOUR"
-    }
-    RasUnsteady.update_unsteady_parameters(plan_path, batch_modifications)
-    print("Updated parameters in batch")
-    print()
-
-    # Step 5: Verify changes
-    print("Step 5: Verifying changes")
-    with open(plan_path, 'r') as f:
-        content = f.read()
-        for param in ["Simulation Date", "Computation Interval", "Output Interval", 
-                      "Mapping Interval", "Hydrograph Output Interval", "Detailed Output Interval"]:
-            for line in content.split('\n'):
-                if line.startswith(param):
-                    print(f"Updated {line}")
-                    break
-    print()
-
-    # Step 6: Compute the updated plan
-    print("Step 6: Computing the updated plan")
-    success = RasCmdr.compute_plan(new_plan_number)
-    if success:
-        print(f"Plan {new_plan_number} computed successfully")
-    else:
-        print(f"Failed to compute plan {new_plan_number}")
-
+    
 if __name__ == "__main__":
     main()
+

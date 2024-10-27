@@ -34,6 +34,8 @@ from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
 from pathlib import Path
 from typing import Union, Any
+from datetime import datetime
+
 import logging
 import re
 from .LoggingConfig import get_logger
@@ -216,6 +218,8 @@ class RasPlan:
     @staticmethod
     def _update_unsteady_in_file(lines, new_unsteady_flow_number):
         return [f"Unsteady File=u{new_unsteady_flow_number}\n" if line.startswith("Unsteady File=u") else line for line in lines]
+    
+    
     @staticmethod
     @log_call
     def set_num_cores(plan_number, num_cores, ras_object=None):
@@ -870,47 +874,174 @@ class RasPlan:
                 logger.error(f"Key '{key}' not found in the plan file.")
                 return None
 
+
+#  NEW FUNCTIONS THAT NEED TESTING AND EXAMPLES
+
+
     @staticmethod
     @log_call
-    def update_plan_value(
+    def update_run_flags(
         plan_number_or_path: Union[str, Path],
-        key: str,
-        value: Any,
+        geometry_preprocessor: bool = None,
+        unsteady_flow_simulation: bool = None,
+        run_sediment: bool = None,
+        post_processor: bool = None,
+        floodplain_mapping: bool = None,
         ras_object=None
     ) -> None:
         """
-        Update a specific key-value pair in a HEC-RAS plan file.
+        Update the run flags in a HEC-RAS plan file.
 
         Parameters:
         plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
-        key (str): The key to update in the plan file
-        value (Any): The new value to set for the key
+        geometry_preprocessor (bool, optional): Flag for Geometry Preprocessor
+        unsteady_flow_simulation (bool, optional): Flag for Unsteady Flow Simulation
+        run_sediment (bool, optional): Flag for run_sediment
+        post_processor (bool, optional): Flag for Post Processor
+        floodplain_mapping (bool, optional): Flag for Floodplain Mapping
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Raises:
         ValueError: If the plan file is not found
         IOError: If there's an error reading or writing the plan file
 
-        Note: See the docstring of get_plan_value for a full list of available keys and their types.
-
         Example:
-        >>> RasPlan.update_plan_value("01", "computation_interval", "10SEC")
-        >>> RasPlan.update_plan_value("/path/to/plan.p01", "run_htab", 1)
-        >>> RasPlan.update_plan_value("01", "run_rasmapper", 0)  # Turn on Floodplain Mapping
+        >>> RasPlan.update_run_flags("01", geometry_preprocessor=True, unsteady_flow_simulation=True, run_sediment=False, post_processor=True, floodplain_mapping=False)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        supported_plan_keys = {
-            'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
-            'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
-            'Run HTAB', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
-            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET Use Existing IB Tables',
-            'UNET 1D Methodology', 'UNET D2 Solver Type', 'UNET D2 Name', 'Run RASMapper'
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object=ras_obj)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        flag_mapping = {
+            'geometry_preprocessor': ('Run HTab', geometry_preprocessor),
+            'unsteady_flow_simulation': ('Run UNet', unsteady_flow_simulation),
+            'run_sediment': ('Run run_sediment', run_sediment),
+            'post_processor': ('Run PostProcess', post_processor),
+            'floodplain_mapping': ('Run RASMapper', floodplain_mapping)
         }
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            for i, line in enumerate(lines):
+                for key, (file_key, value) in flag_mapping.items():
+                    if value is not None and line.strip().startswith(file_key):
+                        lines[i] = f"{file_key}= {1 if value else 0}\n"
+
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"Successfully updated run flags in plan file: {plan_file_path}")
+
+        except IOError as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error updating run flags in plan file {plan_file_path}: {e}")
+            raise
+
+
+
+    @staticmethod
+    @log_call
+    def update_plan_intervals(
+        plan_number_or_path: Union[str, Path],
+        computation_interval: Optional[str] = None,
+        output_interval: Optional[str] = None,
+        instantaneous_interval: Optional[str] = None,
+        mapping_interval: Optional[str] = None,
+        ras_object=None
+    ) -> None:
+        """
+        Update the computation and output intervals in a HEC-RAS plan file.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        computation_interval (Optional[str]): The new computation interval. Valid entries include:
+            '1SEC', '2SEC', '3SEC', '4SEC', '5SEC', '6SEC', '10SEC', '15SEC', '20SEC', '30SEC',
+            '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '15MIN', '20MIN', '30MIN',
+            '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR', '1DAY'
+        output_interval (Optional[str]): The new output interval. Valid entries are the same as computation_interval.
+        instantaneous_interval (Optional[str]): The new instantaneous interval. Valid entries are the same as computation_interval.
+        mapping_interval (Optional[str]): The new mapping interval. Valid entries are the same as computation_interval.
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Raises:
+        ValueError: If the plan file is not found or if an invalid interval is provided
+        IOError: If there's an error reading or writing the plan file
+
+        Note: This function does not check if the intervals are equal divisors. Ensure you use valid values from HEC-RAS.
+
+        Example:
+        >>> RasPlan.update_plan_intervals("01", computation_interval="5SEC", output_interval="1MIN", instantaneous_interval="1HOUR", mapping_interval="5MIN")
+        >>> RasPlan.update_plan_intervals("/path/to/plan.p01", computation_interval="10SEC", output_interval="30SEC")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object=ras_obj)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        valid_intervals = [
+            '1SEC', '2SEC', '3SEC', '4SEC', '5SEC', '6SEC', '10SEC', '15SEC', '20SEC', '30SEC',
+            '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '15MIN', '20MIN', '30MIN',
+            '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR', '1DAY'
+        ]
+
+        interval_mapping = {
+            'Computation Interval': computation_interval,
+            'Output Interval': output_interval,
+            'Instantaneous Interval': instantaneous_interval,
+            'Mapping Interval': mapping_interval
+        }
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            for i, line in enumerate(lines):
+                for key, value in interval_mapping.items():
+                    if value is not None:
+                        if value.upper() not in valid_intervals:
+                            raise ValueError(f"Invalid {key}: {value}. Must be one of {valid_intervals}")
+                        if line.strip().startswith(key):
+                            lines[i] = f"{key}={value.upper()}\n"
+
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"Successfully updated intervals in plan file: {plan_file_path}")
+
+        except IOError as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error updating intervals in plan file {plan_file_path}: {e}")
+            raise
+
+
+    @log_call
+    def update_plan_description(plan_number_or_path: Union[str, Path], description: str, ras_object: Optional['RasPrj'] = None) -> None:
+        """
+        Update the description in the plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            description (str): The new description to be written to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from or writing to the plan file.
+        """
         logger = logging.getLogger(__name__)
-        if key not in supported_plan_keys:
-            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(supported_plan_keys)}")
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -925,43 +1056,165 @@ class RasPlan:
             logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
 
-        # Special handling for description
-        if key == 'description':
-            description_start = None
-            description_end = None
-            for i, line in enumerate(lines):
-                if line.strip() == 'Begin DESCRIPTION':
-                    description_start = i
-                elif line.strip() == 'END DESCRIPTION':
-                    description_end = i
-                    break
-            if description_start is not None and description_end is not None:
-                lines[description_start+1:description_end] = [f"{value}\n"]
+        start_index = None
+        end_index = None
+        comp_interval_index = None
+        for i, line in enumerate(lines):
+            if line.strip() == "BEGIN DESCRIPTION:":
+                start_index = i
+            elif line.strip() == "END DESCRIPTION:":
+                end_index = i
+            elif line.strip().startswith("Computation Interval="):
+                comp_interval_index = i
+
+        if start_index is not None and end_index is not None:
+            # Description exists, update it
+            new_lines = lines[:start_index + 1]
+            if description:
+                new_lines.extend(description.split('\n'))
             else:
-                lines.append(f"Begin DESCRIPTION\n{value}\nEND DESCRIPTION\n")
+                new_lines.append('\n')
+            new_lines.extend(lines[end_index:])
         else:
-            # For other keys
-            pattern = f"{key.replace('_', ' ').title()}="
-            updated = False
-            for i, line in enumerate(lines):
-                if line.startswith(pattern):
-                    lines[i] = f"{pattern}{value}\n"
-                    updated = True
-                    break
-            if not updated:
-                logger.error(f"Key '{key}' not found in the plan file.")
-                return
+            # Description doesn't exist, insert before Computation Interval
+            if comp_interval_index is None:
+                logger.warning("Neither description tags nor Computation Interval found in plan file. Appending to end of file.")
+                comp_interval_index = len(lines)
+            
+            new_lines = lines[:comp_interval_index]
+            new_lines.append("BEGIN DESCRIPTION:\n")
+            if description:
+                new_lines.extend(f"{line}\n" for line in description.split('\n'))
+            else:
+                new_lines.append('\n')
+            new_lines.append("END DESCRIPTION:\n")
+            new_lines.extend(lines[comp_interval_index:])
 
         try:
             with open(plan_file_path, 'w') as file:
-                file.writelines(lines)
-            logger.info(f"Updated {key} in plan file: {plan_file_path}")
+                file.writelines(new_lines)
+            logger.info(f"Updated description in plan file: {plan_file_path}")
         except IOError as e:
             logger.error(f"Error writing to plan file {plan_file_path}: {e}")
             raise
 
         # Refresh RasPrj dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()
+            ras_object.geom_df = ras_object.get_geom_entries()
+            ras_object.flow_df = ras_object.get_flow_entries()
+            ras_object.unsteady_df = ras_object.get_unsteady_entries()
+            
+    @staticmethod
+    @log_call
+    def read_plan_description(plan_number_or_path: Union[str, Path], ras_object: Optional['RasPrj'] = None) -> str:
+        """
+        Read the description from the plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            str: The description from the plan file.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from the plan file.
+        """
+        logger = logging.getLogger(__name__)
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+        except IOError as e:
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        description_lines = []
+        in_description = False
+        description_found = False
+        for line in lines:
+            if line.strip() == "BEGIN DESCRIPTION:":
+                in_description = True
+                description_found = True
+            elif line.strip() == "END DESCRIPTION:":
+                break
+            elif in_description:
+                description_lines.append(line.strip())
+
+        if not description_found:
+            logger.warning(f"No description found in plan file: {plan_file_path}")
+            return ""
+
+        description = '\n'.join(description_lines)
+        logger.info(f"Read description from plan file: {plan_file_path}")
+        return description
+
+
+
+
+    @staticmethod
+    @log_call
+    def update_simulation_date(plan_number_or_path: Union[str, Path], start_date: datetime, end_date: datetime, ras_object: Optional['RasPrj'] = None) -> None:
+        """
+        Update the simulation date for a given plan.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            start_date (datetime): The start date and time for the simulation.
+            end_date (datetime): The end date and time for the simulation.
+            ras_object (Optional['RasPrj']): The RAS project object. Defaults to None.
+
+        Raises:
+            ValueError: If the plan file is not found or if there's an error updating the file.
+        """
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        # Format the dates
+        formatted_date = f"{start_date.strftime('%d%b%Y').upper()},{start_date.strftime('%H%M')},{end_date.strftime('%d%b%Y').upper()},{end_date.strftime('%H%M')}"
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Update the Simulation Date line
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith("Simulation Date="):
+                    lines[i] = f"Simulation Date={formatted_date}\n"
+                    updated = True
+                    break
+
+            # If Simulation Date line not found, add it at the end
+            if not updated:
+                lines.append(f"Simulation Date={formatted_date}\n")
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Updated simulation date in plan file: {plan_file_path}")
+
+        except IOError as e:
+            logger.error(f"Error updating simulation date in plan file {plan_file_path}: {e}")
+            raise ValueError(f"Error updating simulation date: {e}")
+
+        # Refresh RasPrj dataframes
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()
+            ras_object.unsteady_df = ras_object.get_unsteady_entries()
+

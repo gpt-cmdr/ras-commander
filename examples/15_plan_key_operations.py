@@ -4,6 +4,7 @@
 
 import sys
 from pathlib import Path
+from datetime import datetime, timedelta
 
 # Add the parent directory to the Python path
 current_file = Path(__file__).resolve()
@@ -35,48 +36,72 @@ def main():
     project_path = current_dir / "example_projects" / "Balde Eagle Creek"
     ras_obj = init_ras_project(project_path, "6.6")
 
-    print("Example 15: Getting and Setting Plan Keys")
+    print("Example 15: Plan Key Operations")
     print("------------------------------------------")
 
     # Get the first plan number
     plan_number = ras_obj.plan_df['plan_number'].iloc[0]
     print(f"Working with Plan: {plan_number}")
 
-    # 1. Get and print multiple plan values
+    # 1. Get and print initial plan values
     keys_to_check = ['Computation Interval', 'Simulation Date', 'Short Identifier', 'UNET D1 Cores']
-    print("\n1. Current Plan Values:")
+    print("\n1. Initial Plan Values:")
     for key in keys_to_check:
         value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
         print(f"  {key}: {value}")
 
-    # 2. Update plan values
-    print("\n2. Updating Plan Values:")
-    updates = {
-        'Computation Interval': '30SEC',
-        'Short Identifier': 'Updated_Plan',
-        'UNET D1 Cores': '4'
-    }
-    for key, value in updates.items():
-        RasPlan.update_plan_value(plan_number, key, value, ras_object=ras_obj)
-        print(f"  Updated {key} to: {value}")
+    # 2. Update run flags
+    print("\n2. Updating Run Flags:")
+    RasPlan.update_run_flags(
+        plan_number,
+        geometry_preprocessor=True,
+        unsteady_flow_simulation=True,
+        run_sediment=False,
+        post_processor=True,
+        floodplain_mapping=False,
+        ras_object=ras_obj
+    )
+    print("  Run flags updated.")
 
-    # 3. Verify updates
-    print("\n3. Verifying Updates:")
-    for key in updates.keys():
-        new_value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
-        print(f"  {key}: {new_value}")
+    # 3. Update plan intervals
+    print("\n3. Updating Plan Intervals:")
+    RasPlan.update_plan_intervals(
+        plan_number,
+        computation_interval="5SEC",
+        output_interval="1MIN",
+        instantaneous_interval="5MIN",
+        mapping_interval="15MIN",
+        ras_object=ras_obj
+    )
+    print("  Plan intervals updated.")
 
-    # 4. Get description
-    print("\n4. Plan Description:")
-    current_description = RasPlan.get_plan_value(plan_number, 'Description', ras_object=ras_obj)
-    print(f"  Current description: {current_description}")
-    # Updating descriptions is a multi-line operation that will need additional logic in update_plan_value
+    # 4. Update plan description
+    
+    print("\n4. Current Plan Description:")
+    current_description = RasPlan.read_plan_description(plan_number, ras_object=ras_obj)
+    print(f"  {current_description}")    
+    print("\n4. Updating Plan Description:")
+    new_description = "This is an updated plan description for testing purposes."
+    RasPlan.update_plan_description(plan_number, new_description, ras_object=ras_obj)
+    print("  Plan description updated.")
 
-    # 5. Attempt to get and set an invalid key
-    print("\n5. Handling Invalid Keys:")
-    RasPlan.get_plan_value(plan_number, 'Invalid Key', ras_object=ras_obj)
+    # 5. Update simulation date
+    print("\n5. Updating Simulation Date:")
+    start_date = datetime.now()
+    end_date = start_date + timedelta(days=1)
+    RasPlan.update_simulation_date(plan_number, start_date, end_date, ras_object=ras_obj)
+    print(f"  Simulation date updated to: {start_date} - {end_date}")
 
-    RasPlan.update_plan_value(plan_number, 'Invalid Key', 'some_value', ras_object=ras_obj)
+    # 6. Get and print updated plan values
+    print("\n6. Updated Plan Values:")
+    for key in keys_to_check:
+        value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)
+        print(f"  {key}: {value}")
+
+    # 7. Get updated description
+    print("\n7. Updated Plan Description:")
+    updated_description = RasPlan.read_plan_description(plan_number, ras_object=ras_obj)
+    print(f"  {updated_description}")
 
     print("\nExample 15 completed.")
 

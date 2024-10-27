@@ -8,19 +8,20 @@ released under MIT license and Copyright (c) 2024 fema-ffrd
 The file has been forked and modified for use in RAS Commander.
 """
 
+from pathlib import Path
+from typing import Union, Optional, List, Dict, Tuple
+
 import h5py
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Union, Optional, List
+import xarray as xr
+
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
-import xarray as xr
+from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
-
 
 class HdfResultsXsec:
     """
@@ -36,202 +37,236 @@ class HdfResultsXsec:
     Attributes:
         None
 
-    Methods:
-        steady_profile_xs_output: Extract steady profile cross-section output for a specified variable.
-        cross_sections_wsel: Get water surface elevation data for cross-sections.
-        cross_sections_flow: Get flow data for cross-sections.
-        cross_sections_energy_grade: Get energy grade data for cross-sections.
-        cross_sections_additional_enc_station_left: Get left encroachment station data for cross-sections.
-        cross_sections_additional_enc_station_right: Get right encroachment station data for cross-sections.
-        cross_sections_additional_area_total: Get total ineffective area data for cross-sections.
-        cross_sections_additional_velocity_total: Get total velocity data for cross-sections.
+    
     """
 
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def steady_profile_xs_output(hdf_path: Path, var: str, round_to: int = 2) -> pd.DataFrame:
-        """
-        Create a DataFrame from steady cross section results based on the specified variable.
 
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-        var : str
-            The variable to extract from the steady cross section results.
-        round_to : int, optional
-            Number of decimal places to round the results to (default is 2).
+
+
+
+
+
+
+
+
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pump_station_profile_output(hdf_path: Path) -> pd.DataFrame:
+        """
+        Extract pump station profile output data from the HDF file.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
 
         Returns:
-        -------
-        pd.DataFrame
-            DataFrame containing the steady cross section results for the specified variable.
+            pd.DataFrame: DataFrame containing pump station profile output data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
         """
-        XS_STEADY_OUTPUT_ADDITIONAL = [
-            "Additional Encroachment Station Left",
-            "Additional Encroachment Station Right",
-            "Additional Area Ineffective Total",
-            "Additional Velocity Total",
-        ]
-                
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                # Determine the correct path based on the variable
-                if var in XS_STEADY_OUTPUT_ADDITIONAL:
-                    path = f"/Results/Steady/Cross Sections/Additional Output/{var}"
-                else:
-                    path = f"/Results/Steady/Cross Sections/{var}"
-                
-                # Check if the path exists in the HDF file
-                if path not in hdf_file:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract profile output data
+                profile_path = "/Results/Unsteady/Output/Output Blocks/DSS Profile Output/Unsteady Time Series/Pumping Stations"
+                if profile_path not in hdf:
+                    logger.warning("Pump Station profile output data not found in HDF file")
                     return pd.DataFrame()
 
-                # Get the profile names
-                profiles = HdfBase.steady_flow_names(hdf_path)
-                
-                # Extract the steady data
-                steady_data = hdf_file[path]
-                
-                # Create a DataFrame with profiles as index
-                df = pd.DataFrame(steady_data, index=profiles)
-                
-                # Transpose the DataFrame and round values
-                df_t = df.T.copy()
-                for p in profiles:
-                    df_t[p] = df_t[p].apply(lambda x: round(x, round_to))
+                # Initialize an empty list to store data from all pump stations
+                all_data = []
 
-                return df_t
+                # Iterate through all pump stations
+                for station in hdf[profile_path].keys():
+                    station_path = f"{profile_path}/{station}/Structure Variables"
+                    
+                    data = hdf[station_path][()]
+                    
+                    # Create a DataFrame for this pump station
+                    df = pd.DataFrame(data, columns=['Flow', 'Stage HW', 'Stage TW', 'Pump Station', 'Pumps on'])
+                    df['Station'] = station
+                    
+                    all_data.append(df)
+
+                # Concatenate all DataFrames
+                result_df = pd.concat(all_data, ignore_index=True)
+
+                # Add time information
+                time = HdfBase._get_unsteady_datetimes(hdf)
+                result_df['Time'] = [time[i] for i in result_df.index]
+
+                return result_df
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
         except Exception as e:
-            HdfUtils.logger.error(f"Failed to get steady profile cross section output: {str(e)}")
-            return pd.DataFrame()
+            logger.error(f"Error extracting pump station profile output data: {e}")
+            raise
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
-    def cross_sections_wsel(hdf_path: Path) -> pd.DataFrame:
+    def get_pump_station_summary(hdf_path: Path) -> pd.DataFrame:
         """
-        Return the water surface elevation information for each 1D Cross Section.
+        Extract summary data for pump stations from the HDF file.
 
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
+        Args:
+            hdf_path (Path): Path to the HDF file.
 
         Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the water surface elevations for each cross section and event.
+            pd.DataFrame: DataFrame containing pump station summary data.
+
+        Raises:
+            KeyError: If the required datasets are not found in the HDF file.
         """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Water Surface")
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Extract summary data
+                summary_path = "/Results/Unsteady/Summary/Pump Station"
+                if summary_path not in hdf:
+                    logger.warning("Pump Station summary data not found in HDF file")
+                    return pd.DataFrame()
+
+                summary_data = hdf[summary_path][()]
+                
+                # Create DataFrame
+                df = pd.DataFrame(summary_data)
+
+                # Convert column names
+                df.columns = [col.decode('utf-8') if isinstance(col, bytes) else col for col in df.columns]
+
+                # Convert byte string values to regular strings
+                for col in df.columns:
+                    if df[col].dtype == object:
+                        df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+
+                return df
+
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting pump station summary data: {e}")
+            raise
+
+
+
+
+# Tested functions from AWS webinar where the code was developed
+# Need to add examples
+
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
-    def cross_sections_flow(hdf_path: Path) -> pd.DataFrame:
+    def extract_cross_section_results(hdf_path: Path) -> xr.Dataset:
         """
-        Return the Flow information for each 1D Cross Section.
+        Extract Water Surface, Velocity Total, Velocity Channel, Flow Lateral, and Flow data from HEC-RAS HDF file.
+        Includes Cross Section Only and Cross Section Attributes as coordinates in the xarray.Dataset.
+        Also calculates maximum values for key parameters.
 
         Parameters:
-        ----------
+        -----------
         hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
+            Path to the HEC-RAS results HDF file
 
         Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the flow for each cross section and event.
+        --------
+        xr.Dataset
+            Xarray Dataset containing the extracted cross-section results with appropriate coordinates and attributes.
+            Includes maximum values for Water Surface, Flow, Channel Velocity, Total Velocity, and Lateral Flow.
         """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Flow")
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Define base paths
+                base_output_path = "/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/"
+                time_stamp_path = "/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time Date Stamp (ms)"
+                
+                # Extract Cross Section Attributes
+                attrs_dataset = hdf_file[f"{base_output_path}Cross Section Attributes"][:]
+                rivers = [attr['River'].decode('utf-8').strip() for attr in attrs_dataset]
+                reaches = [attr['Reach'].decode('utf-8').strip() for attr in attrs_dataset]
+                stations = [attr['Station'].decode('utf-8').strip() for attr in attrs_dataset]
+                names = [attr['Name'].decode('utf-8').strip() for attr in attrs_dataset]
+                
+                # Extract Cross Section Only (Unique Names)
+                cross_section_only_dataset = hdf_file[f"{base_output_path}Cross Section Only"][:]
+                cross_section_names = [cs.decode('utf-8').strip() for cs in cross_section_only_dataset]
+                
+                # Extract Time Stamps and convert to datetime
+                time_stamps = hdf_file[time_stamp_path][:]
+                if any(isinstance(ts, bytes) for ts in time_stamps):
+                    time_stamps = [ts.decode('utf-8') for ts in time_stamps]
+                # Convert RAS format timestamps to datetime
+                times = pd.to_datetime(time_stamps, format='%d%b%Y %H:%M:%S:%f')
+                
+                # Extract Required Datasets
+                water_surface = hdf_file[f"{base_output_path}Water Surface"][:]
+                velocity_total = hdf_file[f"{base_output_path}Velocity Total"][:]
+                velocity_channel = hdf_file[f"{base_output_path}Velocity Channel"][:]
+                flow_lateral = hdf_file[f"{base_output_path}Flow Lateral"][:]
+                flow = hdf_file[f"{base_output_path}Flow"][:]
+                
+                # Calculate maximum values along time axis
+                max_water_surface = np.max(water_surface, axis=0)
+                max_flow = np.max(flow, axis=0)
+                max_velocity_channel = np.max(velocity_channel, axis=0)
+                max_velocity_total = np.max(velocity_total, axis=0)
+                max_flow_lateral = np.max(flow_lateral, axis=0)
+                
+                # Create Xarray Dataset
+                ds = xr.Dataset(
+                    {
+                        'Water_Surface': (['time', 'cross_section'], water_surface),
+                        'Velocity_Total': (['time', 'cross_section'], velocity_total),
+                        'Velocity_Channel': (['time', 'cross_section'], velocity_channel),
+                        'Flow_Lateral': (['time', 'cross_section'], flow_lateral),
+                        'Flow': (['time', 'cross_section'], flow),
+                    },
+                    coords={
+                        'time': times,
+                        'cross_section': cross_section_names,
+                        'River': ('cross_section', rivers),
+                        'Reach': ('cross_section', reaches),
+                        'Station': ('cross_section', stations),
+                        'Name': ('cross_section', names),
+                        'Maximum_Water_Surface': ('cross_section', max_water_surface),
+                        'Maximum_Flow': ('cross_section', max_flow),
+                        'Maximum_Channel_Velocity': ('cross_section', max_velocity_channel),
+                        'Maximum_Velocity_Total': ('cross_section', max_velocity_total),
+                        'Maximum_Flow_Lateral': ('cross_section', max_flow_lateral)
+                    },
+                    attrs={
+                        'description': 'Cross-section results extracted from HEC-RAS HDF file',
+                        'source_file': str(hdf_path)
+                    }
+                )
+                
+                return ds
 
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_energy_grade(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the energy grade information for each 1D Cross Section.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the energy grade for each cross section and event.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Energy Grade")
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_enc_station_left(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the left side encroachment information for a floodway plan hdf.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the cross sections left side encroachment stations.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(
-            hdf_path, "Encroachment Station Left"
-        )
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_enc_station_right(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the right side encroachment information for a floodway plan hdf.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the cross sections right side encroachment stations.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(
-            hdf_path, "Encroachment Station Right"
-        )
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_area_total(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the 1D cross section area for each profile.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the wet area inside the cross sections.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Area Ineffective Total")
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def cross_sections_additional_velocity_total(hdf_path: Path) -> pd.DataFrame:
-        """
-        Return the 1D cross section velocity for each profile.
-
-        Parameters:
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS plan HDF file.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A DataFrame containing the velocity inside the cross sections.
-        """
-        return HdfResultsXsec.steady_profile_xs_output(hdf_path, "Velocity Total")
+        except KeyError as e:
+            logger.error(f"Required dataset not found in HDF file: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting cross section results: {e}")
+            raise
 

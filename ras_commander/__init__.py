@@ -19,7 +19,9 @@ from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
-from .RasGpt import RasGpt
+from .RasGpt import RasGpt  
+from .RasToGo import RasToGo
+from .HdfFluvialPluvial import HdfFluvialPluvial
 
 # Import the Hdf* classes
 from .HdfBase import HdfBase
@@ -32,6 +34,8 @@ from .HdfResultsXsec import HdfResultsXsec
 from .HdfStruc import HdfStruc
 from .HdfUtils import HdfUtils
 from .HdfXsec import HdfXsec
+from .HdfPump import HdfPump
+from .HdfPipe import HdfPipe
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
@@ -45,6 +49,8 @@ __all__ = [
     "HdfStruc",
     "HdfUtils",
     "HdfXsec",
+    "HdfPump",
+    "HdfPipe",
     "standardize_input",
     "ras",
     "init_ras_project",

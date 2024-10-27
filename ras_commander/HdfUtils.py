@@ -17,6 +17,7 @@ from typing import Union, Optional, Dict, List, Tuple, Any
 from scipy.spatial import KDTree
 import re
 
+
 from .Decorators import standardize_input, log_call 
 from .LoggingConfig import setup_logging, get_logger
 
@@ -465,3 +466,53 @@ class HdfUtils:
         except Exception as e:
             logger.error(f"Error reading projection from {hdf_path}: {str(e)}")
             return None
+
+    def print_attrs(name, obj):
+        """
+        Print attributes of an HDF5 object.
+        """
+        if obj.attrs:
+            print("")
+            print(f"    Attributes for {name}:")
+            for key, val in obj.attrs.items():
+                print(f"        {key}: {val}")
+        else:
+            print(f"    No attributes for {name}.")
+
+    @staticmethod
+    @standardize_input(file_type='plan_hdf')
+    def explore_hdf5(file_path: Path, group_path: str = '/') -> None:
+        """
+        Recursively explore and print the structure of an HDF5 file.
+
+        :param file_path: Path to the HDF5 file
+        :param group_path: Current group path to explore
+        """
+        def recurse(name, obj, indent=0):
+            spacer = "    " * indent
+            if isinstance(obj, h5py.Group):
+                print(f"{spacer}Group: {name}")
+                HdfUtils.print_attrs(name, obj)
+                for key in obj:
+                    recurse(f"{name}/{key}", obj[key], indent+1)
+            elif isinstance(obj, h5py.Dataset):
+                print(f"{spacer}Dataset: {name}")
+                print(f"{spacer}    Shape: {obj.shape}")
+                print(f"{spacer}    Dtype: {obj.dtype}")
+                HdfUtils.print_attrs(name, obj)
+            else:
+                print(f"{spacer}Unknown object: {name}")
+
+        try:
+            with h5py.File(file_path, 'r') as hdf_file:
+                if group_path in hdf_file:
+                    print("")
+                    print(f"Exploring group: {group_path}\n")
+                    group = hdf_file[group_path]
+                    for key in group:
+                        print("")
+                        recurse(f"{group_path}/{key}", group[key], indent=1)
+                else:
+                    print(f"Group path '{group_path}' not found in the HDF5 file.")
+        except Exception as e:
+            print(f"Error exploring HDF5 file: {e}")

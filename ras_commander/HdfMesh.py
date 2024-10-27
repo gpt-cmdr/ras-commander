@@ -39,8 +39,6 @@ class HdfMesh:
     Note: This class relies on HdfBase and HdfUtils for some underlying operations.
     """
 
-    FLOW_AREA_2D_PATH = "Geometry/2D Flow Areas"
-
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
@@ -62,12 +60,12 @@ class HdfMesh:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                if HdfMesh.FLOW_AREA_2D_PATH not in hdf_file:
+                if "Geometry/2D Flow Areas" not in hdf_file:
                     return list()
                 return list(
                     [
                         HdfUtils.convert_ras_hdf_string(n)
-                        for n in hdf_file[f"{HdfMesh.FLOW_AREA_2D_PATH}/Attributes"][()]["Name"]
+                        for n in hdf_file["Geometry/2D Flow Areas/Attributes"][()]["Name"]
                     ]
                 )
         except Exception as e:
@@ -96,7 +94,7 @@ class HdfMesh:
                 if not mesh_area_names:
                     return GeoDataFrame()
                 mesh_area_polygons = [
-                    Polygon(hdf_file[f"{HdfMesh.FLOW_AREA_2D_PATH}/{n}/Perimeter"][()])
+                    Polygon(hdf_file["Geometry/2D Flow Areas/{}/Perimeter".format(n)][()])
                     for n in mesh_area_names
                 ]
                 return GeoDataFrame(
@@ -134,13 +132,13 @@ class HdfMesh:
 
                 cell_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
                 for i, mesh_name in enumerate(mesh_area_names):
-                    cell_cnt = hdf_file[f"{HdfMesh.FLOW_AREA_2D_PATH}/Cell Info"][()][i][1]
+                    cell_cnt = hdf_file["Geometry/2D Flow Areas/Cell Info"][()][i][1]
                     cell_ids = list(range(cell_cnt))
                     cell_face_info = hdf_file[
-                        f"{HdfMesh.FLOW_AREA_2D_PATH}/{mesh_name}/Cells Face and Orientation Info"
+                        "Geometry/2D Flow Areas/{}/Cells Face and Orientation Info".format(mesh_name)
                     ][()]
                     cell_face_values = hdf_file[
-                        f"{HdfMesh.FLOW_AREA_2D_PATH}/{mesh_name}/Cells Face and Orientation Values"
+                        "Geometry/2D Flow Areas/{}/Cells Face and Orientation Values".format(mesh_name)
                     ][()][:, 0]
                     face_id_lists = list(
                         np.vectorize(
@@ -200,8 +198,8 @@ class HdfMesh:
                     return GeoDataFrame()
                 pnt_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
                 for i, mesh_name in enumerate(mesh_area_names):
-                    starting_row, count = hdf_file[f"{HdfMesh.FLOW_AREA_2D_PATH}/Cell Info"][()][i]
-                    cell_pnt_coords = hdf_file[f"{HdfMesh.FLOW_AREA_2D_PATH}/Cell Points"][()][
+                    starting_row, count = hdf_file["Geometry/2D Flow Areas/Cell Info"][()][i]
+                    cell_pnt_coords = hdf_file["Geometry/2D Flow Areas/Cell Points"][()][
                         starting_row : starting_row + count
                     ]
                     pnt_dict["mesh_name"] += [mesh_name] * cell_pnt_coords.shape[0]
@@ -240,16 +238,16 @@ class HdfMesh:
                 face_dict = {"mesh_name": [], "face_id": [], "geometry": []}
                 for mesh_name in mesh_area_names:
                     facepoints_index = hdf_file[
-                        f"{HdfMesh.FLOW_AREA_2D_PATH}/{mesh_name}/Faces FacePoint Indexes"
+                        "Geometry/2D Flow Areas/{}/Faces FacePoint Indexes".format(mesh_name)
                     ][()]
                     facepoints_coordinates = hdf_file[
-                        f"{HdfMesh.FLOW_AREA_2D_PATH}/{mesh_name}/FacePoints Coordinate"
+                        "Geometry/2D Flow Areas/{}/FacePoints Coordinate".format(mesh_name)
                     ][()]
                     faces_perimeter_info = hdf_file[
-                        f"{HdfMesh.FLOW_AREA_2D_PATH}/{mesh_name}/Faces Perimeter Info"
+                        "Geometry/2D Flow Areas/{}/Faces Perimeter Info".format(mesh_name)
                     ][()]
                     faces_perimeter_values = hdf_file[
-                        f"{HdfMesh.FLOW_AREA_2D_PATH}/{mesh_name}/Faces Perimeter Values"
+                        "Geometry/2D Flow Areas/{}/Faces Perimeter Values".format(mesh_name)
                     ][()]
                     face_id = -1
                     for pnt_a_index, pnt_b_index in facepoints_index:
@@ -288,7 +286,7 @@ class HdfMesh:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                d2_flow_area = hdf_file.get(f"{HdfMesh.FLOW_AREA_2D_PATH}/Attributes")
+                d2_flow_area = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_area is not None and isinstance(d2_flow_area, h5py.Dataset):
                     result = {}
                     for name in d2_flow_area.dtype.names:
@@ -305,4 +303,53 @@ class HdfMesh:
                     return {}
         except Exception as e:
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
+            return {}
+
+
+    @staticmethod
+    @standardize_input(file_type='geom_hdf')
+    def get_face_property_tables(hdf_path: Path) -> Dict[str, pd.DataFrame]:
+        """
+        Extract Face Property Tables for each Face in all 2D Flow Areas.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+
+        Returns
+        -------
+        Dict[str, pd.DataFrame]
+            A dictionary where keys are mesh names and values are DataFrames
+            containing the Face Property Tables for all faces in that mesh.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
+                if not mesh_area_names:
+                    return {}
+
+                result = {}
+                for mesh_name in mesh_area_names:
+                    area_elevation_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Info"][()]
+                    area_elevation_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Values"][()]
+                    
+                    face_data = []
+                    for face_id, (start_index, count) in enumerate(area_elevation_info):
+                        face_values = area_elevation_values[start_index:start_index+count]
+                        for z, area, wetted_perimeter, mannings_n in face_values:
+                            face_data.append({
+                                'Face ID': face_id,
+                                'Z': z,
+                                'Area': area,
+                                'Wetted Perimeter': wetted_perimeter,
+                                "Manning's n": mannings_n
+                            })
+                    
+                    result[mesh_name] = pd.DataFrame(face_data)
+                
+                return result
+
+        except Exception as e:
+            logger.error(f"Error extracting face property tables from {hdf_path}: {str(e)}")
             return {}

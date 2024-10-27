@@ -69,23 +69,8 @@ def main():
     print(f"Set geometry for plan {new_muncie_plan} in Muncie project")
     print()
 
-    # Example 3: Update unsteady flow parameters for both projects
-    print("Example 3: Updating unsteady flow parameters")
-    bald_eagle_plan_file = RasPlan.get_plan_path(new_bald_eagle_plan, ras_object=bald_eagle)
-    muncie_plan_file = RasPlan.get_plan_path(new_muncie_plan, ras_object=muncie)
 
-    modifications = {
-        "Computation Interval": "2MIN",
-        "Output Interval": "30MIN",
-        "Mapping Interval": "1HOUR"
-    }
-
-    RasUnsteady.update_unsteady_parameters(bald_eagle_plan_file, modifications, ras_object=bald_eagle)
-    RasUnsteady.update_unsteady_parameters(muncie_plan_file, modifications, ras_object=muncie)
-    print("Updated unsteady flow parameters for both projects")
-    print()
-
-    # Example 4: Execute plans for both projects simultaneously in separate compute folders
+    # Example 3: Execute plans for both projects simultaneously in separate compute folders
     print("Example 4: Executing plans for both projects simultaneously in separate compute folders")
     
     # Create compute folders
@@ -114,7 +99,7 @@ def main():
         print(f"Plan {plan_number} execution: {'Successful' if success else 'Failed'}")
     print()
 
-    # Example 5: Get and print results paths
+    # Example 4: Get and print results paths
     print("Example 5: Getting results paths")
     bald_eagle_results = RasPlan.get_results_path(new_bald_eagle_plan, ras_object=bald_eagle)
     muncie_results = RasPlan.get_results_path(new_muncie_plan, ras_object=muncie)
