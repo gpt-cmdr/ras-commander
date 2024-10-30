@@ -70,9 +70,9 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {
                         "bc_line_id": bc_line_ids,
-                        "name": names,
+                        "Name": names,
                         "mesh_name": mesh_names,
-                        "type": types,
+                        "Type": types,
                         "geometry": geoms,
                     },
                     geometry="geometry",
@@ -110,7 +110,7 @@ class HdfBndry:
                 )
                 geoms = HdfBndry._get_polylines(hdf_file, breaklines_path)
                 return gpd.GeoDataFrame(
-                    {"bl_id": bl_line_ids, "name": names, "geometry": geoms},
+                    {"bl_id": bl_line_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
                     crs=HdfUtils.projection(hdf_file),
                 )
@@ -158,7 +158,7 @@ class HdfBndry:
                             )
                         )
                 return gpd.GeoDataFrame(
-                    {"rr_id": rr_ids, "name": names, "geometry": geoms},
+                    {"rr_id": rr_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
                     crs=HdfUtils.projection(hdf_file),
                 )
@@ -242,9 +242,9 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {
                         "refln_id": refline_ids,
-                        "refln_name": names,
-                        "mesh_name": mesh_names,
-                        "type": types,
+                        "Name": names,
+                        "mesh-name": mesh_names,
+                        "Type": types,
                         "geometry": geoms,
                     },
                     geometry="geometry",
@@ -286,9 +286,9 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {
                         "refpt_id": range(attributes.shape[0]),
-                        "refpt_name": names,
+                        "Name": names,
                         "mesh_name": mesh_names,
-                        "cell_id": cell_id,
+                        "Cell Index": cell_id,
                         "geometry": list(map(Point, points)),
                     },
                     geometry="geometry",

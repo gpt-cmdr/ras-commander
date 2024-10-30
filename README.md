@@ -50,7 +50,7 @@ Create a virtual environment with conda or venv (ask ChatGPT if you need help)
 
 In your virtual environment, install ras-commander using pip:
 ```
-pip install h5py numpy pandas requests tqdm scipy
+pip install h5py numpy pandas requests tqdm scipy rtree pyproj shapely xarray rasterio
 pip install --upgrade ras-commander
 ```
 

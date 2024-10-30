@@ -389,9 +389,9 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {
                         "bc_line_id": bc_line_ids,
-                        "name": names,
+                        "Name": names,
                         "mesh_name": mesh_names,
-                        "type": types,
+                        "Type": types,
                         "geometry": geoms,
                     },
                     geometry="geometry",
@@ -429,7 +429,7 @@ class HdfBndry:
                 )
                 geoms = HdfBndry._get_polylines(hdf_file, breaklines_path)
                 return gpd.GeoDataFrame(
-                    {"bl_id": bl_line_ids, "name": names, "geometry": geoms},
+                    {"bl_id": bl_line_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
                     crs=HdfUtils.projection(hdf_file),
                 )
@@ -477,7 +477,7 @@ class HdfBndry:
                             )
                         )
                 return gpd.GeoDataFrame(
-                    {"rr_id": rr_ids, "name": names, "geometry": geoms},
+                    {"rr_id": rr_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
                     crs=HdfUtils.projection(hdf_file),
                 )
@@ -561,9 +561,9 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {
                         "refln_id": refline_ids,
-                        "refln_name": names,
-                        "mesh_name": mesh_names,
-                        "type": types,
+                        "Name": names,
+                        "mesh-name": mesh_names,
+                        "Type": types,
                         "geometry": geoms,
                     },
                     geometry="geometry",
@@ -605,9 +605,9 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {
                         "refpt_id": range(attributes.shape[0]),
-                        "refpt_name": names,
+                        "Name": names,
                         "mesh_name": mesh_names,
-                        "cell_id": cell_id,
+                        "Cell Index": cell_id,
                         "geometry": list(map(Point, points)),
                     },
                     geometry="geometry",
@@ -1142,7 +1142,12 @@ class HdfFluvialPluvial:
         - GeoDataFrame with the specified projection.
         """
         gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=projection)
+        
         return gdf
+
+
+
+
 
 ==================================================
 
@@ -1214,7 +1219,7 @@ class HdfMesh:
                     return list()
                 return list(
                     [
-                        HdfUtils.convert_ras_hdf_string(n)
+                        HdfUtils.convert_ras_hdf_string(n.decode('utf-8'))  # Decode as UTF-8
                         for n in hdf_file["Geometry/2D Flow Areas/Attributes"][()]["Name"]
                     ]
                 )
@@ -1324,12 +1329,11 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
             return GeoDataFrame()
-
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def mesh_cell_points(hdf_path: Path) -> GeoDataFrame:
         """
-        Return 2D flow mesh cell points.
+        Return 2D flow mesh cell center points.
 
         Parameters
         ----------
@@ -1339,29 +1343,29 @@ class HdfMesh:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the 2D flow mesh cell points.
+            A GeoDataFrame containing the 2D flow mesh cell center points.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
+                
                 pnt_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
-                for i, mesh_name in enumerate(mesh_area_names):
-                    starting_row, count = hdf_file["Geometry/2D Flow Areas/Cell Info"][()][i]
-                    cell_pnt_coords = hdf_file["Geometry/2D Flow Areas/Cell Points"][()][
-                        starting_row : starting_row + count
-                    ]
-                    pnt_dict["mesh_name"] += [mesh_name] * cell_pnt_coords.shape[0]
-                    pnt_dict["cell_id"] += range(count)
+                for mesh_name in mesh_area_names:
+                    cell_center_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    cell_count = len(cell_center_coords)
+                    
+                    pnt_dict["mesh_name"] += [mesh_name] * cell_count
+                    pnt_dict["cell_id"] += range(cell_count)
                     pnt_dict["geometry"] += list(
                         np.vectorize(lambda coords: Point(coords), signature="(n)->()")(
-                            cell_pnt_coords
+                            cell_center_coords
                         )
                     )
                 return GeoDataFrame(pnt_dict, geometry="geometry", crs=HdfUtils.projection(hdf_path))
         except Exception as e:
-            self.logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod
@@ -1443,7 +1447,7 @@ class HdfMesh:
                         try:
                             value = d2_flow_area[name][()]
                             if isinstance(value, bytes):
-                                value = value.decode('utf-8')
+                                value = value.decode('utf-8')  # Decode as UTF-8
                             result[name] = value
                         except Exception as e:
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
@@ -1490,10 +1494,10 @@ class HdfMesh:
                         for z, area, wetted_perimeter, mannings_n in face_values:
                             face_data.append({
                                 'Face ID': face_id,
-                                'Z': z,
-                                'Area': area,
-                                'Wetted Perimeter': wetted_perimeter,
-                                "Manning's n": mannings_n
+                                'Z': z.decode('utf-8'),  # Decode as UTF-8
+                                'Area': area.decode('utf-8'),  # Decode as UTF-8
+                                'Wetted Perimeter': wetted_perimeter.decode('utf-8'),  # Decode as UTF-8
+                                "Manning's n": mannings_n.decode('utf-8')  # Decode as UTF-8
                             })
                     
                     result[mesh_name] = pd.DataFrame(face_data)
@@ -1503,6 +1507,7 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error extracting face property tables from {hdf_path}: {str(e)}")
             return {}
+
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\HdfPipe.py
@@ -8053,7 +8058,7 @@ class RasPrj:
         # Add Geom_File to plan_df
         self.plan_df['Geom_File'] = self.plan_df.apply(lambda row: self._get_geom_file_for_plan(row['plan_number']), axis=1)
 
-    @log_call
+    
     def _get_geom_file_for_plan(self, plan_number):
         """
         Get the geometry file path for a given plan number.
@@ -8079,7 +8084,7 @@ class RasPrj:
             logger.error(f"Error reading plan file for geometry: {e}")
         return None
 
-    @log_call
+
     def _parse_plan_file(self, plan_file_path):
         """
         Parse a plan file and extract critical information.
@@ -8139,9 +8144,6 @@ class RasPrj:
         
         return plan_info
     
-
-    
-    @log_call
     def _get_prj_entries(self, entry_type):
         """
         Extract entries of a specific type from the HEC-RAS project file.
@@ -8188,7 +8190,6 @@ class RasPrj:
 
         return pd.DataFrame(entries)
 
-    @log_call
     def _parse_unsteady_file(self, unsteady_file_path):
         """
         Parse an unsteady flow file and extract critical information.
@@ -8563,7 +8564,6 @@ class RasPrj:
         
         return merged_df
 
-    @log_call
     def _parse_boundary_condition(self, block: str, unsteady_number: str, bc_number: int) -> Tuple[Dict, str]:
         lines = block.split('\n')
         bc_info = {

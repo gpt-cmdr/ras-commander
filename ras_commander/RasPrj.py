@@ -107,7 +107,7 @@ class RasPrj:
         # Add Geom_File to plan_df
         self.plan_df['Geom_File'] = self.plan_df.apply(lambda row: self._get_geom_file_for_plan(row['plan_number']), axis=1)
 
-    @log_call
+    
     def _get_geom_file_for_plan(self, plan_number):
         """
         Get the geometry file path for a given plan number.
@@ -133,7 +133,7 @@ class RasPrj:
             logger.error(f"Error reading plan file for geometry: {e}")
         return None
 
-    @log_call
+
     def _parse_plan_file(self, plan_file_path):
         """
         Parse a plan file and extract critical information.
@@ -193,9 +193,6 @@ class RasPrj:
         
         return plan_info
     
-
-    
-    @log_call
     def _get_prj_entries(self, entry_type):
         """
         Extract entries of a specific type from the HEC-RAS project file.
@@ -242,7 +239,6 @@ class RasPrj:
 
         return pd.DataFrame(entries)
 
-    @log_call
     def _parse_unsteady_file(self, unsteady_file_path):
         """
         Parse an unsteady flow file and extract critical information.
@@ -617,7 +613,6 @@ class RasPrj:
         
         return merged_df
 
-    @log_call
     def _parse_boundary_condition(self, block: str, unsteady_number: str, bc_number: int) -> Tuple[Dict, str]:
         lines = block.split('\n')
         bc_info = {

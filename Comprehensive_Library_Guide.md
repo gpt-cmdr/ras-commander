@@ -6,8 +6,8 @@ RAS-Commander (`ras_commander`) is a Python library designed to automate and str
 
 RAS-Commander can be installed with the following commands:
 ```
-pip install h5py numpy pandas requests tqdm scipy
-pip install ras-commander
+pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib ras-commander ipython psutil shapely fiona pathlib rtree
+pip install --update ras-commander # This ensures you get the latest version of the library
 ```
 
 ## Key Concepts
@@ -94,6 +94,9 @@ pip install ras-commander
 17. **HdfXsec**: Handles cross-section data in HDF files.
 18. **HdfPipe**: Handles pipe network related data in HDF files.
 19. **HdfPump**: Manages pump station related data in HDF files.
+20. **HdfFluvialPluvial**: Manages fluvial and pluvial related data in HDF files.
+21. **RasToGo**: Functions to interface with USACE Go Consequences.
+22. **RasMap**: Handling of RASMapper .rasmap files.
 
 ## Best Practices
 
@@ -235,6 +238,7 @@ Proper error handling and logging are crucial for robust RAS Commander scripts. 
 
 - Apply type hints to improve code readability and IDE support.
   ```python
+  from typing import Union, List, Optional
   def compute_plan(plan_number: str, clear_geompre: bool = False) -> bool:
       ...
   ```
@@ -274,7 +278,7 @@ print(f"Created new plan: {new_plan_number}")
   from ras_commander import RasCmdr
 
   results = RasCmdr.compute_parallel(
-      plan_numbers=["01", "02", "03"],
+      plan_number=["01", "02", "03"],
       max_workers=3,
       num_cores=4,
       dest_folder="/path/to/results",

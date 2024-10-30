@@ -64,7 +64,7 @@ class HdfMesh:
                     return list()
                 return list(
                     [
-                        HdfUtils.convert_ras_hdf_string(n)
+                        HdfUtils.convert_ras_hdf_string(n.decode('utf-8'))  # Decode as UTF-8
                         for n in hdf_file["Geometry/2D Flow Areas/Attributes"][()]["Name"]
                     ]
                 )
@@ -174,12 +174,11 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
             return GeoDataFrame()
-
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def mesh_cell_points(hdf_path: Path) -> GeoDataFrame:
         """
-        Return 2D flow mesh cell points.
+        Return 2D flow mesh cell center points.
 
         Parameters
         ----------
@@ -189,29 +188,29 @@ class HdfMesh:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the 2D flow mesh cell points.
+            A GeoDataFrame containing the 2D flow mesh cell center points.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
+                
                 pnt_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
-                for i, mesh_name in enumerate(mesh_area_names):
-                    starting_row, count = hdf_file["Geometry/2D Flow Areas/Cell Info"][()][i]
-                    cell_pnt_coords = hdf_file["Geometry/2D Flow Areas/Cell Points"][()][
-                        starting_row : starting_row + count
-                    ]
-                    pnt_dict["mesh_name"] += [mesh_name] * cell_pnt_coords.shape[0]
-                    pnt_dict["cell_id"] += range(count)
+                for mesh_name in mesh_area_names:
+                    cell_center_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    cell_count = len(cell_center_coords)
+                    
+                    pnt_dict["mesh_name"] += [mesh_name] * cell_count
+                    pnt_dict["cell_id"] += range(cell_count)
                     pnt_dict["geometry"] += list(
                         np.vectorize(lambda coords: Point(coords), signature="(n)->()")(
-                            cell_pnt_coords
+                            cell_center_coords
                         )
                     )
                 return GeoDataFrame(pnt_dict, geometry="geometry", crs=HdfUtils.projection(hdf_path))
         except Exception as e:
-            self.logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod
@@ -293,7 +292,7 @@ class HdfMesh:
                         try:
                             value = d2_flow_area[name][()]
                             if isinstance(value, bytes):
-                                value = value.decode('utf-8')
+                                value = value.decode('utf-8')  # Decode as UTF-8
                             result[name] = value
                         except Exception as e:
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
@@ -340,10 +339,10 @@ class HdfMesh:
                         for z, area, wetted_perimeter, mannings_n in face_values:
                             face_data.append({
                                 'Face ID': face_id,
-                                'Z': z,
-                                'Area': area,
-                                'Wetted Perimeter': wetted_perimeter,
-                                "Manning's n": mannings_n
+                                'Z': z.decode('utf-8'),  # Decode as UTF-8
+                                'Area': area.decode('utf-8'),  # Decode as UTF-8
+                                'Wetted Perimeter': wetted_perimeter.decode('utf-8'),  # Decode as UTF-8
+                                "Manning's n": mannings_n.decode('utf-8')  # Decode as UTF-8
                             })
                     
                     result[mesh_name] = pd.DataFrame(face_data)
