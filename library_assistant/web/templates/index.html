@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Library Assistant</title>
+    <title>RAS Commander Library Assistant</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
-        .container { max-width: 900px; margin: auto; }
+        .container { max-width: 1800px; margin: auto; width: 98%; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; }
         input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
@@ -59,11 +59,273 @@
             background: #0d6efd;
             cursor: pointer;
         }
+        /* Add to existing styles */
+        #file-tree {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .file-tree-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        
+        .file-tree-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .file-tree-toggle {
+            margin-right: 5px;
+            width: 16px;
+            height: 16px;
+            text-align: center;
+            line-height: 16px;
+        }
+        
+        .file-tree-indent {
+            margin-left: 20px;
+        }
+        
+        .file-tree-selected {
+            background-color: #e3f2fd;
+        }
+
+        /* Enhanced file tree styling */
+        .file-tree-container {
+            width: 800px;
+            flex-shrink: 0;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-tree-header {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-tree {
+            padding: 10px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+
+        .file-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .file-item.selected {
+            background-color: #e3f2fd;
+        }
+
+        .file-icon {
+            margin-right: 8px;
+            width: 16px;
+            text-align: center;
+        }
+
+        .folder-toggle {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .folder-toggle.open {
+            transform: rotate(90deg);
+        }
+
+        .file-children {
+            margin-left: 20px;
+        }
+
+        /* Main container layout */
+        .main-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            height: calc(100vh - 200px);
+            min-height: 400px;
+            width: 100%;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 400px;
+        }
+
+        .file-tree-header {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .file-tree {
+            padding: 10px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .chat-box {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #ffffff;
+            margin-bottom: 10px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1400px) {
+            .file-tree-container {
+                width: 600px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .file-tree-container {
+                width: 100%;
+                height: 300px;
+                margin-bottom: 20px;
+            }
+            
+            .chat-container {
+                width: 100%;
+            }
+        }
+
+        /* Add to existing styles */
+        .file-checkbox {
+            margin-right: 8px;
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .file-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .file-item.selected {
+            background-color: #e3f2fd;
+        }
+
+        .file-icon {
+            margin-right: 8px;
+            width: 16px;
+            text-align: center;
+        }
+
+        .file-item span {
+            cursor: pointer;
+        }
+
+        .file-checkbox:indeterminate {
+            background-color: #86b7fe;
+            border-color: #86b7fe;
+        }
+
+        /* Add to existing styles */
+        .folder-toggle {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            line-height: 14px;
+            text-align: center;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 16px;
+            color: #666;
+            user-select: none;
+        }
+
+        .folder-toggle:hover {
+            color: #000;
+        }
+
+        .file-icon {
+            margin-right: 8px;
+            width: 16px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .file-children {
+            margin-left: 0; /* Remove left margin since we're using padding */
+        }
+
+        /* Add to existing styles */
+        .token-count {
+            margin-left: auto;
+            color: #666;
+            font-size: 0.85em;
+            padding-left: 10px;
+        }
+
+        .total-tokens-display {
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: bold;
+            color: #0d6efd;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="mt-4 mb-4">Library Assistant</h1>
+        <h1 class="mt-4 mb-4">RAS Commander Library Assistant</h1>
+        
+        <div id="context-cost-display" class="alert alert-info mb-4" style="display: none;">
+            <strong>Context Cost Estimates:</strong>
+            <span id="context-costs"></span>
+        </div>
         
         <div class="card mb-4">
             <div class="card-header">
@@ -119,30 +381,315 @@
             </div>
         </div>
         
-        <div class="chat-box" id="chat-box"></div>
-        <form id="chat-form" class="mt-3">
-            <div class="form-group">
-                <label for="user-input">Your message:</label>
-                <textarea id="user-input" class="form-control" rows="3" required></textarea>
+        <div class="main-container">
+            <!-- File Tree Container -->
+            <div id="file-tree-container" class="file-tree-container" style="display: none;">
+                <div class="file-tree-header">
+                    <h5 class="mb-0">Project Files</h5>
+                    <button class="btn btn-sm btn-outline-secondary" id="collapse-tree">
+                        <i class="bi bi-arrows-collapse"></i>
+                    </button>
+                </div>
+                <div class="file-tree" id="file-tree"></div>
             </div>
-            <button type="submit" class="btn btn-primary">Send</button>
-        </form>
-        <div class="cost mt-2" id="cost-display"></div>
-        <button onclick="saveConversation()" class="btn btn-success mt-3">Save Conversation</button>
+            
+            <!-- Chat Container -->
+            <div class="chat-container">
+                <div class="chat-box" id="chat-box"></div>
+                <form id="chat-form" class="mt-3">
+                    <div class="form-group">
+                        <label for="user-input">Your message:</label>
+                        <textarea id="user-input" class="form-control" rows="3" required></textarea>
+                    </div>
+                    <div class="mt-2 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <button type="submit" class="btn btn-primary">Send</button>
+                            <div id="cost-display" class="text-muted"></div>
+                        </div>
+                        <button type="button" onclick="saveConversation()" class="btn btn-outline-secondary btn-sm">
+                            Save Conversation
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        class FileTreeViewer {
+            constructor(container) {
+                this.container = container;
+                this.selectedFiles = new Set();
+                this.onSelectionChange = null;
+                this.totalTokensDisplay = document.createElement('div');
+                this.totalTokensDisplay.className = 'total-tokens-display';
+                container.parentElement.insertBefore(this.totalTokensDisplay, container);
+                this.expandedFolders = [
+                    'ras-commander',           // Root project folder
+                    'ras-commander/examples',  // Examples folder
+                    'ras-commander/ras_commander'  // Main package folder
+                ];
+            }
+
+            updateTotalTokens() {
+                let totalTokens = 0;
+                this.selectedFiles.forEach(path => {
+                    const element = this.container.querySelector(`[data-path="${path}"]`);
+                    if (element) {
+                        totalTokens += parseInt(element.dataset.tokens || 0);
+                    }
+                });
+                this.totalTokensDisplay.textContent = `Selected: ${totalTokens.toLocaleString()} tokens`;
+            }
+
+            renderNode(node, level = 0) {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.style.paddingLeft = `${level * 20}px`;
+                item.dataset.path = node.path;
+                item.dataset.tokens = node.tokens;
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'file-checkbox me-2';
+                
+                if (node.type === 'directory') {
+                    // Directory rendering
+                    const toggleBtn = document.createElement('span');
+                    toggleBtn.className = 'folder-toggle me-2';
+                    
+                    const icon = document.createElement('span');
+                    icon.className = 'file-icon';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = node.name;
+                    
+                    const tokenCount = document.createElement('span');
+                    tokenCount.className = 'token-count';
+                    tokenCount.textContent = `${node.tokens.toLocaleString()} tokens`;
+                    
+                    item.appendChild(toggleBtn);
+                    item.appendChild(checkbox);
+                    item.appendChild(icon);
+                    item.appendChild(nameSpan);
+                    item.appendChild(tokenCount);
+                    
+                    const content = document.createElement('div');
+                    content.className = 'file-children';
+                    
+                    // Check if this folder should be expanded by default
+                    const shouldExpand = this.expandedFolders.some(path => {
+                        const normalizedPath = path.replace(/\\/g, '/');
+                        const nodePath = node.path.replace(/\\/g, '/');
+                        return normalizedPath === nodePath || normalizedPath.startsWith(nodePath + '/');
+                    });
+                    
+                    content.style.display = shouldExpand ? 'block' : 'none';
+                    toggleBtn.textContent = shouldExpand ? '−' : '+';
+                    icon.textContent = shouldExpand ? '📂' : '📁';
+                    
+                    // Function to handle expand/collapse
+                    const toggleFolder = (e) => {
+                        e.stopPropagation();
+                        const isExpanded = content.style.display !== 'none';
+                        content.style.display = isExpanded ? 'none' : 'block';
+                        toggleBtn.textContent = isExpanded ? '+' : '−';
+                        icon.textContent = isExpanded ? '📁' : '📂';
+                    };
+                    
+                    // Add click handlers for toggle button, icon, and name
+                    toggleBtn.onclick = toggleFolder;
+                    icon.onclick = toggleFolder;
+                    nameSpan.onclick = toggleFolder;
+                    
+                    // Handle directory checkbox click
+                    checkbox.onclick = (e) => {
+                        e.stopPropagation();
+                        this.toggleDirectory(node, checkbox.checked, content);
+                    };
+                    
+                    if (node.children) {
+                        node.children.forEach(child => {
+                            const childElement = this.renderNode(child, level + 1);
+                            content.appendChild(childElement);
+                        });
+                    }
+                    
+                    const container = document.createElement('div');
+                    container.appendChild(item);
+                    container.appendChild(content);
+                    return container;
+                    
+                } else {
+                    // File rendering
+                    const emptyToggle = document.createElement('span');
+                    emptyToggle.className = 'folder-toggle me-2';
+                    emptyToggle.style.visibility = 'hidden';
+                    
+                    const icon = document.createElement('span');
+                    icon.className = 'file-icon';
+                    icon.textContent = '📄';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = node.name;
+                    
+                    const tokenCount = document.createElement('span');
+                    tokenCount.className = 'token-count';
+                    tokenCount.textContent = `${node.tokens.toLocaleString()} tokens`;
+                    
+                    checkbox.checked = this.selectedFiles.has(node.path);
+                    
+                    item.appendChild(emptyToggle);
+                    item.appendChild(checkbox);
+                    item.appendChild(icon);
+                    item.appendChild(nameSpan);
+                    item.appendChild(tokenCount);
+                    
+                    // Update checkbox handler to include token counting
+                    checkbox.onclick = (e) => {
+                        e.stopPropagation();
+                        if (checkbox.checked) {
+                            this.selectedFiles.add(node.path);
+                        } else {
+                            this.selectedFiles.delete(node.path);
+                        }
+                        
+                        if (this.onSelectionChange) {
+                            this.onSelectionChange(Array.from(this.selectedFiles));
+                        }
+                        
+                        this.updateParentCheckboxes(item);
+                        this.updateTotalTokens();
+                    };
+                    
+                    // Handle file name click (view content)
+                    const viewContent = async (e) => {
+                        e.stopPropagation();
+                        
+                        const selected = document.querySelector('.file-tree-selected');
+                        if (selected) {
+                            selected.classList.remove('file-tree-selected');
+                        }
+                        
+                        item.classList.add('file-tree-selected');
+                        
+                        try {
+                            const response = await fetch(`/get_file_content?path=${encodeURIComponent(node.path)}`);
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            const data = await response.json();
+                            
+                            const userInput = document.getElementById('user-input');
+                            userInput.value = `Please help me with this file:\n\n${data.content}`;
+                        } catch (error) {
+                            console.error('Error loading file content:', error);
+                            alert('Error loading file content: ' + error.message);
+                        }
+                    };
+                    
+                    // Add click handlers for both icon and name
+                    icon.onclick = viewContent;
+                    nameSpan.onclick = viewContent;
+                    
+                    return item;
+                }
+            }
+
+            toggleDirectory(node, checked, contentElement) {
+                const checkboxes = contentElement.querySelectorAll('.file-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = checked;
+                    
+                    const fileItem = checkbox.closest('.file-item');
+                    const nameSpan = fileItem.querySelector('span:not(.file-icon):not(.token-count)');
+                    const path = this.getNodePath(node, nameSpan.textContent);
+                    
+                    if (checked) {
+                        this.selectedFiles.add(path);
+                    } else {
+                        this.selectedFiles.delete(path);
+                    }
+                });
+
+                if (this.onSelectionChange) {
+                    this.onSelectionChange(Array.from(this.selectedFiles));
+                }
+                
+                this.updateTotalTokens();
+            }
+
+            getNodePath(node, fileName) {
+                // Construct the full path for a file within a directory
+                return node.path + '/' + fileName;
+            }
+
+            updateParentCheckboxes(element) {
+                // Update parent directory checkboxes based on child selections
+                let parent = element.parentElement;
+                while (parent) {
+                    const parentCheckbox = parent.querySelector(':scope > .file-item > .file-checkbox');
+                    if (parentCheckbox) {
+                        const childCheckboxes = parent.querySelectorAll('.file-children .file-checkbox');
+                        const allChecked = Array.from(childCheckboxes).every(cb => cb.checked);
+                        const someChecked = Array.from(childCheckboxes).some(cb => cb.checked);
+                        
+                        parentCheckbox.checked = allChecked;
+                        parentCheckbox.indeterminate = someChecked && !allChecked;
+                    }
+                    parent = parent.parentElement;
+                }
+            }
+
+            initialize(data) {
+                this.container.innerHTML = '';
+                if (data) {
+                    const rootElement = this.renderNode(data);
+                    this.container.appendChild(rootElement);
+                }
+            }
+
+            getSelectedFiles() {
+                return Array.from(this.selectedFiles);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const selectedModel = document.getElementById('selected_model');
             const anthropicGroup = document.getElementById('anthropic_api_key_group');
             const openaiGroup = document.getElementById('openai_api_key_group');
             const contextMode = document.getElementById('context_mode');
+            const fileTreeContainer = document.getElementById('file-tree-container');
+            const fileTree = document.getElementById('file-tree');
+            const chatContainer = document.querySelector('.chat-container');
             const ragSliders = document.getElementById('rag_sliders');
-            const initialChunkSize = document.getElementById('initial_chunk_size');
-            const initialChunkSizeValue = document.getElementById('initial_chunk_size_value');
-            const followupChunkSize = document.getElementById('followup_chunk_size');
-            const followupChunkSizeValue = document.getElementById('followup_chunk_size_value');
+
+            // Initialize file tree viewer
+            const fileTreeViewer = new FileTreeViewer(document.getElementById('file-tree'));
+
+            async function loadFileTree() {
+                try {
+                    const response = await fetch('/get_file_tree');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    fileTreeViewer.initialize(data.fileTree);
+                } catch (error) {
+                    console.error('Error loading file tree:', error);
+                    alert('Error loading file tree: ' + error.message);
+                }
+            }
+
+            function toggleFileTree() {
+                if (contextMode.value === 'full_context') {
+                    fileTreeContainer.style.display = 'flex';
+                    loadFileTree();
+                } else {
+                    fileTreeContainer.style.display = 'none';
+                }
+            }
 
             function toggleApiKeys() {
                 const model = selectedModel.value;
@@ -159,53 +706,33 @@
             }
 
             function toggleRagSliders() {
-                const mode = contextMode.value;
-                if (mode === 'rag') {
+                if (contextMode.value === 'rag') {
                     ragSliders.classList.remove('hidden');
                 } else {
                     ragSliders.classList.add('hidden');
                 }
             }
 
-            toggleApiKeys();
-            toggleRagSliders();
+            // Add event listeners
+            contextMode.addEventListener('change', () => {
+                toggleFileTree();
+                toggleRagSliders();
+                autoSaveSettings();
+            });
 
             selectedModel.addEventListener('change', () => {
                 toggleApiKeys();
                 autoSaveSettings();
             });
 
-            contextMode.addEventListener('change', () => {
-                toggleRagSliders();
-                autoSaveSettings();
-            });
+            // Initialize UI state
+            toggleApiKeys();
+            toggleRagSliders();
 
-            initialChunkSize.addEventListener('input', () => {
-                initialChunkSizeValue.textContent = initialChunkSize.value;
-                autoSaveSettings();
-            });
-
-            followupChunkSize.addEventListener('input', () => {
-                followupChunkSizeValue.textContent = followupChunkSize.value;
-                autoSaveSettings();
-            });
-
-            document.getElementById('anthropic_api_key').addEventListener('input', autoSaveSettings);
-            document.getElementById('openai_api_key').addEventListener('input', autoSaveSettings);
-
-            function autoSaveSettings() {
-                const formData = new FormData(document.getElementById('settings-form'));
-                fetch('/submit', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Settings saved:', data);
-                })
-                .catch(error => {
-                    console.error('Error saving settings:', error);
-                });
+            // Force initial file tree display if in full_context mode
+            if (contextMode.value === 'full_context') {
+                fileTreeContainer.style.display = 'flex';
+                loadFileTree();
             }
 
             // Handle chat form submission
@@ -219,6 +746,10 @@
                 const message = userInput.value.trim();
                 if (message === '') return;
 
+                // Get selected files if in full_context mode
+                const selectedFiles = contextMode.value === 'full_context' ? 
+                    fileTreeViewer.getSelectedFiles() : [];
+
                 // Display user message with markdown rendering
                 const userMessage = document.createElement('div');
                 userMessage.className = 'message user';
@@ -228,54 +759,79 @@
                 // Clear input
                 userInput.value = '';
 
-                // Show loading indicator
-                const loadingMessage = document.createElement('div');
-                loadingMessage.className = 'message assistant';
-                loadingMessage.textContent = 'Assistant: Loading...';
-                chatBox.appendChild(loadingMessage);
+                // Create assistant message container
+                const assistantMessage = document.createElement('div');
+                assistantMessage.className = 'message assistant';
+                assistantMessage.innerHTML = 'Assistant: ';
+                const responseText = document.createElement('span');
+                assistantMessage.appendChild(responseText);
+                chatBox.appendChild(assistantMessage);
 
                 // Scroll to bottom
                 chatBox.scrollTop = chatBox.scrollHeight;
 
                 try {
-                    // Send message to backend
                     const response = await fetch('/chat', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream',
                         },
-                        body: JSON.stringify({ message: message })
+                        body: JSON.stringify({ 
+                            message: message,
+                            selectedFiles: selectedFiles
+                        })
                     });
 
-                    // Remove loading indicator
-                    chatBox.removeChild(loadingMessage);
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let fullResponse = '';
 
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.detail);
+                    while (true) {
+                        const {value, done} = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, {stream: true});
+                        const lines = buffer.split('\n');
+                        
+                        // Process all complete lines
+                        buffer = lines.pop() || '';  // Keep any incomplete line in the buffer
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    
+                                    if (data.chunk) {
+                                        // Accumulate the complete response
+                                        fullResponse += data.chunk;
+                                        // Render the accumulated response
+                                        responseText.innerHTML = marked.parse(fullResponse);
+                                    } else if (data.cost) {
+                                        costDisplay.textContent = `Estimated Cost: $${data.cost.toFixed(6)} (${data.provider})`;
+                                        
+                                        // Add copy button after streaming is complete
+                                        const copyButton = document.createElement('button');
+                                        copyButton.textContent = 'Copy Response';
+                                        copyButton.className = 'copy-btn btn btn-sm';
+                                        copyButton.onclick = () => copyToClipboard(fullResponse);
+                                        assistantMessage.appendChild(copyButton);
+                                    } else if (data.error) {
+                                        const errorDiv = document.createElement('div');
+                                        errorDiv.className = 'error';
+                                        errorDiv.textContent = data.error;
+                                        assistantMessage.appendChild(errorDiv);
+                                    }
+                                    
+                                    // Scroll to bottom as content is added
+                                    chatBox.scrollTop = chatBox.scrollHeight;
+                                } catch (e) {
+                                    console.error('Error parsing SSE data:', e);
+                                }
+                            }
+                        }
                     }
-
-                    const data = await response.json();
-
-                    // Display assistant response with markdown rendering
-                    const assistantMessage = document.createElement('div');
-                    assistantMessage.className = 'message assistant';
-                    assistantMessage.innerHTML = 'Assistant: ' + marked.parse(data.response);
-
-                    // Add "Copy Response" button
-                    const copyButton = document.createElement('button');
-                    copyButton.textContent = 'Copy Response';
-                    copyButton.className = 'copy-btn btn btn-sm';
-                    copyButton.onclick = () => copyToClipboard(data.response);
-                    assistantMessage.appendChild(copyButton);
-
-                    chatBox.appendChild(assistantMessage);
-
-                    // Scroll to bottom
-                    chatBox.scrollTop = chatBox.scrollHeight;
-
-                    // Update cost display
-                    costDisplay.textContent = `Estimated Cost: $${data.estimated_cost.toFixed(6)} (${data.provider})`;
 
                 } catch (error) {
                     console.error('Error:', error);
@@ -292,6 +848,21 @@
                     alert('Response copied to clipboard!');
                 }, (err) => {
                     console.error('Could not copy text: ', err);
+                });
+            }
+
+            function autoSaveSettings() {
+                const formData = new FormData(document.getElementById('settings-form'));
+                fetch('/submit', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Settings saved:', data);
+                })
+                .catch(error => {
+                    console.error('Error saving settings:', error);
                 });
             }
         });
@@ -322,6 +893,30 @@
                 alert(error.message);
             });
         }
+
+        function updateContextCostDisplay(selectedStats) {
+            const costDisplay = document.getElementById('context-cost-display');
+            const costsSpan = document.getElementById('context-costs');
+            
+            if (selectedStats.totalTokens > 0) {
+                costsSpan.innerHTML = `
+                    <div class="mt-1">
+                        <div>Tokens: ${selectedStats.totalTokens.toLocaleString()}</div>
+                        <div>Claude 3.5: $${selectedStats.costs.claude.toFixed(4)}</div>
+                        <div>GPT-4: $${selectedStats.costs.gpt4.toFixed(4)}</div>
+                        <div>GPT-4 Mini: $${selectedStats.costs.gpt4mini.toFixed(4)}</div>
+                    </div>
+                `;
+                costDisplay.style.display = 'block';
+            } else {
+                costDisplay.style.display = 'none';
+            }
+        }
+
+        fileTreeViewer.setSelectionChangeCallback((selectedFiles) => {
+            const selectedStats = fileTreeViewer.getSelectedStats();
+            updateContextCostDisplay(selectedStats);
+        });
     </script>
 </body>
 </html>

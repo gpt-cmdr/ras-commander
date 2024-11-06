@@ -1,102 +1,132 @@
 """
 Anthropic API integration for the Library Assistant.
-
-This module provides functions for interacting with the Anthropic API,
-specifically for the Claude model.
-
-Functions:
-- anthropic_stream_response(client, prompt, max_tokens=8000): Streams a response from the Anthropic API.
 """
 
-import anthropic
+from anthropic import AsyncAnthropic, Anthropic, APIError, AuthenticationError
+from typing import AsyncGenerator, List, Optional, Union
 
-async def anthropic_stream_response(client, prompt, max_tokens=8000):
+async def anthropic_stream_response(
+    client: Union[AsyncAnthropic, Anthropic], 
+    prompt: str, 
+    max_tokens: int = 8000,
+    model: Optional[str] = None
+) -> AsyncGenerator[str, None]:
     """
     Streams a response from the Anthropic API using the Claude model.
 
-    This function sends a prompt to the Anthropic API and yields chunks of the response.
-
     Args:
-        client (anthropic.Anthropic): An initialized Anthropic client.
-        prompt (str): The prompt to send to the API.
-        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 8000.
+        client: An initialized Anthropic client (sync or async)
+        prompt: The prompt to send to the API
+        max_tokens: The maximum number of tokens to generate (default: 8000)
+        model: The model to use (default: claude-3-5-sonnet-20240620)
 
     Yields:
-        str: Chunks of the response from the API.
+        str: Chunks of the response text from the API
 
     Raises:
-        anthropic.APIError: If there's an error in the API call.
-        Exception: For any other unexpected errors.
+        APIError: If there's an error with the API call
+        AuthenticationError: If authentication fails
     """
     try:
-        with client.messages.stream(
+        model = model or "claude-3-5-sonnet-20240620"
+        
+        # Convert to async client if needed
+        async_client = client if isinstance(client, AsyncAnthropic) else AsyncAnthropic(api_key=client.api_key)
+        
+        stream = await async_client.messages.create(
             max_tokens=max_tokens,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            model="claude-3-5-sonnet-20240620"
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
-    except anthropic.APIError as e:
-        raise anthropic.APIError(f"Anthropic API error: {str(e)}")
+            messages=[{"role": "user", "content": prompt}],
+            model=model,
+            stream=True
+        )
+        
+        # Process the stream events
+        current_line = []
+        
+        async for message in stream:
+            try:
+                if message.type == "content_block_delta" and message.delta and message.delta.text:
+                    # Clean and normalize the chunk text
+                    chunk = message.delta.text.replace('\r', '')
+                    
+                    # Accumulate text until we get a natural break
+                    current_line.append(chunk)
+                    
+                    # Check for natural breaks (end of sentence or paragraph)
+                    if any(chunk.endswith(end) for end in ['.', '!', '?', '\n']):
+                        complete_line = ''.join(current_line)
+                        if complete_line.strip():
+                            yield complete_line
+                        current_line = []
+                        
+            except Exception as e:
+                print(f"Error processing message chunk: {str(e)}")
+                continue
+        
+        # Yield any remaining text
+        if current_line:
+            remaining = ''.join(current_line)
+            if remaining.strip():
+                yield remaining
+                
     except Exception as e:
-        raise Exception(f"Unexpected error in Anthropic API call: {str(e)}")
+        raise APIError(f"Unexpected error in Anthropic API call: {str(e)}")
 
-def get_anthropic_client(api_key):
+def get_anthropic_client(api_key: str, async_client: bool = False) -> Union[Anthropic, AsyncAnthropic]:
     """
     Creates and returns an Anthropic client.
 
     Args:
-        api_key (str): The Anthropic API key.
+        api_key: The Anthropic API key
+        async_client: Whether to return an async client (default: False)
 
     Returns:
-        anthropic.Anthropic: An initialized Anthropic client.
+        An initialized Anthropic client (sync or async)
 
     Raises:
-        ValueError: If the API key is not provided.
+        ValueError: If the API key is not provided or invalid
     """
-    if not api_key:
-        raise ValueError("Anthropic API key not provided.")
-    return anthropic.Anthropic(api_key=api_key)
+    if not api_key or not isinstance(api_key, str):
+        raise ValueError("Valid Anthropic API key must be provided")
+    return AsyncAnthropic(api_key=api_key) if async_client else Anthropic(api_key=api_key)
 
-def validate_anthropic_api_key(api_key):
+async def validate_anthropic_api_key(api_key: str) -> bool:
     """
     Validates the Anthropic API key by making a test API call.
 
     Args:
-        api_key (str): The Anthropic API key to validate.
+        api_key: The Anthropic API key to validate
 
     Returns:
-        bool: True if the API key is valid, False otherwise.
+        True if the API key is valid, False otherwise
     """
     try:
-        client = get_anthropic_client(api_key)
-        # Make a minimal API call to test the key
-        client.messages.create(
+        client = get_anthropic_client(api_key, async_client=True)
+        await client.messages.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1,
-            messages=[
-                {"role": "user", "content": "Test"}
-            ]
+            messages=[{"role": "user", "content": "Test"}],
+            stream=False
         )
         return True
-    except (anthropic.APIError, ValueError):
+    except (anthropic.APIError, anthropic.AuthenticationError, ValueError):
         return False
 
-def get_anthropic_models():
+def get_anthropic_models() -> List[str]:
     """
     Returns a list of available Anthropic models.
 
-    This function provides a static list of Anthropic models that are
-    supported by the Library Assistant.
-
     Returns:
-        list: A list of strings representing available Anthropic model names.
+        List of strings representing available Anthropic model names
     """
     return ["claude-3-5-sonnet-20240620"]
 
-def stream_response(client, prompt, max_tokens=8000):
+async def stream_response(
+    client: Union[AsyncAnthropic, Anthropic], 
+    prompt: str, 
+    max_tokens: int = 8000,
+    model: Optional[str] = None
+) -> AsyncGenerator[str, None]:
     """
     Streams a response from the Anthropic API.
 
@@ -104,11 +134,13 @@ def stream_response(client, prompt, max_tokens=8000):
     a consistent interface across different API providers.
 
     Args:
-        client (anthropic.Anthropic): An initialized Anthropic client.
-        prompt (str): The prompt to send to the API.
-        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 8000.
+        client: An initialized Anthropic client (sync or async)
+        prompt: The prompt to send to the API
+        max_tokens: The maximum number of tokens to generate (default: 8000)
+        model: The model to use (optional)
 
     Returns:
-        str: The complete response from the API.
+        An async generator yielding response chunks
     """
-    return anthropic_stream_response(client, prompt, max_tokens)
+    async for chunk in anthropic_stream_response(client, prompt, max_tokens, model):
+        yield chunk

@@ -1,16 +1,5 @@
 """
 Utility functions for context processing in the Library Assistant.
-
-This module provides functions for ranking and chunking text,
-preparing context for AI processing, and initializing the RAG context.
-
-Functions:
-- rank_chunks(chunks): Ranks chunks of text (placeholder function).
-- chunk_and_rank(combined_text, chunk_size): Chunks and ranks the combined text.
-- prepare_context(combined_text, mode='full_context', initial_chunk_size=32000, followup_chunk_size=16000): Prepares context based on the specified mode.
-- reconstruct_context(ranked_chunks, max_tokens): Reconstructs context from ranked chunks.
-- initialize_rag_context(): Initializes the RAG context for the application.
-- prepare_full_prompt(user_query): Prepares the full prompt for the AI model, including context and user query.
 """
 
 import tiktoken
@@ -19,185 +8,255 @@ from config.config import load_settings
 from utils.file_handling import combine_files, read_system_message, set_context_folder
 import json
 
+# Initialize global variables for context
+preprocessed_context = ""
+preprocessed_rag_context = ""
+conversation_context = {}  # Store context for each conversation
+
+def initialize_rag_context():
+    """
+    Initializes the RAG context for the application.
+    """
+    global preprocessed_context, preprocessed_rag_context
+    
+    try:
+        # Load settings
+        settings = load_settings()
+        context_mode = settings.context_mode
+        omit_folders = json.loads(settings.omit_folders)
+        omit_extensions = json.loads(settings.omit_extensions)
+        omit_files = json.loads(settings.omit_files)
+        chunk_level = settings.chunk_level
+        initial_chunk_size = settings.initial_chunk_size
+        followup_chunk_size = settings.followup_chunk_size
+
+        # Set up context
+        context_folder = set_context_folder()
+        
+        # Combine files
+        combined_text, total_token_count, _ = combine_files(
+            summarize_subfolder=context_folder,
+            omit_folders=omit_folders,
+            omit_extensions=omit_extensions,
+            omit_files=omit_files,
+            strip_code=True,
+            chunk_level=chunk_level
+        )
+
+        # Process context based on mode
+        if context_mode == 'full_context':
+            preprocessed_context = combined_text
+        else:  # RAG mode
+            preprocessed_rag_context = prepare_context(
+                text=combined_text,
+                mode='rag',
+                initial_chunk_size=initial_chunk_size,
+                followup_chunk_size=followup_chunk_size
+            )
+
+    except Exception as e:
+        print(f"Error initializing context: {str(e)}")
+        raise
+
+def prepare_full_prompt(user_query: str, selected_files=None, conversation_id=None) -> str:
+    """
+    Prepares the full prompt for the AI model, including context and conversation history.
+    
+    Args:
+        user_query (str): The user's query
+        selected_files (list): List of files to include in context
+        conversation_id (str): Unique identifier for the conversation
+    
+    Returns:
+        str: The complete prompt including system message, context, and conversation history
+    """
+    settings = load_settings()
+    context_mode = settings.context_mode
+    system_message = read_system_message()
+    
+    try:
+        # Get or initialize conversation context
+        if conversation_id not in conversation_context:
+            conversation_context[conversation_id] = {
+                'selected_files': selected_files,
+                'history': []
+            }
+        
+        conv_data = conversation_context[conversation_id]
+        
+        # Update selected files if they've changed
+        if selected_files != conv_data['selected_files']:
+            conv_data['selected_files'] = selected_files
+        
+        if context_mode == 'full_context':
+            if selected_files:
+                # Get content of selected files
+                context_folder = set_context_folder()
+                combined_text, _, _ = combine_files(
+                    summarize_subfolder=context_folder,
+                    omit_folders=[],
+                    omit_extensions=[],
+                    omit_files=[],
+                    strip_code=True,
+                    chunk_level='file',
+                    selected_files=selected_files
+                )
+                context = combined_text
+            else:
+                context = preprocessed_context
+                
+            # Format prompt with conversation history
+            prompt = (f"{system_message}\n\n"
+                     f"Files from RAS-Commander Repository for Context:\n{context}\n\n"
+                     "Previous Conversation:\n")
+            
+            # Add conversation history
+            for msg in conv_data['history']:
+                prompt += f"{msg['role'].capitalize()}: {msg['content']}\n\n"
+            
+            # Add current query
+            prompt += f"User Query: {user_query}"
+            
+            return prompt
+            
+        else:  # RAG mode
+            prompt = (f"{system_message}\n\n"
+                     "<context>\nFiles from RAS-Commander Repository for Context:\n"
+                     f"{preprocessed_rag_context}\n</context>\n\n"
+                     "Previous Conversation:\n")
+            
+            # Add conversation history
+            for msg in conv_data['history']:
+                prompt += f"{msg['role'].capitalize()}: {msg['content']}\n\n"
+            
+            prompt += f"Using the context above, please respond to this query:\n\n"
+            prompt += f"User Query: {user_query}"
+            
+            return prompt
+            
+    except Exception as e:
+        print(f"Error preparing prompt: {str(e)}")
+        return f"{system_message}\n\nUser Query: {user_query}"
+
+def update_conversation_history(conversation_id: str, role: str, content: str):
+    """
+    Updates the conversation history for a given conversation.
+    
+    Args:
+        conversation_id (str): Unique identifier for the conversation
+        role (str): Role of the message sender ('user' or 'assistant')
+        content (str): Content of the message
+    """
+    if conversation_id not in conversation_context:
+        conversation_context[conversation_id] = {
+            'selected_files': None,
+            'history': []
+        }
+    
+    conversation_context[conversation_id]['history'].append({
+        'role': role,
+        'content': content
+    })
+
+def clear_conversation_history(conversation_id: str):
+    """
+    Clears the conversation history for a given conversation.
+    
+    Args:
+        conversation_id (str): Unique identifier for the conversation
+    """
+    if conversation_id in conversation_context:
+        conversation_context[conversation_id]['history'] = []
+
+def prepare_context(text="", mode='full_context', selected_files=None, initial_chunk_size=32000, followup_chunk_size=16000):
+    """
+    Prepares context based on the specified mode.
+    
+    Args:
+        text (str): The input text to process
+        mode (str): Context preparation mode ('full_context' or 'rag')
+        selected_files (list): List of files to include in context (for full_context mode)
+        initial_chunk_size (int): Size for initial RAG chunks
+        followup_chunk_size (int): Size for follow-up RAG chunks
+    
+    Returns:
+        str: The prepared context
+    """
+    if mode == 'full_context':
+        if selected_files:
+            # Filter context to only include selected files
+            filtered_text = ""
+            current_file = None
+            for line in text.split('\n'):
+                if line.startswith("----- ") and " - " in line:
+                    current_file = line.split(" - ")[0].replace("----- ", "")
+                    if current_file in selected_files:
+                        filtered_text += line + "\n"
+                elif current_file in selected_files:
+                    filtered_text += line + "\n"
+            return filtered_text
+        return text
+    elif mode == 'rag':
+        chunks = chunk_text(text, initial_chunk_size)
+        ranked_chunks = rank_chunks(chunks)
+        prepared_context = ""
+        current_size = 0
+        enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        
+        for chunk in ranked_chunks:
+            chunk_size = len(enc.encode(chunk))
+            if current_size + chunk_size <= followup_chunk_size:
+                prepared_context += chunk + "\n\n"
+                current_size += chunk_size
+            else:
+                break
+        return prepared_context
+    else:
+        raise ValueError("Invalid mode. Choose 'full_context' or 'rag'")
+
 def rank_chunks(chunks):
     """
-    Ranks chunks of text (placeholder function).
-
-    This function is a placeholder for a more sophisticated ranking algorithm.
-    Currently, it returns the chunks in their original order.
+    Ranks chunks of text based on potential relevance.
+    Currently returns chunks in original order, but could be enhanced with
+    more sophisticated ranking algorithms.
 
     Args:
         chunks (list): A list of text chunks to be ranked.
 
     Returns:
-        list: The input chunks in their original order.
+        list: The ranked chunks.
     """
-    return chunks  # Implement your ranking algorithm here
+    return chunks
 
-def chunk_and_rank(combined_text, chunk_size):
+def chunk_text(text, chunk_size):
     """
-    Chunks the combined text and ranks the resulting chunks.
-
-    This function splits the combined text into chunks based on file and function
-    boundaries, then ranks these chunks.
+    Splits text into chunks while maintaining context boundaries.
 
     Args:
-        combined_text (str): The combined text to be chunked and ranked.
-        chunk_size (int): The maximum size (in tokens) for each chunk.
+        text (str): The text to be chunked.
+        chunk_size (int): Target size for each chunk in tokens.
 
     Returns:
-        list: A list of tuples, where each tuple contains (file_name, chunk_content).
+        list: List of text chunks.
     """
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
     chunks = []
     current_chunk = ""
-    current_file = ""
-    
-    for line in combined_text.split('\n'):
-        if line.startswith("----- ") and line.endswith(" -----"):
+    current_tokens = 0
+
+    for line in text.split('\n'):
+        line_tokens = len(enc.encode(line))
+        
+        if current_tokens + line_tokens > chunk_size:
             if current_chunk:
-                chunks.append((current_file, current_chunk))
-                current_chunk = ""
-            current_file = line.strip("-").strip()
+                chunks.append(current_chunk)
+            current_chunk = line
+            current_tokens = line_tokens
         else:
-            current_chunk += line + "\n"
-            if len(enc.encode(current_chunk)) > chunk_size:
-                chunks.append((current_file, current_chunk))
-                current_chunk = ""
-    
+            current_chunk += '\n' + line if current_chunk else line
+            current_tokens += line_tokens
+
     if current_chunk:
-        chunks.append((current_file, current_chunk))
-    
-    ranked_chunks = rank_chunks(chunks)
-    return ranked_chunks
+        chunks.append(current_chunk)
 
-def prepare_context(context_mode='full_context', initial_chunk_size=32000, followup_chunk_size=16000):
-    """
-    Prepares context based on the specified mode.
-
-    This function either returns the full context or uses RAG to prepare a
-    more focused context.
-
-    Args:
-        context_mode (str): The context preparation mode ('full_context' or 'rag').
-        initial_chunk_size (int): The initial chunk size for RAG mode.
-        followup_chunk_size (int): The followup chunk size for RAG mode.
-
-    Returns:
-        str: The prepared context.
-
-    Raises:
-        ValueError: If an invalid mode is specified.
-    """
-    global preprocessed_context, preprocessed_rag_context
-
-    if context_mode == 'full_context':
-        return preprocessed_context
-    elif context_mode == 'rag':
-        return preprocessed_rag_context
-    else:
-        raise ValueError("Invalid mode. Choose 'full_context' or 'rag'.")
-
-def reconstruct_context(ranked_chunks, max_tokens):
-    """
-    Reconstructs context from ranked chunks up to a maximum token limit.
-
-    Args:
-        ranked_chunks (list): A list of ranked text chunks.
-        max_tokens (int): The maximum number of tokens to include in the context.
-
-    Returns:
-        str: The reconstructed context.
-    """
-    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-    context = "Retrieval system has provided these chunks which may be helpful to the query:\n\n"
-    current_tokens = len(enc.encode(context))
-    
-    for file, chunk in ranked_chunks:
-        chunk_tokens = len(enc.encode(chunk))
-        if current_tokens + chunk_tokens > max_tokens:
-            break
-        context += f"{chunk}\n\n"
-        current_tokens += chunk_tokens
-    
-    return context
-
-def initialize_rag_context():
-    """
-    Initializes the RAG context for the application.
-
-    This function loads settings, combines files, and prepares the initial
-    context for the RAG system.
-
-    Note: This function modifies global variables `preprocessed_context`
-    and `preprocessed_rag_context`.
-    """
-    global preprocessed_context, preprocessed_rag_context
-    settings = load_settings()
-    selected_model = settings.selected_model
-    context_mode = settings.context_mode
-    omit_folders = json.loads(settings.omit_folders)
-    omit_extensions = json.loads(settings.omit_extensions)
-    omit_files = json.loads(settings.omit_files)
-    chunk_level = settings.chunk_level
-    initial_chunk_size = settings.initial_chunk_size
-    followup_chunk_size = settings.followup_chunk_size
-
-    print("Setting context folder")
-    context_folder = set_context_folder()
-    print("Combining files")
-    combined_text, total_token_count, _ = combine_files(
-        summarize_subfolder=context_folder, 
-        omit_folders=omit_folders, 
-        omit_extensions=omit_extensions, 
-        omit_files=omit_files, 
-        strip_code=True, 
-        chunk_level=chunk_level
-    )
-
-    print("Reading system message")
-    system_message = read_system_message()
-
-    if context_mode == 'full_context':
-        print("Setting full context")
-        preprocessed_context = combined_text
-    else:  # RAG mode
-        print("Preparing RAG Chunks (takes 10-20 seconds)")
-        preprocessed_rag_context = prepare_context(
-            combined_text=combined_text, 
-            mode='rag', 
-            initial_chunk_size=initial_chunk_size, 
-            followup_chunk_size=followup_chunk_size
-        )
-
-# Initialize global variables for context
-preprocessed_context = ""
-preprocessed_rag_context = ""
-
-def prepare_full_prompt(user_query):
-    """
-    Prepares the full prompt for the AI model, including context and user query.
-
-    Args:
-        user_query (str): The user's query.
-
-    Returns:
-        str: The full prompt including system message, context, and user query.
-    """
-    settings = load_settings()
-    context_mode = settings.context_mode
-    
-    system_message = read_system_message()
-    
-    if context_mode == 'full_context':
-        context = prepare_context(context_mode='full_context')
-        full_prompt = f"{system_message}\n\nContext:\n{context}\n\nUser Query: {user_query}"
-    else:  # RAG mode
-        context = prepare_context(context_mode='rag')
-        full_prompt = (
-            f"{system_message}\n\n<context>Context Chunks:\n{context}\n\n</context>\n"
-            "The context above is provided for your use in responding to the user's query:\n\n"
-            f"User Query: {user_query}"
-        )
-    
-    return full_prompt
+    return chunks
