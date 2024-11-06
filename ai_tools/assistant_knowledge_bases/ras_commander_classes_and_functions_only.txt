@@ -1425,15 +1425,25 @@ All methods are designed to work with the mesh geometry data stored in
 HEC-RAS HDF files, providing functionality to retrieve and process various aspects
 of the 2D flow areas and their associated mesh structures.
 
+
 List of Functions:
 -----------------
 get_mesh_area_names()
     Returns list of 2D mesh area names
 get_mesh_areas()
     Returns 2D flow area perimeter polygons
-mesh_cell_polygons()
+get_mesh_cell_polygons()
     Returns 2D flow mesh cell polygons
-[etc...]
+get_mesh_cell_points()
+    Returns 2D flow mesh cell center points
+get_mesh_cell_faces()
+    Returns 2D flow mesh cell faces
+get_mesh_area_attributes()
+    Returns geometry 2D flow area attributes
+get_mesh_face_property_tables()
+    Returns Face Property Tables for each Face in all 2D Flow Areas
+get_mesh_cell_property_tables()
+    Returns Cell Property Tables for each Cell in all 2D Flow Areas
 
 Each function is decorated with @standardize_input and @log_call for consistent
 input handling and logging functionality.
