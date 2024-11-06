@@ -6,6 +6,14 @@ from the https://github.com/fema-ffrd/rashdf library,
 released under MIT license and Copyright (c) 2024 fema-ffrd
 
 The file has been forked and modified for use in RAS Commander.
+
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in HdfStruc:
+- get_structures()
+- get_geom_structures_attrs()
 """
 from typing import Dict, Any, List, Union
 from pathlib import Path
@@ -24,68 +32,83 @@ logger = get_logger(__name__)
 
 class HdfStruc:
     """
-    HEC-RAS HDF Structures class for handling operations related to structures in HDF files.
+    Handles 2D structure geometry data extraction from HEC-RAS HDF files.
 
-    This class provides methods for extracting and analyzing data about structures
-    from HEC-RAS HDF files. It includes functionality to retrieve structure geometries
-    and attributes.
+    This class provides static methods for extracting and analyzing structure geometries
+    and their attributes from HEC-RAS geometry HDF files. All methods are designed to work
+    without class instantiation.
 
-    Methods in this class use the @standardize_input decorator to handle different
-    input types (file path, etc.) and the @log_call decorator for logging method calls.
-
-    Attributes:
-        GEOM_STRUCTURES_PATH (str): Constant for the HDF path to structures data.
-
-    Note: This class contains static methods and does not require instantiation.
+    Notes
+    -----
+    - 1D Structure data should be accessed via the HdfResultsXsec class
+    - All methods use @standardize_input for consistent file handling
+    - All methods use @log_call for operation logging
+    - Returns GeoDataFrames with both geometric and attribute data
     """
     
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def structures(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_structures(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
         """
-        Extracts structure data from a HEC-RAS geometry HDF5 file and returns it as a GeoDataFrame.
-
-        This function excludes Property Tables, Pier and Abutment Data/Attributes, and Gate Groups.
-        It includes Table Info, Centerlines as LineStrings, Structures Attributes, Bridge Coefficient Attributes,
-        and Profile Data (as a list of station and elevation values for each structure).
+        Extracts structure data from a HEC-RAS geometry HDF5 file.
 
         Parameters
         ----------
         hdf_path : Path
-            Path to the HEC-RAS geometry HDF5 file.
+            Path to the HEC-RAS geometry HDF5 file
         datetime_to_str : bool, optional
-            Convert datetime objects to strings, by default False.
+            If True, converts datetime objects to ISO format strings, by default False
 
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing all relevant structure data with geometries and attributes.
+            Structure data with columns:
+            - Structure ID: unique identifier
+            - Geometry: LineString of structure centerline
+            - Various attribute columns from the HDF file
+            - Profile_Data: list of station/elevation dictionaries
+            - Bridge coefficient attributes (if present)
+            - Table info attributes (if present)
+
+        Notes
+        -----
+        - Group-level attributes are stored in GeoDataFrame.attrs['group_attributes']
+        - Invalid geometries are dropped with warning
+        - All byte strings are decoded to UTF-8
+        - CRS is preserved from the source file
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
                 if "Geometry/Structures" not in hdf:
                     logger.info(f"No structures found in: {hdf_path}")
                     return GeoDataFrame()
-
+                
                 def get_dataset_df(path: str) -> pd.DataFrame:
                     """
-                    Helper function to convert an HDF5 dataset to a pandas DataFrame.
+                    Converts an HDF5 dataset to a pandas DataFrame.
 
                     Parameters
                     ----------
                     path : str
-                        The path to the dataset within the HDF5 file.
+                        Dataset path within the HDF5 file
 
                     Returns
                     -------
                     pd.DataFrame
-                        DataFrame representation of the dataset.
+                        DataFrame containing the dataset values.
+                        - For compound datasets, column names match field names
+                        - For simple datasets, generic column names (Value_0, Value_1, etc.)
+                        - Empty DataFrame if dataset not found
+
+                    Notes
+                    -----
+                    Automatically decodes byte strings to UTF-8 with error handling.
                     """
                     if path not in hdf:
                         logger.warning(f"Dataset not found: {path}")
                         return pd.DataFrame()
-
+                    
                     data = hdf[path][()]
                     
                     if data.dtype.names:
@@ -100,6 +123,7 @@ class HdfStruc:
                         return pd.DataFrame(data, columns=[f'Value_{i}' for i in range(data.shape[1])])
 
                 # Extract relevant datasets
+                group_attrs = HdfBase.get_attrs(hdf, "Geometry/Structures")
                 struct_attrs = get_dataset_df("Geometry/Structures/Attributes")
                 bridge_coef = get_dataset_df("Geometry/Structures/Bridge Coefficient Attributes")
                 table_info = get_dataset_df("Geometry/Structures/Table Info")
@@ -135,7 +159,7 @@ class HdfStruc:
                 struct_gdf = GeoDataFrame(
                     struct_attrs,
                     geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path)
+                    crs=HdfBase.get_projection(hdf_path)
                 )
 
                 # Drop entries with invalid geometries
@@ -205,6 +229,12 @@ class HdfStruc:
 
                 # Final GeoDataFrame
                 logger.info("Successfully extracted structures GeoDataFrame.")
+                
+                # Add group attributes to the GeoDataFrame's attrs['group_attributes']
+                struct_gdf.attrs['group_attributes'] = group_attrs
+                
+                logger.info("Successfully extracted structures GeoDataFrame with attributes.")
+                
                 return struct_gdf
 
         except Exception as e:
@@ -216,30 +246,30 @@ class HdfStruc:
     @standardize_input(file_type='geom_hdf')
     def get_geom_structures_attrs(hdf_path: Path) -> Dict[str, Any]:
         """
-        Return geometry structures attributes from a HEC-RAS HDF file.
-
-        This method extracts attributes related to geometry structures from the HDF file.
+        Extracts structure attributes from a HEC-RAS geometry HDF file.
 
         Parameters
         ----------
         hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
+            Path to the HEC-RAS geometry HDF file
 
         Returns
         -------
         Dict[str, Any]
-            A dictionary containing the geometry structures attributes.
+            Dictionary of structure attributes from the Geometry/Structures group.
+            Returns empty dict if no structures are found.
 
         Notes
         -----
-        If no structures are found in the geometry file, an empty dictionary is returned.
+        Attributes are extracted from the HDF5 group 'Geometry/Structures'.
+        All byte strings in attributes are automatically decoded to UTF-8.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/Structures" not in hdf_file:
                     logger.info(f"No structures found in the geometry file: {hdf_path}")
                     return {}
-                return HdfUtils.get_attrs(hdf_file, "Geometry/Structures")
+                return HdfUtils.hdf5_attrs_to_dict(hdf_file["Geometry/Structures"].attrs)
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
             return {}

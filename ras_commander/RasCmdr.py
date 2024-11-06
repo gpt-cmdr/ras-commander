@@ -21,6 +21,19 @@ Example:
         
         logger.debug("Additional debug information")
         # Function logic here
+        
+        
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasCmdr:
+- compute_plan()
+- compute_parallel()
+- compute_test_mode()
+        
+        
+        
 """
 import os
 import subprocess

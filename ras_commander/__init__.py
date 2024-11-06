@@ -36,6 +36,12 @@ from .HdfUtils import HdfUtils
 from .HdfXsec import HdfXsec
 from .HdfPump import HdfPump
 from .HdfPipe import HdfPipe
+from .HdfInfiltration import HdfInfiltration
+from .RasMapper import RasMapper
+
+# Import plotting classes
+from .HdfPlot import HdfPlot
+from .HdfResultsPlot import HdfResultsPlot
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
@@ -51,6 +57,10 @@ __all__ = [
     "HdfXsec",
     "HdfPump",
     "HdfPipe",
+    "HdfPlot",
+    "HdfResultsPlot",
+    "HdfInfiltration",
+    "RasMapper",
     "standardize_input",
     "ras",
     "init_ras_project",

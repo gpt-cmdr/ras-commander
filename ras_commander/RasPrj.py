@@ -37,6 +37,40 @@ Example:
         
         logger.debug("Additional debug information")
         # Function logic here
+        
+-----
+
+All of the methods in this class are class methods and are designed to be used with instances of the class.
+
+List of Functions in RasPrj:    
+- initialize()
+- _load_project_data()
+- _get_geom_file_for_plan()
+- _parse_plan_file()
+- _parse_unsteady_file()
+- _get_prj_entries()
+- _parse_boundary_condition()
+- is_initialized (property)
+- check_initialized()
+- find_ras_prj()
+- get_project_name()
+- get_prj_entries()
+- get_plan_entries()
+- get_flow_entries()
+- get_unsteady_entries()
+- get_geom_entries()
+- get_hdf_entries()
+- print_data()
+- get_plan_value()
+- get_boundary_conditions()
+        
+Functions in RasPrj that are not part of the class:        
+- init_ras_project()
+- get_ras_exe()
+
+        
+        
+        
 """
 import os
 import re

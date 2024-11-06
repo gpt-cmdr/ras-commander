@@ -1,0 +1,2293 @@
+File: c:\GH\ras-commander\library_assistant\.cursorrules
+==================================================
+Library Assistant: AI-Powered Tool for Managing and Querying Library Content
+
+Project Structure:
+library_assistant/
+├── api/
+│   ├── anthropic.py
+│   └── openai.py
+├── config/
+│   └── config.py
+├── database/
+│   └── models.py
+├── utils/
+│   ├── file_handling.py
+│   ├── cost_estimation.py
+│   ├── conversation.py
+│   └── context_processing.py
+├── web/
+│   ├── routes.py
+│   ├── templates/
+│   └── static/
+└── assistant.py
+
+Program Features:
+1. Integration with Anthropic and OpenAI APIs for AI-powered responses
+2. Context-aware processing using full context or RAG (Retrieval-Augmented Generation) modes
+3. Dynamic file handling and content processing
+4. Cost estimation for API calls
+5. Conversation management and history saving
+6. Web-based user interface using FastAPI
+7. Customizable settings for model selection, context mode, and file handling
+8. Error handling and user guidance
+
+General Coding Rules and Guidelines:
+1. Follow PEP 8 style guidelines for Python code
+2. Use type hints and docstrings for improved code readability
+3. Implement proper error handling and logging
+4. Maintain separation of concerns between modules
+5. Use asynchronous programming where appropriate for improved performance
+6. Implement unit tests for critical functions
+7. Keep sensitive information (e.g., API keys) secure and out of version control
+8. Use meaningful variable and function names
+9. Optimize for readability and maintainability
+10. Regularly update dependencies and address security vulnerabilities
+
+The Library Assistant operates by:
+1. Processing user queries through a web interface
+2. Preparing context based on the selected mode (full context or RAG)
+3. Sending prepared prompts to the chosen AI model (Anthropic or OpenAI)
+4. Streaming and processing AI responses
+5. Estimating and displaying costs for API calls
+6. Managing conversation history and allowing for conversation saving
+7. Providing user guidance and error handling as needed
+
+The AI assistant interacting with the Library Assistant is a helpful expert with experience in:
+- Python programming
+- FastAPI web framework
+- SQLAlchemy ORM
+- Anthropic and OpenAI APIs
+- Natural Language Processing (NLP) techniques
+- Retrieval-Augmented Generation (RAG)
+- Asynchronous programming
+- RESTful API design
+- Database management
+- Cost optimization for API usage
+- Web development (HTML, CSS, JavaScript)
+- Git version control
+
+The assistant should provide accurate, context-aware, and helpful responses while adhering to the Library Assistant's capabilities and limitations. It should offer guidance on effective use of the tool, including query formulation and settings management, while maintaining a professional and knowledgeable persona throughout all interactions.
+
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\api
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\assistant.py
+==================================================
+"""
+Main entry point for the Library Assistant application.
+
+This module initializes the FastAPI application, sets up the necessary routes,
+and provides functions to open the browser and run the application.
+
+Functions:
+- open_browser(): Opens the default web browser to the application URL.
+- run_app(): Starts the FastAPI application using uvicorn.
+"""
+
+import os
+import uvicorn
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from web.routes import router
+import webbrowser
+from utils.context_processing import initialize_rag_context
+
+# Initialize FastAPI application
+print("Initializing FastAPI")
+app = FastAPI(
+    title="Library Assistant",
+    description="An AI-powered assistant for managing and querying library content.",
+    version="1.0.0"
+)
+
+# Create necessary directories if they don't exist
+os.makedirs("web/templates", exist_ok=True)
+os.makedirs("web/static", exist_ok=True)
+
+# Mount the static files directory
+app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+# Include the router from web/routes.py
+app.include_router(router)
+
+def open_browser():
+    """
+    Opens the default web browser to the application URL.
+    
+    This function is called when the application starts to provide
+    easy access to the web interface.
+    """
+    webbrowser.open("http://127.0.0.1:8000")
+
+def run_app():
+    """
+    Starts the FastAPI application using uvicorn.
+    
+    This function configures and runs the uvicorn server with the
+    FastAPI application.
+    """
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+if __name__ == "__main__":
+    # Initialize RAG context at startup
+    try:
+        initialize_rag_context()
+        print("RAG context initialized successfully.")
+    except Exception as e:
+        print(f"Failed to initialize RAG context: {e}")
+
+    # Open the browser
+    open_browser()
+
+    # Run the app
+    run_app()
+
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\config
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\database
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\path
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\README.md
+==================================================
+# RAS Commander (ras-commander) v0.43.0
+
+RAS Commander is a Python library for automating HEC-RAS operations, providing a comprehensive set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library is an evolution of the RASCommander 1.0 Python Notebook Application, now offering enhanced capabilities and improved integration with HEC-RAS version 6.0 and later.
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Quick Start](#quick-start)
+5. [Key Components](#key-components)
+6. [HDF File Handling](#hdf-file-handling)
+7. [Project Organization](#project-organization)
+8. [Logging System](#logging-system)
+9. [Standardized Input Handling](#standardized-input-handling)
+10. [Error Handling and Logging Best Practices](#error-handling-and-logging-best-practices)
+11. [Working with HDF Files](#working-with-hdf-files)
+12. [Accessing HEC Examples through RasExamples](#accessing-hec-examples-through-rasexamples)
+13. [Performance Optimization](#performance-optimization)
+14. [Jupyter Notebooks](#jupyter-notebooks)
+15. [Examples](#examples)
+16. [Backwards Compatibility and Breaking Changes](#backwards-compatibility-and-breaking-changes)
+17. [Contributing](#contributing)
+18. [Related Resources](#related-resources)
+19. [Acknowledgments](#acknowledgments)
+20. [License](#license)
+
+## Introduction
+
+RAS Commander is designed to streamline and automate workflows for water resources engineers working with HEC-RAS. It provides a Pythonic interface to HEC-RAS operations, enabling users to programmatically manage projects, execute simulations, and analyze results. With the addition of comprehensive HDF file handling capabilities, RAS Commander now offers powerful tools for working with HEC-RAS output data.
+
+## Features
+
+- Automate HEC-RAS project management and simulations
+- Support for both single and multiple project instances
+- Parallel execution of HEC-RAS plans
+- Comprehensive HDF file handling and analysis
+- Utilities for managing geometry, plan, and unsteady flow files
+- Example project management for testing and development
+- Two primary operation modes: "Run Missing" and "Build from DSS"
+- Advanced logging and error handling system
+- Standardized input handling across the library
+- Performance optimization for large-scale simulations
+- Integration with data analysis and visualization libraries
+
+## Installation
+
+To install RAS Commander and its dependencies, use the following commands:
+
+```bash
+pip install h5py numpy pandas requests tqdm scipy
+pip install ras-commander
+```
+
+If you encounter dependency issues, particularly with numpy, try clearing your local pip packages and creating a new virtual environment:
+
+```bash
+rm -rf C:\Users\your_username\AppData\Roaming\Python\
+python -m venv new_environment
+source new_environment/bin/activate  # On Windows, use: new_environment\Scripts\activate
+pip install ras-commander
+```
+
+Requirements:
+- Python 3.10 or later
+- HEC-RAS 6.2 or later (earlier versions may work but are not officially supported)
+
+## Quick Start
+
+Here's a quick example demonstrating some of the core functionalities of RAS Commander, including HDF file handling:
+
+```python
+from ras_commander import init_ras_project, RasCmdr, RasPlan, HdfResultsMesh
+import matplotlib.pyplot as plt
+
+# Initialize a project
+project = init_ras_project(r"/path/to/project", "6.5")
+
+# Execute a single plan
+RasCmdr.compute_plan("01", dest_folder=r"/path/to/results", overwrite_dest=True)
+
+# Modify a plan
+RasPlan.set_geom("01", "02")
+
+# Extract and plot mesh results
+plan_hdf_path = RasPlan.get_results_path("01")
+mesh_name = "2D Flow Area"
+water_surface = HdfResultsMesh.mesh_timeseries_output(plan_hdf_path, mesh_name, "Water Surface")
+
+plt.figure(figsize=(10, 6))
+plt.plot(water_surface.time, water_surface.mean(axis=1))
+plt.title("Average Water Surface Elevation Over Time")
+plt.xlabel("Time")
+plt.ylabel("Water Surface Elevation (ft)")
+plt.show()
+```
+
+This example demonstrates project initialization, plan execution, plan modification, and HDF result extraction and visualization.
+
+## Key Components
+
+- `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
+- `RasCmdr`: Handles execution of HEC-RAS simulations
+- `RasPlan`: Provides functions for modifying and updating plan files
+- `RasGeo`: Handles operations related to geometry files
+- `RasUnsteady`: Manages unsteady flow file operations
+- `RasUtils`: Contains utility functions for file operations and data management
+- `RasExamples`: Manages and loads HEC-RAS example projects
+- `RasHdf`: Provides utilities for working with HDF files in HEC-RAS projects
+- `HdfBase`: Fundamental HDF file operations
+- `HdfBndry`: Boundary condition data handling
+- `HdfMesh`: Mesh-related operations
+- `HdfPlan`: Plan file HDF operations
+- `HdfResultsMesh`: Mesh result processing
+- `HdfResultsPlan`: Plan result management
+- `HdfResultsXsec`: Cross-section result handling
+- `HdfStruc`: Structure data management
+- `HdfUtils`: HDF utility functions
+- `HdfXsec`: Cross-section operations
+
+## HDF File Handling
+
+RAS Commander now includes a suite of classes for working with HEC-RAS HDF files:
+
+- `HdfBase`: Provides fundamental methods for interacting with HEC-RAS HDF files.
+- `HdfBndry`: Handles boundary-related data from HEC-RAS HDF files.
+- `HdfMesh`: Manages mesh-related operations on HEC-RAS HDF files.
+- `HdfPlan`: Handles operations on HEC-RAS plan HDF files.
+- `HdfResultsMesh`: Processes mesh-related results from HEC-RAS HDF files.
+- `HdfResultsPlan`: Manages plan-related results from HEC-RAS HDF files.
+- `HdfResultsXsec`: Handles cross-section results from HEC-RAS HDF files.
+- `HdfStruc`: Manages structure-related data in HEC-RAS HDF files.
+- `HdfUtils`: Provides utility functions for HDF file operations.
+- `HdfXsec`: Handles cross-section related operations on HEC-RAS HDF files.
+
+These classes enable efficient extraction, analysis, and manipulation of data stored in HEC-RAS HDF files, enhancing the library's capabilities for advanced hydraulic modeling tasks.
+
+## Project Organization
+
+The RAS Commander project is organized as follows:
+
+```
+ras_commander
+├── .github
+│   └── workflows
+│       └── python-package.yml
+├── ras_commander
+│   ├── __init__.py
+│   ├── _version.py
+│   ├── RasCmdr.py
+│   ├── RasExamples.py
+│   ├── RasGeo.py
+│   ├── RasHdf.py
+│   ├── RasPlan.py
+│   ├── RasPrj.py
+│   ├── RasUnsteady.py
+│   ├── RasUtils.py
+│   ├── HdfBase.py
+│   ├── HdfBndry.py
+│   ├── HdfMesh.py
+│   ├── HdfPlan.py
+│   ├── HdfResultsMesh.py
+│   ├── HdfResultsPlan.py
+│   ├── HdfResultsXsec.py
+│   ├── HdfStruc.py
+│   ├── HdfUtils.py
+│   └── HdfXsec.py
+├── examples
+│   └── ... (example files)
+├── tests
+│   └── ... (test files)
+├── .gitignore
+├── LICENSE
+├── README.md
+├── STYLE_GUIDE.md
+├── Comprehensive_Library_Guide.md
+├── pyproject.toml
+├── setup.cfg
+├── setup.py
+└── requirements.txt
+```
+
+## Logging System
+
+RAS Commander now features a robust logging system to enhance debugging and traceability. The system is configured in the `logging_config.py` file and provides the following features:
+
+- Centralized logging configuration
+- Multiple log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Console and file logging
+- Automatic function call logging with the `@log_call` decorator
+
+To use logging in your scripts:
+
+```python
+from ras_commander import get_logger, log_call
+
+logger = get_logger(__name__)
+
+@log_call
+def my_function():
+    logger.debug("Additional debug information")
+    # Function logic here
+```
+
+This system allows for consistent and informative logging across the entire library and your custom scripts.
+
+## Standardized Input Handling
+
+The `@standardize_input` decorator has been introduced to streamline input handling across the library. This decorator automatically processes various input types and converts them to a standardized format, ensuring consistency and reducing boilerplate code.
+
+Usage example:
+
+```python
+from ras_commander import standardize_input
+
+@standardize_input(file_type='plan_hdf')
+def my_function(hdf_path: Path):
+    # Function logic here
+    pass
+
+# Can be called with various input types
+my_function("path/to/file.hdf")
+my_function(Path("path/to/file.hdf"))
+my_function(h5py.File("path/to/file.hdf", 'r'))
+```
+
+This decorator handles different input types (string paths, Path objects, h5py.File objects) and ensures that the function receives a standardized Path object.
+
+
+## Error Handling and Logging Best Practices
+
+RAS Commander emphasizes robust error handling and informative logging. Follow these best practices in your scripts:
+
+1. Use try-except blocks to catch and handle specific exceptions:
+
+```python
+try:
+    result = RasCmdr.compute_plan(plan_number)
+except FileNotFoundError as e:
+    logger.error(f"Plan file not found: {e}")
+except ValueError as e:
+    logger.error(f"Invalid plan parameter: {e}")
+except Exception as e:
+    logger.error(f"Unexpected error during plan computation: {e}")
+```
+
+2. Use the logging system instead of print statements:
+
+```python
+logger.info("Starting HEC-RAS simulation...")
+logger.debug(f"Using parameters: {params}")
+logger.warning("Deprecated feature used. Consider updating.")
+logger.error(f"Failed to execute plan: {error_message}")
+```
+
+3. Set appropriate log levels for different environments:
+
+```python
+import logging
+logging.getLogger('ras_commander').setLevel(logging.DEBUG)  # For development
+logging.getLogger('ras_commander').setLevel(logging.INFO)   # For production
+```
+
+4. Use the `@log_call` decorator for automatic function call logging:
+
+```python
+@log_call
+def my_function(arg1, arg2):
+    # Function logic here
+    pass
+```
+
+By following these practices, you'll create more robust and maintainable scripts that integrate well with RAS Commander's error handling and logging system.
+
+## Working with HDF Files
+
+RAS Commander provides a comprehensive set of tools for working with HEC-RAS HDF files. Here's an overview of some key operations:
+
+1. Accessing HDF file metadata:
+```python
+from ras_commander import HdfUtils
+
+hdf_paths = HdfUtils.get_hdf_paths_with_properties(plan_hdf_path)
+print(hdf_paths)
+```
+
+2. Extracting mesh results:
+```python
+from ras_commander import HdfResultsMesh
+
+water_surface = HdfResultsMesh.mesh_timeseries_output(plan_hdf_path, mesh_name, "Water Surface")
+print(water_surface)
+```
+
+3. Working with plan results:
+```python
+from ras_commander import HdfResultsPlan
+
+runtime_data = HdfResultsPlan.get_runtime_data(plan_hdf_path)
+print(runtime_data)
+```
+
+4. Analyzing cross-section data:
+```python
+from ras_commander import HdfResultsXsec
+
+wsel_data = HdfResultsXsec.cross_sections_wsel(plan_hdf_path)
+print(wsel_data)
+```
+
+These classes provide a high-level interface to HDF data, making it easier to extract and analyze HEC-RAS results programmatically. For more detailed information on working with HDF files, refer to the comprehensive library guide.
+
+## Accessing HEC Examples through RasExamples
+
+The `RasExamples` class has been enhanced to provide more robust functionality for managing HEC-RAS example projects:
+
+```python
+from ras_commander import RasExamples
+
+# Initialize RasExamples
+ras_examples = RasExamples()
+
+# Download and extract example projects
+ras_examples.get_example_projects("6.6")
+
+# List available project categories
+categories = ras_examples.list_categories()
+print(f"Available categories: {categories}")
+
+# List projects in a specific category
+steady_flow_projects = ras_examples.list_projects("Steady Flow")
+print(f"Steady Flow projects: {steady_flow_projects}")
+
+# Extract specific projects
+extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
+for path in extracted_paths:
+    print(f"Extracted project to: {path}")
+
+# Clean up extracted projects when done
+ras_examples.clean_projects_directory()
+
+# Download FEMA BLE models
+ras_examples.download_fema_ble_model("12345678", output_dir="path/to/output")
+```
+
+These methods allow for easy access, management, and cleanup of example projects, facilitating testing and development with real-world HEC-RAS models.
+
+Certainly. Here are the final sections of the revised README:
+
+```markdown
+## Jupyter Notebooks
+
+RAS Commander now includes several Jupyter notebooks in the `examples/` folder to demonstrate advanced usage and analysis techniques:
+
+1. `14_Core_Sensitivity.ipynb`: This notebook demonstrates how to perform a sensitivity analysis on the number of cores used for HEC-RAS computations. It helps in determining the optimal core count for your specific model and hardware.
+
+2. `18_2d_hdf_data_extraction.ipynb`: This notebook showcases techniques for extracting and analyzing 2D data from HEC-RAS HDF files. It covers topics such as mesh data extraction, result visualization, and time series analysis.
+
+3. `19_benchmarking_version_6.6.ipynb`: This notebook provides a framework for benchmarking different versions of HEC-RAS (6.6, 6.5, etc.) using RAS Commander. It helps in comparing performance across versions and identifying potential improvements or regressions.
+
+These notebooks serve as both examples and templates for your own analysis tasks. They can be found in the `examples/` directory of the RAS Commander repository.
+
+## Examples
+
+The `examples/` directory contains a variety of scripts and notebooks demonstrating the use of RAS Commander, including the new HDF-related functionalities:
+
+1. Basic project initialization and plan execution
+2. Parallel execution of multiple plans
+3. Geometry and unsteady flow file operations
+4. HDF file analysis and data extraction
+5. Result visualization using matplotlib
+6. Performance optimization techniques
+7. Integration with data analysis libraries like pandas and numpy
+
+Here's a quick example of extracting and plotting 2D mesh results:
+
+```python
+from ras_commander import HdfResultsMesh
+import matplotlib.pyplot as plt
+
+# Extract water surface data
+water_surface = HdfResultsMesh.mesh_timeseries_output(hdf_path, mesh_name, "Water Surface")
+
+# Calculate average water surface elevation over time
+mean_ws = water_surface.mean(axis=1)
+
+# Plot the results
+plt.figure(figsize=(10, 6))
+plt.plot(water_surface.time, mean_ws)
+plt.title("Average Water Surface Elevation Over Time")
+plt.xlabel("Time")
+plt.ylabel("Water Surface Elevation (ft)")
+plt.show()
+```
+
+For more examples, refer to the scripts and notebooks in the `examples/` directory.
+
+## Backwards Compatibility and Breaking Changes
+
+RAS Commander strives to maintain backwards compatibility where possible. However, the introduction of new features, especially related to HDF file handling, has led to some changes that users should be aware of:
+
+1. HDF File Handling: The new HDF-related classes (`HdfBase`, `HdfBndry`, etc.) replace some older methods of accessing HDF data. While the old methods are still supported, we recommend transitioning to the new classes for improved performance and functionality.
+
+2. Logging System: The introduction of the centralized logging system may require updates to existing scripts that used custom logging setups.
+
+3. Input Standardization: The `@standardize_input` decorator changes how some functions handle input parameters. While it generally improves usability, it may require adjustments in scripts that relied on specific input formats.
+
+4. RAS Version Support: RAS Commander now primarily supports HEC-RAS version 6.0 and later. While it may still work with earlier versions, full functionality is not guaranteed.
+
+If you encounter any issues when upgrading to the latest version of RAS Commander, please refer to the migration guide in the documentation or open an issue on the GitHub repository.
+
+## Contributing
+
+We welcome contributions to RAS Commander! Here are some guidelines for contributing, especially when working with the new HDF-related classes:
+
+1. Follow the [Style Guide](STYLE_GUIDE.md) for code formatting and conventions.
+2. When adding new HDF-related functionality:
+   - Ensure compatibility with existing HDF classes
+   - Add appropriate error handling and logging
+   - Include type hints for function parameters and return values
+   - Write comprehensive docstrings with examples
+3. Add unit tests for new functions or methods in the `tests/` directory.
+4. Update the Comprehensive Library Guide with any new functionality.
+5. For significant changes, create a feature branch and submit a pull request.
+6. Ensure all tests pass before submitting a pull request.
+7. Update the README.md file if your changes affect the library's usage or features.
+
+For more detailed information on contributing, please refer to our [Contributing Guide](CONTRIBUTING.md).
+
+## Related Resources
+
+- [HEC-Commander Blog](https://github.com/billk-FM/HEC-Commander/tree/main/Blog): In-depth articles on HEC-RAS automation and advanced modeling techniques.
+- [GPT-Commander YouTube Channel](https://www.youtube.com/@GPT_Commander): Video tutorials and demonstrations of RAS Commander capabilities.
+- [ChatGPT Examples for Water Resources Engineers](https://github.com/billk-FM/HEC-Commander/tree/main/ChatGPT%20Examples): AI-assisted problem-solving for hydraulic modeling tasks.
+- [HEC-RAS Documentation](https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx): Official documentation for HEC-RAS, including details on HDF file structure.
+- [h5py Documentation](https://docs.h5py.org/en/stable/): Documentation for the h5py library, which RAS Commander uses for low-level HDF file operations.
+- [Dask Documentation](https://docs.dask.org/en/latest/): Information on using Dask for large-scale data processing, which can be helpful when working with large HEC-RAS models.
+
+## Acknowledgments
+
+RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. We would like to acknowledge the following contributions and influences:
+
+1. Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration and utility functions adapted for use in RAS Commander.
+
+2. The [`rashdf`](https://github.com/fema-ffrd/rashdf) library by Thomas Williams, PE (Sr. Software Engineer / Water Resources Engineer @ WSP), which provided substantial code and inspiration for HDF file handling in RAS Commander.
+
+3. Chris Goodell's "Breaking the HEC-RAS Code" - Used as a reference for understanding the inner workings of HEC-RAS.
+
+4. The [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) repository, which served as the initial inspiration and code base for RAS Commander.
+
+5. The HEC-RAS development team at the US Army Corps of Engineers for their ongoing work on HEC-RAS and its file formats.
+
+6. The open-source community, particularly the developers of h5py, numpy, pandas, and other libraries that RAS Commander relies on.
+
+7. The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.
+We are grateful for these contributions and the broader community of water resources engineers and developers who continue to push the boundaries of hydraulic modeling and automation.
+
+## License
+
+RAS Commander is released under the MIT License. See the [LICENSE](LICENSE) file for details.
+```
+
+This completes the fully revised README. It now includes comprehensive information about the library's features, usage, and recent updates, with a focus on the new HDF-related functionalities and best practices for using RAS Commander.
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\requirements.txt
+==================================================
+# Web framework and ASGI server
+fastapi==0.68.0
+uvicorn==0.15.0
+
+# Database ORM
+sqlalchemy==1.4.23
+
+# Template engine
+jinja2==3.0.1
+
+# Data manipulation
+pandas==1.3.3
+
+# AI/ML libraries
+anthropic==0.2.7
+openai==0.27.0
+tiktoken==0.3.0
+
+# Code parsing and manipulation
+astor==0.8.1
+
+# Markdown processing
+markdown==3.3.4
+
+# Form handling for FastAPI
+python-multipart==0.0.5
+
+# HTTP client for Python
+requests==2.26.0
+
+# Environment variable management
+python-dotenv==0.19.0
+
+# YAML parsing (if needed for configuration)
+pyyaml==5.4.1
+
+# Date and time manipulation
+python-dateutil==2.8.2
+
+# Progress bars (optional, for long-running tasks)
+tqdm==4.62.3
+
+# Testing framework
+pytest==6.2.5
+
+# Linting and code formatting
+flake8==3.9.2
+black==21.9b0
+
+# Type checking
+mypy==0.910
+
+# Documentation generation
+sphinx==4.2.0
+
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\utils
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\web
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\api\anthropic.py
+==================================================
+"""
+Anthropic API integration for the Library Assistant.
+
+This module provides functions for interacting with the Anthropic API,
+specifically for the Claude model.
+
+Functions:
+- anthropic_stream_response(client, prompt, max_tokens=8000): Streams a response from the Anthropic API.
+"""
+
+import anthropic
+
+async def anthropic_stream_response(client, prompt, max_tokens=8000):
+    """
+    Streams a response from the Anthropic API using the Claude model.
+
+    This function sends a prompt to the Anthropic API and yields chunks of the response.
+
+    Args:
+        client (anthropic.Anthropic): An initialized Anthropic client.
+        prompt (str): The prompt to send to the API.
+        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 8000.
+
+    Yields:
+        str: Chunks of the response from the API.
+
+    Raises:
+        anthropic.APIError: If there's an error in the API call.
+        Exception: For any other unexpected errors.
+    """
+    try:
+        with client.messages.stream(
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            model="claude-3-5-sonnet-20240620"
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
+    except anthropic.APIError as e:
+        raise anthropic.APIError(f"Anthropic API error: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Unexpected error in Anthropic API call: {str(e)}")
+
+def get_anthropic_client(api_key):
+    """
+    Creates and returns an Anthropic client.
+
+    Args:
+        api_key (str): The Anthropic API key.
+
+    Returns:
+        anthropic.Anthropic: An initialized Anthropic client.
+
+    Raises:
+        ValueError: If the API key is not provided.
+    """
+    if not api_key:
+        raise ValueError("Anthropic API key not provided.")
+    return anthropic.Anthropic(api_key=api_key)
+
+def validate_anthropic_api_key(api_key):
+    """
+    Validates the Anthropic API key by making a test API call.
+
+    Args:
+        api_key (str): The Anthropic API key to validate.
+
+    Returns:
+        bool: True if the API key is valid, False otherwise.
+    """
+    try:
+        client = get_anthropic_client(api_key)
+        # Make a minimal API call to test the key
+        client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=1,
+            messages=[
+                {"role": "user", "content": "Test"}
+            ]
+        )
+        return True
+    except (anthropic.APIError, ValueError):
+        return False
+
+def get_anthropic_models():
+    """
+    Returns a list of available Anthropic models.
+
+    This function provides a static list of Anthropic models that are
+    supported by the Library Assistant.
+
+    Returns:
+        list: A list of strings representing available Anthropic model names.
+    """
+    return ["claude-3-5-sonnet-20240620"]
+
+def stream_response(client, prompt, max_tokens=8000):
+    """
+    Streams a response from the Anthropic API.
+
+    This function is a wrapper around anthropic_stream_response to provide
+    a consistent interface across different API providers.
+
+    Args:
+        client (anthropic.Anthropic): An initialized Anthropic client.
+        prompt (str): The prompt to send to the API.
+        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 8000.
+
+    Returns:
+        str: The complete response from the API.
+    """
+    return anthropic_stream_response(client, prompt, max_tokens)
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\api\openai.py
+==================================================
+"""
+OpenAI API integration for the Library Assistant.
+
+This module provides functions for interacting with the OpenAI API,
+specifically for GPT models.
+
+Functions:
+- get_openai_client(api_key): Creates and returns an OpenAI client.
+- openai_stream_response(model, messages, max_tokens=16000): Streams a response from the OpenAI API.
+- validate_openai_api_key(api_key): Validates the OpenAI API key.
+- get_openai_models(): Returns a list of available OpenAI models.
+"""
+
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessage
+
+def get_openai_client(api_key):
+    """
+    Creates and returns an OpenAI client.
+
+    Args:
+        api_key (str): The OpenAI API key.
+
+    Returns:
+        OpenAI: An initialized OpenAI client.
+
+    Raises:
+        ValueError: If the API key is not provided.
+    """
+    if not api_key:
+        raise ValueError("OpenAI API key not provided.")
+    return OpenAI(api_key=api_key)
+
+async def openai_stream_response(client, model, messages, max_tokens=16000):
+    """
+    Streams a response from the OpenAI API using the specified model.
+
+    This function sends messages to the OpenAI API and yields chunks of the response.
+
+    Args:
+        client (OpenAI): An initialized OpenAI client.
+        model (str): The name of the OpenAI model to use.
+        messages (list): A list of message dictionaries to send to the API.
+        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 16000.
+
+    Yields:
+        str: Chunks of the response from the API.
+
+    Raises:
+        openai.OpenAIError: If there's an error in the API call.
+        Exception: For any other unexpected errors.
+    """
+    try:
+        stream = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            stream=True
+        )
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+    except openai.OpenAIError as e:
+        raise openai.OpenAIError(f"OpenAI API error: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Unexpected error in OpenAI API call: {str(e)}")
+
+def validate_openai_api_key(api_key):
+    """
+    Validates the OpenAI API key by making a test API call.
+
+    Args:
+        api_key (str): The OpenAI API key to validate.
+
+    Returns:
+        bool: True if the API key is valid, False otherwise.
+    """
+    try:
+        client = get_openai_client(api_key)
+        # Make a minimal API call to test the key
+        client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Test"}],
+            max_tokens=1
+        )
+        return True
+    except (openai.OpenAIError, ValueError):
+        return False
+
+def get_openai_models():
+    """
+    Returns a list of available OpenAI models.
+
+    This function provides a static list of OpenAI models that are
+    supported by the Library Assistant.
+
+    Returns:
+        list: A list of strings representing available OpenAI model names.
+    """
+    return ["gpt-4o-2024-08-06", "gpt-4o-mini", "o1-mini"]
+
+def stream_response(client, model, messages, max_tokens=16000):
+    """
+    Streams a response from the OpenAI API.
+
+    This function is a wrapper around openai_stream_response to provide
+    a consistent interface across different API providers.
+
+    Args:
+        client (OpenAI): An initialized OpenAI client.
+        model (str): The name of the OpenAI model to use.
+        messages (list): A list of message dictionaries to send to the API.
+        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 16000.
+
+    Returns:
+        str: The complete response from the API.
+    """
+    return openai_stream_response(client, model, messages, max_tokens)
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\config\config.py
+==================================================
+"""
+Configuration module for the Library Assistant.
+
+This module provides functions for loading and updating settings,
+as well as defining default settings for the application.
+
+Functions:
+- load_settings(): Loads the current settings from the database or initializes with defaults.
+- update_settings(data): Updates the settings in the database with new values.
+
+Constants:
+- DEFAULT_SETTINGS: A dictionary containing the default settings for the application.
+"""
+
+import json
+from sqlalchemy.orm import sessionmaker
+from database.models import Settings, engine
+
+# Create a SessionLocal class for database sessions
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Default settings for the application
+DEFAULT_SETTINGS = {
+    "anthropic_api_key": "",
+    "openai_api_key": "",
+    "selected_model": "",
+    "context_mode": "",
+    "omit_folders": [
+        "Bald Eagle Creek", 
+        "__pycache__", 
+        ".git", 
+        ".github", 
+        "tests", 
+        "build", 
+        "dist", 
+        "ras_commander.egg-info", 
+        "venv", 
+        "example_projects", 
+        "llm_summary", 
+        "misc", 
+        "future", 
+        "ai_tools",
+        "docs"
+        "Example_Projects_6_6"
+    ],
+    "omit_extensions": [
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+        '.zip', '.rar', '.7z', '.tar', '.gz',
+        '.exe', '.dll', '.so', '.dylib',
+        '.pyc', '.pyo', '.pyd',
+        '.class',
+        '.log', '.tmp', '.bak', '.swp',
+        '.bat', '.sh',
+    ],
+    "omit_files": [
+        'FunctionList.md',
+        'DS_Store',
+        'Thumbs.db',
+        'llmsummarize',
+        'example_projects.zip',
+        '11_accessing_example_projects.ipynb',
+        'Example_Projects_6_5.zip',
+        'github_code_assistant.ipynb',
+        'example_projects.ipynb',
+        '11_Using_RasExamples.ipynb',
+        'example_projects.csv',
+        'rascommander_code_assistant.ipynb',
+        'RasExamples.py'
+    ],
+    "chunk_level": "function",
+    "initial_chunk_size": 32000,
+    "followup_chunk_size": 16000
+}
+
+def load_settings():
+    """
+    Loads the current settings from the database or initializes with defaults.
+
+    This function queries the database for existing settings. If no settings are found,
+    it initializes the database with the default settings. The settings are stored
+    as a singleton record in the database.
+
+    Returns:
+        Settings: An instance of the Settings model containing the current settings.
+    """
+    db = SessionLocal()
+    settings = db.query(Settings).filter(Settings.id == "singleton").first()
+    if not settings:
+        # Initialize with default settings
+        settings = Settings(
+            id="singleton",
+            **{key: json.dumps(value) if isinstance(value, list) else value 
+               for key, value in DEFAULT_SETTINGS.items()}
+        )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    db.close()
+    return settings
+
+def update_settings(data):
+    """
+    Updates the settings in the database with new values.
+
+    This function takes a dictionary of settings to update, queries the database
+    for the existing settings, and updates the values accordingly. For list-type
+    settings (omit_folders, omit_extensions, omit_files), the values are JSON-encoded
+    before storage.
+
+    Args:
+        data (dict): A dictionary containing the settings to update.
+                     Keys should match the attribute names in the Settings model.
+
+    Note:
+        This function does not return any value. It directly updates the database.
+    """
+    db = SessionLocal()
+    settings = db.query(Settings).filter(Settings.id == "singleton").first()
+    for key, value in data.items():
+        if key in ["omit_folders", "omit_extensions", "omit_files"]:
+            setattr(settings, key, json.dumps(value))
+        else:
+            setattr(settings, key, value)
+    db.commit()
+    db.close()
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\database\models.py
+==================================================
+"""
+Database models for the Library Assistant.
+
+This module defines the SQLAlchemy ORM models used for storing application settings.
+
+Classes:
+- Base: The declarative base class for SQLAlchemy models.
+- Settings: The model representing application settings.
+
+Constants:
+- DATABASE_URL: The URL for the SQLite database.
+- engine: The SQLAlchemy engine instance.
+"""
+
+from sqlalchemy import create_engine, Column, String, Text, Integer
+from sqlalchemy.orm import declarative_base
+
+# Define the database URL
+DATABASE_URL = "sqlite:///./settings.db"
+
+# Create the SQLAlchemy engine
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+# Create the declarative base class
+Base = declarative_base()
+
+class Settings(Base):
+    """
+    SQLAlchemy ORM model for storing application settings.
+
+    This class represents a single row in the settings table, which stores
+    all configuration options for the Library Assistant application.
+
+    Attributes:
+        id (str): Primary key, set to "singleton" as there's only one settings record.
+        anthropic_api_key (str): API key for Anthropic services.
+        openai_api_key (str): API key for OpenAI services.
+        selected_model (str): The currently selected AI model.
+        context_mode (str): The context handling mode (e.g., 'full_context' or 'rag').
+        omit_folders (str): JSON string of folders to omit from processing.
+        omit_extensions (str): JSON string of file extensions to omit from processing.
+        omit_files (str): JSON string of specific files to omit from processing.
+        chunk_level (str): The level at which to chunk text (e.g., 'function').
+        initial_chunk_size (int): The initial size of text chunks for processing.
+        followup_chunk_size (int): The size of follow-up chunks for processing.
+    """
+
+    __tablename__ = "settings"
+
+    id = Column(String, primary_key=True, index=True, default="singleton")
+    anthropic_api_key = Column(Text, nullable=True)
+    openai_api_key = Column(Text, nullable=True)
+    selected_model = Column(String, nullable=True)
+    context_mode = Column(String, nullable=True)
+    omit_folders = Column(Text, nullable=True)
+    omit_extensions = Column(Text, nullable=True)
+    omit_files = Column(Text, nullable=True)
+    chunk_level = Column(String, nullable=True)
+    initial_chunk_size = Column(Integer, default=32000)
+    followup_chunk_size = Column(Integer, default=16000)
+
+# Create the database tables
+Base.metadata.create_all(bind=engine)
+
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\path\to
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\utils\context_processing.py
+==================================================
+"""
+Utility functions for context processing in the Library Assistant.
+
+This module provides functions for ranking and chunking text,
+preparing context for AI processing, and initializing the RAG context.
+
+Functions:
+- rank_chunks(chunks): Ranks chunks of text (placeholder function).
+- chunk_and_rank(combined_text, chunk_size): Chunks and ranks the combined text.
+- prepare_context(combined_text, mode='full_context', initial_chunk_size=32000, followup_chunk_size=16000): Prepares context based on the specified mode.
+- reconstruct_context(ranked_chunks, max_tokens): Reconstructs context from ranked chunks.
+- initialize_rag_context(): Initializes the RAG context for the application.
+- prepare_full_prompt(user_query): Prepares the full prompt for the AI model, including context and user query.
+"""
+
+import tiktoken
+from pathlib import Path
+from config.config import load_settings
+from utils.file_handling import combine_files, read_system_message, set_context_folder
+import json
+
+def rank_chunks(chunks):
+    """
+    Ranks chunks of text (placeholder function).
+
+    This function is a placeholder for a more sophisticated ranking algorithm.
+    Currently, it returns the chunks in their original order.
+
+    Args:
+        chunks (list): A list of text chunks to be ranked.
+
+    Returns:
+        list: The input chunks in their original order.
+    """
+    return chunks  # Implement your ranking algorithm here
+
+def chunk_and_rank(combined_text, chunk_size):
+    """
+    Chunks the combined text and ranks the resulting chunks.
+
+    This function splits the combined text into chunks based on file and function
+    boundaries, then ranks these chunks.
+
+    Args:
+        combined_text (str): The combined text to be chunked and ranked.
+        chunk_size (int): The maximum size (in tokens) for each chunk.
+
+    Returns:
+        list: A list of tuples, where each tuple contains (file_name, chunk_content).
+    """
+    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    chunks = []
+    current_chunk = ""
+    current_file = ""
+    
+    for line in combined_text.split('\n'):
+        if line.startswith("----- ") and line.endswith(" -----"):
+            if current_chunk:
+                chunks.append((current_file, current_chunk))
+                current_chunk = ""
+            current_file = line.strip("-").strip()
+        else:
+            current_chunk += line + "\n"
+            if len(enc.encode(current_chunk)) > chunk_size:
+                chunks.append((current_file, current_chunk))
+                current_chunk = ""
+    
+    if current_chunk:
+        chunks.append((current_file, current_chunk))
+    
+    ranked_chunks = rank_chunks(chunks)
+    return ranked_chunks
+
+def prepare_context(context_mode='full_context', initial_chunk_size=32000, followup_chunk_size=16000):
+    """
+    Prepares context based on the specified mode.
+
+    This function either returns the full context or uses RAG to prepare a
+    more focused context.
+
+    Args:
+        context_mode (str): The context preparation mode ('full_context' or 'rag').
+        initial_chunk_size (int): The initial chunk size for RAG mode.
+        followup_chunk_size (int): The followup chunk size for RAG mode.
+
+    Returns:
+        str: The prepared context.
+
+    Raises:
+        ValueError: If an invalid mode is specified.
+    """
+    global preprocessed_context, preprocessed_rag_context
+
+    if context_mode == 'full_context':
+        return preprocessed_context
+    elif context_mode == 'rag':
+        return preprocessed_rag_context
+    else:
+        raise ValueError("Invalid mode. Choose 'full_context' or 'rag'.")
+
+def reconstruct_context(ranked_chunks, max_tokens):
+    """
+    Reconstructs context from ranked chunks up to a maximum token limit.
+
+    Args:
+        ranked_chunks (list): A list of ranked text chunks.
+        max_tokens (int): The maximum number of tokens to include in the context.
+
+    Returns:
+        str: The reconstructed context.
+    """
+    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    context = "Retrieval system has provided these chunks which may be helpful to the query:\n\n"
+    current_tokens = len(enc.encode(context))
+    
+    for file, chunk in ranked_chunks:
+        chunk_tokens = len(enc.encode(chunk))
+        if current_tokens + chunk_tokens > max_tokens:
+            break
+        context += f"{chunk}\n\n"
+        current_tokens += chunk_tokens
+    
+    return context
+
+def initialize_rag_context():
+    """
+    Initializes the RAG context for the application.
+
+    This function loads settings, combines files, and prepares the initial
+    context for the RAG system.
+
+    Note: This function modifies global variables `preprocessed_context`
+    and `preprocessed_rag_context`.
+    """
+    global preprocessed_context, preprocessed_rag_context
+    settings = load_settings()
+    selected_model = settings.selected_model
+    context_mode = settings.context_mode
+    omit_folders = json.loads(settings.omit_folders)
+    omit_extensions = json.loads(settings.omit_extensions)
+    omit_files = json.loads(settings.omit_files)
+    chunk_level = settings.chunk_level
+    initial_chunk_size = settings.initial_chunk_size
+    followup_chunk_size = settings.followup_chunk_size
+
+    print("Setting context folder")
+    context_folder = set_context_folder()
+    print("Combining files")
+    combined_text, total_token_count, _ = combine_files(
+        summarize_subfolder=context_folder, 
+        omit_folders=omit_folders, 
+        omit_extensions=omit_extensions, 
+        omit_files=omit_files, 
+        strip_code=True, 
+        chunk_level=chunk_level
+    )
+
+    print("Reading system message")
+    system_message = read_system_message()
+
+    if context_mode == 'full_context':
+        print("Setting full context")
+        preprocessed_context = combined_text
+    else:  # RAG mode
+        print("Preparing RAG Chunks (takes 10-20 seconds)")
+        preprocessed_rag_context = prepare_context(
+            combined_text=combined_text, 
+            mode='rag', 
+            initial_chunk_size=initial_chunk_size, 
+            followup_chunk_size=followup_chunk_size
+        )
+
+# Initialize global variables for context
+preprocessed_context = ""
+preprocessed_rag_context = ""
+
+def prepare_full_prompt(user_query):
+    """
+    Prepares the full prompt for the AI model, including context and user query.
+
+    Args:
+        user_query (str): The user's query.
+
+    Returns:
+        str: The full prompt including system message, context, and user query.
+    """
+    settings = load_settings()
+    context_mode = settings.context_mode
+    
+    system_message = read_system_message()
+    
+    if context_mode == 'full_context':
+        context = prepare_context(context_mode='full_context')
+        full_prompt = f"{system_message}\n\nContext:\n{context}\n\nUser Query: {user_query}"
+    else:  # RAG mode
+        context = prepare_context(context_mode='rag')
+        full_prompt = (
+            f"{system_message}\n\n<context>Context Chunks:\n{context}\n\n</context>\n"
+            "The context above is provided for your use in responding to the user's query:\n\n"
+            f"User Query: {user_query}"
+        )
+    
+    return full_prompt
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\utils\conversation.py
+==================================================
+"""
+Utility functions for conversation handling in the Library Assistant.
+
+This module provides functions for managing conversation history,
+including adding messages, retrieving the full conversation,
+and saving the conversation to a file.
+
+Functions:
+- add_to_history(role, content): Adds a message to the conversation history.
+- get_full_conversation(): Retrieves the full conversation history as a string.
+- save_conversation(): Saves the current conversation history to a file.
+"""
+
+from datetime import datetime
+import os
+
+# Initialize conversation history
+conversation_history = []
+
+def add_to_history(role, content):
+    """
+    Adds a message to the conversation history.
+
+    Args:
+        role (str): The role of the message sender (e.g., 'user' or 'assistant').
+        content (str): The content of the message.
+    """
+    conversation_history.append({"role": role, "content": content})
+
+def get_full_conversation():
+    """
+    Retrieves the full conversation history as a formatted string.
+
+    Returns:
+        str: A string representation of the entire conversation history.
+    """
+    return "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in conversation_history])
+
+def save_conversation():
+    """
+    Saves the current conversation history to a file.
+
+    This function creates a text file with a timestamp in its name,
+    containing the full conversation history.
+
+    Returns:
+        str: The file path of the saved conversation history.
+
+    Raises:
+        IOError: If there's an error writing to the file.
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"conversation_history_{timestamp}.txt"
+    file_path = os.path.join(os.getcwd(), file_name)
+    
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            for message in conversation_history:
+                f.write(f"{message['role'].capitalize()}: {message['content']}\n\n")
+        return file_path
+    except IOError as e:
+        raise IOError(f"Error saving conversation history: {str(e)}")
+
+def clear_conversation_history():
+    """
+    Clears the current conversation history.
+
+    This function removes all messages from the conversation history,
+    effectively resetting it to an empty state.
+    """
+    global conversation_history
+    conversation_history = []
+
+def get_conversation_length():
+    """
+    Returns the number of messages in the current conversation history.
+
+    Returns:
+        int: The number of messages in the conversation history.
+    """
+    return len(conversation_history)
+
+def get_last_message():
+    """
+    Retrieves the last message from the conversation history.
+
+    Returns:
+        dict: A dictionary containing the role and content of the last message,
+              or None if the conversation history is empty.
+    """
+    if conversation_history:
+        return conversation_history[-1]
+    return None
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\utils\cost_estimation.py
+==================================================
+"""
+Utility functions for cost estimation in the Library Assistant.
+
+This module provides functions for creating pricing dataframes and
+estimating the cost of API calls based on token usage.
+
+Functions:
+- create_pricing_df(model): Creates a pricing dataframe for a given model.
+- estimate_cost(input_tokens, output_tokens, pricing_df): Estimates the cost of an API call.
+"""
+
+import pandas as pd
+
+def create_pricing_df(model):
+    """
+    Creates a pricing dataframe for a given model.
+
+    This function returns a dictionary containing a pandas DataFrame with pricing information
+    and the provider (OpenAI or Anthropic) for the specified model.
+
+    Args:
+        model (str): The name of the model (e.g., 'gpt-4', 'claude-3-5-sonnet-20240620').
+
+    Returns:
+        dict: A dictionary containing:
+            - 'pricing_df': A pandas DataFrame with columns 'Model', 'Input ($/1M Tokens)',
+                            'Output ($/1M Tokens)', 'Context Window (Tokens)', and 'Response Max Tokens'.
+            - 'provider': A string indicating the provider ('openai' or 'anthropic').
+
+    Raises:
+        ValueError: If an unsupported model is specified.
+    """
+    if model.startswith("claude"):
+        provider = "anthropic"
+        pricing_data = {
+            "Model": ["Claude 3.5 Sonnet"],
+            "Input ($/1M Tokens)": [3],
+            "Output ($/1M Tokens)": [15],
+            "Context Window (Tokens)": [200000],
+            "Response Max Tokens": [8192]
+        }
+    elif model.startswith("gpt") or model.startswith("o1"):
+        provider = "openai"
+        if model == "gpt-4o-2024-08-06":
+            pricing_data = {
+                "Model": ["gpt-4o-2024-08-06"],
+                "Input ($/1M Tokens)": [2.50],
+                "Output ($/1M Tokens)": [10.00],
+                "Context Window (Tokens)": [128000],
+                "Response Max Tokens": [16000]
+            }
+        elif model == "gpt-4o-mini":
+            pricing_data = {
+                "Model": ["GPT-4o-mini"],
+                "Input ($/1M Tokens)": [0.150],
+                "Output ($/1M Tokens)": [0.600],
+                "Context Window (Tokens)": [128000],
+                "Response Max Tokens": [16000]
+            }
+        elif model == "o1-mini":
+            pricing_data = {
+                "Model": ["o1-mini"],
+                "Input ($/1M Tokens)": [3.00],
+                "Output ($/1M Tokens)": [12.00],
+                "Context Window (Tokens)": [128000],
+                "Response Max Tokens": [16000]
+            }
+        else:
+            raise ValueError(f"Unsupported OpenAI model selected: {model}")
+    else:
+        raise ValueError(f"Unsupported model: {model}")
+    
+    pricing_df = pd.DataFrame(pricing_data)
+    return {"pricing_df": pricing_df, "provider": provider}
+
+def estimate_cost(input_tokens, output_tokens, pricing_df):
+    """
+    Estimates the cost of an API call based on input and output tokens.
+
+    Args:
+        input_tokens (int): The number of input tokens used in the API call.
+        output_tokens (int): The number of output tokens generated by the API call.
+        pricing_df (pd.DataFrame): A pandas DataFrame containing pricing information.
+
+    Returns:
+        float: The estimated cost of the API call in dollars.
+    """
+    input_cost = (input_tokens / 1e6) * pricing_df['Input ($/1M Tokens)'].iloc[0]
+    output_cost = (output_tokens / 1e6) * pricing_df['Output ($/1M Tokens)'].iloc[0]
+    return input_cost + output_cost
+
+def get_max_tokens(pricing_df):
+    """
+    Retrieves the maximum number of tokens allowed for a response.
+
+    Args:
+        pricing_df (pd.DataFrame): A pandas DataFrame containing pricing information.
+
+    Returns:
+        int: The maximum number of tokens allowed for a response.
+    """
+    return pricing_df['Response Max Tokens'].iloc[0]
+
+def get_context_window(pricing_df):
+    """
+    Retrieves the context window size in tokens.
+
+    Args:
+        pricing_df (pd.DataFrame): A pandas DataFrame containing pricing information.
+
+    Returns:
+        int: The context window size in tokens.
+    """
+    return pricing_df['Context Window (Tokens)'].iloc[0]
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\utils\file_handling.py
+==================================================
+"""
+Utility functions for file handling in the Library Assistant.
+
+This module provides functions for reading API keys, system messages,
+and processing various file types for the Library Assistant application.
+
+Functions:
+- read_api_key(file_path): Reads an API key from a file.
+- read_system_message(): Reads the system message from .cursorrules file.
+- set_context_folder(): Sets the context folder for file processing.
+- strip_code_from_functions(content): Strips code from function bodies.
+- handle_python_file(content, filepath, strip_code, chunk_level='function'): Processes Python files.
+- handle_markdown_file(content, filepath): Processes Markdown files.
+- combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files, strip_code=False, chunk_level='function'): Combines and processes multiple files.
+"""
+
+import os
+import json
+import re
+import ast
+import astor
+from pathlib import Path
+import tiktoken
+
+def read_api_key(file_path):
+    """
+    Reads an API key from a file.
+
+    Args:
+        file_path (str): Path to the file containing the API key.
+
+    Returns:
+        str: The API key.
+
+    Raises:
+        FileNotFoundError: If the API key file is not found.
+    """
+    try:
+        with open(file_path, 'r') as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"API key file not found: {file_path}")
+
+def read_system_message():
+    """
+    Reads the system message from .cursorrules file.
+
+    Returns:
+        str: The system message.
+
+    Raises:
+        FileNotFoundError: If the .cursorrules file is not found.
+        ValueError: If no system message is found in the file.
+    """
+    current_dir = Path.cwd()
+    cursor_rules_path = current_dir.parent / '.cursorrules'
+
+    if not cursor_rules_path.exists():
+        raise FileNotFoundError("This script expects to be in a directory within the ras_commander repo which has a .cursorrules file in its parent directory.")
+
+    with open(cursor_rules_path, 'r') as f:
+        system_message = f.read().strip()
+
+    if not system_message:
+        raise ValueError("No system message found in .cursorrules file.")
+
+    return system_message
+
+def set_context_folder():
+    """
+    Sets the context folder for file processing.
+
+    Returns:
+        Path: The path to the context folder.
+    """
+    return Path.cwd().parent
+
+class FunctionStripper(ast.NodeTransformer):
+    """AST NodeTransformer to strip code from function bodies."""
+    def visit_FunctionDef(self, node):
+        new_node = ast.FunctionDef(
+            name=node.name,
+            args=node.args,
+            body=[ast.Pass()],
+            decorator_list=node.decorator_list,
+            returns=node.returns
+        )
+        if (node.body and isinstance(node.body[0], ast.Expr) and
+            isinstance(node.body[0].value, ast.Str)):
+            new_node.body = [node.body[0], ast.Pass()]
+        return new_node
+
+def strip_code_from_functions(content):
+    """
+    Strips code from function bodies, leaving only function signatures and docstrings.
+
+    Args:
+        content (str): The Python code content.
+
+    Returns:
+        str: The code with function bodies stripped.
+    """
+    try:
+        tree = ast.parse(content)
+        stripped_tree = FunctionStripper().visit(tree)
+        return astor.to_source(stripped_tree)
+    except SyntaxError:
+        return content
+
+def handle_python_file(content, filepath, strip_code, chunk_level='function'):
+    """
+    Processes Python files, optionally stripping code and chunking content.
+
+    Args:
+        content (str): The content of the Python file.
+        filepath (Path): The path to the Python file.
+        strip_code (bool): Whether to strip code from function bodies.
+        chunk_level (str): The level at which to chunk the content ('function' or 'file').
+
+    Returns:
+        str: The processed content of the Python file.
+    """
+    header_end = content.find("class ") if "class " in content else len(content)
+    header = content[:header_end]
+    processed_content = f"\n\n----- {filepath.name} - header -----\n\n{header}\n\n----- End of header -----\n\n"
+    
+    if chunk_level == 'function':
+        function_chunks = re.findall(r"(def .*?(?=\ndef |\Z))", content[header_end:], re.DOTALL)
+        for chunk in function_chunks:
+            if strip_code:
+                chunk = strip_code_from_functions(chunk)
+            processed_content += f"\n\n----- {filepath.name} - chunk -----\n\n{chunk}\n\n----- End of chunk -----\n\n"
+    else:
+        content = strip_code_from_functions(content[header_end:]) if strip_code else content[header_end:]
+        processed_content += f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of full_file -----\n\n"
+    
+    return processed_content
+
+def handle_markdown_file(content, filepath):
+    """
+    Processes Markdown files, splitting them into sections.
+
+    Args:
+        content (str): The content of the Markdown file.
+        filepath (Path): The path to the Markdown file.
+
+    Returns:
+        str: The processed content of the Markdown file.
+    """
+    if filepath.name in ["Comprehensive_Library_Guide.md", "STYLE_GUIDE.md"]:
+        return f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of {filepath.name} -----\n\n"
+    
+    sections = re.split(r'\n#+ ', content)
+    processed_content = ""
+    for section in sections:
+        processed_content += f"\n\n----- {filepath.name} - section -----\n\n# {section}\n\n----- End of section -----\n\n"
+    return processed_content
+
+def combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files, strip_code=False, chunk_level='function'):
+    """
+    Combines and processes multiple files, respecting omission rules.
+
+    Args:
+        summarize_subfolder (Path): The root folder to process.
+        omit_folders (list): List of folder names to omit.
+        omit_extensions (list): List of file extensions to omit.
+        omit_files (list): List of specific file names to omit.
+        strip_code (bool): Whether to strip code from function bodies in Python files.
+        chunk_level (str): The level at which to chunk content ('function' or 'file').
+
+    Returns:
+        tuple: A tuple containing the combined text, total token count, and a dictionary of file token counts.
+    """
+    combined_text = ""
+    file_token_counts = {}
+    total_token_count = 0
+    
+    this_script = Path(__file__).name
+    summarize_subfolder = Path(summarize_subfolder)
+    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+    for filepath in summarize_subfolder.rglob('*'):
+        if (filepath.name != this_script and 
+            not any(omit_folder in filepath.parts for omit_folder in omit_folders) and
+            filepath.suffix.lower() not in omit_extensions and
+            not any(omit_file in filepath.name for omit_file in omit_files)):
+            
+            if filepath.is_file():
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as infile:
+                        content = infile.read()
+                except UnicodeDecodeError:
+                    with open(filepath, 'rb') as infile:
+                        content = infile.read().decode('utf-8', errors='ignore')
+                
+                if filepath.suffix.lower() == '.py':
+                    content = handle_python_file(content, filepath, strip_code, chunk_level)
+                elif filepath.suffix.lower() == '.md':
+                    content = handle_markdown_file(content, filepath)
+                else:
+                    content = f"\n\n----- {filepath.name} - full_file -----\n\n{content}\n\n----- End of {filepath.name} -----\n\n"
+                
+                combined_text += content
+                file_tokens = len(enc.encode(content))
+                file_token_counts[str(filepath)] = file_tokens
+                total_token_count += file_tokens
+
+    return combined_text, total_token_count, file_token_counts
+
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\web\routes.py
+==================================================
+"""
+Web routes for the Library Assistant.
+
+This module defines the FastAPI routes for the web interface of the Library Assistant.
+It handles user interactions, API calls, and serves the HTML template.
+
+Routes:
+- GET /: Serves the main page of the application.
+- POST /chat: Handles chat interactions with the AI model.
+- POST /submit: Handles form submissions for updating settings.
+- POST /save_conversation: Saves the current conversation history to a file.
+"""
+
+from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from config.config import load_settings, update_settings
+from utils.conversation import add_to_history, get_full_conversation, save_conversation
+from utils.context_processing import prepare_full_prompt
+from utils.cost_estimation import create_pricing_df, estimate_cost
+from api.anthropic import anthropic_stream_response, get_anthropic_client
+from api.openai import openai_stream_response, get_openai_client
+import json
+import tiktoken
+import os
+
+router = APIRouter()
+
+# Set up Jinja2 templates
+templates = Jinja2Templates(directory="web/templates")
+
+@router.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    """
+    Serves the main page of the application.
+
+    Args:
+        request (Request): The incoming request object.
+
+    Returns:
+        TemplateResponse: The rendered HTML template with current settings.
+    """
+    settings = load_settings()
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "settings": settings
+    })
+
+@router.post("/chat")
+async def chat(request: Request, message: dict):
+    """
+    Handles chat interactions with the AI model.
+
+    This function processes user messages, prepares the context, sends the query to the
+    appropriate AI model, and returns the response along with cost estimates.
+
+    Args:
+        request (Request): The incoming request object.
+        message (dict): A dictionary containing the user's message.
+
+    Returns:
+        JSONResponse: A JSON object containing the AI's response and cost estimate.
+
+    Raises:
+        HTTPException: If there's an error processing the request.
+    """
+    user_message = message.get("message")
+    if not user_message:
+        raise HTTPException(status_code=400, detail="No message provided.")
+    
+    try:
+        # Add user message to history
+        add_to_history("user", user_message)
+        
+        # Load settings
+        settings = load_settings()
+        selected_model = settings.selected_model
+        
+        # Prepare the full prompt
+        full_prompt = prepare_full_prompt(user_message)
+        
+        # Estimate cost (simplified for this example)
+        enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        input_tokens = len(enc.encode(full_prompt))
+        output_tokens = 1000  # Assuming an average response length
+        
+        # Create pricing dataframe
+        pricing_info = create_pricing_df(selected_model)
+        pricing_df = pricing_info["pricing_df"]
+        provider = pricing_info["provider"]
+        
+        estimated_cost = estimate_cost(input_tokens, output_tokens, pricing_df)
+
+        # Prepare the streaming response
+        async def response_generator():
+            if provider == "anthropic":
+                anthropic_api_key = settings.anthropic_api_key
+                client = get_anthropic_client(anthropic_api_key)
+                async for chunk in anthropic_stream_response(client, full_prompt):
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            elif provider == "openai":
+                openai_api_key = settings.openai_api_key
+                client = get_openai_client(openai_api_key)
+                messages = [
+                    {"role": "system", "content": "You are a helpful AI assistant."},
+                    {"role": "user", "content": full_prompt}
+                ]
+                async for chunk in openai_stream_response(client, selected_model, messages):
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported provider selected.")
+
+        return StreamingResponse(response_generator(), media_type="text/event-stream")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+@router.post("/submit")
+async def handle_submit(
+    request: Request,
+    anthropic_api_key: str = Form(None),
+    openai_api_key: str = Form(None),
+    selected_model: str = Form(None),
+    context_mode: str = Form(None),
+    initial_chunk_size: int = Form(None),
+    followup_chunk_size: int = Form(None),
+):
+    """
+    Handles form submissions for updating settings.
+
+    This function updates the application settings based on form data submitted by the user.
+
+    Args:
+        request (Request): The incoming request object.
+        anthropic_api_key (str, optional): The Anthropic API key.
+        openai_api_key (str, optional): The OpenAI API key.
+        selected_model (str, optional): The selected AI model.
+        context_mode (str, optional): The context handling mode.
+        initial_chunk_size (int, optional): The initial chunk size for RAG mode.
+        followup_chunk_size (int, optional): The followup chunk size for RAG mode.
+
+    Returns:
+        JSONResponse: A JSON object indicating the success status of the update.
+    """
+    updated_data = {}
+    if anthropic_api_key is not None:
+        updated_data["anthropic_api_key"] = anthropic_api_key
+    if openai_api_key is not None:
+        updated_data["openai_api_key"] = openai_api_key
+    if selected_model is not None:
+        updated_data["selected_model"] = selected_model
+    if context_mode is not None:
+        updated_data["context_mode"] = context_mode
+    if initial_chunk_size is not None:
+        updated_data["initial_chunk_size"] = initial_chunk_size
+    if followup_chunk_size is not None:
+        updated_data["followup_chunk_size"] = followup_chunk_size
+    
+    update_settings(updated_data)
+    return JSONResponse({"status": "success"})
+
+@router.post("/save_conversation")
+async def save_conversation_endpoint():
+    """
+    Saves the current conversation history to a file.
+
+    This function triggers the saving of the conversation history and returns the file
+    for download.
+
+    Returns:
+        FileResponse: The saved conversation history file for download.
+
+    Raises:
+        HTTPException: If there's an error saving the conversation.
+    """
+    try:
+        file_path = save_conversation()
+        return FileResponse(file_path, filename=os.path.basename(file_path))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(e)}")
+
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\web\static
+==================================================
+
+Folder: c:\GH\ras-commander\library_assistant\web\templates
+==================================================
+
+File: c:\GH\ras-commander\library_assistant\web\templates\index.html
+==================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
+        .container { max-width: 900px; margin: auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        .chat-box { border: 1px solid #ced4da; padding: 10px; height: 400px; overflow-y: scroll; background-color: #ffffff; border-radius: 5px; }
+        .message { margin: 10px 0; }
+        .user { color: #0d6efd; }
+        .assistant { color: #198754; }
+        .error { color: red; }
+        .btn { padding: 10px 20px; background-color: #0d6efd; color: white; border: none; cursor: pointer; border-radius: 5px; }
+        .btn:hover { background-color: #0b5ed7; }
+        .cost { margin-top: 10px; font-weight: bold; }
+        .copy-btn {
+            margin-left: 10px;
+            padding: 5px 10px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .copy-btn:hover {
+            background-color: #0b5ed7;
+        }
+        .hidden { display: none; }
+        /* Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+            margin-top: 10px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0d6efd;
+            cursor: pointer;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0d6efd;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-4 mb-4">Library Assistant</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="mb-0">
+                    <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#settingsCollapse">
+                        Settings
+                    </button>
+                </h2>
+            </div>
+            <div id="settingsCollapse" class="collapse">
+                <div class="card-body">
+                    <form id="settings-form">
+                        <div class="form-group">
+                            <label for="selected_model">Select Model:</label>
+                            <select id="selected_model" name="selected_model" class="form-select" required>
+                                <option value="" disabled>Select a model</option>
+                                <option value="claude-3-5-sonnet-20240620" {% if settings.selected_model == 'claude-3-5-sonnet-20240620' %}selected{% endif %}>Claude 3.5 Sonnet (Anthropic)</option>
+                                <option value="gpt-4o-2024-08-06" {% if settings.selected_model == 'gpt-4o-2024-08-06' %}selected{% endif %}>GPT-4o (OpenAI)</option>
+                                <option value="gpt-4o-mini" {% if settings.selected_model == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o-mini (OpenAI)</option>
+                                <option value="o1-mini" {% if settings.selected_model == 'o1-mini' %}selected{% endif %}>o1-mini (OpenAI)</option>
+                            </select>
+                        </div>
+                        <div id="anthropic_api_key_group" class="form-group hidden">
+                            <label for="anthropic_api_key">Anthropic API Key:</label>
+                            <input type="password" id="anthropic_api_key" name="anthropic_api_key" class="form-control" value="{{ settings.anthropic_api_key }}">
+                        </div>
+                        <div id="openai_api_key_group" class="form-group hidden">
+                            <label for="openai_api_key">OpenAI API Key:</label>
+                            <input type="password" id="openai_api_key" name="openai_api_key" class="form-control" value="{{ settings.openai_api_key }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="context_mode">Context Handling Mode:</label>
+                            <select id="context_mode" name="context_mode" class="form-select" required>
+                                <option value="" disabled>Select a mode</option>
+                                <option value="full_context" {% if settings.context_mode == 'full_context' %}selected{% endif %}>Full Context</option>
+                                <option value="rag" {% if settings.context_mode == 'rag' %}selected{% endif %}>Retrieval-Augmented Generation (RAG)</option>
+                            </select>
+                        </div>
+                        <div id="rag_sliders" class="hidden">
+                            <div class="form-group">
+                                <label for="initial_chunk_size">Initial RAG Context Size (tokens):</label>
+                                <input type="range" id="initial_chunk_size" name="initial_chunk_size" min="16000" max="96000" step="1000" value="{{ settings.initial_chunk_size }}">
+                                <span id="initial_chunk_size_value">{{ settings.initial_chunk_size }}</span>
+                            </div>
+                            <div class="form-group">
+                                <label for="followup_chunk_size">Follow-up RAG Context Size (tokens):</label>
+                                <input type="range" id="followup_chunk_size" name="followup_chunk_size" min="16000" max="64000" step="1000" value="{{ settings.followup_chunk_size }}">
+                                <span id="followup_chunk_size_value">{{ settings.followup_chunk_size }}</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-box" id="chat-box"></div>
+        <form id="chat-form" class="mt-3">
+            <div class="form-group">
+                <label for="user-input">Your message:</label>
+                <textarea id="user-input" class="form-control" rows="3" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Send</button>
+        </form>
+        <div class="cost mt-2" id="cost-display"></div>
+        <button onclick="saveConversation()" class="btn btn-success mt-3">Save Conversation</button>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectedModel = document.getElementById('selected_model');
+            const anthropicGroup = document.getElementById('anthropic_api_key_group');
+            const openaiGroup = document.getElementById('openai_api_key_group');
+            const contextMode = document.getElementById('context_mode');
+            const ragSliders = document.getElementById('rag_sliders');
+            const initialChunkSize = document.getElementById('initial_chunk_size');
+            const initialChunkSizeValue = document.getElementById('initial_chunk_size_value');
+            const followupChunkSize = document.getElementById('followup_chunk_size');
+            const followupChunkSizeValue = document.getElementById('followup_chunk_size_value');
+
+            function toggleApiKeys() {
+                const model = selectedModel.value;
+                if (model.startsWith('claude')) {
+                    anthropicGroup.classList.remove('hidden');
+                    openaiGroup.classList.add('hidden');
+                } else if (model.startsWith('gpt') || model.startsWith('o1')) {
+                    openaiGroup.classList.remove('hidden');
+                    anthropicGroup.classList.add('hidden');
+                } else {
+                    anthropicGroup.classList.add('hidden');
+                    openaiGroup.classList.add('hidden');
+                }
+            }
+
+            function toggleRagSliders() {
+                const mode = contextMode.value;
+                if (mode === 'rag') {
+                    ragSliders.classList.remove('hidden');
+                } else {
+                    ragSliders.classList.add('hidden');
+                }
+            }
+
+            toggleApiKeys();
+            toggleRagSliders();
+
+            selectedModel.addEventListener('change', () => {
+                toggleApiKeys();
+                autoSaveSettings();
+            });
+
+            contextMode.addEventListener('change', () => {
+                toggleRagSliders();
+                autoSaveSettings();
+            });
+
+            initialChunkSize.addEventListener('input', () => {
+                initialChunkSizeValue.textContent = initialChunkSize.value;
+                autoSaveSettings();
+            });
+
+            followupChunkSize.addEventListener('input', () => {
+                followupChunkSizeValue.textContent = followupChunkSize.value;
+                autoSaveSettings();
+            });
+
+            document.getElementById('anthropic_api_key').addEventListener('input', autoSaveSettings);
+            document.getElementById('openai_api_key').addEventListener('input', autoSaveSettings);
+
+            function autoSaveSettings() {
+                const formData = new FormData(document.getElementById('settings-form'));
+                fetch('/submit', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Settings saved:', data);
+                })
+                .catch(error => {
+                    console.error('Error saving settings:', error);
+                });
+            }
+
+            // Handle chat form submission
+            const chatForm = document.getElementById('chat-form');
+            const chatBox = document.getElementById('chat-box');
+            const userInput = document.getElementById('user-input');
+            const costDisplay = document.getElementById('cost-display');
+
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const message = userInput.value.trim();
+                if (message === '') return;
+
+                // Display user message with markdown rendering
+                const userMessage = document.createElement('div');
+                userMessage.className = 'message user';
+                userMessage.innerHTML = 'User: ' + marked.parse(message);
+                chatBox.appendChild(userMessage);
+
+                // Clear input
+                userInput.value = '';
+
+                // Show loading indicator
+                const loadingMessage = document.createElement('div');
+                loadingMessage.className = 'message assistant';
+                loadingMessage.textContent = 'Assistant: Loading...';
+                chatBox.appendChild(loadingMessage);
+
+                // Scroll to bottom
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                try {
+                    // Send message to backend
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ message: message })
+                    });
+
+                    // Remove loading indicator
+                    chatBox.removeChild(loadingMessage);
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail);
+                    }
+
+                    const data = await response.json();
+
+                    // Display assistant response with markdown rendering
+                    const assistantMessage = document.createElement('div');
+                    assistantMessage.className = 'message assistant';
+                    assistantMessage.innerHTML = 'Assistant: ' + marked.parse(data.response);
+
+                    // Add "Copy Response" button
+                    const copyButton = document.createElement('button');
+                    copyButton.textContent = 'Copy Response';
+                    copyButton.className = 'copy-btn btn btn-sm';
+                    copyButton.onclick = () => copyToClipboard(data.response);
+                    assistantMessage.appendChild(copyButton);
+
+                    chatBox.appendChild(assistantMessage);
+
+                    // Scroll to bottom
+                    chatBox.scrollTop = chatBox.scrollHeight;
+
+                    // Update cost display
+                    costDisplay.textContent = `Estimated Cost: $${data.estimated_cost.toFixed(6)} (${data.provider})`;
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'message assistant error';
+                    errorMessage.textContent = 'Error: ' + error.message;
+                    chatBox.appendChild(errorMessage);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            });
+
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Response copied to clipboard!');
+                }, (err) => {
+                    console.error('Could not copy text: ', err);
+                });
+            }
+        });
+
+        function saveConversation() {
+            fetch('/save_conversation', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                } else {
+                    throw new Error('Failed to save conversation history.');
+                }
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'conversation_history.txt';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(error.message);
+            });
+        }
+    </script>
+</body>
+</html>
+==================================================
+

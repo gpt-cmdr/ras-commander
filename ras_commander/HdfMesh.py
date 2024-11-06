@@ -1,11 +1,26 @@
 """
-Class: HdfMesh
+A static class for handling mesh-related operations on HEC-RAS HDF files.
 
-Attribution: A substantial amount of code in this file is sourced or derived 
-from the https://github.com/fema-ffrd/rashdf library, 
-released under MIT license and Copyright (c) 2024 fema-ffrd
+This class provides static methods to extract and analyze mesh data from HEC-RAS HDF files,
+including mesh area names, mesh areas, cell polygons, cell points, cell faces, and
+2D flow area attributes. No instantiation is required to use these methods.
 
-The file has been forked and modified for use in RAS Commander.
+All methods are designed to work with the mesh geometry data stored in
+HEC-RAS HDF files, providing functionality to retrieve and process various aspects
+of the 2D flow areas and their associated mesh structures.
+
+List of Functions:
+-----------------
+get_mesh_area_names()
+    Returns list of 2D mesh area names
+get_mesh_areas()
+    Returns 2D flow area perimeter polygons
+mesh_cell_polygons()
+    Returns 2D flow mesh cell polygons
+[etc...]
+
+Each function is decorated with @standardize_input and @log_call for consistent
+input handling and logging functionality.
 """
 from pathlib import Path
 import h5py
@@ -44,9 +59,9 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def mesh_area_names(hdf_path: Path) -> List[str]:
+    def get_mesh_area_names(hdf_path: Path) -> List[str]:
         """
-        Return a list of the 2D mesh area names of the RAS geometry.
+        Return a list of the 2D mesh area names from the RAS geometry.
 
         Parameters
         ----------
@@ -56,7 +71,8 @@ class HdfMesh:
         Returns
         -------
         List[str]
-            A list of the 2D mesh area names (str) within the RAS geometry if 2D areas exist.
+            A list of the 2D mesh area names within the RAS geometry.
+            Returns an empty list if no 2D areas exist or if there's an error.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -64,7 +80,7 @@ class HdfMesh:
                     return list()
                 return list(
                     [
-                        HdfUtils.convert_ras_hdf_string(n.decode('utf-8'))  # Decode as UTF-8
+                        HdfUtils.convert_ras_string(n.decode('utf-8'))
                         for n in hdf_file["Geometry/2D Flow Areas/Attributes"][()]["Name"]
                     ]
                 )
@@ -74,7 +90,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def mesh_areas(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_areas(hdf_path: Path) -> GeoDataFrame:
         """
         Return 2D flow area perimeter polygons.
 
@@ -90,7 +106,7 @@ class HdfMesh:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
                 mesh_area_polygons = [
@@ -100,7 +116,7 @@ class HdfMesh:
                 return GeoDataFrame(
                     {"mesh_name": mesh_area_names, "geometry": mesh_area_polygons},
                     geometry="geometry",
-                    crs=HdfUtils.projection(hdf_file),  # Pass the h5py.File object instead of the path
+                    crs=HdfBase.get_projection(hdf_file),
                 )
         except Exception as e:
             logger.error(f"Error reading mesh areas from {hdf_path}: {str(e)}")
@@ -108,7 +124,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def mesh_cell_polygons(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_polygons(hdf_path: Path) -> GeoDataFrame:
         """
         Return 2D flow mesh cell polygons.
 
@@ -120,15 +136,19 @@ class HdfMesh:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the 2D flow mesh cell polygons.
+            A GeoDataFrame containing the 2D flow mesh cell polygons with columns:
+            - mesh_name: name of the mesh area
+            - cell_id: unique identifier for each cell
+            - geometry: polygon geometry of the cell
+            Returns an empty GeoDataFrame if no 2D areas exist or if there's an error.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
 
-                face_gdf = HdfMesh.mesh_cell_faces(hdf_path)
+                face_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
 
                 cell_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
                 for i, mesh_name in enumerate(mesh_area_names):
@@ -170,13 +190,14 @@ class HdfMesh:
                             )
                         )(face_id_lists)
                     )
-                return GeoDataFrame(cell_dict, geometry="geometry", crs=HdfUtils.projection(hdf_file))
+                return GeoDataFrame(cell_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_file))
         except Exception as e:
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
             return GeoDataFrame()
+        
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def mesh_cell_points(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_points(hdf_path: Path) -> GeoDataFrame:
         """
         Return 2D flow mesh cell center points.
 
@@ -192,7 +213,7 @@ class HdfMesh:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
                 
@@ -208,14 +229,14 @@ class HdfMesh:
                             cell_center_coords
                         )
                     )
-                return GeoDataFrame(pnt_dict, geometry="geometry", crs=HdfUtils.projection(hdf_path))
+                return GeoDataFrame(pnt_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
         except Exception as e:
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def mesh_cell_faces(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_faces(hdf_path: Path) -> GeoDataFrame:
         """
         Return 2D flow mesh cell faces.
 
@@ -231,7 +252,7 @@ class HdfMesh:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
                 face_dict = {"mesh_name": [], "face_id": [], "geometry": []}
@@ -262,14 +283,14 @@ class HdfMesh:
                             )
                         coordinates.append(facepoints_coordinates[pnt_b_index])
                         face_dict["geometry"].append(LineString(coordinates))
-                return GeoDataFrame(face_dict, geometry="geometry", crs=HdfUtils.projection(hdf_path))
+                return GeoDataFrame(face_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
         except Exception as e:
             self.logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_geom_2d_flow_area_attrs(hdf_path: Path) -> Dict[str, Any]:
+    def get_mesh_area_attributes(hdf_path: Path) -> pd.DataFrame:
         """
         Return geometry 2D flow area attributes from a HEC-RAS HDF file.
 
@@ -280,8 +301,8 @@ class HdfMesh:
 
         Returns
         -------
-        Dict[str, Any]
-            A dictionary containing the 2D flow area attributes.
+        pd.DataFrame
+            A DataFrame containing the 2D flow area attributes.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -293,21 +314,20 @@ class HdfMesh:
                             value = d2_flow_area[name][()]
                             if isinstance(value, bytes):
                                 value = value.decode('utf-8')  # Decode as UTF-8
-                            result[name] = value
+                            result[name] = value if not isinstance(value, bytes) else value.decode('utf-8')
                         except Exception as e:
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
-                    return result
+                    return pd.DataFrame.from_dict(result, orient='index', columns=['Value'])
                 else:
                     logger.info("No 2D Flow Area attributes found or invalid dataset.")
-                    return {}
+                    return pd.DataFrame()  # Return an empty DataFrame
         except Exception as e:
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
-            return {}
-
+            return pd.DataFrame()  # Return an empty DataFrame
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_face_property_tables(hdf_path: Path) -> Dict[str, pd.DataFrame]:
+    def get_mesh_face_property_tables(hdf_path: Path) -> Dict[str, pd.DataFrame]:
         """
         Extract Face Property Tables for each Face in all 2D Flow Areas.
 
@@ -319,12 +339,19 @@ class HdfMesh:
         Returns
         -------
         Dict[str, pd.DataFrame]
-            A dictionary where keys are mesh names and values are DataFrames
-            containing the Face Property Tables for all faces in that mesh.
+            A dictionary where:
+            - keys: mesh area names (str)
+            - values: DataFrames with columns:
+                - Face ID: unique identifier for each face
+                - Z: elevation
+                - Area: face area
+                - Wetted Perimeter: wetted perimeter length
+                - Manning's n: Manning's roughness coefficient
+            Returns an empty dictionary if no 2D areas exist or if there's an error.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                mesh_area_names = HdfMesh.mesh_area_names(hdf_path)
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return {}
 
@@ -339,10 +366,10 @@ class HdfMesh:
                         for z, area, wetted_perimeter, mannings_n in face_values:
                             face_data.append({
                                 'Face ID': face_id,
-                                'Z': z.decode('utf-8'),  # Decode as UTF-8
-                                'Area': area.decode('utf-8'),  # Decode as UTF-8
-                                'Wetted Perimeter': wetted_perimeter.decode('utf-8'),  # Decode as UTF-8
-                                "Manning's n": mannings_n.decode('utf-8')  # Decode as UTF-8
+                                'Z': str(z),
+                                'Area': str(area), 
+                                'Wetted Perimeter': str(wetted_perimeter),
+                                "Manning's n": str(mannings_n)
                             })
                     
                     result[mesh_name] = pd.DataFrame(face_data)
@@ -351,4 +378,57 @@ class HdfMesh:
 
         except Exception as e:
             logger.error(f"Error extracting face property tables from {hdf_path}: {str(e)}")
+            return {}
+
+    @staticmethod
+    @standardize_input(file_type='geom_hdf')
+    def get_mesh_cell_property_tables(hdf_path: Path) -> Dict[str, pd.DataFrame]:
+        """
+        Extract Cell Property Tables for each Cell in all 2D Flow Areas.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+
+        Returns
+        -------
+        Dict[str, pd.DataFrame]
+            A dictionary where:
+            - keys: mesh area names (str)
+            - values: DataFrames with columns:
+                - Cell ID: unique identifier for each cell
+                - Z: elevation
+                - Volume: cell volume
+                - Surface Area: cell surface area
+            Returns an empty dictionary if no 2D areas exist or if there's an error.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
+                if not mesh_area_names:
+                    return {}
+
+                result = {}
+                for mesh_name in mesh_area_names:
+                    cell_elevation_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Elevation Volume Info"][()]
+                    cell_elevation_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Elevation Volume Values"][()]
+                    
+                    cell_data = []
+                    for cell_id, (start_index, count) in enumerate(cell_elevation_info):
+                        cell_values = cell_elevation_values[start_index:start_index+count]
+                        for z, volume, surface_area in cell_values:
+                            cell_data.append({
+                                'Cell ID': cell_id,
+                                'Z': str(z),
+                                'Volume': str(volume),
+                                'Surface Area': str(surface_area)
+                            })
+                    
+                    result[mesh_name] = pd.DataFrame(cell_data)
+                
+                return result
+
+        except Exception as e:
+            logger.error(f"Error extracting cell property tables from {hdf_path}: {str(e)}")
             return {}

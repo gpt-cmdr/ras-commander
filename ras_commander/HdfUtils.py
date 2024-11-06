@@ -1,11 +1,46 @@
 """
-Class: HdfUtils
+HdfUtils Class
+-------------
 
-Attribution: A substantial amount of code in this file is sourced or derived 
-from the https://github.com/fema-ffrd/rashdf library, 
-released under MIT license and Copyright (c) 2024 fema-ffrd
+A utility class providing static methods for working with HEC-RAS HDF files.
 
-The file has been forked and modified for use in RAS Commander.
+Attribution:
+    A substantial amount of code in this file is sourced or derived from the 
+    https://github.com/fema-ffrd/rashdf library, released under MIT license 
+    and Copyright (c) 2024 fema-ffrd. The file has been forked and modified 
+    for use in RAS Commander.
+
+Key Features:
+- HDF file data conversion and parsing
+- DateTime handling for RAS-specific formats
+- Spatial operations using KDTree
+- HDF attribute management
+
+Main Method Categories:
+
+1. Data Conversion
+    - convert_ras_string: Convert RAS HDF strings to Python objects
+    - convert_ras_hdf_value: Convert general HDF values to Python objects
+    - convert_df_datetimes_to_str: Convert DataFrame datetime columns to strings
+    - convert_hdf5_attrs_to_dict: Convert HDF5 attributes to dictionary
+    - convert_timesteps_to_datetimes: Convert timesteps to datetime objects
+
+2. Spatial Operations
+    - perform_kdtree_query: KDTree search between datasets
+    - find_nearest_neighbors: Find nearest neighbors within dataset
+
+3. DateTime Parsing
+    - parse_ras_datetime: Parse standard RAS datetime format (ddMMMYYYY HH:MM:SS)
+    - parse_ras_window_datetime: Parse simulation window datetime (ddMMMYYYY HHMM)
+    - parse_duration: Parse duration strings (HH:MM:SS)
+    - parse_ras_datetime_ms: Parse datetime with milliseconds
+    - parse_run_time_window: Parse time window strings
+
+Usage Notes:
+- All methods are static and can be called without class instantiation
+- Methods handle both raw HDF data and converted Python objects
+- Includes comprehensive error handling for RAS-specific data formats
+- Supports various RAS datetime formats and conversions
 """
 import logging
 from pathlib import Path
@@ -16,7 +51,7 @@ from datetime import datetime, timedelta
 from typing import Union, Optional, Dict, List, Tuple, Any
 from scipy.spatial import KDTree
 import re
-
+from shapely.geometry import LineString  # Import LineString to avoid NameError
 
 from .Decorators import standardize_input, log_call 
 from .LoggingConfig import setup_logging, get_logger
@@ -37,139 +72,13 @@ class HdfUtils:
     - All methods in this class are static and can be called without instantiating the class.
     """
 
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_hdf_filename(hdf_input: Union[str, Path, h5py.File], ras_object=None) -> Optional[Path]:
-        """
-        Get the HDF filename from various input types.
 
-        Args:
-            hdf_input (Union[str, Path, h5py.File]): The plan number, full path to the HDF file, or an open HDF file object.
-            ras_object (RasPrj, optional): The RAS project object. If None, uses the global ras instance.
 
-        Returns:
-            Optional[Path]: Path to the HDF file, or None if not found.
-        """
-        if isinstance(hdf_input, h5py.File):
-            return Path(hdf_input.filename)
 
-        if isinstance(hdf_input, str):
-            hdf_input = Path(hdf_input)
-
-        if isinstance(hdf_input, Path) and hdf_input.is_file():
-            return hdf_input
-
-        if ras_object is None:
-            logger.critical("RAS object is not provided. It is required when hdf_input is not a direct file path.")
-            return None
-
-        plan_info = ras_object.plan_df[ras_object.plan_df['plan_number'] == str(hdf_input)]
-        if plan_info.empty:
-            logger.critical(f"No HDF file found for plan number {hdf_input}")
-            return None
-
-        hdf_filename = plan_info.iloc[0]['HDF_Results_Path']
-        if hdf_filename is None:
-            logger.critical(f"HDF_Results_Path is None for plan number {hdf_input}")
-            return None
-
-        hdf_path = Path(hdf_filename)
-        if not hdf_path.is_file():
-            logger.critical(f"HDF file not found: {hdf_path}")
-            return None
-
-        return hdf_path
+# RENAME TO convert_ras_string and make public
 
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_root_attrs(hdf_path: Path) -> dict:
-        """
-        Return attributes at root level of HEC-RAS HDF file.
-
-        Args:
-            hdf_path (Path): Path to the HDF file.
-
-        Returns:
-            dict: Dictionary filled with HEC-RAS HDF root attributes.
-        """
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            return HdfUtils.get_attrs(hdf_file, "/")
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_attrs(hdf_path: Path, attr_path: str) -> dict:
-        """
-        Get attributes from a HEC-RAS HDF file for a given attribute path.
-
-        Args:
-            hdf_path (Path): The path to the HDF file.
-            attr_path (str): The path to the attributes within the HDF file.
-
-        Returns:
-            dict: A dictionary of attributes.
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                attr_object = hdf_file.get(attr_path)
-                if attr_object is None:
-                    logger.warning(f"Attribute path '{attr_path}' not found in HDF file.")
-                    return {}
-                return HdfUtils._hdf5_attrs_to_dict(attr_object.attrs)
-        except Exception as e:
-            logger.error(f"Error getting attributes from '{attr_path}': {str(e)}")
-            return {}
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_hdf_paths_with_properties(hdf_path: Path) -> pd.DataFrame:
-        """
-        Get all paths in the HDF file with their properties.
-
-        Args:
-            hdf_path (Path): Path to the HDF file.
-
-        Returns:
-            pd.DataFrame: DataFrame containing paths and their properties.
-        """
-        def get_item_properties(item):
-            return {
-                'name': item.name,
-                'type': type(item).__name__,
-                'shape': item.shape if hasattr(item, 'shape') else None,
-                'dtype': item.dtype if hasattr(item, 'dtype') else None
-            }
-
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                items = []
-                hdf_file.visititems(lambda name, item: items.append(get_item_properties(item)))
-
-            return pd.DataFrame(items)
-        except Exception as e:
-            logger.error(f"Error reading HDF file: {e}")
-            return pd.DataFrame()
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_group_attributes_as_df(hdf_path: Path, group_path: str) -> pd.DataFrame:
-        """
-        Get attributes of a group in the HDF file as a DataFrame.
-
-        Args:
-            hdf_path (Path): Path to the HDF file.
-            group_path (str): Path to the group within the HDF file.
-
-        Returns:
-            pd.DataFrame: DataFrame containing the group's attributes.
-        """
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            group = hdf_file[group_path]
-            attributes = {key: group.attrs[key] for key in group.attrs.keys()}
-            return pd.DataFrame([attributes])
-
-
-    @staticmethod
-    def convert_ras_hdf_string(value: Union[str, bytes]) -> Union[bool, datetime, List[datetime], timedelta, str]:
+    def convert_ras_string(value: Union[str, bytes]) -> Union[bool, datetime, List[datetime], timedelta, str]:
         """
         Convert a string value from an HEC-RAS HDF file into a Python object.
 
@@ -179,10 +88,86 @@ class HdfUtils:
         Returns:
             Union[bool, datetime, List[datetime], timedelta, str]: The converted value.
         """
-        return HdfUtils._convert_ras_hdf_string(value)
+        if isinstance(value, bytes):
+            s = value.decode("utf-8")
+        else:
+            s = value
+
+        if s == "True":
+            return True
+        elif s == "False":
+            return False
+        
+        ras_datetime_format1_re = r"\d{2}\w{3}\d{4} \d{2}:\d{2}:\d{2}"
+        ras_datetime_format2_re = r"\d{2}\w{3}\d{4} \d{2}\d{2}"
+        ras_duration_format_re = r"\d{2}:\d{2}:\d{2}"
+
+        if re.match(rf"^{ras_datetime_format1_re}", s):
+            if re.match(rf"^{ras_datetime_format1_re} to {ras_datetime_format1_re}$", s):
+                split = s.split(" to ")
+                return [
+                    HdfUtils.parse_ras_datetime(split[0]),
+                    HdfUtils.parse_ras_datetime(split[1]),
+                ]
+            return HdfUtils.parse_ras_datetime(s)
+        elif re.match(rf"^{ras_datetime_format2_re}", s):
+            if re.match(rf"^{ras_datetime_format2_re} to {ras_datetime_format2_re}$", s):
+                split = s.split(" to ")
+                return [
+                    HdfUtils.parse_ras_window_datetime(split[0]),
+                    HdfUtils.parse_ras_window_datetime(split[1]),
+                ]
+            return HdfUtils.parse_ras_window_datetime(s)
+        elif re.match(rf"^{ras_duration_format_re}$", s):
+            return HdfUtils.parse_ras_duration(s)
+        return s
+
+
+
+
 
     @staticmethod
-    def df_datetimes_to_str(df: pd.DataFrame) -> pd.DataFrame:
+    def convert_ras_hdf_value(value: Any) -> Union[None, bool, str, List[str], int, float, List[int], List[float]]:
+        """
+        Convert a value from a HEC-RAS HDF file into a Python object.
+
+        Args:
+            value (Any): The value to convert.
+
+        Returns:
+            Union[None, bool, str, List[str], int, float, List[int], List[float]]: The converted value.
+        """
+        if isinstance(value, np.floating) and np.isnan(value):
+            return None
+        elif isinstance(value, (bytes, np.bytes_)):
+            return value.decode('utf-8')
+        elif isinstance(value, np.integer):
+            return int(value)
+        elif isinstance(value, np.floating):
+            return float(value)
+        elif isinstance(value, (int, float)):
+            return value
+        elif isinstance(value, (list, tuple, np.ndarray)):
+            if len(value) > 1:
+                return [HdfUtils.convert_ras_hdf_value(v) for v in value]
+            else:
+                return HdfUtils.convert_ras_hdf_value(value[0])
+        else:
+            return str(value)
+
+
+
+
+
+
+
+
+
+
+# RENAME TO convert_df_datetimes_to_str 
+
+    @staticmethod
+    def convert_df_datetimes_to_str(df: pd.DataFrame) -> pd.DataFrame:
         """
         Convert any datetime64 columns in a DataFrame to strings.
 
@@ -195,6 +180,10 @@ class HdfUtils:
         for col in df.select_dtypes(include=['datetime64']).columns:
             df[col] = df[col].dt.strftime('%Y-%m-%d %H:%M:%S')
         return df
+
+
+# KDTree Methods: 
+
 
     @staticmethod
     def perform_kdtree_query(
@@ -257,84 +246,16 @@ class HdfUtils:
         snapped = filled.fillna(-1).astype(np.int64).to_numpy()
         return snapped
 
-    @staticmethod
-    def _convert_ras_hdf_string(value: Union[str, bytes]) -> Union[bool, datetime, List[datetime], timedelta, str]:
-        """
-        Private method to convert a string value from an HEC-RAS HDF file into a Python object.
 
-        Args:
-            value (Union[str, bytes]): The value to convert.
 
-        Returns:
-            Union[bool, datetime, List[datetime], timedelta, str]: The converted value.
-        """
-        if isinstance(value, bytes):
-            s = value.decode("utf-8")
-        else:
-            s = value
 
-        if s == "True":
-            return True
-        elif s == "False":
-            return False
-        
-        ras_datetime_format1_re = r"\d{2}\w{3}\d{4} \d{2}:\d{2}:\d{2}"
-        ras_datetime_format2_re = r"\d{2}\w{3}\d{4} \d{2}\d{2}"
-        ras_duration_format_re = r"\d{2}:\d{2}:\d{2}"
-
-        if re.match(rf"^{ras_datetime_format1_re}", s):
-            if re.match(rf"^{ras_datetime_format1_re} to {ras_datetime_format1_re}$", s):
-                split = s.split(" to ")
-                return [
-                    HdfBase._parse_ras_datetime(split[0]),
-                    HdfBase._parse_ras_datetime(split[1]),
-                ]
-            return HdfBase._parse_ras_datetime(s)
-        elif re.match(rf"^{ras_datetime_format2_re}", s):
-            if re.match(rf"^{ras_datetime_format2_re} to {ras_datetime_format2_re}$", s):
-                split = s.split(" to ")
-                return [
-                    HdfBase._parse_ras_simulation_window_datetime(split[0]),
-                    HdfBase._parse_ras_simulation_window_datetime(split[1]),
-                ]
-            return HdfBase._parse_ras_simulation_window_datetime(s)
-        elif re.match(rf"^{ras_duration_format_re}$", s):
-            return HdfBase._parse_duration(s)
-        return s
+# Datetime Parsing Methods: 
 
     @staticmethod
-    def _convert_ras_hdf_value(value: Any) -> Union[None, bool, str, List[str], int, float, List[int], List[float]]:
+    @log_call
+    def parse_ras_datetime_ms(datetime_str: str) -> datetime:
         """
-        Convert a value from a HEC-RAS HDF file into a Python object.
-
-        Args:
-            value (Any): The value to convert.
-
-        Returns:
-            Union[None, bool, str, List[str], int, float, List[int], List[float]]: The converted value.
-        """
-        if isinstance(value, np.floating) and np.isnan(value):
-            return None
-        elif isinstance(value, (bytes, np.bytes_)):
-            return value.decode('utf-8')
-        elif isinstance(value, np.integer):
-            return int(value)
-        elif isinstance(value, np.floating):
-            return float(value)
-        elif isinstance(value, (int, float)):
-            return value
-        elif isinstance(value, (list, tuple, np.ndarray)):
-            if len(value) > 1:
-                return [HdfUtils._convert_ras_hdf_value(v) for v in value]
-            else:
-                return HdfUtils._convert_ras_hdf_value(value[0])
-        else:
-            return str(value)
-
-    @staticmethod
-    def _parse_ras_datetime_ms(datetime_str: str) -> datetime:
-        """
-        Private method to parse a datetime string with milliseconds from a RAS file.
+        Public method to parse a datetime string with milliseconds from a RAS file.
 
         Args:
             datetime_str (str): The datetime string to parse.
@@ -344,11 +265,12 @@ class HdfUtils:
         """
         milliseconds = int(datetime_str[-3:])
         microseconds = milliseconds * 1000
-        parsed_dt = HdfBase._parse_ras_datetime(datetime_str[:-4]).replace(microsecond=microseconds)
+        parsed_dt = HdfUtils.parse_ras_datetime(datetime_str[:-4]).replace(microsecond=microseconds)
         return parsed_dt
-
+    
+# Rename to convert_timesteps_to_datetimes and make public
     @staticmethod
-    def _ras_timesteps_to_datetimes(timesteps: np.ndarray, start_time: datetime, time_unit: str = "days", round_to: str = "100ms") -> pd.DatetimeIndex:
+    def convert_timesteps_to_datetimes(timesteps: np.ndarray, start_time: datetime, time_unit: str = "days", round_to: str = "100ms") -> pd.DatetimeIndex:
         """
         Convert RAS timesteps to datetime objects.
 
@@ -369,11 +291,13 @@ class HdfUtils:
             raise ValueError(f"Unsupported time unit: {time_unit}")
 
         return pd.DatetimeIndex(datetimes).round(round_to)
+    
+# rename to convert_hdf5_attrs_to_dict and make public
 
     @staticmethod
-    def _hdf5_attrs_to_dict(attrs: Union[h5py.AttributeManager, Dict], prefix: Optional[str] = None) -> Dict:
+    def convert_hdf5_attrs_to_dict(attrs: Union[h5py.AttributeManager, Dict], prefix: Optional[str] = None) -> Dict:
         """
-        Private method to convert HDF5 attributes to a Python dictionary.
+        Convert HDF5 attributes to a Python dictionary.
 
         Args:
             attrs (Union[h5py.AttributeManager, Dict]): The attributes to convert.
@@ -387,10 +311,12 @@ class HdfUtils:
             if prefix:
                 key = f"{prefix}/{key}"
             if isinstance(value, (np.ndarray, list)):
-                result[key] = [HdfUtils._convert_ras_hdf_value(v) for v in value]
+                result[key] = [HdfUtils.convert_ras_hdf_value(v) for v in value]
             else:
-                result[key] = HdfUtils._convert_ras_hdf_value(value)
+                result[key] = HdfUtils.convert_ras_hdf_value(value)
         return result
+    
+    
 
     @staticmethod
     def parse_run_time_window(window: str) -> Tuple[datetime, datetime]:
@@ -405,114 +331,105 @@ class HdfUtils:
             time window.
         """
         split = window.split(" to ")
-        begin = HdfBase._parse_ras_datetime(split[0])
-        end = HdfBase._parse_ras_datetime(split[1])
+        begin = HdfUtils._parse_ras_datetime(split[0])
+        end = HdfUtils._parse_ras_datetime(split[1])
         return begin, end
 
     
 
+
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+## MOVED FROM HdfBase to HdfUtils:
+# _parse_ras_datetime   
+# _parse_ras_simulation_window_datetime
+# _parse_duration
+# _parse_ras_datetime_ms
+# _convert_ras_hdf_string
+
+# Which were renamed and made public as: 
+# parse_ras_datetime
+# parse_ras_window_datetime
+# parse_ras_datetime_ms
+# parse_ras_duration
+# parse_ras_time_window
+
+
+# Rename to parse_ras_datetime and make public
+
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_2d_flow_area_names_and_counts(hdf_path: Path) -> List[Tuple[str, int]]:
+    def parse_ras_datetime(datetime_str: str) -> datetime:
         """
-        Get the names and cell counts of 2D flow areas from the HDF file.
+        Parse a RAS datetime string into a datetime object.
 
         Args:
-            hdf_path (Path): Path to the HDF file.
+            datetime_str (str): The datetime string in format "ddMMMYYYY HH:MM:SS"
 
         Returns:
-            List[Tuple[str, int]]: A list of tuples containing the name and cell count of each 2D flow area.
-
-        Raises:
-            ValueError: If there's an error reading the HDF file or accessing the required data.
+            datetime: The parsed datetime object.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                flow_area_2d_path = "Geometry/2D Flow Areas"
-                if flow_area_2d_path not in hdf_file:
-                    return []
-                
-                attributes = hdf_file[f"{flow_area_2d_path}/Attributes"][()]
-                names = [HdfUtils._convert_ras_hdf_string(name) for name in attributes["Name"]]
-                
-                cell_info = hdf_file[f"{flow_area_2d_path}/Cell Info"][()]
-                cell_counts = [info[1] for info in cell_info]
-                
-                return list(zip(names, cell_counts))
-        except Exception as e:
-            logger.error(f"Error reading 2D flow area names and counts from {hdf_path}: {str(e)}")
-            raise ValueError(f"Failed to get 2D flow area names and counts: {str(e)}")
+        return datetime.strptime(datetime_str, "%d%b%Y %H:%M:%S")
+
+# Rename to parse_ras_window_datetime and make public
 
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def projection(hdf_path: Path) -> Optional[str]:
+    def parse_ras_window_datetime(datetime_str: str) -> datetime:
         """
-        Get the projection information from the HDF file.
+        Parse a datetime string from a RAS simulation window into a datetime object.
 
         Args:
-            hdf_path (Path): Path to the HDF file.
+            datetime_str (str): The datetime string to parse.
 
         Returns:
-            Optional[str]: The projection information as a string, or None if not found.
+            datetime: The parsed datetime object.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                proj_wkt = hdf_file.attrs.get("Projection")
-                if proj_wkt is None:
-                    return None
-                if isinstance(proj_wkt, bytes) or isinstance(proj_wkt, np.bytes_):
-                    proj_wkt = proj_wkt.decode("utf-8")
-                return proj_wkt
-        except Exception as e:
-            logger.error(f"Error reading projection from {hdf_path}: {str(e)}")
-            return None
+        return datetime.strptime(datetime_str, "%d%b%Y %H%M")
 
-    def print_attrs(name, obj):
-        """
-        Print attributes of an HDF5 object.
-        """
-        if obj.attrs:
-            print("")
-            print(f"    Attributes for {name}:")
-            for key, val in obj.attrs.items():
-                print(f"        {key}: {val}")
-        else:
-            print(f"    No attributes for {name}.")
+
+# Rename to parse_duration and make public
+
 
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def explore_hdf5(file_path: Path, group_path: str = '/') -> None:
+    def parse_duration(duration_str: str) -> timedelta:
         """
-        Recursively explore and print the structure of an HDF5 file.
+        Parse a duration string into a timedelta object.
 
-        :param file_path: Path to the HDF5 file
-        :param group_path: Current group path to explore
+        Args:
+            duration_str (str): The duration string to parse.
+
+        Returns:
+            timedelta: The parsed duration as a timedelta object.
         """
-        def recurse(name, obj, indent=0):
-            spacer = "    " * indent
-            if isinstance(obj, h5py.Group):
-                print(f"{spacer}Group: {name}")
-                HdfUtils.print_attrs(name, obj)
-                for key in obj:
-                    recurse(f"{name}/{key}", obj[key], indent+1)
-            elif isinstance(obj, h5py.Dataset):
-                print(f"{spacer}Dataset: {name}")
-                print(f"{spacer}    Shape: {obj.shape}")
-                print(f"{spacer}    Dtype: {obj.dtype}")
-                HdfUtils.print_attrs(name, obj)
-            else:
-                print(f"{spacer}Unknown object: {name}")
+        hours, minutes, seconds = map(int, duration_str.split(':'))
+        return timedelta(hours=hours, minutes=minutes, seconds=seconds)
+    
+    
+# Rename to parse_ras_datetime_ms and make public
+    
+    @staticmethod
+    def parse_ras_datetime_ms(datetime_str: str) -> datetime:
+        """
+        Parse a datetime string with milliseconds from a RAS file.
 
-        try:
-            with h5py.File(file_path, 'r') as hdf_file:
-                if group_path in hdf_file:
-                    print("")
-                    print(f"Exploring group: {group_path}\n")
-                    group = hdf_file[group_path]
-                    for key in group:
-                        print("")
-                        recurse(f"{group_path}/{key}", group[key], indent=1)
-                else:
-                    print(f"Group path '{group_path}' not found in the HDF5 file.")
-        except Exception as e:
-            print(f"Error exploring HDF5 file: {e}")
+        Args:
+            datetime_str (str): The datetime string to parse.
+
+        Returns:
+            datetime: The parsed datetime object.
+        """
+        milliseconds = int(datetime_str[-3:])
+        microseconds = milliseconds * 1000
+        parsed_dt = HdfUtils.parse_ras_datetime(datetime_str[:-4]).replace(microsecond=microseconds)
+        return parsed_dt
+    
+    

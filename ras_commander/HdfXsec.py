@@ -6,6 +6,26 @@ from the https://github.com/fema-ffrd/rashdf library,
 released under MIT license and Copyright (c) 2024 fema-ffrd
 
 The file has been forked and modified for use in RAS Commander.
+
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+Available Functions:
+- get_cross_sections(): Extract cross sections from HDF geometry file
+- get_river_centerlines(): Extract river centerlines from HDF geometry file
+- get_river_stationing(): Calculate river stationing along centerlines
+- get_river_reaches(): Return the model 1D river reach lines
+- get_river_edge_lines(): Return the model river edge lines
+- get_river_bank_lines(): Extract river bank lines from HDF geometry file
+- _interpolate_station(): Private helper method for station interpolation
+
+All functions follow the get_ prefix convention for methods that return data.
+Private helper methods use the underscore prefix convention.
+
+Each function returns a GeoDataFrame containing geometries and associated attributes
+specific to the requested feature type. All functions include proper error handling
+and logging.
 """
 
 from pathlib import Path
@@ -28,54 +48,54 @@ logger = get_logger(__name__)
 
 class HdfXsec:
     """
-    HdfXsec class for handling cross-section related operations on HEC-RAS HDF files.
+    Handles cross-section and river geometry data extraction from HEC-RAS HDF files.
 
-    This class provides methods to extract and process cross-section data, elevation information,
-    and river reach data from HEC-RAS HDF geometry files. It includes functionality to retrieve
-    cross-section attributes, elevation profiles, and river reach geometries.
+    This class provides static methods to extract and process:
+    - Cross-section geometries and attributes
+    - River centerlines and reaches
+    - River edge and bank lines
+    - Station-elevation profiles
 
-    The class uses static methods, allowing for direct calls without instantiation. It relies on
-    utility functions from HdfBase and HdfUtils classes for various operations such as projection
-    handling and data conversion.
+    All methods are designed to return GeoDataFrames with standardized geometries 
+    and attributes following the HEC-RAS data structure.
 
     Note:
-        This class is designed to work with HEC-RAS geometry HDF files and requires them to have
-        a specific structure and naming convention for the data groups and attributes.
-        """
+        Requires HEC-RAS geometry HDF files with standard structure and naming conventions.
+        All methods use proper error handling and logging.
+    """
     @staticmethod
     @log_call
-    def cross_sections(hdf_path: str, datetime_to_str: bool = True, ras_object=None) -> gpd.GeoDataFrame:
+    def get_cross_sections(hdf_path: str, datetime_to_str: bool = True, ras_object=None) -> gpd.GeoDataFrame:
         """
-        Extract cross sections from HDF geometry file and return as GeoDataFrame
-        
+        Extracts cross-section geometries and attributes from a HEC-RAS geometry HDF file.
+
         Parameters
         ----------
         hdf_path : str
-            Path to HDF file
+            Path to the HEC-RAS geometry HDF file
         datetime_to_str : bool, optional
-            Convert datetime objects to strings, by default True
+            Convert datetime objects to strings, defaults to True
         ras_object : RasPrj, optional
-            RAS project object, by default None
-            
+            RAS project object for additional context, defaults to None
+
         Returns
         -------
         gpd.GeoDataFrame
-            GeoDataFrame containing cross section geometries and attributes including:
-            - River name
-            - Reach name 
-            - River station
-            - Name
-            - Description
-            - Left/Channel/Right lengths
-            - Bank stations
-            - Friction mode
-            - Contraction/Expansion coefficients
-            - Levee information
-            - Hydraulic property parameters
-            - Block modes
-            - Last edited timestamp
-            - Manning's n values and stations
-            - Ineffective blocks data
+            Cross-section data with columns:
+            - geometry: LineString of cross-section path
+            - station_elevation: Station-elevation profile points
+            - mannings_n: Dictionary of Manning's n values and stations
+            - ineffective_blocks: List of ineffective flow area blocks
+            - River, Reach, RS: River system identifiers
+            - Name, Description: Cross-section labels
+            - Len Left/Channel/Right: Flow path lengths
+            - Left/Right Bank: Bank station locations
+            - Additional hydraulic parameters and attributes
+
+        Notes
+        -----
+        The returned GeoDataFrame includes the coordinate system from the HDF file
+        when available. All byte strings are converted to regular strings.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
@@ -216,70 +236,34 @@ class HdfXsec:
             logging.error(f"Error processing cross-section data: {str(e)}")
             return gpd.GeoDataFrame()
 
-
-    @staticmethod
-    @log_call
-    def _get_polylines(hdf_path: Path, path: str, info_name: str = "Polyline Info", parts_name: str = "Polyline Parts", points_name: str = "Polyline Points") -> List[LineString]:
-        """
-        Helper method to extract polylines from HDF file.
-        
-        [rest of docstring remains the same]
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                polyline_info_path = f"{path}/{info_name}"
-                polyline_parts_path = f"{path}/{parts_name}"
-                polyline_points_path = f"{path}/{points_name}"
-
-                polyline_info = hdf_file[polyline_info_path][()]
-                polyline_parts = hdf_file[polyline_parts_path][()]
-                polyline_points = hdf_file[polyline_points_path][()]
-
-                geoms = []
-                for pnt_start, pnt_cnt, part_start, part_cnt in polyline_info:
-                    points = polyline_points[pnt_start : pnt_start + pnt_cnt]
-                    if part_cnt == 1:
-                        geoms.append(LineString(points))
-                    else:
-                        parts = polyline_parts[part_start : part_start + part_cnt]
-                        geoms.append(
-                            MultiLineString(
-                                list(
-                                    points[part_pnt_start : part_pnt_start + part_pnt_cnt]
-                                    for part_pnt_start, part_pnt_cnt in parts
-                                )
-                            )
-                        )
-                return geoms
-        except Exception as e:
-            logger.error(f"Error getting polylines: {str(e)}")
-            return []
-
-
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def river_centerlines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_centerlines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
         """
-        Extract river centerlines from HDF geometry file.
+        Extracts river centerline geometries and attributes from HDF geometry file.
 
         Parameters
         ----------
         hdf_path : Path
             Path to the HEC-RAS geometry HDF file
         datetime_to_str : bool, optional
-            Convert datetime objects to strings, by default False
+            Convert datetime objects to strings, defaults to False
 
         Returns
         -------
         GeoDataFrame
-            GeoDataFrame containing river centerline geometries and attributes including:
-            - River Name
-            - Reach Name
-            - Upstream Type and Name
-            - Downstream Type and Name
-            - Junction distances
-            - Geometry
+            River centerline data with columns:
+            - geometry: LineString of river centerline
+            - River Name, Reach Name: River system identifiers
+            - US/DS Type, Name: Upstream/downstream connection info
+            - length: Centerline length in project units
+            Additional attributes from the HDF file are included
+
+        Notes
+        -----
+        Returns an empty GeoDataFrame if no centerlines are found.
+        All string attributes are stripped of whitespace.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -289,18 +273,23 @@ class HdfXsec:
 
                 centerline_data = hdf_file["Geometry/River Centerlines"]
                 
-                # Get attributes
+                # Get attributes directly from HDF dataset
                 attrs = centerline_data["Attributes"][()]
-                v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
                 
-                # Create dictionary of attributes
-                centerline_dict = {"centerline_id": range(attrs.shape[0])}
-                centerline_dict.update(
-                    {name: v_conv_val(attrs[name]) for name in attrs.dtype.names}
-                )
+                # Create initial dictionary for DataFrame
+                centerline_dict = {}
+                
+                # Process each attribute field
+                for name in attrs.dtype.names:
+                    values = attrs[name]
+                    if values.dtype.kind == 'S':
+                        # Convert byte strings to regular strings
+                        centerline_dict[name] = [val.decode('utf-8').strip() for val in values]
+                    else:
+                        centerline_dict[name] = values.tolist()  # Convert numpy array to list
 
-                # Get polyline geometries
-                geoms = HdfXsec._get_polylines(
+                # Get polylines using utility function
+                geoms = HdfBase.get_polylines_from_parts(
                     hdf_path, 
                     "Geometry/River Centerlines",
                     info_name="Polyline Info",
@@ -312,30 +301,29 @@ class HdfXsec:
                 centerline_gdf = GeoDataFrame(
                     centerline_dict,
                     geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path)
+                    crs=HdfBase.get_projection(hdf_path)
                 )
 
-                # Decode string columns after creation
+                # Clean up string columns
                 str_columns = ['River Name', 'Reach Name', 'US Type', 
-                             'US Name', 'DS Type', 'DS Name']
+                            'US Name', 'DS Type', 'DS Name']
                 for col in str_columns:
                     if col in centerline_gdf.columns:
-                        centerline_gdf[col] = centerline_gdf[col].apply(
-                            lambda x: x.decode('utf-8').strip() if isinstance(x, bytes) else x
-                        )
+                        centerline_gdf[col] = centerline_gdf[col].str.strip()
 
-                # Clean up column names and add length calculation
+                # Add length calculation in project units
                 if not centerline_gdf.empty:
-                    # Calculate length in project units
                     centerline_gdf['length'] = centerline_gdf.geometry.length
                     
-                    # Clean string columns
-                    str_columns = ['River Name', 'Reach Name', 'US Type',
-                                 'US Name', 'DS Type', 'DS Name']
-                    for col in str_columns:
-                        if col in centerline_gdf.columns:
-                            centerline_gdf[col] = centerline_gdf[col].str.strip()
+                    # Convert datetime columns if requested
+                    if datetime_to_str:
+                        datetime_cols = centerline_gdf.select_dtypes(
+                            include=['datetime64']).columns
+                        for col in datetime_cols:
+                            centerline_gdf[col] = centerline_gdf[col].dt.strftime(
+                                '%Y-%m-%d %H:%M:%S')
 
+                logger.info(f"Extracted {len(centerline_gdf)} river centerlines")
                 return centerline_gdf
 
         except Exception as e:
@@ -348,21 +336,27 @@ class HdfXsec:
     @log_call
     def get_river_stationing(centerlines_gdf: GeoDataFrame) -> GeoDataFrame:
         """
-        Calculate river stationing along centerlines.
+        Calculates stationing along river centerlines with interpolated points.
 
         Parameters
         ----------
         centerlines_gdf : GeoDataFrame
-            GeoDataFrame containing river centerline geometries from river_centerlines()
+            River centerline geometries from get_river_centerlines()
 
         Returns
         -------
         GeoDataFrame
-            Original GeoDataFrame with additional columns:
-            - station_start: Starting station for each reach
-            - station_end: Ending station for each reach
-            - stations: Array of stations along the centerline
-            - points: Array of point geometries along the centerline
+            Original centerlines with additional columns:
+            - station_start: Starting station value (0 or length)
+            - station_end: Ending station value (length or 0)
+            - stations: Array of station values along centerline
+            - points: Array of interpolated point geometries
+
+        Notes
+        -----
+        Station direction (increasing/decreasing) is determined by
+        upstream/downstream junction connections. Stations are calculated
+        at 100 evenly spaced points along each centerline.
         """
         if centerlines_gdf.empty:
             logger.warning("Empty centerlines GeoDataFrame provided")
@@ -411,7 +405,21 @@ class HdfXsec:
 
     @staticmethod
     def _interpolate_station(line, distance):
-        """Helper method to interpolate station along a line"""
+        """
+        Interpolates a point along a line at a given distance.
+
+        Parameters
+        ----------
+        line : LineString
+            Shapely LineString geometry
+        distance : float
+            Distance along the line to interpolate
+
+        Returns
+        -------
+        tuple
+            (x, y) coordinates of interpolated point
+        """
         if distance <= 0:
             return line.coords[0]
         elif distance >= line.length:
@@ -423,7 +431,7 @@ class HdfXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def river_reaches(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_reaches(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
         """
         Return the model 1D river reach lines.
 
@@ -448,7 +456,7 @@ class HdfXsec:
                     return GeoDataFrame()
 
                 river_data = hdf_file["Geometry/River Centerlines"]
-                v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
+                v_conv_val = np.vectorize(HdfUtils.convert_ras_string)
                 river_attrs = river_data["Attributes"][()]
                 river_dict = {"river_id": range(river_attrs.shape[0])}
                 river_dict.update(
@@ -456,12 +464,14 @@ class HdfXsec:
                 )
                 
                 # Get polylines for river reaches
-                geoms = HdfXsec._get_polylines(hdf_path, "Geometry/River Centerlines")
-                
+                geoms = HdfBase.get_polylines_from_parts(
+                    hdf_path, "Geometry/River Centerlines"
+                )
+
                 river_gdf = GeoDataFrame(
                     river_dict,
                     geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path),
+                    crs=HdfBase.get_projection(hdf_path),
                 )
                 if datetime_to_str:
                     river_gdf["Last Edited"] = river_gdf["Last Edited"].apply(
@@ -476,7 +486,7 @@ class HdfXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def river_edge_lines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_edge_lines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
         """
         Return the model river edge lines.
 
@@ -504,7 +514,7 @@ class HdfXsec:
                 # Get attributes if they exist
                 if "Attributes" in edge_data:
                     attrs = edge_data["Attributes"][()]
-                    v_conv_val = np.vectorize(HdfUtils._convert_ras_hdf_value)
+                    v_conv_val = np.vectorize(HdfUtils.convert_ras_string)
                     
                     # Create dictionary of attributes
                     edge_dict = {"edge_id": range(attrs.shape[0])}
@@ -519,7 +529,7 @@ class HdfXsec:
                     edge_dict = {"edge_id": [], "bank_side": []}
 
                 # Get polyline geometries
-                geoms = HdfXsec._get_polylines(
+                geoms = HdfBase.get_polylines_from_parts(
                     hdf_path, 
                     "Geometry/River Edge Lines",
                     info_name="Polyline Info",
@@ -531,7 +541,7 @@ class HdfXsec:
                 edge_gdf = GeoDataFrame(
                     edge_dict,
                     geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path)
+                    crs=HdfBase.get_projection(hdf_path)
                 )
 
                 # Convert datetime objects to strings if requested
@@ -553,7 +563,7 @@ class HdfXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def river_bank_lines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_bank_lines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
         """
         Extract river bank lines from HDF geometry file.
 
@@ -580,7 +590,7 @@ class HdfXsec:
                     return GeoDataFrame()
 
                 # Get polyline geometries using existing helper method
-                geoms = HdfXsec._get_polylines(
+                geoms = HdfBase.get_polylines_from_parts(
                     hdf_path, 
                     "Geometry/River Bank Lines",
                     info_name="Polyline Info",
@@ -598,7 +608,7 @@ class HdfXsec:
                 bank_gdf = GeoDataFrame(
                     bank_dict,
                     geometry=geoms,
-                    crs=HdfUtils.projection(hdf_path)
+                    crs=HdfBase.get_projection(hdf_path)
                 )
 
                 # Add length calculation in project units

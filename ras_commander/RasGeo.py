@@ -22,6 +22,17 @@ Example:
         logger = logging.getLogger(__name__)
         logger.debug("Additional debug information")
         # Function logic here
+        
+        
+        
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasGeo:
+- clear_geompre_files()
+        
+        
 """
 import os
 from pathlib import Path

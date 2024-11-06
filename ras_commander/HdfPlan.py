@@ -6,6 +6,43 @@ from the https://github.com/fema-ffrd/rashdf library,
 released under MIT license and Copyright (c) 2024 fema-ffrd
 
 The file has been forked and modified for use in RAS Commander.
+
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in HdfPlan:
+- get_simulation_start_time()
+- get_simulation_end_time()
+- get_unsteady_datetimes()
+- get_plan_info_attrs()
+- get_plan_parameters()
+- get_meteorology_precip_attrs()
+- get_geom_attrs()
+
+
+REVISIONS NEEDED: 
+
+Use get_ prefix for functions that return data.  
+Since we are extracting plan data, we should use get_plan_...
+BUT, we will never set results data, so we should use results_
+
+We need to shorten names where possible.
+
+List of Revised Functions in HdfPlan:
+- get_plan_start_time()
+- get_plan_end_time()
+- get_plan_timestamps_list()     
+- get_plan_information()
+- get_plan_parameters()
+- get_plan_met_precip()
+- get_geometry_information()
+
+
+
+
+
+
 """
 
 import h5py
@@ -24,64 +61,53 @@ logger = get_logger(__name__)
 
 class HdfPlan:
     """
-    A class for handling operations on HEC-RAS plan HDF files.
+    A class for handling HEC-RAS plan HDF files.
 
-    This class provides methods for extracting and analyzing data from HEC-RAS plan HDF files,
-    including simulation times, plan information, and geometry attributes.
+    Provides static methods for extracting data from HEC-RAS plan HDF files including 
+    simulation times, plan information, and geometry attributes. All methods use 
+    @standardize_input for handling different input types and @log_call for logging.
 
-    Methods in this class use the @standardize_input decorator to handle different input types
-    (e.g., plan number, file path) and the @log_call decorator for logging method calls.
-
-    Attributes:
-        None
-
-    Methods:
-        get_simulation_start_time: Get the simulation start time.
-        get_simulation_end_time: Get the simulation end time.
-        get_unsteady_datetimes: Get a list of unsteady datetimes.
-        get_plan_info_attrs: Get plan information attributes.
-        get_plan_param_attrs: Get plan parameter attributes.
-        get_meteorology_precip_attrs: Get precipitation attributes.
-        get_geom_attrs: Get geometry attributes.
+    Note: This code is partially derived from the rashdf library (https://github.com/fema-ffrd/rashdf)
+    under MIT license.
     """
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_simulation_start_time(hdf_path: Path) -> datetime:
+    def get_plan_start_time(hdf_path: Path) -> datetime:
         """
-        Get the simulation start time from the plan file.
+        Get the plan start time from the plan file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            datetime: The simulation start time.
+            datetime: The plan start time in UTC format.
 
         Raises:
-            ValueError: If there's an error reading the simulation start time.
+            ValueError: If there's an error reading the plan start time.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                return HdfBase._get_simulation_start_time(hdf_file)
+                return HdfBase.get_simulation_start_time(hdf_file)
         except Exception as e:
-            raise ValueError(f"Failed to get simulation start time: {str(e)}")
+            raise ValueError(f"Failed to get plan start time: {str(e)}")
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_simulation_end_time(hdf_path: Path) -> datetime:
+    def get_plan_end_time(hdf_path: Path) -> datetime:
         """
-        Get the simulation end time from the plan file.
+        Get the plan end time from the plan file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            datetime: The simulation end time.
+            datetime: The plan end time.
 
         Raises:
-            ValueError: If there's an error reading the simulation end time.
+            ValueError: If there's an error reading the plan end time.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -89,57 +115,70 @@ class HdfPlan:
                 if plan_info is None:
                     raise ValueError("Plan Information not found in HDF file")
                 time_str = plan_info.attrs.get('Simulation End Time')
-                return datetime.strptime(time_str.decode('utf-8'), "%d%b%Y %H:%M:%S")
+                return HdfUtils.parse_ras_datetime(time_str.decode('utf-8'))
         except Exception as e:
-            raise ValueError(f"Failed to get simulation end time: {str(e)}")
+            raise ValueError(f"Failed to get plan end time: {str(e)}")
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_unsteady_datetimes(hdf_path: Path) -> List[datetime]:
+    def get_plan_timestamps_list(hdf_path: Path) -> List[datetime]:
         """
-        Get the list of unsteady datetimes from the HDF file.
+        Get the list of output timestamps from the plan simulation.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            List[datetime]: A list of datetime objects representing the unsteady timestamps.
+            List[datetime]: Chronological list of simulation output timestamps in UTC.
 
         Raises:
-            ValueError: If there's an error retrieving the unsteady datetimes.
+            ValueError: If there's an error retrieving the plan timestamps.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                return HdfBase._get_unsteady_datetimes(hdf_file)
+                return HdfBase.get_unsteady_timestamps(hdf_file)
         except Exception as e:
-            raise ValueError(f"Failed to get unsteady datetimes: {str(e)}")
+            raise ValueError(f"Failed to get plan timestamps: {str(e)}")
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_plan_info_attrs(hdf_path: Path) -> Dict:
+    def get_plan_information(hdf_path: Path) -> Dict:
         """
-        Get plan information attributes from a HEC-RAS HDF plan file.
+        Get plan information from a HEC-RAS HDF plan file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: A dictionary containing the plan information attributes.
+            Dict: Plan information including simulation times, flow regime, 
+                computation settings, etc.
 
         Raises:
-            ValueError: If there's an error retrieving the plan information attributes.
+            ValueError: If there's an error retrieving the plan information.
         """
         try:
-            return HdfUtils.get_attrs(hdf_path, "Plan Data/Plan Information")
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                plan_info_path = "Plan Data/Plan Information"
+                if plan_info_path not in hdf_file:
+                    raise ValueError(f"Plan Information not found in {hdf_path}")
+                
+                attrs = {}
+                for key in hdf_file[plan_info_path].attrs.keys():
+                    value = hdf_file[plan_info_path].attrs[key]
+                    if isinstance(value, bytes):
+                        value = HdfUtils.convert_ras_string(value)
+                    attrs[key] = value
+                
+                return attrs
         except Exception as e:
             raise ValueError(f"Failed to get plan information attributes: {str(e)}")
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_plan_param_attrs(hdf_path: Path) -> Dict:
+    def get_plan_parameters(hdf_path: Path) -> Dict:
         """
         Get plan parameter attributes from a HEC-RAS HDF plan file.
 
@@ -153,14 +192,26 @@ class HdfPlan:
             ValueError: If there's an error retrieving the plan parameter attributes.
         """
         try:
-            return HdfUtils.get_attrs(hdf_path, "Plan Data/Plan Parameters")
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                plan_params_path = "Plan Data/Plan Parameters"
+                if plan_params_path not in hdf_file:
+                    raise ValueError(f"Plan Parameters not found in {hdf_path}")
+                
+                attrs = {}
+                for key in hdf_file[plan_params_path].attrs.keys():
+                    value = hdf_file[plan_params_path].attrs[key]
+                    if isinstance(value, bytes):
+                        value = HdfUtils.convert_ras_string(value)
+                    attrs[key] = value
+                
+                return attrs
         except Exception as e:
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_meteorology_precip_attrs(hdf_path: Path) -> Dict:
+    def get_plan_met_precip(hdf_path: Path) -> Dict:
         """
         Get precipitation attributes from a HEC-RAS HDF plan file.
 
@@ -168,38 +219,73 @@ class HdfPlan:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: A dictionary containing the precipitation attributes.
-
-        Raises:
-            ValueError: If there's an error retrieving the precipitation attributes.
+            Dict: Precipitation attributes including method, time series data,
+                and spatial distribution if available. Returns empty dict if
+                no precipitation data exists.
         """
         try:
-            return HdfUtils.get_attrs(hdf_path, "Event Conditions/Meteorology/Precipitation")
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                precip_path = "Event Conditions/Meteorology/Precipitation"
+                if precip_path not in hdf_file:
+                    logger.error(f"Precipitation data not found in {hdf_path}")
+                    return {}
+                
+                attrs = {}
+                for key in hdf_file[precip_path].attrs.keys():
+                    value = hdf_file[precip_path].attrs[key]
+                    if isinstance(value, bytes):
+                        value = HdfUtils.convert_ras_string(value)
+                    attrs[key] = value
+                
+                return attrs
         except Exception as e:
-            raise ValueError(f"Failed to get precipitation attributes: {str(e)}")
-
+            logger.error(f"Failed to get precipitation attributes: {str(e)}")
+            return {}
+        
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_geom_attrs(hdf_path: Path) -> Dict:
+    def get_geometry_information(hdf_path: Path) -> pd.DataFrame:
         """
-        Get geometry attributes from a HEC-RAS HDF plan file.
+        Get root level geometry attributes from the HDF plan file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: A dictionary containing the geometry attributes.
+            pd.DataFrame: DataFrame with geometry attributes including Creation Date/Time,
+                        Version, Units, and Projection information.
 
         Raises:
-            ValueError: If there's an error retrieving the geometry attributes.
+            ValueError: If Geometry group is missing or there's an error reading attributes.
         """
+        print(f"Getting geometry attributes from {hdf_path}")
         try:
-            return HdfUtils.get_attrs(hdf_path, "Geometry")
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                geom_attrs_path = "Geometry"
+                print(f"Checking for Geometry group in {hdf_path}")
+                if geom_attrs_path not in hdf_file:
+                    raise ValueError(f"Geometry group not found in {hdf_path}")
+
+                attrs = {}
+                geom_group = hdf_file[geom_attrs_path]
+                print("Getting root level geometry attributes")
+                # Get root level geometry attributes only
+                for key, value in geom_group.attrs.items():
+                    if isinstance(value, bytes):
+                        try:
+                            value = HdfUtils.convert_ras_string(value)
+                        except UnicodeDecodeError:
+                            logger.warning(f"Failed to decode byte string for root attribute {key}")
+                            continue
+                    attrs[key] = value
+
+                print("Successfully extracted root level geometry attributes")
+                return pd.DataFrame.from_dict(attrs, orient='index', columns=['Value'])
+
+        except (OSError, RuntimeError) as e:
+            raise ValueError(f"Failed to read HDF file {hdf_path}: {str(e)}")
         except Exception as e:
             raise ValueError(f"Failed to get geometry attributes: {str(e)}")
-
-
-
 
 

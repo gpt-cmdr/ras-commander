@@ -20,6 +20,37 @@ Example:
     def my_function():
         logger.debug("Additional debug information")
         # Function logic here
+        
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasUtils:
+- create_directory()
+- find_files_by_extension()
+- get_file_size()
+- get_file_modification_time()
+- get_plan_path()
+- remove_with_retry()
+- update_plan_file()
+- check_file_access()
+- convert_to_dataframe()
+- save_to_excel()
+- calculate_rmse()
+- calculate_percent_bias()
+- calculate_error_metrics()
+- update_file()
+- get_next_number()
+- clone_file()
+- update_project_file()
+- decode_byte_strings()
+- perform_kdtree_query()
+- find_nearest_neighbors()
+- consolidate_dataframe()
+- find_nearest_value()
+- horizontal_distance()
+    
+        
 """
 import os
 from pathlib import Path

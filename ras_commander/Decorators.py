@@ -16,7 +16,6 @@ def log_call(func):
         return result
     return wrapper
 
-
 def standardize_input(file_type: str = 'plan_hdf'):
     """
     Decorator to standardize input for HDF file operations.
@@ -41,6 +40,14 @@ def standardize_input(file_type: str = 'plan_hdf'):
         def wrapper(*args, **kwargs):
             logger = logging.getLogger(func.__module__)
             
+            # Check if the function expects an hdf_path parameter
+            sig = inspect.signature(func)
+            param_names = list(sig.parameters.keys())
+            
+            # If first parameter is 'hdf_file', skip path processing
+            if param_names and param_names[0] == 'hdf_file':
+                return func(*args, **kwargs)
+                
             # Handle both static method calls and regular function calls
             if args and isinstance(args[0], type):
                 # Static method call, remove the class argument
@@ -48,6 +55,16 @@ def standardize_input(file_type: str = 'plan_hdf'):
             
             hdf_input = kwargs.pop('hdf_path', None) or kwargs.pop('hdf_input', None) or (args[0] if args else None)
             ras_object = kwargs.pop('ras_object', None) or (args[1] if len(args) > 1 else None)
+
+            # If no hdf_input provided, return the function unmodified
+            if hdf_input is None:
+                return func(*args, **kwargs)
+
+            # NEW: If input is already a Path and exists, use it directly regardless of file_type
+            if isinstance(hdf_input, Path) and hdf_input.is_file():
+                logger.info(f"Using existing HDF file: {hdf_input}")
+                new_args = (hdf_input,) + args[1:]
+                return func(*new_args, **kwargs)
 
             hdf_path = None
 

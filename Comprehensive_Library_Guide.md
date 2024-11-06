@@ -61,6 +61,26 @@ pip install --update ras-commander # This ensures you get the latest version of 
 13. **AI-Accessibility**:
     - Structured, consistent codebase with clear documentation to facilitate easier learning and usage by AI models.
 
+14. **Expanded HDF Support**:
+    - Comprehensive HDF file handling through specialized classes
+    - Support for mesh, plan, and cross-section results
+    - Advanced data extraction and analysis capabilities
+
+15. **Enhanced Boundary Conditions**:
+    - Improved extraction and management of boundary conditions
+    - Support for various boundary condition types
+    - Structured representation of boundary data
+
+16. **Infrastructure Analysis**:
+    - New support for pipe networks through `HdfPipe`
+    - Pump station analysis via `HdfPump`
+    - Fluvial-pluvial analysis capabilities in `HdfFluvialPluvial`
+
+17. **RAS Interface Components**:
+    - Integration with RASMapper through `RasMap`
+    - Go-Consequences interface via `RasToGo`
+    - AI assistance through `RasGpt`
+
 ## Core Features
 
 1. **Project Management**: Initialize, load, and manage HEC-RAS projects.
@@ -72,6 +92,10 @@ pip install --update ras-commander # This ensures you get the latest version of 
 7. **Example Project Handling**: Download and manage HEC-RAS example projects.
 8. **Utility Functions**: Perform common tasks and statistical analyses.
 9. **HDF File Handling**: Specialized classes for working with HEC-RAS HDF files.
+10. **Advanced HDF Analysis**: Comprehensive tools for HDF file operations
+11. **Infrastructure Analysis**: Tools for pipe networks and pump stations
+12. **Mapping Integration**: RASMapper interface capabilities
+13. **External Tool Integration**: Connection to Go-Consequences and other tools
 
 ## Module Overview
 
@@ -97,6 +121,8 @@ pip install --update ras-commander # This ensures you get the latest version of 
 20. **HdfFluvialPluvial**: Manages fluvial and pluvial related data in HDF files.
 21. **RasToGo**: Functions to interface with USACE Go Consequences.
 22. **RasMap**: Handling of RASMapper .rasmap files.
+23. **RasGpt**: AI assistance tools
+24. **HdfPlot & HdfResultsPlot**: Visualization utilities
 
 ## Best Practices
 
@@ -920,6 +946,21 @@ By following these strategies and best practices, you can effectively use RAS Co
 
 - **Geometry Files**: Clear geometry preprocessor files when making changes.
 - **Plan Parameters**: Ensure all plan parameters are correctly set before execution.
+
+### 6. Infrastructure Analysis Issues
+- Verify network connectivity in pipe systems
+- Check pump station configurations
+- Validate time series data consistency
+
+### 7. HDF File Problems
+- Check file permissions and access
+- Verify HDF structure using HdfUtils
+- Use proper file type specification with @standardize_input
+
+### 8. Performance Optimization
+- Monitor system resources during parallel execution
+- Balance worker count with system capabilities
+- Use appropriate chunking for large datasets
 
 ## Conclusion
 

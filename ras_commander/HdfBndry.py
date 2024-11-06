@@ -1,11 +1,28 @@
 """
 Class: HdfBndry
 
+A utility class for extracting and processing boundary-related features from HEC-RAS HDF files,
+including boundary conditions, breaklines, refinement regions, and reference features.
+
 Attribution: A substantial amount of code in this file is sourced or derived 
 from the https://github.com/fema-ffrd/rashdf library, 
 released under MIT license and Copyright (c) 2024 fema-ffrd
 
 The file has been forked and modified for use in RAS Commander.
+
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in HdfBndry:
+- get_bc_lines()           # Returns boundary condition lines as a GeoDataFrame.
+- get_breaklines()         # Returns 2D mesh area breaklines as a GeoDataFrame.
+- get_refinement_regions() # Returns refinement regions as a GeoDataFrame.
+- get_reference_lines()    # Returns reference lines as a GeoDataFrame.
+- get_reference_points()   # Returns reference points as a GeoDataFrame.
+
+
+
 """
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
@@ -38,10 +55,9 @@ class HdfBndry:
         This class relies on the HdfBase and HdfUtils classes for some of its
         functionality. Ensure these classes are available in the same package.
     """
-
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def bc_lines(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_bc_lines(hdf_path: Path) -> gpd.GeoDataFrame:
         """
         Return 2D mesh area boundary condition lines.
 
@@ -53,38 +69,47 @@ class HdfBndry:
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the boundary condition lines.
+            A GeoDataFrame containing the boundary condition lines and their attributes.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 bc_lines_path = "Geometry/Boundary Condition Lines"
                 if bc_lines_path not in hdf_file:
                     return gpd.GeoDataFrame()
+                
+                # Get geometries
                 bc_line_data = hdf_file[bc_lines_path]
-                bc_line_ids = range(bc_line_data["Attributes"][()].shape[0])
-                v_conv_str = np.vectorize(HdfUtils.convert_ras_hdf_string)
-                names = v_conv_str(bc_line_data["Attributes"][()]["Name"])
-                mesh_names = v_conv_str(bc_line_data["Attributes"][()]["SA-2D"])
-                types = v_conv_str(bc_line_data["Attributes"][()]["Type"])
-                geoms = HdfBndry._get_polylines(hdf_file, bc_lines_path)
-                return gpd.GeoDataFrame(
-                    {
-                        "bc_line_id": bc_line_ids,
-                        "Name": names,
-                        "mesh_name": mesh_names,
-                        "Type": types,
-                        "geometry": geoms,
-                    },
-                    geometry="geometry",
-                    crs=HdfUtils.projection(hdf_file),
+                geoms = HdfUtils.get_polylines_from_parts(hdf_path, bc_lines_path)
+                
+                # Get attributes
+                attributes = pd.DataFrame(bc_line_data["Attributes"][()])
+                
+                # Convert string columns
+                str_columns = ['Name', 'SA-2D', 'Type']
+                for col in str_columns:
+                    if col in attributes.columns:
+                        attributes[col] = attributes[col].apply(HdfUtils.convert_ras_string)
+                
+                # Create GeoDataFrame with all attributes
+                gdf = gpd.GeoDataFrame(
+                    attributes,
+                    geometry=geoms,
+                    crs=HdfUtils.get_projection(hdf_file)
                 )
+                
+                # Add ID column if not present
+                if 'bc_line_id' not in gdf.columns:
+                    gdf['bc_line_id'] = range(len(gdf))
+                    
+                return gdf
+
         except Exception as e:
-            print(f"Error reading boundary condition lines: {str(e)}")
+            logger.error(f"Error reading boundary condition lines: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def breaklines(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_breaklines(hdf_path: Path) -> gpd.GeoDataFrame:
         """
         Return 2D mesh area breaklines.
 
@@ -102,25 +127,26 @@ class HdfBndry:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 breaklines_path = "Geometry/2D Flow Area Break Lines"
                 if breaklines_path not in hdf_file:
+                    logger.warning(f"Breaklines path '{breaklines_path}' not found in HDF file.")
                     return gpd.GeoDataFrame()
                 bl_line_data = hdf_file[breaklines_path]
                 bl_line_ids = range(bl_line_data["Attributes"][()].shape[0])
-                names = np.vectorize(HdfUtils.convert_ras_hdf_string)(
+                names = np.vectorize(HdfUtils.convert_ras_string)(
                     bl_line_data["Attributes"][()]["Name"]
                 )
-                geoms = HdfBndry._get_polylines(hdf_file, breaklines_path)
+                geoms = HdfUtils.get_polylines_from_parts(hdf_path, breaklines_path)
                 return gpd.GeoDataFrame(
                     {"bl_id": bl_line_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
-                    crs=HdfUtils.projection(hdf_file),
+                    crs=HdfUtils.get_projection(hdf_file),
                 )
         except Exception as e:
-            print(f"Error reading breaklines: {str(e)}")
+            logger.error(f"Error reading breaklines: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def refinement_regions(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_refinement_regions(hdf_path: Path) -> gpd.GeoDataFrame:
         """
         Return 2D mesh area refinement regions.
 
@@ -141,7 +167,7 @@ class HdfBndry:
                     return gpd.GeoDataFrame()
                 rr_data = hdf_file[refinement_regions_path]
                 rr_ids = range(rr_data["Attributes"][()].shape[0])
-                names = np.vectorize(HdfUtils.convert_ras_hdf_string)(rr_data["Attributes"][()]["Name"])
+                names = np.vectorize(HdfUtils.convert_ras_string)(rr_data["Attributes"][()]["Name"])
                 geoms = list()
                 for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
                     points = rr_data["Polygon Points"][()][pnt_start : pnt_start + pnt_cnt]
@@ -160,55 +186,15 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {"rr_id": rr_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
-                    crs=HdfUtils.projection(hdf_file),
+                    crs=HdfUtils.get_projection(hdf_file),
                 )
         except Exception as e:
-            print(f"Error reading refinement regions: {str(e)}")
+            logger.error(f"Error reading refinement regions: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def reference_lines_names(hdf_path: Path, mesh_name: Optional[str] = None) -> Union[Dict[str, List[str]], List[str]]:
-        """
-        Return reference line names.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        mesh_name : Optional[str], optional
-            Name of the mesh to filter by. Default is None.
-
-        Returns
-        -------
-        Union[Dict[str, List[str]], List[str]]
-            A dictionary of mesh names to reference line names, or a list of reference line names if mesh_name is provided.
-        """
-        return HdfBndry._get_reference_lines_points_names(hdf_path, "lines", mesh_name)
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def reference_points_names(hdf_path: Path, mesh_name: Optional[str] = None) -> Union[Dict[str, List[str]], List[str]]:
-        """
-        Return reference point names.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        mesh_name : Optional[str], optional
-            Name of the mesh to filter by. Default is None.
-
-        Returns
-        -------
-        Union[Dict[str, List[str]], List[str]]
-            A dictionary of mesh names to reference point names, or a list of reference point names if mesh_name is provided.
-        """
-        return HdfBndry._get_reference_lines_points_names(hdf_path, "points", mesh_name)
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def reference_lines(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_reference_lines(hdf_path: Path, mesh_name: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Return the reference lines geometry and attributes.
 
@@ -216,11 +202,14 @@ class HdfBndry:
         ----------
         hdf_path : Path
             Path to the HEC-RAS geometry HDF file.
+        mesh_name : Optional[str], optional
+            Name of the mesh to filter by. Default is None.
 
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the reference lines.
+            A GeoDataFrame containing the reference lines. If mesh_name is provided,
+            returns only lines for that mesh.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -228,35 +217,45 @@ class HdfBndry:
                 attributes_path = f"{reference_lines_path}/Attributes"
                 if attributes_path not in hdf_file:
                     return gpd.GeoDataFrame()
+                
                 attributes = hdf_file[attributes_path][()]
                 refline_ids = range(attributes.shape[0])
-                v_conv_str = np.vectorize(HdfUtils.convert_ras_hdf_string)
+                v_conv_str = np.vectorize(HdfUtils.convert_ras_string)
                 names = v_conv_str(attributes["Name"])
                 mesh_names = v_conv_str(attributes["SA-2D"])
+                
                 try:
                     types = v_conv_str(attributes["Type"])
                 except ValueError:
-                    # "Type" field doesn't exist -- observed in some RAS HDF files
                     types = np.array([""] * attributes.shape[0])
-                geoms = HdfBndry._get_polylines(hdf_file, reference_lines_path)
-                return gpd.GeoDataFrame(
+                
+                geoms = HdfUtils.get_polylines_from_parts(hdf_path, reference_lines_path)
+                
+                gdf = gpd.GeoDataFrame(
                     {
                         "refln_id": refline_ids,
                         "Name": names,
-                        "mesh-name": mesh_names,
+                        "mesh_name": mesh_names,
                         "Type": types,
                         "geometry": geoms,
                     },
                     geometry="geometry",
-                    crs=HdfUtils.projection(hdf_file),
+                    crs=HdfUtils.get_projection(hdf_file),
                 )
+                
+                # Filter by mesh_name if provided
+                if mesh_name is not None:
+                    gdf = gdf[gdf['mesh_name'] == mesh_name]
+                
+                return gdf
+                
         except Exception as e:
-            print(f"Error reading reference lines: {str(e)}")
+            logger.error(f"Error reading reference lines: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def reference_points(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_reference_points(hdf_path: Path, mesh_name: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Return the reference points geometry and attributes.
 
@@ -264,11 +263,14 @@ class HdfBndry:
         ----------
         hdf_path : Path
             Path to the HEC-RAS geometry HDF file.
+        mesh_name : Optional[str], optional
+            Name of the mesh to filter by. Default is None.
 
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the reference points.
+            A GeoDataFrame containing the reference points. If mesh_name is provided,
+            returns only points for that mesh.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -276,14 +278,16 @@ class HdfBndry:
                 attributes_path = f"{reference_points_path}/Attributes"
                 if attributes_path not in hdf_file:
                     return gpd.GeoDataFrame()
+                
                 ref_points_group = hdf_file[reference_points_path]
                 attributes = ref_points_group["Attributes"][:]
-                v_conv_str = np.vectorize(HdfUtils.convert_ras_hdf_string)
+                v_conv_str = np.vectorize(HdfUtils.convert_ras_string)
                 names = v_conv_str(attributes["Name"])
                 mesh_names = v_conv_str(attributes["SA/2D"])
                 cell_id = attributes["Cell Index"]
                 points = ref_points_group["Points"][()]
-                return gpd.GeoDataFrame(
+                
+                gdf = gpd.GeoDataFrame(
                     {
                         "refpt_id": range(attributes.shape[0]),
                         "Name": names,
@@ -292,214 +296,17 @@ class HdfBndry:
                         "geometry": list(map(Point, points)),
                     },
                     geometry="geometry",
-                    crs=HdfUtils.projection(hdf_file),
+                    crs=HdfUtils.get_projection(hdf_file),
                 )
+                
+                # Filter by mesh_name if provided
+                if mesh_name is not None:
+                    gdf = gdf[gdf['mesh_name'] == mesh_name]
+                
+                return gdf
+                
         except Exception as e:
-            print(f"Error reading reference points: {str(e)}")
+            logger.error(f"Error reading reference points: {str(e)}")
             return gpd.GeoDataFrame()
 
-    @staticmethod
-    def _get_reference_lines_points_names(hdf_path: Path, reftype: str = "lines", mesh_name: Optional[str] = None) -> Union[Dict[str, List[str]], List[str]]:
-        """
-        Get the names of reference lines or points.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        reftype : str, optional
-            Type of reference, either "lines" or "points" (default "lines").
-        mesh_name : Optional[str], optional
-            Name of the mesh to filter by. Default is None.
-
-        Returns
-        -------
-        Union[Dict[str, List[str]], List[str]]
-            A dictionary of mesh names to reference names, or a list of reference names if mesh_name is provided.
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                if reftype == "lines":
-                    path = "Geometry/Reference Lines"
-                    sa_2d_field = "SA-2D"
-                elif reftype == "points":
-                    path = "Geometry/Reference Points"
-                    sa_2d_field = "SA/2D"
-                else:
-                    raise ValueError(
-                        f"Invalid reference type: {reftype} -- must be 'lines' or 'points'."
-                    )
-                attributes_path = f"{path}/Attributes"
-                if mesh_name is None and attributes_path not in hdf_file:
-                    return {m: [] for m in HdfMesh.mesh_area_names(hdf_file)}
-                if mesh_name is not None and attributes_path not in hdf_file:
-                    return []
-                attributes = hdf_file[attributes_path][()]
-                v_conv_str = np.vectorize(HdfUtils.convert_ras_hdf_string)
-                names = v_conv_str(attributes["Name"])
-                if mesh_name is not None:
-                    return names[v_conv_str(attributes[sa_2d_field]) == mesh_name].tolist()
-                mesh_names = v_conv_str(attributes[sa_2d_field])
-                return {m: names[mesh_names == m].tolist() for m in np.unique(mesh_names)}
-        except Exception as e:
-            print(f"Error reading reference lines/points names: {str(e)}")
-            return {} if mesh_name is None else []
-
-    @staticmethod
-    def _get_polylines(hdf_file: h5py.File, path: str, info_name: str = "Polyline Info", parts_name: str = "Polyline Parts", points_name: str = "Polyline Points") -> List[Union[LineString, MultiLineString]]:
-        """
-        Get polyline geometries from HDF file.
-
-        Parameters
-        ----------
-        hdf_file : h5py.File
-            Open HDF file object.
-        path : str
-            Path to the polyline data in the HDF file.
-        info_name : str, optional
-            Name of the info dataset (default "Polyline Info").
-        parts_name : str, optional
-            Name of the parts dataset (default "Polyline Parts").
-        points_name : str, optional
-            Name of the points dataset (default "Polyline Points").
-
-        Returns
-        -------
-        List[Union[LineString, MultiLineString]]
-            A list of polyline geometries.
-        """
-        polyline_info_path = f"{path}/{info_name}"
-        polyline_parts_path = f"{path}/{parts_name}"
-        polyline_points_path = f"{path}/{points_name}"
-
-        polyline_info = hdf_file[polyline_info_path][()]
-        polyline_parts = hdf_file[polyline_parts_path][()]
-        polyline_points = hdf_file[polyline_points_path][()]
-
-        geoms = []
-        for pnt_start, pnt_cnt, part_start, part_cnt in polyline_info:
-            points = polyline_points[pnt_start : pnt_start + pnt_cnt]
-            if part_cnt == 1:
-                geoms.append(LineString(points))
-            else:
-                parts = polyline_parts[part_start : part_start + part_cnt]
-                geoms.append(
-                    MultiLineString(
-                        list(
-                            points[part_pnt_start : part_pnt_start + part_pnt_cnt]
-                            for part_pnt_start, part_pnt_cnt in parts
-                        )
-                    )
-                )
-        return geoms
     
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_boundary_attributes(hdf_path: Path, boundary_type: str) -> pd.DataFrame:
-        """
-        Get attributes of boundary elements.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        boundary_type : str
-            Type of boundary element ('bc_lines', 'breaklines', 'refinement_regions', 'reference_lines', 'reference_points').
-
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame containing the attributes of the specified boundary element.
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                if boundary_type == 'bc_lines':
-                    path = "Geometry/Boundary Condition Lines/Attributes"
-                elif boundary_type == 'breaklines':
-                    path = "Geometry/2D Flow Area Break Lines/Attributes"
-                elif boundary_type == 'refinement_regions':
-                    path = "Geometry/2D Flow Area Refinement Regions/Attributes"
-                elif boundary_type == 'reference_lines':
-                    path = "Geometry/Reference Lines/Attributes"
-                elif boundary_type == 'reference_points':
-                    path = "Geometry/Reference Points/Attributes"
-                else:
-                    raise ValueError(f"Invalid boundary type: {boundary_type}")
-
-                if path not in hdf_file:
-                    return pd.DataFrame()
-
-                attributes = hdf_file[path][()]
-                return pd.DataFrame(attributes)
-        except Exception as e:
-            print(f"Error reading {boundary_type} attributes: {str(e)}")
-            return pd.DataFrame()
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_boundary_count(hdf_path: Path, boundary_type: str) -> int:
-        """
-        Get the count of boundary elements.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        boundary_type : str
-            Type of boundary element ('bc_lines', 'breaklines', 'refinement_regions', 'reference_lines', 'reference_points').
-
-        Returns
-        -------
-        int
-            The count of the specified boundary element.
-        """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                if boundary_type == 'bc_lines':
-                    path = "Geometry/Boundary Condition Lines/Attributes"
-                elif boundary_type == 'breaklines':
-                    path = "Geometry/2D Flow Area Break Lines/Attributes"
-                elif boundary_type == 'refinement_regions':
-                    path = "Geometry/2D Flow Area Refinement Regions/Attributes"
-                elif boundary_type == 'reference_lines':
-                    path = "Geometry/Reference Lines/Attributes"
-                elif boundary_type == 'reference_points':
-                    path = "Geometry/Reference Points/Attributes"
-                else:
-                    raise ValueError(f"Invalid boundary type: {boundary_type}")
-
-                if path not in hdf_file:
-                    return 0
-
-                return hdf_file[path].shape[0]
-        except Exception as e:
-            print(f"Error getting {boundary_type} count: {str(e)}")
-            return 0
-
-    @staticmethod
-    @standardize_input(file_type='plan_hdf')
-    def get_boundary_names(hdf_path: Path, boundary_type: str) -> List[str]:
-        """
-        Get the names of boundary elements.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file.
-        boundary_type : str
-            Type of boundary element ('bc_lines', 'breaklines', 'refinement_regions', 'reference_lines', 'reference_points').
-
-        Returns
-        -------
-        List[str]
-            A list of names for the specified boundary element.
-        """
-        try:
-            df = HdfBndry.get_boundary_attributes(hdf_path, boundary_type)
-            if 'Name' in df.columns:
-                return df['Name'].tolist()
-            else:
-                return []
-        except Exception as e:
-            print(f"Error getting {boundary_type} names: {str(e)}")
-            return []

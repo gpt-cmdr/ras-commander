@@ -22,6 +22,36 @@ Example:
         logger = logging.getLogger(__name__)
         logger.debug("Additional debug information")
         # Function logic here
+        
+        
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasPlan:
+- set_geom(): Set the geometry for a specified plan
+- set_steady(): Apply a steady flow file to a plan file
+- set_unsteady(): Apply an unsteady flow file to a plan file
+- set_num_cores(): Update the maximum number of cores to use
+- set_geom_preprocessor(): Update geometry preprocessor settings
+- clone_plan(): Create a new plan file based on a template
+- clone_unsteady(): Copy unsteady flow files from a template
+- clone_steady(): Copy steady flow files from a template
+- clone_geom(): Copy geometry files from a template
+- get_next_number(): Determine the next available number from a list
+- get_plan_value(): Retrieve a specific value from a plan file
+- get_results_path(): Get the results file path for a plan
+- get_plan_path(): Get the full path for a plan number
+- get_flow_path(): Get the full path for a flow number
+- get_unsteady_path(): Get the full path for an unsteady number
+- get_geom_path(): Get the full path for a geometry number
+- update_run_flags(): Update various run flags in a plan file
+- update_plan_intervals(): Update computation and output intervals
+- update_plan_description(): Update the description in a plan file
+- read_plan_description(): Read the description from a plan file
+- update_simulation_date(): Update simulation start and end dates
+
+        
 """
 import os
 import re

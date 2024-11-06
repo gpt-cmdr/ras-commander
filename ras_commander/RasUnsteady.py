@@ -21,6 +21,21 @@ Example:
     def my_function():
         logger.debug("Additional debug information")
         # Function logic here
+        
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasUnsteady:
+- update_flow_title()
+- update_restart_settings()
+- extract_boundary_and_tables()
+- print_boundaries_and_tables()
+- identify_tables()
+- parse_fixed_width_table()
+- extract_tables()
+- write_table_to_file()
+        
 """
 import os
 from pathlib import Path

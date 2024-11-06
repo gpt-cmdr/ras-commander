@@ -50,9 +50,12 @@ Create a virtual environment with conda or venv (ask ChatGPT if you need help)
 
 In your virtual environment, install ras-commander using pip:
 ```
-pip install h5py numpy pandas requests tqdm scipy rtree pyproj shapely xarray rasterio
+pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib ras-commander ipython psutil shapely fiona pathlib rtree rasterstats
 pip install --upgrade ras-commander
 ```
+
+**Tested with Python 3.11**
+
 
 If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
    
@@ -107,26 +110,56 @@ Certainly! I'll provide you with an updated Key Components section and Project O
 - `RasUnsteady`: Manages unsteady flow file operations
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
-- `RasHdf`: Provides utilities for working with HDF files in HEC-RAS projects
+
+### New Components:
+- `HdfBase`: Core functionality for HDF file operations
+- `HdfBndry`: Enhanced boundary condition handling
+- `HdfMesh`: Comprehensive mesh data management
+- `HdfPlan`: Plan data extraction and analysis
+- `HdfResultsMesh`: Advanced mesh results processing
+- `HdfResultsPlan`: Plan results analysis
+- `HdfResultsXsec`: Cross-section results processing
+- `HdfStruc`: Structure data management
+- `HdfPipe`: Pipe network analysis tools
+- `HdfPump`: Pump station analysis capabilities
+- `HdfFluvialPluvial`: Fluvial-pluvial boundary analysis
+- `RasMapper`: RASMapper interface
+- `RasToGo`: Go-Consequences integration
+- `HdfPlot` & `HdfResultsPlot`: Specialized plotting utilities
+
+## Project Organization Diagram
 
 ## Project Organization Diagram
 
 ```
 ras_commander
-├── .github
-│   └── workflows
-│       └── python-package.yml
 ├── ras_commander
 │   ├── __init__.py
 │   ├── _version.py
+│   ├── Decorators.py
+│   ├── LoggingConfig.py
 │   ├── RasCmdr.py
 │   ├── RasExamples.py
 │   ├── RasGeo.py
-│   ├── RasHdf.py
 │   ├── RasPlan.py
 │   ├── RasPrj.py
 │   ├── RasUnsteady.py
-│   └── RasUtils.py
+│   ├── RasUtils.py
+│   ├── RasToGo.py
+│   ├── RasGpt.py
+│   ├── HdfBase.py
+│   ├── HdfBndry.py
+│   ├── HdfMesh.py
+│   ├── HdfPlan.py
+│   ├── HdfResultsMesh.py
+│   ├── HdfResultsPlan.py
+│   ├── HdfResultsXsec.py
+│   ├── HdfStruc.py
+│   ├── HdfPipe.py
+│   ├── HdfPump.py
+│   ├── HdfFluvialPluvial.py
+│   ├── HdfPlot.py
+│   └── HdfResultsPlot.py
 ├── examples
 │   ├── 01_project_initialization.py
 │   ├── 02_plan_operations.py
@@ -225,8 +258,43 @@ plan_number = "01"
 runtime_data = RasHdf.get_runtime_data(plan_number, ras_object=custom_ras)
 print(runtime_data)
 ```
-
 This class simplifies the process of extracting and analyzing data from HEC-RAS HDF output files, supporting tasks such as post-processing and result visualization.
+
+
+### Infrastructure Analysis
+```python
+from ras_commander import HdfPipe, HdfPump
+
+# Analyze pipe network
+pipe_network = HdfPipe.get_pipe_network(hdf_path)
+conduits = HdfPipe.get_pipe_conduits(hdf_path)
+
+# Analyze pump stations
+pump_stations = HdfPump.get_pump_stations(hdf_path)
+pump_performance = HdfPump.get_pump_station_summary(hdf_path)
+```
+
+### Advanced Results Analysis
+```python
+from ras_commander import HdfResultsMesh
+
+# Get maximum water surface and velocity
+max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+max_vel = HdfResultsMesh.get_mesh_max_face_v(hdf_path)
+
+# Visualize results
+from ras_commander import HdfResultsPlot
+HdfResultsPlot.plot_results_max_wsel(max_ws)
+```
+
+### Fluvial-Pluvial Analysis
+```python
+from ras_commander import HdfFluvialPluvial
+
+boundary = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
+    hdf_path,
+    delta_t=12  # Time threshold in hours
+)
 
 
 ## Documentation

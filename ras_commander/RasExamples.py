@@ -22,6 +22,20 @@ Example:
         logger = logging.getLogger(__name__)
         logger.debug("Additional debug information")
         # Function logic here
+        
+        
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasExamples:   
+- get_example_projects()
+- list_categories()
+- list_projects()
+- extract_project()
+- is_project_extracted()
+- clean_projects_directory()
+        
 """
 import os
 import requests

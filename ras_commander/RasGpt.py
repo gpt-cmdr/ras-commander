@@ -17,3 +17,11 @@ class RasGpt:
 # These will simply filter the data to only include the relevant information for the area of focus. 
 
 #
+# IDEAS
+# 1. Package up a standard set of information for LLM analysis
+#       - General project information
+#       - Cross section information (for specific cross sections)
+#       - Structure information (for specific structures)
+#       - Include time series results and relevant HEC Guidance for LLM to reference
+
+# 2. Use Library Assistant to call LLM 
