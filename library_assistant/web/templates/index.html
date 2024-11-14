@@ -4,22 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RAS Commander Library Assistant</title>
+    <!-- Link to Bootstrap CSS for styling -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Include marked.js for markdown rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <style>
+        /* Basic styling for the body */
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
+        /* Container styling for layout */
         .container { max-width: 1800px; margin: auto; width: 98%; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; }
         input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        /* Chat box styling */
         .chat-box { border: 1px solid #ced4da; padding: 10px; height: 400px; overflow-y: scroll; background-color: #ffffff; border-radius: 5px; }
         .message { margin: 10px 0; }
         .user { color: #0d6efd; }
         .assistant { color: #198754; }
         .error { color: red; }
+        /* Button styling */
         .btn { padding: 10px 20px; background-color: #0d6efd; color: white; border: none; cursor: pointer; border-radius: 5px; }
         .btn:hover { background-color: #0b5ed7; }
         .cost { margin-top: 10px; font-weight: bold; }
+        /* Copy button styling */
         .copy-btn {
             margin-left: 10px;
             padding: 5px 10px;
@@ -59,7 +66,7 @@
             background: #0d6efd;
             cursor: pointer;
         }
-        /* Add to existing styles */
+        /* File tree styling */
         #file-tree {
             max-height: 600px;
             overflow-y: auto;
@@ -92,7 +99,7 @@
             background-color: #e3f2fd;
         }
 
-        /* Enhanced file tree styling */
+        /* Enhanced file tree container styling */
         .file-tree-container {
             width: 800px;
             flex-shrink: 0;
@@ -222,7 +229,7 @@
             }
         }
 
-        /* Add to existing styles */
+        /* Checkbox styling */
         .file-checkbox {
             margin-right: 8px;
             cursor: pointer;
@@ -262,7 +269,7 @@
             border-color: #86b7fe;
         }
 
-        /* Add to existing styles */
+        /* Folder toggle styling */
         .folder-toggle {
             display: inline-block;
             width: 16px;
@@ -301,7 +308,7 @@
             margin-left: 0; /* Remove left margin since we're using padding */
         }
 
-        /* Add to existing styles */
+        /* Token count display styling */
         .token-count {
             margin-left: auto;
             color: #666;
@@ -316,26 +323,83 @@
             font-weight: bold;
             color: #0d6efd;
         }
+
+        .refresh-icon {
+            display: inline-block;
+            transition: transform 0.5s;
+        }
+        
+        .refresh-icon.spinning {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Advanced Settings Popover Styling */
+        .advanced-settings-popover {
+            min-width: 300px;
+            padding: 10px;
+        }
+
+        .advanced-settings-popover .form-group {
+            margin-bottom: 15px;
+        }
+
+        .advanced-settings-popover label {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .popover {
+            max-width: 400px;
+        }
+
+        .popover-body {
+            padding: 15px;
+        }
+
+        /* Add these new styles */
+        .sticky-bottom {
+            position: sticky;
+            bottom: 0;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            z-index: 1000;
+        }
+        
+        .file-tree-container {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 250px);
+        }
+        
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="mt-4 mb-4">RAS Commander Library Assistant</h1>
-        
-        <div id="context-cost-display" class="alert alert-info mb-4" style="display: none;">
-            <strong>Context Cost Estimates:</strong>
-            <span id="context-costs"></span>
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-4">
+            <h1>RAS Commander Library Assistant</h1>
+            <button class="btn btn-outline-secondary" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#settingsCollapse"
+                    aria-expanded="false"
+                    aria-controls="settingsCollapse">
+                ⚙️ Settings
+            </button>
         </div>
-        
-        <div class="card mb-4">
-            <div class="card-header">
-                <h2 class="mb-0">
-                    <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#settingsCollapse">
-                        Settings
-                    </button>
-                </h2>
-            </div>
-            <div id="settingsCollapse" class="collapse">
+
+        <!-- Settings collapse panel -->
+        <div class="collapse mb-4" id="settingsCollapse">
+            <div class="card">
                 <div class="card-body">
                     <form id="settings-form">
                         <div class="form-group">
@@ -348,10 +412,12 @@
                                 <option value="o1-mini" {% if settings.selected_model == 'o1-mini' %}selected{% endif %}>o1-mini (OpenAI)</option>
                             </select>
                         </div>
+                        <!-- API key input for Anthropic -->
                         <div id="anthropic_api_key_group" class="form-group hidden">
                             <label for="anthropic_api_key">Anthropic API Key:</label>
                             <input type="password" id="anthropic_api_key" name="anthropic_api_key" class="form-control" value="{{ settings.anthropic_api_key }}">
                         </div>
+                        <!-- API key input for OpenAI -->
                         <div id="openai_api_key_group" class="form-group hidden">
                             <label for="openai_api_key">OpenAI API Key:</label>
                             <input type="password" id="openai_api_key" name="openai_api_key" class="form-control" value="{{ settings.openai_api_key }}">
@@ -364,6 +430,7 @@
                                 <option value="rag" {% if settings.context_mode == 'rag' %}selected{% endif %}>Retrieval-Augmented Generation (RAG)</option>
                             </select>
                         </div>
+                        <!-- RAG context size sliders -->
                         <div id="rag_sliders" class="hidden">
                             <div class="form-group">
                                 <label for="initial_chunk_size">Initial RAG Context Size (tokens):</label>
@@ -378,6 +445,17 @@
                         </div>
                     </form>
                 </div>
+                <div class="card-footer text-end">
+                    <button type="button" 
+                            class="btn btn-secondary" 
+                            id="advanced-settings-btn"
+                            data-bs-toggle="popover" 
+                            data-bs-placement="bottom" 
+                            data-bs-html="true"
+                            data-bs-title="Advanced Settings">
+                        Advanced Settings
+                    </button>
+                </div>
             </div>
         </div>
         
@@ -385,16 +463,74 @@
             <!-- File Tree Container -->
             <div id="file-tree-container" class="file-tree-container" style="display: none;">
                 <div class="file-tree-header">
-                    <h5 class="mb-0">Project Files</h5>
-                    <button class="btn btn-sm btn-outline-secondary" id="collapse-tree">
-                        <i class="bi bi-arrows-collapse"></i>
-                    </button>
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <h5 class="mb-0">Project Files</h5>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" id="refresh-context">
+                                <span class="refresh-icon">↻</span> Refresh Context
+                            </button>
+                        </div>
+                    </div>
+                    <div id="refresh-status" class="text-muted small mt-1" style="display: none;"></div>
+                    <div id="refresh-error" class="alert alert-danger small mt-1" style="display: none;"></div>
                 </div>
                 <div class="file-tree" id="file-tree"></div>
+                
+                <!-- Cost Estimation Panel -->
+                <div class="p-3 bg-gray-100 rounded border sticky-bottom">
+                    <div class="mb-2 border-bottom pb-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Selected Files:</span>
+                            <strong id="selected-files-count">0 files</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Selected Tokens:</span>
+                            <strong id="selected-tokens-count">0</strong>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="fw-bold mb-1">Estimated Context Costs:</div>
+                        <div class="d-flex justify-content-between">
+                            <span>Claude 3.5:</span>
+                            <strong id="claude-cost">$0.0000</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>GPT-4:</span>
+                            <strong id="gpt4-cost">$0.0000</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>GPT-4 Mini:</span>
+                            <strong id="gpt4-mini-cost">$0.0000</strong>
+                        </div>
+                        <div class="mt-2 pt-2 border-top">
+                            <div class="d-flex justify-content-between text-muted">
+                                <small>Current Conversation:</small>
+                                <small id="conversation-tokens">0 tokens</small>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted">
+                                <small>Message Being Typed:</small>
+                                <small id="current-message-tokens">0 tokens</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+            
+
             
             <!-- Chat Container -->
             <div class="chat-container">
+                <!-- Add header similar to file tree -->
+                <div class="file-tree-header">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <h5 class="mb-0">Chat Window</h5>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" id="reset-chat">
+                                Reset Conversation
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <div class="chat-box" id="chat-box"></div>
                 <form id="chat-form" class="mt-3">
                     <div class="form-group">
@@ -415,16 +551,18 @@
         </div>
     </div>
     
+    <!-- Include Bootstrap JS for functionality -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // FileTreeViewer class to manage the file tree display and interactions
         class FileTreeViewer {
             constructor(container) {
-                this.container = container;
-                this.selectedFiles = new Set();
-                this.onSelectionChange = null;
-                this.totalTokensDisplay = document.createElement('div');
+                this.container = container; // Container for the file tree
+                this.selectedFiles = new Set(); // Set to track selected files
+                this.onSelectionChange = null; // Callback for selection changes
+                this.totalTokensDisplay = document.createElement('div'); // Display for total tokens
                 this.totalTokensDisplay.className = 'total-tokens-display';
-                container.parentElement.insertBefore(this.totalTokensDisplay, container);
+                container.parentElement.insertBefore(this.totalTokensDisplay, container); // Insert total tokens display before the container
                 this.expandedFolders = [
                     'ras-commander',           // Root project folder
                     'ras-commander/examples',  // Examples folder
@@ -432,50 +570,53 @@
                 ];
             }
 
+            // Update the total tokens display based on selected files
             updateTotalTokens() {
-                let totalTokens = 0;
+                let totalTokens = 0; // Initialize total tokens
                 this.selectedFiles.forEach(path => {
-                    const element = this.container.querySelector(`[data-path="${path}"]`);
+                    const element = this.container.querySelector(`[data-path="${path}"]`); // Find the file element
                     if (element) {
-                        totalTokens += parseInt(element.dataset.tokens || 0);
+                        totalTokens += parseInt(element.dataset.tokens || 0); // Add tokens from the selected file
                     }
                 });
-                this.totalTokensDisplay.textContent = `Selected: ${totalTokens.toLocaleString()} tokens`;
+                this.totalTokensDisplay.textContent = `Selected: ${totalTokens.toLocaleString()} tokens`; // Update display
             }
 
+            // Render a node (file or directory) in the file tree
             renderNode(node, level = 0) {
-                const item = document.createElement('div');
-                item.className = 'file-item';
-                item.style.paddingLeft = `${level * 20}px`;
-                item.dataset.path = node.path;
-                item.dataset.tokens = node.tokens;
+                const item = document.createElement('div'); // Create a new div for the item
+                item.className = 'file-item'; // Set class for styling
+                item.style.paddingLeft = `${level * 20}px`; // Indent based on level
+                item.dataset.path = node.path; // Store the path in a data attribute
+                item.dataset.tokens = node.tokens; // Store the token count in a data attribute
                 
-                const checkbox = document.createElement('input');
+                const checkbox = document.createElement('input'); // Create a checkbox for selection
                 checkbox.type = 'checkbox';
-                checkbox.className = 'file-checkbox me-2';
+                checkbox.className = 'file-checkbox me-2'; // Add class for styling
                 
                 if (node.type === 'directory') {
                     // Directory rendering
-                    const toggleBtn = document.createElement('span');
+                    const toggleBtn = document.createElement('span'); // Button to toggle folder open/close
                     toggleBtn.className = 'folder-toggle me-2';
                     
-                    const icon = document.createElement('span');
+                    const icon = document.createElement('span'); // Icon for folder
                     icon.className = 'file-icon';
                     
-                    const nameSpan = document.createElement('span');
+                    const nameSpan = document.createElement('span'); // Name of the file or folder
                     nameSpan.textContent = node.name;
                     
-                    const tokenCount = document.createElement('span');
+                    const tokenCount = document.createElement('span'); // Display token count
                     tokenCount.className = 'token-count';
                     tokenCount.textContent = `${node.tokens.toLocaleString()} tokens`;
                     
+                    // Append elements to the item
                     item.appendChild(toggleBtn);
                     item.appendChild(checkbox);
                     item.appendChild(icon);
                     item.appendChild(nameSpan);
                     item.appendChild(tokenCount);
                     
-                    const content = document.createElement('div');
+                    const content = document.createElement('div'); // Container for child items
                     content.className = 'file-children';
                     
                     // Check if this folder should be expanded by default
@@ -485,17 +626,17 @@
                         return normalizedPath === nodePath || normalizedPath.startsWith(nodePath + '/');
                     });
                     
-                    content.style.display = shouldExpand ? 'block' : 'none';
-                    toggleBtn.textContent = shouldExpand ? '−' : '+';
-                    icon.textContent = shouldExpand ? '📂' : '📁';
+                    content.style.display = shouldExpand ? 'block' : 'none'; // Set display based on expansion
+                    toggleBtn.textContent = shouldExpand ? '−' : '+'; // Set toggle button text
+                    icon.textContent = shouldExpand ? '📂' : '📁'; // Set icon based on expansion
                     
                     // Function to handle expand/collapse
                     const toggleFolder = (e) => {
-                        e.stopPropagation();
-                        const isExpanded = content.style.display !== 'none';
-                        content.style.display = isExpanded ? 'none' : 'block';
-                        toggleBtn.textContent = isExpanded ? '+' : '−';
-                        icon.textContent = isExpanded ? '📁' : '📂';
+                        e.stopPropagation(); // Prevent event bubbling
+                        const isExpanded = content.style.display !== 'none'; // Check if currently expanded
+                        content.style.display = isExpanded ? 'none' : 'block'; // Toggle display
+                        toggleBtn.textContent = isExpanded ? '+' : '−'; // Update toggle button text
+                        icon.textContent = isExpanded ? '📁' : '📂'; // Update icon
                     };
                     
                     // Add click handlers for toggle button, icon, and name
@@ -505,41 +646,43 @@
                     
                     // Handle directory checkbox click
                     checkbox.onclick = (e) => {
-                        e.stopPropagation();
-                        this.toggleDirectory(node, checkbox.checked, content);
+                        e.stopPropagation(); // Prevent event bubbling
+                        this.toggleDirectory(node, checkbox.checked, content); // Toggle directory selection
                     };
                     
+                    // Render child nodes if they exist
                     if (node.children) {
                         node.children.forEach(child => {
-                            const childElement = this.renderNode(child, level + 1);
-                            content.appendChild(childElement);
+                            const childElement = this.renderNode(child, level + 1); // Render child node
+                            content.appendChild(childElement); // Append child to content
                         });
                     }
                     
-                    const container = document.createElement('div');
+                    const container = document.createElement('div'); // Create a container for the item and its children
                     container.appendChild(item);
                     container.appendChild(content);
-                    return container;
+                    return container; // Return the complete node structure
                     
                 } else {
                     // File rendering
-                    const emptyToggle = document.createElement('span');
+                    const emptyToggle = document.createElement('span'); // Placeholder for folder toggle
                     emptyToggle.className = 'folder-toggle me-2';
-                    emptyToggle.style.visibility = 'hidden';
+                    emptyToggle.style.visibility = 'hidden'; // Hide placeholder
                     
-                    const icon = document.createElement('span');
+                    const icon = document.createElement('span'); // Icon for file
                     icon.className = 'file-icon';
-                    icon.textContent = '📄';
+                    icon.textContent = '📄'; // File icon
                     
-                    const nameSpan = document.createElement('span');
+                    const nameSpan = document.createElement('span'); // Name of the file
                     nameSpan.textContent = node.name;
                     
-                    const tokenCount = document.createElement('span');
+                    const tokenCount = document.createElement('span'); // Display token count
                     tokenCount.className = 'token-count';
                     tokenCount.textContent = `${node.tokens.toLocaleString()} tokens`;
                     
-                    checkbox.checked = this.selectedFiles.has(node.path);
+                    checkbox.checked = this.selectedFiles.has(node.path); // Check if file is selected
                     
+                    // Append elements to the item
                     item.appendChild(emptyToggle);
                     item.appendChild(checkbox);
                     item.appendChild(icon);
@@ -548,44 +691,44 @@
                     
                     // Update checkbox handler to include token counting
                     checkbox.onclick = (e) => {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Prevent event bubbling
                         if (checkbox.checked) {
-                            this.selectedFiles.add(node.path);
+                            this.selectedFiles.add(node.path); // Add file to selected set
                         } else {
-                            this.selectedFiles.delete(node.path);
+                            this.selectedFiles.delete(node.path); // Remove file from selected set
                         }
                         
                         if (this.onSelectionChange) {
-                            this.onSelectionChange(Array.from(this.selectedFiles));
+                            this.onSelectionChange(Array.from(this.selectedFiles)); // Call selection change callback
                         }
                         
-                        this.updateParentCheckboxes(item);
-                        this.updateTotalTokens();
+                        this.updateParentCheckboxes(item); // Update parent checkboxes
+                        this.updateTotalTokens(); // Update total tokens display
                     };
                     
                     // Handle file name click (view content)
                     const viewContent = async (e) => {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Prevent event bubbling
                         
-                        const selected = document.querySelector('.file-tree-selected');
+                        const selected = document.querySelector('.file-tree-selected'); // Find currently selected item
                         if (selected) {
-                            selected.classList.remove('file-tree-selected');
+                            selected.classList.remove('file-tree-selected'); // Remove selection from previous item
                         }
                         
-                        item.classList.add('file-tree-selected');
+                        item.classList.add('file-tree-selected'); // Mark this item as selected
                         
                         try {
-                            const response = await fetch(`/get_file_content?path=${encodeURIComponent(node.path)}`);
+                            const response = await fetch(`/get_file_content?path=${encodeURIComponent(node.path)}`); // Fetch file content
                             if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
+                                throw new Error(`HTTP error! status: ${response.status}`); // Handle HTTP errors
                             }
-                            const data = await response.json();
+                            const data = await response.json(); // Parse JSON response
                             
-                            const userInput = document.getElementById('user-input');
-                            userInput.value = `Please help me with this file:\n\n${data.content}`;
+                            const userInput = document.getElementById('user-input'); // Get user input textarea
+                            userInput.value = `Please help me with this file:\n\n${data.content}`; // Populate input with file content
                         } catch (error) {
-                            console.error('Error loading file content:', error);
-                            alert('Error loading file content: ' + error.message);
+                            console.error('Error loading file content:', error); // Log error
+                            alert('Error loading file content: ' + error.message); // Alert user
                         }
                     };
                     
@@ -593,310 +736,452 @@
                     icon.onclick = viewContent;
                     nameSpan.onclick = viewContent;
                     
-                    return item;
+                    return item; // Return the file item
                 }
             }
 
+            // Toggle selection for a directory and its children
             toggleDirectory(node, checked, contentElement) {
-                const checkboxes = contentElement.querySelectorAll('.file-checkbox');
+                const checkboxes = contentElement.querySelectorAll('.file-checkbox'); // Get all checkboxes in the directory
                 checkboxes.forEach(checkbox => {
-                    checkbox.checked = checked;
+                    checkbox.checked = checked; // Set checkbox state
                     
-                    const fileItem = checkbox.closest('.file-item');
-                    const nameSpan = fileItem.querySelector('span:not(.file-icon):not(.token-count)');
-                    const path = this.getNodePath(node, nameSpan.textContent);
+                    const fileItem = checkbox.closest('.file-item'); // Find the closest file item
+                    const nameSpan = fileItem.querySelector('span:not(.file-icon):not(.token-count)'); // Get the name span
+                    const path = this.getNodePath(node, nameSpan.textContent); // Get the full path
                     
                     if (checked) {
-                        this.selectedFiles.add(path);
+                        this.selectedFiles.add(path); // Add path to selected files
                     } else {
-                        this.selectedFiles.delete(path);
+                        this.selectedFiles.delete(path); // Remove path from selected files
                     }
                 });
 
                 if (this.onSelectionChange) {
-                    this.onSelectionChange(Array.from(this.selectedFiles));
+                    this.onSelectionChange(Array.from(this.selectedFiles)); // Call selection change callback
                 }
                 
-                this.updateTotalTokens();
+                this.updateTotalTokens(); // Update total tokens display
             }
 
+            // Construct the full path for a file within a directory
             getNodePath(node, fileName) {
-                // Construct the full path for a file within a directory
-                return node.path + '/' + fileName;
+                return node.path + '/' + fileName; // Return full path
             }
 
+            // Update parent directory checkboxes based on child selections
             updateParentCheckboxes(element) {
-                // Update parent directory checkboxes based on child selections
-                let parent = element.parentElement;
+                let parent = element.parentElement; // Start with the parent element
                 while (parent) {
-                    const parentCheckbox = parent.querySelector(':scope > .file-item > .file-checkbox');
+                    const parentCheckbox = parent.querySelector(':scope > .file-item > .file-checkbox'); // Find the parent checkbox
                     if (parentCheckbox) {
-                        const childCheckboxes = parent.querySelectorAll('.file-children .file-checkbox');
-                        const allChecked = Array.from(childCheckboxes).every(cb => cb.checked);
-                        const someChecked = Array.from(childCheckboxes).some(cb => cb.checked);
+                        const childCheckboxes = parent.querySelectorAll('.file-children .file-checkbox'); // Get all child checkboxes
+                        const allChecked = Array.from(childCheckboxes).every(cb => cb.checked); // Check if all are checked
+                        const someChecked = Array.from(childCheckboxes).some(cb => cb.checked); // Check if some are checked
                         
-                        parentCheckbox.checked = allChecked;
-                        parentCheckbox.indeterminate = someChecked && !allChecked;
+                        parentCheckbox.checked = allChecked; // Set parent checkbox state
+                        parentCheckbox.indeterminate = someChecked && !allChecked; // Set indeterminate state if some are checked
                     }
-                    parent = parent.parentElement;
+                    parent = parent.parentElement; // Move up to the next parent
                 }
             }
 
+            // Initialize the file tree with data
             initialize(data) {
-                this.container.innerHTML = '';
+                this.container.innerHTML = ''; // Clear existing content
                 if (data) {
-                    const rootElement = this.renderNode(data);
-                    this.container.appendChild(rootElement);
+                    const rootElement = this.renderNode(data); // Render the root node
+                    this.container.appendChild(rootElement); // Append the root element to the container
                 }
             }
 
+            // Get the currently selected files
             getSelectedFiles() {
-                return Array.from(this.selectedFiles);
+                return Array.from(this.selectedFiles); // Return selected files as an array
             }
-        }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const selectedModel = document.getElementById('selected_model');
-            const anthropicGroup = document.getElementById('anthropic_api_key_group');
-            const openaiGroup = document.getElementById('openai_api_key_group');
-            const contextMode = document.getElementById('context_mode');
-            const fileTreeContainer = document.getElementById('file-tree-container');
-            const fileTree = document.getElementById('file-tree');
-            const chatContainer = document.querySelector('.chat-container');
-            const ragSliders = document.getElementById('rag_sliders');
-
-            // Initialize file tree viewer
-            const fileTreeViewer = new FileTreeViewer(document.getElementById('file-tree'));
-
-            async function loadFileTree() {
+            async loadProcessedFiles() {
                 try {
                     const response = await fetch('/get_file_tree');
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     const data = await response.json();
-                    fileTreeViewer.initialize(data.fileTree);
+                    
+                    // Clear current selection
+                    this.selectedFiles.clear();
+                    
+                    // Reinitialize with new data
+                    this.initialize(data.fileTree);
+                    
+                    // Update total tokens display
+                    this.updateTotalTokens();
+                    
                 } catch (error) {
-                    console.error('Error loading file tree:', error);
-                    alert('Error loading file tree: ' + error.message);
+                    console.error('Error loading processed files:', error);
+                    throw error;
+                }
+            }
+        }
+
+        // Wait for the DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectedModel = document.getElementById('selected_model'); // Model selection dropdown
+            const anthropicGroup = document.getElementById('anthropic_api_key_group'); // Anthropic API key input group
+            const openaiGroup = document.getElementById('openai_api_key_group'); // OpenAI API key input group
+            const contextMode = document.getElementById('context_mode'); // Context mode selection dropdown
+            const fileTreeContainer = document.getElementById('file-tree-container'); // File tree container
+            const fileTree = document.getElementById('file-tree'); // File tree element
+            const chatContainer = document.querySelector('.chat-container'); // Chat container
+            const ragSliders = document.getElementById('rag_sliders'); // RAG sliders container
+
+            // Initialize file tree viewer
+            const fileTreeViewer = new FileTreeViewer(fileTree); // Ensure this is defined before use
+
+            // Load the file tree from the server
+            async function loadFileTree() {
+                try {
+                    const response = await fetch('/get_file_tree'); // Fetch file tree data
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`); // Handle HTTP errors
+                    }
+                    const data = await response.json(); // Parse JSON response
+                    fileTreeViewer.initialize(data.fileTree); // Initialize file tree viewer with data
+                } catch (error) {
+                    console.error('Error loading file tree:', error); // Log error
+                    alert('Error loading file tree: ' + error.message); // Alert user
                 }
             }
 
+            // Toggle the visibility of the file tree based on context mode
             function toggleFileTree() {
                 if (contextMode.value === 'full_context') {
-                    fileTreeContainer.style.display = 'flex';
-                    loadFileTree();
+                    fileTreeContainer.style.display = 'flex'; // Show file tree
+                    loadFileTree(); // Load file tree data
                 } else {
-                    fileTreeContainer.style.display = 'none';
+                    fileTreeContainer.style.display = 'none'; // Hide file tree
                 }
             }
 
+            // Toggle visibility of API key input fields based on selected model
             function toggleApiKeys() {
-                const model = selectedModel.value;
+                const model = selectedModel.value; // Get selected model
                 if (model.startsWith('claude')) {
-                    anthropicGroup.classList.remove('hidden');
-                    openaiGroup.classList.add('hidden');
+                    anthropicGroup.classList.remove('hidden'); // Show Anthropic API key input
+                    openaiGroup.classList.add('hidden'); // Hide OpenAI API key input
                 } else if (model.startsWith('gpt') || model.startsWith('o1')) {
-                    openaiGroup.classList.remove('hidden');
-                    anthropicGroup.classList.add('hidden');
+                    openaiGroup.classList.remove('hidden'); // Show OpenAI API key input
+                    anthropicGroup.classList.add('hidden'); // Hide Anthropic API key input
                 } else {
-                    anthropicGroup.classList.add('hidden');
+                    anthropicGroup.classList.add('hidden'); // Hide both API key inputs
                     openaiGroup.classList.add('hidden');
                 }
             }
 
+            // Toggle visibility of RAG sliders based on context mode
             function toggleRagSliders() {
                 if (contextMode.value === 'rag') {
-                    ragSliders.classList.remove('hidden');
+                    ragSliders.classList.remove('hidden'); // Show RAG sliders
                 } else {
-                    ragSliders.classList.add('hidden');
+                    ragSliders.classList.add('hidden'); // Hide RAG sliders
                 }
             }
 
-            // Add event listeners
+            // Add event listeners for context mode and model selection changes
             contextMode.addEventListener('change', () => {
-                toggleFileTree();
-                toggleRagSliders();
-                autoSaveSettings();
+                toggleFileTree(); // Toggle file tree visibility
+                toggleRagSliders(); // Toggle RAG sliders visibility
+                autoSaveSettings(); // Auto-save settings
             });
 
             selectedModel.addEventListener('change', () => {
-                toggleApiKeys();
-                autoSaveSettings();
+                toggleApiKeys(); // Toggle API key visibility
+                autoSaveSettings(); // Auto-save settings
             });
 
             // Initialize UI state
-            toggleApiKeys();
-            toggleRagSliders();
+            toggleApiKeys(); // Set initial API key visibility
+            toggleRagSliders(); // Set initial RAG sliders visibility
 
             // Force initial file tree display if in full_context mode
             if (contextMode.value === 'full_context') {
-                fileTreeContainer.style.display = 'flex';
-                loadFileTree();
+                fileTreeContainer.style.display = 'flex'; // Show file tree
+                loadFileTree(); // Load file tree data
             }
 
             // Handle chat form submission
-            const chatForm = document.getElementById('chat-form');
-            const chatBox = document.getElementById('chat-box');
-            const userInput = document.getElementById('user-input');
-            const costDisplay = document.getElementById('cost-display');
+            const chatForm = document.getElementById('chat-form'); // Chat form element
+            const chatBox = document.getElementById('chat-box'); // Chat box element
+            const userInput = document.getElementById('user-input'); // User input textarea
+            const costDisplay = document.getElementById('cost-display'); // Cost display element
 
             chatForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const message = userInput.value.trim();
-                if (message === '') return;
+                e.preventDefault(); // Prevent default form submission
+                const message = userInput.value.trim(); // Get user input
+                if (message === '') return; // Do nothing if input is empty
 
                 // Get selected files if in full_context mode
                 const selectedFiles = contextMode.value === 'full_context' ? 
-                    fileTreeViewer.getSelectedFiles() : [];
+                    fileTreeViewer.getSelectedFiles() : []; // Get selected files
 
                 // Display user message with markdown rendering
-                const userMessage = document.createElement('div');
-                userMessage.className = 'message user';
-                userMessage.innerHTML = 'User: ' + marked.parse(message);
-                chatBox.appendChild(userMessage);
+                const userMessage = document.createElement('div'); // Create user message element
+                userMessage.className = 'message user'; // Set class for styling
+                userMessage.innerHTML = 'User: ' + marked.parse(message); // Render message as markdown
+                chatBox.appendChild(userMessage); // Append user message to chat box
 
                 // Clear input
-                userInput.value = '';
+                userInput.value = ''; // Reset user input
 
                 // Create assistant message container
-                const assistantMessage = document.createElement('div');
-                assistantMessage.className = 'message assistant';
-                assistantMessage.innerHTML = 'Assistant: ';
-                const responseText = document.createElement('span');
-                assistantMessage.appendChild(responseText);
-                chatBox.appendChild(assistantMessage);
+                const assistantMessage = document.createElement('div'); // Create assistant message element
+                assistantMessage.className = 'message assistant'; // Set class for styling
+                assistantMessage.innerHTML = 'Assistant: '; // Initial assistant message
+                const responseText = document.createElement('span'); // Span for response text
+                assistantMessage.appendChild(responseText); // Append response text to assistant message
+                chatBox.appendChild(assistantMessage); // Append assistant message to chat box
 
                 // Scroll to bottom
-                chatBox.scrollTop = chatBox.scrollHeight;
+                chatBox.scrollTop = chatBox.scrollHeight; // Scroll to the bottom of the chat box
 
                 try {
-                    const response = await fetch('/chat', {
+                    const response = await fetch('/chat', { // Send chat message to server
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'text/event-stream',
+                            'Content-Type': 'application/json', // Set content type
+                            'Accept': 'text/event-stream', // Accept server-sent events
                         },
                         body: JSON.stringify({ 
-                            message: message,
-                            selectedFiles: selectedFiles
+                            message: message, // Send user message
+                            selectedFiles: selectedFiles // Send selected files
                         })
                     });
 
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = '';
-                    let fullResponse = '';
+                    const reader = response.body.getReader(); // Get reader for response body
+                    const decoder = new TextDecoder(); // Create a text decoder
+                    let buffer = ''; // Buffer for accumulating response
+                    let fullResponse = ''; // Full response text
 
                     while (true) {
-                        const {value, done} = await reader.read();
-                        if (done) break;
+                        const {value, done} = await reader.read(); // Read from response
+                        if (done) break; // Exit loop if done
                         
-                        buffer += decoder.decode(value, {stream: true});
-                        const lines = buffer.split('\n');
+                        buffer += decoder.decode(value, {stream: true}); // Decode and accumulate response
+                        const lines = buffer.split('\n'); // Split buffer into lines
                         
                         // Process all complete lines
                         buffer = lines.pop() || '';  // Keep any incomplete line in the buffer
                         
                         for (const line of lines) {
-                            if (line.startsWith('data: ')) {
+                            if (line.startsWith('data: ')) { // Check for data lines
                                 try {
-                                    const data = JSON.parse(line.slice(6));
+                                    const data = JSON.parse(line.slice(6)); // Parse JSON data
                                     
                                     if (data.chunk) {
                                         // Accumulate the complete response
-                                        fullResponse += data.chunk;
+                                        fullResponse += data.chunk; // Append chunk to full response
                                         // Render the accumulated response
-                                        responseText.innerHTML = marked.parse(fullResponse);
+                                        responseText.innerHTML = marked.parse(fullResponse); // Update response text
                                     } else if (data.cost) {
-                                        costDisplay.textContent = `Estimated Cost: $${data.cost.toFixed(6)} (${data.provider})`;
+                                        costDisplay.textContent = `Estimated Cost: $${data.cost.toFixed(6)} (${data.provider})`; // Display cost
                                         
                                         // Add copy button after streaming is complete
-                                        const copyButton = document.createElement('button');
-                                        copyButton.textContent = 'Copy Response';
-                                        copyButton.className = 'copy-btn btn btn-sm';
-                                        copyButton.onclick = () => copyToClipboard(fullResponse);
-                                        assistantMessage.appendChild(copyButton);
+                                        const copyButton = document.createElement('button'); // Create copy button
+                                        copyButton.textContent = 'Copy Response'; // Set button text
+                                        copyButton.className = 'copy-btn btn btn-sm'; // Set class for styling
+                                        copyButton.onclick = () => copyToClipboard(fullResponse); // Set click handler
+                                        assistantMessage.appendChild(copyButton); // Append copy button to assistant message
                                     } else if (data.error) {
-                                        const errorDiv = document.createElement('div');
-                                        errorDiv.className = 'error';
-                                        errorDiv.textContent = data.error;
-                                        assistantMessage.appendChild(errorDiv);
+                                        const errorDiv = document.createElement('div'); // Create error message element
+                                        errorDiv.className = 'error'; // Set class for styling
+                                        errorDiv.textContent = data.error; // Set error message
+                                        assistantMessage.appendChild(errorDiv); // Append error message to assistant
                                     }
                                     
                                     // Scroll to bottom as content is added
-                                    chatBox.scrollTop = chatBox.scrollHeight;
+                                    chatBox.scrollTop = chatBox.scrollHeight; // Scroll to the bottom
                                 } catch (e) {
-                                    console.error('Error parsing SSE data:', e);
+                                    console.error('Error parsing SSE data:', e); // Log parsing error
                                 }
                             }
                         }
                     }
 
                 } catch (error) {
-                    console.error('Error:', error);
-                    const errorMessage = document.createElement('div');
-                    errorMessage.className = 'message assistant error';
-                    errorMessage.textContent = 'Error: ' + error.message;
-                    chatBox.appendChild(errorMessage);
-                    chatBox.scrollTop = chatBox.scrollHeight;
+                    console.error('Error:', error); // Log error
+                    const errorMessage = document.createElement('div'); // Create error message element
+                    errorMessage.className = 'message assistant error'; // Set class for styling
+                    errorMessage.textContent = 'Error: ' + error.message; // Set error message
+                    chatBox.appendChild(errorMessage); // Append error message to chat box
+                    chatBox.scrollTop = chatBox.scrollHeight; // Scroll to the bottom
                 }
             });
 
+            // Function to copy text to clipboard
             function copyToClipboard(text) {
                 navigator.clipboard.writeText(text).then(() => {
-                    alert('Response copied to clipboard!');
+                    alert('Response copied to clipboard!'); // Alert user on success
                 }, (err) => {
-                    console.error('Could not copy text: ', err);
+                    console.error('Could not copy text: ', err); // Log error
                 });
             }
 
+            // Function to auto-save settings
             function autoSaveSettings() {
-                const formData = new FormData(document.getElementById('settings-form'));
+                const formData = new FormData(document.getElementById('settings-form')); // Get form data
                 fetch('/submit', {
                     method: 'POST',
-                    body: formData
+                    body: formData // Send form data to server
                 })
-                .then(response => response.json())
+                .then(response => response.json()) // Parse JSON response
                 .then(data => {
-                    console.log('Settings saved:', data);
+                    console.log('Settings saved:', data); // Log success
                 })
                 .catch(error => {
-                    console.error('Error saving settings:', error);
+                    console.error('Error saving settings:', error); // Log error
                 });
             }
+
+            const refreshBtn = document.getElementById('refresh-context');
+            const refreshIcon = refreshBtn.querySelector('.refresh-icon');
+            const refreshStatus = document.getElementById('refresh-status');
+            const refreshError = document.getElementById('refresh-error');
+            
+            async function refreshContext() {
+                refreshBtn.disabled = true;
+                refreshIcon.classList.add('spinning');
+                refreshError.style.display = 'none';
+                refreshStatus.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/refresh_context', {
+                        method: 'POST'
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to refresh context: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Show success status
+                    refreshStatus.textContent = `Last refreshed: ${new Date().toLocaleTimeString()}`;
+                    refreshStatus.style.display = 'block';
+                    
+                    // Reload file tree if it exists
+                    if (fileTreeViewer) {
+                        await fileTreeViewer.loadProcessedFiles();
+                    }
+                    
+                } catch (error) {
+                    console.error('Error refreshing context:', error);
+                    refreshError.textContent = error.message;
+                    refreshError.style.display = 'block';
+                } finally {
+                    refreshBtn.disabled = false;
+                    refreshIcon.classList.remove('spinning');
+                }
+            }
+            
+            // Add click handler for refresh button
+            refreshBtn.addEventListener('click', refreshContext);
+
+            const resetChatBtn = document.getElementById('reset-chat');
+            resetChatBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to reset the conversation? This cannot be undone.')) {
+                    chatBox.innerHTML = ''; // Clear chat history
+                    // You may also want to send a request to the server to clear the conversation state
+                    fetch('/reset_conversation', { method: 'POST' })
+                        .catch(error => console.error('Error resetting conversation:', error));
+                }
+            });
+
+            // Initialize popover for advanced settings
+            const advancedSettingsBtn = document.getElementById('advanced-settings-btn');
+            const advancedSettingsContent = `
+                <div class="advanced-settings-popover">
+                    <div class="form-group mb-3">
+                        <label for="temperature">Temperature:</label>
+                        <input type="range" class="form-range" id="temperature" min="0" max="1" step="0.1" value="0.7">
+                        <span id="temperature-value">0.7</span>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="max-tokens">Max Tokens:</label>
+                        <input type="number" class="form-control" id="max-tokens" value="2000" min="100" max="4000">
+                    </div>
+                    <div class="form-group">
+                        <label for="system-prompt">System Prompt:</label>
+                        <textarea class="form-control" id="system-prompt" rows="3"></textarea>
+                    </div>
+                </div>
+            `;
+
+            // Initialize the popover
+            const popover = new bootstrap.Popover(advancedSettingsBtn, {
+                content: advancedSettingsContent,
+                trigger: 'click',
+                sanitize: false
+            });
+
+            // Handle popover shown event to initialize range input display
+            advancedSettingsBtn.addEventListener('shown.bs.popover', () => {
+                const temperatureInput = document.getElementById('temperature');
+                const temperatureValue = document.getElementById('temperature-value');
+                
+                if (temperatureInput && temperatureValue) {
+                    temperatureInput.addEventListener('input', () => {
+                        temperatureValue.textContent = temperatureInput.value;
+                    });
+                }
+            });
+
+            // Close popover when clicking outside
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('#advanced-settings-btn') && 
+                    !event.target.closest('.popover')) {
+                    popover.hide();
+                }
+            });
+
+            // Set selection change callback for file tree viewer
+            fileTreeViewer.setSelectionChangeCallback((selectedFiles) => {
+                const selectedStats = fileTreeViewer.getSelectedStats(); // Get selected stats
+                updateContextCostDisplay(selectedStats); // Update cost display
+            });
         });
 
+        // Function to save conversation history
         function saveConversation() {
             fetch('/save_conversation', {
-                method: 'POST'
+                method: 'POST' // Send request to save conversation
             })
             .then(response => {
                 if (response.ok) {
-                    return response.blob();
+                    return response.blob(); // Return response as blob
                 } else {
-                    throw new Error('Failed to save conversation history.');
+                    throw new Error('Failed to save conversation history.'); // Handle error
                 }
             })
             .then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = 'conversation_history.txt';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
+                const url = window.URL.createObjectURL(blob); // Create URL for blob
+                const a = document.createElement('a'); // Create anchor element
+                a.style.display = 'none'; // Hide anchor
+                a.href = url; // Set href to blob URL
+                a.download = 'conversation_history.txt'; // Set download filename
+                document.body.appendChild(a); // Append anchor to body
+                a.click(); // Trigger download
+                window.URL.revokeObjectURL(url); // Clean up URL
             })
             .catch(error => {
-                console.error('Error:', error);
-                alert(error.message);
+                console.error('Error:', error); // Log error
+                alert(error.message); // Alert user
             });
         }
 
+        // Function to update context cost display
         function updateContextCostDisplay(selectedStats) {
-            const costDisplay = document.getElementById('context-cost-display');
-            const costsSpan = document.getElementById('context-costs');
+            const costDisplay = document.getElementById('context-cost-display'); // Get cost display element
+            const costsSpan = document.getElementById('context-costs'); // Get costs span
             
             if (selectedStats.totalTokens > 0) {
                 costsSpan.innerHTML = `
@@ -907,16 +1192,11 @@
                         <div>GPT-4 Mini: $${selectedStats.costs.gpt4mini.toFixed(4)}</div>
                     </div>
                 `;
-                costDisplay.style.display = 'block';
+                costDisplay.style.display = 'block'; // Show cost display
             } else {
-                costDisplay.style.display = 'none';
+                costDisplay.style.display = 'none'; // Hide cost display
             }
         }
-
-        fileTreeViewer.setSelectionChangeCallback((selectedFiles) => {
-            const selectedStats = fileTreeViewer.getSelectedStats();
-            updateContextCostDisplay(selectedStats);
-        });
     </script>
 </body>
 </html>

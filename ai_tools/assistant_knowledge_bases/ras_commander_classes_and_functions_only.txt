@@ -1,4 +1,4 @@
-File: c:\GH\ras-commander\ras_commander\Decorators.py
+File: C:\GH\ras-commander\ras_commander\Decorators.py
 ==================================================
 from functools import wraps
 from pathlib import Path
@@ -130,7 +130,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
     return decorator
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBase.py
+File: C:\GH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -442,7 +442,7 @@ class HdfBase:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBndry.py
+File: C:\GH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -759,7 +759,7 @@ class HdfBndry:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -777,7 +777,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import geopandas as gpd
 from collections import defaultdict
-from shapely.geometry import LineString
+from shapely.geometry import LineString, MultiLineString  # Added MultiLineString import
 from tqdm import tqdm
 from .HdfMesh import HdfMesh
 from .HdfUtils import HdfUtils
@@ -816,7 +816,9 @@ class HdfFluvialPluvial:
         ...     delta_t=12
         ... )
     """
-
+    def __init__(self):
+        self.logger = get_logger(__name__)  # Initialize logger with module name
+    
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def calculate_fluvial_pluvial_boundary(hdf_path: Path, delta_t: float = 12) -> gpd.GeoDataFrame:
@@ -856,106 +858,179 @@ class HdfFluvialPluvial:
                 raise ValueError("No maximum water surface data found in HDF file")
 
             # Convert timestamps using the renamed utility function
+            logger.info("Converting maximum water surface timestamps...")
             if 'maximum_water_surface_time' in max_ws_df.columns:
                 max_ws_df['maximum_water_surface_time'] = max_ws_df['maximum_water_surface_time'].apply(
                     lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
                 )
 
             # Process cell adjacencies
+            logger.info("Processing cell adjacencies...")
             cell_adjacency, common_edges = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
             
             # Get cell times from max_ws_df
+            logger.info("Extracting cell times from maximum water surface data...")
             cell_times = max_ws_df.set_index('cell_id')['maximum_water_surface_time'].to_dict()
             
             # Identify boundary edges
+            logger.info("Identifying boundary edges...")
             boundary_edges = HdfFluvialPluvial._identify_boundary_edges(
                 cell_adjacency, common_edges, cell_times, delta_t
             )
 
             # Join adjacent LineStrings into simple LineStrings
+            logger.info("Joining adjacent LineStrings into simple LineStrings...")
             joined_lines = []
-            current_line = []
+            
+            def get_coords(geom):
+                """Helper function to get coordinates from either LineString or MultiLineString"""
+                if isinstance(geom, LineString):
+                    return list(geom.coords)
+                elif isinstance(geom, MultiLineString):
+                    return list(geom.geoms[0].coords)
+                return None
 
-            for edge in boundary_edges:
-                if not current_line:
-                    current_line.append(edge)
-                else:
-                    if current_line[-1].coords[-1] == edge.coords[0]:
-                        current_line.append(edge)
-                    else:
-                        joined_lines.append(LineString([point for line in current_line for point in line.coords]))
-                        current_line = [edge]
+            # Create a dictionary to store start and end points for each line
+            line_endpoints = {}
+            for i, edge in enumerate(boundary_edges):
+                coords = get_coords(edge)
+                if coords:
+                    line_endpoints[i] = (coords[0], coords[-1])
 
-            if current_line:
-                joined_lines.append(LineString([point for line in current_line for point in line.coords]))
+            # Process lines in order
+            used_indices = set()
+            while len(used_indices) < len(boundary_edges):
+                current_line = []
+                current_points = []
+                
+                # Find a new starting line if needed
+                for i in range(len(boundary_edges)):
+                    if i not in used_indices:
+                        current_line.append(boundary_edges[i])
+                        coords = get_coords(boundary_edges[i])
+                        if coords:
+                            current_points.extend(coords)
+                        used_indices.add(i)
+                        break
+                
+                # Continue adding connected lines
+                while True:
+                    found_next = False
+                    current_end = current_points[-1] if current_points else None
+                    
+                    # Look for the next connected line
+                    for i, (start, end) in line_endpoints.items():
+                        if i not in used_indices and current_end:
+                            if start == current_end:
+                                # Add line in forward direction
+                                coords = get_coords(boundary_edges[i])
+                                if coords:
+                                    current_points.extend(coords[1:])  # Skip first point to avoid duplication
+                                current_line.append(boundary_edges[i])
+                                used_indices.add(i)
+                                found_next = True
+                                break
+                            elif end == current_end:
+                                # Add line in reverse direction
+                                coords = get_coords(boundary_edges[i])
+                                if coords:
+                                    current_points.extend(reversed(coords[:-1]))  # Skip last point to avoid duplication
+                                current_line.append(boundary_edges[i])
+                                used_indices.add(i)
+                                found_next = True
+                                break
+                    
+                    if not found_next:
+                        break
+                
+                # Create a single LineString from the collected points
+                if current_points:
+                    joined_lines.append(LineString(current_points))
 
             # Create final GeoDataFrame with CRS from cell_polygons_gdf
+            logger.info("Creating final GeoDataFrame for boundaries...")
             boundary_gdf = gpd.GeoDataFrame(
                 geometry=joined_lines, 
                 crs=cell_polygons_gdf.crs
             )
 
             # Clean up intermediate dataframes
+            logger.info("Cleaning up intermediate dataframes...")
             del cell_polygons_gdf
             del max_ws_df
 
+            logger.info("Fluvial-pluvial boundary calculation completed successfully.")
             return boundary_gdf
 
         except Exception as e:
-            logger.error(f"Error calculating fluvial-pluvial boundary: {str(e)}")
-            raise
-
+            self.logger.error(f"Error calculating fluvial-pluvial boundary: {str(e)}")
+            return None
+        
+        
     @staticmethod
     def _process_cell_adjacencies(cell_polygons_gdf: gpd.GeoDataFrame) -> Tuple[Dict[int, List[int]], Dict[int, Dict[int, LineString]]]:
         """
-        Process cell adjacencies and common edges using R-tree spatial indexing for efficiency.
-
+        Optimized method to process cell adjacencies by extracting shared edges directly.
+        
         Args:
             cell_polygons_gdf (gpd.GeoDataFrame): GeoDataFrame containing 2D mesh cell polygons
-                                                 with 'cell_id' and 'geometry' columns
+                                                   with 'cell_id' and 'geometry' columns.
 
         Returns:
             Tuple containing:
-                - Dict[int, List[int]]: Dictionary mapping cell IDs to lists of adjacent cell IDs
+                - Dict[int, List[int]]: Dictionary mapping cell IDs to lists of adjacent cell IDs.
                 - Dict[int, Dict[int, LineString]]: Nested dictionary storing common edges between cells,
-                                                   where common_edges[cell1][cell2] gives the shared boundary
-
-        Note:
-            Uses R-tree spatial indexing to efficiently identify potential neighboring cells
-            before performing more detailed geometric operations.
+                                                    where common_edges[cell1][cell2] gives the shared boundary.
         """
-        from rtree import index
         cell_adjacency = defaultdict(list)
         common_edges = defaultdict(dict)
-        idx = index.Index()
 
-        for i, geom in enumerate(cell_polygons_gdf.geometry):
-            idx.insert(i, geom.bounds)
+        # Build an edge to cells mapping
+        edge_to_cells = defaultdict(set)
 
-        with tqdm(total=len(cell_polygons_gdf), desc="Processing cell adjacencies") as pbar:
-            for idx1, row1 in cell_polygons_gdf.iterrows():
-                cell_id1 = row1['cell_id']
-                poly1 = row1['geometry']
-                potential_neighbors = list(idx.intersection(poly1.bounds))
+        # Function to generate edge keys
+        def edge_key(coords1, coords2, precision=8):
+            # Round coordinates
+            coords1 = tuple(round(coord, precision) for coord in coords1)
+            coords2 = tuple(round(coord, precision) for coord in coords2)
+            # Create sorted key to handle edge direction
+            return tuple(sorted([coords1, coords2]))
 
-                for idx2 in potential_neighbors:
-                    if idx1 >= idx2:
-                        continue
+        # For each polygon, extract edges
+        for idx, row in cell_polygons_gdf.iterrows():
+            cell_id = row['cell_id']
+            geom = row['geometry']
+            if geom.is_empty or not geom.is_valid:
+                continue
+            # Get exterior coordinates
+            coords = list(geom.exterior.coords)
+            num_coords = len(coords)
+            for i in range(num_coords - 1):
+                coord1 = coords[i]
+                coord2 = coords[i + 1]
+                key = edge_key(coord1, coord2)
+                edge_to_cells[key].add(cell_id)
 
-                    row2 = cell_polygons_gdf.iloc[idx2]
-                    cell_id2 = row2['cell_id']
-                    poly2 = row2['geometry']
+        # Now, process edge_to_cells to build adjacency
+        for edge, cells in edge_to_cells.items():
+            cells = list(cells)
+            if len(cells) >= 2:
+                # For all pairs of cells sharing this edge
+                for i in range(len(cells)):
+                    for j in range(i + 1, len(cells)):
+                        cell1 = cells[i]
+                        cell2 = cells[j]
+                        # Update adjacency
+                        if cell2 not in cell_adjacency[cell1]:
+                            cell_adjacency[cell1].append(cell2)
+                        if cell1 not in cell_adjacency[cell2]:
+                            cell_adjacency[cell2].append(cell1)
+                        # Store common edge
+                        common_edge = LineString([edge[0], edge[1]])
+                        common_edges[cell1][cell2] = common_edge
+                        common_edges[cell2][cell1] = common_edge
 
-                    if poly1.touches(poly2):
-                        intersection = poly1.intersection(poly2)
-                        if isinstance(intersection, LineString):
-                            cell_adjacency[cell_id1].append(cell_id2)
-                            cell_adjacency[cell_id2].append(cell_id1)
-                            common_edges[cell_id1][cell_id2] = intersection
-                            common_edges[cell_id2][cell_id1] = intersection
-
-                pbar.update(1)
-
+        logger.info("Cell adjacencies processed successfully.")
         return cell_adjacency, common_edges
 
     @staticmethod
@@ -998,7 +1073,7 @@ class HdfFluvialPluvial:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -1412,7 +1487,7 @@ HdfInfiltration.save_statistics(soil_stats, Path('soil_statistics.csv'))
 """
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -1574,49 +1649,45 @@ class HdfMesh:
                 if not mesh_area_names:
                     return GeoDataFrame()
 
+                # Get face geometries once
                 face_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
+                
+                # Pre-allocate lists for better memory efficiency
+                all_mesh_names = []
+                all_cell_ids = []
+                all_geometries = []
 
-                cell_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
-                for i, mesh_name in enumerate(mesh_area_names):
-                    cell_cnt = hdf_file["Geometry/2D Flow Areas/Cell Info"][()][i][1]
-                    cell_ids = list(range(cell_cnt))
-                    cell_face_info = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Cells Face and Orientation Info".format(mesh_name)
-                    ][()]
-                    cell_face_values = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Cells Face and Orientation Values".format(mesh_name)
-                    ][()][:, 0]
-                    face_id_lists = list(
-                        np.vectorize(
-                            lambda cell_id: str(
-                                cell_face_values[
-                                    cell_face_info[cell_id][0] : cell_face_info[cell_id][0]
-                                    + cell_face_info[cell_id][1]
-                                ]
-                            )
-                        )(cell_ids)
-                    )
-                    mesh_faces = (
-                        face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]]
-                        .set_index("face_id")
-                        .to_numpy()
-                    )
-                    cell_dict["mesh_name"] += [mesh_name] * cell_cnt
-                    cell_dict["cell_id"] += cell_ids
-                    cell_dict["geometry"] += list(
-                        np.vectorize(
-                            lambda face_id_list: (
-                                lambda geom_col: Polygon(list(polygonize(geom_col))[0])
-                            )(
-                                np.ravel(
-                                    mesh_faces[
-                                        np.array(face_id_list.strip("[]").split()).astype(int)
-                                    ]
-                                )
-                            )
-                        )(face_id_lists)
-                    )
-                return GeoDataFrame(cell_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_file))
+                for mesh_name in mesh_area_names:
+                    # Get cell face info in one read
+                    cell_face_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Info"][()]
+                    cell_face_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Values"][()][:, 0]
+                    
+                    # Create face lookup dictionary for this mesh
+                    mesh_faces_dict = dict(face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]].values)
+
+                    # Process each cell
+                    for cell_id, (start, length) in enumerate(cell_face_info[:, :2]):
+                        face_ids = cell_face_values[start:start + length]
+                        face_geoms = [mesh_faces_dict[face_id] for face_id in face_ids]
+                        
+                        # Create polygon
+                        polygons = list(polygonize(face_geoms))
+                        if polygons:
+                            all_mesh_names.append(mesh_name)
+                            all_cell_ids.append(cell_id)
+                            all_geometries.append(Polygon(polygons[0]))
+
+                # Create GeoDataFrame in one go
+                return GeoDataFrame(
+                    {
+                        "mesh_name": all_mesh_names,
+                        "cell_id": all_cell_ids,
+                        "geometry": all_geometries
+                    },
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file)
+                )
+
         except Exception as e:
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1643,19 +1714,32 @@ class HdfMesh:
                 if not mesh_area_names:
                     return GeoDataFrame()
                 
-                pnt_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
+                # Pre-allocate lists
+                all_mesh_names = []
+                all_cell_ids = []
+                all_points = []
+
                 for mesh_name in mesh_area_names:
-                    cell_center_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
-                    cell_count = len(cell_center_coords)
+                    # Get all cell centers in one read
+                    cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    cell_count = len(cell_centers)
                     
-                    pnt_dict["mesh_name"] += [mesh_name] * cell_count
-                    pnt_dict["cell_id"] += range(cell_count)
-                    pnt_dict["geometry"] += list(
-                        np.vectorize(lambda coords: Point(coords), signature="(n)->()")(
-                            cell_center_coords
-                        )
-                    )
-                return GeoDataFrame(pnt_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+                    # Extend lists efficiently
+                    all_mesh_names.extend([mesh_name] * cell_count)
+                    all_cell_ids.extend(range(cell_count))
+                    all_points.extend(Point(coords) for coords in cell_centers)
+
+                # Create GeoDataFrame in one go
+                return GeoDataFrame(
+                    {
+                        "mesh_name": all_mesh_names,
+                        "cell_id": all_cell_ids,
+                        "geometry": all_points
+                    },
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file)
+                )
+
         except Exception as e:
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1681,37 +1765,45 @@ class HdfMesh:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
-                face_dict = {"mesh_name": [], "face_id": [], "geometry": []}
+
+                # Pre-allocate lists
+                all_mesh_names = []
+                all_face_ids = []
+                all_geometries = []
+
                 for mesh_name in mesh_area_names:
-                    facepoints_index = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Faces FacePoint Indexes".format(mesh_name)
-                    ][()]
-                    facepoints_coordinates = hdf_file[
-                        "Geometry/2D Flow Areas/{}/FacePoints Coordinate".format(mesh_name)
-                    ][()]
-                    faces_perimeter_info = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Faces Perimeter Info".format(mesh_name)
-                    ][()]
-                    faces_perimeter_values = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Faces Perimeter Values".format(mesh_name)
-                    ][()]
-                    face_id = -1
-                    for pnt_a_index, pnt_b_index in facepoints_index:
-                        face_id += 1
-                        face_dict["mesh_name"].append(mesh_name)
-                        face_dict["face_id"].append(face_id)
-                        coordinates = list()
-                        coordinates.append(facepoints_coordinates[pnt_a_index])
-                        starting_row, count = faces_perimeter_info[face_id]
+                    # Read all data at once
+                    facepoints_index = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces FacePoint Indexes"][()]
+                    facepoints_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/FacePoints Coordinate"][()]
+                    faces_perim_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Perimeter Info"][()]
+                    faces_perim_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Perimeter Values"][()]
+
+                    # Process each face
+                    for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
+                        coords = [facepoints_coords[pnt_a_idx]]
+                        
                         if count > 0:
-                            coordinates += list(
-                                faces_perimeter_values[starting_row : starting_row + count]
-                            )
-                        coordinates.append(facepoints_coordinates[pnt_b_index])
-                        face_dict["geometry"].append(LineString(coordinates))
-                return GeoDataFrame(face_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+                            coords.extend(faces_perim_values[start_row:start_row + count])
+                            
+                        coords.append(facepoints_coords[pnt_b_idx])
+                        
+                        all_mesh_names.append(mesh_name)
+                        all_face_ids.append(face_id)
+                        all_geometries.append(LineString(coords))
+
+                # Create GeoDataFrame in one go
+                return GeoDataFrame(
+                    {
+                        "mesh_name": all_mesh_names,
+                        "face_id": all_face_ids,
+                        "geometry": all_geometries
+                    },
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file)
+                )
+
         except Exception as e:
-            self.logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod
@@ -1861,7 +1953,7 @@ class HdfMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPipe.py
+File: C:\GH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -2589,7 +2681,7 @@ class HdfPipe:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -2885,7 +2977,7 @@ class HdfPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -2911,7 +3003,7 @@ class HdfPlot:
     @staticmethod
     @log_call
     def plot_mesh_cells(
-        cell_polygons_df: pd.DataFrame, 
+        cell_polygons_df: pd.DataFrame, ## THIS IS A GEODATAFRAME - NEED TO EDIT BOTH ARGUMENT AND USAGE
         projection: str,
         title: str = '2D Flow Area Mesh Cells',
         figsize: Tuple[int, int] = (12, 8)
@@ -2993,7 +3085,7 @@ class HdfPlot:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPump.py
+File: C:\GH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -3314,7 +3406,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -3392,6 +3484,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .Decorators import log_call, standardize_input
 from .LoggingConfig import setup_logging, get_logger
+import geopandas as gpd
 
 logger = get_logger(__name__)
 
@@ -3552,7 +3645,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_ws(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_max_ws(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get maximum water surface elevation for each mesh cell.
 
@@ -3561,10 +3654,7 @@ class HdfResultsMesh:
             round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing maximum water surface elevations.
-
-        Raises:
-            ValueError: If there's an error processing the maximum water surface data.
+            gpd.GeoDataFrame: GeoDataFrame containing maximum water surface elevations with geometry.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -3580,7 +3670,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_min_ws(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_min_ws(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get minimum water surface elevation for each mesh cell.
 
@@ -3589,7 +3679,7 @@ class HdfResultsMesh:
             round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing minimum water surface elevations.
+            gpd.GeoDataFrame: GeoDataFrame containing minimum water surface elevations with geometry.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -3671,7 +3761,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_iter(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_max_iter(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get maximum iteration count for each mesh cell.
 
@@ -3680,36 +3770,19 @@ class HdfResultsMesh:
             round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing maximum iteration counts with face geometry.
-
-        Raises:
-            ValueError: If there's an error processing the maximum iteration data.
-        """
-        """
-        Get maximum iteration count for each mesh cell.
-
-        Args:
-            hdf_path (Path): Path to the HDF file
-            round_to (str): Time rounding specification (default "100ms").
-
-        Returns:
-            pd.DataFrame: DataFrame containing maximum iteration counts with columns:
+            gpd.GeoDataFrame: GeoDataFrame containing maximum iteration counts with geometry.
+                Includes columns:
                 - mesh_name: Name of the mesh
                 - cell_id: ID of the cell
                 - cell_last_iteration: Maximum number of iterations
                 - cell_last_iteration_time: Time when max iterations occurred
                 - geometry: Point geometry representing cell center
-                
-        Raises:
-            ValueError: If there's an error processing the maximum iteration data.
-            
-        Note: The Maximum Iteration is labeled as "Cell Last Iteration" in the HDF file 
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Cell Last Iteration", round_to)
         except Exception as e:
-            logger.error(f"Error in mesh_max_iter: {str(e)}")
+            logger.error(f"Error in get_mesh_max_iter: {str(e)}")
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
         
         
@@ -3930,7 +4003,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get the summary output data for a given variable from the HDF file.
 
@@ -3945,8 +4018,8 @@ class HdfResultsMesh:
 
         Returns
         -------
-        pd.DataFrame
-            A DataFrame containing the summary output data with attributes as metadata.
+        gpd.GeoDataFrame
+            A GeoDataFrame containing the summary output data with attributes as metadata.
 
         Raises
         ------
@@ -3960,7 +4033,7 @@ class HdfResultsMesh:
             logger.info(f"Processing summary output for variable: {var}")
             d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
             if d2_flow_areas is None:
-                return pd.DataFrame()
+                return gpd.GeoDataFrame()
 
             for d2_flow_area in d2_flow_areas[:]:
                 mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
@@ -4025,9 +4098,17 @@ class HdfResultsMesh:
                 dfs.append(df)
             
             if not dfs:
-                return pd.DataFrame()
+                return gpd.GeoDataFrame()
                 
             result = pd.concat(dfs, ignore_index=True)
+            
+            # Convert to GeoDataFrame
+            gdf = gpd.GeoDataFrame(result, geometry='geometry')
+            
+            # Get CRS from HdfUtils
+            crs = HdfBase.get_projection(hdf_file)
+            if crs:
+                gdf.set_crs(crs, inplace=True)
             
             # Combine attributes from all meshes
             combined_attrs = {}
@@ -4038,15 +4119,14 @@ class HdfResultsMesh:
                     elif combined_attrs[key] != value:
                         combined_attrs[key] = f"Multiple values: {combined_attrs[key]}, {value}"
             
-            result.attrs.update(combined_attrs)
+            gdf.attrs.update(combined_attrs)
             
-            logger.info(f"Processed {len(result)} rows of summary output data")
-            return result
+            logger.info(f"Processed {len(gdf)} rows of summary output data")
+            return gdf
         
         except Exception as e:
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
-        
 
     @staticmethod
     def get_mesh_summary_output_group(hdf_file: h5py.File, mesh_name: str, var: str) -> Union[h5py.Group, h5py.Dataset]:
@@ -4073,7 +4153,7 @@ class HdfResultsMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -4335,7 +4415,7 @@ class HdfResultsPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -4522,7 +4602,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -4839,7 +4919,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfStruc.py
+File: C:\GH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -5119,7 +5199,7 @@ class HdfStruc:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfUtils.py
+File: C:\GH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -5558,7 +5638,7 @@ class HdfUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -6186,7 +6266,7 @@ class HdfXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\LoggingConfig.py
+File: C:\GH\ras-commander\ras_commander\LoggingConfig.py
 ==================================================
 # logging_config.py
 
@@ -6239,9 +6319,19 @@ def setup_logging(log_file=None, log_level=logging.INFO):
     
     _logging_setup_done = True
 
-def get_logger(name):
-    """Get a logger for a specific module."""
-    return logging.getLogger(name)
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger instance with the specified name.
+    
+    Args:
+        name: The name for the logger, typically __name__ or module path
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    logger = logging.getLogger(name)
+    if not logger.handlers:  # Only add handler if none exists
+        setup_logging()  # Ensure logging is configured
+    return logger
 
 def log_call(logger=None):
     """Decorator to log function calls."""
@@ -6270,7 +6360,7 @@ def log_call(logger=None):
 setup_logging()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+File: C:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -6798,7 +6888,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasExamples.py
+File: C:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -7197,7 +7287,7 @@ class RasExamples:
         return int(number * units[unit])
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGeo.py
+File: C:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -7340,7 +7430,7 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGpt.py
+File: C:\GH\ras-commander\ras_commander\RasGpt.py
 ==================================================
 import os
 from pathlib import Path
@@ -7372,7 +7462,7 @@ class RasGpt:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasMapper.py
+File: C:\GH\ras-commander\ras_commander\RasMapper.py
 ==================================================
 """
 Class: RasMapper
@@ -7481,7 +7571,7 @@ significant_mukeys = HdfInfiltration.get_significant_mukeys(
 """
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPlan.py
+File: C:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -8736,7 +8826,7 @@ class RasPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPrj.py
+File: C:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -9620,7 +9710,7 @@ def get_ras_exe(ras_version=None):
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasToGo.py
+File: C:\GH\ras-commander\ras_commander\RasToGo.py
 ==================================================
 """
 RasToGo module provides functions to interface HEC-RAS with go-consequences.
@@ -9661,7 +9751,7 @@ class RasToGo:
     #@log_call 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -10391,7 +10481,7 @@ Lava Param=,2500,
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUtils.py
+File: C:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -11291,7 +11381,7 @@ class RasUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\__init__.py
+File: C:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
 from .LoggingConfig import setup_logging, get_logger

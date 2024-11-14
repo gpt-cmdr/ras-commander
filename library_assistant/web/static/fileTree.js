@@ -1,433 +1,243 @@
-// FileTreeViewer Component
-class FileTreeViewer {
-    constructor(container) {
-        this.container = container;
-        this.selectedFiles = new Set();
-        this.expandedFolders = new Set(['library_assistant/']);
-        this.searchQuery = '';
-        this.sortOption = 'name-asc';
-        this.hiddenTypes = new Set(['__pycache__']);
-        this.fileContents = new Map();
-        this.onSelectionChange = null;
-    initialize(data) {
-        this.fileData = null;
-        this.container.innerHTML = '';
-        this.fileData = data;
-        if (data) {
-        this.fileData = null;
-            const rootElement = this.renderNode(data);
-            this.container.appendChild(rootElement);
-            
-            // Auto-select default files after rendering
-            this.autoSelectDefaultFiles();
-        }
-    }
+import React, { useState, useEffect } from 'react';
 
-    async autoSelectDefaultFiles() {
-        // Expand all folders initially to ensure we can find the files
-        const collectFolderPaths = (node, path = '') => {
-            if (node.type === 'directory' && node.children) {
-                const fullPath = path ? `${path}/${node.name}` : node.name;
-                this.expandedFolders.add(fullPath);
-                node.children.forEach(child => {
-                    collectFolderPaths(child, fullPath);
-                });
-            }
-        };
-        
-        if (this.fileData) {
-            collectFolderPaths(this.fileData);
-        }
+// Override console.log to send logs to the server
+(function() {
+    const originalLog = console.log;
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        fetch('/api/log', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message: args.join(' ') })
+        }).catch(error => originalLog('Error sending log:', error));
+    };
+})();
 
-        // Re-render with expanded folders
-        this.render();
+// File node component
+const FileNode = ({ file, path, onSelect, isSelected }) => (
+  <div className="file ps-3">
+    <div className="d-flex align-items-center py-1 hover-bg-light">
+      <input 
+        type="checkbox" 
+        className="form-check-input me-2"
+        checked={isSelected}
+        onChange={(e) => onSelect(path, file.tokens, e.target.checked)}
+      />
+      <span className="me-2">📄</span>
+      <span>{file.name}</span>
+      <small className="text-muted ms-2">({file.tokens?.toLocaleString() || 0} tokens)</small>
+    </div>
+  </div>
+);
 
-        // Find and select default files
-        for (const filename of this.defaultFiles) {
-            const filePath = this.findFilePath(this.fileData, filename);
-            if (filePath) {
-                await this.toggleFileSelection(filePath, true);
-            }
-        }
+// Folder node component
+const FolderNode = ({ folder, path, expanded, onToggle, children }) => (
+  <div className="folder ps-3">
+    <div className="d-flex align-items-center py-1 hover-bg-light">
+      <button 
+        className="btn btn-sm p-0 me-2"
+        onClick={() => onToggle(path)}
+      >
+        {expanded ? '▼' : '▶'}
+      </button>
+      <span className="me-2">📁</span>
+      <span>{folder.name}</span>
+      <small className="text-muted ms-2">({folder.tokens?.toLocaleString() || 0} tokens)</small>
+    </div>
+    {expanded && <div className="children ps-3">{children}</div>}
+  </div>
+);
 
-        // Keep folders expanded to show default files
-        this.render();
-    }
+// Stats display component
+const StatsDisplay = ({ stats, tokens }) => (
+  <div className="p-3 bg-gray-100 rounded border sticky-bottom">
+    <div className="mb-2 border-bottom pb-2">
+      <div className="d-flex justify-content-between">
+        <span>Selected Files:</span>
+        <strong>{stats.fileCount} files</strong>
+      </div>
+      <div className="d-flex justify-content-between">
+        <span>Selected Tokens:</span>
+        <strong>{stats.tokens.toLocaleString()}</strong>
+      </div>
+    </div>
+    <div>
+      <div className="fw-bold mb-1">Estimated Context Costs:</div>
+      <div className="d-flex justify-content-between">
+        <span>Claude 3.5:</span>
+        <strong>${stats.costs.claude.toFixed(4)}</strong>
+      </div>
+      <div className="d-flex justify-content-between">
+        <span>GPT-4:</span>
+        <strong>${stats.costs.gpt4.toFixed(4)}</strong>
+      </div>
+      <div className="d-flex justify-content-between">
+        <span>GPT-4 Mini:</span>
+        <strong>${stats.costs.gpt4mini.toFixed(4)}</strong>
+      </div>
+      <div className="mt-2 pt-2 border-top">
+        <div className="d-flex justify-content-between text-muted">
+          <small>Current Conversation:</small>
+          <small>{tokens.conversation.toLocaleString()} tokens</small>
+        </div>
+        <div className="d-flex justify-content-between text-muted">
+          <small>Message Being Typed:</small>
+          <small>{tokens.currentMessage.toLocaleString()} tokens</small>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
-    findFilePath(node, targetFilename, currentPath = '') {
-        if (node.type === 'file' && node.name === targetFilename) {
-            return currentPath ? `${currentPath}/${node.name}` : node.name;
-        }
-        if (node.children) {
-            for (const child of node.children) {
-                const childPath = currentPath ? `${currentPath}/${node.name}` : node.name;
-                const result = this.findFilePath(child, targetFilename, childPath);
-                if (result) return result;
-            }
-        }
-        return null;
-    }
+// Main FileTreeViewer component
+const FileTreeViewer = ({ initialData }) => {
+  const [fileData, setFileData] = useState(initialData);
+  const [selectedFiles, setSelectedFiles] = useState(new Set());
+  const [expandedFolders, setExpandedFolders] = useState(new Set(['library_assistant']));
+  const [fileContents, setFileContents] = useState(new Map());
+  const [tokens, setTokens] = useState({ conversation: 0, currentMessage: 0 });
+  const [statsUpdate, setStatsUpdate] = useState(0);
 
-    getFolderStats(obj) {
-        const stats = {
-            totalTokens: 0,
-            fileCount: 0,
-            maxTokenFile: { name: '', tokens: 0 },
-            minTokenFile: { name: '', tokens: Infinity },
-            avgTokens: 0
-        };
-
-        const processNode = (node, path = '') => {
-            Object.entries(node).forEach(([key, value]) => {
-                const fullPath = path ? `${path}/${key}` : key;
-                if (typeof value === 'number') {
-                    stats.totalTokens += value;
-                    stats.fileCount++;
-                    if (value > stats.maxTokenFile.tokens) {
-                        stats.maxTokenFile = { name: fullPath, tokens: value };
-                    }
-                    if (value < stats.minTokenFile.tokens) {
-                        stats.minTokenFile = { name: fullPath, tokens: value };
-                    }
-                } else {
-                    processNode(value, fullPath);
-                }
-            });
-        };
-
-        processNode(obj);
-        stats.avgTokens = stats.fileCount > 0 ? Math.round(stats.totalTokens / stats.fileCount) : 0;
-        return stats;
-    }
-
-    getSelectedStats() {
-        const getNodeTokens = (obj, path) => {
-            let total = 0;
-            if (typeof obj === 'number') {
-                return this.selectedFiles.has(path) ? obj : 0;
-            }
-            Object.entries(obj).forEach(([key, value]) => {
-                const fullPath = path ? `${path}/${key}` : key;
-                total += getNodeTokens(value, fullPath);
-            });
-            return total;
-        };
-
-        const selectedTokens = getNodeTokens(this.fileData, '');
-        
-        // Calculate costs for different models
-        const costs = {
-            claude: (selectedTokens / 1000000) * 3.00,  // $3.00 per million tokens
-            gpt4: (selectedTokens / 1000000) * 10.00,   // $10.00 per million tokens
-            gpt4mini: (selectedTokens / 1000000) * 0.60 // $0.60 per million tokens
-        };
-
-        return {
-            totalTokens: selectedTokens,
-            fileCount: this.selectedFiles.size,
-            avgTokens: this.selectedFiles.size > 0 ? Math.round(selectedTokens / this.selectedFiles.size) : 0,
-            costs: costs
-        };
-    }
-
-    sortItems(items) {
-        return Object.entries(items).sort(([keyA, valueA], [keyB, valueB]) => {
-            const isFileA = typeof valueA === 'number';
-            const isFileB = typeof valueB === 'number';
-            
-            if (isFileA !== isFileB) return isFileA ? 1 : -1;
-
-            switch (this.sortOption) {
-                case 'name-asc': return keyA.localeCompare(keyB);
-                case 'name-desc': return keyB.localeCompare(keyA);
-                case 'tokens-asc':
-                    return (isFileA ? valueA : this.getFolderStats(valueA).totalTokens) 
-                           - (isFileB ? valueB : this.getFolderStats(valueB).totalTokens);
-                case 'tokens-desc':
-                    return (isFileB ? valueB : this.getFolderStats(valueB).totalTokens)
-                           - (isFileA ? valueA : this.getFolderStats(valueA).totalTokens);
-                default: return 0;
-            }
-        });
-    }
-
-    renderToolbar() {
-        return `
-            <div class="mb-3">
-                <div class="d-flex gap-2 mb-2">
-                    <div class="flex-grow-1">
-                        <input
-                            type="text"
-                            placeholder="Search files..."
-                            value="${this.searchQuery}"
-                            class="search-input form-control"
-                        />
-                    </div>
-                    <select
-                        class="sort-select form-select"
-                        style="width: auto;"
-                        value="${this.sortOption}"
-                    >
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                        <option value="tokens-asc">Tokens (Low to High)</option>
-                        <option value="tokens-desc">Tokens (High to Low)</option>
-                    </select>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="expand-all btn btn-sm btn-outline-secondary">
-                        Expand All
-                    </button>
-                    <button class="collapse-all btn btn-sm btn-outline-secondary">
-                        Collapse All
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
-    renderTree(obj, path = '') {
-        let html = '<div class="ml-4">';
-        const sortedEntries = this.sortItems(obj);
-        
-        for (const [key, value] of sortedEntries) {
-            const fullPath = path ? `${path}/${key}` : key;
-            const isFolder = typeof value === 'object';
-            
-            if (this.hiddenTypes.has(key) && key !== '.cursorrules') continue;
-            if (this.searchQuery && !fullPath.toLowerCase().includes(this.searchQuery.toLowerCase())) continue;
-            
-            if (isFolder) {
-                const folderStats = this.getFolderStats(value);
-                const isExpanded = this.expandedFolders.has(fullPath);
-                
-                html += `
-                    <div class="folder" data-path="${fullPath}">
-                        <div class="flex items-center py-1 hover:bg-gray-100">
-                            <button class="toggle-folder mr-1">
-                                ${isExpanded ? '▼' : '▶'}
-                            </button>
-                            <button class="select-folder mr-2">
-                                □
-                            </button>
-                            📁
-                            <span class="font-medium ml-2">${key}</span>
-                            <span class="ml-2 text-sm text-gray-500">(${folderStats.totalTokens.toLocaleString()} tokens)</span>
-                        </div>
-                        ${isExpanded ? this.renderTree(value, fullPath) : ''}
-                    </div>
-                `;
-            } else {
-                const isSelected = this.selectedFiles.has(fullPath);
-                const isDefaultFile = this.defaultFiles.includes(key);
-                
-                html += `
-                    <div class="flex items-center py-1 hover:bg-gray-100 ${isDefaultFile ? 'bg-gray-50' : ''}">
-                        <div class="w-4 mr-1"></div>
-                        <input
-                            type="checkbox"
-                            class="file-checkbox mr-2 ml-1"
-                            data-path="${fullPath}"
-                            ${isSelected ? 'checked' : ''}
-                            ${isDefaultFile ? 'data-default="true"' : ''}
-                        />
-                        <span class="file-icon">📄</span>
-                        <span class="ml-2 ${isDefaultFile ? 'font-medium' : ''}">${key}</span>
-                        <span class="ml-2 text-sm text-gray-500">(${value.toLocaleString()} tokens)</span>
-                    </div>
-                `;
-            }
-        }
-        return html + '</div>';
-    }
-
-    renderStats() {
-        const stats = this.getFolderStats(this.fileData);
-        const selectedStats = this.getSelectedStats();
-
-        return `
-            <div class="p-3 bg-gray-100 rounded border" style="position: sticky; bottom: 0;">
-                <div class="mb-2 border-bottom pb-2">
-                    <div class="d-flex justify-content-between">
-                        <span>Selected Files:</span>
-                        <strong>${selectedStats.fileCount} of ${stats.fileCount} files</strong>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <span>Selected Tokens:</span>
-                        <strong>${selectedStats.totalTokens.toLocaleString()} of ${stats.totalTokens.toLocaleString()}</strong>
-                    </div>
-                </div>
-                <div>
-                    <div class="fw-bold mb-1">Estimated Context Costs:</div>
-                    <div class="d-flex justify-content-between">
-                        <span>Claude 3.5:</span>
-                        <strong>$${selectedStats.costs.claude.toFixed(4)}</strong>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <span>GPT-4:</span>
-                        <strong>$${selectedStats.costs.gpt4.toFixed(4)}</strong>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <span>GPT-4 Mini:</span>
-                        <strong>$${selectedStats.costs.gpt4mini.toFixed(4)}</strong>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    render() {
-        this.container.innerHTML = `
-            <div class="border rounded-lg p-4 bg-white">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold">Project Files</h2>
-                </div>
-                ${this.renderToolbar()}
-                <div class="border rounded p-4 bg-gray-50 mb-4" style="max-height: 60vh; overflow-y: auto;">
-                    ${this.renderTree(this.fileData)}
-                </div>
-                ${this.renderStats()}
-            </div>
-        `;
-
-        // Attach event listeners after rendering
-        this.attachEventListeners();
-    }
-
-    attachEventListeners() {
-        // File checkboxes
-        this.container.querySelectorAll('.file-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', async (e) => {
-                e.preventDefault();
-                const path = e.target.dataset.path;
-                await this.toggleFileSelection(path);
-            });
-        });
-
-        // Folder expansion
-        this.container.querySelectorAll('.toggle-folder').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const folderDiv = e.target.closest('.folder');
-                const path = folderDiv.dataset.path;
-                if (this.expandedFolders.has(path)) {
-                    this.expandedFolders.delete(path);
-                } else {
-                    this.expandedFolders.add(path);
-                }
-                this.render();
-            });
-        });
-
-        // Search input
-        this.container.querySelector('.search-input').addEventListener('input', (e) => {
-            this.searchQuery = e.target.value;
-            this.render();
-        });
-
-        // Sort select
-        this.container.querySelector('.sort-select').addEventListener('change', (e) => {
-            this.sortOption = e.target.value;
-            this.render();
-        });
-
-        // Expand/Collapse all
-        this.container.querySelector('.expand-all').addEventListener('click', () => {
-            const collectFolderPaths = (obj, path = '') => {
-                Object.entries(obj).forEach(([key, value]) => {
-                    if (typeof value === 'object') {
-                        const fullPath = path ? `${path}/${key}` : key;
-                        this.expandedFolders.add(fullPath);
-                        collectFolderPaths(value, fullPath);
-                    }
-                });
-            };
-            collectFolderPaths(this.fileData);
-            this.render();
-        });
-
-        this.container.querySelector('.collapse-all').addEventListener('click', () => {
-            this.expandedFolders.clear();
-            this.render();
-        });
-    }
-
-    async getFileContent(path) {
+  // Handle file selection and deselection
+  const handleFileSelect = async (path, tokens, selected) => {
+    console.group(`handleFileSelect: ${path}`);
+    console.log('Selected:', selected);
+    console.log('Tokens:', tokens);
+    
+    if (selected) {
         try {
-            if (!path) return null;
+            console.log('Fetching file content...');
+            const content = await getFileContent(path);
+            console.log('Content received:', !!content);
             
-            // Check if we already have the content cached
-            if (this.fileContents.has(path)) {
-                return this.fileContents.get(path);
-            }
-
-            const response = await fetch(`/get_file_content?path=${encodeURIComponent(path)}`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch file content: ${response.statusText}`);
-            }
-            
-            const content = await response.json();
-            // Cache the content
-            this.fileContents.set(path, content);
-            return content;
-        } catch (error) {
-            console.error('Error fetching file content:', error);
-            return null;
-        }
-    }
-
-    async toggleFileSelection(path, forceSelect = false) {
-        if (!forceSelect && this.selectedFiles.has(path)) {
-            this.selectedFiles.delete(path);
-            this.updateAllCostDisplays();
-            this.render();
-        } else {
-            const checkbox = this.container.querySelector(`[data-path="${path}"]`);
-            if (checkbox) checkbox.disabled = true;
-
-            const fileContent = await this.getFileContent(path);
-            
-            if (checkbox) checkbox.disabled = false;
-
-            if (fileContent) {
-                this.selectedFiles.add(path);
-                this.updateAllCostDisplays();
-                this.render();
-            } else {
-                console.error('Failed to load file content:', path);
-                alert(`Failed to load content for ${path}`);
-                return;
-            }
-        }
-
-        if (this.onSelectionChange) {
-            this.onSelectionChange(Array.from(this.selectedFiles));
-        }
-    }
-
-    setSelectionChangeCallback(callback) {
-        this.onSelectionChange = callback;
-    }
-
-    async getSelectedContents() {
-        const contents = new Map();
-        for (const path of this.selectedFiles) {
-            const content = await this.getFileContent(path);
             if (content) {
-                contents.set(path, content);
+                setSelectedFiles(prev => {
+                    const next = new Set([...prev, path]);
+                    console.log('Updated selected files:', Array.from(next));
+                    return next;
+                });
+                setFileContents(prev => new Map(prev).set(path, content));
             }
+        } catch (error) {
+            console.error('Error loading file:', error);
         }
-        return contents;
+    } else {
+        setSelectedFiles(prev => {
+            const next = new Set(prev);
+            next.delete(path);
+            console.log('Updated selected files after removal:', Array.from(next));
+            return next;
+        });
+    }
+    
+    setStatsUpdate(prev => prev + 1);
+    console.groupEnd();
+  };
+
+  // Handle folder expansion
+  const handleFolderToggle = (path) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  // Fetch file content
+  const getFileContent = async (path) => {
+    if (fileContents.has(path)) {
+      return fileContents.get(path);
     }
 
-    updateAllCostDisplays() {
-        const stats = this.getSelectedStats();
-        
-        // Update file tree stats by re-rendering
-        this.render();
-        
-        // Update total cost estimation for the message input area
-        if (window.updateTotalCostEstimation) {
-            window.updateTotalCostEstimation();
-        }
+    const response = await fetch(`/get_file_content?path=${encodeURIComponent(path)}`);
+    if (!response.ok) throw new Error('Failed to fetch file content');
+    
+    return await response.json();
+  };
+
+  // Render the file tree
+  const renderTree = (item, path = '') => {
+    const fullPath = path ? `${path}/${item.name}` : item.name;
+    console.group(`renderTree: ${fullPath}`);
+    console.log('Item:', item);
+    console.log('Current path:', path);
+    console.log('Full path:', fullPath);
+    
+    let result;
+    if (item.type === 'directory') {
+        const isExpanded = expandedFolders.has(fullPath);
+        console.log('Directory is expanded:', isExpanded);
+        result = (
+            <FolderNode
+                key={fullPath}
+                folder={item}
+                path={fullPath}
+                expanded={isExpanded}
+                onToggle={handleFolderToggle}
+            >
+                {isExpanded && item.children?.map(child => renderTree(child, fullPath))}
+            </FolderNode>
+        );
+    } else {
+        const isSelected = selectedFiles.has(fullPath);
+        console.log('File is selected:', isSelected);
+        result = (
+            <FileNode
+                key={fullPath}
+                file={item}
+                path={fullPath}
+                isSelected={isSelected}
+                onSelect={handleFileSelect}
+            />
+        );
     }
-}
+    
+    console.groupEnd();
+    return result;
+  };
+
+  useEffect(() => {
+    console.group('FileTreeViewer Initialization');
+    console.log('Initial data:', initialData);
+    console.log('File data structure:', fileData);
+    console.groupEnd();
+  }, [initialData, fileData]);
+
+  const updateDisplays = () => {
+    document.getElementById('selected-files-count').textContent = `${selectedFiles.size} files`;
+    document.getElementById('selected-tokens-count').textContent = calculateStats().tokens.toLocaleString();
+    // Update cost displays
+    document.getElementById('claude-cost').textContent = `$${calculateStats().costs.claude.toFixed(4)}`;
+    document.getElementById('gpt4-cost').textContent = `$${calculateStats().costs.gpt4.toFixed(4)}`;
+    document.getElementById('gpt4-mini-cost').textContent = `$${calculateStats().costs.gpt4mini.toFixed(4)}`;
+  };
+
+  useEffect(() => {
+    updateDisplays();
+  }, [selectedFiles, statsUpdate]);
+
+  return (
+    <div className="file-tree-container">
+      <div className="file-tree-header">
+        <div className="d-flex justify-content-between align-items-center w-100">
+          <h5 className="mb-0">Project Files</h5>
+          <button className="btn btn-sm btn-primary" onClick={() => window.location.reload()}>
+            <span className="refresh-icon">↻</span> Refresh Context
+          </button>
+        </div>
+      </div>
+      <div className="file-tree">
+        {fileData && renderTree(fileData)}
+      </div>
+      <StatsDisplay key={statsUpdate} stats={calculateStats()} tokens={tokens} />
+    </div>
+  );
+};
+
+export default FileTreeViewer;

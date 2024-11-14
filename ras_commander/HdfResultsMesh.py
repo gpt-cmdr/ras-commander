@@ -74,6 +74,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .Decorators import log_call, standardize_input
 from .LoggingConfig import setup_logging, get_logger
+import geopandas as gpd
 
 logger = get_logger(__name__)
 
@@ -234,7 +235,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_ws(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_max_ws(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get maximum water surface elevation for each mesh cell.
 
@@ -243,10 +244,7 @@ class HdfResultsMesh:
             round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing maximum water surface elevations.
-
-        Raises:
-            ValueError: If there's an error processing the maximum water surface data.
+            gpd.GeoDataFrame: GeoDataFrame containing maximum water surface elevations with geometry.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -262,7 +260,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_min_ws(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_min_ws(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get minimum water surface elevation for each mesh cell.
 
@@ -271,7 +269,7 @@ class HdfResultsMesh:
             round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing minimum water surface elevations.
+            gpd.GeoDataFrame: GeoDataFrame containing minimum water surface elevations with geometry.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -353,7 +351,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_iter(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_max_iter(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get maximum iteration count for each mesh cell.
 
@@ -362,36 +360,19 @@ class HdfResultsMesh:
             round_to (str): Time rounding specification (default "100ms").
 
         Returns:
-            pd.DataFrame: DataFrame containing maximum iteration counts with face geometry.
-
-        Raises:
-            ValueError: If there's an error processing the maximum iteration data.
-        """
-        """
-        Get maximum iteration count for each mesh cell.
-
-        Args:
-            hdf_path (Path): Path to the HDF file
-            round_to (str): Time rounding specification (default "100ms").
-
-        Returns:
-            pd.DataFrame: DataFrame containing maximum iteration counts with columns:
+            gpd.GeoDataFrame: GeoDataFrame containing maximum iteration counts with geometry.
+                Includes columns:
                 - mesh_name: Name of the mesh
                 - cell_id: ID of the cell
                 - cell_last_iteration: Maximum number of iterations
                 - cell_last_iteration_time: Time when max iterations occurred
                 - geometry: Point geometry representing cell center
-                
-        Raises:
-            ValueError: If there's an error processing the maximum iteration data.
-            
-        Note: The Maximum Iteration is labeled as "Cell Last Iteration" in the HDF file 
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Cell Last Iteration", round_to)
         except Exception as e:
-            logger.error(f"Error in mesh_max_iter: {str(e)}")
+            logger.error(f"Error in get_mesh_max_iter: {str(e)}")
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
         
         
@@ -612,7 +593,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_summary_output(hdf_file: h5py.File, var: str, round_to: str = "100ms") -> gpd.GeoDataFrame:
         """
         Get the summary output data for a given variable from the HDF file.
 
@@ -627,8 +608,8 @@ class HdfResultsMesh:
 
         Returns
         -------
-        pd.DataFrame
-            A DataFrame containing the summary output data with attributes as metadata.
+        gpd.GeoDataFrame
+            A GeoDataFrame containing the summary output data with attributes as metadata.
 
         Raises
         ------
@@ -642,7 +623,7 @@ class HdfResultsMesh:
             logger.info(f"Processing summary output for variable: {var}")
             d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
             if d2_flow_areas is None:
-                return pd.DataFrame()
+                return gpd.GeoDataFrame()
 
             for d2_flow_area in d2_flow_areas[:]:
                 mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
@@ -707,9 +688,17 @@ class HdfResultsMesh:
                 dfs.append(df)
             
             if not dfs:
-                return pd.DataFrame()
+                return gpd.GeoDataFrame()
                 
             result = pd.concat(dfs, ignore_index=True)
+            
+            # Convert to GeoDataFrame
+            gdf = gpd.GeoDataFrame(result, geometry='geometry')
+            
+            # Get CRS from HdfUtils
+            crs = HdfBase.get_projection(hdf_file)
+            if crs:
+                gdf.set_crs(crs, inplace=True)
             
             # Combine attributes from all meshes
             combined_attrs = {}
@@ -720,15 +709,14 @@ class HdfResultsMesh:
                     elif combined_attrs[key] != value:
                         combined_attrs[key] = f"Multiple values: {combined_attrs[key]}, {value}"
             
-            result.attrs.update(combined_attrs)
+            gdf.attrs.update(combined_attrs)
             
-            logger.info(f"Processed {len(result)} rows of summary output data")
-            return result
+            logger.info(f"Processed {len(gdf)} rows of summary output data")
+            return gdf
         
         except Exception as e:
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
-        
 
     @staticmethod
     def get_mesh_summary_output_group(hdf_file: h5py.File, mesh_name: str, var: str) -> Union[h5py.Group, h5py.Dataset]:

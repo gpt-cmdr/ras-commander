@@ -49,9 +49,19 @@ def setup_logging(log_file=None, log_level=logging.INFO):
     
     _logging_setup_done = True
 
-def get_logger(name):
-    """Get a logger for a specific module."""
-    return logging.getLogger(name)
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger instance with the specified name.
+    
+    Args:
+        name: The name for the logger, typically __name__ or module path
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    logger = logging.getLogger(name)
+    if not logger.handlers:  # Only add handler if none exists
+        setup_logging()  # Ensure logging is configured
+    return logger
 
 def log_call(logger=None):
     """Decorator to log function calls."""

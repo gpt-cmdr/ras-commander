@@ -10,6 +10,7 @@ Routes:
 - POST /submit: Handles form submissions for updating settings.
 - POST /save_conversation: Saves the current conversation history to a file.
 - GET /get_file_tree: Returns the file tree structure with token counts.
+- POST /refresh_context: Refreshes the context processing for both RAG and full context modes.
 """
 
 from fastapi import APIRouter, Request, Form, HTTPException
@@ -18,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from config.config import load_settings, update_settings
 from utils.conversation import add_to_history, get_full_conversation, save_conversation
-from utils.context_processing import prepare_full_prompt, update_conversation_history
+from utils.context_processing import prepare_full_prompt, update_conversation_history, initialize_rag_context
 from utils.cost_estimation import create_pricing_df, estimate_cost
 from utils.file_handling import set_context_folder
 from api.anthropic import anthropic_stream_response, get_anthropic_client
@@ -28,6 +29,7 @@ import tiktoken
 import os
 from pathlib import Path
 import uuid
+from datetime import datetime
 
 router = APIRouter()
 
@@ -295,3 +297,21 @@ async def get_file_content(path: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+
+@router.post("/refresh_context")
+async def refresh_context():
+    """
+    Refreshes the context processing for both RAG and full context modes.
+    """
+    try:
+        await initialize_rag_context()
+        return JSONResponse({
+            "status": "success",
+            "message": "Context refreshed successfully",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to refresh context: {str(e)}"
+        )

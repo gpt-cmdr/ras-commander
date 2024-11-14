@@ -158,49 +158,45 @@ class HdfMesh:
                 if not mesh_area_names:
                     return GeoDataFrame()
 
+                # Get face geometries once
                 face_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
+                
+                # Pre-allocate lists for better memory efficiency
+                all_mesh_names = []
+                all_cell_ids = []
+                all_geometries = []
 
-                cell_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
-                for i, mesh_name in enumerate(mesh_area_names):
-                    cell_cnt = hdf_file["Geometry/2D Flow Areas/Cell Info"][()][i][1]
-                    cell_ids = list(range(cell_cnt))
-                    cell_face_info = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Cells Face and Orientation Info".format(mesh_name)
-                    ][()]
-                    cell_face_values = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Cells Face and Orientation Values".format(mesh_name)
-                    ][()][:, 0]
-                    face_id_lists = list(
-                        np.vectorize(
-                            lambda cell_id: str(
-                                cell_face_values[
-                                    cell_face_info[cell_id][0] : cell_face_info[cell_id][0]
-                                    + cell_face_info[cell_id][1]
-                                ]
-                            )
-                        )(cell_ids)
-                    )
-                    mesh_faces = (
-                        face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]]
-                        .set_index("face_id")
-                        .to_numpy()
-                    )
-                    cell_dict["mesh_name"] += [mesh_name] * cell_cnt
-                    cell_dict["cell_id"] += cell_ids
-                    cell_dict["geometry"] += list(
-                        np.vectorize(
-                            lambda face_id_list: (
-                                lambda geom_col: Polygon(list(polygonize(geom_col))[0])
-                            )(
-                                np.ravel(
-                                    mesh_faces[
-                                        np.array(face_id_list.strip("[]").split()).astype(int)
-                                    ]
-                                )
-                            )
-                        )(face_id_lists)
-                    )
-                return GeoDataFrame(cell_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_file))
+                for mesh_name in mesh_area_names:
+                    # Get cell face info in one read
+                    cell_face_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Info"][()]
+                    cell_face_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Values"][()][:, 0]
+                    
+                    # Create face lookup dictionary for this mesh
+                    mesh_faces_dict = dict(face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]].values)
+
+                    # Process each cell
+                    for cell_id, (start, length) in enumerate(cell_face_info[:, :2]):
+                        face_ids = cell_face_values[start:start + length]
+                        face_geoms = [mesh_faces_dict[face_id] for face_id in face_ids]
+                        
+                        # Create polygon
+                        polygons = list(polygonize(face_geoms))
+                        if polygons:
+                            all_mesh_names.append(mesh_name)
+                            all_cell_ids.append(cell_id)
+                            all_geometries.append(Polygon(polygons[0]))
+
+                # Create GeoDataFrame in one go
+                return GeoDataFrame(
+                    {
+                        "mesh_name": all_mesh_names,
+                        "cell_id": all_cell_ids,
+                        "geometry": all_geometries
+                    },
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file)
+                )
+
         except Exception as e:
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -227,19 +223,32 @@ class HdfMesh:
                 if not mesh_area_names:
                     return GeoDataFrame()
                 
-                pnt_dict = {"mesh_name": [], "cell_id": [], "geometry": []}
+                # Pre-allocate lists
+                all_mesh_names = []
+                all_cell_ids = []
+                all_points = []
+
                 for mesh_name in mesh_area_names:
-                    cell_center_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
-                    cell_count = len(cell_center_coords)
+                    # Get all cell centers in one read
+                    cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    cell_count = len(cell_centers)
                     
-                    pnt_dict["mesh_name"] += [mesh_name] * cell_count
-                    pnt_dict["cell_id"] += range(cell_count)
-                    pnt_dict["geometry"] += list(
-                        np.vectorize(lambda coords: Point(coords), signature="(n)->()")(
-                            cell_center_coords
-                        )
-                    )
-                return GeoDataFrame(pnt_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+                    # Extend lists efficiently
+                    all_mesh_names.extend([mesh_name] * cell_count)
+                    all_cell_ids.extend(range(cell_count))
+                    all_points.extend(Point(coords) for coords in cell_centers)
+
+                # Create GeoDataFrame in one go
+                return GeoDataFrame(
+                    {
+                        "mesh_name": all_mesh_names,
+                        "cell_id": all_cell_ids,
+                        "geometry": all_points
+                    },
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file)
+                )
+
         except Exception as e:
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -265,37 +274,45 @@ class HdfMesh:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
-                face_dict = {"mesh_name": [], "face_id": [], "geometry": []}
+
+                # Pre-allocate lists
+                all_mesh_names = []
+                all_face_ids = []
+                all_geometries = []
+
                 for mesh_name in mesh_area_names:
-                    facepoints_index = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Faces FacePoint Indexes".format(mesh_name)
-                    ][()]
-                    facepoints_coordinates = hdf_file[
-                        "Geometry/2D Flow Areas/{}/FacePoints Coordinate".format(mesh_name)
-                    ][()]
-                    faces_perimeter_info = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Faces Perimeter Info".format(mesh_name)
-                    ][()]
-                    faces_perimeter_values = hdf_file[
-                        "Geometry/2D Flow Areas/{}/Faces Perimeter Values".format(mesh_name)
-                    ][()]
-                    face_id = -1
-                    for pnt_a_index, pnt_b_index in facepoints_index:
-                        face_id += 1
-                        face_dict["mesh_name"].append(mesh_name)
-                        face_dict["face_id"].append(face_id)
-                        coordinates = list()
-                        coordinates.append(facepoints_coordinates[pnt_a_index])
-                        starting_row, count = faces_perimeter_info[face_id]
+                    # Read all data at once
+                    facepoints_index = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces FacePoint Indexes"][()]
+                    facepoints_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/FacePoints Coordinate"][()]
+                    faces_perim_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Perimeter Info"][()]
+                    faces_perim_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Perimeter Values"][()]
+
+                    # Process each face
+                    for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
+                        coords = [facepoints_coords[pnt_a_idx]]
+                        
                         if count > 0:
-                            coordinates += list(
-                                faces_perimeter_values[starting_row : starting_row + count]
-                            )
-                        coordinates.append(facepoints_coordinates[pnt_b_index])
-                        face_dict["geometry"].append(LineString(coordinates))
-                return GeoDataFrame(face_dict, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+                            coords.extend(faces_perim_values[start_row:start_row + count])
+                            
+                        coords.append(facepoints_coords[pnt_b_idx])
+                        
+                        all_mesh_names.append(mesh_name)
+                        all_face_ids.append(face_id)
+                        all_geometries.append(LineString(coords))
+
+                # Create GeoDataFrame in one go
+                return GeoDataFrame(
+                    {
+                        "mesh_name": all_mesh_names,
+                        "face_id": all_face_ids,
+                        "geometry": all_geometries
+                    },
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file)
+                )
+
         except Exception as e:
-            self.logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod

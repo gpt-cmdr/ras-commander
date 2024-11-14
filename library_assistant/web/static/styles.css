@@ -1,0 +1,38 @@
+/* Add these styles to your existing CSS */
+.file-tree-dropdown {
+    width: 100%;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+}
+
+.tree-directory {
+    font-weight: bold;
+}
+
+.tree-file {
+    padding-left: 1rem;
+}
+
+.file-tag {
+    background-color: #e3f2fd;
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    margin: 0.25rem;
+    display: inline-block;
+}
+
+/* Customize dropdown appearance */
+.dropdown-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Style the checkboxes */
+.checkbox-item {
+    margin-right: 0.5rem;
+}
+
+/* Style partially selected nodes */
+.node.partial .checkbox-item:indeterminate {
+    background-color: #86b7fe;
+} 

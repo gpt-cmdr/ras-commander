@@ -42,6 +42,8 @@ DEFAULT_SETTINGS = {
         "ai_tools",
         "docs"
         "Example_Projects_6_6"
+        "html"
+        "data"
     ],
     "omit_extensions": [
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',
@@ -51,7 +53,7 @@ DEFAULT_SETTINGS = {
         '.pyc', '.pyo', '.pyd',
         '.class',
         '.log', '.tmp', '.bak', '.swp',
-        '.bat', '.sh',
+        '.bat', '.sh', '.html',
     ],
     "omit_files": [
         'FunctionList.md',

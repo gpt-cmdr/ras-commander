@@ -22,7 +22,7 @@ class HdfPlot:
     @staticmethod
     @log_call
     def plot_mesh_cells(
-        cell_polygons_df: pd.DataFrame, 
+        cell_polygons_df: pd.DataFrame, ## THIS IS A GEODATAFRAME - NEED TO EDIT BOTH ARGUMENT AND USAGE
         projection: str,
         title: str = '2D Flow Area Mesh Cells',
         figsize: Tuple[int, int] = (12, 8)

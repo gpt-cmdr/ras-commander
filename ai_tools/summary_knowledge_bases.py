@@ -49,7 +49,7 @@ import re
 OMIT_FOLDERS = [
     "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant",
     "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info",
-    "example_projects", "assistant_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models","hdf_example_data", "ras_example_categories"
+    "example_projects", "assistant_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models","hdf_example_data", "ras_example_categories", "html", "data", "apidocs"
 ]
 OMIT_FILES = [
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",

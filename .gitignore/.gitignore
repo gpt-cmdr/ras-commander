@@ -10,6 +10,9 @@ my_projects/
 examples/FEMA_BLE_Models/
 examples/hdf_example_data/
 
+# ignore tools/stored_map_assistant build folders
+tools/stored_map_assistant/build/
+tools/stored_map_assistant/dist/
 
 # Ignore library assistant config
 library_assistant/config/

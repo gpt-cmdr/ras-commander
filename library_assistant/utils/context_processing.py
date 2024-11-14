@@ -15,45 +15,46 @@ conversation_context = {}  # Store context for each conversation
 
 def initialize_rag_context():
     """
-    Initializes the RAG context for the application.
+    Initializes both RAG and full context processing.
     """
     global preprocessed_context, preprocessed_rag_context
     
     try:
         # Load settings
         settings = load_settings()
-        context_mode = settings.context_mode
+        context_folder = set_context_folder()
+        
+        # Get settings as Python objects
         omit_folders = json.loads(settings.omit_folders)
         omit_extensions = json.loads(settings.omit_extensions)
         omit_files = json.loads(settings.omit_files)
-        chunk_level = settings.chunk_level
-        initial_chunk_size = settings.initial_chunk_size
-        followup_chunk_size = settings.followup_chunk_size
-
-        # Set up context
-        context_folder = set_context_folder()
         
-        # Combine files
-        combined_text, total_token_count, _ = combine_files(
+        # Combine files with current settings
+        combined_text, total_token_count, file_token_counts = combine_files(
             summarize_subfolder=context_folder,
             omit_folders=omit_folders,
             omit_extensions=omit_extensions,
             omit_files=omit_files,
             strip_code=True,
-            chunk_level=chunk_level
+            chunk_level=settings.chunk_level
         )
-
-        # Process context based on mode
-        if context_mode == 'full_context':
-            preprocessed_context = combined_text
-        else:  # RAG mode
-            preprocessed_rag_context = prepare_context(
-                text=combined_text,
-                mode='rag',
-                initial_chunk_size=initial_chunk_size,
-                followup_chunk_size=followup_chunk_size
-            )
-
+        
+        # Store full context
+        preprocessed_context = combined_text
+        
+        # Process RAG context
+        preprocessed_rag_context = prepare_context(
+            text=combined_text,
+            mode='rag',
+            initial_chunk_size=settings.initial_chunk_size,
+            followup_chunk_size=settings.followup_chunk_size
+        )
+        
+        # Store token counts for files
+        global file_token_mapping
+        file_token_mapping = file_token_counts
+        
+        return True
     except Exception as e:
         print(f"Error initializing context: {str(e)}")
         raise

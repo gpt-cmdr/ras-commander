@@ -1,0 +1,2827 @@
+
+
+#  PANDAS CHANGELOG
+
+
+
+
+What’s new in 2.2.3 (September 20, 2024)
+These are the changes in pandas 2.2.3. See Release notes for a full changelog including other versions of pandas.
+
+Pandas 2.2.3 is now compatible with Python 3.13
+Pandas 2.2.3 is the first version of pandas that is generally compatible with the upcoming Python 3.13, and both wheels for free-threaded and normal Python 3.13 will be uploaded for this release.
+
+Bug fixes
+Bug in eval() on complex including division / discards imaginary part. (GH 21374)
+
+Minor fixes for numpy 2.1 compatibility. (GH 59444)
+
+
+
+
+What’s new in 2.2.2 (April 10, 2024)
+These are the changes in pandas 2.2.2. See Release notes for a full changelog including other versions of pandas.
+
+Pandas 2.2.2 is now compatible with numpy 2.0
+Pandas 2.2.2 is the first version of pandas that is generally compatible with the upcoming numpy 2.0 release, and wheels for pandas 2.2.2 will work with both numpy 1.x and 2.x.
+
+One major caveat is that arrays created with numpy 2.0’s new StringDtype will convert to object dtyped arrays upon Series/DataFrame creation. Full support for numpy 2.0’s StringDtype is expected to land in pandas 3.0.
+
+As usual please report any bugs discovered to our issue tracker
+
+Fixed regressions
+DataFrame.__dataframe__() was producing incorrect data buffers when the a column’s type was a pandas nullable on with missing values (GH 56702)
+
+DataFrame.__dataframe__() was producing incorrect data buffers when the a column’s type was a pyarrow nullable on with missing values (GH 57664)
+
+Avoid issuing a spurious DeprecationWarning when a custom DataFrame or Series subclass method is called (GH 57553)
+
+Fixed regression in precision of to_datetime() with string and unit input (GH 57051)
+
+Bug fixes
+DataFrame.__dataframe__() was producing incorrect data buffers when the column’s type was nullable boolean (GH 55332)
+
+DataFrame.__dataframe__() was showing bytemask instead of bitmask for 'string[pyarrow]' validity buffer (GH 57762)
+
+DataFrame.__dataframe__() was showing non-null validity buffer (instead of None) 'string[pyarrow]' without missing values (GH 57761)
+
+DataFrame.to_sql() was failing to find the right table when using the schema argument (GH 57539)
+
+
+
+
+What’s new in 2.2.2 (April 10, 2024)
+These are the changes in pandas 2.2.2. See Release notes for a full changelog including other versions of pandas.
+
+Pandas 2.2.2 is now compatible with numpy 2.0
+Pandas 2.2.2 is the first version of pandas that is generally compatible with the upcoming numpy 2.0 release, and wheels for pandas 2.2.2 will work with both numpy 1.x and 2.x.
+
+One major caveat is that arrays created with numpy 2.0’s new StringDtype will convert to object dtyped arrays upon Series/DataFrame creation. Full support for numpy 2.0’s StringDtype is expected to land in pandas 3.0.
+
+As usual please report any bugs discovered to our issue tracker
+
+Fixed regressions
+DataFrame.__dataframe__() was producing incorrect data buffers when the a column’s type was a pandas nullable on with missing values (GH 56702)
+
+DataFrame.__dataframe__() was producing incorrect data buffers when the a column’s type was a pyarrow nullable on with missing values (GH 57664)
+
+Avoid issuing a spurious DeprecationWarning when a custom DataFrame or Series subclass method is called (GH 57553)
+
+Fixed regression in precision of to_datetime() with string and unit input (GH 57051)
+
+Bug fixes
+DataFrame.__dataframe__() was producing incorrect data buffers when the column’s type was nullable boolean (GH 55332)
+
+DataFrame.__dataframe__() was showing bytemask instead of bitmask for 'string[pyarrow]' validity buffer (GH 57762)
+
+DataFrame.__dataframe__() was showing non-null validity buffer (instead of None) 'string[pyarrow]' without missing values (GH 57761)
+
+DataFrame.to_sql() was failing to find the right table when using the schema argument (GH 57539)
+
+
+
+
+
+What’s new in 2.2.1 (February 22, 2024)
+These are the changes in pandas 2.2.1. See Release notes for a full changelog including other versions of pandas.
+
+Enhancements
+Added pyarrow pip extra so users can install pandas and pyarrow with pip with pip install pandas[pyarrow] (GH 54466)
+
+Fixed regressions
+Fixed memory leak in read_csv() (GH 57039)
+
+Fixed performance regression in Series.combine_first() (GH 55845)
+
+Fixed regression causing overflow for near-minimum timestamps (GH 57150)
+
+Fixed regression in concat() changing long-standing behavior that always sorted the non-concatenation axis when the axis was a DatetimeIndex (GH 57006)
+
+Fixed regression in merge_ordered() raising TypeError for fill_method="ffill" and how="left" (GH 57010)
+
+Fixed regression in pandas.testing.assert_series_equal() defaulting to check_exact=True when checking the Index (GH 57067)
+
+Fixed regression in read_json() where an Index would be returned instead of a RangeIndex (GH 57429)
+
+Fixed regression in wide_to_long() raising an AttributeError for string columns (GH 57066)
+
+Fixed regression in DataFrameGroupBy.idxmin(), DataFrameGroupBy.idxmax(), SeriesGroupBy.idxmin(), SeriesGroupBy.idxmax() ignoring the skipna argument (GH 57040)
+
+Fixed regression in DataFrameGroupBy.idxmin(), DataFrameGroupBy.idxmax(), SeriesGroupBy.idxmin(), SeriesGroupBy.idxmax() where values containing the minimum or maximum value for the dtype could produce incorrect results (GH 57040)
+
+Fixed regression in CategoricalIndex.difference() raising KeyError when other contains null values other than NaN (GH 57318)
+
+Fixed regression in DataFrame.groupby() raising ValueError when grouping by a Series in some cases (GH 57276)
+
+Fixed regression in DataFrame.loc() raising IndexError for non-unique, masked dtype indexes where result has more than 10,000 rows (GH 57027)
+
+Fixed regression in DataFrame.loc() which was unnecessarily throwing “incompatible dtype warning” when expanding with partial row indexer and multiple columns (see PDEP6) (GH 56503)
+
+Fixed regression in DataFrame.map() with na_action="ignore" not being respected for NumPy nullable and ArrowDtypes (GH 57316)
+
+Fixed regression in DataFrame.merge() raising ValueError for certain types of 3rd-party extension arrays (GH 57316)
+
+Fixed regression in DataFrame.query() with all NaT column with object dtype (GH 57068)
+
+Fixed regression in DataFrame.shift() raising AssertionError for axis=1 and empty DataFrame (GH 57301)
+
+Fixed regression in DataFrame.sort_index() not producing a stable sort for a index with duplicates (GH 57151)
+
+Fixed regression in DataFrame.to_dict() with orient='list' and datetime or timedelta types returning integers (GH 54824)
+
+Fixed regression in DataFrame.to_json() converting nullable integers to floats (GH 57224)
+
+Fixed regression in DataFrame.to_sql() when method="multi" is passed and the dialect type is not Oracle (GH 57310)
+
+Fixed regression in DataFrame.transpose() with nullable extension dtypes not having F-contiguous data potentially causing exceptions when used (GH 57315)
+
+Fixed regression in DataFrame.update() emitting incorrect warnings about downcasting (GH 57124)
+
+Fixed regression in DataFrameGroupBy.idxmin(), DataFrameGroupBy.idxmax(), SeriesGroupBy.idxmin(), SeriesGroupBy.idxmax() ignoring the skipna argument (GH 57040)
+
+Fixed regression in DataFrameGroupBy.idxmin(), DataFrameGroupBy.idxmax(), SeriesGroupBy.idxmin(), SeriesGroupBy.idxmax() where values containing the minimum or maximum value for the dtype could produce incorrect results (GH 57040)
+
+Fixed regression in ExtensionArray.to_numpy() raising for non-numeric masked dtypes (GH 56991)
+
+Fixed regression in Index.join() raising TypeError when joining an empty index to a non-empty index containing mixed dtype values (GH 57048)
+
+Fixed regression in Series.astype() introducing decimals when converting from integer with missing values to string dtype (GH 57418)
+
+Fixed regression in Series.pct_change() raising a ValueError for an empty Series (GH 57056)
+
+Fixed regression in Series.to_numpy() when dtype is given as float and the data contains NaNs (GH 57121)
+
+Fixed regression in addition or subtraction of DateOffset objects with millisecond components to datetime64 Index, Series, or DataFrame (GH 57529)
+
+Bug fixes
+Fixed bug in pandas.api.interchange.from_dataframe() which was raising for Nullable integers (GH 55069)
+
+Fixed bug in pandas.api.interchange.from_dataframe() which was raising for empty inputs (GH 56700)
+
+Fixed bug in pandas.api.interchange.from_dataframe() which wasn’t converting columns names to strings (GH 55069)
+
+Fixed bug in DataFrame.__getitem__() for empty DataFrame with Copy-on-Write enabled (GH 57130)
+
+Fixed bug in PeriodIndex.asfreq() which was silently converting frequencies which are not supported as period frequencies instead of raising an error (GH 56945)
+
+Other
+Note
+
+The DeprecationWarning that was raised when pandas was imported without PyArrow being installed has been removed. This decision was made because the warning was too noisy for too many users and a lot of feedback was collected about the decision to make PyArrow a required dependency. Pandas is currently considering the decision whether or not PyArrow should be added as a hard dependency in 3.0. Interested users can follow the discussion here.
+
+Added the argument skipna to DataFrameGroupBy.first(), DataFrameGroupBy.last(), SeriesGroupBy.first(), and SeriesGroupBy.last(); achieving skipna=False used to be available via DataFrameGroupBy.nth(), but the behavior was changed in pandas 2.0.0 (GH 57019)
+
+Added the argument skipna to Resampler.first(), Resampler.last() (GH 57019)
+
+
+
+What’s new in 2.2.0 (January 19, 2024)
+These are the changes in pandas 2.2.0. See Release notes for a full changelog including other versions of pandas.
+
+Upcoming changes in pandas 3.0
+pandas 3.0 will bring two bigger changes to the default behavior of pandas.
+
+Copy-on-Write
+The currently optional mode Copy-on-Write will be enabled by default in pandas 3.0. There won’t be an option to keep the current behavior enabled. The new behavioral semantics are explained in the user guide about Copy-on-Write.
+
+The new behavior can be enabled since pandas 2.0 with the following option:
+
+pd.options.mode.copy_on_write = True
+This change brings different changes in behavior in how pandas operates with respect to copies and views. Some of these changes allow a clear deprecation, like the changes in chained assignment. Other changes are more subtle and thus, the warnings are hidden behind an option that can be enabled in pandas 2.2.
+
+pd.options.mode.copy_on_write = "warn"
+This mode will warn in many different scenarios that aren’t actually relevant to most queries. We recommend exploring this mode, but it is not necessary to get rid of all of these warnings. The migration guide explains the upgrade process in more detail.
+
+Dedicated string data type (backed by Arrow) by default
+Historically, pandas represented string columns with NumPy object data type. This representation has numerous problems, including slow performance and a large memory footprint. This will change in pandas 3.0. pandas will start inferring string columns as a new string data type, backed by Arrow, which represents strings contiguous in memory. This brings a huge performance and memory improvement.
+
+Old behavior:
+
+ser = pd.Series(["a", "b"])
+Out[1]:
+0    a
+1    b
+dtype: object
+New behavior:
+
+ser = pd.Series(["a", "b"])
+Out[1]:
+0    a
+1    b
+dtype: string
+The string data type that is used in these scenarios will mostly behave as NumPy object would, including missing value semantics and general operations on these columns.
+
+This change includes a few additional changes across the API:
+
+Currently, specifying dtype="string" creates a dtype that is backed by Python strings which are stored in a NumPy array. This will change in pandas 3.0, this dtype will create an Arrow backed string column.
+
+The column names and the Index will also be backed by Arrow strings.
+
+PyArrow will become a required dependency with pandas 3.0 to accommodate this change.
+
+This future dtype inference logic can be enabled with:
+
+pd.options.future.infer_string = True
+Enhancements
+ADBC Driver support in to_sql and read_sql
+read_sql() and to_sql() now work with Apache Arrow ADBC drivers. Compared to traditional drivers used via SQLAlchemy, ADBC drivers should provide significant performance improvements, better type support and cleaner nullability handling.
+
+import adbc_driver_postgresql.dbapi as pg_dbapi
+
+df = pd.DataFrame(
+    [
+        [1, 2, 3],
+        [4, 5, 6],
+    ],
+    columns=['a', 'b', 'c']
+)
+uri = "postgresql://postgres:postgres@localhost/postgres"
+with pg_dbapi.connect(uri) as conn:
+    df.to_sql("pandas_table", conn, index=False)
+
+# for round-tripping
+with pg_dbapi.connect(uri) as conn:
+    df2 = pd.read_sql("pandas_table", conn)
+The Arrow type system offers a wider array of types that can more closely match what databases like PostgreSQL can offer. To illustrate, note this (non-exhaustive) listing of types available in different databases and pandas backends:
+
+numpy/pandas
+
+arrow
+
+postgres
+
+sqlite
+
+int16/Int16
+
+int16
+
+SMALLINT
+
+INTEGER
+
+int32/Int32
+
+int32
+
+INTEGER
+
+INTEGER
+
+int64/Int64
+
+int64
+
+BIGINT
+
+INTEGER
+
+float32
+
+float32
+
+REAL
+
+REAL
+
+float64
+
+float64
+
+DOUBLE PRECISION
+
+REAL
+
+object
+
+string
+
+TEXT
+
+TEXT
+
+bool
+
+bool_
+
+BOOLEAN
+
+datetime64[ns]
+
+timestamp(us)
+
+TIMESTAMP
+
+datetime64[ns,tz]
+
+timestamp(us,tz)
+
+TIMESTAMPTZ
+
+date32
+
+DATE
+
+month_day_nano_interval
+
+INTERVAL
+
+binary
+
+BINARY
+
+BLOB
+
+decimal128
+
+DECIMAL [1]
+
+list
+
+ARRAY [1]
+
+struct
+
+COMPOSITE TYPE
+[1]
+
+Footnotes
+
+[1](1,2,3)
+Not implemented as of writing, but theoretically possible
+
+If you are interested in preserving database types as best as possible throughout the lifecycle of your DataFrame, users are encouraged to leverage the dtype_backend="pyarrow" argument of read_sql()
+
+# for round-tripping
+with pg_dbapi.connect(uri) as conn:
+    df2 = pd.read_sql("pandas_table", conn, dtype_backend="pyarrow")
+This will prevent your data from being converted to the traditional pandas/NumPy type system, which often converts SQL types in ways that make them impossible to round-trip.
+
+For a full list of ADBC drivers and their development status, see the ADBC Driver Implementation Status documentation.
+
+Create a pandas Series based on one or more conditions
+The Series.case_when() function has been added to create a Series object based on one or more conditions. (GH 39154)
+
+import pandas as pd
+
+df = pd.DataFrame(dict(a=[1, 2, 3], b=[4, 5, 6]))
+
+default=pd.Series('default', index=df.index)
+
+default.case_when(
+     caselist=[
+         (df.a == 1, 'first'),                              # condition, replacement
+         (df.a.gt(1) & df.b.eq(5), 'second'),  # condition, replacement
+     ],
+)
+
+Out[4]: 
+0      first
+1     second
+2    default
+dtype: object
+to_numpy for NumPy nullable and Arrow types converts to suitable NumPy dtype
+to_numpy for NumPy nullable and Arrow types will now convert to a suitable NumPy dtype instead of object dtype for nullable and PyArrow backed extension dtypes.
+
+Old behavior:
+
+ser = pd.Series([1, 2, 3], dtype="Int64")
+ser.to_numpy()
+Out[2]: array([1, 2, 3], dtype=object)
+New behavior:
+
+ser = pd.Series([1, 2, 3], dtype="Int64")
+
+ser.to_numpy()
+Out[6]: array([1, 2, 3])
+
+ser = pd.Series([1, 2, 3], dtype="timestamp[ns][pyarrow]")
+
+ser.to_numpy()
+Out[8]: 
+array(['1970-01-01T00:00:00.000000001', '1970-01-01T00:00:00.000000002',
+       '1970-01-01T00:00:00.000000003'], dtype='datetime64[ns]')
+The default NumPy dtype (without any arguments) is determined as follows:
+
+float dtypes are cast to NumPy floats
+
+integer dtypes without missing values are cast to NumPy integer dtypes
+
+integer dtypes with missing values are cast to NumPy float dtypes and NaN is used as missing value indicator
+
+boolean dtypes without missing values are cast to NumPy bool dtype
+
+boolean dtypes with missing values keep object dtype
+
+datetime and timedelta types are cast to Numpy datetime64 and timedelta64 types respectively and NaT is used as missing value indicator
+
+Series.struct accessor for PyArrow structured data
+The Series.struct accessor provides attributes and methods for processing data with struct[pyarrow] dtype Series. For example, Series.struct.explode() converts PyArrow structured data to a pandas DataFrame. (GH 54938)
+
+import pyarrow as pa
+
+series = pd.Series(
+    [
+        {"project": "pandas", "version": "2.2.0"},
+        {"project": "numpy", "version": "1.25.2"},
+        {"project": "pyarrow", "version": "13.0.0"},
+    ],
+    dtype=pd.ArrowDtype(
+        pa.struct([
+            ("project", pa.string()),
+            ("version", pa.string()),
+        ])
+    ),
+)
+
+
+series.struct.explode()
+Out[11]: 
+   project version
+0   pandas   2.2.0
+1    numpy  1.25.2
+2  pyarrow  13.0.0
+Use Series.struct.field() to index into a (possible nested) struct field.
+
+series.struct.field("project")
+Out[12]: 
+0     pandas
+1      numpy
+2    pyarrow
+Name: project, dtype: string[pyarrow]
+Series.list accessor for PyArrow list data
+The Series.list accessor provides attributes and methods for processing data with list[pyarrow] dtype Series. For example, Series.list.__getitem__() allows indexing pyarrow lists in a Series. (GH 55323)
+
+import pyarrow as pa
+
+series = pd.Series(
+    [
+        [1, 2, 3],
+        [4, 5],
+        [6],
+    ],
+    dtype=pd.ArrowDtype(
+        pa.list_(pa.int64())
+    ),
+)
+
+
+series.list[0]
+Out[15]: 
+0    1
+1    4
+2    6
+dtype: int64[pyarrow]
+Calamine engine for read_excel()
+The calamine engine was added to read_excel(). It uses python-calamine, which provides Python bindings for the Rust library calamine. This engine supports Excel files (.xlsx, .xlsm, .xls, .xlsb) and OpenDocument spreadsheets (.ods) (GH 50395).
+
+There are two advantages of this engine:
+
+Calamine is often faster than other engines, some benchmarks show results up to 5x faster than ‘openpyxl’, 20x - ‘odf’, 4x - ‘pyxlsb’, and 1.5x - ‘xlrd’. But, ‘openpyxl’ and ‘pyxlsb’ are faster in reading a few rows from large files because of lazy iteration over rows.
+
+Calamine supports the recognition of datetime in .xlsb files, unlike ‘pyxlsb’ which is the only other engine in pandas that can read .xlsb files.
+
+pd.read_excel("path_to_file.xlsb", engine="calamine")
+For more, see Calamine (Excel and ODS files) in the user guide on IO tools.
+
+Other enhancements
+to_sql() with method parameter set to multi works with Oracle on the backend
+
+Series.attrs / DataFrame.attrs now uses a deepcopy for propagating attrs (GH 54134).
+
+get_dummies() now returning extension dtypes boolean or bool[pyarrow] that are compatible with the input dtype (GH 56273)
+
+read_csv() now supports on_bad_lines parameter with engine="pyarrow" (GH 54480)
+
+read_sas() returns datetime64 dtypes with resolutions better matching those stored natively in SAS, and avoids returning object-dtype in cases that cannot be stored with datetime64[ns] dtype (GH 56127)
+
+read_spss() now returns a DataFrame that stores the metadata in DataFrame.attrs (GH 54264)
+
+tseries.api.guess_datetime_format() is now part of the public API (GH 54727)
+
+DataFrame.apply() now allows the usage of numba (via engine="numba") to JIT compile the passed function, allowing for potential speedups (GH 54666)
+
+ExtensionArray._explode() interface method added to allow extension type implementations of the explode method (GH 54833)
+
+ExtensionArray.duplicated() added to allow extension type implementations of the duplicated method (GH 55255)
+
+Series.ffill(), Series.bfill(), DataFrame.ffill(), and DataFrame.bfill() have gained the argument limit_area; 3rd party ExtensionArray authors need to add this argument to the method _pad_or_backfill (GH 56492)
+
+Allow passing read_only, data_only and keep_links arguments to openpyxl using engine_kwargs of read_excel() (GH 55027)
+
+Implement Series.interpolate() and DataFrame.interpolate() for ArrowDtype and masked dtypes (GH 56267)
+
+Implement masked algorithms for Series.value_counts() (GH 54984)
+
+Implemented Series.dt() methods and attributes for ArrowDtype with pyarrow.duration type (GH 52284)
+
+Implemented Series.str.extract() for ArrowDtype (GH 56268)
+
+Improved error message that appears in DatetimeIndex.to_period() with frequencies which are not supported as period frequencies, such as "BMS" (GH 56243)
+
+Improved error message when constructing Period with invalid offsets such as "QS" (GH 55785)
+
+The dtypes string[pyarrow] and string[pyarrow_numpy] now both utilize the large_string type from PyArrow to avoid overflow for long columns (GH 56259)
+
+Notable bug fixes
+These are bug fixes that might have notable behavior changes.
+
+merge() and DataFrame.join() now consistently follow documented sort behavior
+In previous versions of pandas, merge() and DataFrame.join() did not always return a result that followed the documented sort behavior. pandas now follows the documented sort behavior in merge and join operations (GH 54611, GH 56426, GH 56443).
+
+As documented, sort=True sorts the join keys lexicographically in the resulting DataFrame. With sort=False, the order of the join keys depends on the join type (how keyword):
+
+how="left": preserve the order of the left keys
+
+how="right": preserve the order of the right keys
+
+how="inner": preserve the order of the left keys
+
+how="outer": sort keys lexicographically
+
+One example with changing behavior is inner joins with non-unique left join keys and sort=False:
+
+left = pd.DataFrame({"a": [1, 2, 1]})
+
+right = pd.DataFrame({"a": [1, 2]})
+
+result = pd.merge(left, right, how="inner", on="a", sort=False)
+Old Behavior
+
+result
+Out[5]:
+   a
+0  1
+1  1
+2  2
+New Behavior
+
+result
+Out[19]: 
+   a
+0  1
+1  2
+2  1
+merge() and DataFrame.join() no longer reorder levels when levels differ
+In previous versions of pandas, merge() and DataFrame.join() would reorder index levels when joining on two indexes with different levels (GH 34133).
+
+left = pd.DataFrame({"left": 1}, index=pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=["A", "B"]))
+
+right = pd.DataFrame({"right": 2}, index=pd.MultiIndex.from_tuples([(1, 1), (2, 2)], names=["B", "C"]))
+
+left
+Out[22]: 
+     left
+A B      
+x 1     1
+  2     1
+
+right
+Out[23]: 
+     right
+B C       
+1 1      2
+2 2      2
+
+result = left.join(right)
+Old Behavior
+
+result
+Out[5]:
+       left  right
+B A C
+1 x 1     1      2
+2 x 2     1      2
+New Behavior
+
+result
+Out[25]: 
+       left  right
+A B C             
+x 1 1     1      2
+  2 2     1      2
+Increased minimum versions for dependencies
+For optional dependencies the general recommendation is to use the latest version. Optional dependencies below the lowest tested version may still work but are not considered supported. The following table lists the optional dependencies that have had their minimum tested version increased.
+
+Package
+
+New Minimum Version
+
+beautifulsoup4
+
+4.11.2
+
+blosc
+
+1.21.3
+
+bottleneck
+
+1.3.6
+
+fastparquet
+
+2022.12.0
+
+fsspec
+
+2022.11.0
+
+gcsfs
+
+2022.11.0
+
+lxml
+
+4.9.2
+
+matplotlib
+
+3.6.3
+
+numba
+
+0.56.4
+
+numexpr
+
+2.8.4
+
+qtpy
+
+2.3.0
+
+openpyxl
+
+3.1.0
+
+psycopg2
+
+2.9.6
+
+pyreadstat
+
+1.2.0
+
+pytables
+
+3.8.0
+
+pyxlsb
+
+1.0.10
+
+s3fs
+
+2022.11.0
+
+scipy
+
+1.10.0
+
+sqlalchemy
+
+2.0.0
+
+tabulate
+
+0.9.0
+
+xarray
+
+2022.12.0
+
+xlsxwriter
+
+3.0.5
+
+zstandard
+
+0.19.0
+
+pyqt5
+
+5.15.8
+
+tzdata
+
+2022.7
+
+See Dependencies and Optional dependencies for more.
+
+Other API changes
+The hash values of nullable extension dtypes changed to improve the performance of the hashing operation (GH 56507)
+
+check_exact now only takes effect for floating-point dtypes in testing.assert_frame_equal() and testing.assert_series_equal(). In particular, integer dtypes are always checked exactly (GH 55882)
+
+Deprecations
+Chained assignment
+In preparation of larger upcoming changes to the copy / view behaviour in pandas 3.0 (Copy-on-Write (CoW), PDEP-7), we started deprecating chained assignment.
+
+Chained assignment occurs when you try to update a pandas DataFrame or Series through two subsequent indexing operations. Depending on the type and order of those operations this currently does or does not work.
+
+A typical example is as follows:
+
+df = pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
+
+# first selecting rows with a mask, then assigning values to a column
+# -> this has never worked and raises a SettingWithCopyWarning
+df[df["bar"] > 5]["foo"] = 100
+
+# first selecting the column, and then assigning to a subset of that column
+# -> this currently works
+df["foo"][df["bar"] > 5] = 100
+This second example of chained assignment currently works to update the original df. This will no longer work in pandas 3.0, and therefore we started deprecating this:
+
+df["foo"][df["bar"] > 5] = 100
+FutureWarning: ChainedAssignmentError: behaviour will change in pandas 3.0!
+You are setting values through chained assignment. Currently this works in certain cases, but when using Copy-on-Write (which will become the default behaviour in pandas 3.0) this will never work to update the original DataFrame or Series, because the intermediate object on which we are setting values will behave as a copy.
+A typical example is when you are setting values in a column of a DataFrame, like:
+
+df["col"][row_indexer] = value
+
+Use `df.loc[row_indexer, "col"] = values` instead, to perform the assignment in a single step and ensure this keeps updating the original `df`.
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+You can fix this warning and ensure your code is ready for pandas 3.0 by removing the usage of chained assignment. Typically, this can be done by doing the assignment in a single step using for example .loc. For the example above, we can do:
+
+df.loc[df["bar"] > 5, "foo"] = 100
+The same deprecation applies to inplace methods that are done in a chained manner, such as:
+
+df["foo"].fillna(0, inplace=True)
+FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
+The behavior will change in pandas 3.0. This inplace method will never work because the intermediate object on which we are setting values always behaves as a copy.
+
+For example, when doing 'df[col].method(value, inplace=True)', try using 'df.method({col: value}, inplace=True)' or df[col] = df[col].method(value) instead, to perform the operation inplace on the original object.
+When the goal is to update the column in the DataFrame df, the alternative here is to call the method on df itself, such as df.fillna({"foo": 0}, inplace=True).
+
+See more details in the migration guide.
+
+Deprecate aliases M, Q, Y, etc. in favour of ME, QE, YE, etc. for offsets
+Deprecated the following frequency aliases (GH 9586):
+
+offsets
+
+deprecated aliases
+
+new aliases
+
+MonthEnd
+
+M
+
+ME
+
+BusinessMonthEnd
+
+BM
+
+BME
+
+SemiMonthEnd
+
+SM
+
+SME
+
+CustomBusinessMonthEnd
+
+CBM
+
+CBME
+
+QuarterEnd
+
+Q
+
+QE
+
+BQuarterEnd
+
+BQ
+
+BQE
+
+YearEnd
+
+Y
+
+YE
+
+BYearEnd
+
+BY
+
+BYE
+
+For example:
+
+Previous behavior:
+
+pd.date_range('2020-01-01', periods=3, freq='Q-NOV')
+Out[8]:
+DatetimeIndex(['2020-02-29', '2020-05-31', '2020-08-31'],
+              dtype='datetime64[ns]', freq='Q-NOV')
+Future behavior:
+
+pd.date_range('2020-01-01', periods=3, freq='QE-NOV')
+Out[26]: DatetimeIndex(['2020-02-29', '2020-05-31', '2020-08-31'], dtype='datetime64[ns]', freq='QE-NOV')
+Deprecated automatic downcasting
+Deprecated the automatic downcasting of object dtype results in a number of methods. These would silently change the dtype in a hard to predict manner since the behavior was value dependent. Additionally, pandas is moving away from silent dtype changes (GH 54710, GH 54261).
+
+These methods are:
+
+Series.replace() and DataFrame.replace()
+
+DataFrame.fillna(), Series.fillna()
+
+DataFrame.ffill(), Series.ffill()
+
+DataFrame.bfill(), Series.bfill()
+
+DataFrame.mask(), Series.mask()
+
+DataFrame.where(), Series.where()
+
+DataFrame.clip(), Series.clip()
+
+Explicitly call DataFrame.infer_objects() to replicate the current behavior in the future.
+
+result = result.infer_objects(copy=False)
+Or explicitly cast all-round floats to ints using astype.
+
+Set the following option to opt into the future behavior:
+
+pd.set_option("future.no_silent_downcasting", True)
+Other Deprecations
+Changed Timedelta.resolution_string() to return h, min, s, ms, us, and ns instead of H, T, S, L, U, and N, for compatibility with respective deprecations in frequency aliases (GH 52536)
+
+Deprecated offsets.Day.delta, offsets.Hour.delta, offsets.Minute.delta, offsets.Second.delta, offsets.Milli.delta, offsets.Micro.delta, offsets.Nano.delta, use pd.Timedelta(obj) instead (GH 55498)
+
+Deprecated pandas.api.types.is_interval() and pandas.api.types.is_period(), use isinstance(obj, pd.Interval) and isinstance(obj, pd.Period) instead (GH 55264)
+
+Deprecated read_gbq() and DataFrame.to_gbq(). Use pandas_gbq.read_gbq and pandas_gbq.to_gbq instead https://pandas-gbq.readthedocs.io/en/latest/api.html (GH 55525)
+
+Deprecated DataFrameGroupBy.fillna() and SeriesGroupBy.fillna(); use DataFrameGroupBy.ffill(), DataFrameGroupBy.bfill() for forward and backward filling or DataFrame.fillna() to fill with a single value (or the Series equivalents) (GH 55718)
+
+Deprecated DateOffset.is_anchored(), use obj.n == 1 for non-Tick subclasses (for Tick this was always False) (GH 55388)
+
+Deprecated DatetimeArray.__init__() and TimedeltaArray.__init__(), use array() instead (GH 55623)
+
+Deprecated Index.format(), use index.astype(str) or index.map(formatter) instead (GH 55413)
+
+Deprecated Series.ravel(), the underlying array is already 1D, so ravel is not necessary (GH 52511)
+
+Deprecated Series.resample() and DataFrame.resample() with a PeriodIndex (and the ‘convention’ keyword), convert to DatetimeIndex (with .to_timestamp()) before resampling instead (GH 53481)
+
+Deprecated Series.view(), use Series.astype() instead to change the dtype (GH 20251)
+
+Deprecated offsets.Tick.is_anchored(), use False instead (GH 55388)
+
+Deprecated core.internals members Block, ExtensionBlock, and DatetimeTZBlock, use public APIs instead (GH 55139)
+
+Deprecated year, month, quarter, day, hour, minute, and second keywords in the PeriodIndex constructor, use PeriodIndex.from_fields() instead (GH 55960)
+
+Deprecated accepting a type as an argument in Index.view(), call without any arguments instead (GH 55709)
+
+Deprecated allowing non-integer periods argument in date_range(), timedelta_range(), period_range(), and interval_range() (GH 56036)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_clipboard() (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_csv() except path_or_buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_dict() (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_excel() except excel_writer (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_gbq() except destination_table (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_hdf() except path_or_buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_html() except buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_json() except path_or_buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_latex() except buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_markdown() except buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_parquet() except path (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_pickle() except path (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_string() except buf (GH 54229)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_xml() except path_or_buffer (GH 54229)
+
+Deprecated allowing passing BlockManager objects to DataFrame or SingleBlockManager objects to Series (GH 52419)
+
+Deprecated behavior of Index.insert() with an object-dtype index silently performing type inference on the result, explicitly call result.infer_objects(copy=False) for the old behavior instead (GH 51363)
+
+Deprecated casting non-datetimelike values (mainly strings) in Series.isin() and Index.isin() with datetime64, timedelta64, and PeriodDtype dtypes (GH 53111)
+
+Deprecated dtype inference in Index, Series and DataFrame constructors when giving a pandas input, call .infer_objects on the input to keep the current behavior (GH 56012)
+
+Deprecated dtype inference when setting a Index into a DataFrame, cast explicitly instead (GH 56102)
+
+Deprecated including the groups in computations when using DataFrameGroupBy.apply() and DataFrameGroupBy.resample(); pass include_groups=False to exclude the groups (GH 7155)
+
+Deprecated indexing an Index with a boolean indexer of length zero (GH 55820)
+
+Deprecated not passing a tuple to DataFrameGroupBy.get_group or SeriesGroupBy.get_group when grouping by a length-1 list-like (GH 25971)
+
+Deprecated string AS denoting frequency in YearBegin and strings AS-DEC, AS-JAN, etc. denoting annual frequencies with various fiscal year starts (GH 54275)
+
+Deprecated string A denoting frequency in YearEnd and strings A-DEC, A-JAN, etc. denoting annual frequencies with various fiscal year ends (GH 54275)
+
+Deprecated string BAS denoting frequency in BYearBegin and strings BAS-DEC, BAS-JAN, etc. denoting annual frequencies with various fiscal year starts (GH 54275)
+
+Deprecated string BA denoting frequency in BYearEnd and strings BA-DEC, BA-JAN, etc. denoting annual frequencies with various fiscal year ends (GH 54275)
+
+Deprecated strings H, BH, and CBH denoting frequencies in Hour, BusinessHour, CustomBusinessHour (GH 52536)
+
+Deprecated strings H, S, U, and N denoting units in to_timedelta() (GH 52536)
+
+Deprecated strings H, T, S, L, U, and N denoting units in Timedelta (GH 52536)
+
+Deprecated strings T, S, L, U, and N denoting frequencies in Minute, Second, Milli, Micro, Nano (GH 52536)
+
+Deprecated support for combining parsed datetime columns in read_csv() along with the keep_date_col keyword (GH 55569)
+
+Deprecated the DataFrameGroupBy.grouper and SeriesGroupBy.grouper; these attributes will be removed in a future version of pandas (GH 56521)
+
+Deprecated the Grouping attributes group_index, result_index, and group_arraylike; these will be removed in a future version of pandas (GH 56148)
+
+Deprecated the delim_whitespace keyword in read_csv() and read_table(), use sep="\\s+" instead (GH 55569)
+
+Deprecated the errors="ignore" option in to_datetime(), to_timedelta(), and to_numeric(); explicitly catch exceptions instead (GH 54467)
+
+Deprecated the fastpath keyword in the Series constructor (GH 20110)
+
+Deprecated the kind keyword in Series.resample() and DataFrame.resample(), explicitly cast the object’s index instead (GH 55895)
+
+Deprecated the ordinal keyword in PeriodIndex, use PeriodIndex.from_ordinals() instead (GH 55960)
+
+Deprecated the unit keyword in TimedeltaIndex construction, use to_timedelta() instead (GH 55499)
+
+Deprecated the verbose keyword in read_csv() and read_table() (GH 55569)
+
+Deprecated the behavior of DataFrame.replace() and Series.replace() with CategoricalDtype; in a future version replace will change the values while preserving the categories. To change the categories, use ser.cat.rename_categories instead (GH 55147)
+
+Deprecated the behavior of Series.value_counts() and Index.value_counts() with object dtype; in a future version these will not perform dtype inference on the resulting Index, do result.index = result.index.infer_objects() to retain the old behavior (GH 56161)
+
+Deprecated the default of observed=False in DataFrame.pivot_table(); will be True in a future version (GH 56236)
+
+Deprecated the extension test classes BaseNoReduceTests, BaseBooleanReduceTests, and BaseNumericReduceTests, use BaseReduceTests instead (GH 54663)
+
+Deprecated the option mode.data_manager and the ArrayManager; only the BlockManager will be available in future versions (GH 55043)
+
+Deprecated the previous implementation of DataFrame.stack; specify future_stack=True to adopt the future version (GH 53515)
+
+Performance improvements
+Performance improvement in testing.assert_frame_equal() and testing.assert_series_equal() (GH 55949, GH 55971)
+
+Performance improvement in concat() with axis=1 and objects with unaligned indexes (GH 55084)
+
+Performance improvement in get_dummies() (GH 56089)
+
+Performance improvement in merge() and merge_ordered() when joining on sorted ascending keys (GH 56115)
+
+Performance improvement in merge_asof() when by is not None (GH 55580, GH 55678)
+
+Performance improvement in read_stata() for files with many variables (GH 55515)
+
+Performance improvement in DataFrame.groupby() when aggregating pyarrow timestamp and duration dtypes (GH 55031)
+
+Performance improvement in DataFrame.join() when joining on unordered categorical indexes (GH 56345)
+
+Performance improvement in DataFrame.loc() and Series.loc() when indexing with a MultiIndex (GH 56062)
+
+Performance improvement in DataFrame.sort_index() and Series.sort_index() when indexed by a MultiIndex (GH 54835)
+
+Performance improvement in DataFrame.to_dict() on converting DataFrame to dictionary (GH 50990)
+
+Performance improvement in Index.difference() (GH 55108)
+
+Performance improvement in Index.sort_values() when index is already sorted (GH 56128)
+
+Performance improvement in MultiIndex.get_indexer() when method is not None (GH 55839)
+
+Performance improvement in Series.duplicated() for pyarrow dtypes (GH 55255)
+
+Performance improvement in Series.str.get_dummies() when dtype is "string[pyarrow]" or "string[pyarrow_numpy]" (GH 56110)
+
+Performance improvement in Series.str() methods (GH 55736)
+
+Performance improvement in Series.value_counts() and Series.mode() for masked dtypes (GH 54984, GH 55340)
+
+Performance improvement in DataFrameGroupBy.nunique() and SeriesGroupBy.nunique() (GH 55972)
+
+Performance improvement in SeriesGroupBy.idxmax(), SeriesGroupBy.idxmin(), DataFrameGroupBy.idxmax(), DataFrameGroupBy.idxmin() (GH 54234)
+
+Performance improvement when hashing a nullable extension array (GH 56507)
+
+Performance improvement when indexing into a non-unique index (GH 55816)
+
+Performance improvement when indexing with more than 4 keys (GH 54550)
+
+Performance improvement when localizing time to UTC (GH 55241)
+
+Bug fixes
+Categorical
+Categorical.isin() raising InvalidIndexError for categorical containing overlapping Interval values (GH 34974)
+
+Bug in CategoricalDtype.__eq__() returning False for unordered categorical data with mixed types (GH 55468)
+
+Bug when casting pa.dictionary to CategoricalDtype using a pa.DictionaryArray as categories (GH 56672)
+
+Datetimelike
+Bug in DatetimeIndex construction when passing both a tz and either dayfirst or yearfirst ignoring dayfirst/yearfirst (GH 55813)
+
+Bug in DatetimeIndex when passing an object-dtype ndarray of float objects and a tz incorrectly localizing the result (GH 55780)
+
+Bug in Series.isin() with DatetimeTZDtype dtype and comparison values that are all NaT incorrectly returning all-False even if the series contains NaT entries (GH 56427)
+
+Bug in concat() raising AttributeError when concatenating all-NA DataFrame with DatetimeTZDtype dtype DataFrame (GH 52093)
+
+Bug in testing.assert_extension_array_equal() that could use the wrong unit when comparing resolutions (GH 55730)
+
+Bug in to_datetime() and DatetimeIndex when passing a list of mixed-string-and-numeric types incorrectly raising (GH 55780)
+
+Bug in to_datetime() and DatetimeIndex when passing mixed-type objects with a mix of timezones or mix of timezone-awareness failing to raise ValueError (GH 55693)
+
+Bug in Tick.delta() with very large ticks raising OverflowError instead of OutOfBoundsTimedelta (GH 55503)
+
+Bug in DatetimeIndex.shift() with non-nanosecond resolution incorrectly returning with nanosecond resolution (GH 56117)
+
+Bug in DatetimeIndex.union() returning object dtype for tz-aware indexes with the same timezone but different units (GH 55238)
+
+Bug in Index.is_monotonic_increasing() and Index.is_monotonic_decreasing() always caching Index.is_unique() as True when first value in index is NaT (GH 55755)
+
+Bug in Index.view() to a datetime64 dtype with non-supported resolution incorrectly raising (GH 55710)
+
+Bug in Series.dt.round() with non-nanosecond resolution and NaT entries incorrectly raising OverflowError (GH 56158)
+
+Bug in Series.fillna() with non-nanosecond resolution dtypes and higher-resolution vector values returning incorrect (internally-corrupted) results (GH 56410)
+
+Bug in Timestamp.unit() being inferred incorrectly from an ISO8601 format string with minute or hour resolution and a timezone offset (GH 56208)
+
+Bug in .astype converting from a higher-resolution datetime64 dtype to a lower-resolution datetime64 dtype (e.g. datetime64[us]->datetime64[ms]) silently overflowing with values near the lower implementation bound (GH 55979)
+
+Bug in adding or subtracting a Week offset to a datetime64 Series, Index, or DataFrame column with non-nanosecond resolution returning incorrect results (GH 55583)
+
+Bug in addition or subtraction of BusinessDay offset with offset attribute to non-nanosecond Index, Series, or DataFrame column giving incorrect results (GH 55608)
+
+Bug in addition or subtraction of DateOffset objects with microsecond components to datetime64 Index, Series, or DataFrame columns with non-nanosecond resolution (GH 55595)
+
+Bug in addition or subtraction of very large Tick objects with Timestamp or Timedelta objects raising OverflowError instead of OutOfBoundsTimedelta (GH 55503)
+
+Bug in creating a Index, Series, or DataFrame with a non-nanosecond DatetimeTZDtype and inputs that would be out of bounds with nanosecond resolution incorrectly raising OutOfBoundsDatetime (GH 54620)
+
+Bug in creating a Index, Series, or DataFrame with a non-nanosecond datetime64 (or DatetimeTZDtype) from mixed-numeric inputs treating those as nanoseconds instead of as multiples of the dtype’s unit (which would happen with non-mixed numeric inputs) (GH 56004)
+
+Bug in creating a Index, Series, or DataFrame with a non-nanosecond datetime64 dtype and inputs that would be out of bounds for a datetime64[ns] incorrectly raising OutOfBoundsDatetime (GH 55756)
+
+Bug in parsing datetime strings with nanosecond resolution with non-ISO8601 formats incorrectly truncating sub-microsecond components (GH 56051)
+
+Bug in parsing datetime strings with sub-second resolution and trailing zeros incorrectly inferring second or millisecond resolution (GH 55737)
+
+Bug in the results of to_datetime() with an floating-dtype argument with unit not matching the pointwise results of Timestamp (GH 56037)
+
+Fixed regression where concat() would raise an error when concatenating datetime64 columns with differing resolutions (GH 53641)
+
+Timedelta
+Bug in Timedelta construction raising OverflowError instead of OutOfBoundsTimedelta (GH 55503)
+
+Bug in rendering (__repr__) of TimedeltaIndex and Series with timedelta64 values with non-nanosecond resolution entries that are all multiples of 24 hours failing to use the compact representation used in the nanosecond cases (GH 55405)
+
+Timezones
+Bug in AbstractHolidayCalendar where timezone data was not propagated when computing holiday observances (GH 54580)
+
+Bug in Timestamp construction with an ambiguous value and a pytz timezone failing to raise pytz.AmbiguousTimeError (GH 55657)
+
+Bug in Timestamp.tz_localize() with nonexistent="shift_forward around UTC+0 during DST (GH 51501)
+
+Numeric
+Bug in read_csv() with engine="pyarrow" causing rounding errors for large integers (GH 52505)
+
+Bug in Series.__floordiv__() and Series.__truediv__() for ArrowDtype with integral dtypes raising for large divisors (GH 56706)
+
+Bug in Series.__floordiv__() for ArrowDtype with integral dtypes raising for large values (GH 56645)
+
+Bug in Series.pow() not filling missing values correctly (GH 55512)
+
+Bug in Series.replace() and DataFrame.replace() matching float 0.0 with False and vice versa (GH 55398)
+
+Bug in Series.round() raising for nullable boolean dtype (GH 55936)
+
+Conversion
+Bug in DataFrame.astype() when called with str on unpickled array - the array might change in-place (GH 54654)
+
+Bug in DataFrame.astype() where errors="ignore" had no effect for extension types (GH 54654)
+
+Bug in Series.convert_dtypes() not converting all NA column to null[pyarrow] (GH 55346)
+
+Bug in :meth:DataFrame.loc was not throwing “incompatible dtype warning” (see PDEP6) when assigning a Series with a different dtype using a full column setter (e.g. df.loc[:, 'a'] = incompatible_value) (GH 39584)
+
+Strings
+Bug in pandas.api.types.is_string_dtype() while checking object array with no elements is of the string dtype (GH 54661)
+
+Bug in DataFrame.apply() failing when engine="numba" and columns or index have StringDtype (GH 56189)
+
+Bug in DataFrame.reindex() not matching Index with string[pyarrow_numpy] dtype (GH 56106)
+
+Bug in Index.str.cat() always casting result to object dtype (GH 56157)
+
+Bug in Series.__mul__() for ArrowDtype with pyarrow.string dtype and string[pyarrow] for the pyarrow backend (GH 51970)
+
+Bug in Series.str.find() when start < 0 for ArrowDtype with pyarrow.string (GH 56411)
+
+Bug in Series.str.fullmatch() when dtype=pandas.ArrowDtype(pyarrow.string())) allows partial matches when regex ends in literal //$ (GH 56652)
+
+Bug in Series.str.replace() when n < 0 for ArrowDtype with pyarrow.string (GH 56404)
+
+Bug in Series.str.startswith() and Series.str.endswith() with arguments of type tuple[str, ...] for ArrowDtype with pyarrow.string dtype (GH 56579)
+
+Bug in Series.str.startswith() and Series.str.endswith() with arguments of type tuple[str, ...] for string[pyarrow] (GH 54942)
+
+Bug in comparison operations for dtype="string[pyarrow_numpy]" raising if dtypes can’t be compared (GH 56008)
+
+Interval
+Bug in Interval __repr__ not displaying UTC offsets for Timestamp bounds. Additionally the hour, minute and second components will now be shown (GH 55015)
+
+Bug in IntervalIndex.factorize() and Series.factorize() with IntervalDtype with datetime64 or timedelta64 intervals not preserving non-nanosecond units (GH 56099)
+
+Bug in IntervalIndex.from_arrays() when passed datetime64 or timedelta64 arrays with mismatched resolutions constructing an invalid IntervalArray object (GH 55714)
+
+Bug in IntervalIndex.from_tuples() raising if subtype is a nullable extension dtype (GH 56765)
+
+Bug in IntervalIndex.get_indexer() with datetime or timedelta intervals incorrectly matching on integer targets (GH 47772)
+
+Bug in IntervalIndex.get_indexer() with timezone-aware datetime intervals incorrectly matching on a sequence of timezone-naive targets (GH 47772)
+
+Bug in setting values on a Series with an IntervalIndex using a slice incorrectly raising (GH 54722)
+
+Indexing
+Bug in DataFrame.loc() mutating a boolean indexer when DataFrame has a MultiIndex (GH 56635)
+
+Bug in DataFrame.loc() when setting Series with extension dtype into NumPy dtype (GH 55604)
+
+Bug in Index.difference() not returning a unique set of values when other is empty or other is considered non-comparable (GH 55113)
+
+Bug in setting Categorical values into a DataFrame with numpy dtypes raising RecursionError (GH 52927)
+
+Fixed bug when creating new column with missing values when setting a single string value (GH 56204)
+
+Missing
+Bug in DataFrame.update() wasn’t updating in-place for tz-aware datetime64 dtypes (GH 56227)
+
+MultiIndex
+Bug in MultiIndex.get_indexer() not raising ValueError when method provided and index is non-monotonic (GH 53452)
+
+I/O
+Bug in read_csv() where engine="python" did not respect chunksize arg when skiprows was specified (GH 56323)
+
+Bug in read_csv() where engine="python" was causing a TypeError when a callable skiprows and a chunk size was specified (GH 55677)
+
+Bug in read_csv() where on_bad_lines="warn" would write to stderr instead of raising a Python warning; this now yields a errors.ParserWarning (GH 54296)
+
+Bug in read_csv() with engine="pyarrow" where quotechar was ignored (GH 52266)
+
+Bug in read_csv() with engine="pyarrow" where usecols wasn’t working with a CSV with no headers (GH 54459)
+
+Bug in read_excel(), with engine="xlrd" (xls files) erroring when the file contains NaN or Inf (GH 54564)
+
+Bug in read_json() not handling dtype conversion properly if infer_string is set (GH 56195)
+
+Bug in DataFrame.to_excel(), with OdsWriter (ods files) writing Boolean/string value (GH 54994)
+
+Bug in DataFrame.to_hdf() and read_hdf() with datetime64 dtypes with non-nanosecond resolution failing to round-trip correctly (GH 55622)
+
+Bug in DataFrame.to_stata() raising for extension dtypes (GH 54671)
+
+Bug in read_excel() with engine="odf" (ods files) when a string cell contains an annotation (GH 55200)
+
+Bug in read_excel() with an ODS file without cached formatted cell for float values (GH 55219)
+
+Bug where DataFrame.to_json() would raise an OverflowError instead of a TypeError with unsupported NumPy types (GH 55403)
+
+Period
+Bug in PeriodIndex construction when more than one of data, ordinal and **fields are passed failing to raise ValueError (GH 55961)
+
+Bug in Period addition silently wrapping around instead of raising OverflowError (GH 55503)
+
+Bug in casting from PeriodDtype with astype to datetime64 or DatetimeTZDtype with non-nanosecond unit incorrectly returning with nanosecond unit (GH 55958)
+
+Plotting
+Bug in DataFrame.plot.box() with vert=False and a Matplotlib Axes created with sharey=True (GH 54941)
+
+Bug in DataFrame.plot.scatter() discarding string columns (GH 56142)
+
+Bug in Series.plot() when reusing an ax object failing to raise when a how keyword is passed (GH 55953)
+
+Groupby/resample/rolling
+Bug in DataFrameGroupBy.idxmin(), DataFrameGroupBy.idxmax(), SeriesGroupBy.idxmin(), and SeriesGroupBy.idxmax() would not retain Categorical dtype when the index was a CategoricalIndex that contained NA values (GH 54234)
+
+Bug in DataFrameGroupBy.transform() and SeriesGroupBy.transform() when observed=False and f="idxmin" or f="idxmax" would incorrectly raise on unobserved categories (GH 54234)
+
+Bug in DataFrameGroupBy.value_counts() and SeriesGroupBy.value_counts() could result in incorrect sorting if the columns of the DataFrame or name of the Series are integers (GH 55951)
+
+Bug in DataFrameGroupBy.value_counts() and SeriesGroupBy.value_counts() would not respect sort=False in DataFrame.groupby() and Series.groupby() (GH 55951)
+
+Bug in DataFrameGroupBy.value_counts() and SeriesGroupBy.value_counts() would sort by proportions rather than frequencies when sort=True and normalize=True (GH 55951)
+
+Bug in DataFrame.asfreq() and Series.asfreq() with a DatetimeIndex with non-nanosecond resolution incorrectly converting to nanosecond resolution (GH 55958)
+
+Bug in DataFrame.ewm() when passed times with non-nanosecond datetime64 or DatetimeTZDtype dtype (GH 56262)
+
+Bug in DataFrame.groupby() and Series.groupby() where grouping by a combination of Decimal and NA values would fail when sort=True (GH 54847)
+
+Bug in DataFrame.groupby() for DataFrame subclasses when selecting a subset of columns to apply the function to (GH 56761)
+
+Bug in DataFrame.resample() not respecting closed and label arguments for BusinessDay (GH 55282)
+
+Bug in DataFrame.resample() when resampling on a ArrowDtype of pyarrow.timestamp or pyarrow.duration type (GH 55989)
+
+Bug in DataFrame.resample() where bin edges were not correct for BusinessDay (GH 55281)
+
+Bug in DataFrame.resample() where bin edges were not correct for MonthBegin (GH 55271)
+
+Bug in DataFrame.rolling() and Series.rolling() where duplicate datetimelike indexes are treated as consecutive rather than equal with closed='left' and closed='neither' (GH 20712)
+
+Bug in DataFrame.rolling() and Series.rolling() where either the index or on column was ArrowDtype with pyarrow.timestamp type (GH 55849)
+
+Reshaping
+Bug in concat() ignoring sort parameter when passed DatetimeIndex indexes (GH 54769)
+
+Bug in concat() renaming Series when ignore_index=False (GH 15047)
+
+Bug in merge_asof() raising TypeError when by dtype is not object, int64, or uint64 (GH 22794)
+
+Bug in merge_asof() raising incorrect error for string dtype (GH 56444)
+
+Bug in merge_asof() when using a Timedelta tolerance on a ArrowDtype column (GH 56486)
+
+Bug in merge() not raising when merging datetime columns with timedelta columns (GH 56455)
+
+Bug in merge() not raising when merging string columns with numeric columns (GH 56441)
+
+Bug in merge() not sorting for new string dtype (GH 56442)
+
+Bug in merge() returning columns in incorrect order when left and/or right is empty (GH 51929)
+
+Bug in DataFrame.melt() where an exception was raised if var_name was not a string (GH 55948)
+
+Bug in DataFrame.melt() where it would not preserve the datetime (GH 55254)
+
+Bug in DataFrame.pivot_table() where the row margin is incorrect when the columns have numeric names (GH 26568)
+
+Bug in DataFrame.pivot() with numeric columns and extension dtype for data (GH 56528)
+
+Bug in DataFrame.stack() with future_stack=True would not preserve NA values in the index (GH 56573)
+
+Sparse
+Bug in arrays.SparseArray.take() when using a different fill value than the array’s fill value (GH 55181)
+
+Other
+DataFrame.__dataframe__() did not support pyarrow large strings (GH 56702)
+
+Bug in DataFrame.describe() when formatting percentiles in the resulting percentile 99.999% is rounded to 100% (GH 55765)
+
+Bug in api.interchange.from_dataframe() where it raised NotImplementedError when handling empty string columns (GH 56703)
+
+Bug in cut() and qcut() with datetime64 dtype values with non-nanosecond units incorrectly returning nanosecond-unit bins (GH 56101)
+
+Bug in cut() incorrectly allowing cutting of timezone-aware datetimes with timezone-naive bins (GH 54964)
+
+Bug in infer_freq() and DatetimeIndex.inferred_freq() with weekly frequencies and non-nanosecond resolutions (GH 55609)
+
+Bug in DataFrame.apply() where passing raw=True ignored args passed to the applied function (GH 55009)
+
+Bug in DataFrame.from_dict() which would always sort the rows of the created DataFrame. (GH 55683)
+
+Bug in DataFrame.sort_index() when passing axis="columns" and ignore_index=True raising a ValueError (GH 56478)
+
+Bug in rendering inf values inside a DataFrame with the use_inf_as_na option enabled (GH 55483)
+
+Bug in rendering a Series with a MultiIndex when one of the index level’s names is 0 not having that name displayed (GH 55415)
+
+Bug in the error message when assigning an empty DataFrame to a column (GH 55956)
+
+Bug when time-like strings were being cast to ArrowDtype with pyarrow.time64 type (GH 56463)
+
+Fixed a spurious deprecation warning from numba >= 0.58.0 when passing a numpy ufunc in core.window.Rolling.apply with engine="numba" (GH 55247)
+
+
+
+
+What’s new in 2.1.4 (December 8, 2023)
+These are the changes in pandas 2.1.4. See Release notes for a full changelog including other versions of pandas.
+
+Fixed regressions
+Fixed regression when trying to read a pickled pandas DataFrame from pandas 1.3 (GH 55137)
+
+Bug fixes
+Bug in Series constructor raising DeprecationWarning when index is a list of Series (GH 55228)
+
+Bug in Series when trying to cast date-like string inputs to ArrowDtype of pyarrow.timestamp (GH 56266)
+
+Bug in Timestamp construction with ts_input="now" or ts_input="today" giving a different unit from Timestamp.now() or Timestamp.today() (GH 55879)
+
+Bug in Index.__getitem__() returning wrong result for Arrow dtypes and negative stepsize (GH 55832)
+
+Fixed bug in read_csv() not respecting object dtype when infer_string option is set (GH 56047)
+
+Fixed bug in to_numeric() converting to extension dtype for string[pyarrow_numpy] dtype (GH 56179)
+
+Fixed bug in DataFrameGroupBy.min() and DataFrameGroupBy.max() not preserving extension dtype for empty object (GH 55619)
+
+Fixed bug in DataFrame.__setitem__() casting Index with object-dtype to PyArrow backed strings when infer_string option is set (GH 55638)
+
+Fixed bug in DataFrame.to_hdf() raising when columns have StringDtype (GH 55088)
+
+Fixed bug in Index.insert() casting object-dtype to PyArrow backed strings when infer_string option is set (GH 55638)
+
+Fixed bug in Series.__ne__() resulting in False for comparison between NA and string value for dtype="string[pyarrow_numpy]" (GH 56122)
+
+Fixed bug in Series.mode() not keeping object dtype when infer_string is set (GH 56183)
+
+Fixed bug in Series.reset_index() not preserving object dtype when infer_string is set (GH 56160)
+
+Fixed bug in Series.str.split() and Series.str.rsplit() when pat=None for ArrowDtype with pyarrow.string (GH 56271)
+
+Fixed bug in Series.str.translate() losing object dtype when string option is set (GH 56152)
+
+
+
+What’s new in 2.1.3 (November 10, 2023)
+These are the changes in pandas 2.1.3. See Release notes for a full changelog including other versions of pandas.
+
+Fixed regressions
+Fixed infinite recursion from operations that return a new object on some DataFrame subclasses (GH 55763)
+
+Bug fixes
+Bug in DatetimeIndex.diff() raising TypeError (GH 55080)
+
+Bug in Index.isin() raising for Arrow backed string and None value (GH 55821)
+
+Fix read_parquet() and read_feather() for CVE-2023-47248 (GH 55894)
+
+
+
+
+What’s new in 2.1.2 (October 26, 2023)
+These are the changes in pandas 2.1.2. See Release notes for a full changelog including other versions of pandas.
+
+Deprecations
+Reverted deprecation of fill_method=None in DataFrame.pct_change(), Series.pct_change(), DataFrameGroupBy.pct_change(), and SeriesGroupBy.pct_change(); the values 'backfill', 'bfill', 'pad', and 'ffill' are still deprecated (GH 53491)
+
+Fixed regressions
+Fixed regression in DataFrame.join() where result has missing values and dtype is arrow backed string (GH 55348)
+
+Fixed regression in rolling() where non-nanosecond index or on column would produce incorrect results (GH 55026, GH 55106, GH 55299)
+
+Fixed regression in DataFrame.resample() which was extrapolating back to origin when origin was outside its bounds (GH 55064)
+
+Fixed regression in DataFrame.sort_index() which was not sorting correctly when the index was a sliced MultiIndex (GH 55379)
+
+Fixed regression in DataFrameGroupBy.agg() and SeriesGroupBy.agg() where if the option compute.use_numba was set to True, groupby methods not supported by the numba engine would raise a TypeError (GH 55520)
+
+Fixed performance regression with wide DataFrames, typically involving methods where all columns were accessed individually (GH 55256, GH 55245)
+
+Fixed regression in merge_asof() raising TypeError for by with datetime and timedelta dtypes (GH 55453)
+
+Fixed regression in read_parquet() when reading a file with a string column consisting of more than 2 GB of string data and using the "string" dtype (GH 55606)
+
+Fixed regression in DataFrame.to_sql() not roundtripping datetime columns correctly for sqlite when using detect_types (GH 55554)
+
+Fixed regression in construction of certain DataFrame or Series subclasses (GH 54922)
+
+Bug fixes
+Fixed bug in DataFrameGroupBy reductions not preserving object dtype when infer_string is set (GH 55620)
+
+Fixed bug in SeriesGroupBy.value_counts() returning incorrect dtype for string columns (GH 55627)
+
+Fixed bug in Categorical.equals() if other has arrow backed string dtype (GH 55364)
+
+Fixed bug in DataFrame.__setitem__() not inferring string dtype for zero-dimensional array with infer_string=True (GH 55366)
+
+Fixed bug in DataFrame.idxmin() and DataFrame.idxmax() raising for arrow dtypes (GH 55368)
+
+Fixed bug in DataFrame.interpolate() raising incorrect error message (GH 55347)
+
+Fixed bug in Index.insert() raising when inserting None into Index with dtype="string[pyarrow_numpy]" (GH 55365)
+
+Fixed bug in Series.all() and Series.any() not treating missing values correctly for dtype="string[pyarrow_numpy]" (GH 55367)
+
+Fixed bug in Series.floordiv() for ArrowDtype (GH 55561)
+
+Fixed bug in Series.mode() not sorting values for arrow backed string dtype (GH 55621)
+
+Fixed bug in Series.rank() for string[pyarrow_numpy] dtype (GH 55362)
+
+Fixed bug in Series.str.extractall() for ArrowDtype dtype being converted to object (GH 53846)
+
+Fixed bug where PDEP-6 warning about setting an item of an incompatible dtype was being shown when creating a new conditional column (GH 55025)
+
+Silence Period[B] warnings introduced by GH 53446 during normal plotting activity (GH 55138)
+
+Fixed bug in Series constructor not inferring string dtype when NA is the first value and infer_string is set (:issue:` 55655`)
+
+Other
+Fixed non-working installation of optional dependency group output_formatting. Replacing underscore _ with a dash - fixes broken dependency resolution. A correct way to use now is pip install pandas[output-formatting].
+
+
+What’s new in 2.1.1 (September 20, 2023)
+These are the changes in pandas 2.1.1. See Release notes for a full changelog including other versions of pandas.
+
+Fixed regressions
+Fixed regression in concat() when DataFrame ‘s have two different extension dtypes (GH 54848)
+
+Fixed regression in merge() when merging over a PyArrow string index (GH 54894)
+
+Fixed regression in read_csv() when usecols is given and dtypes is a dict for engine="python" (GH 54868)
+
+Fixed regression in read_csv() when delim_whitespace is True (GH 54918, GH 54931)
+
+Fixed regression in GroupBy.get_group() raising for axis=1 (GH 54858)
+
+Fixed regression in DataFrame.__setitem__() raising AssertionError when setting a Series with a partial MultiIndex (GH 54875)
+
+Fixed regression in DataFrame.filter() not respecting the order of elements for filter (GH 54980)
+
+Fixed regression in DataFrame.to_sql() not roundtripping datetime columns correctly for sqlite (GH 54877)
+
+Fixed regression in DataFrameGroupBy.agg() when aggregating a DataFrame with duplicate column names using a dictionary (GH 55006)
+
+Fixed regression in MultiIndex.append() raising when appending overlapping IntervalIndex levels (GH 54934)
+
+Fixed regression in Series.drop_duplicates() for PyArrow strings (GH 54904)
+
+Fixed regression in Series.interpolate() raising when fill_value was given (GH 54920)
+
+Fixed regression in Series.value_counts() raising for numeric data if bins was specified (GH 54857)
+
+Fixed regression in comparison operations for PyArrow backed columns not propagating exceptions correctly (GH 54944)
+
+Fixed regression when comparing a Series with datetime64 dtype with None (GH 54870)
+
+Bug fixes
+Fixed bug for ArrowDtype raising NotImplementedError for fixed-size list (GH 55000)
+
+Fixed bug in DataFrame.stack() with future_stack=True and columns a non-MultiIndex consisting of tuples (GH 54948)
+
+Fixed bug in Series.dt.tz() with ArrowDtype where a string was returned instead of a tzinfo object (GH 55003)
+
+Fixed bug in Series.pct_change() and DataFrame.pct_change() showing unnecessary FutureWarning (GH 54981)
+
+Other
+Reverted the deprecation that disallowed Series.apply() returning a DataFrame when the passed-in callable returns a Series object (GH 52116)
+
+
+
+
+
+
+
+
+What’s new in 2.1.0 (Aug 30, 2023)
+These are the changes in pandas 2.1.0. See Release notes for a full changelog including other versions of pandas.
+
+Enhancements
+PyArrow will become a required dependency with pandas 3.0
+PyArrow will become a required dependency of pandas starting with pandas 3.0. This decision was made based on PDEP 10.
+
+This will enable more changes that are hugely beneficial to pandas users, including but not limited to:
+
+inferring strings as PyArrow backed strings by default enabling a significant reduction of the memory footprint and huge performance improvements.
+
+inferring more complex dtypes with PyArrow by default, like Decimal, lists, bytes, structured data and more.
+
+Better interoperability with other libraries that depend on Apache Arrow.
+
+We are collecting feedback on this decision here.
+
+Avoid NumPy object dtype for strings by default
+Previously, all strings were stored in columns with NumPy object dtype by default. This release introduces an option future.infer_string that infers all strings as PyArrow backed strings with dtype "string[pyarrow_numpy]" instead. This is a new string dtype implementation that follows NumPy semantics in comparison operations and will return np.nan as the missing value indicator. Setting the option will also infer the dtype "string" as a StringDtype with storage set to "pyarrow_numpy", ignoring the value behind the option mode.string_storage.
+
+This option only works if PyArrow is installed. PyArrow backed strings have a significantly reduced memory footprint and provide a big performance improvement compared to NumPy object (GH 54430).
+
+The option can be enabled with:
+
+pd.options.future.infer_string = True
+This behavior will become the default with pandas 3.0.
+
+DataFrame reductions preserve extension dtypes
+In previous versions of pandas, the results of DataFrame reductions (DataFrame.sum() DataFrame.mean() etc.) had NumPy dtypes, even when the DataFrames were of extension dtypes. Pandas can now keep the dtypes when doing reductions over DataFrame columns with a common dtype (GH 52788).
+
+Old Behavior
+
+df = pd.DataFrame({"a": [1, 1, 2, 1], "b": [np.nan, 2.0, 3.0, 4.0]}, dtype="Int64")
+df.sum()
+Out[2]:
+a    5
+b    9
+dtype: int64
+df = df.astype("int64[pyarrow]")
+df.sum()
+Out[4]:
+a    5
+b    9
+dtype: int64
+New Behavior
+
+df = pd.DataFrame({"a": [1, 1, 2, 1], "b": [np.nan, 2.0, 3.0, 4.0]}, dtype="Int64")
+
+df.sum()
+Out[2]: 
+a    5
+b    9
+dtype: Int64
+
+df = df.astype("int64[pyarrow]")
+
+df.sum()
+Out[4]: 
+a    5
+b    9
+dtype: int64[pyarrow]
+Notice that the dtype is now a masked dtype and PyArrow dtype, respectively, while previously it was a NumPy integer dtype.
+
+To allow DataFrame reductions to preserve extension dtypes, ExtensionArray._reduce() has gotten a new keyword parameter keepdims. Calling ExtensionArray._reduce() with keepdims=True should return an array of length 1 along the reduction axis. In order to maintain backward compatibility, the parameter is not required, but will it become required in the future. If the parameter is not found in the signature, DataFrame reductions can not preserve extension dtypes. Also, if the parameter is not found, a FutureWarning will be emitted and type checkers like mypy may complain about the signature not being compatible with ExtensionArray._reduce().
+
+Copy-on-Write improvements
+Series.transform() not respecting Copy-on-Write when func modifies Series inplace (GH 53747)
+
+Calling Index.values() will now return a read-only NumPy array (GH 53704)
+
+Setting a Series into a DataFrame now creates a lazy instead of a deep copy (GH 53142)
+
+The DataFrame constructor, when constructing a DataFrame from a dictionary of Index objects and specifying copy=False, will now use a lazy copy of those Index objects for the columns of the DataFrame (GH 52947)
+
+A shallow copy of a Series or DataFrame (df.copy(deep=False)) will now also return a shallow copy of the rows/columns Index objects instead of only a shallow copy of the data, i.e. the index of the result is no longer identical (df.copy(deep=False).index is df.index is no longer True) (GH 53721)
+
+DataFrame.head() and DataFrame.tail() will now return deep copies (GH 54011)
+
+Add lazy copy mechanism to DataFrame.eval() (GH 53746)
+
+Trying to operate inplace on a temporary column selection (for example, df["a"].fillna(100, inplace=True)) will now always raise a warning when Copy-on-Write is enabled. In this mode, operating inplace like this will never work, since the selection behaves as a temporary copy. This holds true for:
+
+DataFrame.update / Series.update
+
+DataFrame.fillna / Series.fillna
+
+DataFrame.replace / Series.replace
+
+DataFrame.clip / Series.clip
+
+DataFrame.where / Series.where
+
+DataFrame.mask / Series.mask
+
+DataFrame.interpolate / Series.interpolate
+
+DataFrame.ffill / Series.ffill
+
+DataFrame.bfill / Series.bfill
+
+New DataFrame.map() method and support for ExtensionArrays
+The DataFrame.map() been added and DataFrame.applymap() has been deprecated. DataFrame.map() has the same functionality as DataFrame.applymap(), but the new name better communicates that this is the DataFrame version of Series.map() (GH 52353).
+
+When given a callable, Series.map() applies the callable to all elements of the Series. Similarly, DataFrame.map() applies the callable to all elements of the DataFrame, while Index.map() applies the callable to all elements of the Index.
+
+Frequently, it is not desirable to apply the callable to nan-like values of the array and to avoid doing that, the map method could be called with na_action="ignore", i.e. ser.map(func, na_action="ignore"). However, na_action="ignore" was not implemented for many ExtensionArray and Index types and na_action="ignore" did not work correctly for any ExtensionArray subclass except the nullable numeric ones (i.e. with dtype Int64 etc.).
+
+na_action="ignore" now works for all array types (GH 52219, GH 51645, GH 51809, GH 51936, GH 52033; GH 52096).
+
+Previous behavior:
+
+ser = pd.Series(["a", "b", np.nan], dtype="category")
+ser.map(str.upper, na_action="ignore")
+NotImplementedError
+df = pd.DataFrame(ser)
+df.applymap(str.upper, na_action="ignore")  # worked for DataFrame
+     0
+0    A
+1    B
+2  NaN
+idx = pd.Index(ser)
+idx.map(str.upper, na_action="ignore")
+TypeError: CategoricalIndex.map() got an unexpected keyword argument 'na_action'
+New behavior:
+
+ser = pd.Series(["a", "b", np.nan], dtype="category")
+
+ser.map(str.upper, na_action="ignore")
+Out[6]: 
+0      A
+1      B
+2    NaN
+dtype: category
+Categories (2, object): ['A', 'B']
+
+df = pd.DataFrame(ser)
+
+df.map(str.upper, na_action="ignore")
+Out[8]: 
+     0
+0    A
+1    B
+2  NaN
+
+idx = pd.Index(ser)
+
+idx.map(str.upper, na_action="ignore")
+Out[10]: CategoricalIndex(['A', 'B', nan], categories=['A', 'B'], ordered=False, dtype='category')
+Also, note that Categorical.map() implicitly has had its na_action set to "ignore" by default. This has been deprecated and the default for Categorical.map() will change to na_action=None, consistent with all the other array types.
+
+New implementation of DataFrame.stack()
+pandas has reimplemented DataFrame.stack(). To use the new implementation, pass the argument future_stack=True. This will become the only option in pandas 3.0.
+
+The previous implementation had two main behavioral downsides.
+
+The previous implementation would unnecessarily introduce NA values into the result. The user could have NA values automatically removed by passing dropna=True (the default), but doing this could also remove NA values from the result that existed in the input. See the examples below.
+
+The previous implementation with sort=True (the default) would sometimes sort part of the resulting index, and sometimes not. If the input’s columns are not a MultiIndex, then the resulting index would never be sorted. If the columns are a MultiIndex, then in most cases the level(s) in the resulting index that come from stacking the column level(s) would be sorted. In rare cases such level(s) would be sorted in a non-standard order, depending on how the columns were created.
+
+The new implementation (future_stack=True) will no longer unnecessarily introduce NA values when stacking multiple levels and will never sort. As such, the arguments dropna and sort are not utilized and must remain unspecified when using future_stack=True. These arguments will be removed in the next major release.
+
+columns = pd.MultiIndex.from_tuples([("B", "d"), ("A", "c")])
+
+df = pd.DataFrame([[0, 2], [1, 3]], index=["z", "y"], columns=columns)
+
+df
+Out[13]: 
+   B  A
+   d  c
+z  0  2
+y  1  3
+In the previous version (future_stack=False), the default of dropna=True would remove unnecessarily introduced NA values but still coerce the dtype to float64 in the process. In the new version, no NAs are introduced and so there is no coercion of the dtype.
+
+df.stack([0, 1], future_stack=False, dropna=True)
+Out[14]: 
+z  A  c    2.0
+   B  d    0.0
+y  A  c    3.0
+   B  d    1.0
+dtype: float64
+
+df.stack([0, 1], future_stack=True)
+Out[15]: 
+z  B  d    0
+   A  c    2
+y  B  d    1
+   A  c    3
+dtype: int64
+If the input contains NA values, the previous version would drop those as well with dropna=True or introduce new NA values with dropna=False. The new version persists all values from the input.
+
+df = pd.DataFrame([[0, 2], [np.nan, np.nan]], columns=columns)
+
+df
+Out[17]: 
+     B    A
+     d    c
+0  0.0  2.0
+1  NaN  NaN
+
+df.stack([0, 1], future_stack=False, dropna=True)
+Out[18]: 
+0  A  c    2.0
+   B  d    0.0
+dtype: float64
+
+df.stack([0, 1], future_stack=False, dropna=False)
+Out[19]: 
+0  A  d    NaN
+      c    2.0
+   B  d    0.0
+      c    NaN
+1  A  d    NaN
+      c    NaN
+   B  d    NaN
+      c    NaN
+dtype: float64
+
+df.stack([0, 1], future_stack=True)
+Out[20]: 
+0  B  d    0.0
+   A  c    2.0
+1  B  d    NaN
+   A  c    NaN
+dtype: float64
+Other enhancements
+Series.ffill() and Series.bfill() are now supported for objects with IntervalDtype (GH 54247)
+
+Added filters parameter to read_parquet() to filter out data, compatible with both engines (GH 53212)
+
+Categorical.map() and CategoricalIndex.map() now have a na_action parameter. Categorical.map() implicitly had a default value of "ignore" for na_action. This has formally been deprecated and will be changed to None in the future. Also notice that Series.map() has default na_action=None and calls to series with categorical data will now use na_action=None unless explicitly set otherwise (GH 44279)
+
+api.extensions.ExtensionArray now has a map() method (GH 51809)
+
+DataFrame.applymap() now uses the map() method of underlying api.extensions.ExtensionArray instances (GH 52219)
+
+MultiIndex.sort_values() now supports na_position (GH 51612)
+
+MultiIndex.sortlevel() and Index.sortlevel() gained a new keyword na_position (GH 51612)
+
+arrays.DatetimeArray.map(), arrays.TimedeltaArray.map() and arrays.PeriodArray.map() can now take a na_action argument (GH 51644)
+
+arrays.SparseArray.map() now supports na_action (GH 52096).
+
+pandas.read_html() now supports the storage_options keyword when used with a URL, allowing users to add headers to the outbound HTTP request (GH 49944)
+
+Add Index.diff() and Index.round() (GH 19708)
+
+Add "latex-math" as an option to the escape argument of Styler which will not escape all characters between "\(" and "\)" during formatting (GH 51903)
+
+Add dtype of categories to repr information of CategoricalDtype (GH 52179)
+
+Adding engine_kwargs parameter to read_excel() (GH 52214)
+
+Classes that are useful for type-hinting have been added to the public API in the new submodule pandas.api.typing (GH 48577)
+
+Implemented Series.dt.is_month_start, Series.dt.is_month_end, Series.dt.is_year_start, Series.dt.is_year_end, Series.dt.is_quarter_start, Series.dt.is_quarter_end, Series.dt.days_in_month, Series.dt.unit, Series.dt.normalize, Series.dt.day_name(), Series.dt.month_name(), Series.dt.tz_convert() for ArrowDtype with pyarrow.timestamp (GH 52388, GH 51718)
+
+DataFrameGroupBy.agg() and DataFrameGroupBy.transform() now support grouping by multiple keys when the index is not a MultiIndex for engine="numba" (GH 53486)
+
+SeriesGroupBy.agg() and DataFrameGroupBy.agg() now support passing in multiple functions for engine="numba" (GH 53486)
+
+SeriesGroupBy.transform() and DataFrameGroupBy.transform() now support passing in a string as the function for engine="numba" (GH 53579)
+
+DataFrame.stack() gained the sort keyword to dictate whether the resulting MultiIndex levels are sorted (GH 15105)
+
+DataFrame.unstack() gained the sort keyword to dictate whether the resulting MultiIndex levels are sorted (GH 15105)
+
+Series.explode() now supports PyArrow-backed list types (GH 53602)
+
+Series.str.join() now supports ArrowDtype(pa.string()) (GH 53646)
+
+Add validate parameter to Categorical.from_codes() (GH 50975)
+
+Added ExtensionArray.interpolate() used by Series.interpolate() and DataFrame.interpolate() (GH 53659)
+
+Added engine_kwargs parameter to DataFrame.to_excel() (GH 53220)
+
+Implemented api.interchange.from_dataframe() for DatetimeTZDtype (GH 54239)
+
+Implemented __from_arrow__ on DatetimeTZDtype (GH 52201)
+
+Implemented __pandas_priority__ to allow custom types to take precedence over DataFrame, Series, Index, or ExtensionArray for arithmetic operations, see the developer guide (GH 48347)
+
+Improve error message when having incompatible columns using DataFrame.merge() (GH 51861)
+
+Improve error message when setting DataFrame with wrong number of columns through DataFrame.isetitem() (GH 51701)
+
+Improved error handling when using DataFrame.to_json() with incompatible index and orient arguments (GH 52143)
+
+Improved error message when creating a DataFrame with empty data (0 rows), no index and an incorrect number of columns (GH 52084)
+
+Improved error message when providing an invalid index or offset argument to VariableOffsetWindowIndexer (GH 54379)
+
+Let DataFrame.to_feather() accept a non-default Index and non-string column names (GH 51787)
+
+Added a new parameter by_row to Series.apply() and DataFrame.apply(). When set to False the supplied callables will always operate on the whole Series or DataFrame (GH 53400, GH 53601).
+
+DataFrame.shift() and Series.shift() now allow shifting by multiple periods by supplying a list of periods (GH 44424)
+
+Groupby aggregations with numba (such as DataFrameGroupBy.sum()) now can preserve the dtype of the input instead of casting to float64 (GH 44952)
+
+Improved error message when DataFrameGroupBy.agg() failed (GH 52930)
+
+Many read/to_* functions, such as DataFrame.to_pickle() and read_csv(), support forwarding compression arguments to lzma.LZMAFile (GH 52979)
+
+Reductions Series.argmax(), Series.argmin(), Series.idxmax(), Series.idxmin(), Index.argmax(), Index.argmin(), DataFrame.idxmax(), DataFrame.idxmin() are now supported for object-dtype (GH 4279, GH 18021, GH 40685, GH 43697)
+
+DataFrame.to_parquet() and read_parquet() will now write and read attrs respectively (GH 54346)
+
+Index.all() and Index.any() with floating dtypes and timedelta64 dtypes no longer raise TypeError, matching the Series.all() and Series.any() behavior (GH 54566)
+
+Series.cummax(), Series.cummin() and Series.cumprod() are now supported for pyarrow dtypes with pyarrow version 13.0 and above (GH 52085)
+
+Added support for the DataFrame Consortium Standard (GH 54383)
+
+Performance improvement in DataFrameGroupBy.quantile() and SeriesGroupBy.quantile() (GH 51722)
+
+PyArrow-backed integer dtypes now support bitwise operations (GH 54495)
+
+Backwards incompatible API changes
+Increased minimum version for Python
+pandas 2.1.0 supports Python 3.9 and higher.
+
+Increased minimum versions for dependencies
+Some minimum supported versions of dependencies were updated. If installed, we now require:
+
+Package
+
+Minimum Version
+
+Required
+
+Changed
+
+numpy
+
+1.22.4
+
+X
+
+X
+
+mypy (dev)
+
+1.4.1
+
+X
+
+beautifulsoup4
+
+4.11.1
+
+X
+
+bottleneck
+
+1.3.4
+
+X
+
+dataframe-api-compat
+
+0.1.7
+
+X
+
+fastparquet
+
+0.8.1
+
+X
+
+fsspec
+
+2022.05.0
+
+X
+
+hypothesis
+
+6.46.1
+
+X
+
+gcsfs
+
+2022.05.0
+
+X
+
+jinja2
+
+3.1.2
+
+X
+
+lxml
+
+4.8.0
+
+X
+
+numba
+
+0.55.2
+
+X
+
+numexpr
+
+2.8.0
+
+X
+
+openpyxl
+
+3.0.10
+
+X
+
+pandas-gbq
+
+0.17.5
+
+X
+
+psycopg2
+
+2.9.3
+
+X
+
+pyreadstat
+
+1.1.5
+
+X
+
+pyqt5
+
+5.15.6
+
+X
+
+pytables
+
+3.7.0
+
+X
+
+pytest
+
+7.3.2
+
+X
+
+python-snappy
+
+0.6.1
+
+X
+
+pyxlsb
+
+1.0.9
+
+X
+
+s3fs
+
+2022.05.0
+
+X
+
+scipy
+
+1.8.1
+
+X
+
+sqlalchemy
+
+1.4.36
+
+X
+
+tabulate
+
+0.8.10
+
+X
+
+xarray
+
+2022.03.0
+
+X
+
+xlsxwriter
+
+3.0.3
+
+X
+
+zstandard
+
+0.17.0
+
+X
+
+For optional libraries the general recommendation is to use the latest version.
+
+See Dependencies and Optional dependencies for more.
+
+Other API changes
+arrays.PandasArray has been renamed NumpyExtensionArray and the attached dtype name changed from PandasDtype to NumpyEADtype; importing PandasArray still works until the next major version (GH 53694)
+
+Deprecations
+Deprecated silent upcasting in setitem-like Series operations
+PDEP-6: https://pandas.pydata.org/pdeps/0006-ban-upcasting.html
+
+Setitem-like operations on Series (or DataFrame columns) which silently upcast the dtype are deprecated and show a warning. Examples of affected operations are:
+
+ser.fillna('foo', inplace=True)
+
+ser.where(ser.isna(), 'foo', inplace=True)
+
+ser.iloc[indexer] = 'foo'
+
+ser.loc[indexer] = 'foo'
+
+df.iloc[indexer, 0] = 'foo'
+
+df.loc[indexer, 'a'] = 'foo'
+
+ser[indexer] = 'foo'
+
+where ser is a Series, df is a DataFrame, and indexer could be a slice, a mask, a single value, a list or array of values, or any other allowed indexer.
+
+In a future version, these will raise an error and you should cast to a common dtype first.
+
+Previous behavior:
+
+ser = pd.Series([1, 2, 3])
+
+ser
+Out[2]:
+0    1
+1    2
+2    3
+dtype: int64
+
+ser[0] = 'not an int64'
+
+ser
+Out[4]:
+0    not an int64
+1               2
+2               3
+dtype: object
+New behavior:
+
+ser = pd.Series([1, 2, 3])
+
+ser
+Out[2]:
+0    1
+1    2
+2    3
+dtype: int64
+
+ser[0] = 'not an int64'
+FutureWarning:
+  Setting an item of incompatible dtype is deprecated and will raise an error in a future version of pandas.
+  Value 'not an int64' has dtype incompatible with int64, please explicitly cast to a compatible dtype first.
+
+ser
+Out[4]:
+0    not an int64
+1               2
+2               3
+dtype: object
+To retain the current behaviour, in the case above you could cast ser to object dtype first:
+
+ser = pd.Series([1, 2, 3])
+
+ser = ser.astype('object')
+
+ser[0] = 'not an int64'
+
+ser
+Out[24]: 
+0    not an int64
+1               2
+2               3
+dtype: object
+Depending on the use-case, it might be more appropriate to cast to a different dtype. In the following, for example, we cast to float64:
+
+ser = pd.Series([1, 2, 3])
+
+ser = ser.astype('float64')
+
+ser[0] = 1.1
+
+ser
+Out[28]: 
+0    1.1
+1    2.0
+2    3.0
+dtype: float64
+For further reading, please see https://pandas.pydata.org/pdeps/0006-ban-upcasting.html.
+
+Deprecated parsing datetimes with mixed time zones
+Parsing datetimes with mixed time zones is deprecated and shows a warning unless user passes utc=True to to_datetime() (GH 50887)
+
+Previous behavior:
+
+data = ["2020-01-01 00:00:00+06:00", "2020-01-01 00:00:00+01:00"]
+
+ pd.to_datetime(data, utc=False)
+Out[8]:
+Index([2020-01-01 00:00:00+06:00, 2020-01-01 00:00:00+01:00], dtype='object')
+New behavior:
+
+pd.to_datetime(data, utc=False)
+FutureWarning:
+  In a future version of pandas, parsing datetimes with mixed time zones will raise
+  a warning unless `utc=True`. Please specify `utc=True` to opt in to the new behaviour
+  and silence this warning. To create a `Series` with mixed offsets and `object` dtype,
+  please use `apply` and `datetime.datetime.strptime`.
+Index([2020-01-01 00:00:00+06:00, 2020-01-01 00:00:00+01:00], dtype='object')
+In order to silence this warning and avoid an error in a future version of pandas, please specify utc=True:
+
+data = ["2020-01-01 00:00:00+06:00", "2020-01-01 00:00:00+01:00"]
+
+pd.to_datetime(data, utc=True)
+Out[30]: DatetimeIndex(['2019-12-31 18:00:00+00:00', '2019-12-31 23:00:00+00:00'], dtype='datetime64[ns, UTC]', freq=None)
+To create a Series with mixed offsets and object dtype, please use apply and datetime.datetime.strptime:
+
+import datetime as dt
+
+data = ["2020-01-01 00:00:00+06:00", "2020-01-01 00:00:00+01:00"]
+
+pd.Series(data).apply(lambda x: dt.datetime.strptime(x, '%Y-%m-%d %H:%M:%S%z'))
+Out[33]: 
+0    2020-01-01 00:00:00+06:00
+1    2020-01-01 00:00:00+01:00
+dtype: object
+Other Deprecations
+Deprecated DataFrameGroupBy.dtypes, check dtypes on the underlying object instead (GH 51045)
+
+Deprecated DataFrame._data and Series._data, use public APIs instead (GH 33333)
+
+Deprecated concat() behavior when any of the objects being concatenated have length 0; in the past the dtypes of empty objects were ignored when determining the resulting dtype, in a future version they will not (GH 39122)
+
+Deprecated Categorical.to_list(), use obj.tolist() instead (GH 51254)
+
+Deprecated DataFrameGroupBy.all() and DataFrameGroupBy.any() with datetime64 or PeriodDtype values, matching the Series and DataFrame deprecations (GH 34479)
+
+Deprecated axis=1 in DataFrame.ewm(), DataFrame.rolling(), DataFrame.expanding(), transpose before calling the method instead (GH 51778)
+
+Deprecated axis=1 in DataFrame.groupby() and in Grouper constructor, do frame.T.groupby(...) instead (GH 51203)
+
+Deprecated broadcast_axis keyword in Series.align() and DataFrame.align(), upcast before calling align with left = DataFrame({col: left for col in right.columns}, index=right.index) (GH 51856)
+
+Deprecated downcast keyword in Index.fillna() (GH 53956)
+
+Deprecated fill_method and limit keywords in DataFrame.pct_change(), Series.pct_change(), DataFrameGroupBy.pct_change(), and SeriesGroupBy.pct_change(), explicitly call e.g. DataFrame.ffill() or DataFrame.bfill() before calling pct_change instead (GH 53491)
+
+Deprecated method, limit, and fill_axis keywords in DataFrame.align() and Series.align(), explicitly call DataFrame.fillna() or Series.fillna() on the alignment results instead (GH 51856)
+
+Deprecated quantile keyword in Rolling.quantile() and Expanding.quantile(), renamed to q instead (GH 52550)
+
+Deprecated accepting slices in DataFrame.take(), call obj[slicer] or pass a sequence of integers instead (GH 51539)
+
+Deprecated behavior of DataFrame.idxmax(), DataFrame.idxmin(), Series.idxmax(), Series.idxmin() in with all-NA entries or any-NA and skipna=False; in a future version these will raise ValueError (GH 51276)
+
+Deprecated explicit support for subclassing Index (GH 45289)
+
+Deprecated making functions given to Series.agg() attempt to operate on each element in the Series and only operate on the whole Series if the elementwise operations failed. In the future, functions given to Series.agg() will always operate on the whole Series only. To keep the current behavior, use Series.transform() instead (GH 53325)
+
+Deprecated making the functions in a list of functions given to DataFrame.agg() attempt to operate on each element in the DataFrame and only operate on the columns of the DataFrame if the elementwise operations failed. To keep the current behavior, use DataFrame.transform() instead (GH 53325)
+
+Deprecated passing a DataFrame to DataFrame.from_records(), use DataFrame.set_index() or DataFrame.drop() instead (GH 51353)
+
+Deprecated silently dropping unrecognized timezones when parsing strings to datetimes (GH 18702)
+
+Deprecated the axis keyword in DataFrame.ewm(), Series.ewm(), DataFrame.rolling(), Series.rolling(), DataFrame.expanding(), Series.expanding() (GH 51778)
+
+Deprecated the axis keyword in DataFrame.resample(), Series.resample() (GH 51778)
+
+Deprecated the downcast keyword in Series.interpolate(), DataFrame.interpolate(), Series.fillna(), DataFrame.fillna(), Series.ffill(), DataFrame.ffill(), Series.bfill(), DataFrame.bfill() (GH 40988)
+
+Deprecated the behavior of concat() with both len(keys) != len(objs), in a future version this will raise instead of truncating to the shorter of the two sequences (GH 43485)
+
+Deprecated the behavior of Series.argsort() in the presence of NA values; in a future version these will be sorted at the end instead of giving -1 (GH 54219)
+
+Deprecated the default of observed=False in DataFrame.groupby() and Series.groupby(); this will default to True in a future version (GH 43999)
+
+Deprecating pinning group.name to each group in SeriesGroupBy.aggregate() aggregations; if your operation requires utilizing the groupby keys, iterate over the groupby object instead (GH 41090)
+
+Deprecated the axis keyword in DataFrameGroupBy.idxmax(), DataFrameGroupBy.idxmin(), DataFrameGroupBy.fillna(), DataFrameGroupBy.take(), DataFrameGroupBy.skew(), DataFrameGroupBy.rank(), DataFrameGroupBy.cumprod(), DataFrameGroupBy.cumsum(), DataFrameGroupBy.cummax(), DataFrameGroupBy.cummin(), DataFrameGroupBy.pct_change(), DataFrameGroupBy.diff(), DataFrameGroupBy.shift(), and DataFrameGroupBy.corrwith(); for axis=1 operate on the underlying DataFrame instead (GH 50405, GH 51046)
+
+Deprecated DataFrameGroupBy with as_index=False not including groupings in the result when they are not columns of the DataFrame (GH 49519)
+
+Deprecated is_categorical_dtype(), use isinstance(obj.dtype, pd.CategoricalDtype) instead (GH 52527)
+
+Deprecated is_datetime64tz_dtype(), check isinstance(dtype, pd.DatetimeTZDtype) instead (GH 52607)
+
+Deprecated is_int64_dtype(), check dtype == np.dtype(np.int64) instead (GH 52564)
+
+Deprecated is_interval_dtype(), check isinstance(dtype, pd.IntervalDtype) instead (GH 52607)
+
+Deprecated is_period_dtype(), check isinstance(dtype, pd.PeriodDtype) instead (GH 52642)
+
+Deprecated is_sparse(), check isinstance(dtype, pd.SparseDtype) instead (GH 52642)
+
+Deprecated Styler.applymap_index(). Use the new Styler.map_index() method instead (GH 52708)
+
+Deprecated Styler.applymap(). Use the new Styler.map() method instead (GH 52708)
+
+Deprecated DataFrame.applymap(). Use the new DataFrame.map() method instead (GH 52353)
+
+Deprecated DataFrame.swapaxes() and Series.swapaxes(), use DataFrame.transpose() or Series.transpose() instead (GH 51946)
+
+Deprecated freq parameter in PeriodArray constructor, pass dtype instead (GH 52462)
+
+Deprecated allowing non-standard inputs in take(), pass either a numpy.ndarray, ExtensionArray, Index, or Series (GH 52981)
+
+Deprecated allowing non-standard sequences for isin(), value_counts(), unique(), factorize(), case to one of numpy.ndarray, Index, ExtensionArray, or Series before calling (GH 52986)
+
+Deprecated behavior of DataFrame reductions sum, prod, std, var, sem with axis=None, in a future version this will operate over both axes returning a scalar instead of behaving like axis=0; note this also affects numpy functions e.g. np.sum(df) (GH 21597)
+
+Deprecated behavior of concat() when DataFrame has columns that are all-NA, in a future version these will not be discarded when determining the resulting dtype (GH 40893)
+
+Deprecated behavior of Series.dt.to_pydatetime(), in a future version this will return a Series containing python datetime objects instead of an ndarray of datetimes; this matches the behavior of other Series.dt properties (GH 20306)
+
+Deprecated logical operations (|, &, ^) between pandas objects and dtype-less sequences (e.g. list, tuple), wrap a sequence in a Series or NumPy array before operating instead (GH 51521)
+
+Deprecated parameter convert_type in Series.apply() (GH 52140)
+
+Deprecated passing a dictionary to SeriesGroupBy.agg(); pass a list of aggregations instead (GH 50684)
+
+Deprecated the fastpath keyword in Categorical constructor, use Categorical.from_codes() instead (GH 20110)
+
+Deprecated the behavior of is_bool_dtype() returning True for object-dtype Index of bool objects (GH 52680)
+
+Deprecated the methods Series.bool() and DataFrame.bool() (GH 51749)
+
+Deprecated unused closed and normalize keywords in the DatetimeIndex constructor (GH 52628)
+
+Deprecated unused closed keyword in the TimedeltaIndex constructor (GH 52628)
+
+Deprecated logical operation between two non boolean Series with different indexes always coercing the result to bool dtype. In a future version, this will maintain the return type of the inputs (GH 52500, GH 52538)
+
+Deprecated Period and PeriodDtype with BDay freq, use a DatetimeIndex with BDay freq instead (GH 53446)
+
+Deprecated value_counts(), use pd.Series(obj).value_counts() instead (GH 47862)
+
+Deprecated Series.first() and DataFrame.first(); create a mask and filter using .loc instead (GH 45908)
+
+Deprecated Series.interpolate() and DataFrame.interpolate() for object-dtype (GH 53631)
+
+Deprecated Series.last() and DataFrame.last(); create a mask and filter using .loc instead (GH 53692)
+
+Deprecated allowing arbitrary fill_value in SparseDtype, in a future version the fill_value will need to be compatible with the dtype.subtype, either a scalar that can be held by that subtype or NaN for integer or bool subtypes (GH 23124)
+
+Deprecated allowing bool dtype in DataFrameGroupBy.quantile() and SeriesGroupBy.quantile(), consistent with the Series.quantile() and DataFrame.quantile() behavior (GH 51424)
+
+Deprecated behavior of testing.assert_series_equal() and testing.assert_frame_equal() considering NA-like values (e.g. NaN vs None as equivalent) (GH 52081)
+
+Deprecated bytes input to read_excel(). To read a file path, use a string or path-like object (GH 53767)
+
+Deprecated constructing SparseArray from scalar data, pass a sequence instead (GH 53039)
+
+Deprecated falling back to filling when value is not specified in DataFrame.replace() and Series.replace() with non-dict-like to_replace (GH 33302)
+
+Deprecated literal json input to read_json(). Wrap literal json string input in io.StringIO instead (GH 53409)
+
+Deprecated literal string input to read_xml(). Wrap literal string/bytes input in io.StringIO / io.BytesIO instead (GH 53767)
+
+Deprecated literal string/bytes input to read_html(). Wrap literal string/bytes input in io.StringIO / io.BytesIO instead (GH 53767)
+
+Deprecated option mode.use_inf_as_na, convert inf entries to NaN before instead (GH 51684)
+
+Deprecated parameter obj in DataFrameGroupBy.get_group() (GH 53545)
+
+Deprecated positional indexing on Series with Series.__getitem__() and Series.__setitem__(), in a future version ser[item] will always interpret item as a label, not a position (GH 50617)
+
+Deprecated replacing builtin and NumPy functions in .agg, .apply, and .transform; use the corresponding string alias (e.g. "sum" for sum or np.sum) instead (GH 53425)
+
+Deprecated strings T, t, L and l denoting units in to_timedelta() (GH 52536)
+
+Deprecated the “method” and “limit” keywords in .ExtensionArray.fillna, implement _pad_or_backfill instead (GH 53621)
+
+Deprecated the method and limit keywords in DataFrame.replace() and Series.replace() (GH 33302)
+
+Deprecated the method and limit keywords on Series.fillna(), DataFrame.fillna(), SeriesGroupBy.fillna(), DataFrameGroupBy.fillna(), and Resampler.fillna(), use obj.bfill() or obj.ffill() instead (GH 53394)
+
+Deprecated the behavior of Series.__getitem__(), Series.__setitem__(), DataFrame.__getitem__(), DataFrame.__setitem__() with an integer slice on objects with a floating-dtype index, in a future version this will be treated as positional indexing (GH 49612)
+
+Deprecated the use of non-supported datetime64 and timedelta64 resolutions with pandas.array(). Supported resolutions are: “s”, “ms”, “us”, “ns” resolutions (GH 53058)
+
+Deprecated values "pad", "ffill", "bfill", "backfill" for Series.interpolate() and DataFrame.interpolate(), use obj.ffill() or obj.bfill() instead (GH 53581)
+
+Deprecated the behavior of Index.argmax(), Index.argmin(), Series.argmax(), Series.argmin() with either all-NAs and skipna=True or any-NAs and skipna=False returning -1; in a future version this will raise ValueError (GH 33941, GH 33942)
+
+Deprecated allowing non-keyword arguments in DataFrame.to_sql() except name and con (GH 54229)
+
+Deprecated silently ignoring fill_value when passing both freq and fill_value to DataFrame.shift(), Series.shift() and DataFrameGroupBy.shift(); in a future version this will raise ValueError (GH 53832)
+
+Performance improvements
+Performance improvement in concat() with homogeneous np.float64 or np.float32 dtypes (GH 52685)
+
+Performance improvement in factorize() for object columns not containing strings (GH 51921)
+
+Performance improvement in read_orc() when reading a remote URI file path (GH 51609)
+
+Performance improvement in read_parquet() and DataFrame.to_parquet() when reading a remote file with engine="pyarrow" (GH 51609)
+
+Performance improvement in read_parquet() on string columns when using use_nullable_dtypes=True (GH 47345)
+
+Performance improvement in DataFrame.clip() and Series.clip() (GH 51472)
+
+Performance improvement in DataFrame.filter() when items is given (GH 52941)
+
+Performance improvement in DataFrame.first_valid_index() and DataFrame.last_valid_index() for extension array dtypes (GH 51549)
+
+Performance improvement in DataFrame.where() when cond is backed by an extension dtype (GH 51574)
+
+Performance improvement in MultiIndex.set_levels() and MultiIndex.set_codes() when verify_integrity=True (GH 51873)
+
+Performance improvement in MultiIndex.sortlevel() when ascending is a list (GH 51612)
+
+Performance improvement in Series.combine_first() (GH 51777)
+
+Performance improvement in fillna() when array does not contain nulls (GH 51635)
+
+Performance improvement in isna() when array has zero nulls or is all nulls (GH 51630)
+
+Performance improvement when parsing strings to boolean[pyarrow] dtype (GH 51730)
+
+Performance improvement when searching an Index sliced from other indexes (GH 51738)
+
+Performance improvement in concat() (GH 52291, GH 52290)
+
+Period’s default formatter (period_format) is now significantly (~twice) faster. This improves performance of str(Period), repr(Period), and Period.strftime(fmt=None)(), as well as .PeriodArray.strftime(fmt=None), .PeriodIndex.strftime(fmt=None) and .PeriodIndex.format(fmt=None). to_csv operations involving PeriodArray or PeriodIndex with default date_format are also significantly accelerated (GH 51459)
+
+Performance improvement accessing arrays.IntegerArrays.dtype & arrays.FloatingArray.dtype (GH 52998)
+
+Performance improvement for DataFrameGroupBy/SeriesGroupBy aggregations (e.g. DataFrameGroupBy.sum()) with engine="numba" (GH 53731)
+
+Performance improvement in DataFrame reductions with axis=1 and extension dtypes (GH 54341)
+
+Performance improvement in DataFrame reductions with axis=None and extension dtypes (GH 54308)
+
+Performance improvement in MultiIndex and multi-column operations (e.g. DataFrame.sort_values(), DataFrame.groupby(), Series.unstack()) when index/column values are already sorted (GH 53806)
+
+Performance improvement in Series reductions (GH 52341)
+
+Performance improvement in concat() when axis=1 and objects have different indexes (GH 52541)
+
+Performance improvement in concat() when the concatenation axis is a MultiIndex (GH 53574)
+
+Performance improvement in merge() for PyArrow backed strings (GH 54443)
+
+Performance improvement in read_csv() with engine="c" (GH 52632)
+
+Performance improvement in ArrowExtensionArray.to_numpy() (GH 52525)
+
+Performance improvement in DataFrameGroupBy.groups() (GH 53088)
+
+Performance improvement in DataFrame.astype() when dtype is an extension dtype (GH 54299)
+
+Performance improvement in DataFrame.iloc() when input is an single integer and dataframe is backed by extension dtypes (GH 54508)
+
+Performance improvement in DataFrame.isin() for extension dtypes (GH 53514)
+
+Performance improvement in DataFrame.loc() when selecting rows and columns (GH 53014)
+
+Performance improvement in DataFrame.transpose() when transposing a DataFrame with a single PyArrow dtype (GH 54224)
+
+Performance improvement in DataFrame.transpose() when transposing a DataFrame with a single masked dtype, e.g. Int64 (GH 52836)
+
+Performance improvement in Series.add() for PyArrow string and binary dtypes (GH 53150)
+
+Performance improvement in Series.corr() and Series.cov() for extension dtypes (GH 52502)
+
+Performance improvement in Series.drop_duplicates() for ArrowDtype (GH 54667).
+
+Performance improvement in Series.ffill(), Series.bfill(), DataFrame.ffill(), DataFrame.bfill() with PyArrow dtypes (GH 53950)
+
+Performance improvement in Series.str.get_dummies() for PyArrow-backed strings (GH 53655)
+
+Performance improvement in Series.str.get() for PyArrow-backed strings (GH 53152)
+
+Performance improvement in Series.str.split() with expand=True for PyArrow-backed strings (GH 53585)
+
+Performance improvement in Series.to_numpy() when dtype is a NumPy float dtype and na_value is np.nan (GH 52430)
+
+Performance improvement in astype() when converting from a PyArrow timestamp or duration dtype to NumPy (GH 53326)
+
+Performance improvement in various MultiIndex set and indexing operations (GH 53955)
+
+Performance improvement when doing various reshaping operations on arrays.IntegerArray & arrays.FloatingArray by avoiding doing unnecessary validation (GH 53013)
+
+Performance improvement when indexing with PyArrow timestamp and duration dtypes (GH 53368)
+
+Performance improvement when passing an array to RangeIndex.take(), DataFrame.loc(), or DataFrame.iloc() and the DataFrame is using a RangeIndex (GH 53387)
+
+Bug fixes
+Categorical
+Bug in CategoricalIndex.remove_categories() where ordered categories would not be maintained (GH 53935).
+
+Bug in Series.astype() with dtype="category" for nullable arrays with read-only null value masks (GH 53658)
+
+Bug in Series.map() , where the value of the na_action parameter was not used if the series held a Categorical (GH 22527).
+
+Datetimelike
+DatetimeIndex.map() with na_action="ignore" now works as expected (GH 51644)
+
+DatetimeIndex.slice_indexer() now raises KeyError for non-monotonic indexes if either of the slice bounds is not in the index; this behaviour was previously deprecated but inconsistently handled (GH 53983)
+
+Bug in DateOffset which had inconsistent behavior when multiplying a DateOffset object by a constant (GH 47953)
+
+Bug in date_range() when freq was a DateOffset with nanoseconds (GH 46877)
+
+Bug in to_datetime() converting Series or DataFrame containing arrays.ArrowExtensionArray of PyArrow timestamps to numpy datetimes (GH 52545)
+
+Bug in DatetimeArray.map() and DatetimeIndex.map(), where the supplied callable operated array-wise instead of element-wise (GH 51977)
+
+Bug in DataFrame.to_sql() raising ValueError for PyArrow-backed date like dtypes (GH 53854)
+
+Bug in Timestamp.date(), Timestamp.isocalendar(), Timestamp.timetuple(), and Timestamp.toordinal() were returning incorrect results for inputs outside those supported by the Python standard library’s datetime module (GH 53668)
+
+Bug in Timestamp.round() with values close to the implementation bounds returning incorrect results instead of raising OutOfBoundsDatetime (GH 51494)
+
+Bug in constructing a Series or DataFrame from a datetime or timedelta scalar always inferring nanosecond resolution instead of inferring from the input (GH 52212)
+
+Bug in constructing a Timestamp from a string representing a time without a date inferring an incorrect unit (GH 54097)
+
+Bug in constructing a Timestamp with ts_input=pd.NA raising TypeError (GH 45481)
+
+Bug in parsing datetime strings with weekday but no day e.g. “2023 Sept Thu” incorrectly raising AttributeError instead of ValueError (GH 52659)
+
+Bug in the repr for Series when dtype is a timezone aware datetime with non-nanosecond resolution raising OutOfBoundsDatetime (GH 54623)
+
+Timedelta
+Bug in TimedeltaIndex division or multiplication leading to .freq of “0 Days” instead of None (GH 51575)
+
+Bug in Timedelta with NumPy timedelta64 objects not properly raising ValueError (GH 52806)
+
+Bug in to_timedelta() converting Series or DataFrame containing ArrowDtype of pyarrow.duration to NumPy timedelta64 (GH 54298)
+
+Bug in Timedelta.__hash__(), raising an OutOfBoundsTimedelta on certain large values of second resolution (GH 54037)
+
+Bug in Timedelta.round() with values close to the implementation bounds returning incorrect results instead of raising OutOfBoundsTimedelta (GH 51494)
+
+Bug in TimedeltaIndex.map() with na_action="ignore" (GH 51644)
+
+Bug in arrays.TimedeltaArray.map() and TimedeltaIndex.map(), where the supplied callable operated array-wise instead of element-wise (GH 51977)
+
+Timezones
+Bug in infer_freq() that raises TypeError for Series of timezone-aware timestamps (GH 52456)
+
+Bug in DatetimeTZDtype.base() that always returns a NumPy dtype with nanosecond resolution (GH 52705)
+
+Numeric
+Bug in RangeIndex setting step incorrectly when being the subtrahend with minuend a numeric value (GH 53255)
+
+Bug in Series.corr() and Series.cov() raising AttributeError for masked dtypes (GH 51422)
+
+Bug when calling Series.kurt() and Series.skew() on NumPy data of all zero returning a Python type instead of a NumPy type (GH 53482)
+
+Bug in Series.mean(), DataFrame.mean() with object-dtype values containing strings that can be converted to numbers (e.g. “2”) returning incorrect numeric results; these now raise TypeError (GH 36703, GH 44008)
+
+Bug in DataFrame.corrwith() raising NotImplementedError for PyArrow-backed dtypes (GH 52314)
+
+Bug in DataFrame.size() and Series.size() returning 64-bit integer instead of a Python int (GH 52897)
+
+Bug in DateFrame.dot() returning object dtype for ArrowDtype data (GH 53979)
+
+Bug in Series.any(), Series.all(), DataFrame.any(), and DataFrame.all() had the default value of bool_only set to None instead of False; this change should have no impact on users (GH 53258)
+
+Bug in Series.corr() and Series.cov() raising AttributeError for masked dtypes (GH 51422)
+
+Bug in Series.median() and DataFrame.median() with object-dtype values containing strings that can be converted to numbers (e.g. “2”) returning incorrect numeric results; these now raise TypeError (GH 34671)
+
+Bug in Series.sum() converting dtype uint64 to int64 (GH 53401)
+
+Conversion
+Bug in DataFrame.style.to_latex() and DataFrame.style.to_html() if the DataFrame contains integers with more digits than can be represented by floating point double precision (GH 52272)
+
+Bug in array() when given a datetime64 or timedelta64 dtype with unit of “s”, “us”, or “ms” returning NumpyExtensionArray instead of DatetimeArray or TimedeltaArray (GH 52859)
+
+Bug in array() when given an empty list and no dtype returning NumpyExtensionArray instead of FloatingArray (GH 54371)
+
+Bug in ArrowDtype.numpy_dtype() returning nanosecond units for non-nanosecond pyarrow.timestamp and pyarrow.duration types (GH 51800)
+
+Bug in DataFrame.__repr__() incorrectly raising a TypeError when the dtype of a column is np.record (GH 48526)
+
+Bug in DataFrame.info() raising ValueError when use_numba is set (GH 51922)
+
+Bug in DataFrame.insert() raising TypeError if loc is np.int64 (GH 53193)
+
+Bug in HDFStore.select() loses precision of large int when stored and retrieved (GH 54186)
+
+Bug in Series.astype() not supporting object_ (GH 54251)
+
+Strings
+Bug in Series.str() that did not raise a TypeError when iterated (GH 54173)
+
+Bug in repr for DataFrame` with string-dtype columns (GH 54797)
+
+Interval
+IntervalIndex.get_indexer() and IntervalIndex.get_indexer_nonunique() raising if target is read-only array (GH 53703)
+
+Bug in IntervalDtype where the object could be kept alive when deleted (GH 54184)
+
+Bug in interval_range() where a float step would produce incorrect intervals from floating point artifacts (GH 54477)
+
+Indexing
+Bug in DataFrame.__setitem__() losing dtype when setting a DataFrame into duplicated columns (GH 53143)
+
+Bug in DataFrame.__setitem__() with a boolean mask and DataFrame.putmask() with mixed non-numeric dtypes and a value other than NaN incorrectly raising TypeError (GH 53291)
+
+Bug in DataFrame.iloc() when using nan as the only element (GH 52234)
+
+Bug in Series.loc() casting Series to np.dnarray when assigning Series at predefined index of object dtype Series (GH 48933)
+
+Missing
+Bug in DataFrame.interpolate() failing to fill across data when method is "pad", "ffill", "bfill", or "backfill" (GH 53898)
+
+Bug in DataFrame.interpolate() ignoring inplace when DataFrame is empty (GH 53199)
+
+Bug in Series.idxmin(), Series.idxmax(), DataFrame.idxmin(), DataFrame.idxmax() with a DatetimeIndex index containing NaT incorrectly returning NaN instead of NaT (GH 43587)
+
+Bug in Series.interpolate() and DataFrame.interpolate() failing to raise on invalid downcast keyword, which can be only None or "infer" (GH 53103)
+
+Bug in Series.interpolate() and DataFrame.interpolate() with complex dtype incorrectly failing to fill NaN entries (GH 53635)
+
+MultiIndex
+Bug in MultiIndex.set_levels() not preserving dtypes for Categorical (GH 52125)
+
+Bug in displaying a MultiIndex with a long element (GH 52960)
+
+I/O
+DataFrame.to_orc() now raising ValueError when non-default Index is given (GH 51828)
+
+DataFrame.to_sql() now raising ValueError when the name param is left empty while using SQLAlchemy to connect (GH 52675)
+
+Bug in json_normalize() could not parse metadata fields list type (GH 37782)
+
+Bug in read_csv() where it would error when parse_dates was set to a list or dictionary with engine="pyarrow" (GH 47961)
+
+Bug in read_csv() with engine="pyarrow" raising when specifying a dtype with index_col (GH 53229)
+
+Bug in read_hdf() not properly closing store after an IndexError is raised (GH 52781)
+
+Bug in read_html() where style elements were read into DataFrames (GH 52197)
+
+Bug in read_html() where tail texts were removed together with elements containing display:none style (GH 51629)
+
+Bug in read_sql_table() raising an exception when reading a view (GH 52969)
+
+Bug in read_sql() when reading multiple timezone aware columns with the same column name (GH 44421)
+
+Bug in read_xml() stripping whitespace in string data (GH 53811)
+
+Bug in DataFrame.to_html() where colspace was incorrectly applied in case of multi index columns (GH 53885)
+
+Bug in DataFrame.to_html() where conversion for an empty DataFrame with complex dtype raised a ValueError (GH 54167)
+
+Bug in DataFrame.to_json() where DateTimeArray/DateTimeIndex with non nanosecond precision could not be serialized correctly (GH 53686)
+
+Bug when writing and reading empty Stata dta files where dtype information was lost (GH 46240)
+
+Bug where bz2 was treated as a hard requirement (GH 53857)
+
+Period
+Bug in PeriodDtype constructor failing to raise TypeError when no argument is passed or when None is passed (GH 27388)
+
+Bug in PeriodDtype constructor incorrectly returning the same normalize for different DateOffset freq inputs (GH 24121)
+
+Bug in PeriodDtype constructor raising ValueError instead of TypeError when an invalid type is passed (GH 51790)
+
+Bug in PeriodDtype where the object could be kept alive when deleted (GH 54184)
+
+Bug in read_csv() not processing empty strings as a null value, with engine="pyarrow" (GH 52087)
+
+Bug in read_csv() returning object dtype columns instead of float64 dtype columns with engine="pyarrow" for columns that are all null with engine="pyarrow" (GH 52087)
+
+Bug in Period.now() not accepting the freq parameter as a keyword argument (GH 53369)
+
+Bug in PeriodIndex.map() with na_action="ignore" (GH 51644)
+
+Bug in arrays.PeriodArray.map() and PeriodIndex.map(), where the supplied callable operated array-wise instead of element-wise (GH 51977)
+
+Bug in incorrectly allowing construction of Period or PeriodDtype with CustomBusinessDay freq; use BusinessDay instead (GH 52534)
+
+Plotting
+Bug in Series.plot() when invoked with color=None (GH 51953)
+
+Fixed UserWarning in DataFrame.plot.scatter() when invoked with c="b" (GH 53908)
+
+Groupby/resample/rolling
+Bug in DataFrameGroupBy.idxmin(), SeriesGroupBy.idxmin(), DataFrameGroupBy.idxmax(), SeriesGroupBy.idxmax() returns wrong dtype when used on an empty DataFrameGroupBy or SeriesGroupBy (GH 51423)
+
+Bug in DataFrame.groupby.rank() on nullable datatypes when passing na_option="bottom" or na_option="top" (GH 54206)
+
+Bug in DataFrame.resample() and Series.resample() in incorrectly allowing non-fixed freq when resampling on a TimedeltaIndex (GH 51896)
+
+Bug in DataFrame.resample() and Series.resample() losing time zone when resampling empty data (GH 53664)
+
+Bug in DataFrame.resample() and Series.resample() where origin has no effect in resample when values are outside of axis (GH 53662)
+
+Bug in weighted rolling aggregations when specifying min_periods=0 (GH 51449)
+
+Bug in DataFrame.groupby() and Series.groupby() where, when the index of the grouped Series or DataFrame was a DatetimeIndex, TimedeltaIndex or PeriodIndex, and the groupby method was given a function as its first argument, the function operated on the whole index rather than each element of the index (GH 51979)
+
+Bug in DataFrameGroupBy.agg() with lists not respecting as_index=False (GH 52849)
+
+Bug in DataFrameGroupBy.apply() causing an error to be raised when the input DataFrame was subset as a DataFrame after groupby ([['a']] and not ['a']) and the given callable returned Series that were not all indexed the same (GH 52444)
+
+Bug in DataFrameGroupBy.apply() raising a TypeError when selecting multiple columns and providing a function that returns np.ndarray results (GH 18930)
+
+Bug in DataFrameGroupBy.groups() and SeriesGroupBy.groups() with a datetime key in conjunction with another key produced an incorrect number of group keys (GH 51158)
+
+Bug in DataFrameGroupBy.quantile() and SeriesGroupBy.quantile() may implicitly sort the result index with sort=False (GH 53009)
+
+Bug in SeriesGroupBy.size() where the dtype would be np.int64 for data with ArrowDtype or masked dtypes (e.g. Int64) (GH 53831)
+
+Bug in DataFrame.groupby() with column selection on the resulting groupby object not returning names as tuples when grouping by a list consisting of a single element (GH 53500)
+
+Bug in DataFrameGroupBy.var() and SeriesGroupBy.var() failing to raise TypeError when called with datetime64, timedelta64 or PeriodDtype values (GH 52128, GH 53045)
+
+Bug in DataFrameGroupBy.resample() with kind="period" raising AttributeError (GH 24103)
+
+Bug in Resampler.ohlc() with empty object returning a Series instead of empty DataFrame (GH 42902)
+
+Bug in SeriesGroupBy.count() and DataFrameGroupBy.count() where the dtype would be np.int64 for data with ArrowDtype or masked dtypes (e.g. Int64) (GH 53831)
+
+Bug in SeriesGroupBy.nth() and DataFrameGroupBy.nth() after performing column selection when using dropna="any" or dropna="all" would not subset columns (GH 53518)
+
+Bug in SeriesGroupBy.nth() and DataFrameGroupBy.nth() raised after performing column selection when using dropna="any" or dropna="all" resulted in rows being dropped (GH 53518)
+
+Bug in SeriesGroupBy.sum() and DataFrameGroupBy.sum() summing np.inf + np.inf and (-np.inf) + (-np.inf) to np.nan instead of np.inf and -np.inf respectively (GH 53606)
+
+Bug in Series.groupby() raising an error when grouped Series has a DatetimeIndex index and a Series with a name that is a month is given to the by argument (GH 48509)
+
+Reshaping
+Bug in concat() coercing to object dtype when one column has pa.null() dtype (GH 53702)
+
+Bug in crosstab() when dropna=False would not keep np.nan in the result (GH 10772)
+
+Bug in melt() where the variable column would lose extension dtypes (GH 54297)
+
+Bug in merge_asof() raising KeyError for extension dtypes (GH 52904)
+
+Bug in merge_asof() raising ValueError for data backed by read-only ndarrays (GH 53513)
+
+Bug in merge_asof() with left_index=True or right_index=True with mismatched index dtypes giving incorrect results in some cases instead of raising MergeError (GH 53870)
+
+Bug in merge() when merging on integer ExtensionDtype and float NumPy dtype raising TypeError (GH 46178)
+
+Bug in DataFrame.agg() and Series.agg() on non-unique columns would return incorrect type when dist-like argument passed in (GH 51099)
+
+Bug in DataFrame.combine_first() ignoring other’s columns if other is empty (GH 53792)
+
+Bug in DataFrame.idxmin() and DataFrame.idxmax(), where the axis dtype would be lost for empty frames (GH 53265)
+
+Bug in DataFrame.merge() not merging correctly when having MultiIndex with single level (GH 52331)
+
+Bug in DataFrame.stack() losing extension dtypes when columns is a MultiIndex and frame contains mixed dtypes (GH 45740)
+
+Bug in DataFrame.stack() sorting columns lexicographically (GH 53786)
+
+Bug in DataFrame.transpose() inferring dtype for object column (GH 51546)
+
+Bug in Series.combine_first() converting int64 dtype to float64 and losing precision on very large integers (GH 51764)
+
+Bug when joining empty DataFrame objects, where the joined index would be a RangeIndex instead of the joined index type (GH 52777)
+
+Sparse
+Bug in SparseDtype constructor failing to raise TypeError when given an incompatible dtype for its subtype, which must be a NumPy dtype (GH 53160)
+
+Bug in arrays.SparseArray.map() allowed the fill value to be included in the sparse values (GH 52095)
+
+ExtensionArray
+Bug in ArrowStringArray constructor raises ValueError with dictionary types of strings (GH 54074)
+
+Bug in DataFrame constructor not copying Series with extension dtype when given in dict (GH 53744)
+
+Bug in ArrowExtensionArray converting pandas non-nanosecond temporal objects from non-zero values to zero values (GH 53171)
+
+Bug in Series.quantile() for PyArrow temporal types raising ArrowInvalid (GH 52678)
+
+Bug in Series.rank() returning wrong order for small values with Float64 dtype (GH 52471)
+
+Bug in Series.unique() for boolean ArrowDtype with NA values (GH 54667)
+
+Bug in __iter__() and __getitem__() returning python datetime and timedelta objects for non-nano dtypes (GH 53326)
+
+Bug in factorize() returning incorrect uniques for a pyarrow.dictionary type pyarrow.chunked_array with more than one chunk (GH 54844)
+
+Bug when passing an ExtensionArray subclass to dtype keywords. This will now raise a UserWarning to encourage passing an instance instead (GH 31356, GH 54592)
+
+Bug where the DataFrame repr would not work when a column had an ArrowDtype with a pyarrow.ExtensionDtype (GH 54063)
+
+Bug where the __from_arrow__ method of masked ExtensionDtypes (e.g. Float64Dtype, BooleanDtype) would not accept PyArrow arrays of type pyarrow.null() (GH 52223)
+
+Styler
+Bug in Styler._copy() calling overridden methods in subclasses of Styler (GH 52728)
+
+Metadata
+Fixed metadata propagation in DataFrame.max(), DataFrame.min(), DataFrame.prod(), DataFrame.mean(), Series.mode(), DataFrame.median(), DataFrame.sem(), DataFrame.skew(), DataFrame.kurt() (GH 28283)
+
+Fixed metadata propagation in DataFrame.squeeze(), and DataFrame.describe() (GH 28283)
+
+Fixed metadata propagation in DataFrame.std() (GH 28283)
+
+Other
+Bug in FloatingArray.__contains__ with NaN item incorrectly returning False when NaN values are present (GH 52840)
+
+Bug in DataFrame and Series raising for data of complex dtype when NaN values are present (GH 53627)
+
+Bug in DatetimeIndex where repr of index passed with time does not print time is midnight and non-day based freq(GH 53470)
+
+Bug in testing.assert_frame_equal() and testing.assert_series_equal() now throw assertion error for two unequal sets (GH 51727)
+
+Bug in testing.assert_frame_equal() checks category dtypes even when asked not to check index type (GH 52126)
+
+Bug in api.interchange.from_dataframe() was not respecting allow_copy argument (GH 54322)
+
+Bug in api.interchange.from_dataframe() was raising during interchanging from non-pandas tz-aware data containing null values (GH 54287)
+
+Bug in api.interchange.from_dataframe() when converting an empty DataFrame object (GH 53155)
+
+Bug in from_dummies() where the resulting Index did not match the original Index (GH 54300)
+
+Bug in from_dummies() where the resulting data would always be object dtype instead of the dtype of the columns (GH 54300)
+
+Bug in DataFrameGroupBy.first(), DataFrameGroupBy.last(), SeriesGroupBy.first(), and SeriesGroupBy.last() where an empty group would return np.nan instead of the corresponding ExtensionArray NA value (GH 39098)
+
+Bug in DataFrame.pivot_table() with casting the mean of ints back to an int (GH 16676)
+
+Bug in DataFrame.reindex() with a fill_value that should be inferred with a ExtensionDtype incorrectly inferring object dtype (GH 52586)
+
+Bug in DataFrame.shift() with axis=1 on a DataFrame with a single ExtensionDtype column giving incorrect results (GH 53832)
+
+Bug in Index.sort_values() when a key is passed (GH 52764)
+
+Bug in Series.align(), DataFrame.align(), Series.reindex(), DataFrame.reindex(), Series.interpolate(), DataFrame.interpolate(), incorrectly failing to raise with method=”asfreq” (GH 53620)
+
+Bug in Series.argsort() failing to raise when an invalid axis is passed (GH 54257)
+
+Bug in Series.map() when giving a callable to an empty series, the returned series had object dtype. It now keeps the original dtype (GH 52384)
+
+Bug in Series.memory_usage() when deep=True throw an error with Series of objects and the returned value is incorrect, as it does not take into account GC corrections (GH 51858)
+
+Bug in period_range() the default behavior when freq was not passed as an argument was incorrect(GH 53687)
+
+Fixed incorrect __name__ attribute of pandas._libs.json (GH 52898)
+
+
+
+What’s new in 2.0.3 (June 28, 2023)
+These are the changes in pandas 2.0.3. See Release notes for a full changelog including other versions of pandas.
+
+Fixed regressions
+Bug in Timestamp.weekday`() was returning incorrect results before '0000-02-29' (GH 53738)
+
+Fixed performance regression in merging on datetime-like columns (GH 53231)
+
+Fixed regression when DataFrame.to_string() creates extra space for string dtypes (GH 52690)
+
+Bug fixes
+Bug in DataFrame.convert_dtype() and Series.convert_dtype() when trying to convert ArrowDtype with dtype_backend="nullable_numpy" (GH 53648)
+
+Bug in RangeIndex.union() when using sort=True with another RangeIndex (GH 53490)
+
+Bug in Series.reindex() when expanding a non-nanosecond datetime or timedelta Series would not fill with NaT correctly (GH 53497)
+
+Bug in read_csv() when defining dtype with bool[pyarrow] for the "c" and "python" engines (GH 53390)
+
+Bug in Series.str.split() and Series.str.rsplit() with expand=True for ArrowDtype with pyarrow.string (GH 53532)
+
+Bug in indexing methods (e.g. DataFrame.__getitem__()) where taking the entire DataFrame/Series would raise an OverflowError when Copy on Write was enabled and the length of the array was over the maximum size a 32-bit integer can hold (GH 53616)
+
+Bug when constructing a DataFrame with columns of an ArrowDtype with a pyarrow.dictionary type that reindexes the data (GH 53617)
+
+Bug when indexing a DataFrame or Series with an Index with a timestamp ArrowDtype would raise an AttributeError (GH 53644)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# GEOPANDAS CHANGELOG
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

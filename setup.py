@@ -5,6 +5,15 @@ from pathlib import Path
 
 class CustomBuildPy(build_py):
     def run(self):
+        # Clean up __pycache__ folders
+        root_dir = Path(__file__).parent
+        for pycache_dir in root_dir.rglob('__pycache__'):
+            if pycache_dir.is_dir():
+                for cache_file in pycache_dir.iterdir():
+                    cache_file.unlink()  # Delete each file
+                pycache_dir.rmdir()      # Delete the empty directory
+                print(f"Cleaned up: {pycache_dir}")
+
         # Run the summary_knowledge_bases.py script
         script_path = Path(__file__).parent / 'ai_tools' / 'summary_knowledge_bases.py'
         subprocess.run(['python', str(script_path)], check=True)
@@ -14,7 +23,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.49.0",
+    version="0.50.0",
     packages=["ras_commander"],
     include_package_data=True,
     python_requires='>=3.10',
