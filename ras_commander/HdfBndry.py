@@ -79,7 +79,7 @@ class HdfBndry:
                 
                 # Get geometries
                 bc_line_data = hdf_file[bc_lines_path]
-                geoms = HdfUtils.get_polylines_from_parts(hdf_path, bc_lines_path)
+                geoms = HdfBase.get_polylines_from_parts(hdf_path, bc_lines_path)
                 
                 # Get attributes
                 attributes = pd.DataFrame(bc_line_data["Attributes"][()])
@@ -94,7 +94,7 @@ class HdfBndry:
                 gdf = gpd.GeoDataFrame(
                     attributes,
                     geometry=geoms,
-                    crs=HdfUtils.get_projection(hdf_file)
+                    crs=HdfBase.get_projection(hdf_file)
                 )
                 
                 # Add ID column if not present
@@ -134,11 +134,11 @@ class HdfBndry:
                 names = np.vectorize(HdfUtils.convert_ras_string)(
                     bl_line_data["Attributes"][()]["Name"]
                 )
-                geoms = HdfUtils.get_polylines_from_parts(hdf_path, breaklines_path)
+                geoms = HdfBase.get_polylines_from_parts(hdf_path, breaklines_path)
                 return gpd.GeoDataFrame(
                     {"bl_id": bl_line_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
-                    crs=HdfUtils.get_projection(hdf_file),
+                    crs=HdfBase.get_projection(hdf_file),
                 )
         except Exception as e:
             logger.error(f"Error reading breaklines: {str(e)}")
@@ -186,7 +186,7 @@ class HdfBndry:
                 return gpd.GeoDataFrame(
                     {"rr_id": rr_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
-                    crs=HdfUtils.get_projection(hdf_file),
+                    crs=HdfBase.get_projection(hdf_file),
                 )
         except Exception as e:
             logger.error(f"Error reading refinement regions: {str(e)}")
@@ -229,7 +229,7 @@ class HdfBndry:
                 except ValueError:
                     types = np.array([""] * attributes.shape[0])
                 
-                geoms = HdfUtils.get_polylines_from_parts(hdf_path, reference_lines_path)
+                geoms = HdfBase.get_polylines_from_parts(hdf_path, reference_lines_path)
                 
                 gdf = gpd.GeoDataFrame(
                     {
@@ -240,7 +240,7 @@ class HdfBndry:
                         "geometry": geoms,
                     },
                     geometry="geometry",
-                    crs=HdfUtils.get_projection(hdf_file),
+                    crs=HdfBase.get_projection(hdf_file),
                 )
                 
                 # Filter by mesh_name if provided
@@ -296,7 +296,7 @@ class HdfBndry:
                         "geometry": list(map(Point, points)),
                     },
                     geometry="geometry",
-                    crs=HdfUtils.get_projection(hdf_file),
+                    crs=HdfBase.get_projection(hdf_file),
                 )
                 
                 # Filter by mesh_name if provided
