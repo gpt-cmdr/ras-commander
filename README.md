@@ -13,11 +13,10 @@ Aaron Nichols, P.E., C.F.M.
 
 ## Don't Ask Me, Ask ChatGPT!
 
-Before you read any further, you can [chat directly with ChatGPT on this topic.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results. 
+Before you read any further, you can [chat directly with ChatGPT.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant) about the library  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results, although this ability is still limited in comparison to the provided library assistant. 
 
-There are also [AI Assistant Knowledge Bases](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases) with various versions available to directly use with large context LLM models such as Anthropic's Claude, Google Gemini and OpenAI's GPT4o and o1 models.  
+The RAS-Commander libary is included which allows users to utilize their own API keys to use OpenAI, Anthropic, or other models to build scripts and notebooks that utilize the ras-commander libary.  See the 'library-assistant' subfolder. 
 
-FUTURE:  TEMPLATES are available to use with AI Assistant Notebooks to build your own automation tools.  When used with large context models, these templates allow you to ask GPT to build a workflow from scratch to automate your projects. 
 
 ## Background
 The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
