@@ -13,7 +13,7 @@ Aaron Nichols, P.E., C.F.M.
 
 ## Don't Ask Me, Ask ChatGPT!
 
-Before you read any further, you can [chat directly with ChatGPT.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant) about the library  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results, although this ability is still limited in comparison to the provided library assistant. 
+Before you read any further, you can [chat directly with ChatGPT.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant) about the library.  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results, although this ability is still limited in comparison to the provided library assistant. 
 
 
 ## Background
