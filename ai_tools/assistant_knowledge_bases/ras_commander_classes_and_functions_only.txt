@@ -1,4 +1,4 @@
-File: C:\GH\ras-commander\ras_commander\Decorators.py
+File: c:\SCRATCH\ras-commander\ras_commander\Decorators.py
 ==================================================
 from functools import wraps
 from pathlib import Path
@@ -130,7 +130,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
     return decorator
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfBase.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -274,29 +274,66 @@ class HdfBase:
             logger.error(f"Error reading 2D flow area names and counts from {hdf_path}: {str(e)}")
             raise ValueError(f"Failed to get 2D flow area names and counts: {str(e)}")
 
+
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def get_projection(hdf_path: Path) -> Optional[str]:
         """
-        Get the projection information from the HDF file.
-
+        Get projection information from HDF file or RASMapper project file.
+        Converts WKT projection to EPSG code for GeoDataFrame compatibility.
+        
         Args:
             hdf_path (Path): Path to the HDF file.
 
         Returns:
-            Optional[str]: The projection information as a string, or None if not found.
+            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), or None if not found.
         """
+        from pyproj import CRS
+
+        project_folder = hdf_path.parent
+        wkt = None
+        
+        # Try HDF file
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 proj_wkt = hdf_file.attrs.get("Projection")
-                if proj_wkt is None:
-                    return None
-                if isinstance(proj_wkt, bytes) or isinstance(proj_wkt, np.bytes_):
-                    proj_wkt = proj_wkt.decode("utf-8")
-                return proj_wkt
+                if proj_wkt is not None:
+                    if isinstance(proj_wkt, (bytes, np.bytes_)):
+                        wkt = proj_wkt.decode("utf-8")
+                        logger.info(f"Found projection in HDF file: {hdf_path}")
+                        return wkt
         except Exception as e:
-            logger.error(f"Error reading projection from {hdf_path}: {str(e)}")
-            return None
+            logger.error(f"Error reading projection from HDF file {hdf_path}: {str(e)}")
+        # Try RASMapper file if no HDF projection
+        if not wkt:
+            try:
+                rasmap_files = list(project_folder.glob("*.rasmap"))
+                if rasmap_files:
+                    with open(rasmap_files[0], 'r') as f:
+                        content = f.read()
+                        
+                    proj_match = re.search(r'<RASProjectionFilename Filename="(.*?)"', content)
+                    if proj_match:
+                        proj_file = project_folder / proj_match.group(1).replace('.\\', '')
+                        if proj_file.exists():
+                            with open(proj_file, 'r') as f:
+                                wkt = f.read().strip()
+                                logger.info(f"Found projection in RASMapper file: {proj_file}")
+                                return wkt
+            except Exception as e:
+                logger.error(f"Error reading RASMapper projection file: {str(e)}")
+        
+        logger.critical(
+            "No valid projection found. Checked:\n"
+            f"1. HDF file projection attribute: {hdf_path}\n"
+            f"2. RASMapper projection file {proj_file} found in RASMapper file, but was invalid\n"
+            "To fix this:\n"
+            "1. Open RASMapper\n"
+            "2. Click Map > Set Projection\n" 
+            "3. Select an appropriate projection file or coordinate system\n"
+            "4. Save the RASMapper project"
+        )
+        return None
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -442,7 +479,7 @@ class HdfBase:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfBndry.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -759,7 +796,7 @@ class HdfBndry:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -878,74 +915,273 @@ class HdfFluvialPluvial:
                 cell_adjacency, common_edges, cell_times, delta_t
             )
 
-            # Join adjacent LineStrings into simple LineStrings
+            # FOCUS YOUR REVISIONS HERE: 
+            # Join adjacent LineStrings into simple LineStrings by connecting them at shared endpoints
             logger.info("Joining adjacent LineStrings into simple LineStrings...")
-            joined_lines = []
             
             def get_coords(geom):
-                """Helper function to get coordinates from either LineString or MultiLineString"""
+                """Helper function to extract coordinates from geometry objects
+                
+                Args:
+                    geom: A Shapely LineString or MultiLineString geometry
+                
+                Returns:
+                    tuple: Tuple containing:
+                        - list of original coordinates [(x1,y1), (x2,y2),...]
+                        - list of rounded coordinates for comparison
+                        - None if invalid geometry
+                """
                 if isinstance(geom, LineString):
-                    return list(geom.coords)
+                    orig_coords = list(geom.coords)
+                    # Round coordinates to 0.01 for comparison
+                    rounded_coords = [(round(x, 2), round(y, 2)) for x, y in orig_coords]
+                    return orig_coords, rounded_coords
                 elif isinstance(geom, MultiLineString):
-                    return list(geom.geoms[0].coords)
-                return None
+                    orig_coords = list(geom.geoms[0].coords)
+                    rounded_coords = [(round(x, 2), round(y, 2)) for x, y in orig_coords]
+                    return orig_coords, rounded_coords
+                return None, None
 
-            # Create a dictionary to store start and end points for each line
+            def find_connecting_line(current_end, unused_lines, endpoint_counts, rounded_endpoints):
+                """Find a line that connects to the current endpoint
+                
+                Args:
+                    current_end: Tuple of (x, y) coordinates
+                    unused_lines: Set of unused line indices
+                    endpoint_counts: Dict of endpoint occurrence counts
+                    rounded_endpoints: Dict of rounded endpoint coordinates
+                
+                Returns:
+                    tuple: (line_index, should_reverse, found) or (None, None, False)
+                """
+                rounded_end = (round(current_end[0], 2), round(current_end[1], 2))
+                
+                # Skip if current endpoint is connected to more than 2 lines
+                if endpoint_counts.get(rounded_end, 0) > 2:
+                    return None, None, False
+                
+                for i in unused_lines:
+                    start, end = rounded_endpoints[i]
+                    if start == rounded_end and endpoint_counts.get(start, 0) <= 2:
+                        return i, False, True
+                    elif end == rounded_end and endpoint_counts.get(end, 0) <= 2:
+                        return i, True, True
+                return None, None, False
+
+            # Initialize data structures
+            joined_lines = []
+            unused_lines = set(range(len(boundary_edges)))
+            
+            # Create endpoint lookup dictionaries
             line_endpoints = {}
+            rounded_endpoints = {}
             for i, edge in enumerate(boundary_edges):
-                coords = get_coords(edge)
-                if coords:
-                    line_endpoints[i] = (coords[0], coords[-1])
+                coords_result = get_coords(edge)
+                if coords_result:
+                    orig_coords, rounded_coords = coords_result
+                    line_endpoints[i] = (orig_coords[0], orig_coords[-1])
+                    rounded_endpoints[i] = (rounded_coords[0], rounded_coords[-1])
 
-            # Process lines in order
-            used_indices = set()
-            while len(used_indices) < len(boundary_edges):
-                current_line = []
+            # Count endpoint occurrences
+            endpoint_counts = {}
+            for start, end in rounded_endpoints.values():
+                endpoint_counts[start] = endpoint_counts.get(start, 0) + 1
+                endpoint_counts[end] = endpoint_counts.get(end, 0) + 1
+
+            # Iteratively join lines
+            while unused_lines:
+                # Start a new line chain
                 current_points = []
                 
-                # Find a new starting line if needed
-                for i in range(len(boundary_edges)):
-                    if i not in used_indices:
-                        current_line.append(boundary_edges[i])
-                        coords = get_coords(boundary_edges[i])
-                        if coords:
-                            current_points.extend(coords)
-                        used_indices.add(i)
-                        break
+                # Find first unused line
+                start_idx = unused_lines.pop()
+                start_coords, _ = get_coords(boundary_edges[start_idx])
+                if start_coords:
+                    current_points.extend(start_coords)
                 
-                # Continue adding connected lines
-                while True:
-                    found_next = False
-                    current_end = current_points[-1] if current_points else None
+                # Try to extend in both directions
+                continue_joining = True
+                while continue_joining:
+                    continue_joining = False
                     
-                    # Look for the next connected line
-                    for i, (start, end) in line_endpoints.items():
-                        if i not in used_indices and current_end:
-                            if start == current_end:
-                                # Add line in forward direction
-                                coords = get_coords(boundary_edges[i])
-                                if coords:
-                                    current_points.extend(coords[1:])  # Skip first point to avoid duplication
-                                current_line.append(boundary_edges[i])
-                                used_indices.add(i)
-                                found_next = True
-                                break
-                            elif end == current_end:
-                                # Add line in reverse direction
-                                coords = get_coords(boundary_edges[i])
-                                if coords:
-                                    current_points.extend(reversed(coords[:-1]))  # Skip last point to avoid duplication
-                                current_line.append(boundary_edges[i])
-                                used_indices.add(i)
-                                found_next = True
-                                break
+                    # Try to extend forward
+                    next_idx, should_reverse, found = find_connecting_line(
+                        current_points[-1], 
+                        unused_lines,
+                        endpoint_counts,
+                        rounded_endpoints
+                    )
                     
-                    if not found_next:
-                        break
+                    if found:
+                        unused_lines.remove(next_idx)
+                        next_coords, _ = get_coords(boundary_edges[next_idx])
+                        if next_coords:
+                            if should_reverse:
+                                current_points.extend(reversed(next_coords[:-1]))
+                            else:
+                                current_points.extend(next_coords[1:])
+                        continue_joining = True
+                        continue
+                    
+                    # Try to extend backward
+                    prev_idx, should_reverse, found = find_connecting_line(
+                        current_points[0], 
+                        unused_lines,
+                        endpoint_counts,
+                        rounded_endpoints
+                    )
+                    
+                    if found:
+                        unused_lines.remove(prev_idx)
+                        prev_coords, _ = get_coords(boundary_edges[prev_idx])
+                        if prev_coords:
+                            if should_reverse:
+                                current_points[0:0] = reversed(prev_coords[:-1])
+                            else:
+                                current_points[0:0] = prev_coords[:-1]
+                        continue_joining = True
                 
-                # Create a single LineString from the collected points
+                # Create final LineString from collected points
                 if current_points:
                     joined_lines.append(LineString(current_points))
+
+            # FILL GAPS BETWEEN JOINED LINES
+            logger.info(f"Starting gap analysis for {len(joined_lines)} line segments...")
+            
+            def find_endpoints(lines):
+                """Get all endpoints of the lines with their indices"""
+                endpoints = []
+                for i, line in enumerate(lines):
+                    coords = list(line.coords)
+                    endpoints.append((coords[0], i, 'start'))
+                    endpoints.append((coords[-1], i, 'end'))
+                return endpoints
+            
+            def find_nearby_points(point1, point2, tolerance=0.01):
+                """Check if two points are within tolerance distance"""
+                return (abs(point1[0] - point2[0]) <= tolerance and 
+                       abs(point1[1] - point2[1]) <= tolerance)
+            
+            def find_gaps(lines, tolerance=0.01):
+                """Find gaps between line endpoints"""
+                logger.info("Analyzing line endpoints to identify gaps...")
+                endpoints = []
+                for i, line in enumerate(lines):
+                    coords = list(line.coords)
+                    start = coords[0]
+                    end = coords[-1]
+                    endpoints.append({
+                        'point': start,
+                        'line_idx': i,
+                        'position': 'start',
+                        'coords': coords
+                    })
+                    endpoints.append({
+                        'point': end,
+                        'line_idx': i,
+                        'position': 'end',
+                        'coords': coords
+                    })
+                
+                logger.info(f"Found {len(endpoints)} endpoints to analyze")
+                gaps = []
+                
+                # Compare each endpoint with all others
+                for i, ep1 in enumerate(endpoints):
+                    for ep2 in endpoints[i+1:]:
+                        # Skip if endpoints are from same line
+                        if ep1['line_idx'] == ep2['line_idx']:
+                            continue
+                            
+                        point1 = ep1['point']
+                        point2 = ep2['point']
+                        
+                        # Skip if points are too close (already connected)
+                        if find_nearby_points(point1, point2):
+                            continue
+                            
+                        # Check if this could be a gap
+                        dist = LineString([point1, point2]).length
+                        if dist < 10.0:  # Maximum gap distance threshold
+                            gaps.append({
+                                'start': ep1,
+                                'end': ep2,
+                                'distance': dist
+                            })
+                
+                logger.info(f"Identified {len(gaps)} potential gaps to fill")
+                return sorted(gaps, key=lambda x: x['distance'])
+
+            def join_lines_with_gap(line1_coords, line2_coords, gap_start_pos, gap_end_pos):
+                """Join two lines maintaining correct point order based on gap positions"""
+                if gap_start_pos == 'end' and gap_end_pos == 'start':
+                    # line1 end connects to line2 start
+                    return line1_coords + line2_coords
+                elif gap_start_pos == 'start' and gap_end_pos == 'end':
+                    # line1 start connects to line2 end
+                    return list(reversed(line2_coords)) + line1_coords
+                elif gap_start_pos == 'end' and gap_end_pos == 'end':
+                    # line1 end connects to line2 end
+                    return line1_coords + list(reversed(line2_coords))
+                else:  # start to start
+                    # line1 start connects to line2 start
+                    return list(reversed(line1_coords)) + line2_coords
+
+            # Process gaps and join lines
+            processed_lines = joined_lines.copy()
+            line_groups = [[i] for i in range(len(processed_lines))]
+            gaps = find_gaps(processed_lines)
+            
+            filled_gap_count = 0
+            for gap_idx, gap in enumerate(gaps, 1):
+                logger.info(f"Processing gap {gap_idx}/{len(gaps)} (distance: {gap['distance']:.3f})")
+                
+                line1_idx = gap['start']['line_idx']
+                line2_idx = gap['end']['line_idx']
+                
+                # Find the groups containing these lines
+                group1 = next(g for g in line_groups if line1_idx in g)
+                group2 = next(g for g in line_groups if line2_idx in g)
+                
+                # Skip if lines are already in the same group
+                if group1 == group2:
+                    continue
+                
+                # Get the coordinates for both lines
+                line1_coords = gap['start']['coords']
+                line2_coords = gap['end']['coords']
+                
+                # Join the lines in correct order
+                joined_coords = join_lines_with_gap(
+                    line1_coords,
+                    line2_coords,
+                    gap['start']['position'],
+                    gap['end']['position']
+                )
+                
+                # Create new joined line
+                new_line = LineString(joined_coords)
+                
+                # Update processed_lines and line_groups
+                new_idx = len(processed_lines)
+                processed_lines.append(new_line)
+                
+                # Merge groups and remove old ones
+                new_group = group1 + group2
+                line_groups.remove(group1)
+                line_groups.remove(group2)
+                line_groups.append(new_group + [new_idx])
+                
+                filled_gap_count += 1
+                logger.info(f"Successfully joined lines {line1_idx} and {line2_idx}")
+            
+            logger.info(f"Gap filling complete. Filled {filled_gap_count} out of {len(gaps)} gaps")
+            
+            # Get final lines (take the last line from each group)
+            final_lines = [processed_lines[group[-1]] for group in line_groups]
+            
+            logger.info(f"Final cleanup complete. Resulting in {len(final_lines)} line segments")
+            joined_lines = final_lines
 
             # Create final GeoDataFrame with CRS from cell_polygons_gdf
             logger.info("Creating final GeoDataFrame for boundaries...")
@@ -1053,27 +1289,40 @@ class HdfFluvialPluvial:
 
         Note:
             Boundaries are identified where the absolute time difference between adjacent
-            cells exceeds the specified delta_t threshold.
+            cells exceeds the specified delta_t threshold. Each boundary edge is only
+            included once, regardless of which cell it is accessed from.
         """
+        # Use a set to store processed cell pairs and avoid duplicates
+        processed_pairs = set()
         boundary_edges = []
+
         with tqdm(total=len(cell_adjacency), desc="Processing cell adjacencies") as pbar:
             for cell_id, neighbors in cell_adjacency.items():
                 cell_time = cell_times[cell_id]
 
                 for neighbor_id in neighbors:
+                    # Create a sorted tuple of the cell pair to ensure uniqueness
+                    cell_pair = tuple(sorted([cell_id, neighbor_id]))
+                    
+                    # Skip if we've already processed this pair
+                    if cell_pair in processed_pairs:
+                        continue
+                        
                     neighbor_time = cell_times[neighbor_id]
                     time_diff = abs((cell_time - neighbor_time).total_seconds() / 3600)
 
                     if time_diff >= delta_t:
                         boundary_edges.append(common_edges[cell_id][neighbor_id])
+                    
+                    # Mark this pair as processed
+                    processed_pairs.add(cell_pair)
 
                 pbar.update(1)
 
         return boundary_edges
-
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -1487,7 +1736,7 @@ HdfInfiltration.save_statistics(soil_stats, Path('soil_statistics.csv'))
 """
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfMesh.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -1586,7 +1835,7 @@ class HdfMesh:
                     ]
                 )
         except Exception as e:
-            self.logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
             return list()
 
     @staticmethod
@@ -1953,7 +2202,7 @@ class HdfMesh:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPipe.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -2681,7 +2930,7 @@ class HdfPipe:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPlan.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -2977,7 +3226,7 @@ class HdfPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPlot.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -3085,7 +3334,7 @@ class HdfPlot:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPump.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -3406,7 +3655,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -4153,7 +4402,7 @@ class HdfResultsMesh:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -4415,7 +4664,7 @@ class HdfResultsPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -4602,7 +4851,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -4919,7 +5168,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfStruc.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -5199,7 +5448,7 @@ class HdfStruc:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfUtils.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -5638,7 +5887,7 @@ class HdfUtils:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfXsec.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -5741,7 +5990,7 @@ class HdfXsec:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
-                # Extract datasets
+                # Extract required datasets
                 poly_info = hdf['/Geometry/Cross Sections/Polyline Info'][:]
                 poly_parts = hdf['/Geometry/Cross Sections/Polyline Parts'][:]
                 poly_points = hdf['/Geometry/Cross Sections/Polyline Points'][:]
@@ -5824,43 +6073,61 @@ class HdfXsec:
                         else:
                             ineffective_blocks.append([])
                 
-                # Create GeoDataFrame
-                if geometries:
-                    # Create DataFrame from attributes
-                    data = {
-                        'geometry': geometries,
-                        'station_elevation': station_elevations,
-                        'mannings_n': mannings_n,
-                        'ineffective_blocks': ineffective_blocks,
-                        'River': [x['River'].decode('utf-8').strip() for x in xs_attrs],
-                        'Reach': [x['Reach'].decode('utf-8').strip() for x in xs_attrs],
-                        'RS': [x['RS'].decode('utf-8').strip() for x in xs_attrs],
-                        'Name': [x['Name'].decode('utf-8').strip() for x in xs_attrs],
-                        'Description': [x['Description'].decode('utf-8').strip() for x in xs_attrs],
-                        'Len Left': xs_attrs['Len Left'],
-                        'Len Channel': xs_attrs['Len Channel'],
-                        'Len Right': xs_attrs['Len Right'], 
-                        'Left Bank': xs_attrs['Left Bank'],
-                        'Right Bank': xs_attrs['Right Bank'],
-                        'Friction Mode': [x['Friction Mode'].decode('utf-8').strip() for x in xs_attrs],
-                        'Contr': xs_attrs['Contr'],
-                        'Expan': xs_attrs['Expan'],
-                        'Left Levee Sta': xs_attrs['Left Levee Sta'],
-                        'Left Levee Elev': xs_attrs['Left Levee Elev'],
-                        'Right Levee Sta': xs_attrs['Right Levee Sta'],
-                        'Right Levee Elev': xs_attrs['Right Levee Elev'],
-                        'HP Count': xs_attrs['HP Count'],
-                        'HP Start Elev': xs_attrs['HP Start Elev'],
-                        'HP Vert Incr': xs_attrs['HP Vert Incr'],
-                        'HP LOB Slices': xs_attrs['HP LOB Slices'],
-                        'HP Chan Slices': xs_attrs['HP Chan Slices'],
-                        'HP ROB Slices': xs_attrs['HP ROB Slices'],
-                        'Ineff Block Mode': xs_attrs['Ineff Block Mode'],
-                        'Obstr Block Mode': xs_attrs['Obstr Block Mode'],
-                        'Default Centerline': xs_attrs['Default Centerline'],
-                        'Last Edited': [x['Last Edited'].decode('utf-8').strip() for x in xs_attrs]
-                    }
+                # Create base dictionary with required fields
+                data = {
+                    'geometry': geometries,
+                    'station_elevation': station_elevations,
+                    'mannings_n': mannings_n,
+                    'ineffective_blocks': ineffective_blocks,
+                }
                 
+                # Define field mappings with default values
+                field_mappings = {
+                    'River': ('River', ''),
+                    'Reach': ('Reach', ''),
+                    'RS': ('RS', ''),
+                    'Name': ('Name', ''),
+                    'Description': ('Description', ''),
+                    'Len Left': ('Len Left', 0.0),
+                    'Len Channel': ('Len Channel', 0.0),
+                    'Len Right': ('Len Right', 0.0),
+                    'Left Bank': ('Left Bank', 0.0),
+                    'Right Bank': ('Right Bank', 0.0),
+                    'Friction Mode': ('Friction Mode', ''),
+                    'Contr': ('Contr', 0.0),
+                    'Expan': ('Expan', 0.0),
+                    'Left Levee Sta': ('Left Levee Sta', None),
+                    'Left Levee Elev': ('Left Levee Elev', None),
+                    'Right Levee Sta': ('Right Levee Sta', None),
+                    'Right Levee Elev': ('Right Levee Elev', None),
+                    'HP Count': ('HP Count', 0),
+                    'HP Start Elev': ('HP Start Elev', 0.0),
+                    'HP Vert Incr': ('HP Vert Incr', 0.0),
+                    'HP LOB Slices': ('HP LOB Slices', 0),
+                    'HP Chan Slices': ('HP Chan Slices', 0),
+                    'HP ROB Slices': ('HP ROB Slices', 0),
+                    'Ineff Block Mode': ('Ineff Block Mode', 0),
+                    'Obstr Block Mode': ('Obstr Block Mode', 0),
+                    'Default Centerline': ('Default Centerline', 0),
+                    'Last Edited': ('Last Edited', '')
+                }
+                
+                # Add fields that exist in xs_attrs
+                for field_name, (attr_name, default_value) in field_mappings.items():
+                    if attr_name in xs_attrs.dtype.names:
+                        if xs_attrs[attr_name].dtype.kind == 'S':
+                            # Handle string fields
+                            data[field_name] = [x[attr_name].decode('utf-8').strip() 
+                                              for x in xs_attrs]
+                        else:
+                            # Handle numeric fields
+                            data[field_name] = xs_attrs[attr_name]
+                    else:
+                        # Use default value if field doesn't exist
+                        data[field_name] = [default_value] * len(geometries)
+                        logger.debug(f"Field {attr_name} not found in attributes, using default value")
+                
+                if geometries:
                     gdf = gpd.GeoDataFrame(data)
                     
                     # Set CRS if available
@@ -5875,7 +6142,7 @@ class HdfXsec:
                 return gpd.GeoDataFrame()
                 
         except Exception as e:
-            logging.error(f"Error processing cross-section data: {str(e)}")
+            logger.error(f"Error processing cross-section data: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -6266,7 +6533,7 @@ class HdfXsec:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\LoggingConfig.py
+File: c:\SCRATCH\ras-commander\ras_commander\LoggingConfig.py
 ==================================================
 # logging_config.py
 
@@ -6360,7 +6627,7 @@ def log_call(logger=None):
 setup_logging()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasCmdr.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -6888,7 +7155,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasExamples.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -7287,7 +7554,7 @@ class RasExamples:
         return int(number * units[unit])
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGeo.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -7430,7 +7697,7 @@ class RasGeo:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGpt.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasGpt.py
 ==================================================
 import os
 from pathlib import Path
@@ -7462,7 +7729,7 @@ class RasGpt:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasMapper.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasMapper.py
 ==================================================
 """
 Class: RasMapper
@@ -7571,7 +7838,7 @@ significant_mukeys = HdfInfiltration.get_significant_mukeys(
 """
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPlan.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -8826,7 +9093,7 @@ class RasPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPrj.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -8913,6 +9180,31 @@ from ras_commander.Decorators import log_call
 
 logger = get_logger(__name__)
 
+def read_file_with_fallback_encoding(file_path, encodings=['utf-8', 'latin1', 'cp1252', 'iso-8859-1']):
+    """
+    Attempt to read a file using multiple encodings.
+    
+    Args:
+        file_path (str or Path): Path to the file to read
+        encodings (list): List of encodings to try, in order of preference
+    
+    Returns:
+        tuple: (content, encoding_used) or (None, None) if all encodings fail
+    """
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                content = file.read()
+                return content, encoding
+        except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            logger.error(f"Error reading file {file_path} with {encoding} encoding: {e}")
+            continue
+    
+    logger.error(f"Failed to read file {file_path} with any of the attempted encodings: {encodings}")
+    return None, None
+
 class RasPrj:
     
     def __init__(self):
@@ -8983,16 +9275,20 @@ class RasPrj:
             str: The full path to the geometry HDF file, or None if not found.
         """
         plan_file_path = self.project_folder / f"{self.project_name}.p{plan_number}"
+        content, encoding = read_file_with_fallback_encoding(plan_file_path)
+        
+        if content is None:
+            return None
+        
         try:
-            with open(plan_file_path, 'r') as plan_file:
-                for line in plan_file:
-                    if line.startswith("Geom File="):
-                        geom_file = line.strip().split('=')[1]
-                        geom_hdf_path = self.project_folder / f"{self.project_name}.{geom_file}.hdf"
-                        if geom_hdf_path.exists():
-                            return str(geom_hdf_path)
-                        else:
-                            return None
+            for line in content.splitlines():
+                if line.startswith("Geom File="):
+                    geom_file = line.strip().split('=')[1]
+                    geom_hdf_path = self.project_folder / f"{self.project_name}.{geom_file}.hdf"
+                    if geom_hdf_path.exists():
+                        return str(geom_hdf_path)
+                    else:
+                        return None
         except Exception as e:
             logger.error(f"Error reading plan file for geometry: {e}")
         return None
@@ -9009,51 +9305,54 @@ class RasPrj:
             dict: Dictionary containing extracted plan information.
         """
         plan_info = {}
+        content, encoding = read_file_with_fallback_encoding(plan_file_path)
+        
+        if content is None:
+            logger.error(f"Could not read plan file {plan_file_path} with any supported encoding")
+            return plan_info
+        
         try:
-            with open(plan_file_path, 'r') as file:
-                content = file.read()
-                
-                # Extract description
-                description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
-                if description_match:
-                    plan_info['description'] = description_match.group(1).strip()
-                
-                # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
-                
-                # Extract other critical information
-                supported_plan_keys = {
-                    'Computation Interval': r'Computation Interval=(.+)',
-                    'DSS File': r'DSS File=(.+)',
-                    'Flow File': r'Flow File=(.+)',
-                    'Friction Slope Method': r'Friction Slope Method=(.+)',
-                    'Geom File': r'Geom File=(.+)',
-                    'Mapping Interval': r'Mapping Interval=(.+)',
-                    'Plan Title': r'Plan Title=(.+)',
-                    'Program Version': r'Program Version=(.+)',
-                    'Run HTab': r'Run HTab=(.+)',
-                    'Run PostProcess': r'Run PostProcess=(.+)',
-                    'Run Sediment': r'Run Sediment=(.+)',
-                    'Run UNet': r'Run UNet=(.+)',
-                    'Run WQNet': r'Run WQNet=(.+)',
-                    'Short Identifier': r'Short Identifier=(.+)',
-                    'Simulation Date': r'Simulation Date=(.+)',
-                    'UNET D1 Cores': r'UNET D1 Cores=(.+)',
-                    'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
-                    'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
-                    'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
-                    'UNET D2 Name': r'UNET D2 Name=(.+)'
-                }
-                
-                # END Exception to Style Guide
-                
-                for key, pattern in supported_plan_keys.items():
-                    match = re.search(pattern, content)
-                    if match:
-                        plan_info[key] = match.group(1).strip()
+            # Extract description
+            description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            if description_match:
+                plan_info['description'] = description_match.group(1).strip()
             
-            logger.debug(f"Parsed plan file: {plan_file_path}")
+            # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
+            
+            # Extract other critical information
+            supported_plan_keys = {
+                'Computation Interval': r'Computation Interval=(.+)',
+                'DSS File': r'DSS File=(.+)',
+                'Flow File': r'Flow File=(.+)',
+                'Friction Slope Method': r'Friction Slope Method=(.+)',
+                'Geom File': r'Geom File=(.+)',
+                'Mapping Interval': r'Mapping Interval=(.+)',
+                'Plan Title': r'Plan Title=(.+)',
+                'Program Version': r'Program Version=(.+)',
+                'Run HTab': r'Run HTab=(.+)',
+                'Run PostProcess': r'Run PostProcess=(.+)',
+                'Run Sediment': r'Run Sediment=(.+)',
+                'Run UNet': r'Run UNet=(.+)',
+                'Run WQNet': r'Run WQNet=(.+)',
+                'Short Identifier': r'Short Identifier=(.+)',
+                'Simulation Date': r'Simulation Date=(.+)',
+                'UNET D1 Cores': r'UNET D1 Cores=(.+)',
+                'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
+                'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
+                'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
+                'UNET D2 Name': r'UNET D2 Name=(.+)'
+            }
+            
+            # END Exception to Style Guide
+            
+            for key, pattern in supported_plan_keys.items():
+                match = re.search(pattern, content)
+                if match:
+                    plan_info[key] = match.group(1).strip()
+            
+            logger.debug(f"Parsed plan file: {plan_file_path} using {encoding} encoding")
         except Exception as e:
-            logger.exception(f"Error parsing plan file {plan_file_path}: {e}")
+            logger.error(f"Error parsing plan file {plan_file_path}: {e}")
         
         return plan_info
     
@@ -9114,11 +9413,14 @@ class RasPrj:
             dict: Dictionary containing extracted unsteady flow information.
         """
         unsteady_info = {}
-        with open(unsteady_file_path, 'r') as file:
-            content = file.read()
-            
+        content, encoding = read_file_with_fallback_encoding(unsteady_file_path)
+        
+        if content is None:
+            return unsteady_info
+        
+        try:
             # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the unsteady file keys.
-                
+            
             supported_unsteady_keys = {
                 'Flow Title': r'Flow Title=(.+)',
                 'Program Version': r'Program Version=(.+)',
@@ -9138,6 +9440,9 @@ class RasPrj:
                 match = re.search(pattern, content)
                 if match:
                     unsteady_info[key] = match.group(1).strip()
+        
+        except Exception as e:
+            logger.error(f"Error parsing unsteady file {unsteady_file_path}: {e}")
         
         return unsteady_info
 
@@ -9710,7 +10015,7 @@ def get_ras_exe(ras_version=None):
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasToGo.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasToGo.py
 ==================================================
 """
 RasToGo module provides functions to interface HEC-RAS with go-consequences.
@@ -9751,7 +10056,7 @@ class RasToGo:
     #@log_call 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -10481,7 +10786,7 @@ Lava Param=,2500,
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUtils.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -11381,7 +11686,7 @@ class RasUtils:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\__init__.py
+File: c:\SCRATCH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
 from .LoggingConfig import setup_logging, get_logger

@@ -1,0 +1,51 @@
+
+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   openrouter
+- Add file uploads
+
+
+50c8feaed687455524c84f1347aa636c96c1360a1951110a5b5c21f9cbcda661
+
+
+- Instead of Project Files, this should be "Conversation Context", and it should have a list of folders that are included.  By default, ras-commander is the first folder.  Below that entry should be an "Add Folder" button, that allows the user to add their own folders for context.  
+
+These folders should be pre-processed in the same manner as the default ras-commander library.  When including these files for context during the conversation, the full file path should be included (I believe the script already does this, please check). 
+
+Next to the "Upload Folder" button, there should be an "Upload File" button, that only processes and adds a single file to the tree.  
+
+Next to the "Upload File" button should be a "Remove" button that allows user-added folder and file entries to be removed from the table. 
+
+
+
+
+
+
+
+
+
+Previous issues: 
+
+Token Counting and Cost Display in Web Interface is not working
+
+	- Need to separate logic and make it constantly updating whenever a radio button is clicked or text is entered
+
+RAG is broken/not implemented, and needs a rudimentary implementation.  It should adhere to the following guidelines: 
+	- 2 RAG Types - Full File Chunks or 
+	- Chunks should always consist of either 
+
+
+
+
+
+
+Based on the token limit of each model, the color of the "Selected: X tokens" text should change colors.  The token limit should also be shown as: "Selected: 2,657 tokens/128,000 available" for example of OpenAI models with a 128k context window. At >50% of the token limit, the color should turn orange, and at 80% of the token limit the text should turn bold red. This will indicate to the user whether their conversation is too long.   The context limit can be found in the cost estimation dataframe for this purpose
+
+Below the chat window, the previous conversation length in tokens should be displayed, and below the user input window, there should be a live display of the number of tokens in the user's input.  
+
+Add a setting for the Output Length, and we will need to input the default output length for OpenAI and Anthropic models while allowing overrides within acceptable ranges. (need to research this and include)
+
+
+By including all of these discrete data points, we can calculate the full request size and validate whether it exceeds the maximum token limit for the model.  This will also allow for accurate cost modeling, that updates as the user provides input, selects context, and adds their own files and selects them for inclusion. 
+
+
+
+

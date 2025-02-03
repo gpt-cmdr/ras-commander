@@ -95,7 +95,7 @@ class HdfMesh:
                     ]
                 )
         except Exception as e:
-            self.logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
             return list()
 
     @staticmethod

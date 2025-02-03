@@ -1,5 +1,8 @@
 """
 Anthropic API integration for the Library Assistant.
+
+NOTE: Do not change the model name from 'claude-3-5-sonnet-latest' to a specific version.
+The 'latest' suffix ensures we always use the most recent model version.
 """
 
 from anthropic import AsyncAnthropic, Anthropic, APIError, AuthenticationError
@@ -8,8 +11,9 @@ from typing import AsyncGenerator, List, Optional, Union
 async def anthropic_stream_response(
     client: Union[AsyncAnthropic, Anthropic], 
     prompt: str, 
-    max_tokens: int = 8000,
-    model: Optional[str] = None
+    max_tokens: int = 8192,
+    model: Optional[str] = None,
+    system_message: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """
     Streams a response from the Anthropic API using the Claude model.
@@ -17,8 +21,9 @@ async def anthropic_stream_response(
     Args:
         client: An initialized Anthropic client (sync or async)
         prompt: The prompt to send to the API
-        max_tokens: The maximum number of tokens to generate (default: 8000)
-        model: The model to use (default: claude-3-5-sonnet-20240620)
+        max_tokens: The maximum number of tokens to generate (default: 8192)
+        model: The model to use (default: claude-3-5-sonnet-latest)
+        system_message: Optional system message to set the AI's behavior
 
     Yields:
         str: Chunks of the response text from the API
@@ -28,57 +33,40 @@ async def anthropic_stream_response(
         AuthenticationError: If authentication fails
     """
     try:
-        model = model or "claude-3-5-sonnet-20240620"
+        model = model or "claude-3-5-sonnet-latest"  # Always use the latest version
         
         # Convert to async client if needed
         async_client = client if isinstance(client, AsyncAnthropic) else AsyncAnthropic(api_key=client.api_key)
         
+        # Create the streaming response with system message as top-level parameter
         stream = await async_client.messages.create(
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
             model=model,
+            system=system_message if system_message else None,
             stream=True
         )
         
         # Process the stream events
-        current_line = []
-        
-        async for message in stream:
-            try:
-                if message.type == "content_block_delta" and message.delta and message.delta.text:
-                    # Clean and normalize the chunk text
-                    chunk = message.delta.text.replace('\r', '')
-                    
-                    # Accumulate text until we get a natural break
-                    current_line.append(chunk)
-                    
-                    # Check for natural breaks (end of sentence or paragraph)
-                    if any(chunk.endswith(end) for end in ['.', '!', '?', '\n']):
-                        complete_line = ''.join(current_line)
-                        if complete_line.strip():
-                            yield complete_line
-                        current_line = []
-                        
-            except Exception as e:
-                print(f"Error processing message chunk: {str(e)}")
-                continue
-        
-        # Yield any remaining text
-        if current_line:
-            remaining = ''.join(current_line)
-            if remaining.strip():
-                yield remaining
+        async for chunk in stream:
+            if chunk.type == "content_block_delta" and chunk.delta and chunk.delta.text:
+                # Clean and normalize the chunk text
+                text = chunk.delta.text.replace('\r', '')
+                if text.strip():
+                    yield text
                 
     except Exception as e:
-        raise APIError(f"Unexpected error in Anthropic API call: {str(e)}")
+        error_msg = f"Unexpected error in Anthropic API call: {str(e)}"
+        print(error_msg)  # Log the error
+        raise APIError(error_msg, request=None)  # Include required request parameter
 
-def get_anthropic_client(api_key: str, async_client: bool = False) -> Union[Anthropic, AsyncAnthropic]:
+def get_anthropic_client(api_key: str, async_client: bool = True) -> Union[Anthropic, AsyncAnthropic]:
     """
     Creates and returns an Anthropic client.
 
     Args:
         api_key: The Anthropic API key
-        async_client: Whether to return an async client (default: False)
+        async_client: Whether to return an async client (default: True)
 
     Returns:
         An initialized Anthropic client (sync or async)
@@ -98,18 +86,17 @@ async def validate_anthropic_api_key(api_key: str) -> bool:
         api_key: The Anthropic API key to validate
 
     Returns:
-        True if the API key is valid, False otherwise
+        bool: True if the API key is valid, False otherwise
     """
     try:
-        client = get_anthropic_client(api_key, async_client=True)
-        await client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=1,
+        client = get_anthropic_client(api_key)
+        response = await client.messages.create(
             messages=[{"role": "user", "content": "Test"}],
-            stream=False
+            model="claude-3-5-sonnet-latest",
+            max_tokens=10
         )
         return True
-    except (anthropic.APIError, anthropic.AuthenticationError, ValueError):
+    except (APIError, AuthenticationError):
         return False
 
 def get_anthropic_models() -> List[str]:
@@ -117,9 +104,9 @@ def get_anthropic_models() -> List[str]:
     Returns a list of available Anthropic models.
 
     Returns:
-        List of strings representing available Anthropic model names
+        List[str]: List of model identifiers
     """
-    return ["claude-3-5-sonnet-20240620"]
+    return ["claude-3-5-sonnet-latest"]
 
 async def stream_response(
     client: Union[AsyncAnthropic, Anthropic], 

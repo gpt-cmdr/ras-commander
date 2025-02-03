@@ -15,7 +15,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from web.routes import router
 import webbrowser
-from utils.context_processing import initialize_rag_context
+from utils.context_processing import initialize_context
+from api.logging import logger
 
 # Initialize FastAPI application
 print("Initializing FastAPI")
@@ -51,18 +52,23 @@ def run_app():
     This function configures and runs the uvicorn server with the
     FastAPI application.
     """
+    logger.info("Starting Library Assistant application")
     uvicorn.run(app, host="127.0.0.1", port=8000)
 
 if __name__ == "__main__":
-    # Initialize RAG context at startup
+    # Initialize context at startup
     try:
-        initialize_rag_context()
-        print("RAG context initialized successfully.")
+        logger.info("Initializing context...")
+        initialize_context()
+        logger.info("Context initialized successfully")
     except Exception as e:
-        print(f"Failed to initialize RAG context: {e}")
+        logger.error(f"Failed to initialize context: {str(e)}")
+        raise
 
     # Open the browser
+    logger.info("Opening web browser")
     open_browser()
 
     # Run the app
+    logger.info("Starting application server")
     run_app()

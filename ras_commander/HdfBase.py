@@ -140,29 +140,66 @@ class HdfBase:
             logger.error(f"Error reading 2D flow area names and counts from {hdf_path}: {str(e)}")
             raise ValueError(f"Failed to get 2D flow area names and counts: {str(e)}")
 
+
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def get_projection(hdf_path: Path) -> Optional[str]:
         """
-        Get the projection information from the HDF file.
-
+        Get projection information from HDF file or RASMapper project file.
+        Converts WKT projection to EPSG code for GeoDataFrame compatibility.
+        
         Args:
             hdf_path (Path): Path to the HDF file.
 
         Returns:
-            Optional[str]: The projection information as a string, or None if not found.
+            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), or None if not found.
         """
+        from pyproj import CRS
+
+        project_folder = hdf_path.parent
+        wkt = None
+        
+        # Try HDF file
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 proj_wkt = hdf_file.attrs.get("Projection")
-                if proj_wkt is None:
-                    return None
-                if isinstance(proj_wkt, bytes) or isinstance(proj_wkt, np.bytes_):
-                    proj_wkt = proj_wkt.decode("utf-8")
-                return proj_wkt
+                if proj_wkt is not None:
+                    if isinstance(proj_wkt, (bytes, np.bytes_)):
+                        wkt = proj_wkt.decode("utf-8")
+                        logger.info(f"Found projection in HDF file: {hdf_path}")
+                        return wkt
         except Exception as e:
-            logger.error(f"Error reading projection from {hdf_path}: {str(e)}")
-            return None
+            logger.error(f"Error reading projection from HDF file {hdf_path}: {str(e)}")
+        # Try RASMapper file if no HDF projection
+        if not wkt:
+            try:
+                rasmap_files = list(project_folder.glob("*.rasmap"))
+                if rasmap_files:
+                    with open(rasmap_files[0], 'r') as f:
+                        content = f.read()
+                        
+                    proj_match = re.search(r'<RASProjectionFilename Filename="(.*?)"', content)
+                    if proj_match:
+                        proj_file = project_folder / proj_match.group(1).replace('.\\', '')
+                        if proj_file.exists():
+                            with open(proj_file, 'r') as f:
+                                wkt = f.read().strip()
+                                logger.info(f"Found projection in RASMapper file: {proj_file}")
+                                return wkt
+            except Exception as e:
+                logger.error(f"Error reading RASMapper projection file: {str(e)}")
+        
+        logger.critical(
+            "No valid projection found. Checked:\n"
+            f"1. HDF file projection attribute: {hdf_path}\n"
+            f"2. RASMapper projection file {proj_file} found in RASMapper file, but was invalid\n"
+            "To fix this:\n"
+            "1. Open RASMapper\n"
+            "2. Click Map > Set Projection\n" 
+            "3. Select an appropriate projection file or coordinate system\n"
+            "4. Save the RASMapper project"
+        )
+        return None
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')

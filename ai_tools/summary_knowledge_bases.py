@@ -47,8 +47,8 @@ import re
 
 # Configuration
 OMIT_FOLDERS = [
-    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant",
-    "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info",
+    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant", "__pycache__",
+    "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info", "log_folder", "logs",
     "example_projects", "assistant_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models","hdf_example_data", "ras_example_categories", "html", "data", "apidocs"
 ]
 OMIT_FILES = [
@@ -60,6 +60,25 @@ OMIT_FILES = [
 ]
 SUMMARY_OUTPUT_DIR = "assistant_knowledge_bases"
 SCRIPT_NAME = Path(__file__).name
+
+# Recursively delete all __pycache__ folders and their contents
+for folder in Path(__file__).parent.parent.rglob("__pycache__"):
+    if folder.is_dir():
+        print(f"Deleting __pycache__ folder and contents: {folder}")
+        try:
+            # Recursively delete all subfolders and files
+            for item in folder.rglob("*"):
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    item.rmdir()
+            # Delete the empty __pycache__ folder itself
+            folder.rmdir()
+            print(f"Successfully deleted {folder} and all contents")
+        except Exception as e:
+            print(f"Error deleting {folder}: {e}")
+
+
 
 def ensure_output_dir(base_path):
     output_dir = base_path / SUMMARY_OUTPUT_DIR

@@ -21,6 +21,23 @@
     display: inline-block;
 }
 
+/* Style omitted folders and files */
+.folder.omitted,
+.file.omitted {
+    opacity: 0.7;
+    color: #6c757d;
+}
+
+.folder.omitted .folder-toggle,
+.file.omitted .file-toggle {
+    color: #6c757d;
+}
+
+.folder.omitted:hover,
+.file.omitted:hover {
+    opacity: 0.9;
+}
+
 /* Customize dropdown appearance */
 .dropdown-content {
     max-height: 400px;

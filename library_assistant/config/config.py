@@ -24,7 +24,6 @@ DEFAULT_SETTINGS = {
     "anthropic_api_key": "",
     "openai_api_key": "",
     "selected_model": "",
-    "context_mode": "",
     "omit_folders": [
         "Bald Eagle Creek", 
         "__pycache__", 
@@ -41,9 +40,11 @@ DEFAULT_SETTINGS = {
         "future", 
         "ai_tools",
         "docs"
-        "Example_Projects_6_6"
-        "html"
-        "data"
+        "Example_Projects_6_6",
+        "html",
+        "data",
+        "assistant",
+        "dist",
     ],
     "omit_extensions": [
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.ico',
@@ -69,10 +70,7 @@ DEFAULT_SETTINGS = {
         'example_projects.csv',
         'rascommander_code_assistant.ipynb',
         'RasExamples.py'
-    ],
-    "chunk_level": "function",
-    "initial_chunk_size": 32000,
-    "followup_chunk_size": 16000
+    ]
 }
 
 def load_settings():

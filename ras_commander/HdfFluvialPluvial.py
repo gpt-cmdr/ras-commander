@@ -115,74 +115,273 @@ class HdfFluvialPluvial:
                 cell_adjacency, common_edges, cell_times, delta_t
             )
 
-            # Join adjacent LineStrings into simple LineStrings
+            # FOCUS YOUR REVISIONS HERE: 
+            # Join adjacent LineStrings into simple LineStrings by connecting them at shared endpoints
             logger.info("Joining adjacent LineStrings into simple LineStrings...")
-            joined_lines = []
             
             def get_coords(geom):
-                """Helper function to get coordinates from either LineString or MultiLineString"""
+                """Helper function to extract coordinates from geometry objects
+                
+                Args:
+                    geom: A Shapely LineString or MultiLineString geometry
+                
+                Returns:
+                    tuple: Tuple containing:
+                        - list of original coordinates [(x1,y1), (x2,y2),...]
+                        - list of rounded coordinates for comparison
+                        - None if invalid geometry
+                """
                 if isinstance(geom, LineString):
-                    return list(geom.coords)
+                    orig_coords = list(geom.coords)
+                    # Round coordinates to 0.01 for comparison
+                    rounded_coords = [(round(x, 2), round(y, 2)) for x, y in orig_coords]
+                    return orig_coords, rounded_coords
                 elif isinstance(geom, MultiLineString):
-                    return list(geom.geoms[0].coords)
-                return None
+                    orig_coords = list(geom.geoms[0].coords)
+                    rounded_coords = [(round(x, 2), round(y, 2)) for x, y in orig_coords]
+                    return orig_coords, rounded_coords
+                return None, None
 
-            # Create a dictionary to store start and end points for each line
+            def find_connecting_line(current_end, unused_lines, endpoint_counts, rounded_endpoints):
+                """Find a line that connects to the current endpoint
+                
+                Args:
+                    current_end: Tuple of (x, y) coordinates
+                    unused_lines: Set of unused line indices
+                    endpoint_counts: Dict of endpoint occurrence counts
+                    rounded_endpoints: Dict of rounded endpoint coordinates
+                
+                Returns:
+                    tuple: (line_index, should_reverse, found) or (None, None, False)
+                """
+                rounded_end = (round(current_end[0], 2), round(current_end[1], 2))
+                
+                # Skip if current endpoint is connected to more than 2 lines
+                if endpoint_counts.get(rounded_end, 0) > 2:
+                    return None, None, False
+                
+                for i in unused_lines:
+                    start, end = rounded_endpoints[i]
+                    if start == rounded_end and endpoint_counts.get(start, 0) <= 2:
+                        return i, False, True
+                    elif end == rounded_end and endpoint_counts.get(end, 0) <= 2:
+                        return i, True, True
+                return None, None, False
+
+            # Initialize data structures
+            joined_lines = []
+            unused_lines = set(range(len(boundary_edges)))
+            
+            # Create endpoint lookup dictionaries
             line_endpoints = {}
+            rounded_endpoints = {}
             for i, edge in enumerate(boundary_edges):
-                coords = get_coords(edge)
-                if coords:
-                    line_endpoints[i] = (coords[0], coords[-1])
+                coords_result = get_coords(edge)
+                if coords_result:
+                    orig_coords, rounded_coords = coords_result
+                    line_endpoints[i] = (orig_coords[0], orig_coords[-1])
+                    rounded_endpoints[i] = (rounded_coords[0], rounded_coords[-1])
 
-            # Process lines in order
-            used_indices = set()
-            while len(used_indices) < len(boundary_edges):
-                current_line = []
+            # Count endpoint occurrences
+            endpoint_counts = {}
+            for start, end in rounded_endpoints.values():
+                endpoint_counts[start] = endpoint_counts.get(start, 0) + 1
+                endpoint_counts[end] = endpoint_counts.get(end, 0) + 1
+
+            # Iteratively join lines
+            while unused_lines:
+                # Start a new line chain
                 current_points = []
                 
-                # Find a new starting line if needed
-                for i in range(len(boundary_edges)):
-                    if i not in used_indices:
-                        current_line.append(boundary_edges[i])
-                        coords = get_coords(boundary_edges[i])
-                        if coords:
-                            current_points.extend(coords)
-                        used_indices.add(i)
-                        break
+                # Find first unused line
+                start_idx = unused_lines.pop()
+                start_coords, _ = get_coords(boundary_edges[start_idx])
+                if start_coords:
+                    current_points.extend(start_coords)
                 
-                # Continue adding connected lines
-                while True:
-                    found_next = False
-                    current_end = current_points[-1] if current_points else None
+                # Try to extend in both directions
+                continue_joining = True
+                while continue_joining:
+                    continue_joining = False
                     
-                    # Look for the next connected line
-                    for i, (start, end) in line_endpoints.items():
-                        if i not in used_indices and current_end:
-                            if start == current_end:
-                                # Add line in forward direction
-                                coords = get_coords(boundary_edges[i])
-                                if coords:
-                                    current_points.extend(coords[1:])  # Skip first point to avoid duplication
-                                current_line.append(boundary_edges[i])
-                                used_indices.add(i)
-                                found_next = True
-                                break
-                            elif end == current_end:
-                                # Add line in reverse direction
-                                coords = get_coords(boundary_edges[i])
-                                if coords:
-                                    current_points.extend(reversed(coords[:-1]))  # Skip last point to avoid duplication
-                                current_line.append(boundary_edges[i])
-                                used_indices.add(i)
-                                found_next = True
-                                break
+                    # Try to extend forward
+                    next_idx, should_reverse, found = find_connecting_line(
+                        current_points[-1], 
+                        unused_lines,
+                        endpoint_counts,
+                        rounded_endpoints
+                    )
                     
-                    if not found_next:
-                        break
+                    if found:
+                        unused_lines.remove(next_idx)
+                        next_coords, _ = get_coords(boundary_edges[next_idx])
+                        if next_coords:
+                            if should_reverse:
+                                current_points.extend(reversed(next_coords[:-1]))
+                            else:
+                                current_points.extend(next_coords[1:])
+                        continue_joining = True
+                        continue
+                    
+                    # Try to extend backward
+                    prev_idx, should_reverse, found = find_connecting_line(
+                        current_points[0], 
+                        unused_lines,
+                        endpoint_counts,
+                        rounded_endpoints
+                    )
+                    
+                    if found:
+                        unused_lines.remove(prev_idx)
+                        prev_coords, _ = get_coords(boundary_edges[prev_idx])
+                        if prev_coords:
+                            if should_reverse:
+                                current_points[0:0] = reversed(prev_coords[:-1])
+                            else:
+                                current_points[0:0] = prev_coords[:-1]
+                        continue_joining = True
                 
-                # Create a single LineString from the collected points
+                # Create final LineString from collected points
                 if current_points:
                     joined_lines.append(LineString(current_points))
+
+            # FILL GAPS BETWEEN JOINED LINES
+            logger.info(f"Starting gap analysis for {len(joined_lines)} line segments...")
+            
+            def find_endpoints(lines):
+                """Get all endpoints of the lines with their indices"""
+                endpoints = []
+                for i, line in enumerate(lines):
+                    coords = list(line.coords)
+                    endpoints.append((coords[0], i, 'start'))
+                    endpoints.append((coords[-1], i, 'end'))
+                return endpoints
+            
+            def find_nearby_points(point1, point2, tolerance=0.01):
+                """Check if two points are within tolerance distance"""
+                return (abs(point1[0] - point2[0]) <= tolerance and 
+                       abs(point1[1] - point2[1]) <= tolerance)
+            
+            def find_gaps(lines, tolerance=0.01):
+                """Find gaps between line endpoints"""
+                logger.info("Analyzing line endpoints to identify gaps...")
+                endpoints = []
+                for i, line in enumerate(lines):
+                    coords = list(line.coords)
+                    start = coords[0]
+                    end = coords[-1]
+                    endpoints.append({
+                        'point': start,
+                        'line_idx': i,
+                        'position': 'start',
+                        'coords': coords
+                    })
+                    endpoints.append({
+                        'point': end,
+                        'line_idx': i,
+                        'position': 'end',
+                        'coords': coords
+                    })
+                
+                logger.info(f"Found {len(endpoints)} endpoints to analyze")
+                gaps = []
+                
+                # Compare each endpoint with all others
+                for i, ep1 in enumerate(endpoints):
+                    for ep2 in endpoints[i+1:]:
+                        # Skip if endpoints are from same line
+                        if ep1['line_idx'] == ep2['line_idx']:
+                            continue
+                            
+                        point1 = ep1['point']
+                        point2 = ep2['point']
+                        
+                        # Skip if points are too close (already connected)
+                        if find_nearby_points(point1, point2):
+                            continue
+                            
+                        # Check if this could be a gap
+                        dist = LineString([point1, point2]).length
+                        if dist < 10.0:  # Maximum gap distance threshold
+                            gaps.append({
+                                'start': ep1,
+                                'end': ep2,
+                                'distance': dist
+                            })
+                
+                logger.info(f"Identified {len(gaps)} potential gaps to fill")
+                return sorted(gaps, key=lambda x: x['distance'])
+
+            def join_lines_with_gap(line1_coords, line2_coords, gap_start_pos, gap_end_pos):
+                """Join two lines maintaining correct point order based on gap positions"""
+                if gap_start_pos == 'end' and gap_end_pos == 'start':
+                    # line1 end connects to line2 start
+                    return line1_coords + line2_coords
+                elif gap_start_pos == 'start' and gap_end_pos == 'end':
+                    # line1 start connects to line2 end
+                    return list(reversed(line2_coords)) + line1_coords
+                elif gap_start_pos == 'end' and gap_end_pos == 'end':
+                    # line1 end connects to line2 end
+                    return line1_coords + list(reversed(line2_coords))
+                else:  # start to start
+                    # line1 start connects to line2 start
+                    return list(reversed(line1_coords)) + line2_coords
+
+            # Process gaps and join lines
+            processed_lines = joined_lines.copy()
+            line_groups = [[i] for i in range(len(processed_lines))]
+            gaps = find_gaps(processed_lines)
+            
+            filled_gap_count = 0
+            for gap_idx, gap in enumerate(gaps, 1):
+                logger.info(f"Processing gap {gap_idx}/{len(gaps)} (distance: {gap['distance']:.3f})")
+                
+                line1_idx = gap['start']['line_idx']
+                line2_idx = gap['end']['line_idx']
+                
+                # Find the groups containing these lines
+                group1 = next(g for g in line_groups if line1_idx in g)
+                group2 = next(g for g in line_groups if line2_idx in g)
+                
+                # Skip if lines are already in the same group
+                if group1 == group2:
+                    continue
+                
+                # Get the coordinates for both lines
+                line1_coords = gap['start']['coords']
+                line2_coords = gap['end']['coords']
+                
+                # Join the lines in correct order
+                joined_coords = join_lines_with_gap(
+                    line1_coords,
+                    line2_coords,
+                    gap['start']['position'],
+                    gap['end']['position']
+                )
+                
+                # Create new joined line
+                new_line = LineString(joined_coords)
+                
+                # Update processed_lines and line_groups
+                new_idx = len(processed_lines)
+                processed_lines.append(new_line)
+                
+                # Merge groups and remove old ones
+                new_group = group1 + group2
+                line_groups.remove(group1)
+                line_groups.remove(group2)
+                line_groups.append(new_group + [new_idx])
+                
+                filled_gap_count += 1
+                logger.info(f"Successfully joined lines {line1_idx} and {line2_idx}")
+            
+            logger.info(f"Gap filling complete. Filled {filled_gap_count} out of {len(gaps)} gaps")
+            
+            # Get final lines (take the last line from each group)
+            final_lines = [processed_lines[group[-1]] for group in line_groups]
+            
+            logger.info(f"Final cleanup complete. Resulting in {len(final_lines)} line segments")
+            joined_lines = final_lines
 
             # Create final GeoDataFrame with CRS from cell_polygons_gdf
             logger.info("Creating final GeoDataFrame for boundaries...")
@@ -285,25 +484,71 @@ class HdfFluvialPluvial:
             delta_t (float): Time threshold in hours
 
         Returns:
-            List[LineString]: List of LineString geometries representing boundaries where
-                             adjacent cells have time differences greater than delta_t
-
-        Note:
-            Boundaries are identified where the absolute time difference between adjacent
-            cells exceeds the specified delta_t threshold.
+            List[LineString]: List of LineString geometries representing boundaries
         """
+        # Validate cell_times data
+        valid_times = {k: v for k, v in cell_times.items() if pd.notna(v)}
+        if len(valid_times) < len(cell_times):
+            logger.warning(f"Found {len(cell_times) - len(valid_times)} cells with invalid timestamps")
+            cell_times = valid_times
+
+        # Use a set to store processed cell pairs and avoid duplicates
+        processed_pairs = set()
         boundary_edges = []
+        
+        # Track time differences for debugging
+        time_diffs = []
+
         with tqdm(total=len(cell_adjacency), desc="Processing cell adjacencies") as pbar:
             for cell_id, neighbors in cell_adjacency.items():
+                if cell_id not in cell_times:
+                    logger.debug(f"Skipping cell {cell_id} - no timestamp data")
+                    pbar.update(1)
+                    continue
+                    
                 cell_time = cell_times[cell_id]
 
                 for neighbor_id in neighbors:
+                    if neighbor_id not in cell_times:
+                        logger.debug(f"Skipping neighbor {neighbor_id} of cell {cell_id} - no timestamp data")
+                        continue
+                        
+                    # Create a sorted tuple of the cell pair to ensure uniqueness
+                    cell_pair = tuple(sorted([cell_id, neighbor_id]))
+                    
+                    # Skip if we've already processed this pair
+                    if cell_pair in processed_pairs:
+                        continue
+                        
                     neighbor_time = cell_times[neighbor_id]
+                    
+                    # Ensure both timestamps are valid
+                    if pd.isna(cell_time) or pd.isna(neighbor_time):
+                        continue
+                    
+                    # Calculate time difference in hours
                     time_diff = abs((cell_time - neighbor_time).total_seconds() / 3600)
+                    time_diffs.append(time_diff)
+                    
+                    logger.debug(f"Time difference between cells {cell_id} and {neighbor_id}: {time_diff:.2f} hours")
 
                     if time_diff >= delta_t:
+                        logger.debug(f"Found boundary edge between cells {cell_id} and {neighbor_id} "
+                                   f"(time diff: {time_diff:.2f} hours)")
                         boundary_edges.append(common_edges[cell_id][neighbor_id])
+                    
+                    # Mark this pair as processed
+                    processed_pairs.add(cell_pair)
 
                 pbar.update(1)
+
+        # Log summary statistics
+        if time_diffs:
+            logger.info(f"Time difference statistics:")
+            logger.info(f"  Min: {min(time_diffs):.2f} hours")
+            logger.info(f"  Max: {max(time_diffs):.2f} hours")
+            logger.info(f"  Mean: {sum(time_diffs)/len(time_diffs):.2f} hours")
+            logger.info(f"  Number of boundaries found: {len(boundary_edges)}")
+            logger.info(f"  Delta-t threshold: {delta_t} hours")
 
         return boundary_edges

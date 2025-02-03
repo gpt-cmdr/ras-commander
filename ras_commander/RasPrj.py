@@ -83,6 +83,31 @@ from ras_commander.Decorators import log_call
 
 logger = get_logger(__name__)
 
+def read_file_with_fallback_encoding(file_path, encodings=['utf-8', 'latin1', 'cp1252', 'iso-8859-1']):
+    """
+    Attempt to read a file using multiple encodings.
+    
+    Args:
+        file_path (str or Path): Path to the file to read
+        encodings (list): List of encodings to try, in order of preference
+    
+    Returns:
+        tuple: (content, encoding_used) or (None, None) if all encodings fail
+    """
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                content = file.read()
+                return content, encoding
+        except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            logger.error(f"Error reading file {file_path} with {encoding} encoding: {e}")
+            continue
+    
+    logger.error(f"Failed to read file {file_path} with any of the attempted encodings: {encodings}")
+    return None, None
+
 class RasPrj:
     
     def __init__(self):
@@ -153,16 +178,20 @@ class RasPrj:
             str: The full path to the geometry HDF file, or None if not found.
         """
         plan_file_path = self.project_folder / f"{self.project_name}.p{plan_number}"
+        content, encoding = read_file_with_fallback_encoding(plan_file_path)
+        
+        if content is None:
+            return None
+        
         try:
-            with open(plan_file_path, 'r') as plan_file:
-                for line in plan_file:
-                    if line.startswith("Geom File="):
-                        geom_file = line.strip().split('=')[1]
-                        geom_hdf_path = self.project_folder / f"{self.project_name}.{geom_file}.hdf"
-                        if geom_hdf_path.exists():
-                            return str(geom_hdf_path)
-                        else:
-                            return None
+            for line in content.splitlines():
+                if line.startswith("Geom File="):
+                    geom_file = line.strip().split('=')[1]
+                    geom_hdf_path = self.project_folder / f"{self.project_name}.{geom_file}.hdf"
+                    if geom_hdf_path.exists():
+                        return str(geom_hdf_path)
+                    else:
+                        return None
         except Exception as e:
             logger.error(f"Error reading plan file for geometry: {e}")
         return None
@@ -179,51 +208,54 @@ class RasPrj:
             dict: Dictionary containing extracted plan information.
         """
         plan_info = {}
+        content, encoding = read_file_with_fallback_encoding(plan_file_path)
+        
+        if content is None:
+            logger.error(f"Could not read plan file {plan_file_path} with any supported encoding")
+            return plan_info
+        
         try:
-            with open(plan_file_path, 'r') as file:
-                content = file.read()
-                
-                # Extract description
-                description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
-                if description_match:
-                    plan_info['description'] = description_match.group(1).strip()
-                
-                # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
-                
-                # Extract other critical information
-                supported_plan_keys = {
-                    'Computation Interval': r'Computation Interval=(.+)',
-                    'DSS File': r'DSS File=(.+)',
-                    'Flow File': r'Flow File=(.+)',
-                    'Friction Slope Method': r'Friction Slope Method=(.+)',
-                    'Geom File': r'Geom File=(.+)',
-                    'Mapping Interval': r'Mapping Interval=(.+)',
-                    'Plan Title': r'Plan Title=(.+)',
-                    'Program Version': r'Program Version=(.+)',
-                    'Run HTab': r'Run HTab=(.+)',
-                    'Run PostProcess': r'Run PostProcess=(.+)',
-                    'Run Sediment': r'Run Sediment=(.+)',
-                    'Run UNet': r'Run UNet=(.+)',
-                    'Run WQNet': r'Run WQNet=(.+)',
-                    'Short Identifier': r'Short Identifier=(.+)',
-                    'Simulation Date': r'Simulation Date=(.+)',
-                    'UNET D1 Cores': r'UNET D1 Cores=(.+)',
-                    'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
-                    'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
-                    'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
-                    'UNET D2 Name': r'UNET D2 Name=(.+)'
-                }
-                
-                # END Exception to Style Guide
-                
-                for key, pattern in supported_plan_keys.items():
-                    match = re.search(pattern, content)
-                    if match:
-                        plan_info[key] = match.group(1).strip()
+            # Extract description
+            description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            if description_match:
+                plan_info['description'] = description_match.group(1).strip()
             
-            logger.debug(f"Parsed plan file: {plan_file_path}")
+            # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
+            
+            # Extract other critical information
+            supported_plan_keys = {
+                'Computation Interval': r'Computation Interval=(.+)',
+                'DSS File': r'DSS File=(.+)',
+                'Flow File': r'Flow File=(.+)',
+                'Friction Slope Method': r'Friction Slope Method=(.+)',
+                'Geom File': r'Geom File=(.+)',
+                'Mapping Interval': r'Mapping Interval=(.+)',
+                'Plan Title': r'Plan Title=(.+)',
+                'Program Version': r'Program Version=(.+)',
+                'Run HTab': r'Run HTab=(.+)',
+                'Run PostProcess': r'Run PostProcess=(.+)',
+                'Run Sediment': r'Run Sediment=(.+)',
+                'Run UNet': r'Run UNet=(.+)',
+                'Run WQNet': r'Run WQNet=(.+)',
+                'Short Identifier': r'Short Identifier=(.+)',
+                'Simulation Date': r'Simulation Date=(.+)',
+                'UNET D1 Cores': r'UNET D1 Cores=(.+)',
+                'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
+                'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
+                'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
+                'UNET D2 Name': r'UNET D2 Name=(.+)'
+            }
+            
+            # END Exception to Style Guide
+            
+            for key, pattern in supported_plan_keys.items():
+                match = re.search(pattern, content)
+                if match:
+                    plan_info[key] = match.group(1).strip()
+            
+            logger.debug(f"Parsed plan file: {plan_file_path} using {encoding} encoding")
         except Exception as e:
-            logger.exception(f"Error parsing plan file {plan_file_path}: {e}")
+            logger.error(f"Error parsing plan file {plan_file_path}: {e}")
         
         return plan_info
     
@@ -284,11 +316,14 @@ class RasPrj:
             dict: Dictionary containing extracted unsteady flow information.
         """
         unsteady_info = {}
-        with open(unsteady_file_path, 'r') as file:
-            content = file.read()
-            
+        content, encoding = read_file_with_fallback_encoding(unsteady_file_path)
+        
+        if content is None:
+            return unsteady_info
+        
+        try:
             # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the unsteady file keys.
-                
+            
             supported_unsteady_keys = {
                 'Flow Title': r'Flow Title=(.+)',
                 'Program Version': r'Program Version=(.+)',
@@ -308,6 +343,9 @@ class RasPrj:
                 match = re.search(pattern, content)
                 if match:
                     unsteady_info[key] = match.group(1).strip()
+        
+        except Exception as e:
+            logger.error(f"Error parsing unsteady file {unsteady_file_path}: {e}")
         
         return unsteady_info
 

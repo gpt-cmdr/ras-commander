@@ -1,4 +1,4 @@
-File: C:\GH\ras-commander\ras_commander\Decorators.py
+File: c:\SCRATCH\ras-commander\ras_commander\Decorators.py
 ==================================================
 from functools import wraps
 from pathlib import Path
@@ -13,7 +13,7 @@ def log_call:
     return decorator
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfBase.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -157,29 +157,66 @@ class HdfBase:
             logger.error(f"Error reading 2D flow area names and counts from {hdf_path}: {str(e)}")
             raise ValueError(f"Failed to get 2D flow area names and counts: {str(e)}")
 
+
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def get_projection(hdf_path: Path) -> Optional[str]:
         """
-        Get the projection information from the HDF file.
-
+        Get projection information from HDF file or RASMapper project file.
+        Converts WKT projection to EPSG code for GeoDataFrame compatibility.
+        
         Args:
             hdf_path (Path): Path to the HDF file.
 
         Returns:
-            Optional[str]: The projection information as a string, or None if not found.
+            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), or None if not found.
         """
+        from pyproj import CRS
+
+        project_folder = hdf_path.parent
+        wkt = None
+        
+        # Try HDF file
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 proj_wkt = hdf_file.attrs.get("Projection")
-                if proj_wkt is None:
-                    return None
-                if isinstance(proj_wkt, bytes) or isinstance(proj_wkt, np.bytes_):
-                    proj_wkt = proj_wkt.decode("utf-8")
-                return proj_wkt
+                if proj_wkt is not None:
+                    if isinstance(proj_wkt, (bytes, np.bytes_)):
+                        wkt = proj_wkt.decode("utf-8")
+                        logger.info(f"Found projection in HDF file: {hdf_path}")
+                        return wkt
         except Exception as e:
-            logger.error(f"Error reading projection from {hdf_path}: {str(e)}")
-            return None
+            logger.error(f"Error reading projection from HDF file {hdf_path}: {str(e)}")
+        # Try RASMapper file if no HDF projection
+        if not wkt:
+            try:
+                rasmap_files = list(project_folder.glob("*.rasmap"))
+                if rasmap_files:
+                    with open(rasmap_files[0], 'r') as f:
+                        content = f.read()
+                        
+                    proj_match = re.search(r'<RASProjectionFilename Filename="(.*?)"', content)
+                    if proj_match:
+                        proj_file = project_folder / proj_match.group(1).replace('.\\', '')
+                        if proj_file.exists():
+                            with open(proj_file, 'r') as f:
+                                wkt = f.read().strip()
+                                logger.info(f"Found projection in RASMapper file: {proj_file}")
+                                return wkt
+            except Exception as e:
+                logger.error(f"Error reading RASMapper projection file: {str(e)}")
+        
+        logger.critical(
+            "No valid projection found. Checked:\n"
+            f"1. HDF file projection attribute: {hdf_path}\n"
+            f"2. RASMapper projection file {proj_file} found in RASMapper file, but was invalid\n"
+            "To fix this:\n"
+            "1. Open RASMapper\n"
+            "2. Click Map > Set Projection\n" 
+            "3. Select an appropriate projection file or coordinate system\n"
+            "4. Save the RASMapper project"
+        )
+        return None
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -230,7 +267,7 @@ class HdfBase:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfBndry.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -547,7 +584,7 @@ class HdfBndry:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -607,9 +644,10 @@ class HdfFluvialPluvial:
     def __init__:
     """Docs only, see '__init__.py' for full function code"""
 
+        return boundary_edges
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -722,7 +760,7 @@ HdfInfiltration.save_statistics(soil_stats, Path('soil_statistics.csv'))
 """
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfMesh.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -795,7 +833,7 @@ class HdfMesh:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPipe.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -1523,7 +1561,7 @@ class HdfPipe:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPlan.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -1819,7 +1857,7 @@ class HdfPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPlot.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -1927,7 +1965,7 @@ class HdfPlot:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPump.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -2073,7 +2111,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -2820,7 +2858,7 @@ class HdfResultsMesh:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -3082,7 +3120,7 @@ class HdfResultsPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -3269,7 +3307,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -3586,7 +3624,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfStruc.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -3866,7 +3904,7 @@ class HdfStruc:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfUtils.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -4305,7 +4343,7 @@ class HdfUtils:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfXsec.py
+File: c:\SCRATCH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -4408,7 +4446,7 @@ class HdfXsec:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
-                # Extract datasets
+                # Extract required datasets
                 poly_info = hdf['/Geometry/Cross Sections/Polyline Info'][:]
                 poly_parts = hdf['/Geometry/Cross Sections/Polyline Parts'][:]
                 poly_points = hdf['/Geometry/Cross Sections/Polyline Points'][:]
@@ -4491,43 +4529,61 @@ class HdfXsec:
                         else:
                             ineffective_blocks.append([])
                 
-                # Create GeoDataFrame
-                if geometries:
-                    # Create DataFrame from attributes
-                    data = {
-                        'geometry': geometries,
-                        'station_elevation': station_elevations,
-                        'mannings_n': mannings_n,
-                        'ineffective_blocks': ineffective_blocks,
-                        'River': [x['River'].decode('utf-8').strip() for x in xs_attrs],
-                        'Reach': [x['Reach'].decode('utf-8').strip() for x in xs_attrs],
-                        'RS': [x['RS'].decode('utf-8').strip() for x in xs_attrs],
-                        'Name': [x['Name'].decode('utf-8').strip() for x in xs_attrs],
-                        'Description': [x['Description'].decode('utf-8').strip() for x in xs_attrs],
-                        'Len Left': xs_attrs['Len Left'],
-                        'Len Channel': xs_attrs['Len Channel'],
-                        'Len Right': xs_attrs['Len Right'], 
-                        'Left Bank': xs_attrs['Left Bank'],
-                        'Right Bank': xs_attrs['Right Bank'],
-                        'Friction Mode': [x['Friction Mode'].decode('utf-8').strip() for x in xs_attrs],
-                        'Contr': xs_attrs['Contr'],
-                        'Expan': xs_attrs['Expan'],
-                        'Left Levee Sta': xs_attrs['Left Levee Sta'],
-                        'Left Levee Elev': xs_attrs['Left Levee Elev'],
-                        'Right Levee Sta': xs_attrs['Right Levee Sta'],
-                        'Right Levee Elev': xs_attrs['Right Levee Elev'],
-                        'HP Count': xs_attrs['HP Count'],
-                        'HP Start Elev': xs_attrs['HP Start Elev'],
-                        'HP Vert Incr': xs_attrs['HP Vert Incr'],
-                        'HP LOB Slices': xs_attrs['HP LOB Slices'],
-                        'HP Chan Slices': xs_attrs['HP Chan Slices'],
-                        'HP ROB Slices': xs_attrs['HP ROB Slices'],
-                        'Ineff Block Mode': xs_attrs['Ineff Block Mode'],
-                        'Obstr Block Mode': xs_attrs['Obstr Block Mode'],
-                        'Default Centerline': xs_attrs['Default Centerline'],
-                        'Last Edited': [x['Last Edited'].decode('utf-8').strip() for x in xs_attrs]
-                    }
+                # Create base dictionary with required fields
+                data = {
+                    'geometry': geometries,
+                    'station_elevation': station_elevations,
+                    'mannings_n': mannings_n,
+                    'ineffective_blocks': ineffective_blocks,
+                }
                 
+                # Define field mappings with default values
+                field_mappings = {
+                    'River': ('River', ''),
+                    'Reach': ('Reach', ''),
+                    'RS': ('RS', ''),
+                    'Name': ('Name', ''),
+                    'Description': ('Description', ''),
+                    'Len Left': ('Len Left', 0.0),
+                    'Len Channel': ('Len Channel', 0.0),
+                    'Len Right': ('Len Right', 0.0),
+                    'Left Bank': ('Left Bank', 0.0),
+                    'Right Bank': ('Right Bank', 0.0),
+                    'Friction Mode': ('Friction Mode', ''),
+                    'Contr': ('Contr', 0.0),
+                    'Expan': ('Expan', 0.0),
+                    'Left Levee Sta': ('Left Levee Sta', None),
+                    'Left Levee Elev': ('Left Levee Elev', None),
+                    'Right Levee Sta': ('Right Levee Sta', None),
+                    'Right Levee Elev': ('Right Levee Elev', None),
+                    'HP Count': ('HP Count', 0),
+                    'HP Start Elev': ('HP Start Elev', 0.0),
+                    'HP Vert Incr': ('HP Vert Incr', 0.0),
+                    'HP LOB Slices': ('HP LOB Slices', 0),
+                    'HP Chan Slices': ('HP Chan Slices', 0),
+                    'HP ROB Slices': ('HP ROB Slices', 0),
+                    'Ineff Block Mode': ('Ineff Block Mode', 0),
+                    'Obstr Block Mode': ('Obstr Block Mode', 0),
+                    'Default Centerline': ('Default Centerline', 0),
+                    'Last Edited': ('Last Edited', '')
+                }
+                
+                # Add fields that exist in xs_attrs
+                for field_name, (attr_name, default_value) in field_mappings.items():
+                    if attr_name in xs_attrs.dtype.names:
+                        if xs_attrs[attr_name].dtype.kind == 'S':
+                            # Handle string fields
+                            data[field_name] = [x[attr_name].decode('utf-8').strip() 
+                                              for x in xs_attrs]
+                        else:
+                            # Handle numeric fields
+                            data[field_name] = xs_attrs[attr_name]
+                    else:
+                        # Use default value if field doesn't exist
+                        data[field_name] = [default_value] * len(geometries)
+                        logger.debug(f"Field {attr_name} not found in attributes, using default value")
+                
+                if geometries:
                     gdf = gpd.GeoDataFrame(data)
                     
                     # Set CRS if available
@@ -4542,7 +4598,7 @@ class HdfXsec:
                 return gpd.GeoDataFrame()
                 
         except Exception as e:
-            logging.error(f"Error processing cross-section data: {str(e)}")
+            logger.error(f"Error processing cross-section data: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -4719,7 +4775,7 @@ class HdfXsec:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\LoggingConfig.py
+File: c:\SCRATCH\ras-commander\ras_commander\LoggingConfig.py
 ==================================================
 # logging_config.py
 
@@ -4743,7 +4799,7 @@ def setup_logging:
 setup_logging()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasCmdr.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -5262,7 +5318,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasExamples.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -5326,7 +5382,7 @@ class RasExamples:
         return int(number * units[unit])
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGeo.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -5459,7 +5515,7 @@ class RasGeo:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasGpt.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasGpt.py
 ==================================================
 import os
 from pathlib import Path
@@ -5491,7 +5547,7 @@ class RasGpt:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasMapper.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasMapper.py
 ==================================================
 """
 Class: RasMapper
@@ -5563,7 +5619,7 @@ significant_mukeys = HdfInfiltration.get_significant_mukeys(
 """
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPlan.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -5696,7 +5752,7 @@ class RasPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasPrj.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -5775,10 +5831,8 @@ from ras_commander.Decorators import log_call
 
 logger = get_logger(__name__)
 
-class RasPrj:
-    
-    def __init__:
-    """Docs only, see '__init__.py' for full function code"""
+def read_file_with_fallback_encoding:
+    """Docs only, see 'read_file_with_fallback_encoding.py' for full function code"""
 # Defining the global instance allows the init_ras_project function to initialize the project.
 # This only happens on the library initialization, not when the user calls init_ras_project.
 ras = RasPrj()
@@ -5797,7 +5851,7 @@ def get_ras_exe:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasToGo.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasToGo.py
 ==================================================
 """
 RasToGo module provides functions to interface HEC-RAS with go-consequences.
@@ -5838,7 +5892,7 @@ class RasToGo:
     #@log_call 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -6561,7 +6615,7 @@ Lava Param=,2500,
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\RasUtils.py
+File: c:\SCRATCH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -7169,7 +7223,7 @@ class RasUtils:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\__init__.py
+File: c:\SCRATCH\ras-commander\ras_commander\__init__.py
 ==================================================
 from importlib.metadata import version, PackageNotFoundError
 from .LoggingConfig import setup_logging, get_logger

@@ -10,20 +10,25 @@ Routes:
 - POST /submit: Handles form submissions for updating settings.
 - POST /save_conversation: Saves the current conversation history to a file.
 - GET /get_file_tree: Returns the file tree structure with token counts.
-- POST /refresh_context: Refreshes the context processing for both RAG and full context modes.
+- POST /calculate_tokens: Calculates token usage and cost for the current state.
+- POST /add_root_folder: Adds a new root folder to the file tree.
 """
 
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from typing import Optional, List
 from config.config import load_settings, update_settings
 from utils.conversation import add_to_history, get_full_conversation, save_conversation
-from utils.context_processing import prepare_full_prompt, update_conversation_history, initialize_rag_context
-from utils.cost_estimation import create_pricing_df, estimate_cost
+from utils.context_processing import prepare_full_prompt, update_conversation_history, initialize_context
+from utils.cost_estimation import create_pricing_df, estimate_cost, calculate_usage_and_cost
 from utils.file_handling import set_context_folder
 from api.anthropic import anthropic_stream_response, get_anthropic_client
 from api.openai import openai_stream_response, get_openai_client
+from api.together import together_chat_completion
+from api.logging import logger, log_error, log_request_response
 import json
 import tiktoken
 import os
@@ -38,6 +43,16 @@ templates = Jinja2Templates(directory="web/templates")
 
 # Set up static files
 static_files = StaticFiles(directory="web/static")
+
+class TokenCalcRequest(BaseModel):
+    """Request model for token calculation endpoint."""
+    model_name: str
+    conversation_history: str
+    user_input: str
+    rag_context: str = ""
+    system_message: str = ""
+    output_length: Optional[int] = None
+    selected_files: List[str] = []
 
 @router.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -61,81 +76,140 @@ async def chat(request: Request, message: dict):
     """
     Handles chat interactions with the AI model, supporting streaming responses.
     """
+    conversation_id = message.get("conversation_id", str(uuid.uuid4()))
+    logger.info(f"Starting chat interaction - Conversation ID: {conversation_id}")
+    
     try:
         # Validate input
         user_message = message.get("message")
         if not user_message:
+            logger.warning("Empty message received")
             raise HTTPException(status_code=400, detail="No message provided.")
             
         # Get selected files for context if provided
         selected_files = message.get("selectedFiles", [])
+        logger.debug(f"Selected files for context: {selected_files}")
         
         # Add user message to history
         add_to_history("user", user_message)
+        logger.debug(f"Added user message to history: {user_message[:100]}...")
         
         # Load settings and prepare context
         settings = load_settings()
         selected_model = settings.selected_model
-        
-        # Get or generate conversation ID
-        conversation_id = message.get("conversation_id", str(uuid.uuid4()))
+        logger.info(f"Using model: {selected_model}")
         
         # Prepare prompt with conversation history
         full_prompt = prepare_full_prompt(
             user_message,
-            selected_files if settings.context_mode == 'full_context' else None,
+            selected_files,
             conversation_id
         )
+        logger.debug(f"Prepared prompt length: {len(full_prompt)} characters")
         
         # Update conversation history
         update_conversation_history(conversation_id, "user", user_message)
         
-        # Estimate token usage and cost
-        enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        input_tokens = len(enc.encode(full_prompt))
-        output_tokens = 1000  # Assuming average response length
+        # Calculate token usage and validate against limits
+        usage_data = calculate_usage_and_cost(
+            model_name=selected_model,
+            conversation_history=get_full_conversation(),
+            user_input=user_message,
+            rag_context="".join(selected_files),
+            system_message=settings.system_message
+        )
         
-        # Get pricing info
+        # Check if we're exceeding token limits
+        if usage_data["remaining_tokens"] < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Request exceeds maximum token limit. Please reduce context or message length."
+            )
+            
+        logger.info(f"Token usage - Input: {usage_data['total_tokens_used']}, Output: {usage_data['output_length']}")
+        logger.info(f"Estimated cost: ${usage_data['cost_estimate']:.6f}")
+
+        # Get provider info from pricing data
         pricing_info = create_pricing_df(selected_model)
-        pricing_df = pricing_info["pricing_df"]
         provider = pricing_info["provider"]
-        
-        estimated_cost = estimate_cost(input_tokens, output_tokens, pricing_df)
+        logger.info(f"Using provider: {provider}")
 
         async def stream_response():
             """Generator for streaming the AI response"""
             accumulated_response = []
             try:
                 if provider == "anthropic":
+                    logger.info("Using Anthropic API")
                     client = get_anthropic_client(settings.anthropic_api_key)
-                    async for chunk in anthropic_stream_response(client, full_prompt):
+                    logger.info(f"Sending Anthropic API request with model: {selected_model}")
+                    async for chunk in anthropic_stream_response(
+                        client, 
+                        full_prompt,
+                        system_message=settings.system_message,
+                        max_tokens=usage_data["output_length"]
+                    ):
                         accumulated_response.append(chunk)
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
                         
                 elif provider == "openai":
+                    logger.info("Using OpenAI API")
                     client = get_openai_client(settings.openai_api_key)
                     messages = [
-                        {"role": "system", "content": "You are a helpful AI assistant."},
+                        {"role": "system", "content": settings.system_message or "You are a helpful AI assistant."},
                         {"role": "user", "content": full_prompt}
                     ]
-                    async for chunk in openai_stream_response(client, selected_model, messages):
+                    logger.info(f"Sending OpenAI API request with model: {selected_model}")
+                    async for chunk in openai_stream_response(
+                        client, 
+                        selected_model, 
+                        messages,
+                        max_tokens=usage_data["output_length"]
+                    ):
                         accumulated_response.append(chunk)
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                        
+                elif provider == "together":
+                    logger.info("Using Together.ai API")
+                    messages = [
+                        {"role": "system", "content": settings.system_message or "You are a helpful AI assistant."},
+                        {"role": "user", "content": full_prompt}
+                    ]
+                    logger.info(f"Sending Together.ai API request with model: {selected_model}")
+                    response = together_chat_completion(
+                        settings.together_api_key,
+                        selected_model,
+                        messages,
+                        max_tokens=usage_data["output_length"]
+                    )
+                    
+                    if response and response.choices and response.choices[0].message:
+                        response_text = response.choices[0].message.content
+                        accumulated_response.append(response_text)
+                        yield f"data: {json.dumps({'chunk': response_text})}\n\n"
+                    else:
+                        error_msg = "No response content received from Together.ai API"
+                        logger.error(error_msg)
+                        yield f"data: {json.dumps({'error': error_msg})}\n\n"
                 else:
+                    logger.error(f"Unsupported provider: {provider}")
                     raise HTTPException(status_code=400, detail="Unsupported provider selected.")
                 
                 # Add complete response to history
                 complete_response = "".join(accumulated_response)
+                logger.debug(f"Complete response length: {len(complete_response)} characters")
                 add_to_history("assistant", complete_response)
                 
                 # Update history with assistant response
                 update_conversation_history(conversation_id, "assistant", complete_response)
                 
                 # Send the cost estimate as a final message
-                yield f"data: {json.dumps({'cost': estimated_cost, 'provider': provider})}\n\n"
+                yield f"data: {json.dumps({'cost': usage_data['cost_estimate'], 'provider': provider})}\n\n"
+                logger.info(f"Chat interaction completed successfully - Conversation ID: {conversation_id}")
                 
             except Exception as e:
                 error_msg = f"Error during streaming: {str(e)}"
+                logger.error(error_msg)
+                log_error(e, "Streaming error")
                 yield f"data: {json.dumps({'error': error_msg})}\n\n"
 
         return StreamingResponse(
@@ -149,6 +223,7 @@ async def chat(request: Request, message: dict):
         )
 
     except Exception as e:
+        log_error(e, f"Chat endpoint error - Conversation ID: {conversation_id}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 @router.post("/submit")
@@ -156,10 +231,12 @@ async def handle_submit(
     request: Request,
     anthropic_api_key: str = Form(None),
     openai_api_key: str = Form(None),
+    together_api_key: str = Form(None),
     selected_model: str = Form(None),
     context_mode: str = Form(None),
     initial_chunk_size: int = Form(None),
     followup_chunk_size: int = Form(None),
+    system_message: str = Form(None),
 ):
     """
     Handles form submissions for updating settings.
@@ -170,10 +247,12 @@ async def handle_submit(
         request (Request): The incoming request object.
         anthropic_api_key (str, optional): The Anthropic API key.
         openai_api_key (str, optional): The OpenAI API key.
+        together_api_key (str, optional): The Together.ai API key.
         selected_model (str, optional): The selected AI model.
         context_mode (str, optional): The context handling mode.
         initial_chunk_size (int, optional): The initial chunk size for RAG mode.
         followup_chunk_size (int, optional): The followup chunk size for RAG mode.
+        system_message (str, optional): The system message for AI model interactions.
 
     Returns:
         JSONResponse: A JSON object indicating the success status of the update.
@@ -183,6 +262,8 @@ async def handle_submit(
         updated_data["anthropic_api_key"] = anthropic_api_key
     if openai_api_key is not None:
         updated_data["openai_api_key"] = openai_api_key
+    if together_api_key is not None:
+        updated_data["together_api_key"] = together_api_key
     if selected_model is not None:
         updated_data["selected_model"] = selected_model
     if context_mode is not None:
@@ -191,6 +272,8 @@ async def handle_submit(
         updated_data["initial_chunk_size"] = initial_chunk_size
     if followup_chunk_size is not None:
         updated_data["followup_chunk_size"] = followup_chunk_size
+    if system_message is not None:
+        updated_data["system_message"] = system_message
     
     update_settings(updated_data)
     return JSONResponse({"status": "success"})
@@ -219,12 +302,13 @@ async def save_conversation_endpoint():
 async def get_file_tree():
     """Get the file tree structure for the project."""
     try:
+        # Get the parent directory of the current project
         root_dir = Path(__file__).parent.parent.parent
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         
         def count_tokens(content):
             return len(enc.encode(content))
-        
+            
         def build_tree(path):
             """Recursively build the file tree structure."""
             if path.name == '__pycache__':
@@ -240,19 +324,11 @@ async def get_file_tree():
                 children = []
                 total_tokens = 0
                 
-                cursorrules = path / '.cursorrules'
-                if cursorrules.exists():
-                    cursorrules_item = build_tree(cursorrules)
-                    if cursorrules_item:
-                        children.append(cursorrules_item)
-                        total_tokens += cursorrules_item.get("tokens", 0)
-                
                 for child in path.iterdir():
-                    if child.name != '.cursorrules':
-                        child_item = build_tree(child)
-                        if child_item:
-                            children.append(child_item)
-                            total_tokens += child_item.get("tokens", 0)
+                    child_item = build_tree(child)
+                    if child_item:
+                        children.append(child_item)
+                        total_tokens += child_item.get("tokens", 0)
                 
                 item["children"] = sorted(children, key=lambda x: (x["type"] == "file", x["name"]))
                 item["tokens"] = total_tokens
@@ -298,20 +374,69 @@ async def get_file_content(path: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
 
-@router.post("/refresh_context")
-async def refresh_context():
+@router.post("/calculate_tokens")
+async def calculate_tokens(request: TokenCalcRequest):
     """
-    Refreshes the context processing for both RAG and full context modes.
+    Calculate token usage, cost, and color coding for the next request.
+    
+    Args:
+        request (TokenCalcRequest): The request containing model and content information
+        
+    Returns:
+        dict: Usage data including token counts, costs, and color coding
     """
     try:
-        await initialize_rag_context()
-        return JSONResponse({
-            "status": "success",
-            "message": "Context refreshed successfully",
-            "timestamp": datetime.now().isoformat()
-        })
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to refresh context: {str(e)}"
+        # Get settings for system message if not provided
+        if not request.system_message:
+            settings = load_settings()
+            request.system_message = settings.system_message
+            
+        # Calculate usage data
+        usage_data = calculate_usage_and_cost(
+            model_name=request.model_name,
+            conversation_history=request.conversation_history,
+            user_input=request.user_input,
+            rag_context=request.rag_context,
+            system_message=request.system_message,
+            output_length=request.output_length
         )
+        
+        return usage_data
+        
+    except Exception as e:
+        logger.error(f"Error calculating tokens: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error calculating tokens: {str(e)}")
+
+"""
+TODO: Future Implementation - Add Root Folder Feature
+
+This endpoint will be responsible for handling the addition of new folders to the file tree.
+Requirements:
+1. Validate folder path and contents
+2. Process files for token counting
+3. Update file tree structure
+4. Handle large folders and file type filtering
+5. Integrate with context processing system
+6. Provide progress feedback
+7. Implement proper error handling
+8. Consider security implications
+"""
+@router.post("/add_root_folder")
+async def add_root_folder(request: Request):
+    """
+    [FUTURE IMPLEMENTATION]
+    Adds a new root folder to the file tree.
+    
+    Args:
+        request (Request): The incoming request object containing the folder path.
+        
+    Returns:
+        JSONResponse: A JSON object indicating the success status of the operation.
+        
+    Raises:
+        HTTPException: If there's an error adding the folder.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="This feature is not yet implemented."
+    )

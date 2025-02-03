@@ -4,7 +4,9 @@ Project Structure:
 library_assistant/
 ├── api/
 │   ├── anthropic.py
-│   └── openai.py
+│   ├── logging.py
+│   ├── openai.py
+│   └── together.py
 ├── config/
 │   └── config.py
 ├── database/
@@ -17,7 +19,12 @@ library_assistant/
 ├── web/
 │   ├── routes.py
 │   ├── templates/
+│   │   └── index.html
 │   └── static/
+│       ├── styles.css
+│       ├── fileTree.js
+│       ├── main.js
+│       └── tokenDisplay.js
 └── assistant.py
 
 Program Features:
@@ -27,8 +34,11 @@ Program Features:
 4. Cost estimation for API calls
 5. Conversation management and history saving
 6. Web-based user interface using FastAPI
-7. Customizable settings for model selection, context mode, and file handling
-8. Error handling and user guidance
+7. **Separated front-end code** in `index.html` by moving all JavaScript into dedicated static files:
+   - `main.js` for vanilla JS, form handling, SSE logic
+   - `tokenDisplay.js` (with `type="text/babel"`) for React/JSX token usage components
+8. Customizable settings for model selection, context mode, and file handling
+9. Error handling and user guidance
 
 General Coding Rules and Guidelines:
 1. Follow PEP 8 style guidelines for Python code
@@ -40,12 +50,13 @@ General Coding Rules and Guidelines:
 7. Keep sensitive information (e.g., API keys) secure and out of version control
 8. Use meaningful variable and function names
 9. Optimize for readability and maintainability
-10. Regularly update dependencies and address security vulnerabilities
+10. **Separate large inline scripts from HTML** into external `.js` or `.jsx` files (as shown with `main.js` and `tokenDisplay.js`)
+11. Regularly update dependencies and address security vulnerabilities
 
 The Library Assistant operates by:
 1. Processing user queries through a web interface
 2. Preparing context based on the selected mode (full context or RAG)
-3. Sending prepared prompts to the chosen AI model (Anthropic or OpenAI)
+3. Sending prepared prompts to the chosen AI model (Anthropic, OpenAI, or Together)
 4. Streaming and processing AI responses
 5. Estimating and displaying costs for API calls
 6. Managing conversation history and allowing for conversation saving
@@ -55,14 +66,14 @@ The AI assistant interacting with the Library Assistant is a helpful expert with
 - Python programming
 - FastAPI web framework
 - SQLAlchemy ORM
-- Anthropic and OpenAI APIs
+- Anthropic, OpenAI, and Together.ai APIs
 - Natural Language Processing (NLP) techniques
 - Retrieval-Augmented Generation (RAG)
 - Asynchronous programming
 - RESTful API design
 - Database management
 - Cost optimization for API usage
-- Web development (HTML, CSS, JavaScript)
+- Web development (HTML, CSS, JavaScript, React)
 - Git version control
 
 The assistant should provide accurate, context-aware, and helpful responses while adhering to the Library Assistant's capabilities and limitations. It should offer guidance on effective use of the tool, including query formulation and settings management, while maintaining a professional and knowledgeable persona throughout all interactions.

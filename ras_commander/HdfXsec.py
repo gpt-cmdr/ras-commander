@@ -99,7 +99,7 @@ class HdfXsec:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
-                # Extract datasets
+                # Extract required datasets
                 poly_info = hdf['/Geometry/Cross Sections/Polyline Info'][:]
                 poly_parts = hdf['/Geometry/Cross Sections/Polyline Parts'][:]
                 poly_points = hdf['/Geometry/Cross Sections/Polyline Points'][:]
@@ -182,43 +182,61 @@ class HdfXsec:
                         else:
                             ineffective_blocks.append([])
                 
-                # Create GeoDataFrame
-                if geometries:
-                    # Create DataFrame from attributes
-                    data = {
-                        'geometry': geometries,
-                        'station_elevation': station_elevations,
-                        'mannings_n': mannings_n,
-                        'ineffective_blocks': ineffective_blocks,
-                        'River': [x['River'].decode('utf-8').strip() for x in xs_attrs],
-                        'Reach': [x['Reach'].decode('utf-8').strip() for x in xs_attrs],
-                        'RS': [x['RS'].decode('utf-8').strip() for x in xs_attrs],
-                        'Name': [x['Name'].decode('utf-8').strip() for x in xs_attrs],
-                        'Description': [x['Description'].decode('utf-8').strip() for x in xs_attrs],
-                        'Len Left': xs_attrs['Len Left'],
-                        'Len Channel': xs_attrs['Len Channel'],
-                        'Len Right': xs_attrs['Len Right'], 
-                        'Left Bank': xs_attrs['Left Bank'],
-                        'Right Bank': xs_attrs['Right Bank'],
-                        'Friction Mode': [x['Friction Mode'].decode('utf-8').strip() for x in xs_attrs],
-                        'Contr': xs_attrs['Contr'],
-                        'Expan': xs_attrs['Expan'],
-                        'Left Levee Sta': xs_attrs['Left Levee Sta'],
-                        'Left Levee Elev': xs_attrs['Left Levee Elev'],
-                        'Right Levee Sta': xs_attrs['Right Levee Sta'],
-                        'Right Levee Elev': xs_attrs['Right Levee Elev'],
-                        'HP Count': xs_attrs['HP Count'],
-                        'HP Start Elev': xs_attrs['HP Start Elev'],
-                        'HP Vert Incr': xs_attrs['HP Vert Incr'],
-                        'HP LOB Slices': xs_attrs['HP LOB Slices'],
-                        'HP Chan Slices': xs_attrs['HP Chan Slices'],
-                        'HP ROB Slices': xs_attrs['HP ROB Slices'],
-                        'Ineff Block Mode': xs_attrs['Ineff Block Mode'],
-                        'Obstr Block Mode': xs_attrs['Obstr Block Mode'],
-                        'Default Centerline': xs_attrs['Default Centerline'],
-                        'Last Edited': [x['Last Edited'].decode('utf-8').strip() for x in xs_attrs]
-                    }
+                # Create base dictionary with required fields
+                data = {
+                    'geometry': geometries,
+                    'station_elevation': station_elevations,
+                    'mannings_n': mannings_n,
+                    'ineffective_blocks': ineffective_blocks,
+                }
                 
+                # Define field mappings with default values
+                field_mappings = {
+                    'River': ('River', ''),
+                    'Reach': ('Reach', ''),
+                    'RS': ('RS', ''),
+                    'Name': ('Name', ''),
+                    'Description': ('Description', ''),
+                    'Len Left': ('Len Left', 0.0),
+                    'Len Channel': ('Len Channel', 0.0),
+                    'Len Right': ('Len Right', 0.0),
+                    'Left Bank': ('Left Bank', 0.0),
+                    'Right Bank': ('Right Bank', 0.0),
+                    'Friction Mode': ('Friction Mode', ''),
+                    'Contr': ('Contr', 0.0),
+                    'Expan': ('Expan', 0.0),
+                    'Left Levee Sta': ('Left Levee Sta', None),
+                    'Left Levee Elev': ('Left Levee Elev', None),
+                    'Right Levee Sta': ('Right Levee Sta', None),
+                    'Right Levee Elev': ('Right Levee Elev', None),
+                    'HP Count': ('HP Count', 0),
+                    'HP Start Elev': ('HP Start Elev', 0.0),
+                    'HP Vert Incr': ('HP Vert Incr', 0.0),
+                    'HP LOB Slices': ('HP LOB Slices', 0),
+                    'HP Chan Slices': ('HP Chan Slices', 0),
+                    'HP ROB Slices': ('HP ROB Slices', 0),
+                    'Ineff Block Mode': ('Ineff Block Mode', 0),
+                    'Obstr Block Mode': ('Obstr Block Mode', 0),
+                    'Default Centerline': ('Default Centerline', 0),
+                    'Last Edited': ('Last Edited', '')
+                }
+                
+                # Add fields that exist in xs_attrs
+                for field_name, (attr_name, default_value) in field_mappings.items():
+                    if attr_name in xs_attrs.dtype.names:
+                        if xs_attrs[attr_name].dtype.kind == 'S':
+                            # Handle string fields
+                            data[field_name] = [x[attr_name].decode('utf-8').strip() 
+                                              for x in xs_attrs]
+                        else:
+                            # Handle numeric fields
+                            data[field_name] = xs_attrs[attr_name]
+                    else:
+                        # Use default value if field doesn't exist
+                        data[field_name] = [default_value] * len(geometries)
+                        logger.debug(f"Field {attr_name} not found in attributes, using default value")
+                
+                if geometries:
                     gdf = gpd.GeoDataFrame(data)
                     
                     # Set CRS if available
@@ -233,7 +251,7 @@ class HdfXsec:
                 return gpd.GeoDataFrame()
                 
         except Exception as e:
-            logging.error(f"Error processing cross-section data: {str(e)}")
+            logger.error(f"Error processing cross-section data: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
