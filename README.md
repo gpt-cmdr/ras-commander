@@ -13,11 +13,8 @@ Aaron Nichols, P.E., C.F.M.
 
 ## Don't Ask Me, Ask ChatGPT!
 
-Before you read any further, you can [chat directly with ChatGPT on this topic.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results. 
+Before you read any further, you can [chat directly with ChatGPT.](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant) about the library.  Ask it anything, and it will use its tools to answer your questions and help you learn.  You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results, although this ability is still limited in comparison to the provided library assistant. 
 
-There are also [AI Assistant Knowledge Bases](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases) with various versions available to directly use with large context LLM models such as Anthropic's Claude, Google Gemini and OpenAI's GPT4o and o1 models.  
-
-FUTURE:  TEMPLATES are available to use with AI Assistant Notebooks to build your own automation tools.  When used with large context models, these templates allow you to ask GPT to build a workflow from scratch to automate your projects. 
 
 ## Background
 The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
@@ -40,9 +37,8 @@ ras-commander provides several AI-powered tools to enhance the coding experience
 2. **[Purpose-Built Knowledge Base Summaries](https://github.com/billk-FM/ras-commander/tree/main/ai_tools/assistant_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.
 
 3. **[Cursor IDE Integration](https://github.com/billk-FM/ras-commander/blob/main/.cursorrules)**: Custom rules for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.  
-4. **[AI Assistant Notebook](https://github.com/billk-FM/ras-commander/blob/main/ai_tools/rascommander_code_assistant.ipynb)**: A notebook for dynamic code summarization and API interaction (bring your own API Key).  Currently, this only does a single-shot message on the Claude Sonnet 3.5 API, which can be up to 50 cents per request.  Future revisions will include the ability to select which knowledge base file to include, a choice of SOTA models + multi turn conversations to build automation notebooks interactively.  
+4. **[RAS-Commander Library Assistant](https://github.com/billk-FM/ras-commander/blob/main/library_assistant)**: A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.
 
-These tools aim to streamline development and provide intelligent assistance when modeling with, and working with and revising the ras-commander library.
 
 ## Installation
 
