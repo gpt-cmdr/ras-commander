@@ -392,6 +392,11 @@ These acknowledgments recognize the contributions and inspirations that have hel
 
 [No More Wait and See (Cajun Zydeco)](https://suno.com/song/4441c45d-f6cd-47b9-8fbc-1f7b277ee8ed)  
 
+## Other Resources
+
+Notebook version of RAS-Commander: [RAS-Commander Notebook in the HEC-Commander Tools Repository](https://github.com/billk-FM/HEC-Commander/tree/main/RAS-Commander)
+Youtube Tutorials for HEC-Commander Tools and RAS-Commander: [GPT-Commander on YouTube](https://www.youtube.com/@GPT_Commander/videos)
+
 
 ## Contact
 
