@@ -29,6 +29,8 @@ The ras-commander library emerged from the initial test-bed of AI-driven coding 
 
 ## Features
 
+If you've ever read the book "Breaking the HEC-RAS Code" by Chris Goodell, this library is intended to be an AI-coded, pythonic library that provides a modern alternative to the HECRASController API.  By leveraginging modern python features libraries such as pandas, geopandas and H5Py (favoring HDF data sources wherever practicable) this library builds functionality around HEC-RAS 6.2+ while maintaining as much forward compatibilty as possible with HEC-RAS 2025.  
+
 HEC-RAS Project Management & Execution
 - Multi-project handling with parallel and sequential execution
 - Command-line execution integration
@@ -55,12 +57,7 @@ RAS ASCII File Operations
 - Unsteady flow file management
 - Project file updates and validation  
 
-  
-If you've ever read the book "Breaking the HEC-RAS Code" by Chris Goodell, this library is intended to be an AI-coded, pythonic library that provides an alternative to the HECRASController API.  By levering modern libraries such as H5Py and utilizing HDF data sources wherever possible, this library maintains as much forward compatibilty as possible with HEC-RAS 2025, support for 2D modeling use cases introduced in HEC-RAS 6.2, as well as Pipe Networks which were introduced in HEC-RAS 6.6.  Please note that the library has not been tested with versions prior to HEC-RAS 6.2.
-
-  
-  
-
+Note about support for Pipe Networks:  As a relatively new feature, only read access to Pipe Network geometry and results data has been included.  Users will need to code their own methods to modify/add pipe network data, and pull requests are always welcome to incorporate this capability.  Please note that the library has not been tested with versions prior to HEC-RAS 6.2.
 
 ## Installation
 
@@ -71,6 +68,26 @@ In your virtual environment, install ras-commander using pip:
 pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib ras-commander ipython tqdm psutil shapely fiona pathlib rtree rasterstats
 pip install --upgrade ras-commander
 ```
+  
+
+If you want to make revisions and work actively in your local version of ras-commander, just skip the pip install rascommander step.  Most of the notebooks and examples in this repo can be used from a subfolder of the repository:
+```
+# Flexible imports to allow for development without installation
+try:
+    # Try to import from the installed package
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+except ImportError:
+    # If the import fails, add the parent directory to the Python path
+    current_file = Path(__file__).resolve()
+    parent_directory = current_file.parent.parent
+    sys.path.append(str(parent_directory))
+    # Alternately, you can just define a path sys.path.append(r"c:/path/to/rascommander/rascommander)")
+    
+    # Now try to import again
+    from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
+```
+It is highly suggested to fork this repository before going this route, and using Git to manage your changes!
+
 
 **Tested with Python 3.11**
 
