@@ -61,16 +61,20 @@ Note about support for Pipe Networks:  As a relatively new feature, only read ac
 
 ## Installation
 
-Create a virtual environment with conda or venv (ask ChatGPT if you need help)
+First, create a virtual environment with conda or venv (ask ChatGPT if you need help).  
+
+### Install via Pip
 
 In your virtual environment, install ras-commander using pip:
 ```
 pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib ras-commander ipython tqdm psutil shapely fiona pathlib rtree rasterstats
 pip install --upgrade ras-commander
 ```
-  
+If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
+   
+## Fork 
 
-If you want to make revisions and work actively in your local version of ras-commander, just skip the pip install rascommander step.  Most of the notebooks and examples in this repo can be used from a subfolder of the repository:
+If you want to make revisions and work actively in your local version of ras-commander, just skip the pip install rascommander step above and clone a fork of the repo to your local machine using Git (ask ChatGPT if you need help).  Most of the notebooks and examples in this repo have a code segment similar to the one below, that works as long as the script is located in a first-level subfolder of the ras-commander repository:
 ```
 # Flexible imports to allow for development without installation
 try:
@@ -86,14 +90,12 @@ except ImportError:
     # Now try to import again
     from ras_commander import init_ras_project, RasExamples, RasCmdr, RasPlan, RasGeo, RasUnsteady, RasUtils, ras
 ```
-It is highly suggested to fork this repository before going this route, and using Git to manage your changes!
+It is highly suggested to fork this repository before going this route, and using Git to manage your changes!  This allows any revisions to the ras-commander classes and functions to be actively edited and developed by end users. The folders "/workspace/, "/projects/", or "my_projects/" are included in the .gitignore, so users can place you custom scripts there for any project data they don't want to be tracked by git.
 
 
-**Tested with Python 3.11**
+**Tested with Python 3.12**
 
 
-If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
-   
 
 ## Requirements
 
