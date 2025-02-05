@@ -93,19 +93,10 @@ except ImportError:
 It is highly suggested to fork this repository before going this route, and using Git to manage your changes!  This allows any revisions to the ras-commander classes and functions to be actively edited and developed by end users. The folders "/workspace/, "/projects/", or "my_projects/" are included in the .gitignore, so users can place you custom scripts there for any project data they don't want to be tracked by git.
 
 
-**Tested with Python 3.12**
 
+  
 
-
-## Requirements
-
-- Tested with Python 3.11
-- HEC-RAS 6.2 or later (other versions may work, all testing was done with version 6.2 and above)
-- Detailed project workflows and/or existing libraries and code where ras-commander can be integrated.
-
-For a full list of dependencies, see the `requirements.txt` file.
-
-## Quick Start
+## Quick Start Guide
 ```
 from ras_commander import init_ras_project, RasCmdr, RasPlan
 ```
