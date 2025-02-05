@@ -29,12 +29,61 @@ The ras-commander library emerged from the initial test-bed of AI-driven coding 
 
 ## Features
 
-- Automate HEC-RAS project management and simulations
+
+HEC-RAS Project Management & Execution
+- Multi-project handling with parallel and sequential execution
+- Command-line execution integration
+- Project folder management and organization
+- Multi-core processing optimization
+- Progress tracking and logging
+- Execution error handling and recovery
+
+HDF Data Access & Analysis
+- 2D mesh results processing (depths, velocities, WSE)
+- Cross-section data extraction
+- Boundary condition analysis
+- Structure data (bridges, culverts, gates)
+- Pipe network and pump station analysis
+- Fluvial-pluvial boundary calculations
+- Infiltration and precipitation data handling
+
+RAS ASCII File Operations
+- Plan file creation and modification
+- Geometry file parsing examples 
+- Unsteady flow file management
+- Project file updates and validation  
+
+If you've ever read the book "Breaking the HEC-RAS Code" by Chris Goodell, this library is intended to be an AI-coded, pythonic library that provides an alternative to the HECRASController API.  By levering modern libraries such as H5Py and utilizing HDF data sources wherever possible, this library maintains as much forward compatibilty as possible with HEC-RAS 2025, support for 2D modeling use cases introduced in HEC-RAS 6.2, as well as Pipe Networks which were introduced in HEC-RAS 6.6.  Please note that the library has not been tested with versions prior to HEC-RAS 6.2.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- Automate HEC-RAS project management and simulation execution
+      - Series and Parallel Plan Execution
+      - Loading and Parsing HEC-RAS Projects 
+      - Plan, Geometry and Unsteady Key Management
+      - Boundary Condition Editing
+  
 - Support for both single and multiple project instances
 - Parallel execution of HEC-RAS plans
 - Utilities for managing geometry, plan, and unsteady flow files
 - Example project management for testing and development
 - Two primary operation modes: "Run Missing" and "Build from DSS"
+
+HEC-RAS 6.x HDF Data Access
+
+
 
 ## Installation
 
