@@ -63,7 +63,7 @@ Note about support for Pipe Networks:  As a relatively new feature, only read ac
 
 First, create a virtual environment with conda or venv (ask ChatGPT if you need help).  
 
-### Install via Pip
+#### Install via Pip
 
 In your virtual environment, install ras-commander using pip:
 ```
@@ -72,7 +72,7 @@ pip install --upgrade ras-commander
 ```
 If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
    
-## Fork 
+#### Work in a Local Copy
 
 If you want to make revisions and work actively in your local version of ras-commander, just skip the pip install rascommander step above and clone a fork of the repo to your local machine using Git (ask ChatGPT if you need help).  Most of the notebooks and examples in this repo have a code segment similar to the one below, that works as long as the script is located in a first-level subfolder of the ras-commander repository:
 ```
