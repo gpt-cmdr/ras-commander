@@ -97,21 +97,22 @@ It is highly suggested to fork this repository before going this route, and usin
   
 
 ## Quick Start Guide
+
 ```
 from ras_commander import init_ras_project, RasCmdr, RasPlan
 ```
 
-# Initialize a project
+### Initialize a project
 ```
 init_ras_project(r"/path/to/project", "6.5")
 ```
 
-# Execute a single plan
+### Execute a single plan
 ```
 RasCmdr.compute_plan("01", dest_folder=r"/path/to/results", overwrite_dest=True)
 ```
 
-# Execute plans in parallel
+### Execute plans in parallel
 ```
 results = RasCmdr.compute_parallel(
     plan_numbers=["01", "02"],
@@ -122,14 +123,14 @@ results = RasCmdr.compute_parallel(
 )
 ```
 
-# Modify a plan
+### Modify a plan
 ```
 RasPlan.set_geom("01", "02")
 ```
 
 Certainly! I'll provide you with an updated Key Components section and Project Organization diagram based on the current structure of the ras-commander library.
 
-## Key Components
+#### Key Components
 
 - `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
 - `RasCmdr`: Handles execution of HEC-RAS simulations
@@ -139,7 +140,7 @@ Certainly! I'll provide you with an updated Key Components section and Project O
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
-### New Components:
+#### New Components:
 - `HdfBase`: Core functionality for HDF file operations
 - `HdfBndry`: Enhanced boundary condition handling
 - `HdfMesh`: Comprehensive mesh data management
@@ -155,9 +156,9 @@ Certainly! I'll provide you with an updated Key Components section and Project O
 - `RasToGo`: Go-Consequences integration
 - `HdfPlot` & `HdfResultsPlot`: Specialized plotting utilities
 
-## Project Organization Diagram
+### Project Organization Diagram
 
-## Project Organization Diagram
+### Project Organization Diagram
 
 ```
 ras_commander
@@ -220,7 +221,7 @@ ras_commander
 └── requirements.txt
 ```
 
-## Accessing HEC Examples through RasExamples
+### Accessing HEC Examples through RasExamples
 
 The `RasExamples` class provides functionality for quickly loading and managing HEC-RAS example projects. This is particularly useful for testing and development purposes.
 
@@ -241,7 +242,7 @@ projects = ras_examples.list_projects("Steady Flow")
 extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
 ```
 
-## RasPrj
+### RasPrj
 
 The `RasPrj` class is central to managing HEC-RAS projects within the ras-commander library. It handles project initialization, data loading, and provides access to project components.
 
@@ -257,18 +258,18 @@ Example usage:
 from ras_commander import RasPrj, init_ras_project
 ```
 
-### Using the global ras object
+#### Using the global ras object
 ```
 init_ras_project("/path/to/project", "6.5")
 ```
 
-### Creating a custom RasPrj instance
+#### Creating a custom RasPrj instance
 ```
 custom_project = RasPrj()
 init_ras_project("/path/to/another_project", "6.5", ras_instance=custom_project)
 ```
 
-## RasHdf
+### RasHdf
 
 The `RasHdf` class provides utilities for working with HDF files in HEC-RAS projects, enabling easy access to simulation results and model data.
 
@@ -289,7 +290,7 @@ print(runtime_data)
 This class simplifies the process of extracting and analyzing data from HEC-RAS HDF output files, supporting tasks such as post-processing and result visualization.
 
 
-### Infrastructure Analysis
+#### Infrastructure Analysis
 ```python
 from ras_commander import HdfPipe, HdfPump
 
@@ -302,7 +303,7 @@ pump_stations = HdfPump.get_pump_stations(hdf_path)
 pump_performance = HdfPump.get_pump_station_summary(hdf_path)
 ```
 
-### Advanced Results Analysis
+#### Advanced Results Analysis
 ```python
 from ras_commander import HdfResultsMesh
 
@@ -315,7 +316,7 @@ from ras_commander import HdfResultsPlot
 HdfResultsPlot.plot_results_max_wsel(max_ws)
 ```
 
-### Fluvial-Pluvial Analysis
+#### Fluvial-Pluvial Analysis
 ```python
 from ras_commander import HdfFluvialPluvial
 
@@ -323,7 +324,7 @@ boundary = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
     hdf_path,
     delta_t=12  # Time threshold in hours
 )
-
+```
 
 ## Documentation
 
@@ -338,7 +339,6 @@ Check out the `examples/` directory for sample scripts demonstrating various fea
 The ras-commander library is an ongoing project. Future plans include:
 - Integration of more advanced AI-driven features
 - Expansion of HMS and DSS functionalities
-- Enhanced GPU support for computational tasks
 - Community-driven development of new modules and features
 
 ## Related Resources
@@ -377,11 +377,13 @@ Additionally, we would like to acknowledge the following notable contributions a
    Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
    Institute of Computational and Data Sciences, Penn State University
 
+3. Attribution: The[ffrd\rashdf'](https://github.com/fema-ffrd/rashdf) project by FEMA-FFRD (FEMA Future of Flood Risk Data) was incorporated, revised, adapted and extended in rascommander's RasHDF libaries (where noted). 
+
 These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
 
-3. Chris Goodell, "Breaking the HEC-RAS Code" - Studied and used as a reference for understanding the inner workings of HEC-RAS, providing valuable insights into the software's functionality and structure.
+4. Chris Goodell, "Breaking the HEC-RAS Code" - Studied and used as a reference for understanding the inner workings of HEC-RAS, providing valuable insights into the software's functionality and structure.
 
-4. [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
+5. [HEC-Commander Tools](https://github.com/billk-FM/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
 
 
 ## Official RAS Commander AI-Generated Songs:
