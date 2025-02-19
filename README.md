@@ -397,6 +397,10 @@ These acknowledgments recognize the contributions and inspirations that have hel
 Notebook version of RAS-Commander: [RAS-Commander Notebook in the HEC-Commander Tools Repository](https://github.com/billk-FM/HEC-Commander/tree/main/RAS-Commander)
 Youtube Tutorials for HEC-Commander Tools and RAS-Commander: [GPT-Commander on YouTube](https://www.youtube.com/@GPT_Commander/videos)
 
+## LICENSE
+
+This software is released under the MIT license.
+
 
 ## Contact
 
