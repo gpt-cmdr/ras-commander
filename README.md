@@ -401,4 +401,4 @@ Youtube Tutorials for HEC-Commander Tools and RAS-Commander: [GPT-Commander on Y
 ## Contact
 
 For questions, suggestions, or support, please contact:
-William Katzenmeyer, P.E., C.F.M. - billk@fenstermaker.com
+William Katzenmeyer, P.E., C.F.M. - heccommander@gmail.com
