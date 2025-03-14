@@ -23,7 +23,8 @@ def setup_logging(log_file=None, log_level=logging.INFO):
     
     # Define log format
     log_format = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
 
     # Configure console handler

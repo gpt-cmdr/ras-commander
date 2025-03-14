@@ -14,7 +14,7 @@ pip install --update ras-commander # This ensures you get the latest version of 
 
 1. **RAS Objects**:
    - Represent HEC-RAS projects containing information about plans, geometries, and flow files.
-   - Support both a global `ras` object and custom `RasPrj` instances for different projects.
+   - Support both a global `ras` object and custom named object to handle multiple projects.
 
 2. **Project Initialization**:
    - Use `init_ras_project()` to initialize projects and set up RAS objects.
@@ -29,9 +29,9 @@ pip install --update ras-commander # This ensures you get the latest version of 
    - Provides methods for accessing and updating these DataFrames.
 
 5. **Execution Modes**:
-   - **Single Plan Execution**: Run individual plans.
-   - **Sequential Execution**: Run multiple plans in sequence.
-   - **Parallel Execution**: Run multiple plans concurrently for improved performance.
+   - **Single Plan Execution**: Run individual plans with `RasCmdr.compute_plan()`.
+   - **Sequential Execution**: Run multiple plans in sequence with `RasCmdr.compute_test_mode()`.
+   - **Parallel Execution**: Run multiple plans concurrently with `RasCmdr.compute_parallel()`.
 
 6. **Example Projects**:
    - The `RasExamples` class offers functionality to download and manage HEC-RAS example projects for testing and learning.
@@ -50,7 +50,7 @@ pip install --update ras-commander # This ensures you get the latest version of 
     - The `RasPrj` class provides functionality to extract and manage boundary conditions from unsteady flow files.
 
 11. **Flexibility and Modularity**:
-    - All classes are designed to work with either a global 'ras' object + a plan number, or with custom project instances.
+    - All classes are designed to work with either a global 'ras' object + a plan number, or with custom object.
     - Clear separation of concerns between project management (RasPrj), execution (RasCmdr), and results data retrieval (RasHdf).
 
 12. **Error Handling and Logging**:
@@ -100,7 +100,7 @@ pip install --update ras-commander # This ensures you get the latest version of 
 ## Module Overview
 
 1. **RasPrj**: Manages HEC-RAS project initialization and data, including boundary conditions.
-2. **RasCmdr**: Handles execution of HEC-RAS simulations.
+2. **RasCmdr**: Handles execution of HEC-RAS simulations in single, sequential, or parallel modes.
 3. **RasPlan**: Provides functions for plan file operations.
 4. **RasGeo**: Manages geometry file operations.
 5. **RasUnsteady**: Handles unsteady flow file operations.
@@ -138,12 +138,12 @@ pip install --update ras-commander # This ensures you get the latest version of 
     ```
 
 - **Multiple Projects**:
-  - Create separate `RasPrj` instances for each project.
+  - Create separate `RasPrj` object for each project.
     ```python
     from ras_commander import RasPrj, init_ras_project
 
-    project1 = init_ras_project("/path/to/project1", "6.5", ras_instance=RasPrj())
-    project2 = init_ras_project("/path/to/project2", "6.5", ras_instance=RasPrj())
+    project1 = init_ras_project("/path/to/project1", "6.5", ras_object=your_object_name)
+    project2 = init_ras_project("/path/to/project2", "6.5", ras_object=your_object_name)
     ```
 
 - **Consistency**:
@@ -175,10 +175,21 @@ pip install --update ras-commander # This ensures you get the latest version of 
 
 ### 4. Parallel Execution
 
-- Adjust `max_workers` and `num_cores` based on system capabilities.
+- Adjust `max_workers` based on the number of physical cores, not logical cores.
   ```python
   RasCmdr.compute_parallel(max_workers=4, num_cores=2)
   ```
+
+- Set `num_cores` to balance between single-plan performance and overall throughput.
+  ```python
+  # Efficiency mode (maximize throughput)
+  RasCmdr.compute_parallel(max_workers=8, num_cores=2)
+  
+  # Performance mode (minimize individual plan runtime)
+  RasCmdr.compute_parallel(max_workers=2, num_cores=8)
+  ```
+
+- Consider using 2 cores per worker for efficiency or 4-8 cores per worker for performance.
 
 - Use `dest_folder` to organize outputs and prevent conflicts.
   ```python
@@ -288,7 +299,6 @@ new_plan_number = RasPlan.clone_plan("01")
 print(f"Created new plan: {new_plan_number}")
 ```
 
-
 ### Executing Plans
 
 - **Single Plan Execution**:
@@ -321,8 +331,8 @@ print(f"Created new plan: {new_plan_number}")
 from ras_commander import RasPrj, init_ras_project, RasCmdr
 
 # Initialize two separate projects
-project1 = init_ras_project("/path/to/project1", "6.5", ras_instance=RasPrj())
-project2 = init_ras_project("/path/to/project2", "6.5", ras_instance=RasPrj())
+project1 = init_ras_project("/path/to/project1", "6.5", ras_object=your_object_name)
+project2 = init_ras_project("/path/to/project2", "6.5", ras_object=your_object_name)
 
 # Perform operations on each project
 RasCmdr.compute_plan("01", ras_object=project1)
@@ -381,9 +391,7 @@ RAS Commander provides extensive support for working with HDF files through vari
 
 These classes provide a high-level interface to HDF data, making it easier to extract and analyze HEC-RAS results programmatically.
 
-
 ### Working with Pipe Networks and Pump Stations
-
 
 RAS Commander provides specialized classes for handling pipe networks and pump stations data from HEC-RAS HDF files.
 
@@ -417,10 +425,7 @@ RAS Commander provides specialized classes for handling pipe networks and pump s
    print(profile)
    ```
 
-
 2. **Pump Station Operations**:
-
-
    Use `HdfPump` to work with pump station data:
 
    ```python
@@ -452,10 +457,290 @@ RAS Commander provides specialized classes for handling pipe networks and pump s
 
 These classes provide powerful tools for analyzing and visualizing pipe network and pump station data from HEC-RAS simulations. They allow you to easily access geometric information, time series data, and summary statistics for these hydraulic structures.
 
+### Working with Multiple HEC-RAS Projects
 
+RAS Commander allows you to work with multiple HEC-RAS projects simultaneously, which is useful for comparing different river systems, running scenario analyses across multiple watersheds, or managing a suite of related models.
 
+#### Creating Custom RAS Objects
 
+When working with multiple projects, you should create separate RAS objects for each project:
 
+```python
+# Initialize multiple project instances with custom RAS objects
+project1 = init_ras_project(path1, "6.6")
+project2 = init_ras_project(path2, "6.6")
+
+# Note that the global 'ras' object will point to the last initialized project
+print(f"Project 1: {project1.project_name}")
+print(f"Project 2: {project2.project_name}")
+print(f"Global 'ras' object: {ras.project_name}")  # Will be the same as project2
+```
+
+#### Best Practices for Multiple Project Management
+
+1. **Name Your Objects Clearly**: Use descriptive variable names for your RAS objects (e.g., `bald_eagle_ras`, `muncie_ras`).
+2. **Be Consistent**: Always pass the appropriate RAS object to functions when working with multiple projects.
+3. **Avoid Using Global 'ras'**: When working with multiple projects, avoid using the global `ras` object to prevent confusion.
+4. **Separate Compute Folders**: Use different destination folders for each project's computations.
+5. **Resource Management**: Be mindful of CPU and memory usage when running multiple projects in parallel.
+
+#### Example Workflow
+
+```python
+# Initialize two projects
+project1 = init_ras_project(path1, "6.6")
+project2 = init_ras_project(path2, "6.6")
+
+# Create a comparison function
+def compare_project_structures(ras_object1, name1, ras_object2, name2):
+    """Compare the structures of two HEC-RAS projects and display differences."""
+    # Create a comparison dictionary
+    comparison = {
+        'Project Name': [ras_object1.project_name, ras_object2.project_name],
+        'Plan Count': [len(ras_object1.plan_df), len(ras_object2.plan_df)],
+        'Geometry Count': [len(ras_object1.geom_df), len(ras_object2.geom_df)],
+        'Flow Count': [len(ras_object1.flow_df), len(ras_object2.flow_df)],
+        'Unsteady Count': [len(ras_object1.unsteady_df), len(ras_object2.unsteady_df)]
+    }
+    
+    # Create a DataFrame for the comparison
+    comparison_df = pd.DataFrame(comparison, index=[name1, name2])
+    return comparison_df
+
+# Perform operations on each project
+RasCmdr.compute_plan("01", ras_object=project1, dest_folder=folder1)
+RasCmdr.compute_plan("01", ras_object=project2, dest_folder=folder2)
+
+# Compare projects
+comparison_df = compare_project_structures(
+    project1, "Project 1", 
+    project2, "Project 2"
+)
+print(comparison_df)
+```
+
+#### Application Examples
+
+Working with multiple projects unlocks advanced applications such as:
+
+1. **Model Comparison**: Compare results from different river systems
+2. **Basin-wide Analysis**: Analyze connected river systems in parallel
+3. **Parameter Sweep**: Test a range of parameters across multiple models
+4. **Model Development**: Develop and test models simultaneously
+5. **Batch Processing**: Process large sets of models in an automated pipeline
+
+### Plan Execution Modes
+
+RAS Commander provides three different modes for executing HEC-RAS plans, each with its own advantages and use cases.
+
+#### Single Plan Execution
+
+The `compute_plan()` method is designed for running a single HEC-RAS plan.
+
+```python
+success = RasCmdr.compute_plan(
+    plan_number="01",              # The plan to execute
+    dest_folder="/path/to/results", # Where to run the simulation
+    num_cores=2,                    # Number of processor cores to use
+    clear_geompre=True,             # Whether to clear geometry preprocessor files
+    overwrite_dest=True             # Whether to overwrite the destination folder
+)
+```
+
+This approach is best when you need to:
+- Run a single plan with specific parameters
+- Control execution details precisely
+- Monitor immediate results
+- Need to use the results immediately after computation
+
+#### Sequential Execution
+
+The `compute_test_mode()` method runs multiple plans sequentially in a test folder.
+
+```python
+results = RasCmdr.compute_test_mode(
+    plan_number=["01", "02", "03"], # Plans to execute sequentially
+    dest_folder_suffix="[Test]",    # Suffix for the test folder
+    clear_geompre=True,             # Whether to clear geometry preprocessor files
+    num_cores=2                     # Number of cores for each plan
+)
+```
+
+This approach is best when you need to:
+- Run plans in a specific order
+- Ensure consistent resource usage
+- Keep all results in a dedicated test folder
+- Handle plans that depend on each other's results
+
+#### Parallel Execution
+
+The `compute_parallel()` method runs multiple plans simultaneously for improved performance.
+
+```python
+results = RasCmdr.compute_parallel(
+    plan_number=["01", "02", "03"], # Plans to execute in parallel
+    max_workers=3,                  # Maximum number of concurrent workers
+    num_cores=2,                    # Cores per plan
+    dest_folder="/path/to/results", # Destination folder
+    clear_geompre=True              # Whether to clear geometry preprocessor files
+)
+```
+
+This approach is best when you need to:
+- Maximize computational efficiency
+- Run multiple independent plans
+- Make better use of available CPU cores
+- Reduce overall execution time
+
+#### Choosing the Right Execution Mode
+
+Choose based on:
+- **Dependency between plans**: Use sequential for dependent plans, parallel for independent plans
+- **Resource constraints**: Use single or sequential on limited hardware
+- **Time constraints**: Use parallel for faster overall execution
+- **Result organization**: Use test_mode for clean test environments
+
+#### Return Values
+
+All execution methods return information about the success of each plan:
+
+- `compute_plan()`: Returns a boolean indicating success or failure
+- `compute_test_mode()`: Returns a dictionary mapping plan numbers to success status
+- `compute_parallel()`: Returns a dictionary mapping plan numbers to success status
+
+```python
+# Example of checking results
+results = RasCmdr.compute_parallel(plan_number=["01", "02", "03"])
+for plan_num, success in results.items():
+    print(f"Plan {plan_num}: {'Success' if success else 'Failed'}")
+```
+
+### Plan Parameter Operations
+
+RAS Commander provides several functions for working with plan parameters, allowing you to view and modify various simulation settings programmatically without opening the HEC-RAS GUI.
+
+#### Retrieving Plan Values
+
+The `get_plan_value()` method retrieves specific parameters from a plan file:
+
+```python
+# Get the current computation interval
+interval = RasPlan.get_plan_value("01", "Computation Interval")
+print(f"Current computation interval: {interval}")
+
+# Get the number of cores
+cores = RasPlan.get_plan_value("01", "UNET D1 Cores")
+print(f"Current cores setting: {cores}")
+```
+
+Common keys to query include:
+- `Computation Interval`: Time step for calculations
+- `Short Identifier`: Brief name/ID for the plan
+- `Simulation Date`: Start and end dates for simulation
+- `UNET D1 Cores`: Number of processor cores to use
+- `Plan Title`: Full title of the plan
+- `Geom File`: Associated geometry file
+- `Flow File`: Associated flow file (for steady flow)
+- `Unsteady File`: Associated unsteady flow file
+- `Friction Slope Method`: Method for calculating friction slopes
+- `Run HTab`: Whether to run the geometry preprocessor
+- `UNET Use Existing IB Tables`: Whether to use existing internal boundary tables
+
+#### Updating Run Flags
+
+The `update_run_flags()` method controls which components of the simulation are executed:
+
+```python
+RasPlan.update_run_flags(
+    "01",
+    geometry_preprocessor=True,    # Run the geometry preprocessor
+    unsteady_flow_simulation=True, # Run unsteady flow simulation
+    post_processor=True,           # Run post-processing
+    floodplain_mapping=False       # Skip floodplain mapping
+)
+```
+
+This allows you to selectively enable or disable different simulation components, which is useful for focusing on specific parts of the computation or for troubleshooting.
+
+#### Setting Time Intervals
+
+The `update_plan_intervals()` method modifies the time intervals used in the simulation:
+
+```python
+RasPlan.update_plan_intervals(
+    "01",
+    computation_interval="10SEC",  # Time step for calculations
+    output_interval="1MIN",        # How often to save results
+    mapping_interval="15MIN"       # How often to save mapping data
+)
+```
+
+Valid interval values must be specified in HEC-RAS format:
+- Seconds: `1SEC`, `2SEC`, `3SEC`, `4SEC`, `5SEC`, `6SEC`, `10SEC`, `15SEC`, `20SEC`, `30SEC`
+- Minutes: `1MIN`, `2MIN`, `3MIN`, `4MIN`, `5MIN`, `6MIN`, `10MIN`, `15MIN`, `20MIN`, `30MIN`
+- Hours: `1HOUR`, `2HOUR`, `3HOUR`, `4HOUR`, `6HOUR`, `8HOUR`, `12HOUR`
+- Days: `1DAY`
+
+#### Working with Simulation Dates
+
+The `update_simulation_date()` method changes the start and end times for the simulation:
+
+```python
+from datetime import datetime
+
+start_date = datetime(2023, 1, 1, 0, 0)  # January 1, 2023, 00:00
+end_date = datetime(2023, 1, 5, 23, 59)  # January 5, 2023, 23:59
+
+RasPlan.update_simulation_date("01", start_date, end_date)
+```
+
+Considerations for simulation dates:
+1. **Hydrograph Coverage**: The simulation period should fully encompass your hydrographs
+2. **Warm-Up Period**: Include time before the main event for model stabilization
+3. **Cool-Down Period**: Include time after the main event for complete drainage
+4. **Computational Efficiency**: Avoid unnecessarily long periods to reduce runtime
+5. **Consistency**: Ensure dates match available boundary condition data
+
+#### Managing Plan Descriptions
+
+RAS Commander provides methods to read and update plan descriptions:
+
+```python
+# Read the current description
+current_description = RasPlan.read_plan_description("01")
+print(f"Current description: {current_description}")
+
+# Update the description
+new_description = """Modified plan for climate change scenario
+Increased rainfall intensity: 20%
+Extended simulation period: 5 days
+Modified Manning's n values"""
+
+RasPlan.update_plan_description("01", new_description)
+```
+
+Effective plan descriptions should include:
+1. Purpose of the simulation
+2. Key parameters and settings
+3. Date of creation or modification
+4. Author or organization
+5. Any special considerations or notes
+
+#### Core Allocation
+
+The `set_num_cores()` method allows you to configure how many processor cores a plan will use:
+
+```python
+RasPlan.set_num_cores("01", 4)  # Set the plan to use 4 cores
+```
+
+Considerations for core allocation:
+- For 1D models, 2-4 cores typically offer the best performance
+- For 2D models, 4-8 cores may provide better performance depending on mesh size
+- Using too many cores can actually decrease performance due to overhead
+- Consider your system's physical core count rather than logical cores
+
+These operations allow you to programmatically customize HEC-RAS simulations for batch processing, parameter studies, or automated workflows.
 
 ### Performance Optimization
 
@@ -664,89 +949,11 @@ RasUtils provides a set of powerful tools for data processing and analysis. Here
 
 By utilizing these advanced data processing capabilities of RasUtils, you can efficiently handle complex data manipulation tasks in your RAS Commander workflows.
 
-### RasExamples
-
-The `RasExamples` class provides functionality for managing HEC-RAS example projects. This is particularly useful for testing, learning, and development purposes.
-
-#### Key Concepts
-
-- **Example Project Management**: Access and manipulate example projects.
-- **Automatic Downloading and Extraction**: Fetches projects from official sources.
-- **Project Categorization**: Organizes projects into categories for easy navigation.
-
-#### Usage Patterns
-
-```python
-from ras_commander import RasExamples
-
-# Initialize RasExamples
-ras_examples = RasExamples()
-
-# Download example projects (if not already present)
-ras_examples.get_example_projects()
-
-# List available categories
-categories = ras_examples.list_categories()
-print(f"Available categories: {categories}")
-
-# List projects in a specific category
-steady_flow_projects = ras_examples.list_projects("Steady Flow")
-print(f"Steady Flow projects: {steady_flow_projects}")
-
-# Extract specific projects
-extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
-for path in extracted_paths:
-    print(f"Extracted project to: {path}")
-
-# Clean up extracted projects when done
-ras_examples.clean_projects_directory()
-```
-
-## RasHdf
-
-The `RasHdf` class provides utilities for working with HDF (Hierarchical Data Format) files in HEC-RAS projects. HDF files are commonly used in HEC-RAS for storing large datasets and simulation results.
-
-### Key Features of `RasHdf`:
-
-1. **Reading HDF Tables**: Convert HDF5 datasets to pandas DataFrames.
-2. **Writing DataFrames to HDF**: Save pandas DataFrames as HDF5 datasets.
-3. **Spatial Operations**: Perform KDTree queries and find nearest neighbors.
-4. **Data Consolidation**: Merge duplicate values in DataFrames.
-5. **Byte String Handling**: Decode byte strings in DataFrames.
-
-### Example Usage:
-
-```python
-from ras_commander import RasHdf
-import h5py
-import pandas as pd
-
-# Read an HDF table
-with h5py.File('results.hdf', 'r') as f:
-    dataset = f['water_surface_elevations']
-    df = RasHdf.read_hdf_to_dataframe(dataset)
-
-print(df.head())
-
-# Save a DataFrame to HDF
-new_data = pd.DataFrame({'A': [1, 2, 3], 'B': ['a', 'b', 'c']})
-with h5py.File('new_results.hdf', 'w') as f:
-    group = f.create_group('my_results')
-    RasHdf.save_dataframe_to_hdf(new_data, group, 'my_dataset')
-
-# Perform a KDTree query
-import numpy as np
-reference_points = np.array([[0, 0], [1, 1], [2, 2]])
-query_points = np.array([[0.5, 0.5], [1.5, 1.5]])
-results = RasHdf.perform_kdtree_query(reference_points, query_points)
-print("KDTree query results:", results)
-```
-
-## Optimizing Parallel Execution with RAS Commander
+### Optimizing Parallel Execution with RAS Commander
 
 Efficient parallel execution is crucial for maximizing the performance of HEC-RAS simulations, especially when dealing with multiple plans or large models. RAS Commander offers several strategies for optimizing parallel execution based on your specific needs and system resources.
 
-### Strategy 1: Efficiency Mode for Multiple Plans
+#### Strategy 1: Efficiency Mode for Multiple Plans
 
 This strategy maximizes overall throughput and efficiency when running multiple plans, although individual plan turnaround times may be longer.
 
@@ -760,13 +967,13 @@ from ras_commander import RasCmdr
 
 # Assuming 8 physical cores on the system
 RasCmdr.compute_parallel(
-    plan_numbers=["01", "02", "03", "04"],
+    plan_number=["01", "02", "03", "04"],
     max_workers=4,  # 8 cores / 2 cores per plan
     num_cores=2
 )
 ```
 
-### Strategy 2: Performance Mode for Single Plans
+#### Strategy 2: Performance Mode for Single Plans
 
 This strategy maximizes single plan performance by using more cores. It results in less overall efficiency but shortens single plan runtime, making it optimal for situations where individual plan performance is critical.
 
@@ -784,7 +991,7 @@ RasCmdr.compute_plan(
 )
 ```
 
-### Strategy 3: Background Run Operation
+#### Strategy 3: Background Run Operation
 
 This strategy balances performance and system resource usage, allowing for other operations to be performed concurrently.
 
@@ -802,13 +1009,13 @@ physical_cores = psutil.cpu_count(logical=False)
 max_cores_to_use = int(physical_cores * 0.7)  # Using 70% of physical cores
 
 RasCmdr.compute_parallel(
-    plan_numbers=["01", "02", "03"],
+    plan_number=["01", "02", "03"],
     max_workers=max_cores_to_use // 2,
     num_cores=2
 )
 ```
 
-### Optimizing Geometry Preprocessing
+#### Optimizing Geometry Preprocessing
 
 To avoid repeated geometry preprocessing for each run, follow these steps:
 
@@ -837,13 +1044,57 @@ To avoid repeated geometry preprocessing for each run, follow these steps:
 
 This approach preprocesses the geometry once, preventing redundant preprocessing when multiple plans use the same geometry.
 
-### Best Practices for Parallel Execution
+#### Best Practices for Parallel Execution
 
 - **Balance Cores:** Find the right balance between the number of parallel plans and cores per plan based on your system's capabilities.
 - **Consider I/O Operations:** Be aware that disk I/O can become a bottleneck in highly parallel operations.
 - **Test and Iterate:** Experiment with different configurations to find the optimal setup for your specific models and system.
 
 By leveraging these strategies and best practices, you can significantly improve the performance and efficiency of your HEC-RAS simulations using RAS Commander.
+
+## Troubleshooting
+
+### 1. Project Initialization Issues
+
+- **Ensure Correct Paths**: Verify that the project path is accurate and the `.prj` file exists.
+- **HEC-RAS Version**: Confirm that the specified HEC-RAS version is installed on your system.
+
+### 2. Execution Failures
+
+- **File Existence**: Check that all referenced plan, geometry, and flow files exist.
+- **Executable Path**: Ensure the HEC-RAS executable path is correctly set.
+- **Log Files**: Review HEC-RAS log files for specific error messages.
+
+### 3. Parallel Execution Problems
+
+- **Resource Allocation**: Reduce `max_workers` if encountering memory issues.
+- **System Capabilities**: Adjust `num_cores` based on your system's capacity.
+- **Clean Environment**: Use `clear_geompre=True` to prevent conflicts.
+
+### 4. File Access Errors
+
+- **Permissions**: Verify read/write permissions for the project directory.
+- **File Locks**: Close any open HEC-RAS instances that might lock files.
+
+### 5. Inconsistent Results
+
+- **Geometry Files**: Clear geometry preprocessor files when making changes.
+- **Plan Parameters**: Ensure all plan parameters are correctly set before execution.
+
+### 6. Infrastructure Analysis Issues
+- Verify network connectivity in pipe systems
+- Check pump station configurations
+- Validate time series data consistency
+
+### 7. HDF File Problems
+- Check file permissions and access
+- Verify HDF structure using HdfUtils
+- Use proper file type specification with @standardize_input
+
+### 8. Performance Optimization
+- Monitor system resources during parallel execution
+- Balance worker count with system capabilities
+- Use appropriate chunking for large datasets
 
 ## Approaching Your End User Needs with Ras Commander
 
@@ -918,50 +1169,6 @@ RAS Commander is designed to work efficiently with HEC-RAS projects by focusing 
 
 By following these strategies and best practices, you can effectively use RAS Commander to automate and streamline your HEC-RAS workflows, working around limitations and leveraging the strengths of the library's approach to data management.
 
-## Troubleshooting
-
-### 1. Project Initialization Issues
-
-- **Ensure Correct Paths**: Verify that the project path is accurate and the `.prj` file exists.
-- **HEC-RAS Version**: Confirm that the specified HEC-RAS version is installed on your system.
-
-### 2. Execution Failures
-
-- **File Existence**: Check that all referenced plan, geometry, and flow files exist.
-- **Executable Path**: Ensure the HEC-RAS executable path is correctly set.
-- **Log Files**: Review HEC-RAS log files for specific error messages.
-
-### 3. Parallel Execution Problems
-
-- **Resource Allocation**: Reduce `max_workers` if encountering memory issues.
-- **System Capabilities**: Adjust `num_cores` based on your system's capacity.
-- **Clean Environment**: Use `clear_geompre=True` to prevent conflicts.
-
-### 4. File Access Errors
-
-- **Permissions**: Verify read/write permissions for the project directory.
-- **File Locks**: Close any open HEC-RAS instances that might lock files.
-
-### 5. Inconsistent Results
-
-- **Geometry Files**: Clear geometry preprocessor files when making changes.
-- **Plan Parameters**: Ensure all plan parameters are correctly set before execution.
-
-### 6. Infrastructure Analysis Issues
-- Verify network connectivity in pipe systems
-- Check pump station configurations
-- Validate time series data consistency
-
-### 7. HDF File Problems
-- Check file permissions and access
-- Verify HDF structure using HdfUtils
-- Use proper file type specification with @standardize_input
-
-### 8. Performance Optimization
-- Monitor system resources during parallel execution
-- Balance worker count with system capabilities
-- Use appropriate chunking for large datasets
-
 ## Conclusion
 
 The RAS-Commander (`ras_commander`) library provides a powerful set of tools for automating HEC-RAS operations. By following the best practices outlined in this guide and leveraging the library's features, you can efficiently manage and execute complex HEC-RAS projects programmatically.
@@ -971,13 +1178,6 @@ Remember to refer to the latest documentation and the library's source code for 
 For further assistance, bug reports, or feature requests, please refer to the library's [GitHub repository](https://github.com/billk-FM/ras-commander) and issue tracker.
 
 **Happy Modeling!**
-
-
-
-
-
-
-
 
 **Note on Module Naming Convention:**
 While the library now uses capitalized names for the `Decorators.py` and `LoggingConfig.py` modules, it's worth noting that this deviates from the PEP 8 style guide, which recommends lowercase names for modules. Future versions of the library may revert to lowercase naming for consistency with Python conventions. Users should be aware of this potential change in future updates.

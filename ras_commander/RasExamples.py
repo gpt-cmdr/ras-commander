@@ -57,84 +57,51 @@ logger = get_logger(__name__)
 class RasExamples:
     """
     A class for quickly loading HEC-RAS example projects for testing and development of ras-commander.
-
-    This class provides functionality to download, extract, and manage HEC-RAS example projects.
-    It supports both default HEC-RAS example projects and custom projects from user-provided URLs.
-    Additionally, it includes functionality to download FEMA's Base Level Engineering (BLE) models
-    from CSV files provided by the FEMA Estimated Base Flood Elevation (BFE) Viewer.
+    All methods are class methods, so no initialization is required.
     """
-    @log_call
-    def __init__(self):
-        """
-        Initialize the RasExamples class.
-        """
-        self.base_url = 'https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/'
-        self.valid_versions = [
+    base_url = 'https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/'
+    valid_versions = [
             "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
             "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
-        self.base_dir = Path.cwd()
-        self.examples_dir = self.base_dir
-        self.projects_dir = self.examples_dir / 'example_projects'
-        self.zip_file_path = None
-        self.folder_df = None
-        self.csv_file_path = self.examples_dir / 'example_projects.csv'
+    base_dir = Path.cwd()
+    examples_dir = base_dir
+    projects_dir = examples_dir / 'example_projects'
+    csv_file_path = examples_dir / 'example_projects.csv'
 
+    _folder_df = None
+    _zip_file_path = None
+
+    def __init__(self):
+        """Initialize RasExamples and ensure data is loaded"""
+        self._ensure_initialized()
+
+    @property
+    def folder_df(self):
+        """Access the folder DataFrame"""
+        self._ensure_initialized()
+        return self._folder_df
+
+    def _ensure_initialized(self):
+        """Ensure the class is initialized with required data"""
         self.projects_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Example projects folder: {self.projects_dir}")
-        self._load_project_data()
+        if self._folder_df is None:
+            self._load_project_data()
 
-    @log_call
-    def get_example_projects(self, version_number='6.6'):
-        """
-        Download and extract HEC-RAS example projects for a specified version.
-        """
-        logger.info(f"Getting example projects for version {version_number}")
-        if version_number not in self.valid_versions:
-            error_msg = f"Invalid version number. Valid versions are: {', '.join(self.valid_versions)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        zip_url = f"{self.base_url}1.0.33/Example_Projects_{version_number.replace('.', '_')}.zip"
-        
-        self.examples_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.zip_file_path = self.examples_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
-
-        if not self.zip_file_path.exists():
-            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}. \nThe file is over 400 MB, so it may take a few minutes to download....")
-            try:
-                response = requests.get(zip_url, stream=True)
-                response.raise_for_status()
-                with open(self.zip_file_path, 'wb') as file:
-                    shutil.copyfileobj(response.raw, file)
-                logger.info(f"Downloaded to {self.zip_file_path}")
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Failed to download the zip file: {e}")
-                raise
-        else:
-            logger.info("HEC-RAS Example Projects zip file already exists. Skipping download.")
-
-        self._load_project_data()
-        return self.projects_dir
-
-
-    @log_call
     def _load_project_data(self):
-        """
-        Load project data from CSV if up-to-date, otherwise extract from zip.
-        """
+        """Load project data from CSV if up-to-date, otherwise extract from zip."""
+        logger.debug("Loading project data")
         self._find_zip_file()
         
-        if not self.zip_file_path:
+        if not self._zip_file_path:
             logger.info("No example projects zip file found. Downloading...")
             self.get_example_projects()
         
         try:
-            zip_modified_time = os.path.getmtime(self.zip_file_path)
+            zip_modified_time = os.path.getmtime(self._zip_file_path)
         except FileNotFoundError:
-            logger.error(f"Zip file not found at {self.zip_file_path}.")
+            logger.error(f"Zip file not found at {self._zip_file_path}.")
             return
         
         if self.csv_file_path.exists():
@@ -143,103 +110,38 @@ class RasExamples:
             if csv_modified_time >= zip_modified_time:
                 logger.info("Loading project data from CSV...")
                 try:
-                    self.folder_df = pd.read_csv(self.csv_file_path)
-                    logger.info(f"Loaded {len(self.folder_df)} projects from CSV. Use list_categories() and list_projects() to explore them.")
+                    self._folder_df = pd.read_csv(self.csv_file_path)
+                    logger.info(f"Loaded {len(self._folder_df)} projects from CSV.")
+                    return
                 except Exception as e:
                     logger.error(f"Failed to read CSV file: {e}")
-                    self.folder_df = None
-                return
+                    self._folder_df = None
 
         logger.info("Extracting folder structure from zip file...")
         self._extract_folder_structure()
         self._save_to_csv()
 
-    @log_call
-    def _find_zip_file(self):
-        """Locate the example projects zip file in the examples directory."""
-        for version in self.valid_versions:
-            potential_zip = self.examples_dir / f"Example_Projects_{version.replace('.', '_')}.zip"
-            if potential_zip.exists():
-                self.zip_file_path = potential_zip
-                logger.info(f"Found zip file: {self.zip_file_path}")
-                break
-        else:
-            logger.warning("No existing example projects zip file found.")
-
-    @log_call
-    def _extract_folder_structure(self):
-        """
-        Extract folder structure from the zip file.
-
-        Populates folder_df with category and project information.
-        """
-        folder_data = []
-        try:
-            with zipfile.ZipFile(self.zip_file_path, 'r') as zip_ref:
-                for file in zip_ref.namelist():
-                    parts = Path(file).parts
-                    if len(parts) > 1:
-                        folder_data.append({
-                            'Category': parts[0],
-                            'Project': parts[1]
-                        })
+    @classmethod
+    def extract_project(cls, project_names: Union[str, List[str]]) -> Union[Path, List[Path]]:
+        """Extract one or more specific HEC-RAS projects from the zip file.
         
-            self.folder_df = pd.DataFrame(folder_data).drop_duplicates()
-            logger.info(f"Extracted {len(self.folder_df)} projects.")
-            logger.debug(f"folder_df:\n{self.folder_df}")
-        except zipfile.BadZipFile:
-            logger.error(f"The file {self.zip_file_path} is not a valid zip file.")
-            self.folder_df = pd.DataFrame(columns=['Category', 'Project'])
-        except Exception as e:
-            logger.error(f"An error occurred while extracting the folder structure: {str(e)}")
-            self.folder_df = pd.DataFrame(columns=['Category', 'Project'])
-
-    @log_call
-    def _save_to_csv(self):
-        """Save the extracted folder structure to CSV file."""
-        if self.folder_df is not None and not self.folder_df.empty:
-            try:
-                self.folder_df.to_csv(self.csv_file_path, index=False)
-                logger.info(f"Saved project data to {self.csv_file_path}")
-            except Exception as e:
-                logger.error(f"Failed to save project data to CSV: {e}")
-        else:
-            logger.warning("No folder data to save to CSV.")
-
-
-    @log_call
-    def list_categories(self):
+        Args:
+            project_names: Single project name as string or list of project names
+            
+        Returns:
+            Path: Single Path object if one project extracted
+            List[Path]: List of Path objects if multiple projects extracted
         """
-        List all categories of example projects.
-        """
-        if self.folder_df is None or 'Category' not in self.folder_df.columns:
-            logger.warning("No categories available. Make sure the zip file is properly loaded.")
-            return []
-        categories = self.folder_df['Category'].unique()
-        logger.info(f"Available categories: {', '.join(categories)}")
-        return categories.tolist()
-
-    @log_call
-    def list_projects(self, category=None):
-        """
-        List all projects or projects in a specific category.
-        """
-        if self.folder_df is None:
-            logger.warning("No projects available. Make sure the zip file is properly loaded.")
-            return []
-        if category:
-            projects = self.folder_df[self.folder_df['Category'] == category]['Project'].unique()
-            logger.info(f"Projects in category '{category}': {', '.join(projects)}")
-        else:
-            projects = self.folder_df['Project'].unique()
-            logger.info(f"All available projects: {', '.join(projects)}")
-        return projects.tolist()
-
-    @log_call
-    def extract_project(self, project_names: Union[str, List[str]]):
-        """
-        Extract one or more specific HEC-RAS projects from the zip file.
-        """
+        logger.debug(f"Extracting projects: {project_names}")
+        
+        # Initialize if needed
+        if cls._folder_df is None:
+            cls._find_zip_file()
+            if not cls._zip_file_path:
+                logger.info("No example projects zip file found. Downloading...")
+                cls.get_example_projects()
+            cls._load_project_data()
+        
         if isinstance(project_names, str):
             project_names = [project_names]
 
@@ -248,7 +150,7 @@ class RasExamples:
         for project_name in project_names:
             logger.info("----- RasExamples Extracting Project -----")
             logger.info(f"Extracting project '{project_name}'")
-            project_path = self.projects_dir
+            project_path = cls.projects_dir
 
             if (project_path / project_name).exists():
                 logger.info(f"Project '{project_name}' already exists. Deleting existing folder...")
@@ -259,28 +161,17 @@ class RasExamples:
                     logger.error(f"Failed to delete existing project folder '{project_name}': {e}")
                     continue
 
-            if self.folder_df is None or self.folder_df.empty:
-                error_msg = "No project information available. Make sure the zip file is properly loaded."
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-
-            project_info = self.folder_df[self.folder_df['Project'] == project_name]
+            project_info = cls._folder_df[cls._folder_df['Project'] == project_name]
             if project_info.empty:
                 error_msg = f"Project '{project_name}' not found in the zip file."
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
-            category = project_info['Category'].iloc[0]
-            
-            # Ensure the project directory exists
-            project_path.mkdir(parents=True, exist_ok=True)
-
             try:
-                with zipfile.ZipFile(self.zip_file_path, 'r') as zip_ref:
+                with zipfile.ZipFile(cls._zip_file_path, 'r') as zip_ref:
                     for file in zip_ref.namelist():
                         parts = Path(file).parts
                         if len(parts) > 1 and parts[1] == project_name:
-                            # Remove the first level (category)
                             relative_path = Path(*parts[1:])
                             extract_path = project_path / relative_path
                             if file.endswith('/'):
@@ -292,43 +183,181 @@ class RasExamples:
 
                 logger.info(f"Successfully extracted project '{project_name}' to {project_path / project_name}")
                 extracted_paths.append(project_path / project_name)
-            except zipfile.BadZipFile:
-                logger.error(f"Error: The file {self.zip_file_path} is not a valid zip file.")
-            except FileNotFoundError:
-                logger.error(f"Error: The file {self.zip_file_path} was not found.")
             except Exception as e:
-                logger.error(f"An unexpected error occurred while extracting the project: {str(e)}")
-            logger.info("----- RasExamples Extraction Complete -----")
-        return extracted_paths
+                logger.error(f"An error occurred while extracting project '{project_name}': {str(e)}")
 
-    @log_call
-    def is_project_extracted(self, project_name):
+        # Return single path if only one project was extracted, otherwise return list
+        return extracted_paths[0] if len(project_names) == 1 else extracted_paths
+
+    @classmethod
+    def _find_zip_file(cls):
+        """Locate the example projects zip file in the examples directory."""
+        for version in cls.valid_versions:
+            potential_zip = cls.examples_dir / f"Example_Projects_{version.replace('.', '_')}.zip"
+            if potential_zip.exists():
+                cls._zip_file_path = potential_zip
+                logger.info(f"Found zip file: {cls._zip_file_path}")
+                break
+        else:
+            logger.warning("No existing example projects zip file found.")
+
+    @classmethod
+    def get_example_projects(cls, version_number='6.6'):
+        """
+        Download and extract HEC-RAS example projects for a specified version.
+        """
+        logger.info(f"Getting example projects for version {version_number}")
+        if version_number not in cls.valid_versions:
+            error_msg = f"Invalid version number. Valid versions are: {', '.join(cls.valid_versions)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        zip_url = f"{cls.base_url}1.0.33/Example_Projects_{version_number.replace('.', '_')}.zip"
+        
+        cls.examples_dir.mkdir(parents=True, exist_ok=True)
+        
+        cls._zip_file_path = cls.examples_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
+
+        if not cls._zip_file_path.exists():
+            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}. \nThe file is over 400 MB, so it may take a few minutes to download....")
+            try:
+                response = requests.get(zip_url, stream=True)
+                response.raise_for_status()
+                with open(cls._zip_file_path, 'wb') as file:
+                    shutil.copyfileobj(response.raw, file)
+                logger.info(f"Downloaded to {cls._zip_file_path}")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to download the zip file: {e}")
+                raise
+        else:
+            logger.info("HEC-RAS Example Projects zip file already exists. Skipping download.")
+
+        cls._load_project_data()
+        return cls.projects_dir
+
+    @classmethod
+    def _load_project_data(cls):
+        """Load project data from CSV if up-to-date, otherwise extract from zip."""
+        logger.debug("Loading project data")
+        
+        try:
+            zip_modified_time = os.path.getmtime(cls._zip_file_path)
+        except FileNotFoundError:
+            logger.error(f"Zip file not found at {cls._zip_file_path}.")
+            return
+        
+        if cls.csv_file_path.exists():
+            csv_modified_time = os.path.getmtime(cls.csv_file_path)
+            
+            if csv_modified_time >= zip_modified_time:
+                logger.info("Loading project data from CSV...")
+                try:
+                    cls._folder_df = pd.read_csv(cls.csv_file_path)
+                    logger.info(f"Loaded {len(cls._folder_df)} projects from CSV.")
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to read CSV file: {e}")
+                    cls._folder_df = None
+
+        logger.info("Extracting folder structure from zip file...")
+        cls._extract_folder_structure()
+        cls._save_to_csv()
+
+    @classmethod
+    def _extract_folder_structure(cls):
+        """
+        Extract folder structure from the zip file.
+
+        Populates folder_df with category and project information.
+        """
+        folder_data = []
+        try:
+            with zipfile.ZipFile(cls._zip_file_path, 'r') as zip_ref:
+                for file in zip_ref.namelist():
+                    parts = Path(file).parts
+                    if len(parts) > 1:
+                        folder_data.append({
+                            'Category': parts[0],
+                            'Project': parts[1]
+                        })
+        
+            cls._folder_df = pd.DataFrame(folder_data).drop_duplicates()
+            logger.info(f"Extracted {len(cls._folder_df)} projects.")
+            logger.debug(f"folder_df:\n{cls._folder_df}")
+        except zipfile.BadZipFile:
+            logger.error(f"The file {cls._zip_file_path} is not a valid zip file.")
+            cls._folder_df = pd.DataFrame(columns=['Category', 'Project'])
+        except Exception as e:
+            logger.error(f"An error occurred while extracting the folder structure: {str(e)}")
+            cls._folder_df = pd.DataFrame(columns=['Category', 'Project'])
+
+    @classmethod
+    def _save_to_csv(cls):
+        """Save the extracted folder structure to CSV file."""
+        if cls._folder_df is not None and not cls._folder_df.empty:
+            try:
+                cls._folder_df.to_csv(cls.csv_file_path, index=False)
+                logger.info(f"Saved project data to {cls.csv_file_path}")
+            except Exception as e:
+                logger.error(f"Failed to save project data to CSV: {e}")
+        else:
+            logger.warning("No folder data to save to CSV.")
+
+    @classmethod
+    def list_categories(cls):
+        """
+        List all categories of example projects.
+        """
+        if cls._folder_df is None or 'Category' not in cls._folder_df.columns:
+            logger.warning("No categories available. Make sure the zip file is properly loaded.")
+            return []
+        categories = cls._folder_df['Category'].unique()
+        logger.info(f"Available categories: {', '.join(categories)}")
+        return categories.tolist()
+
+    @classmethod
+    def list_projects(cls, category=None):
+        """
+        List all projects or projects in a specific category.
+        """
+        if cls._folder_df is None:
+            logger.warning("No projects available. Make sure the zip file is properly loaded.")
+            return []
+        if category:
+            projects = cls._folder_df[cls._folder_df['Category'] == category]['Project'].unique()
+            logger.info(f"Projects in category '{category}': {', '.join(projects)}")
+        else:
+            projects = cls._folder_df['Project'].unique()
+            logger.info(f"All available projects: {', '.join(projects)}")
+        return projects.tolist()
+
+    @classmethod
+    def is_project_extracted(cls, project_name):
         """
         Check if a specific project is already extracted.
         """
-        project_path = self.projects_dir / project_name
+        project_path = cls.projects_dir / project_name
         is_extracted = project_path.exists()
         logger.info(f"Project '{project_name}' extracted: {is_extracted}")
         return is_extracted
 
-    @log_call
-    def clean_projects_directory(self):
+    @classmethod
+    def clean_projects_directory(cls):
         """Remove all extracted projects from the example_projects directory."""
-        logger.info(f"Cleaning projects directory: {self.projects_dir}")
-        if self.projects_dir.exists():
+        logger.info(f"Cleaning projects directory: {cls.projects_dir}")
+        if cls.projects_dir.exists():
             try:
-                shutil.rmtree(self.projects_dir)
+                shutil.rmtree(cls.projects_dir)
                 logger.info("All projects have been removed.")
             except Exception as e:
                 logger.error(f"Failed to remove projects directory: {e}")
         else:
             logger.warning("Projects directory does not exist.")
-        self.projects_dir.mkdir(parents=True, exist_ok=True)
+        cls.projects_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Projects directory cleaned and recreated.")
 
-
-    @log_call
-    def download_fema_ble_model(self, huc8, output_dir=None):
+    @classmethod
+    def download_fema_ble_model(cls, huc8, output_dir=None):
         """
         Download a FEMA Base Level Engineering (BLE) model for a given HUC8.
 
@@ -344,8 +373,8 @@ class RasExamples:
         """
         # Method implementation...
 
-    @log_call
-    def _make_safe_folder_name(self, name: str) -> str:
+    @classmethod
+    def _make_safe_folder_name(cls, name: str) -> str:
         """
         Convert a string to a safe folder name by replacing unsafe characters with underscores.
         """
@@ -353,8 +382,8 @@ class RasExamples:
         logger.debug(f"Converted '{name}' to safe folder name '{safe_name}'")
         return safe_name
 
-    @log_call
-    def _download_file_with_progress(self, url: str, dest_folder: Path, file_size: int) -> Path:
+    @classmethod
+    def _download_file_with_progress(cls, url: str, dest_folder: Path, file_size: int) -> Path:
         """
         Download a file from a URL to a specified destination folder with progress bar.
         """
@@ -381,8 +410,8 @@ class RasExamples:
             logger.error(f"Failed to write file {local_filename}: {e}")
             raise
 
-    @log_call
-    def _convert_size_to_bytes(self, size_str: str) -> int:
+    @classmethod
+    def _convert_size_to_bytes(cls, size_str: str) -> int:
         """
         Convert a human-readable file size to bytes.
         """

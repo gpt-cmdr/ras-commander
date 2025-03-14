@@ -158,6 +158,7 @@ class HdfBase:
 
         project_folder = hdf_path.parent
         wkt = None
+        proj_file = None  # Initialize proj_file variable
         
         # Try HDF file
         try:
@@ -170,6 +171,7 @@ class HdfBase:
                         return wkt
         except Exception as e:
             logger.error(f"Error reading projection from HDF file {hdf_path}: {str(e)}")
+
         # Try RASMapper file if no HDF projection
         if not wkt:
             try:
@@ -189,16 +191,29 @@ class HdfBase:
             except Exception as e:
                 logger.error(f"Error reading RASMapper projection file: {str(e)}")
         
-        logger.critical(
-            "No valid projection found. Checked:\n"
-            f"1. HDF file projection attribute: {hdf_path}\n"
-            f"2. RASMapper projection file {proj_file} found in RASMapper file, but was invalid\n"
-            "To fix this:\n"
+        # Customize error message based on whether proj_file was found
+        if proj_file:
+            error_msg = (
+                "No valid projection found. Checked:\n"
+                f"1. HDF file projection attribute: {hdf_path}\n"
+                f"2. RASMapper projection file {proj_file} found in RASMapper file, but was invalid"
+            )
+        else:
+            error_msg = (
+                "No valid projection found. Checked:\n"
+                f"1. HDF file projection attribute: {hdf_path}\n was checked and no projection attribute found"
+                "2. No RASMapper projection file found"
+            )
+
+        error_msg += (
+            "\nTo fix this:\n"
             "1. Open RASMapper\n"
             "2. Click Map > Set Projection\n" 
             "3. Select an appropriate projection file or coordinate system\n"
             "4. Save the RASMapper project"
         )
+        
+        logger.critical(error_msg)
         return None
 
     @staticmethod
@@ -219,7 +234,7 @@ class HdfBase:
                 logger.warning(f"Path {attr_path} not found in HDF file")
                 return {}
             
-            return HdfUtils.hdf5_attrs_to_dict(hdf_file[attr_path].attrs)
+            return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file[attr_path].attrs)
         except Exception as e:
             logger.error(f"Error getting attributes from {attr_path}: {str(e)}")
             return {}

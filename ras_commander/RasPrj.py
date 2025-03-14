@@ -92,7 +92,7 @@ def read_file_with_fallback_encoding(file_path, encodings=['utf-8', 'latin1', 'c
         encodings (list): List of encodings to try, in order of preference
     
     Returns:
-        tuple: (content, encoding_used) or (None, None) if all encodings fail
+        tuple: (content, encoding) or (None, None) if all encodings fail
     """
     for encoding in encodings:
         try:
@@ -113,9 +113,10 @@ class RasPrj:
     def __init__(self):
         self.initialized = False
         self.boundaries_df = None  # New attribute to store boundary conditions
+        self.suppress_logging = False  # Add suppress_logging as instance variable
 
     @log_call
-    def initialize(self, project_folder, ras_exe_path):
+    def initialize(self, project_folder, ras_exe_path, suppress_logging=True):
         """
         Initialize a RasPrj instance.
 
@@ -126,6 +127,7 @@ class RasPrj:
         Args:
             project_folder (str or Path): Path to the HEC-RAS project folder.
             ras_exe_path (str or Path): Path to the HEC-RAS executable.
+            suppress_logging (bool): If True, suppresses initialization logging messages.
 
         Raises:
             ValueError: If no HEC-RAS project file is found in the specified folder.
@@ -133,6 +135,7 @@ class RasPrj:
         Note:
             This method is intended for internal use. External users should use the init_ras_project function instead.
         """
+        self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
         self.prj_file = self.find_ras_prj(self.project_folder)
         if self.prj_file is None:
@@ -143,11 +146,13 @@ class RasPrj:
         self._load_project_data()
         self.boundaries_df = self.get_boundary_conditions()  # Extract boundary conditions
         self.initialized = True
-        logger.info(f"Initialization complete for project: {self.project_name}")
-        logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
-                     f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
-                     f"Boundary conditions: {len(self.boundaries_df)}")
-        logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
+        
+        if not suppress_logging:
+            logger.info(f"Initialization complete for project: {self.project_name}")
+            logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
+                         f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
+                         f"Boundary conditions: {len(self.boundaries_df)}")
+            logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
 
     @log_call
     def _load_project_data(self):
@@ -197,6 +202,101 @@ class RasPrj:
         return None
 
 
+    @staticmethod
+    @log_call
+    def get_plan_value(
+        plan_number_or_path: Union[str, Path],
+        key: str,
+        ras_object=None
+    ) -> Any:
+        """
+        Retrieve a specific value from a HEC-RAS plan file.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        key (str): The key to retrieve from the plan file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Any: The value associated with the specified key
+
+        Raises:
+        ValueError: If the plan file is not found
+        IOError: If there's an error reading the plan file
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # These must exactly match the keys in supported_plan_keys from _parse_plan_file
+        valid_keys = {
+            'Computation Interval',
+            'DSS File',
+            'Flow File',
+            'Friction Slope Method',
+            'Geom File',
+            'Mapping Interval',
+            'Plan Title',
+            'Program Version',
+            'Run HTab',
+            'Run PostProcess',
+            'Run Sediment',
+            'Run UNet',
+            'Run WQNet',
+            'Short Identifier',
+            'Simulation Date',
+            'UNET D1 Cores',
+            'UNET D2 Cores',
+            'PS Cores',
+            'UNET Use Existing IB Tables',
+            'UNET 1D Methodology',
+            'UNET D2 SolverType',
+            'UNET D2 Name',
+            'description'  # Special case for description block
+        }
+
+        if key not in valid_keys:
+            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(sorted(valid_keys))}")
+            return None
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                content = file.read()
+        except IOError as e:
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        if key == 'description':
+            match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            return match.group(1).strip() if match else None
+        else:
+            pattern = f"{key}=(.*)"
+            match = re.search(pattern, content)
+            if match:
+                value = match.group(1).strip()
+                # Convert core values to integers
+                if key in ['UNET D1 Cores', 'UNET D2 Cores', 'PS Cores']:
+                    try:
+                        return int(value)
+                    except ValueError:
+                        logger.warning(f"Could not convert {key} value '{value}' to integer")
+                        return None
+                return value
+            
+            # Use DEBUG level for missing core values, ERROR for other missing keys
+            if key in ['UNET D1 Cores', 'UNET D2 Cores', 'PS Cores']:
+                logger.debug(f"Core setting '{key}' not found in plan file")
+            else:
+                logger.error(f"Key '{key}' not found in the plan file")
+            return None
+
     def _parse_plan_file(self, plan_file_path):
         """
         Parse a plan file and extract critical information.
@@ -240,6 +340,8 @@ class RasPrj:
                 'Short Identifier': r'Short Identifier=(.+)',
                 'Simulation Date': r'Simulation Date=(.+)',
                 'UNET D1 Cores': r'UNET D1 Cores=(.+)',
+                'UNET D2 Cores': r'UNET D2 Cores=(.+)',
+                'PS Cores': r'PS Cores=(.+)',
                 'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
                 'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
                 'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
@@ -248,17 +350,32 @@ class RasPrj:
             
             # END Exception to Style Guide
             
+            # First, explicitly set None for core values
+            core_keys = ['UNET D1 Cores', 'UNET D2 Cores', 'PS Cores']
+            for key in core_keys:
+                plan_info[key] = None
+            
             for key, pattern in supported_plan_keys.items():
                 match = re.search(pattern, content)
                 if match:
-                    plan_info[key] = match.group(1).strip()
+                    value = match.group(1).strip()
+                    # Convert core values to integers if they exist
+                    if key in core_keys and value:
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            logger.warning(f"Could not convert {key} value '{value}' to integer in plan file {plan_file_path}")
+                            value = None
+                    plan_info[key] = value
+                elif key in core_keys:
+                    logger.debug(f"Core setting '{key}' not found in plan file {plan_file_path}")
             
             logger.debug(f"Parsed plan file: {plan_file_path} using {encoding} encoding")
         except Exception as e:
             logger.error(f"Error parsing plan file {plan_file_path}: {e}")
         
         return plan_info
-    
+
     def _get_prj_entries(self, entry_type):
         """
         Extract entries of a specific type from the HEC-RAS project file.
@@ -500,7 +617,8 @@ class RasPrj:
             geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
             geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
             
-            logger.info(f"Found {len(geom_df)} geometry entries")
+            if not self.suppress_logging:  # Only log if suppress_logging is False
+                logger.info(f"Found {len(geom_df)} geometry entries")
             return geom_df
         except Exception as e:
             logger.error(f"Error reading geometry entries from project file: {e}")
@@ -546,74 +664,6 @@ class RasPrj:
         logger.info("Boundary conditions:")
         logger.info(f"\n{self.boundaries_df}")
         logger.info("----------------------------")
-
-    @staticmethod
-    @log_call
-    def get_plan_value(
-        plan_number_or_path: Union[str, Path],
-        key: str,
-        ras_object=None
-    ) -> Any:
-        """
-        Retrieve a specific value from a HEC-RAS plan file.
-
-        Parameters:
-        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
-        key (str): The key to retrieve from the plan file
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-
-        Returns:
-        Any: The value associated with the specified key
-
-        Raises:
-        ValueError: If an invalid key is provided or if the plan file is not found
-        IOError: If there's an error reading the plan file
-
-        Note: See the docstring of update_plan_file for a full list of available keys and their types.
-
-        Example:
-        >>> computation_interval = RasUtils.get_plan_value("01", "computation_interval")
-        >>> print(f"Computation interval: {computation_interval}")
-        """
-        logger = getLogger(__name__)
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        valid_keys = {
-            'description', 'computation_interval', 'dss_file', 'flow_file', 'friction_slope_method',
-            'geom_file', 'mapping_interval', 'plan_file', 'plan_title', 'program_version',
-            'run_htab', 'run_post_process', 'run_sediment', 'run_unet', 'run_wqnet',
-            'short_identifier', 'simulation_date', 'unet_d1_cores', 'unet_use_existing_ib_tables',
-            'unet_1d_methodology', 'unet_d2_solver_type', 'unet_d2_name'
-        }
-
-        if key not in valid_keys:
-            logger.error(f"Invalid key: {key}")
-            raise ValueError(f"Invalid key: {key}. Valid keys are: {', '.join(valid_keys)}")
-
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
-            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
-            if not plan_file_path.exists():
-                logger.error(f"Plan file not found: {plan_file_path}")
-                raise ValueError(f"Plan file not found: {plan_file_path}")
-
-        try:
-            with open(plan_file_path, 'r') as file:
-                content = file.read()
-        except IOError as e:
-            logger.error(f"Error reading plan file {plan_file_path}: {e}")
-            raise
-
-        if key == 'description':
-            import re
-            match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
-            return match.group(1).strip() if match else None
-        else:
-            pattern = f"{key.replace('_', ' ').title()}=(.*)"
-            import re
-            match = re.search(pattern, content)
-            return match.group(1).strip() if match else None
 
     @log_call
     def get_boundary_conditions(self) -> pd.DataFrame:
@@ -772,17 +822,13 @@ ras = RasPrj()
 
 # START OF FUNCTION DEFINITIONS
 
-
 @log_call
-def init_ras_project(ras_project_folder, ras_version=None, ras_instance=None):
+def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     """
     Initialize a RAS project.
 
     USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
     The initialize method of the RasPrj class only modifies the global 'ras' object.
-
-    This function creates or initializes a RasPrj instance, providing a safer and more
-    flexible interface than directly using the 'initialize' method.
 
     Parameters:
     -----------
@@ -790,43 +836,15 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_instance=None):
         The path to the RAS project folder.
     ras_version : str, optional
         The version of RAS to use (e.g., "6.6").
-        The version can also be a full path to the Ras.exe file. (Useful when calling ras objects for folder copies.)
+        The version can also be a full path to the Ras.exe file.
         If None, the function will attempt to use the version from the global 'ras' object or a default path.
-        You MUST specify a version number via init at some point or ras will not run.  
-        Once the ras_version is specified once it should auto-fill from the global 'ras' object.
-        The RAS Commander Library Assistant can ignore this argument since it does not have Ras.exe present, but all of other operations are fully working.
-    ras_instance : RasPrj, optional
-        An instance of RasPrj to initialize. If None, the global 'ras' instance is used.
+    ras_object : RasPrj, optional
+        An instance of RasPrj to initialize. If None, the global 'ras' object is used.
 
     Returns:
     --------
     RasPrj
         An initialized RasPrj instance.
-
-    Usage:
-    ------
-    1. For general use with a single project:
-        init_ras_project("/path/to/project")
-        # Use the global 'ras' object after initialization
-
-    2. For managing multiple projects:
-        project1 = init_ras_project("/path/to/project1", "6.6", ras_instance=RasPrj())
-        project2 = init_ras_project("/path/to/project2", ras_instance=RasPrj())
-
-    Notes:
-    ------
-    - This function is preferred over directly calling the 'initialize' method.
-    - It supports both the global 'ras' object and custom instances.
-    - Be consistent in your approach: stick to either the global 'ras' object
-      or custom instances throughout your script or application.
-    - Document your choice of approach clearly in your code.
-    - If ras_version is not provided, the function will attempt to use the version
-      from the global 'ras' object or a default path.
-
-    Warnings:
-    ---------
-    Avoid mixing use of the global 'ras' object and custom instances to prevent
-    confusion and potential bugs.
     """
     if not Path(ras_project_folder).exists():
         logger.error(f"The specified RAS project folder does not exist: {ras_project_folder}")
@@ -834,18 +852,18 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_instance=None):
 
     ras_exe_path = get_ras_exe(ras_version)
 
-    if ras_instance is None:
+    if ras_object is None:
         logger.info("Initializing global 'ras' object via init_ras_project function.")
-        ras_instance = ras
-    elif not isinstance(ras_instance, RasPrj):
-        logger.error("Provided ras_instance is not an instance of RasPrj.")
-        raise TypeError("ras_instance must be an instance of RasPrj or None.")
+        ras_object = ras
+    elif not isinstance(ras_object, RasPrj):
+        logger.error("Provided ras_object is not an instance of RasPrj.")
+        raise TypeError("ras_object must be an instance of RasPrj or None.")
 
     # Initialize the RasPrj instance
-    ras_instance.initialize(ras_project_folder, ras_exe_path)
+    ras_object.initialize(ras_project_folder, ras_exe_path)
     
-    logger.info(f"Project initialized. ras_instance project folder: {ras_instance.project_folder}")
-    return ras_instance
+    logger.info(f"Project initialized. ras_object project folder: {ras_object.project_folder}")
+    return ras_object
 
 @log_call
 def get_ras_exe(ras_version=None):
@@ -872,7 +890,7 @@ def get_ras_exe(ras_version=None):
     """
     if ras_version is None:
         if hasattr(ras, 'ras_exe_path') and ras.ras_exe_path:
-            logger.info(f"Using HEC-RAS executable from global 'ras' object: {ras.ras_exe_path}")
+            logger.debug(f"Using HEC-RAS executable from global 'ras' object: {ras.ras_exe_path}")
             return ras.ras_exe_path
         else:
             default_path = Path("Ras.exe")
@@ -888,13 +906,13 @@ def get_ras_exe(ras_version=None):
     hecras_path = Path(ras_version)
     
     if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
-        logger.info(f"HEC-RAS executable found at specified path: {hecras_path}")
+        logger.debug(f"HEC-RAS executable found at specified path: {hecras_path}")
         return str(hecras_path)
     
     if ras_version in ras_version_numbers:
         default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
         if default_path.is_file():
-            logger.info(f"HEC-RAS executable found at default path: {default_path}")
+            logger.debug(f"HEC-RAS executable found at default path: {default_path}")
             return str(default_path)
         else:
             logger.critical(f"HEC-RAS executable not found at the expected path: {default_path}")
@@ -904,7 +922,7 @@ def get_ras_exe(ras_version=None):
         if version_float > max(float(v) for v in ras_version_numbers):
             newer_version_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
             if newer_version_path.is_file():
-                logger.info(f"Newer version of HEC-RAS executable found at: {newer_version_path}")
+                logger.debug(f"Newer version of HEC-RAS executable found at: {newer_version_path}")
                 return str(newer_version_path)
             else:
                 logger.critical("Newer version of HEC-RAS was specified, but the executable was not found.")
@@ -912,6 +930,5 @@ def get_ras_exe(ras_version=None):
         pass
     
     logger.error(f"Invalid HEC-RAS version or path: {ras_version}, returning default path: {default_path}")
-    #raise ValueError(f"Invalid HEC-RAS version or path: {ras_version}") # don't raise an error here, just return the default path
     return str(default_path)
     

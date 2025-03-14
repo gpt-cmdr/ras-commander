@@ -30,6 +30,7 @@ from .HdfResultsXsec import HdfResultsXsec
 from .LoggingConfig import get_logger
 import numpy as np
 from datetime import datetime
+from .RasPrj import ras
 
 logger = get_logger(__name__)
 
@@ -62,6 +63,7 @@ class HdfResultsPlan:
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: A DataFrame containing the unsteady attributes.
@@ -95,6 +97,7 @@ class HdfResultsPlan:
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: A DataFrame containing the results unsteady summary attributes.
@@ -103,7 +106,7 @@ class HdfResultsPlan:
             FileNotFoundError: If the specified HDF file is not found.
             KeyError: If the "Results/Unsteady/Summary" group is not found in the HDF file.
         """
-        try:
+        try:           
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Results/Unsteady/Summary" not in hdf_file:
                     raise KeyError("Results/Unsteady/Summary group not found in the HDF file.")
@@ -122,29 +125,28 @@ class HdfResultsPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_volume_accounting(hdf_path: Path) -> pd.DataFrame:
+    def get_volume_accounting(hdf_path: Path) -> Optional[pd.DataFrame]:
         """
         Get volume accounting attributes from a HEC-RAS HDF plan file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            pd.DataFrame: A DataFrame containing the volume accounting attributes.
+            Optional[pd.DataFrame]: DataFrame containing the volume accounting attributes,
+                                  or None if the group is not found.
 
         Raises:
             FileNotFoundError: If the specified HDF file is not found.
-            KeyError: If the "Results/Unsteady/Summary/Volume Accounting" group is not found in the HDF file.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Results/Unsteady/Summary/Volume Accounting" not in hdf_file:
-                    raise KeyError("Results/Unsteady/Summary/Volume Accounting group not found in the HDF file.")
+                    return None
                 
-                # Get attributes and create dictionary
+                # Get attributes and convert to DataFrame
                 attrs_dict = dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs)
-                
-                # Create DataFrame with a single row index
                 return pd.DataFrame(attrs_dict, index=[0])
                 
         except FileNotFoundError:
@@ -160,98 +162,204 @@ class HdfResultsPlan:
 
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            Optional[pd.DataFrame]: DataFrame containing:
-                - Plan identification (name, file)
-                - Simulation timing (start, end, duration)
-                - Process-specific compute times
-                - Performance metrics (simulation speeds)
-                Returns None if required data cannot be extracted
+            Optional[pd.DataFrame]: DataFrame containing runtime statistics or None if data cannot be extracted
 
         Notes:
             - Times are reported in multiple units (ms, s, hours)
             - Compute speeds are calculated as simulation-time/compute-time ratios
             - Process times include: geometry, preprocessing, event conditions, 
-            and unsteady flow computations
-
-        Example:
-            >>> runtime_stats = HdfResultsPlan.get_runtime_data('path/to/plan.hdf')
-            >>> if runtime_stats is not None:
-            >>>     print(f"Total compute time: {runtime_stats['Complete Process (hr)'][0]:.2f} hours")
+              and unsteady flow computations
         """
-        if hdf_path is None:
-            logger.error(f"Could not find HDF file for input")
+        try:
+            if hdf_path is None:
+                logger.error(f"Could not find HDF file for input")
+                return None
+
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                logger.info(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
+                plan_info = hdf_file.get('/Plan Data/Plan Information')
+                if plan_info is None:
+                    logger.warning("Group '/Plan Data/Plan Information' not found.")
+                    return None
+
+                # Extract plan information
+                plan_name = HdfUtils.convert_ras_string(plan_info.attrs.get('Plan Name', 'Unknown'))
+                start_time_str = HdfUtils.convert_ras_string(plan_info.attrs.get('Simulation Start Time', 'Unknown'))
+                end_time_str = HdfUtils.convert_ras_string(plan_info.attrs.get('Simulation End Time', 'Unknown'))
+
+                try:
+                    # Check if times are already datetime objects
+                    if isinstance(start_time_str, datetime):
+                        start_time = start_time_str
+                    else:
+                        start_time = datetime.strptime(start_time_str, "%d%b%Y %H:%M:%S")
+                        
+                    if isinstance(end_time_str, datetime):
+                        end_time = end_time_str
+                    else:
+                        end_time = datetime.strptime(end_time_str, "%d%b%Y %H:%M:%S")
+                        
+                    simulation_duration = end_time - start_time
+                    simulation_hours = simulation_duration.total_seconds() / 3600
+                except ValueError as e:
+                    logger.error(f"Error parsing simulation times: {e}")
+                    return None
+
+                logger.info(f"Plan Name: {plan_name}")
+                logger.info(f"Simulation Duration (hours): {simulation_hours}")
+
+                # Extract compute processes data
+                compute_processes = hdf_file.get('/Results/Summary/Compute Processes')
+                if compute_processes is None:
+                    logger.warning("Dataset '/Results/Summary/Compute Processes' not found.")
+                    return None
+
+                # Process compute times
+                process_names = [HdfUtils.convert_ras_string(name) for name in compute_processes['Process'][:]]
+                filenames = [HdfUtils.convert_ras_string(filename) for filename in compute_processes['Filename'][:]]
+                completion_times = compute_processes['Compute Time (ms)'][:]
+
+                compute_processes_df = pd.DataFrame({
+                    'Process': process_names,
+                    'Filename': filenames,
+                    'Compute Time (ms)': completion_times,
+                    'Compute Time (s)': completion_times / 1000,
+                    'Compute Time (hours)': completion_times / (1000 * 3600)
+                })
+
+                # Create summary DataFrame
+                compute_processes_summary = {
+                    'Plan Name': [plan_name],
+                    'File Name': [Path(hdf_file.filename).name],
+                    'Simulation Start Time': [start_time_str],
+                    'Simulation End Time': [end_time_str],
+                    'Simulation Duration (s)': [simulation_duration.total_seconds()],
+                    'Simulation Time (hr)': [simulation_hours]
+                }
+
+                # Add process-specific times
+                process_types = {
+                    'Completing Geometry': 'Completing Geometry (hr)',
+                    'Preprocessing Geometry': 'Preprocessing Geometry (hr)',
+                    'Completing Event Conditions': 'Completing Event Conditions (hr)',
+                    'Unsteady Flow Computations': 'Unsteady Flow Computations (hr)'
+                }
+
+                for process, column in process_types.items():
+                    time_value = compute_processes_df[
+                        compute_processes_df['Process'] == process
+                    ]['Compute Time (hours)'].values[0] if process in process_names else 'N/A'
+                    compute_processes_summary[column] = [time_value]
+
+                # Add total process time
+                total_time = compute_processes_df['Compute Time (hours)'].sum()
+                compute_processes_summary['Complete Process (hr)'] = [total_time]
+
+                # Calculate speeds
+                if compute_processes_summary['Unsteady Flow Computations (hr)'][0] != 'N/A':
+                    compute_processes_summary['Unsteady Flow Speed (hr/hr)'] = [
+                        simulation_hours / compute_processes_summary['Unsteady Flow Computations (hr)'][0]
+                    ]
+                else:
+                    compute_processes_summary['Unsteady Flow Speed (hr/hr)'] = ['N/A']
+
+                compute_processes_summary['Complete Process Speed (hr/hr)'] = [
+                    simulation_hours / total_time
+                ]
+
+                return pd.DataFrame(compute_processes_summary)
+
+        except Exception as e:
+            logger.error(f"Error in get_runtime_data: {str(e)}")
             return None
 
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            logger.info(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
-            plan_info = hdf_file.get('/Plan Data/Plan Information')
-            if plan_info is None:
-                logger.warning("Group '/Plan Data/Plan Information' not found.")
-                return None
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_reference_timeseries(hdf_path: Path, reftype: str) -> pd.DataFrame:
+        """
+        Get reference line or point timeseries output from HDF file.
 
-            plan_name = plan_info.attrs.get('Plan Name', 'Unknown')
-            plan_name = plan_name.decode('utf-8') if isinstance(plan_name, bytes) else plan_name
-            logger.info(f"Plan Name: {plan_name}")
+        Args:
+            hdf_path (Path): Path to HEC-RAS plan HDF file
+            reftype (str): Type of reference data ('lines' or 'points')
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
-            start_time_str = plan_info.attrs.get('Simulation Start Time', 'Unknown')
-            end_time_str = plan_info.attrs.get('Simulation End Time', 'Unknown')
-            start_time_str = start_time_str.decode('utf-8') if isinstance(start_time_str, bytes) else start_time_str
-            end_time_str = end_time_str.decode('utf-8') if isinstance(end_time_str, bytes) else end_time_str
+        Returns:
+            pd.DataFrame: DataFrame containing reference timeseries data
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+                ref_path = f"{base_path}/Reference {reftype.capitalize()}"
+                
+                if ref_path not in hdf_file:
+                    logger.warning(f"Reference {reftype} data not found in HDF file")
+                    return pd.DataFrame()
 
-            start_time = datetime.strptime(start_time_str, "%d%b%Y %H:%M:%S")
-            end_time = datetime.strptime(end_time_str, "%d%b%Y %H:%M:%S")
-            simulation_duration = end_time - start_time
-            simulation_hours = simulation_duration.total_seconds() / 3600
+                ref_group = hdf_file[ref_path]
+                time_data = hdf_file[f"{base_path}/Time"][:]
+                
+                dfs = []
+                for ref_name in ref_group.keys():
+                    ref_data = ref_group[ref_name][:]
+                    df = pd.DataFrame(ref_data, columns=[ref_name])
+                    df['Time'] = time_data
+                    dfs.append(df)
 
-            logger.info(f"Simulation Start Time: {start_time_str}")
-            logger.info(f"Simulation End Time: {end_time_str}")
-            logger.info(f"Simulation Duration (hours): {simulation_hours}")
+                if not dfs:
+                    return pd.DataFrame()
 
-            compute_processes = hdf_file.get('/Results/Summary/Compute Processes')
-            if compute_processes is None:
-                logger.warning("Dataset '/Results/Summary/Compute Processes' not found.")
-                return None
+                return pd.concat(dfs, axis=1)
 
-            process_names = [name.decode('utf-8') for name in compute_processes['Process'][:]]
-            filenames = [filename.decode('utf-8') for filename in compute_processes['Filename'][:]]
-            completion_times = compute_processes['Compute Time (ms)'][:]
+        except Exception as e:
+            logger.error(f"Error reading reference {reftype} timeseries: {str(e)}")
+            return pd.DataFrame()
 
-            compute_processes_df = pd.DataFrame({
-                'Process': process_names,
-                'Filename': filenames,
-                'Compute Time (ms)': completion_times,
-                'Compute Time (s)': completion_times / 1000,
-                'Compute Time (hours)': completion_times / (1000 * 3600)
-            })
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_reference_summary(hdf_path: Path, reftype: str) -> pd.DataFrame:
+        """
+        Get reference line or point summary output from HDF file.
 
-            logger.debug("Compute processes DataFrame:")
-            logger.debug(compute_processes_df)
+        Args:
+            hdf_path (Path): Path to HEC-RAS plan HDF file
+            reftype (str): Type of reference data ('lines' or 'points')
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
-            compute_processes_summary = {
-                'Plan Name': [plan_name],
-                'File Name': [Path(hdf_file.filename).name],
-                'Simulation Start Time': [start_time_str],
-                'Simulation End Time': [end_time_str],
-                'Simulation Duration (s)': [simulation_duration.total_seconds()],
-                'Simulation Time (hr)': [simulation_hours],
-                'Completing Geometry (hr)': [compute_processes_df[compute_processes_df['Process'] == 'Completing Geometry']['Compute Time (hours)'].values[0] if 'Completing Geometry' in compute_processes_df['Process'].values else 'N/A'],
-                'Preprocessing Geometry (hr)': [compute_processes_df[compute_processes_df['Process'] == 'Preprocessing Geometry']['Compute Time (hours)'].values[0] if 'Preprocessing Geometry' in compute_processes_df['Process'].values else 'N/A'],
-                'Completing Event Conditions (hr)': [compute_processes_df[compute_processes_df['Process'] == 'Completing Event Conditions']['Compute Time (hours)'].values[0] if 'Completing Event Conditions' in compute_processes_df['Process'].values else 'N/A'],
-                'Unsteady Flow Computations (hr)': [compute_processes_df[compute_processes_df['Process'] == 'Unsteady Flow Computations']['Compute Time (hours)'].values[0] if 'Unsteady Flow Computations' in compute_processes_df['Process'].values else 'N/A'],
-                'Complete Process (hr)': [compute_processes_df['Compute Time (hours)'].sum()]
-            }
+        Returns:
+            pd.DataFrame: DataFrame containing reference summary data
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output"
+                ref_path = f"{base_path}/Reference {reftype.capitalize()}"
+                
+                if ref_path not in hdf_file:
+                    logger.warning(f"Reference {reftype} summary data not found in HDF file")
+                    return pd.DataFrame()
 
-            compute_processes_summary['Unsteady Flow Speed (hr/hr)'] = [simulation_hours / compute_processes_summary['Unsteady Flow Computations (hr)'][0] if compute_processes_summary['Unsteady Flow Computations (hr)'][0] != 'N/A' else 'N/A']
-            compute_processes_summary['Complete Process Speed (hr/hr)'] = [simulation_hours / compute_processes_summary['Complete Process (hr)'][0] if compute_processes_summary['Complete Process (hr)'][0] != 'N/A' else 'N/A']
+                ref_group = hdf_file[ref_path]
+                dfs = []
+                
+                for ref_name in ref_group.keys():
+                    ref_data = ref_group[ref_name][:]
+                    if ref_data.ndim == 2:
+                        df = pd.DataFrame(ref_data.T, columns=['Value', 'Time'])
+                    else:
+                        df = pd.DataFrame({'Value': ref_data})
+                    df['Reference'] = ref_name
+                    dfs.append(df)
 
-            compute_summary_df = pd.DataFrame(compute_processes_summary)
-            logger.debug("Compute summary DataFrame:")
-            logger.debug(compute_summary_df)
+                if not dfs:
+                    return pd.DataFrame()
 
-            return compute_summary_df
+                return pd.concat(dfs, ignore_index=True)
 
-        
-
-
+        except Exception as e:
+            logger.error(f"Error reading reference {reftype} summary: {str(e)}")
+            return pd.DataFrame()

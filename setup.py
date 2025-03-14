@@ -15,28 +15,47 @@ class CustomBuildPy(build_py):
                 print(f"Cleaned up: {pycache_dir}")
 
         # Run the summary_knowledge_bases.py script
-        script_path = Path(__file__).parent / 'ai_tools' / 'summary_knowledge_bases.py'
-        subprocess.run(['python', str(script_path)], check=True)
+        script_path = Path(__file__).parent / 'ai_tools' / 'generate_llm_knowledge_bases.py'
+        try:
+            subprocess.run(['python', str(script_path)], check=True)
+        except subprocess.CalledProcessError:
+            print("Warning: Knowledge base generation script failed, continuing with build")
+        except FileNotFoundError:
+            print("Warning: Knowledge base generation script not found, continuing with build")
         
         # Continue with the regular build process
         super().run()
 
 setup(
     name="ras-commander",
-    version="0.51.0",
-    packages=["ras_commander"],
+    version="0.58.0",
+    packages=find_packages(),
     include_package_data=True,
     python_requires='>=3.10',
-    author="William M. Katzenmeyer",
-    author_email="billk@fenstermaker.com",
-    description="A Python library for automating HEC-RAS operations",
+    author="William M. Katzenmeyer, P.E., C.F.M.",
+    author_email="heccommander@gmail.com",
+    description="A Python library for automating HEC-RAS 6.x operations",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/billk-FM/ras-commander",
+    url="https://github.com/gpt-cmdr/ras-commander",
     cmdclass={
         'build_py': CustomBuildPy,
     },
-)
+    install_requires=[
+        'h5py',
+        'numpy',
+        'pandas',
+        'requests',
+        'tqdm',
+        'scipy',
+        'xarray',
+        'geopandas',
+        'matplotlib',
+        'shapely',
+        'pathlib',
+        'rasterstats',
+        'rtree',
+    ])
 
 """
 ras-commander setup.py

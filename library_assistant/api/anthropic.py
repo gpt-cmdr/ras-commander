@@ -1,8 +1,8 @@
 """
 Anthropic API integration for the Library Assistant.
 
-NOTE: Do not change the model name from 'claude-3-5-sonnet-latest' to a specific version.
-The 'latest' suffix ensures we always use the most recent model version.
+NOTE: The default model is set to claude-3-7-sonnet-20250219 for best performance.
+For extended output length (up to 128k tokens), include the beta header output-128k-2025-02-19.
 """
 
 from anthropic import AsyncAnthropic, Anthropic, APIError, AuthenticationError
@@ -22,7 +22,7 @@ async def anthropic_stream_response(
         client: An initialized Anthropic client (sync or async)
         prompt: The prompt to send to the API
         max_tokens: The maximum number of tokens to generate (default: 8192)
-        model: The model to use (default: claude-3-5-sonnet-latest)
+        model: The model to use (default: claude-3-7-sonnet-20250219)
         system_message: Optional system message to set the AI's behavior
 
     Yields:
@@ -33,7 +33,7 @@ async def anthropic_stream_response(
         AuthenticationError: If authentication fails
     """
     try:
-        model = model or "claude-3-5-sonnet-latest"  # Always use the latest version
+        model = model or "claude-3-7-sonnet-20250219"  # Use Claude 3.7 Sonnet by default
         
         # Convert to async client if needed
         async_client = client if isinstance(client, AsyncAnthropic) else AsyncAnthropic(api_key=client.api_key)
@@ -92,7 +92,7 @@ async def validate_anthropic_api_key(api_key: str) -> bool:
         client = get_anthropic_client(api_key)
         response = await client.messages.create(
             messages=[{"role": "user", "content": "Test"}],
-            model="claude-3-5-sonnet-latest",
+            model="claude-3-7-sonnet-20250219",
             max_tokens=10
         )
         return True
@@ -106,7 +106,10 @@ def get_anthropic_models() -> List[str]:
     Returns:
         List[str]: List of model identifiers
     """
-    return ["claude-3-5-sonnet-latest"]
+    return [
+        "claude-3-7-sonnet-20250219",  # Latest and most capable model
+        "claude-3-5-sonnet-20241022"   # Previous generation model
+    ]
 
 async def stream_response(
     client: Union[AsyncAnthropic, Anthropic], 

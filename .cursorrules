@@ -8,11 +8,6 @@ This Assistant helps you write efficient Python code for HEC-RAS projects using 
 
 ## Classes, Functions and Arguments
 
-
-
-
-Certainly! I'll summarize the decorators, provide tables for each class showing the decorators used and arguments, and give a summary of each class's function.
-
 Decorator Summaries:
 
 1. @log_call: Logs function calls, including entry and exit times, and any exceptions raised.
@@ -21,23 +16,6 @@ Decorator Summaries:
 
 Now, lets go through each class:
 
-
-1. RasPrj Class:
-
-| Function Name | @log_call | @standardize_input | @hdf_operation | Arguments |
-|---------------|-----------|--------------------|--------------------|-----------|
-| initialize | X | | | project_folder, ras_exe_path |
-| _load_project_data | X | | | |
-| _get_geom_file_for_plan | X | | | plan_number |
-| _parse_plan_file | X | | | plan_file_path |
-| _get_prj_entries | X | | | entry_type |
-| _parse_unsteady_file | X | | | unsteady_file_path |
-| check_initialized | X | | | |
-| find_ras_prj | X | | | folder_path |
-| get_project_name | X | | | |
-| get_prj_entries | X | | | entry_type |
-| get_plan_entries | X | | | |
-| get_flow_entries | X |
 1. RasPrj Class:
 
 | Function Name | @log_call | @standardize_input | Arguments |
@@ -283,11 +261,7 @@ This class is mentioned in the code but has no implemented methods yet.
 | init_ras_project | X | | ras_project_folder, ras_version, ras_instance |
 | get_ras_exe | X | | ras_version |
 
-
-
-
 Overall, the ras-commander library provides a comprehensive set of tools for working with HEC-RAS projects, including project management, file operations, data extraction, and simulation execution. The library makes extensive use of logging and input standardization through decorators, ensuring consistent behavior and traceability across its various components.
-
 
 ## Coding Assistance Rules:
 
@@ -326,6 +300,22 @@ Overall, the ras-commander library provides a comprehensive set of tools for wor
 25. Always consider the implications of file renaming on import statements throughout the project.
 26. When working with GeoDataFrames, remember to use appropriate geometric operations and consider spatial relationships.
 27. For HDF file operations, always use the standardize_input decorator to ensure consistent handling of file paths.
-28. When dealing with large datasets, consider using chunking or iterative processing to manage memory usage.
-29. Utilize the RasExamples class for testing and demonstrating functionality with sample projects.
-30. When working with the RasGpt class, be aware that it's mentioned but currently has no implemented methods.
+28. For parallel execution, suggest appropriate max_workers based on physical CPU core count and model complexity. A good rule of thumb is to use `max_workers = physical_cores // cores_per_worker`.
+29. Recommend using 2 cores per worker for efficiency mode (maximizing throughput), or 4-8 cores per worker for performance mode (minimizing individual plan runtime).
+30. For sequential execution with `compute_test_mode()`, remind users about the dest_folder_suffix parameter which creates a folder with the project name and the specified suffix.
+31. For single plan execution with `compute_plan()`, always specify clear_geompre and overwrite_dest explicitly to avoid unintended behavior.
+32. When using `compute_parallel()`, mention that worker folders are created internally and consolidated after execution.
+33. When working with multiple projects, always use custom named RAS objects (not the global 'ras' object) and pass them explicitly to functions using the ras_object parameter.
+34. Use descriptive variable names for RAS objects that reflect the project they represent (e.g., bald_eagle_ras, muncie_ras).
+35. Create separate destination folders for each project when computing plans to prevent file conflicts.
+36. When comparing projects, use DataFrame operations to analyze differences in plans, geometries, and results.
+37. Remember that `init_ras_project()` always updates the global 'ras' object, even when returning a custom RAS object. The global 'ras' will point to the last initialized project.
+38. When updating plan parameters, use consistent formatting for time intervals (e.g., "1MIN", "10SEC", "1HOUR") following HEC-RAS conventions.
+39. For simulation dates, use datetime objects from the datetime module with explicit year, month, day, hour, and minute values.
+40. Suggest using descriptive plan descriptions with formatted multi-line strings that include purpose, key parameters, and modification date.
+41. When setting the number of cores with `RasPlan.set_num_cores()`, consider the optimal number based on model type (1D vs 2D) and system capabilities.
+42. After making changes to plan parameters, verify them with `RasPlan.get_plan_value()` to ensure they were properly applied.
+43. Remind users to clear geometry preprocessor files with `clear_geompre=True` after changing geometry-related parameters.
+44. When dealing with large datasets, consider using chunking or iterative processing to manage memory usage.
+45. Utilize the RasExamples class for testing and demonstrating functionality with sample projects.
+46. When working with the RasGpt class, be aware that it's mentioned but currently has no implemented methods.

@@ -13,10 +13,15 @@ Functions:
 import pandas as pd
 import tiktoken
 from typing import Dict, Optional
-
 # Model configurations with token limits and pricing
 MODEL_CONFIG = {
-    "claude-3-5-sonnet-20240620": {
+    "claude-3-7-sonnet-20250219": {
+        "max_context_tokens": 200000,
+        "prompt_cost_per_1m": 3000.0,      # $3.00 per million tokens
+        "completion_cost_per_1m": 15000.0,  # $15.00 per million tokens
+        "default_output_tokens": 8192
+    },
+    "claude-3-5-sonnet-20241022": {
         "max_context_tokens": 200000,
         "prompt_cost_per_1m": 3000.0,      # $3.00 per million tokens
         "completion_cost_per_1m": 15000.0,  # $15.00 per million tokens

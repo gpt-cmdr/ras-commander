@@ -472,11 +472,13 @@ function toggleApiKeys() {
  * Update the model name displayed
  */
 function updateModelDisplay(modelValue) {
-  const modelDisplay = document.getElementById('current-model-display');
-  if (!modelDisplay) return;
+  const displayEl = document.getElementById('current-model-display');
+  if (!displayEl) return;
 
   let displayName = 'Select Model';
-  if (modelValue.startsWith('claude')) {
+  if (modelValue === 'claude-3-7-sonnet-20250219') {
+    displayName = 'Claude 3.7 Sonnet';
+  } else if (modelValue === 'claude-3-5-sonnet-20241022') {
     displayName = 'Claude 3.5 Sonnet';
   } else if (modelValue === 'gpt-4o-latest') {
     displayName = 'GPT-4o';
@@ -486,6 +488,8 @@ function updateModelDisplay(modelValue) {
     displayName = 'o1';
   } else if (modelValue === 'o1-mini') {
     displayName = 'o1 Mini';
+  } else if (modelValue === 'o3-mini-2025-01-31') {
+    displayName = 'o3-mini';
   } else if (modelValue === 'meta-llama/Llama-3.3-70B-Instruct-Turbo') {
     displayName = 'Llama 3 70B Instruct';
   } else if (modelValue === 'deepseek-ai/DeepSeek-V3') {
@@ -493,7 +497,8 @@ function updateModelDisplay(modelValue) {
   } else if (modelValue === 'deepseek-ai/DeepSeek-R1') {
     displayName = 'DeepSeek R1';
   }
-  modelDisplay.textContent = displayName;
+  
+  displayEl.textContent = displayName;
 }
 
 /**
@@ -853,8 +858,8 @@ async function calculateTokens(userInput = '', selectedFiles = []) {
             max_tokens: 8192,
             usage_ratio: 0,
             usage_color: 'danger',
-            prompt_cost_per_1k: 0,
-            completion_cost_per_1k: 0,
+            prompt_cost_per_1m: 0,
+            completion_cost_per_1m: 0,
             total_tokens_used: 0,
             output_length: 0,
             cost_estimate: 0

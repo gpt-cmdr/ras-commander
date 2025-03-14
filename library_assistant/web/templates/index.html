@@ -391,7 +391,9 @@
                 <div class="model-display">
                     <span class="model-icon">🤖</span>
                     <span class="model-name" id="current-model-display">
-                        {%- if settings.selected_model.startswith('claude') -%}
+                        {%- if settings.selected_model == 'claude-3-7-sonnet-20250219' -%}
+                            Claude 3.7 Sonnet
+                        {%- elif settings.selected_model == 'claude-3-5-sonnet-20241022' -%}
                             Claude 3.5 Sonnet
                         {%- elif settings.selected_model == 'gpt-4o-latest' -%}
                             GPT-4o
@@ -437,7 +439,8 @@
                             <label for="selected_model">Select Model:</label>
                             <select id="selected_model" name="selected_model" class="form-select" required>
                                 <option value="" disabled>Select a model</option>
-                                <option value="claude-3-5-sonnet-20240620" {% if settings.selected_model == 'claude-3-5-sonnet-20240620' %}selected{% endif %}>Claude 3.5 Sonnet (Anthropic)</option>
+                                <option value="claude-3-7-sonnet-20250219" {% if settings.selected_model == 'claude-3-7-sonnet-20250219' %}selected{% endif %}>Claude 3.7 Sonnet (Anthropic)</option>
+                                <option value="claude-3-5-sonnet-20241022" {% if settings.selected_model == 'claude-3-5-sonnet-20241022' %}selected{% endif %}>Claude 3.5 Sonnet (Anthropic)</option>
                                 <option value="gpt-4o-latest" {% if settings.selected_model == 'gpt-4o-latest' %}selected{% endif %}>GPT-4o (OpenAI)</option>
                                 <option value="gpt-4o-mini" {% if settings.selected_model == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o-mini (OpenAI)</option>
                                 <option value="o1" {% if settings.selected_model == 'o1' %}selected{% endif %}>o1 (OpenAI)</option>

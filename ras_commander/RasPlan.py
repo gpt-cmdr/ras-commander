@@ -249,7 +249,6 @@ class RasPlan:
     def _update_unsteady_in_file(lines, new_unsteady_flow_number):
         return [f"Unsteady File=u{new_unsteady_flow_number}\n" if line.startswith("Unsteady File=u") else line for line in lines]
     
-    
     @staticmethod
     @log_call
     def set_num_cores(plan_number, num_cores, ras_object=None):
@@ -263,6 +262,16 @@ class RasPlan:
         
         Returns:
         None
+
+        Number of cores is controlled by the following parameters in the plan file corresponding to 1D, 2D, Pipe Systems and Pump Stations:
+        UNET D1 Cores=  
+        UNET D2 Cores=
+        PS Cores=
+
+        Where a value of "0" is used for "All Available" cores, and values of 1 or more are used to specify the number of cores to use.
+        For complex 1D/2D models with pipe systems, a more complex approach may be needed to optimize performance.  (Suggest writing a custom function based on this code).
+        This function simply sets the "num_cores" parameter for ALL instances of the above parameters in the plan file.
+
 
         Notes on setting num_cores in HEC-RAS:
         The recommended setting for num_cores is 2 (most efficient) to 8 (most performant)
@@ -290,9 +299,9 @@ class RasPlan:
         def update_num_cores(lines):
             updated_lines = []
             for line in lines:
-                if "UNET D1 Cores=" in line:
-                    parts = line.split("=")
-                    updated_lines.append(f"{parts[0]}= {num_cores}\n")
+                if any(param in line for param in ["UNET D1 Cores=", "UNET D2 Cores=", "PS Cores="]):
+                    param_name = line.split("=")[0]
+                    updated_lines.append(f"{param_name}= {num_cores}\n")
                 else:
                     updated_lines.append(line)
             return updated_lines
@@ -840,7 +849,7 @@ class RasPlan:
         - 'Plan File' (str): Name of the plan file
         - 'Plan Title' (str): Title of the simulation plan
         - 'Program Version' (str): Version number of HEC-RAS
-        - 'Run HTAB' (int): Flag to run HTab module (-1 or 1)
+        - 'Run HTab' (int): Flag to run HTab module (-1 or 1)
         - 'Run Post Process' (int): Flag to run post-processing (-1 or 1)
         - 'Run Sediment' (int): Flag to run sediment transport module (0 or 1)
         - 'Run UNET' (int): Flag to run unsteady network module (-1 or 1)
@@ -848,12 +857,13 @@ class RasPlan:
         - 'Short Identifier' (str): Short name or ID for the plan
         - 'Simulation Date' (str): Start and end dates/times for simulation
         - 'UNET D1 Cores' (int): Number of cores used in 1D calculations
+        - 'UNET D2 Cores' (int): Number of cores used in 2D calculations
+        - 'PS Cores' (int): Number of cores used in parallel simulation
         - 'UNET Use Existing IB Tables' (int): Flag for using existing internal boundary tables (-1, 0, or 1)
         - 'UNET 1D Methodology' (str): 1D calculation methodology
         - 'UNET D2 Solver Type' (str): 2D solver type
         - 'UNET D2 Name' (str): Name of the 2D area
         - 'Run RASMapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
-        
         
         Note: 
         Writing Multi line keys like 'Description' are not supported by this function.
@@ -868,9 +878,10 @@ class RasPlan:
         supported_plan_keys = {
             'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
             'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
-            'Run HTAB', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
-            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET Use Existing IB Tables',
-            'UNET 1D Methodology', 'UNET D2 Solver Type', 'UNET D2 Name', 'Run RASMapper'
+            'Run HTab', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
+            'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET D2 Cores', 'PS Cores',
+            'UNET Use Existing IB Tables', 'UNET 1D Methodology', 'UNET D2 Solver Type', 
+            'UNET D2 Name', 'Run RASMapper', 'Run HTab', 'Run UNET'
         }
 
         if key not in supported_plan_keys:
@@ -891,7 +902,23 @@ class RasPlan:
             logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
 
-        if key == 'Description':
+        # Handle core settings specially to convert to integers
+        core_keys = {'UNET D1 Cores', 'UNET D2 Cores', 'PS Cores'}
+        if key in core_keys:
+            pattern = f"{key}=(.*)"
+            match = re.search(pattern, content)
+            if match:
+                try:
+                    return int(match.group(1).strip())
+                except ValueError:
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Could not convert {key} value to integer")
+                    return None
+            else:
+                logger = logging.getLogger(__name__)
+                logger.error(f"Key '{key}' not found in the plan file.")
+                return None
+        elif key == 'Description':
             match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
             return match.group(1).strip() if match else None
         else:
@@ -1060,81 +1087,63 @@ class RasPlan:
     @log_call
     def update_plan_description(plan_number_or_path: Union[str, Path], description: str, ras_object: Optional['RasPrj'] = None) -> None:
         """
-        Update the description in the plan file.
+        Update the description block in a HEC-RAS plan file.
 
         Args:
-            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
-            description (str): The new description to be written to the plan file.
-            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+            plan_number_or_path (Union[str, Path]): The plan number or full path to the plan file
+            description (str): The new description text to set
+            ras_object (Optional[RasPrj]): Specific RAS object to use. If None, uses the global ras instance.
 
         Raises:
-            ValueError: If the plan file is not found.
-            IOError: If there's an error reading from or writing to the plan file.
+            ValueError: If the plan file is not found
+            IOError: If there's an error reading or writing the plan file
         """
-        logger = logging.getLogger(__name__)
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
-            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
-            if plan_file_path is None or not Path(plan_file_path).exists():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
                 raise ValueError(f"Plan file not found: {plan_file_path}")
 
         try:
             with open(plan_file_path, 'r') as file:
-                lines = file.readlines()
-        except IOError as e:
-            logger.error(f"Error reading plan file {plan_file_path}: {e}")
-            raise
+                content = file.read()
 
-        start_index = None
-        end_index = None
-        comp_interval_index = None
-        for i, line in enumerate(lines):
-            if line.strip() == "BEGIN DESCRIPTION:":
-                start_index = i
-            elif line.strip() == "END DESCRIPTION:":
-                end_index = i
-            elif line.strip().startswith("Computation Interval="):
-                comp_interval_index = i
+            # Find the description block
+            desc_pattern = r'Begin DESCRIPTION.*?END DESCRIPTION'
+            new_desc_block = f'Begin DESCRIPTION\n{description}\nEND DESCRIPTION'
 
-        if start_index is not None and end_index is not None:
-            # Description exists, update it
-            new_lines = lines[:start_index + 1]
-            if description:
-                new_lines.extend(description.split('\n'))
+            if re.search(desc_pattern, content, re.DOTALL):
+                # Replace existing description block
+                new_content = re.sub(desc_pattern, new_desc_block, content, flags=re.DOTALL)
             else:
-                new_lines.append('\n')
-            new_lines.extend(lines[end_index:])
-        else:
-            # Description doesn't exist, insert before Computation Interval
-            if comp_interval_index is None:
-                logger.warning("Neither description tags nor Computation Interval found in plan file. Appending to end of file.")
-                comp_interval_index = len(lines)
-            
-            new_lines = lines[:comp_interval_index]
-            new_lines.append("BEGIN DESCRIPTION:\n")
-            if description:
-                new_lines.extend(f"{line}\n" for line in description.split('\n'))
-            else:
-                new_lines.append('\n')
-            new_lines.append("END DESCRIPTION:\n")
-            new_lines.extend(lines[comp_interval_index:])
+                # Add new description block at the start of the file
+                new_content = new_desc_block + '\n' + content
 
-        try:
+            # Write the updated content back to the file
             with open(plan_file_path, 'w') as file:
-                file.writelines(new_lines)
+                file.write(new_content)
+
             logger.info(f"Updated description in plan file: {plan_file_path}")
+
+            # Update the dataframes in the RAS object to reflect changes
+            if ras_object:
+                ras_object.plan_df = ras_object.get_plan_entries()
+                ras_object.geom_df = ras_object.get_geom_entries()
+                ras_object.flow_df = ras_object.get_flow_entries()
+                ras_object.unsteady_df = ras_object.get_unsteady_entries()
+
         except IOError as e:
-            logger.error(f"Error writing to plan file {plan_file_path}: {e}")
+            logger.error(f"Error updating plan description in {plan_file_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error updating plan description: {e}")
             raise
 
-        # Refresh RasPrj dataframes
-        if ras_object:
-            ras_object.plan_df = ras_object.get_plan_entries()
-            ras_object.geom_df = ras_object.get_geom_entries()
-            ras_object.flow_df = ras_object.get_flow_entries()
-            ras_object.unsteady_df = ras_object.get_unsteady_entries()
-            
     @staticmethod
     @log_call
     def read_plan_description(plan_number_or_path: Union[str, Path], ras_object: Optional['RasPrj'] = None) -> str:

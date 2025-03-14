@@ -271,13 +271,13 @@ class RasCmdr:
                 logger.info(f"Created worker folder: {worker_folder}")
 
                 try:
-                    ras_instance = RasPrj()
-                    worker_ras_instance = init_ras_project(
+                    worker_ras = RasPrj()
+                    worker_ras_object = init_ras_project(
                         ras_project_folder=worker_folder,
                         ras_version=ras_obj.ras_exe_path,
-                        ras_instance=ras_instance
+                        ras_object=worker_ras
                     )
-                    worker_ras_objects[worker_id] = worker_ras_instance
+                    worker_ras_objects[worker_id] = worker_ras_object
                 except Exception as e:
                     logger.critical(f"Failed to initialize RAS project for worker {worker_id}: {str(e)}")
                     worker_ras_objects[worker_id] = None
@@ -317,28 +317,53 @@ class RasCmdr:
                     continue
                 worker_folder = Path(worker_ras.project_folder)
                 try:
-                    for item in worker_folder.iterdir():
-                        dest_path = final_dest_folder / item.name
-                        if dest_path.exists():
-                            if dest_path.is_dir():
-                                shutil.rmtree(dest_path)
-                                logger.debug(f"Removed existing directory at {dest_path}")
-                            else:
-                                dest_path.unlink()
-                                logger.debug(f"Removed existing file at {dest_path}")
-                        shutil.move(str(item), final_dest_folder)
-                        logger.debug(f"Moved {item} to {final_dest_folder}")
-                    shutil.rmtree(worker_folder)
-                    logger.info(f"Removed worker folder: {worker_folder}")
+                    # First, close any open resources in the worker RAS object
+                    worker_ras.close() if hasattr(worker_ras, 'close') else None
+                    
+                    # Add a small delay to ensure file handles are released
+                    time.sleep(1)
+                    
+                    # Move files with retry mechanism
+                    max_retries = 3
+                    for retry in range(max_retries):
+                        try:
+                            for item in worker_folder.iterdir():
+                                dest_path = final_dest_folder / item.name
+                                if dest_path.exists():
+                                    if dest_path.is_dir():
+                                        shutil.rmtree(dest_path)
+                                    else:
+                                        dest_path.unlink()
+                                # Use copy instead of move for more reliability
+                                if item.is_dir():
+                                    shutil.copytree(item, dest_path)
+                                else:
+                                    shutil.copy2(item, dest_path)
+                            
+                            # Add another small delay before removal
+                            time.sleep(1)
+                            
+                            # Try to remove the worker folder
+                            if worker_folder.exists():
+                                shutil.rmtree(worker_folder)
+                            break  # If successful, break the retry loop
+                            
+                        except PermissionError as pe:
+                            if retry == max_retries - 1:  # If this was the last retry
+                                logger.error(f"Failed to move/remove files after {max_retries} attempts: {str(pe)}")
+                                raise
+                            time.sleep(2 ** retry)  # Exponential backoff
+                            continue
+                            
                 except Exception as e:
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
 
             try:
-                final_dest_folder_ras_obj = RasPrj()
+                final_dest_folder_ras = RasPrj()
                 final_dest_folder_ras_obj = init_ras_project(
                     ras_project_folder=final_dest_folder, 
                     ras_version=ras_obj.ras_exe_path,
-                    ras_instance=final_dest_folder_ras_obj
+                    ras_object=final_dest_folder_ras
                 )
                 final_dest_folder_ras_obj.check_initialized()
             except Exception as e:
@@ -379,7 +404,7 @@ class RasCmdr:
         other two compute_ functions. Per the original HEC-RAS test flag, it creates a separate test folder,
         copies the project there, and executes the specified plans in sequential order.
         
-        For most purposes, just copying a the project folder, initing that new folder, then running each plan 
+        For most purposes, just copying the project folder, initing that new folder, then running each plan 
         with compute_plan is a simpler and more flexible approach.  This is shown in the examples provided
         in the ras-commander library.
 

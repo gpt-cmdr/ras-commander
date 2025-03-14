@@ -449,29 +449,47 @@ class RasUnsteady:
         """
         data = []
         for line in lines[start:end]:
-            # Split the line into 8-character columns
-            values = [line[i:i+8].strip() for i in range(0, len(line), 8)]
-            # Convert to float and handle cases where values are run together
-            parsed_values = []
-            for value in values:
-                try:
-                    if len(value) > 8:  # If values are run together
-                        parts = re.findall(r'-?\d+\.?\d*', value)
-                        parsed_values.extend([float(p) for p in parts])
-                    elif value:  # Only add non-empty values
-                        parsed_values.append(float(value))
-                except ValueError as e:
-                    logger.warning(f"Could not parse value '{value}': {e}")
-                    continue
-            data.extend(parsed_values)
+            # Skip empty lines or lines that don't contain numeric data
+            if not line.strip() or not any(c.isdigit() for c in line):
+                continue
+                
+            # Split the line into 8-character columns and process each value
+            values = []
+            for i in range(0, len(line.rstrip()), 8):
+                value_str = line[i:i+8].strip()
+                if value_str:  # Only process non-empty strings
+                    try:
+                        # Handle special cases where numbers are run together
+                        if len(value_str) > 8:
+                            # Use regex to find all numbers in the string
+                            parts = re.findall(r'-?\d+\.?\d*', value_str)
+                            values.extend([float(p) for p in parts])
+                        else:
+                            values.append(float(value_str))
+                    except ValueError:
+                        # If conversion fails, try to extract any valid numbers from the string
+                        parts = re.findall(r'-?\d+\.?\d*', value_str)
+                        if parts:
+                            values.extend([float(p) for p in parts])
+                        else:
+                            logger.debug(f"Skipping non-numeric value: {value_str}")
+                            continue
+            
+            # Only add to data if we found valid numeric values
+            if values:
+                data.extend(values)
         
+        if not data:
+            logger.warning("No numeric data found in table section")
+            return pd.DataFrame(columns=['Value'])
+            
         return pd.DataFrame(data, columns=['Value'])
-
+    
     @staticmethod
     @log_call
     def extract_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> Dict[str, pd.DataFrame]:
         """
-        Extract all tables from the unsteady file and return them as DataFrames.
+        Extract all tables from the unsteady flow file and return them as DataFrames.
         
         Parameters:
         unsteady_file (str): Path to the unsteady flow file
@@ -495,11 +513,12 @@ class RasUnsteady:
             logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
             raise
         
-        tables = RasBndry.identify_tables(lines)
+        # Fix: Use RasUnsteady.identify_tables 
+        tables = RasUnsteady.identify_tables(lines)
         extracted_tables = {}
         
         for table_name, start, end in tables:
-            df = RasBndry.parse_fixed_width_table(lines, start, end)
+            df = RasUnsteady.parse_fixed_width_table(lines, start, end)
             extracted_tables[table_name] = df
             logger.debug(f"Extracted table '{table_name}' with {len(df)} values")
         

@@ -5,7 +5,7 @@ Attribution: A substantial amount of code in this file is sourced or derived
 from the https://github.com/fema-ffrd/rashdf library, 
 released under MIT license and Copyright (c) 2024 fema-ffrd
 
-The file has been forked and modified for use in RAS Commander.
+This source code has been forked and modified for use in RAS Commander.
 
 -----
 
@@ -409,7 +409,7 @@ class HdfXsec:
                 result_gdf.at[idx, 'points'] = points
                 
                 # Add stationing direction based on upstream/downstream info
-                if row['upstream_type'] == 'Junction' and row['downstream_type'] != 'Junction':
+                if row['US Type'] == 'Junction' and row['DS Type'] != 'Junction':
                     # Reverse stationing if upstream is junction
                     result_gdf.at[idx, 'station_start'] = total_length
                     result_gdf.at[idx, 'station_end'] = 0.0

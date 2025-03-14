@@ -99,6 +99,11 @@ async def chat(request: Request, message: dict):
         selected_model = settings.selected_model
         logger.info(f"Using model: {selected_model}")
         
+        # Set output length based on model
+        output_length = None
+        if selected_model == "claude-3-7-sonnet-20250219":
+            output_length = 32000  # Support for extended output length (32k tokens)
+        
         # Prepare prompt with conversation history
         full_prompt = prepare_full_prompt(
             user_message,
@@ -116,7 +121,8 @@ async def chat(request: Request, message: dict):
             conversation_history=get_full_conversation(),
             user_input=user_message,
             rag_context="".join(selected_files),
-            system_message=settings.system_message
+            system_message=settings.system_message,
+            output_length=output_length
         )
         
         # Check if we're exceeding token limits
@@ -390,6 +396,13 @@ async def calculate_tokens(request: TokenCalcRequest):
         if not request.system_message:
             settings = load_settings()
             request.system_message = settings.system_message
+            
+        # Set default output length based on model if not specified
+        if not request.output_length:
+            if request.model_name == "claude-3-7-sonnet-20250219":
+                request.output_length = 32000  # Support for extended output length (32k tokens)
+            else:
+                request.output_length = 8192  # Default for other models
             
         # Calculate usage data
         usage_data = calculate_usage_and_cost(

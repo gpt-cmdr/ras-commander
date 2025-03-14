@@ -269,7 +269,7 @@ class HdfStruc:
                 if "Geometry/Structures" not in hdf_file:
                     logger.info(f"No structures found in the geometry file: {hdf_path}")
                     return {}
-                return HdfUtils.hdf5_attrs_to_dict(hdf_file["Geometry/Structures"].attrs)
+                return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file["Geometry/Structures"].attrs)
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
             return {}

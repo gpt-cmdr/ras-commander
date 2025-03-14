@@ -1,0 +1,32 @@
+2025-03-13 15:42:04,643 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-03-13 15:42:10,757 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-03-13 15:42:10,757 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-03-13 15:42:11,174 - library_assistant - INFO - assistant:73 - Starting application server
+2025-03-13 15:42:11,174 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-03-13 15:51:06,490 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-03-13 15:51:13,604 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-03-13 15:51:13,604 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-03-13 15:51:14,154 - library_assistant - INFO - assistant:73 - Starting application server
+2025-03-13 15:51:14,154 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-03-13 15:55:33,498 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-03-13 15:55:40,395 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-03-13 15:55:40,396 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-03-13 15:55:40,850 - library_assistant - INFO - assistant:73 - Starting application server
+2025-03-13 15:55:40,850 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-03-13 15:59:25,493 - library_assistant - INFO - routes:80 - Starting chat interaction - Conversation ID: 1741895965488
+2025-03-13 15:59:25,494 - library_assistant - DEBUG - routes:91 - Selected files for context: ['Comprehensive_Library_Guide.md']
+2025-03-13 15:59:25,495 - library_assistant - DEBUG - routes:95 - Added user message to history: summarize the comprehensive library guide...
+2025-03-13 15:59:25,497 - library_assistant - INFO - routes:100 - Using model: claude-3-7-sonnet-20250219
+2025-03-13 15:59:25,888 - library_assistant - DEBUG - routes:113 - Prepared prompt length: 51159 characters
+2025-03-13 15:59:25,888 - library_assistant - INFO - routes:135 - Token usage - Input: 28, Output: 8192
+2025-03-13 15:59:25,888 - library_assistant - INFO - routes:136 - Estimated cost: $122.964000
+2025-03-13 15:59:25,888 - library_assistant - INFO - routes:141 - Using provider: anthropic
+2025-03-13 15:59:25,888 - library_assistant - INFO - routes:148 - Using Anthropic API
+2025-03-13 15:59:26,570 - library_assistant - INFO - routes:150 - Sending Anthropic API request with model: claude-3-7-sonnet-20250219
+2025-03-13 15:59:39,635 - library_assistant - DEBUG - routes:205 - Complete response length: 2270 characters
+2025-03-13 15:59:39,635 - library_assistant - INFO - routes:213 - Chat interaction completed successfully - Conversation ID: 1741895965488
+2025-03-13 16:05:45,403 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-03-13 16:05:52,813 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-03-13 16:05:52,813 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-03-13 16:05:53,280 - library_assistant - INFO - assistant:73 - Starting application server
+2025-03-13 16:05:53,280 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
