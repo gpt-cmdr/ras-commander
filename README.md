@@ -9,13 +9,14 @@ RAS Commander is a Python library for automating HEC-RAS operations, providing a
 
 This repository has several methods of interaction with Large Language Models and LLM-Assisted Coding built right in: 
 
-1. **[RAS Commander Library Assistant GPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized GPT model with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results, although this ability is still limited by OpenAI's GPT frameworks and may not be useful for long conversations.
+1. **[Purpose-Built Knowledge Base Summaries](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/assistant_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.  The repo's codebase (without documentation and examples) has been curated to stay within the current ~200k context window limitations of frontier models, and for tasks that do not need an understanding of the underlying code, the Comprehensive Library Guide and any relevant examples from the example folder should be adequate context for leveraging the ras-commander API to complete tasks. 
 
-2. **[Purpose-Built Knowledge Base Summaries](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/assistant_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude or GPT-4. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.  The repo's codebase (without documentation and examples) has been curated to stay within the current ~200k context window limitations of frontier models, and for tasks that do not need an understanding of the underlying code, the Comprehensive Library Guide and any relevant examples from the example folder should be adequate context for leveraging the ras-commander API to complete tasks. 
+2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
-3. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
+3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/library_assistant)**: A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.  To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses.  A dashboard shows you the total context and estimated cost of each request.  **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai**
 
-5. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/library_assistant)**: A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.  To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses.  A dashboard shows you the total context and estimated cost of each request.  **Now with support for OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai**
+4. **[RAS Commander Library Assistant GPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized GPT model with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter does not contain all dependencies required to use ras-commander in the local_
+
 
 ## Background
 The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the HEC-Commander tools Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. The transition from notebooks to a structured library aims to provide a more robust, maintainable, and extensible solution for water resources engineers.
@@ -60,7 +61,13 @@ In your virtual environment, install ras-commander using pip:
 pip install --upgrade ras-commander
 ```
 If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
-   
+
+Dependencies can also be manually installed: 
+```
+pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely pathlib rasterstats rtree
+```
+
+
 #### Work in a Local Copy
 
 If you want to make revisions and work actively in your local version of ras-commander, just skip the pip install rascommander step above and clone a fork of the repo to your local machine using Git (ask ChatGPT if you need help).  Most of the notebooks and examples in this repo have a code segment similar to the one below, that works as long as the script is located in a first-level subfolder of the ras-commander repository:
@@ -87,10 +94,42 @@ It is highly suggested to fork this repository before going this route, and usin
 from ras_commander import init_ras_project, RasCmdr, RasPlan
 ```
 
-### Initialize a project
+### Initialize a project (single project)
 ```
 init_ras_project(r"/path/to/project", "6.5")
 ```
+
+### Initialize a project (multiple projects)
+```
+your_ras_project = RasPrj()
+init_ras_project(r"/path/to/project", "6.5", ras_object=your_ras_project)
+```
+
+## Accessing Plan, Unsteady and Boundary Conditions Dataframes
+Using the default 'ras" object, othewise substitute your_ras_project for muli-project scripts
+```
+print("\nPlan Files DataFrame:")
+ras.plan_df
+
+print("\nFlow Files DataFrame:")
+ras.flow_df
+
+print("\nUnsteady Flow Files DataFrame:")
+ras.unsteady_df
+
+print("\nGeometry Files DataFrame:")
+ras.geom_df
+
+print("\nHDF Entries DataFrame:")
+ras.get_hdf_entries()
+
+print("\nBoundary Conditions DataFrame:")
+ras.boundaries_df
+
+```
+
+
+
 
 ### Execute a single plan
 ```
@@ -153,8 +192,10 @@ RAS Commander allows working with multiple HEC-RAS projects simultaneously:
 
 ```python
 # Initialize multiple projects
-project1 = init_ras_project(path1, "6.6")
-project2 = init_ras_project(path2, "6.6")
+project1 = RasPrj()
+init_ras_project(path1, "6.6", ras_object=project1)
+project2 = RasPrj()
+init_ras_project(path2, "6.6", ras_object=project2)
 
 # Perform operations on each project
 RasCmdr.compute_plan("01", ras_object=project1, dest_folder=folder1)
@@ -170,7 +211,7 @@ print(f"Project 2: {project2.project_name}")
 
 This is useful for comparing different river systems, running scenario analyses across multiple watersheds, or managing a suite of related models.
 
-#### Key Components
+#### Core HEC-RAS Automation Classes
 
 - `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
 - `RasCmdr`: Handles execution of HEC-RAS simulations
@@ -180,7 +221,7 @@ This is useful for comparing different river systems, running scenario analyses 
 - `RasUtils`: Contains utility functions for file operations and data management
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
-#### New Components:
+#### HDF Data Access Classes
 - `HdfBase`: Core functionality for HDF file operations
 - `HdfBndry`: Enhanced boundary condition handling
 - `HdfMesh`: Comprehensive mesh data management
@@ -192,14 +233,18 @@ This is useful for comparing different river systems, running scenario analyses 
 - `HdfPipe`: Pipe network analysis tools
 - `HdfPump`: Pump station analysis capabilities
 - `HdfFluvialPluvial`: Fluvial-pluvial boundary analysis
-- `RasMapper`: RASMapper interface
-- `RasToGo`: Go-Consequences integration
+- `RasMapper`: RASMapper Functions
 - `HdfPlot` & `HdfResultsPlot`: Specialized plotting utilities
 
 ### Project Organization Diagram
 
 ```
 ras_commander
+├── ai_tools
+│   ├── [AI Knowledge Bases](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/llm_knowledge_bases) 
+│   └── [Library Assistant](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/library_asssistant)
+├── examples
+│   └── [Examples Notebooks](https://github.com/gpt-cmdr/ras-commander/tree/main/ras_commander)
 ├── ras_commander
 │   ├── __init__.py
 │   ├── _version.py
@@ -212,8 +257,6 @@ ras_commander
 │   ├── RasPrj.py
 │   ├── RasUnsteady.py
 │   ├── RasUtils.py
-│   ├── RasToGo.py
-│   ├── RasGpt.py
 │   ├── HdfBase.py
 │   ├── HdfBndry.py
 │   ├── HdfMesh.py
@@ -227,28 +270,13 @@ ras_commander
 │   ├── HdfFluvialPluvial.py
 │   ├── HdfPlot.py
 │   └── HdfResultsPlot.py
-├── examples
-│   ├── 00_Using_RasExamples.ipynb
-│   ├── 01_project_initialization.ipynb
-│   ├── 02_plan_and_geometry_operations.ipynb
-│   ├── 03_unsteady_flow_operations.ipynb
-│   ├── 04_multiple_project_operations.ipynb
-│   ├── 05_single_plan_execution.ipynb
-│   ├── 06_executing_plan_sets.ipynb
-│   ├── 07_sequential_plan_execution.ipynb
-│   ├── 08_parallel_execution.ipynb
-│   └── 09_plan_parameter_operations.ipynb
-├── tests
-│   └── ... (test files)
 ├── .gitignore
 ├── LICENSE
 ├── README.md
 ├── STYLE_GUIDE.md
 ├── Comprehensive_Library_Guide.md
 ├── pyproject.toml
-├── setup.cfg
 ├── setup.py
-└── requirements.txt
 ```
 
 ### Accessing HEC Examples through RasExamples
@@ -269,6 +297,8 @@ categories = ras_examples.list_categories()
 projects = ras_examples.list_projects("Steady Flow")
 extracted_paths = ras_examples.extract_project(["Bald Eagle Creek", "Muncie"])
 ```
+
+The RasExamples class is used to provide an alternative to traditional unit testing, with example notebooks doubling as tests and in-context examples for the end user.  This increases interpretability by LLM's, reducing hallucinations.  
 
 ### RasPrj
 

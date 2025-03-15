@@ -9236,7 +9236,6 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     Initialize a RAS project.
 
     USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
-    The initialize method of the RasPrj class only modifies the global 'ras' object.
 
     Parameters:
     -----------
@@ -9246,8 +9245,10 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         The version of RAS to use (e.g., "6.6").
         The version can also be a full path to the Ras.exe file.
         If None, the function will attempt to use the version from the global 'ras' object or a default path.
-    ras_object : RasPrj, optional
-        An instance of RasPrj to initialize. If None, the global 'ras' object is used.
+    ras_object : RasPrj or str, optional
+        If None, the global 'ras' object is updated.
+        If a RasPrj instance, that instance is updated.
+        If any other value is provided, a new RasPrj instance is created and returned.
 
     Returns:
     --------

@@ -76,10 +76,6 @@ pip install --update ras-commander # This ensures you get the latest version of 
     - Pump station analysis via `HdfPump`
     - Fluvial-pluvial analysis capabilities in `HdfFluvialPluvial`
 
-17. **RAS Interface Components**:
-    - Integration with RASMapper through `RasMap`
-    - Go-Consequences interface via `RasToGo`
-    - AI assistance through `RasGpt`
 
 ## Core Features
 
@@ -94,8 +90,7 @@ pip install --update ras-commander # This ensures you get the latest version of 
 9. **HDF File Handling**: Specialized classes for working with HEC-RAS HDF files.
 10. **Advanced HDF Analysis**: Comprehensive tools for HDF file operations
 11. **Infrastructure Analysis**: Tools for pipe networks and pump stations
-12. **Mapping Integration**: RASMapper interface capabilities
-13. **External Tool Integration**: Connection to Go-Consequences and other tools
+12. **External Tool Integration**: Connection to Go-Consequences and other tools
 
 ## Module Overview
 
@@ -119,10 +114,7 @@ pip install --update ras-commander # This ensures you get the latest version of 
 18. **HdfPipe**: Handles pipe network related data in HDF files.
 19. **HdfPump**: Manages pump station related data in HDF files.
 20. **HdfFluvialPluvial**: Manages fluvial and pluvial related data in HDF files.
-21. **RasToGo**: Functions to interface with USACE Go Consequences.
-22. **RasMap**: Handling of RASMapper .rasmap files.
-23. **RasGpt**: AI assistance tools
-24. **HdfPlot & HdfResultsPlot**: Visualization utilities
+21. **HdfPlot & HdfResultsPlot**: Visualization utilities
 
 ## Best Practices
 
@@ -467,13 +459,18 @@ When working with multiple projects, you should create separate RAS objects for 
 
 ```python
 # Initialize multiple project instances with custom RAS objects
-project1 = init_ras_project(path1, "6.6")
-project2 = init_ras_project(path2, "6.6")
+project1 = RasPrj()
+init_ras_project(path1, "6.6", ras_object=project1)
+project2 = RasPrj()
+init_ras_project(path2, "6.6", ras_object=project2)
 
-# Note that the global 'ras' object will point to the last initialized project
+# This allows RasPrj Instances to be accessed as follows:
 print(f"Project 1: {project1.project_name}")
 print(f"Project 2: {project2.project_name}")
-print(f"Global 'ras' object: {ras.project_name}")  # Will be the same as project2
+
+
+
+
 ```
 
 #### Best Practices for Multiple Project Management
@@ -1168,6 +1165,249 @@ RAS Commander is designed to work efficiently with HEC-RAS projects by focusing 
    - With an AI assistant, you can quickly leverage this library or your own custom functions to automate your workflows.
 
 By following these strategies and best practices, you can effectively use RAS Commander to automate and streamline your HEC-RAS workflows, working around limitations and leveraging the strengths of the library's approach to data management.
+
+
+
+# RAS-Commander Dataframe Examples
+
+## Project Data Access
+
+After initializing a HEC-RAS project with `init_ras_project()`, RAS-Commander provides several dataframes to access project data. These dataframes contain detailed information about plans, geometries, flow files, and boundary conditions. This section provides examples of these dataframes based on actual HEC-RAS projects.
+
+### Project Information
+
+The RasPrj object contains basic project information including:
+
+```python
+print(f"Project Name: {ras.project_name}")
+print(f"Project Folder: {ras.project_folder}")
+print(f"PRJ File: {ras.prj_path}")
+print(f"HEC-RAS Executable Path: {ras.ras_exe_path}")
+```
+
+Example output:
+```
+Project Name: Muncie
+Project Folder: c:\GH\ras-commander\examples\example_projects\Muncie
+PRJ File: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.prj
+HEC-RAS Executable Path: C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe
+```
+
+### Plan Files DataFrame (plan_df)
+
+The `plan_df` dataframe contains information about all plan files in the project:
+
+```python
+print(ras.plan_df)
+```
+
+Key columns include:
+- `plan_number`: The plan identifier (e.g., "01", "03")
+- `full_path`: Complete path to the plan file
+- `UNET D1 Cores` & `UNET D2 Cores`: Core allocation for 1D and 2D calculations
+- `Computation Interval`: Simulation time step
+- `Geom File`: Associated geometry file
+- `Flow File` or `Unsteady File`: Associated flow file
+- `Short Identifier`: Brief descriptive name for the plan
+- `Simulation Date`: Start and end dates for the simulation
+- `Run UNet`, `Run HTab`: Run flags for different simulation components
+- `UNET Use Existing IB Tables`: Flag for using existing internal boundary tables
+- `HDF_Results_Path`: Path to HDF results file (if available)
+- `UNET 1D Methodology`, `UNET D2 SolverType`: Solver methods for 1D and 2D areas
+
+Example from Muncie project:
+```
+  plan_number                                          full_path UNET D1 Cores UNET D2 Cores PS Cores Computation Interval DSS File Flow File Friction Slope Method Geom File ...  Run UNet Run WQNet    Short Identifier                   Simulation Date UNET Use Existing IB Tables HDF_Results_Path UNET 1D Methodology    UNET D2 SolverType     UNET D2 Name                                           Geom_File
+0         01  c:\GH\ras-commander\examples\example_projects\...            0            0     None               15SEC      dss      u01                    1      g01 ...         1         0             9-SAs  02JAN1900,0000,02JAN1900,2400                         -1            None                NaN                  NaN             NaN  c:\GH\ras-commander\examples\example_projects\...
+1         03  c:\GH\ras-commander\examples\example_projects\...            0            4     None               10SEC      dss      u01                    1      g02 ...        -1         0      2D 50ft Grid  02JAN1900,0000,02JAN1900,2400                         -1            None  Finite Difference  Pardiso (Direct)  2D Interior Area  c:\GH\ras-commander\examples\example_projects\...
+2         04  c:\GH\ras-commander\examples\example_projects\...            0            6     None               10SEC      dss      u01                    1      g04 ...         1         0  50ft User n Regions  02JAN1900,0000,02JAN1900,2400                         -1            None  Finite Difference  Pardiso (Direct)  2D Interior Area  c:\GH\ras-commander\examples\example_projects\...
+```
+
+Example from BaldEagleDamBrk project (abbreviated):
+```
+  plan_number                                          full_path UNET D1 Cores UNET D2 Cores PS Cores Computation Interval DSS File Flow File Friction Slope Method Geom File ...  Run UNet Run WQNet      Short Identifier                   Simulation Date UNET Use Existing IB Tables UNET 1D Methodology    UNET D2 SolverType   UNET D2 Name HDF_Results_Path                                           Geom_File
+0         13  c:\GH\ras-commander\examples\example_projects\...            0            8     None               30SEC      dss      u07                    1      g06 ...         1         0        PMF Multi 2D  01JAN1999,1200,04JAN1999,1200                         -1  Finite Difference  Pardiso (Direct)           193            None  c:\GH\ras-commander\examples\example_projects\...
+1         15  c:\GH\ras-commander\examples\example_projects\...            0            6     None               20SEC      dss      u12                    1      g08 ...         1         0  1D-2D Refined Grid  01JAN1999,1200,04JAN1999,1200                         -1  Finite Difference                NaN  BaldEagleCr            None  c:\GH\ras-commander\examples\example_projects\...
+...
+```
+
+### Flow Files DataFrame (flow_df)
+
+The `flow_df` dataframe contains information about steady flow files in the project:
+
+```python
+print(ras.flow_df)
+```
+
+Columns include:
+- `flow_number`: The flow file identifier
+- `full_path`: Complete path to the flow file
+
+Example:
+```
+  flow_number                                          full_path
+0         01  c:\GH\ras-commander\examples\example_projects\...
+```
+
+### Unsteady Flow Files DataFrame (unsteady_df)
+
+The `unsteady_df` dataframe contains information about unsteady flow files:
+
+```python
+print(ras.unsteady_df)
+```
+
+Columns include:
+- `unsteady_number`: The unsteady flow file identifier
+- `full_path`: Complete path to the unsteady flow file
+- `Flow Title`: The title of the flow file
+- `Program Version`: HEC-RAS version used to create the file
+- `Use Restart`: Flag for using restart files
+- `Precipitation Mode`, `Wind Mode`: Settings for meteorological conditions
+- `Met BC=Precipitation|Expanded View`: Flag for expanded view of precipitation data
+- `Met BC=Precipitation|Gridded Source`: Source for gridded precipitation data
+
+Example from Muncie project:
+```
+  unsteady_number                                          full_path             Flow Title Program Version Use Restart Precipitation Mode   Wind Mode Met BC=Precipitation|Expanded View Met BC=Precipitation|Gridded Source
+0             01  c:\GH\ras-commander\examples\example_projects\...  Flow Boundary Conditions           6.30           0            Disable  No Wind Forces                                0                               DSS
+```
+
+Example from BaldEagleDamBrk project (abbreviated):
+```
+  unsteady_number                                          full_path                     Flow Title Program Version Use Restart Precipitation Mode   Wind Mode Met BC=Precipitation|Mode Met BC=Evapotranspiration|Mode Met BC=Precipitation|Expanded View Met BC=Precipitation|Constant Units Met BC=Precipitation|Gridded Source
+0             07  c:\GH\ras-commander\examples\example_projects\...        PMF with Multi 2D Areas           5.00           0                NaN        NaN                     NaN                           NaN                            NaN                             NaN                               NaN
+...
+9             03  c:\GH\ras-commander\examples\example_projects\...           Gridded Precipitation           6.00           0            Enable  No Wind Forces                Gridded                        None                             -1                           mm/hr                               DSS
+```
+
+### Geometry Files DataFrame (geom_df)
+
+The `geom_df` dataframe contains information about geometry files:
+
+```python
+print(ras.geom_df)
+```
+
+Columns include:
+- `geom_file`: The geometry file name (e.g., "g01")
+- `geom_number`: The geometry file identifier
+- `full_path`: Complete path to the geometry file
+- `hdf_path`: Path to the associated HDF file (if available)
+
+Example from Muncie project:
+```
+  geom_file geom_number                                          full_path                                           hdf_path
+0       g01          01  c:\GH\ras-commander\examples\example_projects\...  c:\GH\ras-commander\examples\example_projects\...
+1       g02          02  c:\GH\ras-commander\examples\example_projects\...  c:\GH\ras-commander\examples\example_projects\...
+2       g04          04  c:\GH\ras-commander\examples\example_projects\...  c:\GH\ras-commander\examples\example_projects\...
+```
+
+### HDF Entries DataFrame (hdf_df)
+
+The `hdf_df` dataframe contains information about HDF results files generated from plan computations:
+
+```python
+print(ras.hdf_df)
+```
+
+This dataframe has the same structure as `plan_df` but includes an additional `HDF_Results_Path` column pointing to the generated HDF file. In the examples provided, no HDF results have been generated yet, so the dataframe is empty:
+
+```
+Empty DataFrame
+Columns: [plan_number, full_path, UNET D1 Cores, UNET D2 Cores, PS Cores, Computation Interval, DSS File, Flow File, Friction Slope Method, Geom File, ... HDF_Results_Path, UNET 1D Methodology, UNET D2 SolverType, UNET D2 Name, Geom_File]
+0 rows × 26 columns
+```
+
+### Boundary Conditions DataFrame (boundaries_df)
+
+The `boundaries_df` dataframe contains detailed information about boundary conditions defined in unsteady flow files:
+
+```python
+print(ras.boundaries_df)
+```
+
+Key columns include:
+- `unsteady_number`: The unsteady flow file identifier
+- `boundary_condition_number`: Sequential number of the boundary condition
+- `river_reach_name`, `river_station`: Location of the boundary condition
+- `storage_area_name`, `pump_station_name`: Associated storage areas or pump stations
+- `bc_type`: Type of boundary condition (e.g., "Flow Hydrograph", "Normal Depth")
+- `hydrograph_type`: Type of hydrograph for the boundary
+- `Interval`: Time interval for hydrograph data
+- `DSS Path`: Path to DSS file with boundary data
+- `hydrograph_num_values`: Number of values in the hydrograph
+- `hydrograph_values`: Array of values for the hydrograph
+
+Example from Muncie project:
+```
+  unsteady_number  boundary_condition_number river_reach_name river_station storage_area_name pump_station_name          bc_type       hydrograph_type Interval  DSS Path ... hydrograph_num_values                                   hydrograph_values                                          full_path             Flow Title Program Version Use Restart Precipitation Mode   Wind Mode Met BC=Precipitation|Expanded View Met BC=Precipitation|Gridded Source
+0             01                        1           White     Muncie       15696.24                     Flow Hydrograph  Flow Hydrograph    1HOUR        ...                 65  [13500, 14000, 14500, 15000, 15500, 16000, 165...  c:\GH\ras-commander\examples\example_projects\...  Flow Boundary Conditions           6.30           0            Disable  No Wind Forces                                0                               DSS
+1             01                        2           White     Muncie         237.6455                     Normal Depth           None      NaN        NaN ...                  0                                                NaN  c:\GH\ras-commander\examples\example_projects\...  Flow Boundary Conditions           6.30           0            Disable  No Wind Forces                                0                               DSS
+```
+
+Example from BaldEagleDamBrk project (abbreviated):
+```
+  unsteady_number  boundary_condition_number river_reach_name    river_station storage_area_name pump_station_name                      bc_type                hydrograph_type Interval                DSS File ...             Flow Title Program Version Use Restart Precipitation Mode   Wind Mode Met BC=Precipitation|Mode Met BC=Evapotranspiration|Mode Met BC=Precipitation|Expanded View Met BC=Precipitation|Constant Units Met BC=Precipitation|Gridded Source
+0             07                        1  Bald Eagle Cr.      Lock Haven       137520                     Flow Hydrograph           Flow Hydrograph    1HOUR  Bald_Eagle_Creek.dss ...  PMF with Multi 2D Areas           5.00           0                NaN        NaN                     NaN                           NaN                            NaN                             NaN                               NaN
+1             07                        2  Bald Eagle Cr.      Lock Haven        81454                         Gate Opening                  None      NaN               NaN ...  PMF with Multi 2D Areas           5.00           0                NaN        NaN                     NaN                           NaN                            NaN                             NaN                               NaN
+...
+```
+
+## Accessing and Using Dataframes
+
+These dataframes provide structured access to HEC-RAS project data. Here are some example operations:
+
+### Finding Plans by Description
+
+```python
+# Find all 2D plans
+two_d_plans = ras.plan_df[ras.plan_df['Short Identifier'].str.contains('2D', na=False)]
+print(two_d_plans[['plan_number', 'Short Identifier']])
+```
+
+### Examining Computation Intervals
+
+```python
+# Get all unique computation intervals
+intervals = ras.plan_df['Computation Interval'].unique()
+print(f"Computation intervals used: {intervals}")
+
+# Find plans with specific interval
+fast_plans = ras.plan_df[ras.plan_df['Computation Interval'] == '5SEC']
+print(fast_plans[['plan_number', 'Short Identifier']])
+```
+
+### Analyzing Boundary Conditions
+
+```python
+# Count boundary conditions by type
+bc_counts = ras.boundaries_df['bc_type'].value_counts()
+print(bc_counts)
+
+# Get all flow hydrographs
+flow_hydrographs = ras.boundaries_df[ras.boundaries_df['bc_type'] == 'Flow Hydrograph']
+print(flow_hydrographs[['unsteady_number', 'river_reach_name', 'river_station']])
+```
+
+### Finding Plans with Specific Solver Settings
+
+```python
+# Find plans using the Pardiso solver
+pardiso_plans = ras.plan_df[ras.plan_df['UNET D2 SolverType'].str.contains('Pardiso', na=False)]
+print(pardiso_plans[['plan_number', 'Short Identifier', 'UNET D2 SolverType']])
+```
+
+### Examining Core Allocation
+
+```python
+# Analyze core usage
+ras.plan_df[['plan_number', 'Short Identifier', 'UNET D1 Cores', 'UNET D2 Cores']]
+```
+
+These examples demonstrate how to access and utilize the rich project data available through RAS-Commander's dataframes after initializing a project.
+
+
 
 ## Conclusion
 

@@ -87,20 +87,24 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 if Path(hdf_input).is_file():
                     hdf_path = Path(hdf_input)
                 # Check if it's a number (with or without 'p' prefix)
-                elif hdf_input.isdigit() or (len(hdf_input) == 3 and hdf_input[0] == 'p' and hdf_input[1:].isdigit()):
+                elif hdf_input.isdigit() or (len(hdf_input) > 1 and hdf_input[0] == 'p' and hdf_input[1:].isdigit()):
                     try:
                         ras_obj.check_initialized()
                     except Exception as e:
                         raise ValueError(f"RAS object is not initialized: {str(e)}")
                         
-                    number = hdf_input if hdf_input.isdigit() else hdf_input[1:]
+                    # Extract the numeric part and convert to integer for comparison
+                    number_str = hdf_input if hdf_input.isdigit() else hdf_input[1:]
+                    number_int = int(number_str)
                     
                     if file_type == 'plan_hdf':
-                        plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == number]
+                        # Convert plan_number column to integers for comparison
+                        plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
                         if not plan_info.empty:
                             hdf_path = Path(plan_info.iloc[0]['HDF_Results_Path'])
                     elif file_type == 'geom_hdf':
-                        geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == number]
+                        # Convert geom_number column to integers for comparison
+                        geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'].astype(int) == number_int]
                         if not geom_info.empty:
                             hdf_path = Path(geom_info.iloc[0]['HDF_Path'])
                     else:
@@ -112,14 +116,16 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 except Exception as e:
                     raise ValueError(f"RAS object is not initialized: {str(e)}")
                     
-                number = f"{hdf_input:02d}"
+                number_int = hdf_input
                 
                 if file_type == 'plan_hdf':
-                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == number]
+                    # Convert plan_number column to integers for comparison
+                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
                     if not plan_info.empty:
                         hdf_path = Path(plan_info.iloc[0]['HDF_Results_Path'])
                 elif file_type == 'geom_hdf':
-                    geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == number]
+                    # Convert geom_number column to integers for comparison
+                    geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'].astype(int) == number_int]
                     if not geom_info.empty:
                         hdf_path = Path(geom_info.iloc[0]['HDF_Path'])
                 else:
@@ -10153,7 +10159,6 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     Initialize a RAS project.
 
     USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
-    The initialize method of the RasPrj class only modifies the global 'ras' object.
 
     Parameters:
     -----------
@@ -10163,8 +10168,10 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         The version of RAS to use (e.g., "6.6").
         The version can also be a full path to the Ras.exe file.
         If None, the function will attempt to use the version from the global 'ras' object or a default path.
-    ras_object : RasPrj, optional
-        An instance of RasPrj to initialize. If None, the global 'ras' object is used.
+    ras_object : RasPrj or str, optional
+        If None, the global 'ras' object is updated.
+        If a RasPrj instance, that instance is updated.
+        If any other value is provided, a new RasPrj instance is created and returned.
 
     Returns:
     --------
@@ -10177,15 +10184,23 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
 
     ras_exe_path = get_ras_exe(ras_version)
 
+    # Determine which RasPrj instance to use
     if ras_object is None:
+        # Use the global 'ras' object
         logger.info("Initializing global 'ras' object via init_ras_project function.")
         ras_object = ras
     elif not isinstance(ras_object, RasPrj):
-        logger.error("Provided ras_object is not an instance of RasPrj.")
-        raise TypeError("ras_object must be an instance of RasPrj or None.")
+        # Create a new RasPrj instance
+        logger.info("Creating a new RasPrj instance.")
+        ras_object = RasPrj()
 
     # Initialize the RasPrj instance
     ras_object.initialize(ras_project_folder, ras_exe_path)
+    
+    # Always update the global ras object as well
+    if ras_object is not ras:
+        ras.initialize(ras_project_folder, ras_exe_path)
+        logger.info("Global 'ras' object also updated to match the new project.")
     
     logger.info(f"Project initialized. ras_object project folder: {ras_object.project_folder}")
     return ras_object

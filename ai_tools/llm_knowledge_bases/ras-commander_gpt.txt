@@ -10,11 +10,6 @@ This Assistant helps you write efficient Python code for HEC-RAS projects using 
 
 ## Classes, Functions and Arguments
 
-
-
-
-Certainly! I'll summarize the decorators, provide tables for each class showing the decorators used and arguments, and give a summary of each class's function.
-
 Decorator Summaries:
 
 1. @log_call: Logs function calls, including entry and exit times, and any exceptions raised.
@@ -23,23 +18,6 @@ Decorator Summaries:
 
 Now, lets go through each class:
 
-
-1. RasPrj Class:
-
-| Function Name | @log_call | @standardize_input | @hdf_operation | Arguments |
-|---------------|-----------|--------------------|--------------------|-----------|
-| initialize | X | | | project_folder, ras_exe_path |
-| _load_project_data | X | | | |
-| _get_geom_file_for_plan | X | | | plan_number |
-| _parse_plan_file | X | | | plan_file_path |
-| _get_prj_entries | X | | | entry_type |
-| _parse_unsteady_file | X | | | unsteady_file_path |
-| check_initialized | X | | | |
-| find_ras_prj | X | | | folder_path |
-| get_project_name | X | | | |
-| get_prj_entries | X | | | entry_type |
-| get_plan_entries | X | | | |
-| get_flow_entries | X |
 1. RasPrj Class:
 
 | Function Name | @log_call | @standardize_input | Arguments |
@@ -285,11 +263,7 @@ This class is mentioned in the code but has no implemented methods yet.
 | init_ras_project | X | | ras_project_folder, ras_version, ras_instance |
 | get_ras_exe | X | | ras_version |
 
-
-
-
 Overall, the ras-commander library provides a comprehensive set of tools for working with HEC-RAS projects, including project management, file operations, data extraction, and simulation execution. The library makes extensive use of logging and input standardization through decorators, ensuring consistent behavior and traceability across its various components.
-
 
 ## Coding Assistance Rules:
 
@@ -328,9 +302,25 @@ Overall, the ras-commander library provides a comprehensive set of tools for wor
 25. Always consider the implications of file renaming on import statements throughout the project.
 26. When working with GeoDataFrames, remember to use appropriate geometric operations and consider spatial relationships.
 27. For HDF file operations, always use the standardize_input decorator to ensure consistent handling of file paths.
-28. When dealing with large datasets, consider using chunking or iterative processing to manage memory usage.
-29. Utilize the RasExamples class for testing and demonstrating functionality with sample projects.
-30. When working with the RasGpt class, be aware that it's mentioned but currently has no implemented methods.
+28. For parallel execution, suggest appropriate max_workers based on physical CPU core count and model complexity. A good rule of thumb is to use `max_workers = physical_cores // cores_per_worker`.
+29. Recommend using 2 cores per worker for efficiency mode (maximizing throughput), or 4-8 cores per worker for performance mode (minimizing individual plan runtime).
+30. For sequential execution with `compute_test_mode()`, remind users about the dest_folder_suffix parameter which creates a folder with the project name and the specified suffix.
+31. For single plan execution with `compute_plan()`, always specify clear_geompre and overwrite_dest explicitly to avoid unintended behavior.
+32. When using `compute_parallel()`, mention that worker folders are created internally and consolidated after execution.
+33. When working with multiple projects, always use custom named RAS objects (not the global 'ras' object) and pass them explicitly to functions using the ras_object parameter.
+34. Use descriptive variable names for RAS objects that reflect the project they represent (e.g., bald_eagle_ras, muncie_ras).
+35. Create separate destination folders for each project when computing plans to prevent file conflicts.
+36. When comparing projects, use DataFrame operations to analyze differences in plans, geometries, and results.
+37. Remember that `init_ras_project()` always updates the global 'ras' object, even when returning a custom RAS object. The global 'ras' will point to the last initialized project.
+38. When updating plan parameters, use consistent formatting for time intervals (e.g., "1MIN", "10SEC", "1HOUR") following HEC-RAS conventions.
+39. For simulation dates, use datetime objects from the datetime module with explicit year, month, day, hour, and minute values.
+40. Suggest using descriptive plan descriptions with formatted multi-line strings that include purpose, key parameters, and modification date.
+41. When setting the number of cores with `RasPlan.set_num_cores()`, consider the optimal number based on model type (1D vs 2D) and system capabilities.
+42. After making changes to plan parameters, verify them with `RasPlan.get_plan_value()` to ensure they were properly applied.
+43. Remind users to clear geometry preprocessor files with `clear_geompre=True` after changing geometry-related parameters.
+44. When dealing with large datasets, consider using chunking or iterative processing to manage memory usage.
+45. Utilize the RasExamples class for testing and demonstrating functionality with sample projects.
+46. When working with the RasGpt class, be aware that it's mentioned but currently has no implemented methods.
 ==================================================
 
 Folder: c:\GH\ras-commander\.gitignore
@@ -552,7 +542,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.58.0",
+    version="0.61.0",
     packages=find_packages(),
     include_package_data=True,
     python_requires='>=3.10',
@@ -744,9 +734,9 @@ File: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
     "    # If the import fails, add the parent directory to the Python path\n",
     "    import os\n",
     "    current_file = Path(os.getcwd()).resolve()\n",
-    "    parent_directory = current_file.parent\n",
-    "    sys.path.append(str(parent_directory))\n",
-    "    \n",
+    "    rascmdr_directory = current_file.parent\n",
+    "    sys.path.append(str(rascmdr_directory))\n",
+    "    print(\"Loading ras-commander from local dev copy\")\n",
     "    # Now try to import again\n",
     "    from ras_commander import *\n",
     "print(\"ras_commander imported successfully\")\n"
@@ -1007,10 +997,8 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
    ]
   },
   {
-   "cell_type": "code",
-   "execution_count": 3,
+   "cell_type": "markdown",
    "metadata": {},
-   "outputs": [],
    "source": [
     "# 2. Import all required modules\n",
     "\n",
@@ -1022,6 +1010,37 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
     "from pathlib import Path\n",
     "import pandas as pd\n",
     "from IPython import display"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# This cell will try to import the pip package, if it fails it will \n",
+    "# add the parent directory to the Python path and try to import again\n",
+    "# This assumes you are working in a subfolder of the ras-commander repository\n",
+    "# This allows a user's revisions to be tested locally without installing the package\n",
+    "\n",
+    "import sys\n",
+    "from pathlib import Path\n",
+    "\n",
+    "# Flexible imports to allow for development without installation \n",
+    "#  ** Use this version with Jupyter Notebooks **\n",
+    "try:\n",
+    "    # Try to import from the installed package\n",
+    "    from ras_commander import *\n",
+    "except ImportError:\n",
+    "    # If the import fails, add the parent directory to the Python path\n",
+    "    import os\n",
+    "    current_file = Path(os.getcwd()).resolve()\n",
+    "    parent_directory = current_file.parent\n",
+    "    sys.path.append(str(parent_directory))\n",
+    "    print(\"importing from local dev copy\")\n",
+    "    # Now try to import again\n",
+    "    from ras_commander import *\n",
+    "print(\"ras_commander imported successfully\")\n"
    ]
   },
   {
@@ -1290,11 +1309,12 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
     "# Initialize multiple project instances with custom RAS objects\n",
     "# Note: This also updates the global 'ras' object each time, but we'll use the custom instances\n",
     "# Parameters remain the same as before\n",
-    "\n",
-    "multi_2d_project = init_ras_project(multi_2d_path, \"6.5\")\n",
+    "multi_2d_project = RasPrj()\n",
+    "init_ras_project(multi_2d_path, \"6.5\", ras_object=multi_2d_project)\n",
     "print(f\"\\nMulti2D project initialized with its own RAS object\")\n",
     "\n",
-    "muncie_project = init_ras_project(muncie_path, \"6.5\")\n",
+    "muncie_project = RasPrj()\n",
+    "init_ras_project(muncie_path, \"6.5\", ras_object=muncie_project)\n",
     "print(f\"\\nMuncie project initialized with its own RAS object\")\n",
     "\n",
     "# Note that the global 'ras' object now points to the Muncie project\n",
@@ -1314,6 +1334,15 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
     "- `ras`: The global object (which now points to Muncie)\n",
     "\n",
     "Let's examine the Multi2D project:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "display.display(multi_2d_project.plan_df)"
    ]
   },
   {
@@ -2188,7 +2217,7 @@ File: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": 1,
+   "execution_count": 2,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -2786,7 +2815,7 @@ File: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 1,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -2797,7 +2826,7 @@ File: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": 15,
+   "execution_count": 2,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -2950,11 +2979,13 @@ File: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Initialize both projects\n",
-    "bald_eagle_ras = init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "# Initialize both projects with their own RAS objects\n",
+    "bald_eagle_ras = RasPrj()\n",
+    "init_ras_project(bald_eagle_path, \"6.6\", ras_object=bald_eagle_ras)\n",
     "print(f\"Initialized Bald Eagle Creek project: {bald_eagle_ras.project_name}\")\n",
     "\n",
-    "muncie_ras = init_ras_project(muncie_path, \"6.6\")\n",
+    "muncie_ras = RasPrj()\n",
+    "init_ras_project(muncie_path, \"6.6\", ras_object=muncie_ras)\n",
     "print(f\"Initialized Muncie project: {muncie_ras.project_name}\")\n",
     "\n",
     "# Display available plans in each project\n",
@@ -3080,7 +3111,7 @@ File: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": 11,
+   "execution_count": 10,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -3699,7 +3730,8 @@ File: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
     "# Check the results path using the RasPlan.get_results_path method\n",
     "# First, initialize a RAS object using the destination folder\n",
     "try:\n",
-    "    dest_ras = init_ras_project(dest_folder, \"6.6\")\n",
+    "    dest_ras = RasPrj()\n",
+    "    init_ras_project(dest_folder, \"6.6\", ras_object=dest_ras)\n",
     "    \n",
     "    # Get the results path for the plan we just executed\n",
     "    results_path = RasPlan.get_results_path(plan_number, ras_object=dest_ras)\n",
@@ -3864,9 +3896,32 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 3,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Found zip file: c:\\GH\\ras-commander\\examples\\Example_Projects_6_6.zip\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Loading project data from CSV...\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Extracting project 'Balde Eagle Creek'\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Project 'Balde Eagle Creek' already exists. Deleting existing folder...\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Existing folder for project 'Balde Eagle Creek' has been deleted.\n",
+      "2025-03-14 14:26:11 - ras_commander.RasExamples - INFO - Successfully extracted project 'Balde Eagle Creek' to c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Extracted project to: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek\n",
+      "Bald Eagle Creek project exists: True\n"
+     ]
+    }
+   ],
    "source": [
     "# Extract the Bald Eagle Creek example project\n",
     "# The extract_project method downloads the project from GitHub if not already present,\n",
@@ -3919,9 +3974,230 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 4,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:26:11 - ras_commander.RasPrj - INFO - Initializing global 'ras' object via init_ras_project function.\n",
+      "2025-03-14 14:26:11 - ras_commander.RasPrj - INFO - Project initialized. ras_object project folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Initialized HEC-RAS project: BaldEagle\n",
+      "\n",
+      "Available plans in the project:\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>plan_number</th>\n",
+       "      <th>full_path</th>\n",
+       "      <th>UNET D1 Cores</th>\n",
+       "      <th>UNET D2 Cores</th>\n",
+       "      <th>PS Cores</th>\n",
+       "      <th>Computation Interval</th>\n",
+       "      <th>DSS File</th>\n",
+       "      <th>Flow File</th>\n",
+       "      <th>Friction Slope Method</th>\n",
+       "      <th>Geom File</th>\n",
+       "      <th>...</th>\n",
+       "      <th>Run HTab</th>\n",
+       "      <th>Run PostProcess</th>\n",
+       "      <th>Run Sediment</th>\n",
+       "      <th>Run UNet</th>\n",
+       "      <th>Run WQNet</th>\n",
+       "      <th>Short Identifier</th>\n",
+       "      <th>Simulation Date</th>\n",
+       "      <th>UNET Use Existing IB Tables</th>\n",
+       "      <th>HDF_Results_Path</th>\n",
+       "      <th>Geom_File</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>01</td>\n",
+       "      <td>c:\\GH\\ras-commander\\examples\\example_projects\\...</td>\n",
+       "      <td>0.0</td>\n",
+       "      <td>0.0</td>\n",
+       "      <td>None</td>\n",
+       "      <td>2MIN</td>\n",
+       "      <td>dss</td>\n",
+       "      <td>u02</td>\n",
+       "      <td>2</td>\n",
+       "      <td>g01</td>\n",
+       "      <td>...</td>\n",
+       "      <td>1</td>\n",
+       "      <td>1</td>\n",
+       "      <td>0</td>\n",
+       "      <td>1</td>\n",
+       "      <td>0</td>\n",
+       "      <td>UnsteadyFlow</td>\n",
+       "      <td>18FEB1999,0000,24FEB1999,0500</td>\n",
+       "      <td>-1</td>\n",
+       "      <td>None</td>\n",
+       "      <td>c:\\GH\\ras-commander\\examples\\example_projects\\...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>02</td>\n",
+       "      <td>c:\\GH\\ras-commander\\examples\\example_projects\\...</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>None</td>\n",
+       "      <td>2MIN</td>\n",
+       "      <td>dss</td>\n",
+       "      <td>f02</td>\n",
+       "      <td>1</td>\n",
+       "      <td>g01</td>\n",
+       "      <td>...</td>\n",
+       "      <td>1</td>\n",
+       "      <td>1</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>1</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>SteadyRun</td>\n",
+       "      <td>02/18/1999,0000,02/24/1999,0500</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>None</td>\n",
+       "      <td>c:\\GH\\ras-commander\\examples\\example_projects\\...</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>2 rows × 23 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "  plan_number                                          full_path  \\\n",
+       "0          01  c:\\GH\\ras-commander\\examples\\example_projects\\...   \n",
+       "1          02  c:\\GH\\ras-commander\\examples\\example_projects\\...   \n",
+       "\n",
+       "   UNET D1 Cores  UNET D2 Cores PS Cores Computation Interval DSS File  \\\n",
+       "0            0.0            0.0     None                 2MIN      dss   \n",
+       "1            NaN            NaN     None                 2MIN      dss   \n",
+       "\n",
+       "  Flow File Friction Slope Method Geom File  ... Run HTab Run PostProcess  \\\n",
+       "0       u02                     2       g01  ...        1               1   \n",
+       "1       f02                     1       g01  ...        1               1   \n",
+       "\n",
+       "  Run Sediment Run UNet Run WQNet Short Identifier  \\\n",
+       "0            0        1         0     UnsteadyFlow   \n",
+       "1          NaN        1       NaN        SteadyRun   \n",
+       "\n",
+       "                   Simulation Date UNET Use Existing IB Tables  \\\n",
+       "0    18FEB1999,0000,24FEB1999,0500                          -1   \n",
+       "1  02/18/1999,0000,02/24/1999,0500                         NaN   \n",
+       "\n",
+       "  HDF_Results_Path                                          Geom_File  \n",
+       "0             None  c:\\GH\\ras-commander\\examples\\example_projects\\...  \n",
+       "1             None  c:\\GH\\ras-commander\\examples\\example_projects\\...  \n",
+       "\n",
+       "[2 rows x 23 columns]"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:26:11 - ras_commander.RasPlan - WARNING - No description found in plan file: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek\\BaldEagle.p01\n",
+      "2025-03-14 14:26:11 - ras_commander.RasPlan - WARNING - No description found in plan file: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek\\BaldEagle.p02\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "Plan details:\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Plan Number</th>\n",
+       "      <th>Short ID</th>\n",
+       "      <th>Description</th>\n",
+       "      <th>Geometry</th>\n",
+       "      <th>Has Results</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>01</td>\n",
+       "      <td>UnsteadyFlow</td>\n",
+       "      <td></td>\n",
+       "      <td>g01</td>\n",
+       "      <td>False</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>02</td>\n",
+       "      <td>SteadyRun</td>\n",
+       "      <td></td>\n",
+       "      <td>g01</td>\n",
+       "      <td>False</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "  Plan Number      Short ID Description Geometry  Has Results\n",
+       "0          01  UnsteadyFlow                  g01        False\n",
+       "1          02     SteadyRun                  g01        False"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
    "source": [
     "# Initialize the HEC-RAS project\n",
     "init_ras_project(bald_eagle_path, \"6.6\")\n",
@@ -3986,9 +4262,109 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 5,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Starting the compute_test_mode...\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Creating the test folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]...\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Compute folder 'c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]' exists. Overwriting as per overwrite_dest=True.\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Copied project folder to compute folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Initialized RAS project in compute folder: C:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\\BaldEagle.prj\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Executing specific plans sequentially...\n",
+      "This may take several minutes...\n",
+      "Selected plans: 01, 03\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Getting plan entries...\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Retrieved plan entries successfully.\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Filtered plans to execute: ['01', '03']\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Running selected plans sequentially...\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\n",
+      "2025-03-14 14:26:11 - ras_commander.RasUtils - INFO - Using provided plan file path: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\\BaldEagle.p01\n",
+      "2025-03-14 14:26:11 - ras_commander.RasUtils - INFO - Successfully updated file: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\\BaldEagle.p01\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Set number of cores to 6 for plan: 01\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
+      "2025-03-14 14:26:11 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"C:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\\BaldEagle.prj\" \"c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [SpecificSequential]\\BaldEagle.p01\"\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 154.35 seconds\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Successfully computed plan 01\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 154.40 seconds\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - All selected plans have been executed.\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - compute_test_mode completed.\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - \n",
+      "Execution Results:\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Plan 01: Successful\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Sequential execution of specific plans completed in 154.50 seconds\n",
+      "\n",
+      "Sequential Execution Results:\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Plan</th>\n",
+       "      <th>Success</th>\n",
+       "      <th>Execution Type</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>01</td>\n",
+       "      <td>True</td>\n",
+       "      <td>Sequential</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "  Plan  Success Execution Type\n",
+       "0   01     True     Sequential"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
    "source": [
     "print(\"Executing specific plans sequentially...\")\n",
     "print(\"This may take several minutes...\")\n",
@@ -4066,7 +4442,45 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
    "cell_type": "code",
    "execution_count": null,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Starting the compute_test_mode...\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Creating the test folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]...\n",
+      "2025-03-14 14:28:45 - ras_commander.RasCmdr - INFO - Compute folder 'c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]' exists. Overwriting as per overwrite_dest=True.\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Copied project folder to compute folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Initialized RAS project in compute folder: C:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\\BaldEagle.prj\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Getting plan entries...\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Retrieved plan entries successfully.\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Filtered plans to execute: ['01', '02']\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Identifying and executing plans without HDF results...\n",
+      "Found 2 plans without HDF results: 01, 02\n",
+      "\n",
+      "Executing 2 plans without results...\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Running selected plans sequentially...\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\n",
+      "2025-03-14 14:28:46 - ras_commander.RasUtils - INFO - Using provided plan file path: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\\BaldEagle.p01\n",
+      "2025-03-14 14:28:46 - ras_commander.RasUtils - INFO - Successfully updated file: c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\\BaldEagle.p01\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Set number of cores to 6 for plan: 01\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
+      "2025-03-14 14:28:46 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"C:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\\BaldEagle.prj\" \"c:\\GH\\ras-commander\\examples\\example_projects\\Balde Eagle Creek [MissingPlans]\\BaldEagle.p01\"\n"
+     ]
+    }
+   ],
    "source": [
     "print(\"Identifying and executing plans without HDF results...\")\n",
     "\n",
@@ -4090,7 +4504,8 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
     "    execution_results = RasCmdr.compute_test_mode(\n",
     "        plan_number=plans_no_results,\n",
     "        dest_folder_suffix=\"[MissingPlans]\",\n",
-    "        num_cores=6\n",
+    "        num_cores=6, \n",
+    "        overwrite_dest=True\n",
     "    )\n",
     "    \n",
     "    # Record end time and calculate duration\n",
@@ -4113,7 +4528,7 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
     "    display.display(missing_results_df)\n",
     "    \n",
     "    # Check the test folder\n",
-    "    test_folder = script_dir / f\"{ras.project_name} [MissingPlans]\"\n",
+    "    test_folder = bald_eagle_path.parent / f\"{ras.project_name} [MissingPlans]\"\n",
     "    if test_folder.exists():\n",
     "        print(f\"\\nTest folder exists: {test_folder}\")\n",
     "        \n",
@@ -4145,11 +4560,12 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
    "outputs": [],
    "source": [
     "# Re-initialize the project with the test folder to see updated results\n",
-    "missing_plans_folder = script_dir / f\"{ras.project_name} [MissingPlans]\"\n",
+    "missing_plans_folder = bald_eagle_path.parent / f\"{ras.project_name} [MissingPlans]\"\n",
     "\n",
     "if missing_plans_folder.exists():\n",
     "    # Initialize the project from the test folder\n",
-    "    test_ras = init_ras_project(missing_plans_folder, \"6.6\")\n",
+    "    test_ras = RasPrj()\n",
+    "    init_ras_project(missing_plans_folder, \"6.6\", ras_object=test_ras)\n",
     "    \n",
     "    # Check which plans now have results\n",
     "    plans_with_results = test_ras.plan_df[test_ras.plan_df['HDF_Results_Path'].notna()]['plan_number'].tolist()\n",
@@ -4534,7 +4950,8 @@ File: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
     "        \n",
     "    # Initialize a RAS project in the test folder to inspect results\n",
     "    try:\n",
-    "        test_ras = init_ras_project(test_folder, ras.ras_exe_path)\n",
+    "        test_ras = RasPrj()\n",
+    "        init_ras_project(test_folder, ras.ras_exe_path, ras_object=test_ras)\n",
     "        print(\"\\nPlans with results in the test folder:\")\n",
     "        test_plans_with_results = test_ras.plan_df[test_ras.plan_df['HDF_Results_Path'].notna()]\n",
     "        display.display(test_plans_with_results[['plan_number', 'HDF_Results_Path']])\n",
@@ -4957,7 +5374,8 @@ File: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
    "outputs": [],
    "source": [
     "# Initialize a RAS project in the compute folder\n",
-    "compute_project = init_ras_project(compute_folder, \"6.6\")\n",
+    "compute_project = RasPrj()\n",
+    "init_ras_project(compute_folder, \"6.6\", ras_object=compute_project)\n",
     "print(f\"Initialized compute project: {compute_project.project_name}\")\n",
     "\n",
     "# Display the plan files in the compute folder\n",
@@ -5060,7 +5478,8 @@ File: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
     "display.display(specific_results_df)\n",
     "\n",
     "# Initialize a RAS project in the specific compute folder\n",
-    "specific_compute_project = init_ras_project(specific_compute_folder, \"6.6\")\n",
+    "specific_compute_project = RasPrj()\n",
+    "init_ras_project(specific_compute_folder, \"6.6\", ras_object=specific_compute_project)\n",
     "print(f\"\\nInitialized specific compute project: {specific_compute_project.project_name}\")\n",
     "\n",
     "# Check which plans have results\n",
@@ -5135,7 +5554,8 @@ File: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
     "display.display(dynamic_results_df)\n",
     "\n",
     "# Initialize a RAS project in the dynamic compute folder\n",
-    "dynamic_compute_project = init_ras_project(dynamic_compute_folder, \"6.6\")\n",
+    "dynamic_compute_project = RasPrj()\n",
+    "init_ras_project(dynamic_compute_folder, \"6.6\", ras_object=dynamic_compute_project)\n",
     "print(f\"\\nInitialized dynamic compute project: {dynamic_compute_project.project_name}\")\n",
     "\n",
     "# Check which plans have results\n",
@@ -5464,18 +5884,18 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Initialize the project\n",
-    "ras_obj = init_ras_project(bald_eagle_path, \"6.6\")\n",
-    "print(f\"Initialized project: {ras_obj.project_name}\")\n",
+    "# Initialize the project (using the default global ras object)\n",
+    "init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "print(f\"Initialized project: {ras.project_name}\")\n",
     "\n",
     "# Display basic project information\n",
     "print(\"\\nProject Overview:\")\n",
-    "print(f\"Project Folder: {ras_obj.project_folder}\")\n",
-    "print(f\"Project File: {ras_obj.prj_file}\")\n",
-    "print(f\"Number of Plan Files: {len(ras_obj.plan_df)}\")\n",
-    "print(f\"Number of Geometry Files: {len(ras_obj.geom_df)}\")\n",
-    "print(f\"Number of Flow Files: {len(ras_obj.flow_df)}\")\n",
-    "print(f\"Number of Unsteady Files: {len(ras_obj.unsteady_df)}\")"
+    "print(f\"Project Folder: {ras.project_folder}\")\n",
+    "print(f\"Project File: {ras.prj_file}\")\n",
+    "print(f\"Number of Plan Files: {len(ras.plan_df)}\")\n",
+    "print(f\"Number of Geometry Files: {len(ras.geom_df)}\")\n",
+    "print(f\"Number of Flow Files: {len(ras.flow_df)}\")\n",
+    "print(f\"Number of Unsteady Files: {len(ras.unsteady_df)}\")"
    ]
   },
   {
@@ -5493,10 +5913,10 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
    "source": [
     "# Display the plan files\n",
     "print(\"Plan Files in Project:\")\n",
-    "display.display(ras_obj.plan_df[['plan_number', 'Plan Title', 'Short Identifier', 'Geom File']])\n",
+    "display.display(ras.plan_df[['plan_number', 'Plan Title', 'Short Identifier', 'Geom File']])\n",
     "\n",
     "# Get the first plan number for our examples\n",
-    "plan_number = ras_obj.plan_df['plan_number'].iloc[0]\n",
+    "plan_number = ras.plan_df['plan_number'].iloc[0]\n",
     "print(f\"\\nWe'll work with Plan: {plan_number}\")"
    ]
   },
@@ -5512,7 +5932,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "\n",
     "- `plan_number_or_path` (str or Path): The plan number or full path to the plan file\n",
     "- `key` (str): The specific parameter to retrieve (e.g., \"Computation Interval\")\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object (defaults to global `ras`)\n",
+    "- `rasect` (RasPrj, optional): The RAS project object (defaults to global `ras`)\n",
     "\n",
     "### Common Keys\n",
     "\n",
@@ -5552,7 +5972,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "print(\"Initial Plan Values:\")\n",
     "initial_values = {}\n",
     "for key in keys_to_check:\n",
-    "    value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)\n",
+    "    value = RasPlan.get_plan_value(plan_number, key, rasect=ras)\n",
     "    initial_values[key] = value\n",
     "    print(f\"  {key}: {value}\")"
    ]
@@ -5580,7 +6000,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "- `run_sediment` (bool, optional): Whether to run sediment transport calculations\n",
     "- `post_processor` (bool, optional): Whether to run the post-processor\n",
     "- `floodplain_mapping` (bool, optional): Whether to run floodplain mapping\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object\n",
+    "- `rasect` (RasPrj, optional): The RAS project object\n",
     "\n",
     "### Common Run Flags\n",
     "\n",
@@ -5622,7 +6042,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "    run_sediment=False,              # Skip sediment transport calculations\n",
     "    post_processor=True,             # Run post-processing for additional outputs\n",
     "    floodplain_mapping=False,        # Skip floodplain mapping\n",
-    "    ras_object=ras_obj\n",
+    "    rasect=ras\n",
     ")\n",
     "print(\"Run flags updated successfully\")"
    ]
@@ -5642,7 +6062,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "- `output_interval` (str, optional): Time step for saving detailed results\n",
     "- `instantaneous_interval` (str, optional): Time step for peak value calculations\n",
     "- `mapping_interval` (str, optional): Time step for map outputs\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object\n",
+    "- `rasect` (RasPrj, optional): The RAS project object\n",
     "\n",
     "### Valid Interval Values\n",
     "\n",
@@ -5689,7 +6109,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "    output_interval=\"1MIN\",         # Save detailed results every minute\n",
     "    instantaneous_interval=\"5MIN\",  # Check for max/min values every 5 minutes\n",
     "    mapping_interval=\"15MIN\",       # Save map data every 15 minutes\n",
-    "    ras_object=ras_obj\n",
+    "    rasect=ras\n",
     ")\n",
     "print(\"Plan intervals updated successfully\")"
    ]
@@ -5708,7 +6128,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "\n",
     "#### Parameters\n",
     "- `plan_number_or_path` (str or Path): The plan number or full path to the plan file\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object\n",
+    "- `rasect` (RasPrj, optional): The RAS project object\n",
     "\n",
     "### Updating Descriptions\n",
     "\n",
@@ -5717,7 +6137,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "#### Parameters\n",
     "- `plan_number_or_path` (str or Path): The plan number or full path to the plan file\n",
     "- `description` (str): The new description text\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object\n",
+    "- `rasect` (RasPrj, optional): The RAS project object\n",
     "\n",
     "### Best Practices for Plan Descriptions\n",
     "\n",
@@ -5738,7 +6158,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
    "outputs": [],
    "source": [
     "# Read the current plan description\n",
-    "current_description = RasPlan.read_plan_description(plan_number, ras_object=ras_obj)\n",
+    "current_description = RasPlan.read_plan_description(plan_number, rasect=ras)\n",
     "print(f\"Current plan description:\\n{current_description}\")\n",
     "\n",
     "# Create a new description with detailed information\n",
@@ -5755,11 +6175,11 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "\n",
     "# Update the plan description\n",
     "print(\"\\nUpdating plan description...\")\n",
-    "RasPlan.update_plan_description(plan_number, new_description, ras_object=ras_obj)\n",
+    "RasPlan.update_plan_description(plan_number, new_description, rasect=ras)\n",
     "print(\"Plan description updated successfully\")\n",
     "\n",
     "# Verify the updated description\n",
-    "updated_description = RasPlan.read_plan_description(plan_number, ras_object=ras_obj)\n",
+    "updated_description = RasPlan.read_plan_description(plan_number, rasect=ras)\n",
     "print(f\"\\nUpdated plan description:\\n{updated_description}\")"
    ]
   },
@@ -5776,7 +6196,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "- `plan_number_or_path` (str or Path): The plan number or full path to the plan file\n",
     "- `start_date` (datetime): The start date and time for the simulation\n",
     "- `end_date` (datetime): The end date and time for the simulation\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object\n",
+    "- `rasect` (RasPrj, optional): The RAS project object\n",
     "\n",
     "### Considerations for Simulation Dates\n",
     "\n",
@@ -5796,7 +6216,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
    "outputs": [],
    "source": [
     "# Get the current simulation date\n",
-    "current_sim_date = RasPlan.get_plan_value(plan_number, \"Simulation Date\", ras_object=ras_obj)\n",
+    "current_sim_date = RasPlan.get_plan_value(plan_number, \"Simulation Date\", rasect=ras)\n",
     "print(f\"Current simulation date: {current_sim_date}\")\n",
     "\n",
     "# Parse the current simulation date string\n",
@@ -5810,11 +6230,11 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "\n",
     "# Update the simulation date\n",
     "print(f\"\\nUpdating simulation period to: {start_date.strftime('%d%b%Y,%H%M')} - {end_date.strftime('%d%b%Y,%H%M')}\")\n",
-    "RasPlan.update_simulation_date(plan_number, start_date, end_date, ras_object=ras_obj)\n",
+    "RasPlan.update_simulation_date(plan_number, start_date, end_date, rasect=ras)\n",
     "print(\"Simulation dates updated successfully\")\n",
     "\n",
     "# Verify the updated simulation date\n",
-    "updated_sim_date = RasPlan.get_plan_value(plan_number, \"Simulation Date\", ras_object=ras_obj)\n",
+    "updated_sim_date = RasPlan.get_plan_value(plan_number, \"Simulation Date\", rasect=ras)\n",
     "print(f\"\\nUpdated simulation date: {updated_sim_date}\")"
    ]
   },
@@ -5837,7 +6257,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "print(\"Updated Plan Values:\")\n",
     "updated_values = {}\n",
     "for key in keys_to_check:\n",
-    "    value = RasPlan.get_plan_value(plan_number, key, ras_object=ras_obj)\n",
+    "    value = RasPlan.get_plan_value(plan_number, key, rasect=ras)\n",
     "    updated_values[key] = value\n",
     "    print(f\"  {key}: {value}\")\n",
     "\n",
@@ -5864,7 +6284,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "\n",
     "- `plan_number` (str): The plan number to execute\n",
     "- `dest_folder` (str, Path, optional): Destination folder for computation\n",
-    "- `ras_object` (RasPrj, optional): The RAS project object\n",
+    "- `rasect` (RasPrj, optional): The RAS project object\n",
     "- `clear_geompre` (bool, optional): Whether to clear geometry preprocessor files\n",
     "- `num_cores` (int, optional): Number of processor cores to use\n",
     "- `overwrite_dest` (bool, optional): Whether to overwrite the destination folder\n",
@@ -5899,13 +6319,13 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
     "#     clear_geompre=True,    # Clear preprocessor files to ensure clean results\n",
     "#     num_cores=2,           # Use 2 processor cores\n",
     "#     overwrite_dest=True,   # Overwrite existing destination folder\n",
-    "#     ras_object=ras_obj\n",
+    "#     rasect=ras\n",
     "# )\n",
     "\n",
     "# if success:\n",
     "#     print(f\"Plan {plan_number} computed successfully\")\n",
     "#     # Check for results file\n",
-    "#     results_path = RasPlan.get_results_path(plan_number, ras_object=ras_obj)\n",
+    "#     results_path = RasPlan.get_results_path(plan_number, rasect=ras)\n",
     "#     if results_path:\n",
     "#         print(f\"Results saved to: {results_path}\")\n",
     "# else:\n",
@@ -6058,8 +6478,8 @@ File: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
     "current_directory = Path.cwd()\n",
     "project_path = current_directory / \"example_projects\" / \"BaldEagleCrkMulti2D\"\n",
     "\n",
-    "# Step 2: Initialize the Muncie Project using init_ras_project (from ras_commander)\n",
-    "muncie_project = init_ras_project(project_path, \"6.6\")\n",
+    "# Step 2: Initialize the RAS Project Folder using init_ras_project (from ras_commander)\n",
+    "init_ras_project(project_path, \"6.6\")\n",
     "\n",
     "# Step 3: Initialize a DataFrame to store execution results\n",
     "results = []\n",
@@ -6331,50 +6751,42 @@ File: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
    ]
   },
   {
-   "cell_type": "code",
-   "execution_count": null,
+   "cell_type": "markdown",
    "metadata": {},
-   "outputs": [],
    "source": [
-    "# First, benchmark all plans in Version 6.6\n",
+    "# OPTIONAL: Benchmark all plans in Version 6.6\n",
+    "Change the following cell from Markdown to Code and delete \"```\" to Run"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "```\n",
+    "#### Initialize results list\n",
     "results = []\n",
+    "#### Loop through each plan number\n",
     "for plan in plan_numbers:\n",
     "    print(f\"Running simulation for Version 6.6, Plan {plan}\")\n",
     "    result = run_simulation(\"6.6\", plan)\n",
-    "    if result is not None:  # Check if result is not None\n",
-    "        results.append(result)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Convert results list to DataFrame and save as CSV\n",
+    "    if result is not None:  #### Check if result is not None\n",
+    "        results.append(result)\n",
+    "\n",
+    "#### Convert results list to DataFrame and save as CSV\n",
     "results_df = pd.DataFrame(results)\n",
     "results_df.to_csv('hecras_plan_comparison.csv', index=False)\n",
     "\n",
-    "print(\"Results saved to 'hecras_plan_comparison.csv'\")\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Show dataframe of results, and plot the results\n",
+    "print(\"Results saved to 'hecras_plan_comparison.csv'\")\n",
     "\n",
-    "# Load and display the results dataframe\n",
+    "#### Load and display the results dataframe\n",
     "df = pd.read_csv('hecras_plan_comparison.csv')\n",
     "\n",
-    "# Get plan titles from ras.plan_df and merge with results\n",
+    "#### Get plan titles from ras.plan_df and merge with results\n",
     "plan_titles = pd.DataFrame({\n",
-    "    'Plan': ras.plan_df['plan_number'].str.zfill(2),  # Ensure 2-digit format\n",
+    "    'Plan': ras.plan_df['plan_number'].str.zfill(2),  #### Ensure 2-digit format\n",
     "    'Short Identifier': ras.plan_df['Short Identifier']\n",
     "})\n",
-    "# Convert df's Plan column to 2-digit string format\n",
+    "#### Convert df's Plan column to 2-digit string format\n",
     "df['Plan'] = df['Plan'].astype(str).str.zfill(2)\n",
     "\n",
     "df = df.merge(plan_titles, on='Plan', how='left')\n",
@@ -6382,52 +6794,53 @@ File: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
     "print(\"Benchmarking Results:\")\n",
     "print(df.to_string(index=False))\n",
     "\n",
-    "# Create a more comprehensive visualization\n",
+    "#### Create a more comprehensive visualization\n",
     "fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))\n",
     "\n",
-    "# Function to create rotated labels\n",
+    "#### Function to create rotated labels\n",
     "def plot_with_rotated_labels(ax, data, values, color, title, ylabel):\n",
     "    bars = ax.bar(range(len(data)), values, color=color, alpha=0.7)\n",
     "    ax.set_title(title, fontsize=12)\n",
     "    ax.set_ylabel(ylabel, fontsize=10)\n",
     "    ax.grid(True, linestyle='--', alpha=0.7)\n",
     "    \n",
-    "    # Set x-ticks at bar positions\n",
+    "    #### Set x-ticks at bar positions\n",
     "    ax.set_xticks(range(len(data)))\n",
     "    \n",
-    "    # Create labels with plan numbers and titles\n",
+    "    #### Create labels with plan numbers and titles\n",
     "    labels = [f\"Plan {plan}\\n{title}\" for plan, title in zip(data['Plan'], data['Short Identifier'])]\n",
     "    ax.set_xticklabels(labels, rotation=45, ha='right')\n",
     "\n",
-    "# Plot 1: Unsteady Runtime\n",
+    "#### Plot 1: Unsteady Runtime\n",
     "plot_with_rotated_labels(ax1, df, df['Unsteady Compute Time (hr)'], 'blue', \n",
     "                        'Unsteady Runtime by Plan', 'Unsteady Runtime (hours)')\n",
     "\n",
-    "# Plot 2: Volume Error  \n",
+    "#### Plot 2: Volume Error  \n",
     "plot_with_rotated_labels(ax2, df, df['Volume Error (%)'], 'red',\n",
     "                        'Volume Error by Plan', 'Volume Error (%)')\n",
     "\n",
-    "# Plot 3: Preprocessor Time\n",
+    "#### Plot 3: Preprocessor Time\n",
     "plot_with_rotated_labels(ax3, df, df['Preprocessor Time (hr)'], 'green',\n",
     "                        'Preprocessor Time by Plan', 'Preprocessor Time (hours)')\n",
     "\n",
-    "# Plot 4: Total Runtime\n",
+    "#### Plot 4: Total Runtime\n",
     "plot_with_rotated_labels(ax4, df, df['Total Time (hr)'], 'purple',\n",
     "                        'Total Runtime by Plan', 'Total Runtime (hours)')\n",
     "\n",
-    "# Adjust layout and display\n",
+    "#### Adjust layout and display\n",
     "plt.tight_layout(pad=3.0)\n",
     "fig.suptitle('Plan Performance Comparison', fontsize=14, y=1.02)\n",
     "plt.show()\n",
     "\n",
-    "# Calculate and display summary statistics\n",
+    "#### Calculate and display summary statistics\n",
     "print(\"\\nSummary Statistics:\")\n",
     "print(df.describe())\n",
     "\n",
-    "# Calculate plan-to-plan performance changes\n",
+    "#### Calculate plan-to-plan performance changes\n",
     "print(\"\\nPlan-to-Plan Performance Changes:\")\n",
     "df['Unsteady Runtime Change (%)'] = df['Unsteady Compute Time (hr)'].pct_change() * 100\n",
-    "print(df[['Plan', 'Short Identifier', 'Unsteady Runtime Change (%)']].to_string(index=False))"
+    "print(df[['Plan', 'Short Identifier', 'Unsteady Runtime Change (%)']].to_string(index=False))\n",
+    "```"
    ]
   },
   {
@@ -7795,18 +8208,18 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": 5,
+   "execution_count": 1,
    "metadata": {},
    "outputs": [],
    "source": [
     "# Install ras-commander from pip (uncomment to install if needed)\n",
-    "#!pip install ras-commander\n",
+    "#!pip install --upgrade ras-commander\n",
     "# This installs ras-commander and all dependencies"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 2,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -7836,6 +8249,35 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    ]
   },
   {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# This cell will try to import the pip package, if it fails it will \n",
+    "# add the parent directory to the Python path and try to import again\n",
+    "# This assumes you are working in a subfolder of the ras-commander repository\n",
+    "# This allows a user's revisions to be tested locally without installing the package\n",
+    "\n",
+    "import sys\n",
+    "from pathlib import Path\n",
+    "\n",
+    "# Flexible imports to allow for development without installation \n",
+    "#  ** Use this version with Jupyter Notebooks **\n",
+    "try:\n",
+    "    # Try to import from the installed package\n",
+    "    from ras_commander import *\n",
+    "except ImportError:\n",
+    "    # If the import fails, add the parent directory to the Python path\n",
+    "    import os\n",
+    "    current_file = Path(os.getcwd()).resolve()\n",
+    "    rascmdr_directory = current_file.parent\n",
+    "    sys.path.append(str(rascmdr_directory))\n",
+    "    print(\"Loading ras-commander from local dev copy\")\n",
+    "    # Now try to import again\n",
+    "    from ras_commander import *\n",
+    "print(\"ras_commander imported successfully\")\n"
+   ]
+  },
+  {
    "cell_type": "code",
    "execution_count": null,
    "metadata": {},
@@ -7856,17 +8298,17 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
     "    RasExamples.extract_project(\"Balde Eagle Creek\")\n",
     "\n",
     "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
-    "    logging.info(f\"Balde Eagle project initialized with folder: {bald_eagle.project_folder}\")\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    logging.info(f\"Balde Eagle project initialized with folder: {ras.project_folder}\")\n",
     "    \n",
-    "    logging.info(f\"Balde Eagle object id: {id(bald_eagle)}\")\n",
+    "    logging.info(f\"Balde Eagle object id: {id(ras)}\")\n",
     "    \n",
     "    # Define the plan number to execute\n",
     "    plan_number = \"01\"\n",
     "\n",
     "    # Execute Plan 06 using RasCmdr for Bald Eagle\n",
     "    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n",
-    "    success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n",
+    "    success_bald_eagle = RasCmdr.compute_plan(plan_number)\n",
     "    if success_bald_eagle:\n",
     "        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n",
     "    else:\n",
@@ -7888,22 +8330,22 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
     "\n",
     "# Display plan_df for bald_eagle project\n",
     "print(\"Plan DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.plan_df\n",
+    "ras.plan_df\n",
     "\n",
     "# Display geom_df for bald_eagle project\n",
     "print(\"\\nGeometry DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.geom_df\n",
+    "ras.geom_df\n",
     "\n",
     "# Get the plan HDF path\n",
     "plan_number = \"01\"  # Assuming we're using plan 01 as in the previous code\n",
-    "plan_hdf_path = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
+    "plan_hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
     "\n",
     "# Get the geometry file number from the plan DataFrame\n",
-    "geom_file = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
+    "geom_file = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
     "geom_number = geom_file[1:]  # Remove the 'g' prefix\n",
     "\n",
     "# Get the geometry HDF path\n",
-    "geom_hdf_path = bald_eagle.geom_df.loc[bald_eagle.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
+    "geom_hdf_path = ras.geom_df.loc[ras.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
     "\n",
     "print(f\"\\nPlan HDF path for Plan {plan_number}: {plan_hdf_path}\")\n",
     "print(f\"Geometry HDF path for Plan {plan_number}: {geom_hdf_path}\")"
@@ -7938,7 +8380,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get HDF Paths with Properties (For Exploring HDF Files)\n",
-    "HdfBase.get_dataset_info(plan_number, ras_object=bald_eagle, group_path=\"/Geometry\")"
+    "HdfBase.get_dataset_info(plan_number, group_path=\"/Geometry\")"
    ]
   },
   {
@@ -7949,7 +8391,8 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "source": [
     "# Use HdfPlan for geometry-related operations\n",
     "print(\"\\nExample: Extracting Base Geometry Attributes\")\n",
-    "geom_attrs = HdfPlan.get_geometry_information(geom_hdf_path, ras_object=bald_eagle)\n",
+    "geom_attrs = HdfPlan.get_geometry_information(\"01\")  \n",
+    "# NOTE: Here we call the function using the plan number\n",
     "geom_attrs"
    ]
   },
@@ -7961,7 +8404,9 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Extract runtime and compute time data\n",
     "print(\"\\nExample 2: Extracting runtime and compute time data\")\n",
-    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number, ras_object=bald_eagle)\n",
+    "runtime_df = HdfResultsPlan.get_runtime_data(\"1\") \n",
+    "# NOTE: Here we use plan number \"1\" without the leading zero.  The decorator ensures that this still works\n",
+    "\n",
     "\n",
     "runtime_df\n"
    ]
@@ -8062,7 +8507,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "source": [
     "# Get geometry structures attributes\n",
     "print(\"\\nGetting geometry structures attributes\")\n",
-    "geom_structures_attrs = HdfStruc.get_geom_structures_attrs(geom_hdf_path, ras_object=bald_eagle)\n",
+    "geom_structures_attrs = HdfStruc.get_geom_structures_attrs(geom_hdf_path)\n",
     "if geom_structures_attrs:\n",
     "    print(\"Geometry structures attributes:\")\n",
     "    for key, value in geom_structures_attrs.items():\n",
@@ -8075,7 +8520,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "### NEED TO EDIT THIS TO SHOW BC LINES WITH RIVERS AND CROSS SECTIONS"
+    "### REVISION NOTE: NEED TO EDIT THIS TO SHOW BC LINES WITH RIVERS AND CROSS SECTIONS"
    ]
   },
   {
@@ -8084,7 +8529,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Extract Boundary Condition Lines and Plot with 2D Flow Area Perimeter Polygons\n",
     "print(\"\\nExample 7: Extracting Boundary Condition Lines and Plotting with 2D Flow Area Perimeter Polygons\")\n",
-    "bc_lines_df = HdfBndry.bc_lines(geom_hdf_path, ras_object=bald_eagle)\n",
+    "bc_lines_df = HdfBndry.bc_lines(geom_hdf_path)\n",
     "if not bc_lines_df.empty:\n",
     "    display(bc_lines_df.head())\n",
     "else:\n",
@@ -8126,7 +8571,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": 16,
+   "execution_count": 12,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -8155,7 +8600,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get reference lines\n",
-    "ref_lines_gdf = HdfBndry.get_reference_lines(geom_hdf_path, ras_object=bald_eagle)\n",
+    "ref_lines_gdf = HdfBndry.get_reference_lines(geom_hdf_path)\n",
     "print(\"\\nReference Lines:\")\n",
     "if not ref_lines_gdf.empty:\n",
     "    display(ref_lines_gdf.head())\n",
@@ -8170,7 +8615,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get reference points\n",
-    "ref_points_gdf = HdfBndry.get_reference_points(geom_hdf_path, ras_object=bald_eagle)\n",
+    "ref_points_gdf = HdfBndry.get_reference_points(geom_hdf_path)\n",
     "print(\"\\nReference Points:\")\n",
     "if not ref_points_gdf.empty:\n",
     "    display(ref_points_gdf.head())\n",
@@ -8193,12 +8638,12 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
   },
   {
    "cell_type": "code",
-   "execution_count": 21,
+   "execution_count": 17,
    "metadata": {},
    "outputs": [],
    "source": [
     "# Example: Get cross section geodataframe\n",
-    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path, ras_object=bald_eagle)\n",
+    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path)\n",
     "with pd.option_context('display.max_columns', None):  # Show all columns\n",
     "    cross_sections_gdf"
    ]
@@ -8282,7 +8727,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
     "import matplotlib.pyplot as plt\n",
     "\n",
     "# Get cross sections data\n",
-    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path, ras_object=bald_eagle)\n",
+    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path)\n",
     "\n",
     "if not cross_sections_gdf.empty:\n",
     "    # Create figure and axis\n",
@@ -8393,7 +8838,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
     "import matplotlib.pyplot as plt\n",
     "\n",
     "# Get cross sections data\n",
-    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path, ras_object=bald_eagle)\n",
+    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path)\n",
     "\n",
     "# Create figure\n",
     "fig, ax2 = plt.subplots(figsize=(20,10))\n",
@@ -8455,7 +8900,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
     "import numpy as np\n",
     "\n",
     "# Get cross sections data\n",
-    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path, ras_object=bald_eagle)\n",
+    "cross_sections_gdf = HdfXsec.get_cross_sections(geom_hdf_path)\n",
     "\n",
     "if not cross_sections_gdf.empty:\n",
     "    # Get station-elevation data for cross section 42\n",
@@ -9039,7 +9484,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get unsteady attributes\n",
-    "results_unsteady_attrs = HdfResultsPlan.get_unsteady_info(plan_hdf_path, ras_object=bald_eagle)\n",
+    "results_unsteady_attrs = HdfResultsPlan.get_unsteady_info(plan_hdf_path)\n",
     "print(\"\\nResults Unsteady Attributes:\")\n",
     "for key, value in results_unsteady_attrs.items():\n",
     "    print(f\"{key}: {value}\")"
@@ -9052,13 +9497,13 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get unsteady summary attributes\n",
-    "results_unsteady_summary_attrs = HdfResultsPlan.get_unsteady_summary(plan_hdf_path, ras_object=bald_eagle)\n",
+    "results_unsteady_summary_attrs = HdfResultsPlan.get_unsteady_summary(plan_hdf_path)\n",
     "print(\"\\nResults Unsteady Summary Attributes:\")\n",
     "for key, value in results_unsteady_summary_attrs.items():\n",
     "    print(f\"{key}: {value}\")\n",
     "\n",
     "# Get volume accounting attributes\n",
-    "volume_accounting_attrs = HdfResultsPlan.get_volume_accounting(plan_hdf_path, ras_object=bald_eagle)\n",
+    "volume_accounting_attrs = HdfResultsPlan.get_volume_accounting(plan_hdf_path)\n",
     "print(\"\\nVolume Accounting Attributes:\")\n",
     "for key, value in volume_accounting_attrs.items():\n",
     "    print(f\"{key}: {value}\")"
@@ -9235,14 +9680,11 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "    # Initialize RasExamples and extract the BaldEagleCrkMulti2D project\n",
     "    RasExamples.extract_project([\"BaldEagleCrkMulti2D\"])\n",
     "\n",
-    "    # Initialize custom Ras object\n",
-    "    bald_eagle = RasPrj()\n",
-    "\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
-    "    logging.info(f\"Bald Eagle project initialized with folder: {bald_eagle.project_folder}\")\n",
+    "    # Initialize the RAS project using the default global ras object\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    logging.info(f\"Bald Eagle project initialized with folder: {ras.project_folder}\")\n",
     "    \n",
-    "    logging.info(f\"Bald Eagle object id: {id(bald_eagle)}\")\n",
+    "    logging.info(f\"Bald Eagle object id: {id(ras)}\")\n",
     "    \n",
     "    # Define the plan number to execute\n",
     "    plan_number = \"06\"\n",
@@ -9254,22 +9696,20 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "        unsteady_flow_simulation=True,\n",
     "        run_sediment=False,\n",
     "        post_processor=True,\n",
-    "        floodplain_mapping=False,\n",
-    "        ras_object=bald_eagle\n",
+    "        floodplain_mapping=False\n",
     "    )\n",
     "\n",
     "    # Execute Plan 06 using RasCmdr for Bald Eagle\n",
     "    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n",
-    "    success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n",
+    "    success_bald_eagle = RasCmdr.compute_plan(plan_number)\n",
     "    if success_bald_eagle:\n",
     "        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n",
     "    else:\n",
     "        print(f\"Plan {plan_number} execution failed for Bald Eagle.\\n\")\n",
     "else:\n",
     "    print(\"BaldEagleCrkMulti2D.p06.hdf already exists. Skipping project extraction and plan execution.\")\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = RasPrj()\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    # Initialize the RAS project using the default global ras object\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
     "    plan_number = \"06\""
    ]
   },
@@ -9283,22 +9723,22 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "\n",
     "# Display plan_df for bald_eagle project\n",
     "print(\"Plan DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.plan_df\n",
+    "ras.plan_df\n",
     "\n",
     "# Display geom_df for bald_eagle project\n",
     "print(\"\\nGeometry DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.geom_df\n",
+    "ras.geom_df\n",
     "\n",
     "# Get the plan HDF path\n",
     "plan_number = \"06\"  # Assuming we're using plan 01 as in the previous code\n",
-    "plan_hdf_path = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
+    "plan_hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
     "\n",
     "# Get the geometry file number from the plan DataFrame\n",
-    "geom_file = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
+    "geom_file = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
     "geom_number = geom_file[1:]  # Remove the 'g' prefix\n",
     "\n",
     "# Get the geometry HDF path\n",
-    "geom_hdf_path = bald_eagle.geom_df.loc[bald_eagle.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
+    "geom_hdf_path = ras.geom_df.loc[ras.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
     "\n",
     "print(f\"\\nPlan HDF path for Plan {plan_number}: {plan_hdf_path}\")\n",
     "print(f\"Geometry HDF path for Plan {plan_number}: {geom_hdf_path}\")"
@@ -9337,7 +9777,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get HDF Paths with Properties (For Exploring HDF Files)\n",
-    "HdfBase.get_dataset_info(plan_number, ras_object=bald_eagle, group_path=\"/\")"
+    "HdfBase.get_dataset_info(plan_number, group_path=\"/\")"
    ]
   },
   {
@@ -9348,7 +9788,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Extract runtime and compute time data\n",
     "print(\"\\nExample 2: Extracting runtime and compute time data\")\n",
-    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number, ras_object=bald_eagle)\n",
+    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number)\n",
     "if runtime_df is not None:\n",
     "    runtime_df\n",
     "else:\n",
@@ -9517,7 +9957,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Get 2D Flow Area Perimeter Polygons (get_mesh_areas)\n",
     "print(\"\\nExample: Extracting 2D Flow Area Perimeter Polygons\")\n",
-    "mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path, ras_object=bald_eagle)\n",
+    "mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path)\n",
     "\n",
     "# Plot the 2D Flow Area Perimeter Polygons\n",
     "import matplotlib.pyplot as plt\n",
@@ -9549,7 +9989,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "print(\"\\nExample: Extracting mesh cell faces\")\n",
     "\n",
     "# Get mesh cell faces\n",
-    "mesh_cell_faces = HdfMesh.get_mesh_cell_faces(geom_hdf_path, ras_object=bald_eagle)\n",
+    "mesh_cell_faces = HdfMesh.get_mesh_cell_faces(geom_hdf_path)\n",
     "\n",
     "# Display the first few rows of the mesh cell faces DataFrame\n",
     "print(\"First few rows of mesh cell faces:\")\n",
@@ -9719,7 +10159,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Extract Cell Polygons\n",
     "print(\"\\nExample 6: Extracting Cell Polygons\")\n",
-    "cell_polygons_df = HdfMesh.get_mesh_cell_polygons(geom_hdf_path, ras_object=bald_eagle)"
+    "cell_polygons_df = HdfMesh.get_mesh_cell_polygons(geom_hdf_path)"
    ]
   },
   {
@@ -9779,7 +10219,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Extract Cell Info\n",
     "print(\"\\nExample 5: Extracting Cell Info\")\n",
-    "cell_info_df = HdfMesh.get_mesh_cell_points(geom_hdf_path, ras_object=bald_eagle)"
+    "cell_info_df = HdfMesh.get_mesh_cell_points(geom_hdf_path)"
    ]
   },
   {
@@ -9929,7 +10369,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Get geometry structures attributes\n",
     "print(\"\\nGetting geometry structures attributes\")\n",
-    "geom_structures_attrs = HdfStruc.get_geom_structures_attrs(geom_hdf_path, ras_object=bald_eagle)\n",
+    "geom_structures_attrs = HdfStruc.get_geom_structures_attrs(geom_hdf_path)\n",
     "if geom_structures_attrs:\n",
     "    print(\"Geometry structures attributes:\")\n",
     "    for key, value in geom_structures_attrs.items():\n",
@@ -9970,7 +10410,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Extract Boundary Condition Lines and Plot with 2D Flow Area Perimeter Polygons\n",
     "print(\"\\nExample 7: Extracting Boundary Condition Lines and Plotting with 2D Flow Area Perimeter Polygons\")\n",
-    "bc_lines_df = HdfBndry.get_bc_lines(geom_hdf_path, ras_object=bald_eagle)\n",
+    "bc_lines_df = HdfBndry.get_bc_lines(geom_hdf_path)\n",
     "\n",
     "if not bc_lines_df.empty:\n",
     "    bc_lines_df.head()\n",
@@ -10038,7 +10478,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Extract Breaklines and Plot with 2D Flow Area Perimeter Polygons\n",
     "print(\"\\nExample 8: Extracting Breaklines and Plotting with 2D Flow Area Perimeter Polygons\")\n",
-    "breaklines_gdf = HdfBndry.get_breaklines(geom_hdf_path, ras_object=bald_eagle)\n",
+    "breaklines_gdf = HdfBndry.get_breaklines(geom_hdf_path)\n",
     "if not breaklines_gdf.empty:\n",
     "    breaklines_gdf\n",
     "else:\n",
@@ -10107,7 +10547,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get structures\n",
-    "structures_gdf = HdfStruc.get_structures(geom_hdf_path, ras_object=bald_eagle)\n",
+    "structures_gdf = HdfStruc.get_structures(geom_hdf_path)\n",
     "print(\"Structures:\")\n",
     "if not structures_gdf.empty:\n",
     "    structures_gdf.head()\n",
@@ -10163,7 +10603,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "print(\"\\nExample: Extracting Refinement Regions\")\n",
     "\n",
     "# Make sure to pass the bald_eagle object as the ras_object parameter\n",
-    "refinement_regions_df = HdfBndry.get_refinement_regions(geom_hdf_path, ras_object=bald_eagle)\n",
+    "refinement_regions_df = HdfBndry.get_refinement_regions(geom_hdf_path)\n",
     "\n",
     "if not refinement_regions_df.empty:\n",
     "    print(\"Refinement Regions DataFrame:\")\n",
@@ -10440,7 +10880,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "\n",
     "# Example: Get 2D Flow Area Perimeter Polygons (mesh_areas)\n",
     "print(\"\\nExample: Extracting 2D Flow Area Perimeter Polygons\")\n",
-    "mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path, ras_object=bald_eagle)\n",
+    "mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path)\n",
     "\n",
     "print(\"\\n2D Flow Area Groups and Perimeters:\")\n",
     "if not mesh_areas.empty:\n",
@@ -10693,7 +11133,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get mesh maximum water surface elevation\n",
-    "max_ws_df = HdfResultsMesh.get_mesh_max_ws(plan_hdf_path, ras_object=bald_eagle)\n",
+    "max_ws_df = HdfResultsMesh.get_mesh_max_ws(plan_hdf_path)\n",
     "print(\"\\nMesh Maximum Water Surface Elevation:\")\n",
     "print(max_ws_df.attrs)\n",
     "max_ws_df"
@@ -10826,7 +11266,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get mesh minimum water surface elevation\n",
-    "min_ws_df = HdfResultsMesh.get_mesh_min_ws(plan_hdf_path, ras_object=bald_eagle)\n",
+    "min_ws_df = HdfResultsMesh.get_mesh_min_ws(plan_hdf_path)\n",
     "print(\"\\nMesh Minimum Water Surface Elevation:\")\n",
     "min_ws_df"
    ]
@@ -10838,7 +11278,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get mesh maximum face velocity\n",
-    "max_face_v_df = HdfResultsMesh.get_mesh_max_face_v(plan_hdf_path, ras_object=bald_eagle)\n",
+    "max_face_v_df = HdfResultsMesh.get_mesh_max_face_v(plan_hdf_path)\n",
     "print(\"\\nMesh Max Face Velocity:\")\n",
     "max_face_v_df"
    ]
@@ -10890,7 +11330,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get mesh minimum face velocity\n",
-    "min_face_v_df = HdfResultsMesh.get_mesh_min_face_v(plan_hdf_path, ras_object=bald_eagle)\n",
+    "min_face_v_df = HdfResultsMesh.get_mesh_min_face_v(plan_hdf_path)\n",
     "print(\"\\nMesh Min Face Velocity:\")\n",
     "min_face_v_df\n"
    ]
@@ -10903,7 +11343,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Get mesh max water surface error\n",
     "\n",
-    "max_ws_err_df = HdfResultsMesh.get_mesh_max_ws_err(plan_hdf_path, ras_object=bald_eagle)\n",
+    "max_ws_err_df = HdfResultsMesh.get_mesh_max_ws_err(plan_hdf_path)\n",
     "print(\"\\nMesh Max Water Surface Error:\")\n",
     "max_ws_err_df\n"
    ]
@@ -10968,7 +11408,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get mesh summary output for other Datasets (here we retrieve Maximum Face Courant)\n",
-    "max_courant_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Courant\", ras_object=bald_eagle)\n",
+    "max_courant_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Courant\")\n",
     "print(\"\\nMesh Summary Output (Maximum Courant):\")\n",
     "print(max_courant_df.attrs)\n",
     "max_courant_df\n"
@@ -10988,7 +11428,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "import geopandas as gpd\n",
     "\n",
     "# Get mesh max Courant number\n",
-    "max_courant_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Courant\", ras_object=bald_eagle)\n",
+    "max_courant_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Courant\")\n",
     "\n",
     "# Convert to GeoDataFrame\n",
     "max_courant_gdf = gpd.GeoDataFrame(max_courant_df)\n",
@@ -11036,7 +11476,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "source": [
     "# Example: Get mesh summary output for other Datasets (here we retrieve Maximum Face Courant)\n",
     "\n",
-    "max_face_shear_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Shear Stress\", ras_object=bald_eagle)\n",
+    "max_face_shear_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Shear Stress\")\n",
     "print(\"\\nMesh Summary Output (Maximum Face Shear Stress:\")\n",
     "print(max_face_shear_df.attrs)\n",
     "max_face_shear_df\n"
@@ -11056,7 +11496,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "import geopandas as gpd\n",
     "\n",
     "# Get mesh max face shear stress\n",
-    "max_shear_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Shear Stress\", ras_object=bald_eagle)\n",
+    "max_shear_df = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Maximum Face Shear Stress\")\n",
     "\n",
     "# Calculate centroids of the line geometries and extract coordinates\n",
     "max_shear_df['centroid'] = max_shear_df['geometry'].apply(lambda line: line.centroid)\n",
@@ -11100,17 +11540,17 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Example: Get mesh summary output for Minimum Water Surface\n",
-    "summary_df_min_ws = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Minimum Water Surface\", ras_object=bald_eagle)\n",
+    "summary_df_min_ws = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Minimum Water Surface\")\n",
     "print(\"\\nMesh Summary Output (Minimum Water Surface):\")\n",
     "summary_df_min_ws\n",
     "\n",
     "# Example: Get mesh summary output for Minimum Face Velocity\n",
-    "summary_df_min_fv = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Minimum Face Velocity\", ras_object=bald_eagle)\n",
+    "summary_df_min_fv = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Minimum Face Velocity\")\n",
     "print(\"\\nMesh Summary Output (Minimum Face Velocity):\")\n",
     "summary_df_min_fv\n",
     "\n",
     "# Example: Get mesh summary output for Cell Cumulative Iteration\n",
-    "summary_df_cum_iter = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Cell Cumulative Iteration\", ras_object=bald_eagle)\n",
+    "summary_df_cum_iter = HdfResultsMesh.get_mesh_summary(plan_hdf_path, var=\"Cell Cumulative Iteration\")\n",
     "print(\"\\nMesh Summary Output (Cell Cumulative Iteration):\")\n",
     "summary_df_cum_iter\n"
    ]
@@ -11124,11 +11564,11 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "# Get mesh timeseries output\n",
     "\n",
     "# Get mesh areas from previous code cell\n",
-    "mesh_areas = HdfMesh.get_mesh_area_names(geom_hdf_path, ras_object=bald_eagle)\n",
+    "mesh_areas = HdfMesh.get_mesh_area_names(geom_hdf_path)\n",
     "\n",
     "if mesh_areas:\n",
     "    mesh_name = mesh_areas[0]  # Use the first 2D flow area name\n",
-    "    timeseries_da = HdfResultsMesh.get_mesh_timeseries(plan_hdf_path, mesh_name, \"Water Surface\", ras_object=bald_eagle)\n",
+    "    timeseries_da = HdfResultsMesh.get_mesh_timeseries(plan_hdf_path, mesh_name, \"Water Surface\")\n",
     "    print(f\"\\nMesh Timeseries Output (Water Surface) for {mesh_name}:\")\n",
     "    print(timeseries_da)\n",
     "else:\n",
@@ -11174,7 +11614,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get mesh cells timeseries output\n",
-    "cells_timeseries_ds = HdfResultsMesh.get_mesh_cells_timeseries(plan_hdf_path, mesh_name, ras_object=bald_eagle)\n",
+    "cells_timeseries_ds = HdfResultsMesh.get_mesh_cells_timeseries(plan_hdf_path, mesh_name)\n",
     "print(\"\\nMesh Cells Timeseries Output:\")\n",
     "print(cells_timeseries_ds)\n"
    ]
@@ -11245,7 +11685,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get mesh faces timeseries output\n",
-    "faces_timeseries_ds = HdfResultsMesh.get_mesh_faces_timeseries(plan_hdf_path, mesh_name, ras_object=bald_eagle)\n",
+    "faces_timeseries_ds = HdfResultsMesh.get_mesh_faces_timeseries(plan_hdf_path, mesh_name)\n",
     "print(\"\\nMesh Faces Timeseries Output:\")\n",
     "print(faces_timeseries_ds)\n"
    ]
@@ -11302,7 +11742,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
     "fig, ax = plt.subplots(figsize=(12, 8))\n",
     "\n",
     "# Get mesh faces for map view\n",
-    "mesh_faces = HdfMesh.get_mesh_cell_faces(plan_hdf_path, ras_object=bald_eagle)\n",
+    "mesh_faces = HdfMesh.get_mesh_cell_faces(plan_hdf_path)\n",
     "\n",
     "# Calculate mesh faces extents with 10% buffer\n",
     "faces_bounds = mesh_faces.total_bounds\n",
@@ -11416,7 +11856,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get meteorology precipitation attributes\n",
-    "meteo_precip_attrs = HdfPlan.get_plan_met_precip(plan_hdf_path, ras_object=bald_eagle)\n",
+    "meteo_precip_attrs = HdfPlan.get_plan_met_precip(plan_hdf_path)\n",
     "print(\"\\nMeteorology Precipitation Attributes:\")\n",
     "for key, value in meteo_precip_attrs.items():\n",
     "    print(f\"{key}: {value}\")"
@@ -11429,7 +11869,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get results unsteady attributes\n",
-    "results_unsteady_attrs = HdfResultsPlan.get_unsteady_info(plan_hdf_path, ras_object=bald_eagle)\n",
+    "results_unsteady_attrs = HdfResultsPlan.get_unsteady_info(plan_hdf_path)\n",
     "print(\"\\nResults Unsteady Attributes:\")\n",
     "for key, value in results_unsteady_attrs.items():\n",
     "    print(f\"{key}: {value}\")"
@@ -11442,13 +11882,13 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
    "outputs": [],
    "source": [
     "# Get results unsteady summary attributes\n",
-    "results_unsteady_summary_attrs = HdfResultsPlan.get_unsteady_summary(plan_hdf_path, ras_object=bald_eagle)\n",
+    "results_unsteady_summary_attrs = HdfResultsPlan.get_unsteady_summary(plan_hdf_path)\n",
     "print(\"\\nResults Unsteady Summary Attributes:\")\n",
     "for key, value in results_unsteady_summary_attrs.items():\n",
     "    print(f\"{key}: {value}\")\n",
     "\n",
     "# Get results volume accounting attributes\n",
-    "volume_accounting_attrs = HdfResultsPlan.get_volume_accounting(plan_hdf_path, ras_object=bald_eagle)\n",
+    "volume_accounting_attrs = HdfResultsPlan.get_volume_accounting(plan_hdf_path)\n",
     "print(\"\\nVolume Accounting Attributes:\")\n",
     "for key, value in volume_accounting_attrs.items():\n",
     "    print(f\"{key}: {value}\")"
@@ -11506,7 +11946,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": 2,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -11558,14 +11998,11 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
     "    # Initialize RasExamples and extract the Pipes Beta project\n",
     "    RasExamples.extract_project([\"Davis\"])\n",
     "\n",
-    "    # Initialize custom Ras object\n",
-    "    pipes_ex = RasPrj()\n",
-    "\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    pipes_ex = init_ras_project(pipes_ex_path, \"6.6\")\n",
-    "    logging.info(f\"Pipes Beta project initialized with folder: {pipes_ex.project_folder}\")\n",
+    "    # Initialize the RAS project using the ras. (Pipe Networks are only supported in versions 6.6 and above)\n",
+    "    init_ras_project(pipes_ex_path, \"6.6\")\n",
+    "    logging.info(f\"Pipes Beta project initialized with folder: {ras.project_folder}\")\n",
     "    \n",
-    "    logging.info(f\"Pipes Beta object id: {id(pipes_ex)}\")\n",
+    "    logging.info(f\"Pipes Beta object id: {id(ras)}\")\n",
     "    \n",
     "    # Define the plan number to execute\n",
     "    plan_number = \"02\"\n",
@@ -11577,22 +12014,20 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
     "        unsteady_flow_simulation=True,\n",
     "        run_sediment=False,\n",
     "        post_processor=True,\n",
-    "        floodplain_mapping=False,\n",
-    "        ras_object=pipes_ex\n",
+    "        floodplain_mapping=False\n",
     "    )\n",
     "\n",
     "    # Execute Plan 06 using RasCmdr for Pipes Beta\n",
     "    print(f\"Executing Plan {plan_number} for the Pipes Beta Creek project...\")\n",
-    "    success_pipes_ex = RasCmdr.compute_plan(plan_number, ras_object=pipes_ex)\n",
+    "    success_pipes_ex = RasCmdr.compute_plan(plan_number)\n",
     "    if success_pipes_ex:\n",
     "        print(f\"Plan {plan_number} executed successfully for Pipes Beta.\\n\")\n",
     "    else:\n",
     "        print(f\"Plan {plan_number} execution failed for Pipes Beta.\\n\")\n",
     "else:\n",
     "    print(\"Pipes Beta.p06.hdf already exists. Skipping project extraction and plan execution.\")\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    pipes_ex = RasPrj()\n",
-    "    pipes_ex = init_ras_project(pipes_ex_path, \"6.6\")\n",
+    "    # Initialize the RAS project using the ras.\n",
+    "    init_ras_project(pipes_ex_path, \"6.6\")\n",
     "    plan_number = \"02\""
    ]
   },
@@ -11606,21 +12041,21 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
     "\n",
     "# Display plan_df for pipes_ex project\n",
     "print(\"Plan DataFrame for pipes_ex project:\")\n",
-    "pipes_ex.plan_df\n",
+    "ras.plan_df\n",
     "\n",
     "# Display geom_df for pipes_ex project\n",
     "print(\"\\nGeometry DataFrame for pipes_ex project:\")\n",
-    "pipes_ex.geom_df\n",
+    "ras.geom_df\n",
     "\n",
     "# Get the plan HDF path\n",
-    "plan_hdf_path = pipes_ex.plan_df.loc[pipes_ex.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
+    "plan_hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
     "\n",
     "# Get the geometry file number from the plan DataFrame\n",
-    "geom_file = pipes_ex.plan_df.loc[pipes_ex.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
+    "geom_file = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
     "geom_number = geom_file[1:]  # Remove the 'g' prefix\n",
     "\n",
     "# Get the geometry HDF path\n",
-    "geom_hdf_path = pipes_ex.geom_df.loc[pipes_ex.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
+    "geom_hdf_path = ras.geom_df.loc[ras.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
     "\n",
     "print(f\"\\nPlan HDF path for Plan {plan_number}: {plan_hdf_path}\")\n",
     "print(f\"Geometry HDF path for Plan {plan_number}: {geom_hdf_path}\")"
@@ -11634,7 +12069,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
    "source": [
     "# Example: Extract runtime and compute time data\n",
     "print(\"\\nExample 2: Extracting runtime and compute time data\")\n",
-    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number, ras_object=pipes_ex)\n",
+    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number)\n",
     "runtime_df\n"
    ]
   },
@@ -11655,7 +12090,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
    "outputs": [],
    "source": [
     "# Example: Get pipe conduits\n",
-    "pipe_conduits_gdf = HdfPipe.get_pipe_conduits(plan_hdf_path)\n",
+    "pipe_conduits_gdf = HdfPipe.get_pipe_conduits(\"02\") # NOTE: Here we use the plan number instead of the path variable.  The library decorators ensure this maps correctly.  \n",
     "print(\"\\nPipe Conduits: pipe_conduits_gdf\")\n",
     "pipe_conduits_gdf"
    ]
@@ -11911,7 +12346,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
     "print(\"\\nPipe Nodes GeoDataFrame columns:\")\n",
     "print(pipe_nodes_gdf.columns)\n",
     "\n",
-    "perimeter_polygons = HdfMesh.get_mesh_areas(geom_hdf_path, ras_object=pipes_ex)\n",
+    "perimeter_polygons = HdfMesh.get_mesh_areas(geom_hdf_path)\n",
     "if projection:\n",
     "    perimeter_polygons.set_crs(projection, inplace=True, allow_override=True)\n",
     "    \n",
@@ -11934,7 +12369,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
     "fig, ax = plt.subplots(figsize=(28, 20))\n",
     "\n",
     "# Plot cell polygons with 50% transparency behind the pipe network\n",
-    "cell_polygons_df = HdfMesh.get_mesh_cell_polygons(geom_hdf_path, ras_object=pipes_ex)\n",
+    "cell_polygons_df = HdfMesh.get_mesh_cell_polygons(geom_hdf_path)\n",
     "if not cell_polygons_df.empty:\n",
     "    cell_polygons_df.plot(ax=ax, edgecolor='lightgray', facecolor='lightgray', alpha=0.5)\n",
     "\n",
@@ -12342,11 +12777,11 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
     "    # Initialize RasExamples and extract the Chippewa_2D project\n",
     "    RasExamples.extract_project([\"Chippewa_2D\"])\n",
     "\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
-    "    logging.info(f\"Bald Eagle project initialized with folder: {bald_eagle.project_folder}\")\n",
+    "    # Initialize the RAS project using the default global ras object\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    logging.info(f\"Bald Eagle project initialized with folder: {ras.project_folder}\")\n",
     "    \n",
-    "    logging.info(f\"Bald Eagle object id: {id(bald_eagle)}\")\n",
+    "    logging.info(f\"Bald Eagle object id: {id(ras)}\")\n",
     "    \n",
     "    # Define the plan number to execute\n",
     "    plan_number = \"02\"\n",
@@ -12358,22 +12793,20 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
     "        unsteady_flow_simulation=True,\n",
     "        run_sediment=False,\n",
     "        post_processor=True,\n",
-    "        floodplain_mapping=False,\n",
-    "        ras_object=bald_eagle\n",
+    "        floodplain_mapping=False\n",
     "    )\n",
     "\n",
     "    # Execute Plan 02 using RasCmdr for Bald Eagle\n",
     "    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n",
-    "    success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n",
+    "    success_bald_eagle = RasCmdr.compute_plan(plan_number)\n",
     "    if success_bald_eagle:\n",
     "        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n",
     "    else:\n",
     "        print(f\"Plan {plan_number} execution failed for Bald Eagle.\\n\")\n",
     "else:\n",
     "    print(\"Chippewa_2D.p02.hdf already exists. Skipping project extraction and plan execution.\")\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = RasPrj()\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    # Initialize the RAS project using the default global ras object\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
     "    plan_number = \"02\""
    ]
   },
@@ -12394,22 +12827,22 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
     "\n",
     "# Display plan_df for bald_eagle project\n",
     "print(\"Plan DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.plan_df\n",
+    "ras.plan_df\n",
     "\n",
     "# Display geom_df for bald_eagle project\n",
     "print(\"\\nGeometry DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.geom_df\n",
+    "ras.geom_df\n",
     "\n",
     "# Get the plan HDF path\n",
     "plan_number = \"02\"  # Assuming we're using plan 01 as in the previous code\n",
-    "plan_hdf_path = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
+    "plan_hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
     "\n",
     "# Get the geometry file number from the plan DataFrame\n",
-    "geom_file = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
+    "geom_file = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
     "geom_number = geom_file[1:]  # Remove the 'g' prefix\n",
     "\n",
     "# Get the geometry HDF path\n",
-    "geom_hdf_path = bald_eagle.geom_df.loc[bald_eagle.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
+    "geom_hdf_path = ras.geom_df.loc[ras.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
     "\n",
     "print(f\"\\nPlan HDF path for Plan {plan_number}: {plan_hdf_path}\")\n",
     "print(f\"Geometry HDF path for Plan {plan_number}: {geom_hdf_path}\")"
@@ -12434,7 +12867,7 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
    "source": [
     "# Example: Extract runtime and compute time data\n",
     "print(\"\\nExample 2: Extracting runtime and compute time data\")\n",
-    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number, ras_object=bald_eagle)\n",
+    "runtime_df = HdfResultsPlan.get_runtime_data(hdf_input=plan_number)\n",
     "if runtime_df is not None:\n",
     "    runtime_df\n",
     "else:\n",
@@ -12507,7 +12940,7 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
    "source": [
     "# Use HdfMesh for geometry-related operations\n",
     "print(\"\\nExample 3: Listing 2D Flow Area Names\")\n",
-    "flow_area_names = HdfMesh.get_mesh_area_names(geom_hdf_path, ras_object=bald_eagle)\n",
+    "flow_area_names = HdfMesh.get_mesh_area_names(geom_hdf_path)\n",
     "print(\"2D Flow Area Names:\", flow_area_names)"
    ]
   },
@@ -12931,23 +13364,23 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
     "# Get mesh timeseries output\n",
     "\n",
     "# Get mesh areas from previous code cell\n",
-    "mesh_areas = HdfMesh.get_mesh_area_names(geom_hdf_path, ras_object=bald_eagle)\n",
+    "mesh_areas = HdfMesh.get_mesh_area_names(geom_hdf_path)\n",
     "\n",
     "if mesh_areas:\n",
     "    mesh_name = mesh_areas[0]  # Use the first 2D flow area name\n",
-    "    timeseries_da = HdfResultsMesh.get_mesh_timeseries(plan_hdf_path, mesh_name, \"Water Surface\", ras_object=bald_eagle)\n",
+    "    timeseries_da = HdfResultsMesh.get_mesh_timeseries(plan_hdf_path, mesh_name, \"Water Surface\")\n",
     "    print(f\"\\nMesh Timeseries Output (Water Surface) for {mesh_name}:\")\n",
     "    print(timeseries_da)\n",
     "else:\n",
     "    print(\"No mesh areas found in the geometry file.\")\n",
     "\n",
     "# Get mesh cells timeseries output\n",
-    "cells_timeseries_ds = HdfResultsMesh.get_mesh_cells_timeseries(plan_hdf_path, mesh_name, ras_object=bald_eagle)\n",
+    "cells_timeseries_ds = HdfResultsMesh.get_mesh_cells_timeseries(plan_hdf_path, mesh_name)\n",
     "print(\"\\nMesh Cells Timeseries Output:\")\n",
     "print(cells_timeseries_ds)\n",
     "\n",
     "# Get mesh faces timeseries output\n",
-    "faces_timeseries_ds = HdfResultsMesh.get_mesh_faces_timeseries(plan_hdf_path, mesh_name, ras_object=bald_eagle)\n",
+    "faces_timeseries_ds = HdfResultsMesh.get_mesh_faces_timeseries(plan_hdf_path, mesh_name)\n",
     "print(\"\\nMesh Faces Timeseries Output:\")\n",
     "print(faces_timeseries_ds)\n"
    ]
@@ -13508,11 +13941,11 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
     "    RasExamples.extract_project([\"BaldEagleCrkMulti2D\"])\n",
     "\n",
     "\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
-    "    logging.info(f\"Bald Eagle project initialized with folder: {bald_eagle.project_folder}\")\n",
+    "    # Initialize the RAS project using the default global ras object\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    logging.info(f\"Bald Eagle project initialized with folder: {ras.project_folder}\")\n",
     "    \n",
-    "    logging.info(f\"Bald Eagle object id: {id(bald_eagle)}\")\n",
+    "    logging.info(f\"Bald Eagle object id: {id(ras)}\")\n",
     "    \n",
     "    # Define the plan number to execute\n",
     "    plan_number = \"06\"\n",
@@ -13524,21 +13957,19 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
     "        unsteady_flow_simulation=True,  # Run UNet\n",
     "        post_processor=True,  # Run PostProcess\n",
     "        floodplain_mapping=False,  # Run RASMapper\n",
-    "        ras_object=bald_eagle\n",
     "    )\n",
     "\n",
     "    # Execute Plan 06 using RasCmdr for Bald Eagle\n",
     "    print(f\"Executing Plan {plan_number} for the Bald Eagle Creek project...\")\n",
-    "    success_bald_eagle = RasCmdr.compute_plan(plan_number, ras_object=bald_eagle)\n",
+    "    success_bald_eagle = RasCmdr.compute_plan(plan_number)\n",
     "    if success_bald_eagle:\n",
     "        print(f\"Plan {plan_number} executed successfully for Bald Eagle.\\n\")\n",
     "    else:\n",
     "        print(f\"Plan {plan_number} execution failed for Bald Eagle.\\n\")\n",
     "else:\n",
     "    print(\"BaldEagleCrkMulti2D.p06.hdf already exists. Skipping project extraction and plan execution.\")\n",
-    "    # Initialize the RAS project using the custom ras object\n",
-    "    bald_eagle = RasPrj()\n",
-    "    bald_eagle = init_ras_project(bald_eagle_path, \"6.6\")\n",
+    "    # Initialize the RAS project using the default global ras object\n",
+    "    init_ras_project(bald_eagle_path, \"6.6\")\n",
     "    plan_number = \"06\""
    ]
   },
@@ -13552,22 +13983,22 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
     "\n",
     "# Display plan_df for bald_eagle project\n",
     "print(\"Plan DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.plan_df\n",
+    "ras.plan_df\n",
     "\n",
     "# Display geom_df for bald_eagle project\n",
     "print(\"\\nGeometry DataFrame for bald_eagle project:\")\n",
-    "bald_eagle.geom_df\n",
+    "ras.geom_df\n",
     "\n",
     "# Get the plan HDF path\n",
     "plan_number = \"06\"  # Assuming we're using plan 01 as in the previous code\n",
-    "plan_hdf_path = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
+    "plan_hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'HDF_Results_Path'].values[0]\n",
     "\n",
     "# Get the geometry file number from the plan DataFrame\n",
-    "geom_file = bald_eagle.plan_df.loc[bald_eagle.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
+    "geom_file = ras.plan_df.loc[ras.plan_df['plan_number'] == plan_number, 'Geom File'].values[0]\n",
     "geom_number = geom_file[1:]  # Remove the 'g' prefix\n",
     "\n",
     "# Get the geometry HDF path\n",
-    "geom_hdf_path = bald_eagle.geom_df.loc[bald_eagle.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
+    "geom_hdf_path = ras.geom_df.loc[ras.geom_df['geom_number'] == geom_number, 'hdf_path'].values[0]\n",
     "\n",
     "print(f\"\\nPlan HDF path for Plan {plan_number}: {plan_hdf_path}\")\n",
     "print(f\"Geometry HDF path for Plan {plan_number}: {geom_hdf_path}\")\n",
@@ -13587,7 +14018,7 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
     "from shapely.geometry import Point\n",
     "\n",
     "# Get mesh max water surface\n",
-    "max_ws_df = HdfResultsMesh.get_mesh_max_ws(plan_hdf_path, ras_object=bald_eagle)\n",
+    "max_ws_df = HdfResultsMesh.get_mesh_max_ws(plan_hdf_path)\n",
     "\n",
     "print(\"max_ws_df\")\n",
     "print(max_ws_df)"
@@ -13633,7 +14064,7 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
    "source": [
     "# Example: Extract Cell Polygons\n",
     "print(\"\\nExample 6: Extracting Cell Polygons\")\n",
-    "cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(geom_hdf_path, ras_object=bald_eagle)\n",
+    "cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(geom_hdf_path)\n",
     "\n",
     "\n",
     "# Call the function to plot cell polygons\n",
@@ -13848,20 +14279,24 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 if Path(hdf_input).is_file():
                     hdf_path = Path(hdf_input)
                 # Check if it's a number (with or without 'p' prefix)
-                elif hdf_input.isdigit() or (len(hdf_input) == 3 and hdf_input[0] == 'p' and hdf_input[1:].isdigit()):
+                elif hdf_input.isdigit() or (len(hdf_input) > 1 and hdf_input[0] == 'p' and hdf_input[1:].isdigit()):
                     try:
                         ras_obj.check_initialized()
                     except Exception as e:
                         raise ValueError(f"RAS object is not initialized: {str(e)}")
                         
-                    number = hdf_input if hdf_input.isdigit() else hdf_input[1:]
+                    # Extract the numeric part and convert to integer for comparison
+                    number_str = hdf_input if hdf_input.isdigit() else hdf_input[1:]
+                    number_int = int(number_str)
                     
                     if file_type == 'plan_hdf':
-                        plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == number]
+                        # Convert plan_number column to integers for comparison
+                        plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
                         if not plan_info.empty:
                             hdf_path = Path(plan_info.iloc[0]['HDF_Results_Path'])
                     elif file_type == 'geom_hdf':
-                        geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == number]
+                        # Convert geom_number column to integers for comparison
+                        geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'].astype(int) == number_int]
                         if not geom_info.empty:
                             hdf_path = Path(geom_info.iloc[0]['HDF_Path'])
                     else:
@@ -13873,14 +14308,16 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 except Exception as e:
                     raise ValueError(f"RAS object is not initialized: {str(e)}")
                     
-                number = f"{hdf_input:02d}"
+                number_int = hdf_input
                 
                 if file_type == 'plan_hdf':
-                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == number]
+                    # Convert plan_number column to integers for comparison
+                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
                     if not plan_info.empty:
                         hdf_path = Path(plan_info.iloc[0]['HDF_Results_Path'])
                 elif file_type == 'geom_hdf':
-                    geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == number]
+                    # Convert geom_number column to integers for comparison
+                    geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'].astype(int) == number_int]
                     if not geom_info.empty:
                         hdf_path = Path(geom_info.iloc[0]['HDF_Path'])
                 else:
@@ -23914,7 +24351,6 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     Initialize a RAS project.
 
     USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
-    The initialize method of the RasPrj class only modifies the global 'ras' object.
 
     Parameters:
     -----------
@@ -23924,8 +24360,10 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         The version of RAS to use (e.g., "6.6").
         The version can also be a full path to the Ras.exe file.
         If None, the function will attempt to use the version from the global 'ras' object or a default path.
-    ras_object : RasPrj, optional
-        An instance of RasPrj to initialize. If None, the global 'ras' object is used.
+    ras_object : RasPrj or str, optional
+        If None, the global 'ras' object is updated.
+        If a RasPrj instance, that instance is updated.
+        If any other value is provided, a new RasPrj instance is created and returned.
 
     Returns:
     --------
@@ -23938,15 +24376,23 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
 
     ras_exe_path = get_ras_exe(ras_version)
 
+    # Determine which RasPrj instance to use
     if ras_object is None:
+        # Use the global 'ras' object
         logger.info("Initializing global 'ras' object via init_ras_project function.")
         ras_object = ras
     elif not isinstance(ras_object, RasPrj):
-        logger.error("Provided ras_object is not an instance of RasPrj.")
-        raise TypeError("ras_object must be an instance of RasPrj or None.")
+        # Create a new RasPrj instance
+        logger.info("Creating a new RasPrj instance.")
+        ras_object = RasPrj()
 
     # Initialize the RasPrj instance
     ras_object.initialize(ras_project_folder, ras_exe_path)
+    
+    # Always update the global ras object as well
+    if ras_object is not ras:
+        ras.initialize(ras_project_folder, ras_exe_path)
+        logger.info("Global 'ras' object also updated to match the new project.")
     
     logger.info(f"Project initialized. ras_object project folder: {ras_object.project_folder}")
     return ras_object

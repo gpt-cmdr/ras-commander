@@ -13,6 +13,9 @@
 10. [Inheritance](#10-inheritance)
 11. [RasUtils Usage](#11-rasutils-usage)
 12. [Working with RasExamples](#12-working-with-rasexamples)
+13. [Logging](#13-logging)
+14. [Decorator Usage](#14-decorator-usage)
+15. [Static Class Pattern](#15-static-class-pattern)
 
 ## 1. Naming Conventions
 
@@ -65,6 +68,15 @@ Use these abbreviations in lowercase for function and variable names (e.g., `geo
 ### 1.6 Variable Naming
 - Use descriptive names indicating purpose or content
 - Prefix boolean variables with `is_`, `has_`, or similar
+
+### 1.7 HDF Class Method Naming
+
+For HDF class methods, follow these naming conventions:
+- `get_` prefix for methods that extract data from HDF files
+- Use specific entity names in method names: `get_mesh_max_ws()` instead of just `get_max_ws()`
+- For methods that return GeoDataFrame objects, include the relevant geometry type in the name: `get_mesh_cell_polygons()`
+- Prefix private helper methods with underscore: `_get_mesh_timeseries_output_path()`
+- Use consistent suffixes for related methods: `get_mesh_max_ws()`, `get_mesh_min_ws()`
 
 ## 2. Code Structure and Organization
 
@@ -150,15 +162,35 @@ except Exception as e:
     raise RasCommanderError(f"Unexpected error during plan computation: {e}")
 ```
 
+### 5.1 Logging Configuration
+
+- Always use the module-specific logger from `LoggingConfig`:
+  ```python
+  from .LoggingConfig import get_logger
+  logger = get_logger(__name__)
+  ```
+
+- Use appropriate log levels:
+  - DEBUG: Detailed information useful for debugging
+  - INFO: Confirmation of expected operations
+  - WARNING: Something unexpected happened but execution continues
+  - ERROR: An operation failed but the program can continue
+  - CRITICAL: Program cannot continue
+
+- Include informative context in log messages:
+  ```python
+  logger.info(f"Processing file: {file_path}")
+  logger.error(f"Failed to read HDF file {hdf_path}: {str(e)}")
+  ```
+
+- Use the `@log_call` decorator for automatic function entry/exit logging
+
 ## 6. Testing
 
-- Write unit tests for all functions and methods
-- Use the `unittest` framework
-- Aim for high test coverage, especially for critical functionality
-- Include tests for both single-project and multi-project scenarios
-- Write clear and descriptive test names
-- Use setUp and tearDown methods for common test preparations and cleanups
-- Use mock objects when appropriate to isolate units under test
+- The RasExamples() Class is provided for testing directly with HEC Example projects
+- The library eschews traditional unit testing in favor of this approach
+- The unit tests double as useful examples that can be extended by end users 
+- Any notebooks in the repo should include a working model (hosted elsewhere) 
 
 ## 7. Version Control
 
@@ -211,31 +243,19 @@ def process_plans(plan_numbers: List[str], max_workers: Optional[int] = None) ->
 ### 9.5 Function Return Values
 - Prefer returning meaningful values over modifying global state
 - Use tuple returns for multiple values instead of modifying input parameters
+- Use consistent return types across related functions:
+  - Use GeoDataFrame for functions returning spatial data
+  - Use pandas DataFrame for tabular data
+  - Use xarray DataArray/Dataset for multi-dimensional data with coordinates
+  - Use Optional[Type] for functions that might return None
 
-## 10. Inheritance
+- Provide clear error handling for function returns:
+  - Return empty DataFrame/GeoDataFrame instead of None when appropriate
+  - Use Optional typing for functions that might return None
+  - Document possible return values in docstrings
 
-### 10.1 General Principles
 
-- Prioritize composition over inheritance when appropriate
-- Design base classes for extension
-- Clearly document the public API and subclass API using docstrings
-
-### 10.2 Naming Conventions
-
-- Public API: No leading underscores
-- Subclass API: Single leading underscore (e.g., `_prepare_for_execution`)
-- Internal attributes and methods: Single leading underscore
-- Name mangling (double leading underscores): Use sparingly and document the decision clearly
-
-### 10.3 Template Method Pattern
-
-Consider using the template method pattern in base classes to define a high-level algorithm structure. Subclasses can then override specific steps to customize behavior.
-
-### 10.4 Dataframe Access Control
-
-Use properties to control access and modification of dataframes, providing a controlled interface for subclasses.
-
-## 11. RasUtils Usage
+## 10. RasUtils Usage
 
 - Use RasUtils for general-purpose utility functions that don't fit into other specific classes
 - When adding new utility functions, ensure they are static methods of the RasUtils class
@@ -264,7 +284,7 @@ class RasUtils:
         # Function implementation
 ```
 
-## 12. Working with RasExamples
+## 11. Working with RasExamples
 
 - Use RasExamples for managing and loading example HEC-RAS projects
 - Always check if example projects are already downloaded before attempting to download them again
@@ -285,8 +305,7 @@ if not ras_examples.is_project_extracted("Bald Eagle Creek"):
 
 Remember, consistency is key. When in doubt, prioritize readability and clarity in your code. Always consider the maintainability and extensibility of the codebase when making design decisions.
 
-
-13. Logging
+## 12. Logging
 
 Instructions for setting up a minimal logging decorator and applying it to functions:
 
@@ -337,3 +356,51 @@ def compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=F
 ```
 
 Apply this pattern across all functions in the library. This approach will significantly reduce the code footprint while maintaining basic logging functionality.
+
+## 13. Decorator Usage for Ras* and Hdf* Classes to Simplify Inputs
+
+- Use the `@log_call` decorator for all public methods to enable automatic logging of function entry and exit
+- Use the `@standardize_input` decorator for methods that accept HDF file paths to ensure consistent handling
+- Place decorators on separate lines for better readability when multiple decorators are used
+- Order decorators consistently: `@staticmethod` first, followed by `@log_call`, then `@standardize_input`
+
+Example:
+```python
+@staticmethod
+@log_call
+@standardize_input(file_type='plan_hdf')
+def get_mesh_max_ws(hdf_path: Path, round_to: str = "100ms") -> gpd.GeoDataFrame:
+    # Function implementation
+```
+
+## 15. Static Class Pattern
+
+Many classes in the ras-commander library follow a static method pattern where:
+- All methods are decorated with `@staticmethod`
+- The class serves as a namespace for related functionality
+- No instantiation is required to use the methods
+
+When implementing such classes:
+- Include a note in the class docstring stating "All methods in this class are static and designed to be used without instantiation"
+- Use consistent method organization, typically starting with core methods followed by helper methods
+- Private helper methods should still use the underscore prefix (e.g., `_parse_file`)
+- Avoid storing state in class variables unless absolutely necessary
+
+Example:
+```python
+class HdfMesh:
+    """
+    A class for handling mesh-related operations on HEC-RAS HDF files.
+    
+    All methods in this class are static and designed to be used without instantiation.
+    """
+    
+    @staticmethod
+    @log_call
+    def get_mesh_area_names(hdf_path: Path) -> List[str]:
+        # Method implementation
+        
+    @staticmethod
+    def _parse_mesh_data(data: np.ndarray) -> Dict:
+        # Helper method implementation
+```

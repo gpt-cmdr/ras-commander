@@ -23,8 +23,6 @@ from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
-from .RasGpt import RasGpt
-from .RasToGo import RasToGo
 from .HdfFluvialPluvial import HdfFluvialPluvial
 
 # HDF handling
@@ -41,7 +39,6 @@ from .HdfXsec import HdfXsec
 from .HdfPump import HdfPump
 from .HdfPipe import HdfPipe
 from .HdfInfiltration import HdfInfiltration
-from .RasMapper import RasMapper
 
 # Plotting functionality
 from .HdfPlot import HdfPlot
