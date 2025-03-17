@@ -458,7 +458,7 @@ Additionally, we would like to acknowledge the following notable contributions a
    Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
    Institute of Computational and Data Sciences, Penn State University
 
-3. Attribution: The[ffrd\rashdf'](https://github.com/fema-ffrd/rashdf) project by FEMA-FFRD (FEMA Future of Flood Risk Data) was incorporated, revised, adapted and extended in rascommander's RasHDF libaries (where noted). 
+3. Attribution: The [ffrd\rashdf'](https://github.com/fema-ffrd/rashdf) project by FEMA-FFRD (FEMA Future of Flood Risk Data) was incorporated, revised, adapted and extended in rascommander's RasHDF libaries (where noted). 
 
 These acknowledgments recognize the contributions and inspirations that have helped shape RAS Commander, ensuring proper attribution for the ideas and code that have influenced its development.
 
