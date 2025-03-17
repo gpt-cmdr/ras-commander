@@ -111,24 +111,27 @@ Using the default 'ras" object, othewise substitute your_ras_project for muli-pr
 ```
 print("\nPlan Files DataFrame:")
 ras.plan_df
-
+```
+```
 print("\nFlow Files DataFrame:")
 ras.flow_df
-
+```
+```
 print("\nUnsteady Flow Files DataFrame:")
 ras.unsteady_df
-
+```
+```
 print("\nGeometry Files DataFrame:")
 ras.geom_df
-
-print("\nHDF Entries DataFrame:")
-ras.get_hdf_entries()
-
+```
+```
 print("\nBoundary Conditions DataFrame:")
 ras.boundaries_df
-
 ```
-
+```
+print("\nHDF Entries DataFrame:")
+ras.get_hdf_entries()
+```
 
 
 
