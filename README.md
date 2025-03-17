@@ -485,5 +485,5 @@ This software is released under the MIT license.
 
 ## Contact
 
-For questions, suggestions, or support, please contact:
+For questions, suggestions, or support, please contact:  
 William Katzenmeyer, P.E., C.F.M. - heccommander@gmail.com
