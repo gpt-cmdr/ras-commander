@@ -4,8 +4,9 @@ RAS Commander is a Python library for automating HEC-RAS operations, providing a
 
 ## Repository Author:
 [William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)
+-----  
 
-## Don't Ask Me, Ask GPT! https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/llm_knowledge_bases
+## Don't Ask Me, Ask GPT!
 
 This repository has several methods of interaction with Large Language Models and LLM-Assisted Coding built right in: 
 
