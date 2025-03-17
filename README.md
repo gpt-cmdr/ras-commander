@@ -429,17 +429,10 @@ The ras-commander library is an ongoing project. Future plans include:
 - [GPT-Commander YouTube Channel](https://www.youtube.com/@GPT_Commander)
 - [ChatGPT Examples for Water Resources Engineers](https://github.com/gpt-cmdr/HEC-Commander/tree/main/ChatGPT%20Examples)
 
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
 
 ## Style Guide
 
 This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
-
-## License
-
-ras-commander is released under the MIT License. See the license file for details.
 
 ## Acknowledgments
 
@@ -478,6 +471,10 @@ These acknowledgments recognize the contributions and inspirations that have hel
 Notebook version of RAS-Commander: [RAS-Commander Notebook in the HEC-Commander Tools Repository](https://github.com/gpt-cmdr/HEC-Commander/tree/main/RAS-Commander)  
 
 Youtube Tutorials for HEC-Commander Tools and RAS-Commander: [GPT-Commander on YouTube](https://www.youtube.com/@GPT_Commander/videos)
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
 
 ## LICENSE
 
