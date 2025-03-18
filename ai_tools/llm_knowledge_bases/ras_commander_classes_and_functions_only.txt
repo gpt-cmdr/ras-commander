@@ -636,6 +636,12 @@ class HdfBndry:
         -------
         gpd.GeoDataFrame
             A GeoDataFrame containing the breaklines.
+
+        Notes
+        -----
+        - Zero-length breaklines are logged and skipped. 
+        - Single-point breaklines are logged and skipped.
+        - These invalid breaklines should be removed in RASMapper to prevent potential issues.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -643,17 +649,95 @@ class HdfBndry:
                 if breaklines_path not in hdf_file:
                     logger.warning(f"Breaklines path '{breaklines_path}' not found in HDF file.")
                     return gpd.GeoDataFrame()
+
                 bl_line_data = hdf_file[breaklines_path]
-                bl_line_ids = range(bl_line_data["Attributes"][()].shape[0])
-                names = np.vectorize(HdfUtils.convert_ras_string)(
-                    bl_line_data["Attributes"][()]["Name"]
-                )
-                geoms = HdfBase.get_polylines_from_parts(hdf_path, breaklines_path)
+                attributes = bl_line_data["Attributes"][()]
+                
+                # Initialize lists to store valid breakline data
+                valid_ids = []
+                valid_names = []
+                valid_geoms = []
+
+                # Track invalid breaklines for summary
+                zero_length_count = 0
+                single_point_count = 0
+                other_error_count = 0
+
+                # Process each breakline
+                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(bl_line_data["Polyline Info"][()]):
+                    name = HdfUtils.convert_ras_string(attributes["Name"][idx])
+
+                    # Check for zero-length breaklines
+                    if pnt_cnt == 0:
+                        zero_length_count += 1
+                        logger.debug(f"Zero-length breakline found (FID: {idx}, Name: {name})")
+                        continue
+
+                    # Check for single-point breaklines
+                    if pnt_cnt == 1:
+                        single_point_count += 1
+                        logger.debug(f"Single-point breakline found (FID: {idx}, Name: {name})")
+                        continue
+
+                    try:
+                        points = bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
+                        
+                        # Additional validation of points array
+                        if len(points) < 2:
+                            single_point_count += 1
+                            logger.debug(f"Invalid point count in breakline (FID: {idx}, Name: {name})")
+                            continue
+
+                        if part_cnt == 1:
+                            geom = LineString(points)
+                        else:
+                            parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
+                            geom = MultiLineString([
+                                points[part_pnt_start:part_pnt_start + part_pnt_cnt]
+                                for part_pnt_start, part_pnt_cnt in parts
+                                if part_pnt_cnt > 1  # Skip single-point parts
+                            ])
+                            # Skip if no valid parts remain
+                            if len(geom.geoms) == 0:
+                                other_error_count += 1
+                                logger.debug(f"No valid parts in multipart breakline (FID: {idx}, Name: {name})")
+                                continue
+
+                        valid_ids.append(idx)
+                        valid_names.append(name)
+                        valid_geoms.append(geom)
+
+                    except Exception as e:
+                        other_error_count += 1
+                        logger.debug(f"Error processing breakline {idx}: {str(e)}")
+                        continue
+
+                # Log summary of invalid breaklines
+                total_invalid = zero_length_count + single_point_count + other_error_count
+                if total_invalid > 0:
+                    logger.info(
+                        f"Breakline processing summary:\n"
+                        f"- Zero-length breaklines: {zero_length_count}\n"
+                        f"- Single-point breaklines: {single_point_count}\n"
+                        f"- Other invalid breaklines: {other_error_count}\n"
+                        f"Consider removing these invalid breaklines using RASMapper."
+                    )
+
+                # Create GeoDataFrame with valid breaklines
+                if not valid_ids:
+                    logger.warning("No valid breaklines found in the HDF file.")
+                    return gpd.GeoDataFrame()
+
                 return gpd.GeoDataFrame(
-                    {"bl_id": bl_line_ids, "Name": names, "geometry": geoms},
+                    {
+                        "bl_id": valid_ids,
+                        "Name": valid_names,
+                        "geometry": valid_geoms
+                    },
                     geometry="geometry",
-                    crs=HdfBase.get_projection(hdf_file),
+                    crs=HdfBase.get_projection(hdf_file)
                 )
+
         except Exception as e:
             logger.error(f"Error reading breaklines: {str(e)}")
             return gpd.GeoDataFrame()
@@ -1436,7 +1520,7 @@ from pathlib import Path
 import pandas as pd
 import geopandas as gpd
 import h5py
-from rasterstats import zonal_stats
+
 from .Decorators import log_call, standardize_input
 
 class HdfInfiltration:
@@ -1621,6 +1705,12 @@ class HdfInfiltration:
         Returns:
             DataFrame with soil statistics including percentages and areas
         """
+        
+        try:
+            from rasterstats import zonal_stats
+        except ImportError as e:
+            logger.error("Failed to import rasterstats. Please run 'pip install rasterstats' and try again.")
+            raise e
         # Initialize areas dictionary
         mukey_areas = {mukey: 0 for mukey in raster_map.values()}
         
@@ -3047,6 +3137,8 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+import re
+import numpy as np
 
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -3175,7 +3267,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_plan_parameters(hdf_path: Path) -> Dict:
+    def get_plan_parameters(hdf_path: Path) -> pd.DataFrame:
         """
         Get plan parameter attributes from a HEC-RAS HDF plan file.
 
@@ -3183,7 +3275,10 @@ class HdfPlan:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: A dictionary containing the plan parameter attributes.
+            pd.DataFrame: A DataFrame containing the plan parameters with columns:
+                - Parameter: Name of the parameter
+                - Value: Value of the parameter (decoded if byte string)
+                - Plan: Plan number (01-99) extracted from the filename (ProjectName.pXX.hdf)
 
         Raises:
             ValueError: If there's an error retrieving the plan parameter attributes.
@@ -3194,14 +3289,48 @@ class HdfPlan:
                 if plan_params_path not in hdf_file:
                     raise ValueError(f"Plan Parameters not found in {hdf_path}")
                 
-                attrs = {}
+                # Extract parameters
+                params_dict = {}
                 for key in hdf_file[plan_params_path].attrs.keys():
                     value = hdf_file[plan_params_path].attrs[key]
+                    
+                    # Handle different types of values
                     if isinstance(value, bytes):
                         value = HdfUtils.convert_ras_string(value)
-                    attrs[key] = value
+                    elif isinstance(value, np.ndarray):
+                        # Handle array values
+                        if value.dtype.kind in {'S', 'a'}:  # Array of byte strings
+                            value = [v.decode('utf-8') if isinstance(v, bytes) else v for v in value]
+                        else:
+                            value = value.tolist()  # Convert numpy array to list
+                        
+                        # If it's a single-item list, extract the value
+                        if len(value) == 1:
+                            value = value[0]
+                    
+                    params_dict[key] = value
                 
-                return attrs
+                # Create DataFrame from parameters
+                df = pd.DataFrame.from_dict(params_dict, orient='index', columns=['Value'])
+                df.index.name = 'Parameter'
+                df = df.reset_index()
+                
+                # Extract plan number from filename
+                filename = Path(hdf_path).name
+                plan_match = re.search(r'\.p(\d{2})\.', filename)
+                if plan_match:
+                    plan_num = plan_match.group(1)
+                else:
+                    plan_num = "00"  # Default if no match found
+                    logger.warning(f"Could not extract plan number from filename: {filename}")
+                
+                df['Plan'] = plan_num
+                
+                # Reorder columns to put Plan first
+                df = df[['Plan', 'Parameter', 'Value']]
+                
+                return df
+
         except Exception as e:
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
 
@@ -4331,12 +4460,8 @@ class HdfResultsMesh:
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the summary output data with attributes as metadata.
-
-        Raises
-        ------
-        ValueError
-            If the HDF file cannot be opened or read, or if the requested data is not found.
+            A GeoDataFrame containing the summary output data with decoded attributes as metadata.
+            Returns empty GeoDataFrame if variable is not found.
         """
         try:
             dfs = []
@@ -4345,13 +4470,19 @@ class HdfResultsMesh:
             logger.info(f"Processing summary output for variable: {var}")
             d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
             if d2_flow_areas is None:
+                logger.info("No 2D Flow Areas found in HDF file")
                 return gpd.GeoDataFrame()
 
             for d2_flow_area in d2_flow_areas[:]:
                 mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
                 cell_count = d2_flow_area[-1]
                 logger.debug(f"Processing mesh: {mesh_name} with {cell_count} cells")
-                group = HdfResultsMesh.get_mesh_summary_output_group(hdf_file, mesh_name, var)
+                
+                try:
+                    group = HdfResultsMesh.get_mesh_summary_output_group(hdf_file, mesh_name, var)
+                except ValueError:
+                    logger.info(f"Variable '{var}' not present in output file for mesh '{mesh_name}', skipping")
+                    continue
                 
                 data = group[:]
                 logger.debug(f"Data shape for {var} in {mesh_name}: {data.shape}")
@@ -4361,7 +4492,7 @@ class HdfResultsMesh:
                 if data.ndim == 2 and data.shape[0] == 2:
                     # Handle 2D datasets (e.g. Maximum Water Surface)
                     row_variables = group.attrs.get('Row Variables', [b'Value', b'Time'])
-                    row_variables = [v.decode('utf-8').strip() for v in row_variables]
+                    row_variables = [v.decode('utf-8').strip() if isinstance(v, bytes) else v for v in row_variables]
                     
                     df = pd.DataFrame({
                         "mesh_name": [mesh_name] * data.shape[1],
@@ -4398,14 +4529,22 @@ class HdfResultsMesh:
                                     on=['mesh_name', 'cell_id'], 
                                     how='left')
                 
-                # Add group attributes as metadata
+                # Add group attributes as metadata with proper decoding
                 df.attrs['mesh_name'] = mesh_name
                 for attr_name, attr_value in group.attrs.items():
                     if isinstance(attr_value, bytes):
-                        attr_value = attr_value.decode('utf-8')
+                        # Decode single byte string
+                        decoded_value = attr_value.decode('utf-8')
                     elif isinstance(attr_value, np.ndarray):
-                        attr_value = attr_value.tolist()
-                    df.attrs[attr_name] = attr_value
+                        if attr_value.dtype.kind in {'S', 'a'}:  # Array of byte strings
+                            # Decode array of byte strings
+                            decoded_value = [v.decode('utf-8') if isinstance(v, bytes) else v for v in attr_value]
+                        else:
+                            # Convert other numpy arrays to list
+                            decoded_value = attr_value.tolist()
+                    else:
+                        decoded_value = attr_value
+                    df.attrs[attr_name] = decoded_value
                 
                 dfs.append(df)
             
@@ -4422,7 +4561,7 @@ class HdfResultsMesh:
             if crs:
                 gdf.set_crs(crs, inplace=True)
             
-            # Combine attributes from all meshes
+            # Combine attributes from all meshes with decoded values
             combined_attrs = {}
             for df in dfs:
                 for key, value in df.attrs.items():
@@ -4459,7 +4598,7 @@ class HdfResultsMesh:
         output_path = f"Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/2D Flow Areas/{mesh_name}/{var}"
         output_item = hdf_file.get(output_path)
         if output_item is None:
-            raise ValueError(f"Could not find HDF group or dataset at path '{output_path}'")
+            raise ValueError(f"Dataset not found at path '{output_path}'")
         return output_item
 
 
@@ -4535,7 +4674,7 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            pd.DataFrame: A DataFrame containing the unsteady attributes.
+            pd.DataFrame: A DataFrame containing the decoded unsteady attributes.
 
         Raises:
             FileNotFoundError: If the specified HDF file is not found.
@@ -4546,8 +4685,13 @@ class HdfResultsPlan:
                 if "Results/Unsteady" not in hdf_file:
                     raise KeyError("Results/Unsteady group not found in the HDF file.")
                 
-                # Create dictionary from attributes
-                attrs_dict = dict(hdf_file["Results/Unsteady"].attrs)
+                # Create dictionary from attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Results/Unsteady"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
                 
                 # Create DataFrame with a single row index
                 return pd.DataFrame(attrs_dict, index=[0])
@@ -4569,7 +4713,7 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            pd.DataFrame: A DataFrame containing the results unsteady summary attributes.
+            pd.DataFrame: A DataFrame containing the decoded results unsteady summary attributes.
 
         Raises:
             FileNotFoundError: If the specified HDF file is not found.
@@ -4580,8 +4724,13 @@ class HdfResultsPlan:
                 if "Results/Unsteady/Summary" not in hdf_file:
                     raise KeyError("Results/Unsteady/Summary group not found in the HDF file.")
                 
-                # Create dictionary from attributes
-                attrs_dict = dict(hdf_file["Results/Unsteady/Summary"].attrs)
+                # Create dictionary from attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Results/Unsteady/Summary"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
                 
                 # Create DataFrame with a single row index
                 return pd.DataFrame(attrs_dict, index=[0])
@@ -4603,7 +4752,7 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            Optional[pd.DataFrame]: DataFrame containing the volume accounting attributes,
+            Optional[pd.DataFrame]: DataFrame containing the decoded volume accounting attributes,
                                   or None if the group is not found.
 
         Raises:
@@ -4614,8 +4763,14 @@ class HdfResultsPlan:
                 if "Results/Unsteady/Summary/Volume Accounting" not in hdf_file:
                     return None
                 
-                # Get attributes and convert to DataFrame
-                attrs_dict = dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs)
+                # Get attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
+                
                 return pd.DataFrame(attrs_dict, index=[0])
                 
         except FileNotFoundError:
@@ -5423,9 +5578,20 @@ class HdfStruc:
         try:
             with h5py.File(hdf_path, 'r') as hdf:
                 if "Geometry/Structures" not in hdf:
-                    logger.info(f"No structures found in: {hdf_path}")
+                    logger.error(f"No Structures Found in the HDF, Empty Geodataframe Returned: {hdf_path}")
                     return GeoDataFrame()
                 
+                # Check if required datasets exist
+                required_datasets = [
+                    "Geometry/Structures/Centerline Info",
+                    "Geometry/Structures/Centerline Points"
+                ]
+                
+                for dataset in required_datasets:
+                    if dataset not in hdf:
+                        logger.error(f"No Structures Found in the HDF, Empty Geodataframe Returned: {hdf_path}")
+                        return GeoDataFrame()
+
                 def get_dataset_df(path: str) -> pd.DataFrame:
                     """
                     Converts an HDF5 dataset to a pandas DataFrame.
@@ -5586,7 +5752,7 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_geom_structures_attrs(hdf_path: Path) -> Dict[str, Any]:
+    def get_geom_structures_attrs(hdf_path: Path) -> pd.DataFrame:
         """
         Extracts structure attributes from a HEC-RAS geometry HDF file.
 
@@ -5597,9 +5763,9 @@ class HdfStruc:
 
         Returns
         -------
-        Dict[str, Any]
-            Dictionary of structure attributes from the Geometry/Structures group.
-            Returns empty dict if no structures are found.
+        pd.DataFrame
+            DataFrame containing structure attributes from the Geometry/Structures group.
+            Returns empty DataFrame if no structures are found.
 
         Notes
         -----
@@ -5610,11 +5776,22 @@ class HdfStruc:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/Structures" not in hdf_file:
                     logger.info(f"No structures found in the geometry file: {hdf_path}")
-                    return {}
-                return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file["Geometry/Structures"].attrs)
+                    return pd.DataFrame()
+                
+                # Get attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Geometry/Structures"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
+                
+                # Create DataFrame with a single row index
+                return pd.DataFrame(attrs_dict, index=[0])
+                
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
-            return {}
+            return pd.DataFrame()
 
 ==================================================
 
@@ -7922,38 +8099,6 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGpt.py
-==================================================
-import os
-from pathlib import Path
-from typing import Optional
-from ras_commander import get_logger, log_call
-
-logger = get_logger(__name__)
-
-class RasGpt:
-    """
-    A class containing helper functions for the RAS Commander GPT.
-    """
-    
-# to be implemented later
-# 
-# This class will contain  methods to help LLM's extract useful information from HEC-RAS models in a structured format with token budget etc. 
-# Templates will be used to help with this, based on the example projects (1D Steady, 1D Usteady, 1D Sediment Transport, 1D Water Quality, 2D Unsteady, 2D Steady, 2D Sediment Transport, 2D Water Quality, 2D Geospatial, 3D Unsteady, 3D Steady, 3D Sediment Transport, 3D Water Quality, 3D Geospatial).
-# These will simply filter the data to only include the relevant information for the area of focus. 
-
-#
-# IDEAS
-# 1. Package up a standard set of information for LLM analysis
-#       - General project information
-#       - Cross section information (for specific cross sections)
-#       - Structure information (for specific structures)
-#       - Include time series results and relevant HEC Guidance for LLM to reference
-
-# 2. Use Library Assistant to call LLM 
-
-==================================================
-
 File: c:\GH\ras-commander\ras_commander\RasMapper.py
 ==================================================
 """
@@ -7979,88 +8124,7 @@ from .HdfInfiltration import HdfInfiltration
 
 class RasMapper:
     """Class for handling RAS Mapper operations and data extraction"""
-
-    @staticmethod
-    @log_call
-    def get_raster_map(hdf_path: Path) -> dict:
-        """Read the raster map from HDF file and create value mapping
-        
-        Args:
-            hdf_path: Path to the HDF file
-            
-        Returns:
-            Dictionary mapping raster values to mukeys
-        """
-        with h5py.File(hdf_path, 'r') as hdf:
-            raster_map_data = hdf['Raster Map'][:]
-            return {int(item[0]): item[1].decode('utf-8') for item in raster_map_data}
-
-    @staticmethod
-    @log_call 
-    def clip_raster_with_boundary(raster_path: Path, boundary_path: Path):
-        """Clip a raster using a boundary polygon
-        
-        Args:
-            raster_path: Path to the raster file
-            boundary_path: Path to the boundary shapefile
-            
-        Returns:
-            Tuple of (clipped_image, transform, nodata_value)
-        """
-        watershed = gpd.read_file(boundary_path)
-        raster = rasterio.open(raster_path)
-        
-        out_image, out_transform = mask(raster, watershed.geometry, crop=True)
-        nodata = raster.nodatavals[0]
-        
-        return out_image[0], out_transform, nodata
-
-    @staticmethod
-    @log_call
-    def calculate_zonal_stats(boundary_path: Path, raster_data, transform, nodata):
-        """Calculate zonal statistics for a boundary
-        
-        Args:
-            boundary_path: Path to boundary shapefile
-            raster_data: Numpy array of raster values
-            transform: Raster transform
-            nodata: Nodata value
-            
-        Returns:
-            List of statistics by zone
-        """
-        watershed = gpd.read_file(boundary_path)
-        return zonal_stats(watershed, raster_data, 
-                         affine=transform, 
-                         nodata=nodata,
-                         categorical=True)
-
-# Example usage:
-"""
-# Initialize paths
-raster_path = Path('input_files/gSSURGO_InfiltrationDC.tif')
-boundary_path = Path('input_files/WF_Boundary_Simple.shp')
-hdf_path = raster_path.with_suffix('.hdf')
-
-# Get raster mapping
-raster_map = RasMapper.get_raster_map(hdf_path)
-
-# Clip raster with boundary
-clipped_data, transform, nodata = RasMapper.clip_raster_with_boundary(
-    raster_path, boundary_path)
-
-# Calculate zonal statistics
-stats = RasMapper.calculate_zonal_stats(
-    boundary_path, clipped_data, transform, nodata)
-
-# Calculate soil statistics
-soil_stats = HdfInfiltration.calculate_soil_statistics(
-    stats, raster_map)
-
-# Get significant mukeys (>1%)
-significant_mukeys = HdfInfiltration.get_significant_mukeys(
-    soil_stats, threshold=1.0)
-"""
+    # PLACEHOLDER FOR FUTURE DEVELOPMENT
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasPlan.py
@@ -10275,47 +10339,6 @@ def get_ras_exe(ras_version=None):
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasToGo.py
-==================================================
-"""
-RasToGo module provides functions to interface HEC-RAS with go-consequences.
-This module helps prepare and format RAS data for use with go-consequences.
-
-
------
-
-All of the methods in this class are static and are designed to be used without instantiation.
-
-List of Functions in RasToGo:
-
-TO BE IMPLEMENTED: 
-- Adding stored maps in rasmaapper for a results file
-- Editing the terrain name for stored maps, so that a reduced resolution terrain can be used for mapping
-- Re-computing specific plans using the floodplain mapping option to generate stored maps
-- Using the stored map output to call go-consequences and compute damages
-- Comparisons of go-consequences outputs based on RAS plan number
-    - include optional argument with polygons defining areas of interest
-
-"""
-
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Union
-import pandas as pd
-import numpy as np
-
-from .Decorators import log_call, standardize_input
-from .LoggingConfig import setup_logging, get_logger
-
-logger = get_logger(__name__)
-
-class RasToGo:
-    """Class containing functions to interface HEC-RAS with go-consequences."""
-
-    #@staticmethod
-    #@log_call 
-==================================================
-
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
@@ -11979,7 +12002,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.54.0"
+    __version__ = "0.62.0"
 
 # Set up logging
 setup_logging()
@@ -11992,8 +12015,6 @@ from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
-from .RasGpt import RasGpt
-from .RasToGo import RasToGo
 from .HdfFluvialPluvial import HdfFluvialPluvial
 
 # HDF handling
@@ -12010,7 +12031,6 @@ from .HdfXsec import HdfXsec
 from .HdfPump import HdfPump
 from .HdfPipe import HdfPipe
 from .HdfInfiltration import HdfInfiltration
-from .RasMapper import RasMapper
 
 # Plotting functionality
 from .HdfPlot import HdfPlot
@@ -12021,14 +12041,13 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'RasCmdr', 'RasGpt', 'RasToGo',
-    'HdfFluvialPluvial',
+    'RasExamples', 'RasCmdr', 'HdfFluvialPluvial',
     
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
-    'HdfPipe', 'HdfInfiltration', 'RasMapper',
+    'HdfPipe', 'HdfInfiltration',
     
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',

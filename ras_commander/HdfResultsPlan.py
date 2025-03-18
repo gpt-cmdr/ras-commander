@@ -66,7 +66,7 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            pd.DataFrame: A DataFrame containing the unsteady attributes.
+            pd.DataFrame: A DataFrame containing the decoded unsteady attributes.
 
         Raises:
             FileNotFoundError: If the specified HDF file is not found.
@@ -77,8 +77,13 @@ class HdfResultsPlan:
                 if "Results/Unsteady" not in hdf_file:
                     raise KeyError("Results/Unsteady group not found in the HDF file.")
                 
-                # Create dictionary from attributes
-                attrs_dict = dict(hdf_file["Results/Unsteady"].attrs)
+                # Create dictionary from attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Results/Unsteady"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
                 
                 # Create DataFrame with a single row index
                 return pd.DataFrame(attrs_dict, index=[0])
@@ -100,7 +105,7 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            pd.DataFrame: A DataFrame containing the results unsteady summary attributes.
+            pd.DataFrame: A DataFrame containing the decoded results unsteady summary attributes.
 
         Raises:
             FileNotFoundError: If the specified HDF file is not found.
@@ -111,8 +116,13 @@ class HdfResultsPlan:
                 if "Results/Unsteady/Summary" not in hdf_file:
                     raise KeyError("Results/Unsteady/Summary group not found in the HDF file.")
                 
-                # Create dictionary from attributes
-                attrs_dict = dict(hdf_file["Results/Unsteady/Summary"].attrs)
+                # Create dictionary from attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Results/Unsteady/Summary"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
                 
                 # Create DataFrame with a single row index
                 return pd.DataFrame(attrs_dict, index=[0])
@@ -134,7 +144,7 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            Optional[pd.DataFrame]: DataFrame containing the volume accounting attributes,
+            Optional[pd.DataFrame]: DataFrame containing the decoded volume accounting attributes,
                                   or None if the group is not found.
 
         Raises:
@@ -145,8 +155,14 @@ class HdfResultsPlan:
                 if "Results/Unsteady/Summary/Volume Accounting" not in hdf_file:
                     return None
                 
-                # Get attributes and convert to DataFrame
-                attrs_dict = dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs)
+                # Get attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
+                
                 return pd.DataFrame(attrs_dict, index=[0])
                 
         except FileNotFoundError:

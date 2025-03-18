@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.54.0"
+    __version__ = "0.62.0"
 
 # Set up logging
 setup_logging()
@@ -49,14 +49,13 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'RasCmdr', 'RasGpt', 'RasToGo',
-    'HdfFluvialPluvial',
+    'RasExamples', 'RasCmdr', 'HdfFluvialPluvial',
     
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
-    'HdfPipe', 'HdfInfiltration', 'RasMapper',
+    'HdfPipe', 'HdfInfiltration',
     
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',

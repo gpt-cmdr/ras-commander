@@ -47,7 +47,7 @@ from pathlib import Path
 import pandas as pd
 import geopandas as gpd
 import h5py
-from rasterstats import zonal_stats
+
 from .Decorators import log_call, standardize_input
 
 class HdfInfiltration:
@@ -232,6 +232,12 @@ class HdfInfiltration:
         Returns:
             DataFrame with soil statistics including percentages and areas
         """
+        
+        try:
+            from rasterstats import zonal_stats
+        except ImportError as e:
+            logger.error("Failed to import rasterstats. Please run 'pip install rasterstats' and try again.")
+            raise e
         # Initialize areas dictionary
         mukey_areas = {mukey: 0 for mukey in raster_map.values()}
         

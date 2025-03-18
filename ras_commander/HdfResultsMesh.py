@@ -609,12 +609,8 @@ class HdfResultsMesh:
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the summary output data with attributes as metadata.
-
-        Raises
-        ------
-        ValueError
-            If the HDF file cannot be opened or read, or if the requested data is not found.
+            A GeoDataFrame containing the summary output data with decoded attributes as metadata.
+            Returns empty GeoDataFrame if variable is not found.
         """
         try:
             dfs = []
@@ -623,13 +619,19 @@ class HdfResultsMesh:
             logger.info(f"Processing summary output for variable: {var}")
             d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
             if d2_flow_areas is None:
+                logger.info("No 2D Flow Areas found in HDF file")
                 return gpd.GeoDataFrame()
 
             for d2_flow_area in d2_flow_areas[:]:
                 mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
                 cell_count = d2_flow_area[-1]
                 logger.debug(f"Processing mesh: {mesh_name} with {cell_count} cells")
-                group = HdfResultsMesh.get_mesh_summary_output_group(hdf_file, mesh_name, var)
+                
+                try:
+                    group = HdfResultsMesh.get_mesh_summary_output_group(hdf_file, mesh_name, var)
+                except ValueError:
+                    logger.info(f"Variable '{var}' not present in output file for mesh '{mesh_name}', skipping")
+                    continue
                 
                 data = group[:]
                 logger.debug(f"Data shape for {var} in {mesh_name}: {data.shape}")
@@ -639,7 +641,7 @@ class HdfResultsMesh:
                 if data.ndim == 2 and data.shape[0] == 2:
                     # Handle 2D datasets (e.g. Maximum Water Surface)
                     row_variables = group.attrs.get('Row Variables', [b'Value', b'Time'])
-                    row_variables = [v.decode('utf-8').strip() for v in row_variables]
+                    row_variables = [v.decode('utf-8').strip() if isinstance(v, bytes) else v for v in row_variables]
                     
                     df = pd.DataFrame({
                         "mesh_name": [mesh_name] * data.shape[1],
@@ -676,14 +678,22 @@ class HdfResultsMesh:
                                     on=['mesh_name', 'cell_id'], 
                                     how='left')
                 
-                # Add group attributes as metadata
+                # Add group attributes as metadata with proper decoding
                 df.attrs['mesh_name'] = mesh_name
                 for attr_name, attr_value in group.attrs.items():
                     if isinstance(attr_value, bytes):
-                        attr_value = attr_value.decode('utf-8')
+                        # Decode single byte string
+                        decoded_value = attr_value.decode('utf-8')
                     elif isinstance(attr_value, np.ndarray):
-                        attr_value = attr_value.tolist()
-                    df.attrs[attr_name] = attr_value
+                        if attr_value.dtype.kind in {'S', 'a'}:  # Array of byte strings
+                            # Decode array of byte strings
+                            decoded_value = [v.decode('utf-8') if isinstance(v, bytes) else v for v in attr_value]
+                        else:
+                            # Convert other numpy arrays to list
+                            decoded_value = attr_value.tolist()
+                    else:
+                        decoded_value = attr_value
+                    df.attrs[attr_name] = decoded_value
                 
                 dfs.append(df)
             
@@ -700,7 +710,7 @@ class HdfResultsMesh:
             if crs:
                 gdf.set_crs(crs, inplace=True)
             
-            # Combine attributes from all meshes
+            # Combine attributes from all meshes with decoded values
             combined_attrs = {}
             for df in dfs:
                 for key, value in df.attrs.items():
@@ -737,6 +747,6 @@ class HdfResultsMesh:
         output_path = f"Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/2D Flow Areas/{mesh_name}/{var}"
         output_item = hdf_file.get(output_path)
         if output_item is None:
-            raise ValueError(f"Could not find HDF group or dataset at path '{output_path}'")
+            raise ValueError(f"Dataset not found at path '{output_path}'")
         return output_item
 

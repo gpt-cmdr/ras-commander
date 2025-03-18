@@ -250,11 +250,8 @@ Now, lets go through each class:
 | _download_file_with_progress | X | | url, dest_folder, file_size |
 | _convert_size_to_bytes | X | | size_str |
 
-18. RasGpt Class:
 
-This class is mentioned in the code but has no implemented methods yet.
-
-19. Standalone functions:
+18. Standalone functions:
 
 | Function Name | @log_call | @standardize_input | Arguments |
 |---------------|-----------|--------------------|--------------------|
@@ -318,4 +315,3 @@ Overall, the ras-commander library provides a comprehensive set of tools for wor
 43. Remind users to clear geometry preprocessor files with `clear_geompre=True` after changing geometry-related parameters.
 44. When dealing with large datasets, consider using chunking or iterative processing to manage memory usage.
 45. Utilize the RasExamples class for testing and demonstrating functionality with sample projects.
-46. When working with the RasGpt class, be aware that it's mentioned but currently has no implemented methods.

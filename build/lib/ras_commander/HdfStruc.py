@@ -81,9 +81,20 @@ class HdfStruc:
         try:
             with h5py.File(hdf_path, 'r') as hdf:
                 if "Geometry/Structures" not in hdf:
-                    logger.info(f"No structures found in: {hdf_path}")
+                    logger.error(f"No Structures Found in the HDF, Empty Geodataframe Returned: {hdf_path}")
                     return GeoDataFrame()
                 
+                # Check if required datasets exist
+                required_datasets = [
+                    "Geometry/Structures/Centerline Info",
+                    "Geometry/Structures/Centerline Points"
+                ]
+                
+                for dataset in required_datasets:
+                    if dataset not in hdf:
+                        logger.error(f"No Structures Found in the HDF, Empty Geodataframe Returned: {hdf_path}")
+                        return GeoDataFrame()
+
                 def get_dataset_df(path: str) -> pd.DataFrame:
                     """
                     Converts an HDF5 dataset to a pandas DataFrame.
@@ -244,7 +255,7 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_geom_structures_attrs(hdf_path: Path) -> Dict[str, Any]:
+    def get_geom_structures_attrs(hdf_path: Path) -> pd.DataFrame:
         """
         Extracts structure attributes from a HEC-RAS geometry HDF file.
 
@@ -255,9 +266,9 @@ class HdfStruc:
 
         Returns
         -------
-        Dict[str, Any]
-            Dictionary of structure attributes from the Geometry/Structures group.
-            Returns empty dict if no structures are found.
+        pd.DataFrame
+            DataFrame containing structure attributes from the Geometry/Structures group.
+            Returns empty DataFrame if no structures are found.
 
         Notes
         -----
@@ -268,8 +279,19 @@ class HdfStruc:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/Structures" not in hdf_file:
                     logger.info(f"No structures found in the geometry file: {hdf_path}")
-                    return {}
-                return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file["Geometry/Structures"].attrs)
+                    return pd.DataFrame()
+                
+                # Get attributes and decode byte strings
+                attrs_dict = {}
+                for key, value in dict(hdf_file["Geometry/Structures"].attrs).items():
+                    if isinstance(value, bytes):
+                        attrs_dict[key] = value.decode('utf-8')
+                    else:
+                        attrs_dict[key] = value
+                
+                # Create DataFrame with a single row index
+                return pd.DataFrame(attrs_dict, index=[0])
+                
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
-            return {}
+            return pd.DataFrame()

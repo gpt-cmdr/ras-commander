@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.54.0"
+    __version__ = "0.62.0"
 
 # Set up logging
 setup_logging()
@@ -23,8 +23,6 @@ from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
-from .RasGpt import RasGpt
-from .RasToGo import RasToGo
 from .HdfFluvialPluvial import HdfFluvialPluvial
 
 # HDF handling
@@ -41,7 +39,6 @@ from .HdfXsec import HdfXsec
 from .HdfPump import HdfPump
 from .HdfPipe import HdfPipe
 from .HdfInfiltration import HdfInfiltration
-from .RasMapper import RasMapper
 
 # Plotting functionality
 from .HdfPlot import HdfPlot
@@ -52,14 +49,13 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'RasCmdr', 'RasGpt', 'RasToGo',
-    'HdfFluvialPluvial',
+    'RasExamples', 'RasCmdr', 'HdfFluvialPluvial',
     
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
-    'HdfPipe', 'HdfInfiltration', 'RasMapper',
+    'HdfPipe', 'HdfInfiltration',
     
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',

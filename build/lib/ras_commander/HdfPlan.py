@@ -50,6 +50,8 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+import re
+import numpy as np
 
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -178,7 +180,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_plan_parameters(hdf_path: Path) -> Dict:
+    def get_plan_parameters(hdf_path: Path) -> pd.DataFrame:
         """
         Get plan parameter attributes from a HEC-RAS HDF plan file.
 
@@ -186,7 +188,10 @@ class HdfPlan:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: A dictionary containing the plan parameter attributes.
+            pd.DataFrame: A DataFrame containing the plan parameters with columns:
+                - Parameter: Name of the parameter
+                - Value: Value of the parameter (decoded if byte string)
+                - Plan: Plan number (01-99) extracted from the filename (ProjectName.pXX.hdf)
 
         Raises:
             ValueError: If there's an error retrieving the plan parameter attributes.
@@ -197,14 +202,48 @@ class HdfPlan:
                 if plan_params_path not in hdf_file:
                     raise ValueError(f"Plan Parameters not found in {hdf_path}")
                 
-                attrs = {}
+                # Extract parameters
+                params_dict = {}
                 for key in hdf_file[plan_params_path].attrs.keys():
                     value = hdf_file[plan_params_path].attrs[key]
+                    
+                    # Handle different types of values
                     if isinstance(value, bytes):
                         value = HdfUtils.convert_ras_string(value)
-                    attrs[key] = value
+                    elif isinstance(value, np.ndarray):
+                        # Handle array values
+                        if value.dtype.kind in {'S', 'a'}:  # Array of byte strings
+                            value = [v.decode('utf-8') if isinstance(v, bytes) else v for v in value]
+                        else:
+                            value = value.tolist()  # Convert numpy array to list
+                        
+                        # If it's a single-item list, extract the value
+                        if len(value) == 1:
+                            value = value[0]
+                    
+                    params_dict[key] = value
                 
-                return attrs
+                # Create DataFrame from parameters
+                df = pd.DataFrame.from_dict(params_dict, orient='index', columns=['Value'])
+                df.index.name = 'Parameter'
+                df = df.reset_index()
+                
+                # Extract plan number from filename
+                filename = Path(hdf_path).name
+                plan_match = re.search(r'\.p(\d{2})\.', filename)
+                if plan_match:
+                    plan_num = plan_match.group(1)
+                else:
+                    plan_num = "00"  # Default if no match found
+                    logger.warning(f"Could not extract plan number from filename: {filename}")
+                
+                df['Plan'] = plan_num
+                
+                # Reorder columns to put Plan first
+                df = df[['Plan', 'Parameter', 'Value']]
+                
+                return df
+
         except Exception as e:
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
 

@@ -1122,38 +1122,6 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGpt.py
-==================================================
-import os
-from pathlib import Path
-from typing import Optional
-from ras_commander import get_logger, log_call
-
-logger = get_logger(__name__)
-
-class RasGpt:
-    """
-    A class containing helper functions for the RAS Commander GPT.
-    """
-    
-# to be implemented later
-# 
-# This class will contain  methods to help LLM's extract useful information from HEC-RAS models in a structured format with token budget etc. 
-# Templates will be used to help with this, based on the example projects (1D Steady, 1D Usteady, 1D Sediment Transport, 1D Water Quality, 2D Unsteady, 2D Steady, 2D Sediment Transport, 2D Water Quality, 2D Geospatial, 3D Unsteady, 3D Steady, 3D Sediment Transport, 3D Water Quality, 3D Geospatial).
-# These will simply filter the data to only include the relevant information for the area of focus. 
-
-#
-# IDEAS
-# 1. Package up a standard set of information for LLM analysis
-#       - General project information
-#       - Cross section information (for specific cross sections)
-#       - Structure information (for specific structures)
-#       - Include time series results and relevant HEC Guidance for LLM to reference
-
-# 2. Use Library Assistant to call LLM 
-
-==================================================
-
 File: c:\GH\ras-commander\ras_commander\RasMapper.py
 ==================================================
 """
@@ -1179,88 +1147,7 @@ from .HdfInfiltration import HdfInfiltration
 
 class RasMapper:
     """Class for handling RAS Mapper operations and data extraction"""
-
-    @staticmethod
-    @log_call
-    def get_raster_map(hdf_path: Path) -> dict:
-        """Read the raster map from HDF file and create value mapping
-        
-        Args:
-            hdf_path: Path to the HDF file
-            
-        Returns:
-            Dictionary mapping raster values to mukeys
-        """
-        with h5py.File(hdf_path, 'r') as hdf:
-            raster_map_data = hdf['Raster Map'][:]
-            return {int(item[0]): item[1].decode('utf-8') for item in raster_map_data}
-
-    @staticmethod
-    @log_call 
-    def clip_raster_with_boundary(raster_path: Path, boundary_path: Path):
-        """Clip a raster using a boundary polygon
-        
-        Args:
-            raster_path: Path to the raster file
-            boundary_path: Path to the boundary shapefile
-            
-        Returns:
-            Tuple of (clipped_image, transform, nodata_value)
-        """
-        watershed = gpd.read_file(boundary_path)
-        raster = rasterio.open(raster_path)
-        
-        out_image, out_transform = mask(raster, watershed.geometry, crop=True)
-        nodata = raster.nodatavals[0]
-        
-        return out_image[0], out_transform, nodata
-
-    @staticmethod
-    @log_call
-    def calculate_zonal_stats(boundary_path: Path, raster_data, transform, nodata):
-        """Calculate zonal statistics for a boundary
-        
-        Args:
-            boundary_path: Path to boundary shapefile
-            raster_data: Numpy array of raster values
-            transform: Raster transform
-            nodata: Nodata value
-            
-        Returns:
-            List of statistics by zone
-        """
-        watershed = gpd.read_file(boundary_path)
-        return zonal_stats(watershed, raster_data, 
-                         affine=transform, 
-                         nodata=nodata,
-                         categorical=True)
-
-# Example usage:
-"""
-# Initialize paths
-raster_path = Path('input_files/gSSURGO_InfiltrationDC.tif')
-boundary_path = Path('input_files/WF_Boundary_Simple.shp')
-hdf_path = raster_path.with_suffix('.hdf')
-
-# Get raster mapping
-raster_map = RasMapper.get_raster_map(hdf_path)
-
-# Clip raster with boundary
-clipped_data, transform, nodata = RasMapper.clip_raster_with_boundary(
-    raster_path, boundary_path)
-
-# Calculate zonal statistics
-stats = RasMapper.calculate_zonal_stats(
-    boundary_path, clipped_data, transform, nodata)
-
-# Calculate soil statistics
-soil_stats = HdfInfiltration.calculate_soil_statistics(
-    stats, raster_map)
-
-# Get significant mukeys (>1%)
-significant_mukeys = HdfInfiltration.get_significant_mukeys(
-    soil_stats, threshold=1.0)
-"""
+    # PLACEHOLDER FOR FUTURE DEVELOPMENT
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasPlan.py
@@ -3473,47 +3360,6 @@ def get_ras_exe(ras_version=None):
     return str(default_path)
     
 
-==================================================
-
-File: c:\GH\ras-commander\ras_commander\RasToGo.py
-==================================================
-"""
-RasToGo module provides functions to interface HEC-RAS with go-consequences.
-This module helps prepare and format RAS data for use with go-consequences.
-
-
------
-
-All of the methods in this class are static and are designed to be used without instantiation.
-
-List of Functions in RasToGo:
-
-TO BE IMPLEMENTED: 
-- Adding stored maps in rasmaapper for a results file
-- Editing the terrain name for stored maps, so that a reduced resolution terrain can be used for mapping
-- Re-computing specific plans using the floodplain mapping option to generate stored maps
-- Using the stored map output to call go-consequences and compute damages
-- Comparisons of go-consequences outputs based on RAS plan number
-    - include optional argument with polygons defining areas of interest
-
-"""
-
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Union
-import pandas as pd
-import numpy as np
-
-from .Decorators import log_call, standardize_input
-from .LoggingConfig import setup_logging, get_logger
-
-logger = get_logger(__name__)
-
-class RasToGo:
-    """Class containing functions to interface HEC-RAS with go-consequences."""
-
-    #@staticmethod
-    #@log_call 
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
