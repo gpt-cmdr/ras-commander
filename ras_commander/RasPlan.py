@@ -50,6 +50,11 @@ List of Functions in RasPlan:
 - update_plan_description(): Update the description in a plan file
 - read_plan_description(): Read the description from a plan file
 - update_simulation_date(): Update simulation start and end dates
+- get_shortid(): Get the Short Identifier from a plan file
+- set_shortid(): Set the Short Identifier in a plan file
+- get_plan_title(): Get the Plan Title from a plan file
+- set_plan_title(): Set the Plan Title in a plan file
+
 
         
 """
@@ -101,11 +106,10 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Ensure plan_number and new_geom are strings
         plan_number = str(plan_number).zfill(2)
         new_geom = str(new_geom).zfill(2)
 
-        # Before doing anything, make sure the plan, geom, flow, and unsteady dataframes are current
+        # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
@@ -115,18 +119,19 @@ class RasPlan:
             logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
-        # Update the geometry for the specified plan
-        ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
+        # Update all geometry-related columns
+        mask = ras_obj.plan_df['plan_number'] == plan_number
+        ras_obj.plan_df.loc[mask, 'geom_number'] = new_geom
+        ras_obj.plan_df.loc[mask, 'Geom File'] = f"g{new_geom}"
+        geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
+        ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
 
         logger.info(f"Geometry for plan {plan_number} set to {new_geom}")
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
-        # Update the project file
-        prj_file_path = ras_obj.prj_file
-        RasUtils.update_file(prj_file_path, RasPlan._update_geom_in_file, plan_number, new_geom)
-
-        # Re-initialize the ras object to reflect changes
+        # Update project file and reinitialize
+        RasUtils.update_file(ras_obj.prj_file, RasPlan._update_geom_in_file, plan_number, new_geom)
         ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
 
         return ras_obj.plan_df
@@ -173,24 +178,35 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
                         
-        # Update the flow dataframe in the ras instance to ensure it is current
         ras_obj.flow_df = ras_obj.get_flow_entries()
         
         if new_steady_flow_number not in ras_obj.flow_df['flow_number'].values:
             raise ValueError(f"Steady flow number {new_steady_flow_number} not found in project file.")
         
-        # Resolve the full path of the plan file
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
-        RasUtils.update_file(plan_file_path, RasPlan._update_steady_in_file, new_steady_flow_number)
-
-        # Update the ras object's dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        try:
+            RasUtils.update_file(plan_file_path, RasPlan._update_steady_in_file, new_steady_flow_number)
+            
+            # Update all dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            
+            # Update flow-related columns
+            mask = ras_obj.plan_df['plan_number'] == plan_number
+            flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_steady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow File'] = f"f{new_steady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow Path'] = str(flow_path)
+            ras_obj.plan_df.loc[mask, 'unsteady_number'] = None
+            
+            # Update remaining dataframes
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            
+        except Exception as e:
+            raise IOError(f"Failed to update steady flow file: {e}")
 
     @staticmethod
     def _update_steady_in_file(lines, new_steady_flow_number):
@@ -223,27 +239,47 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
-        # Update the unsteady dataframe in the ras instance to ensure it is current
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         if new_unsteady_flow_number not in ras_obj.unsteady_df['unsteady_number'].values:
             raise ValueError(f"Unsteady number {new_unsteady_flow_number} not found in project file.")
         
-        # Get the full path of the plan file
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
         try:
-            RasUtils.update_file(plan_file_path, RasPlan._update_unsteady_in_file, new_unsteady_flow_number)
-        except Exception as e:
-            raise Exception(f"Failed to update unsteady flow file: {e}")
+            # Read the plan file
+            with open(plan_file_path, 'r') as f:
+                lines = f.readlines()
 
-        # Update the ras object's dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            # Update the Flow File line
+            for i, line in enumerate(lines):
+                if line.startswith("Flow File="):
+                    lines[i] = f"Flow File=u{new_unsteady_flow_number}\n"
+                    break
+            
+            # Write back to the plan file
+            with open(plan_file_path, 'w') as f:
+                f.writelines(lines)
+            
+            # Update all dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            
+            # Update flow-related columns
+            mask = ras_obj.plan_df['plan_number'] == plan_number
+            flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow File'] = f"u{new_unsteady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow Path'] = str(flow_path)
+            ras_obj.plan_df.loc[mask, 'unsteady_number'] = new_unsteady_flow_number
+            
+            # Update remaining dataframes
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            
+        except Exception as e:
+            raise IOError(f"Failed to update unsteady flow file: {e}")
 
     @staticmethod
     def _update_unsteady_in_file(lines, new_unsteady_flow_number):
@@ -452,16 +488,17 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
-        # Use updated plan dataframe
         plan_df = ras_obj.get_plan_entries()
         
         plan_path = plan_df[plan_df['plan_number'] == plan_number]
         
         if not plan_path.empty:
-            full_path = plan_path['full_path'].iloc[0]
-            return full_path
-        else:
-            return None
+            if 'full_path' in plan_path.columns and not pd.isna(plan_path['full_path'].iloc[0]):
+                return plan_path['full_path'].iloc[0]
+            else:
+                # Fallback to constructing path
+                return str(ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}")
+        return None
 
     @staticmethod
     @log_call
@@ -1257,3 +1294,207 @@ class RasPlan:
             ras_object.plan_df = ras_object.get_plan_entries()
             ras_object.unsteady_df = ras_object.get_unsteady_entries()
 
+    @staticmethod
+    @log_call
+    def get_shortid(plan_number_or_path: Union[str, Path], ras_object=None) -> str:
+        """
+        Get the Short Identifier from a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            str: The Short Identifier from the plan file.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from the plan file.
+
+        Example:
+            >>> shortid = RasPlan.get_shortid('01')
+            >>> print(f"Plan's Short Identifier: {shortid}")
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the Short Identifier using get_plan_value
+        shortid = RasPlan.get_plan_value(plan_number_or_path, "Short Identifier", ras_obj)
+        
+        if shortid is None:
+            logger.warning(f"Short Identifier not found in plan: {plan_number_or_path}")
+            return ""
+        
+        logger.info(f"Retrieved Short Identifier: {shortid}")
+        return shortid
+
+    @staticmethod
+    @log_call
+    def set_shortid(plan_number_or_path: Union[str, Path], new_shortid: str, ras_object=None) -> None:
+        """
+        Set the Short Identifier in a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            new_shortid (str): The new Short Identifier to set (max 24 characters).
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Raises:
+            ValueError: If the plan file is not found or if new_shortid is too long.
+            IOError: If there's an error updating the plan file.
+
+        Example:
+            >>> RasPlan.set_shortid('01', 'NewShortIdentifier')
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Ensure new_shortid is not too long (HEC-RAS limits short identifiers to 24 characters)
+        if len(new_shortid) > 24:
+            logger.warning(f"Short Identifier too long (24 char max). Truncating: {new_shortid}")
+            new_shortid = new_shortid[:24]
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Update the Short Identifier line
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith("Short Identifier="):
+                    lines[i] = f"Short Identifier={new_shortid}\n"
+                    updated = True
+                    break
+
+            # If Short Identifier line not found, add it after Plan Title
+            if not updated:
+                for i, line in enumerate(lines):
+                    if line.startswith("Plan Title="):
+                        lines.insert(i+1, f"Short Identifier={new_shortid}\n")
+                        updated = True
+                        break
+                
+                # If Plan Title not found either, add at the beginning
+                if not updated:
+                    lines.insert(0, f"Short Identifier={new_shortid}\n")
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Updated Short Identifier in plan file to: {new_shortid}")
+
+        except IOError as e:
+            logger.error(f"Error updating Short Identifier in plan file {plan_file_path}: {e}")
+            raise ValueError(f"Error updating Short Identifier: {e}")
+
+        # Refresh RasPrj dataframes if ras_object provided
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()
+
+    @staticmethod
+    @log_call
+    def get_plan_title(plan_number_or_path: Union[str, Path], ras_object=None) -> str:
+        """
+        Get the Plan Title from a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            str: The Plan Title from the plan file.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from the plan file.
+
+        Example:
+            >>> title = RasPlan.get_plan_title('01')
+            >>> print(f"Plan Title: {title}")
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the Plan Title using get_plan_value
+        title = RasPlan.get_plan_value(plan_number_or_path, "Plan Title", ras_obj)
+        
+        if title is None:
+            logger.warning(f"Plan Title not found in plan: {plan_number_or_path}")
+            return ""
+        
+        logger.info(f"Retrieved Plan Title: {title}")
+        return title
+
+    @staticmethod
+    @log_call
+    def set_plan_title(plan_number_or_path: Union[str, Path], new_title: str, ras_object=None) -> None:
+        """
+        Set the Plan Title in a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            new_title (str): The new Plan Title to set.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error updating the plan file.
+
+        Example:
+            >>> RasPlan.set_plan_title('01', 'Updated Plan Scenario')
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Update the Plan Title line
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith("Plan Title="):
+                    lines[i] = f"Plan Title={new_title}\n"
+                    updated = True
+                    break
+
+            # If Plan Title line not found, add it at the beginning
+            if not updated:
+                lines.insert(0, f"Plan Title={new_title}\n")
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Updated Plan Title in plan file to: {new_title}")
+
+        except IOError as e:
+            logger.error(f"Error updating Plan Title in plan file {plan_file_path}: {e}")
+            raise ValueError(f"Error updating Plan Title: {e}")
+
+        # Refresh RasPrj dataframes if ras_object provided
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()

@@ -11,25 +11,7 @@ The file has been forked and modified for use in RAS Commander.
 
 All of the methods in this class are static and are designed to be used without instantiation.
 
-List of Functions in HdfPlan:
-- get_simulation_start_time()
-- get_simulation_end_time()
-- get_unsteady_datetimes()
-- get_plan_info_attrs()
-- get_plan_parameters()
-- get_meteorology_precip_attrs()
-- get_geom_attrs()
 
-
-REVISIONS NEEDED: 
-
-Use get_ prefix for functions that return data.  
-Since we are extracting plan data, we should use get_plan_...
-BUT, we will never set results data, so we should use results_
-
-We need to shorten names where possible.
-
-List of Revised Functions in HdfPlan:
 - get_plan_start_time()
 - get_plan_end_time()
 - get_plan_timestamps_list()     
@@ -283,7 +265,7 @@ class HdfPlan:
         
     @staticmethod
     @log_call
-    @standardize_input(file_type='plan_hdf')
+    @standardize_input(file_type='geom_hdf')
     def get_geometry_information(hdf_path: Path) -> pd.DataFrame:
         """
         Get root level geometry attributes from the HDF plan file.

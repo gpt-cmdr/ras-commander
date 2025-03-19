@@ -150,8 +150,8 @@ class HdfResultsMesh:
         Valid variables include:
             "Water Surface", "Face Velocity", "Cell Velocity X"...
         """
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            return HdfResultsMesh._get_mesh_timeseries_output(hdf_file, mesh_name, var, truncate)
+        with h5py.File(hdf_path, 'r') as hdf_path:
+            return HdfResultsMesh._get_mesh_timeseries_output(hdf_path, mesh_name, var, truncate)
 
     @staticmethod
     @log_call
@@ -210,8 +210,8 @@ class HdfResultsMesh:
                 - Variable metadata
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                return HdfResultsMesh._get_mesh_cells_timeseries_output(hdf_file, mesh_names, var, truncate)
+            with h5py.File(hdf_path, 'r') as hdf_path:
+                return HdfResultsMesh._get_mesh_cells_timeseries_output(hdf_path, mesh_names, var, truncate)
         except Exception as e:
             logger.error(f"Error in get_mesh_cells_timeseries: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
@@ -219,7 +219,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_last_iter(hdf_path: Path) -> pd.DataFrame:
+    def get_mesh_last_iter(hdf_file: Path) -> pd.DataFrame:
         """
         Get last iteration count for each mesh cell.
 
@@ -229,7 +229,7 @@ class HdfResultsMesh:
         Returns:
             pd.DataFrame: DataFrame containing last iteration counts.
         """
-        return HdfResultsMesh.get_mesh_summary_output(hdf_path, "Cell Last Iteration")
+        return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Cell Last Iteration")
 
 
     @staticmethod
@@ -394,7 +394,7 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_cells_timeseries_output(hdf_file: h5py.File, 
+    def _get_mesh_cells_timeseries_output(hdf_path: h5py.File, 
                                          mesh_names: Optional[Union[str, List[str]]] = None,
                                          var: Optional[str] = None, 
                                          truncate: bool = False) -> Dict[str, xr.Dataset]:
@@ -402,7 +402,7 @@ class HdfResultsMesh:
         Get mesh cells timeseries output for specified meshes and variables.
         
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_names (Optional[Union[str, List[str]]]): Name(s) of the mesh(es). If None, processes all available meshes.
             var (Optional[str]): Name of the variable to retrieve. If None, retrieves all variables.
             truncate (bool): If True, truncates the output to remove trailing zeros.
@@ -431,11 +431,11 @@ class HdfResultsMesh:
         }
 
         try:
-            start_time = HdfBase.get_simulation_start_time(hdf_file)
-            time_stamps = HdfBase.get_unsteady_timestamps(hdf_file)
+            start_time = HdfBase.get_simulation_start_time(hdf_path)
+            time_stamps = HdfBase.get_unsteady_timestamps(hdf_path)
 
             if mesh_names is None:
-                mesh_names = HdfResultsMesh._get_available_meshes(hdf_file)
+                mesh_names = HdfResultsMesh._get_available_meshes(hdf_path)
             elif isinstance(mesh_names, str):
                 mesh_names = [mesh_names]
 
@@ -450,7 +450,7 @@ class HdfResultsMesh:
                 for variable in variables:
                     try:
                         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, variable)
-                        dataset = hdf_file[path]
+                        dataset = hdf_path[path]
                         values = dataset[:]
                         units = dataset.attrs.get("Units", "").decode("utf-8")
 
@@ -495,12 +495,12 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_timeseries_output(hdf_file: h5py.File, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
+    def _get_mesh_timeseries_output(hdf_path: h5py.File, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
         """
         Get timeseries output for a specific mesh and variable.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Variable name to retrieve.
             truncate (bool): Whether to truncate the output to remove trailing zeros (default True).
@@ -514,18 +514,18 @@ class HdfResultsMesh:
         try:
             path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
             
-            if path not in hdf_file:
+            if path not in hdf_path:
                 raise ValueError(f"Path {path} not found in HDF file")
 
-            dataset = hdf_file[path]
+            dataset = hdf_path[path]
             values = dataset[:]
             units = dataset.attrs.get("Units", "").decode("utf-8")
             
             # Get start time and timesteps
-            start_time = HdfBase.get_simulation_start_time(hdf_file)
+            start_time = HdfBase.get_simulation_start_time(hdf_path)
             # Updated to use the new function name from HdfUtils
             timesteps = HdfUtils.convert_timesteps_to_datetimes(
-                np.array(hdf_file["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"][:]),
+                np.array(hdf_path["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"][:]),
                 start_time
             )
 
@@ -555,12 +555,12 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_timeseries_output_values_units(hdf_file: h5py.File, mesh_name: str, var: str) -> Tuple[np.ndarray, str]:
+    def _get_mesh_timeseries_output_values_units(hdf_path: h5py.File, mesh_name: str, var: str) -> Tuple[np.ndarray, str]:
         """
         Get the mesh timeseries output values and units for a specific variable from the HDF file.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Variable name to retrieve.
 
@@ -568,7 +568,7 @@ class HdfResultsMesh:
             Tuple[np.ndarray, str]: A tuple containing the output values and units.
         """
         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
-        group = hdf_file[path]
+        group = hdf_path[path]
         values = group[:]
         units = group.attrs.get("Units")
         if units is not None:
@@ -577,17 +577,17 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_available_meshes(hdf_file: h5py.File) -> List[str]:
+    def _get_available_meshes(hdf_path: h5py.File) -> List[str]:
         """
         Get the names of all available meshes in the HDF file.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
 
         Returns:
             List[str]: A list of mesh names.
         """
-        return HdfMesh.get_mesh_area_names(hdf_file)
+        return HdfMesh.get_mesh_area_names(hdf_path)
     
     
     @staticmethod
@@ -599,7 +599,7 @@ class HdfResultsMesh:
 
         Parameters
         ----------
-        hdf_file : h5py.File
+        hdf_path : h5py.File
             Open HDF file object.
         var : str
             The summary output variable to retrieve.
@@ -734,7 +734,7 @@ class HdfResultsMesh:
         Return the HDF group for a given mesh and summary output variable.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Name of the summary output variable.
 

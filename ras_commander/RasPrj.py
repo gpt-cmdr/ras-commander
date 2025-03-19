@@ -160,18 +160,107 @@ class RasPrj:
         Load project data from the HEC-RAS project file.
 
         This method initializes DataFrames for plan, flow, unsteady, and geometry entries
-        by calling the _get_prj_entries method for each entry type.
+        and ensures all required columns are present with appropriate paths.
         """
-        # Initialize DataFrames
-        self.plan_df = self._get_prj_entries('Plan')
-        self.flow_df = self._get_prj_entries('Flow')
-        self.unsteady_df = self._get_prj_entries('Unsteady')
-        self.geom_df = self.get_geom_entries()  # Use get_geom_entries instead of _get_prj_entries
-        
-        # Add Geom_File to plan_df
-        self.plan_df['Geom_File'] = self.plan_df.apply(lambda row: self._get_geom_file_for_plan(row['plan_number']), axis=1)
+        try:
+            # Load data frames
+            self.unsteady_df = self._get_prj_entries('Unsteady')
+            self.plan_df = self._get_prj_entries('Plan')
+            self.flow_df = self._get_prj_entries('Flow')
+            self.geom_df = self.get_geom_entries()
+            
+            # Ensure required columns exist
+            self._ensure_required_columns()
+            
+            # Set paths for geometry and flow files
+            self._set_file_paths()
+            
+            # Make sure all plan paths are properly set
+            self._set_plan_paths()
+            
+        except Exception as e:
+            logger.error(f"Error loading project data: {e}")
+            raise
 
-    
+    def _ensure_required_columns(self):
+        """Ensure all required columns exist in plan_df."""
+        required_columns = [
+            'plan_number', 'unsteady_number', 'geometry_number',
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+        ]
+        
+        for col in required_columns:
+            if col not in self.plan_df.columns:
+                self.plan_df[col] = None
+        
+        if not self.plan_df['full_path'].any():
+            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+                lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
+            )
+
+    def _set_file_paths(self):
+        """Set geometry and flow paths in plan_df."""
+        for idx, row in self.plan_df.iterrows():
+            try:
+                self._set_geom_path(idx, row)
+                self._set_flow_path(idx, row)
+                
+                if not self.suppress_logging:
+                    logger.info(f"Plan {row['plan_number']} paths set up")
+            except Exception as e:
+                logger.error(f"Error processing plan file {row['plan_number']}: {e}")
+
+    def _set_geom_path(self, idx: int, row: pd.Series):
+        """Set geometry path for a plan entry."""
+        if pd.notna(row['Geom File']):
+            geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+            self.plan_df.at[idx, 'Geom Path'] = str(geom_path)
+
+    def _set_flow_path(self, idx: int, row: pd.Series):
+        """Set flow path for a plan entry."""
+        if pd.notna(row['Flow File']):
+            prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+            flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+            self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+    def _set_plan_paths(self):
+        """Set full path information for plan files and their associated geometry and flow files."""
+        if self.plan_df.empty:
+            logger.debug("Plan DataFrame is empty, no paths to set")
+            return
+        
+        # Ensure full path is set for all plan entries
+        if 'full_path' not in self.plan_df.columns or self.plan_df['full_path'].isna().any():
+            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+                lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
+            )
+        
+        # Create the Geom Path and Flow Path columns if they don't exist
+        if 'Geom Path' not in self.plan_df.columns:
+            self.plan_df['Geom Path'] = None
+        if 'Flow Path' not in self.plan_df.columns:
+            self.plan_df['Flow Path'] = None
+        
+        # Update paths for each plan entry
+        for idx, row in self.plan_df.iterrows():
+            try:
+                # Set geometry path if Geom File exists and Geom Path is missing or invalid
+                if pd.notna(row['Geom File']):
+                    geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+                    self.plan_df.at[idx, 'Geom Path'] = str(geom_path)
+                
+                # Set flow path if Flow File exists and Flow Path is missing or invalid
+                if pd.notna(row['Flow File']):
+                    # Determine the prefix (u for unsteady, f for steady flow)
+                    prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+                    flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+                    self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+                
+                if not self.suppress_logging:
+                    logger.debug(f"Plan {row['plan_number']} paths set up")
+            except Exception as e:
+                logger.error(f"Error setting paths for plan {row.get('plan_number', idx)}: {e}")
+
     def _get_geom_file_for_plan(self, plan_number):
         """
         Get the geometry file path for a given plan number.
@@ -376,51 +465,115 @@ class RasPrj:
         
         return plan_info
 
+    @log_call
     def _get_prj_entries(self, entry_type):
         """
         Extract entries of a specific type from the HEC-RAS project file.
-
+        
         Args:
             entry_type (str): The type of entry to extract (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
-
+        
         Returns:
             pd.DataFrame: A DataFrame containing the extracted entries.
-
-        Note:
-            This method reads the project file and extracts entries matching the specified type.
-            For 'Unsteady' entries, it parses additional information from the unsteady file.
+        
+        Raises:
+            Exception: If there's an error reading or processing the project file.
         """
         entries = []
         pattern = re.compile(rf"{entry_type} File=(\w+)")
 
         try:
-            with open(self.prj_file, 'r') as file:
+            with open(self.prj_file, 'r', encoding='utf-8') as file:
                 for line in file:
                     match = pattern.match(line.strip())
                     if match:
                         file_name = match.group(1)
                         full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                        entry_number = file_name[1:]
+                        
                         entry = {
-                            f'{entry_type.lower()}_number': file_name[1:],
+                            f'{entry_type.lower()}_number': entry_number,
                             'full_path': full_path
                         }
-
-                        if entry_type == 'Plan':
-                            plan_info = self._parse_plan_file(Path(full_path))
-                            entry.update(plan_info)
-                            
-                            hdf_results_path = self.project_folder / f"{self.project_name}.p{file_name[1:]}.hdf"
-                            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
-
+                        
+                        # Handle Unsteady entries
                         if entry_type == 'Unsteady':
-                            unsteady_info = self._parse_unsteady_file(Path(full_path))
-                            entry.update(unsteady_info)
-
+                            entry.update(self._process_unsteady_entry(entry_number, full_path))
+                        else:
+                            entry.update(self._process_default_entry())
+                        
+                        # Handle Plan entries
+                        if entry_type == 'Plan':
+                            entry.update(self._process_plan_entry(entry_number, full_path))
+                        
                         entries.append(entry)
+            
+            df = pd.DataFrame(entries)
+            return self._format_dataframe(df, entry_type)
+        
         except Exception as e:
+            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
             raise
 
-        return pd.DataFrame(entries)
+    def _process_unsteady_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process unsteady entry data."""
+        entry = {'unsteady_number': entry_number}
+        unsteady_info = self._parse_unsteady_file(Path(full_path))
+        entry.update(unsteady_info)
+        return entry
+
+    def _process_default_entry(self) -> dict:
+        """Process default entry data."""
+        return {
+            'unsteady_number': None,
+            'geometry_number': None
+        }
+
+    def _process_plan_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process plan entry data."""
+        entry = {}
+        plan_info = self._parse_plan_file(Path(full_path))
+        
+        if plan_info:
+            entry.update(self._process_flow_file(plan_info))
+            entry.update(self._process_geom_file(plan_info))
+            
+            # Add remaining plan info
+            for key, value in plan_info.items():
+                if key not in ['Flow File', 'Geom File']:
+                    entry[key] = value
+            
+            # Add HDF results path
+            hdf_results_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
+        
+        return entry
+
+    def _process_flow_file(self, plan_info: dict) -> dict:
+        """Process flow file information from plan info."""
+        flow_file = plan_info.get('Flow File')
+        if flow_file and flow_file.startswith('u'):
+            return {
+                'unsteady_number': flow_file[1:],
+                'Flow File': flow_file[1:]
+            }
+        return {
+            'unsteady_number': None,
+            'Flow File': flow_file[1:] if flow_file and flow_file.startswith('f') else None
+        }
+
+    def _process_geom_file(self, plan_info: dict) -> dict:
+        """Process geometry file information from plan info."""
+        geom_file = plan_info.get('Geom File')
+        if geom_file and geom_file.startswith('g'):
+            return {
+                'geometry_number': geom_file[1:],
+                'Geom File': geom_file[1:]
+            }
+        return {
+            'geometry_number': None,
+            'Geom File': None
+        }
 
     def _parse_unsteady_file(self, unsteady_file_path):
         """
@@ -811,6 +964,145 @@ class RasPrj:
         
         return bc_info, unparsed_lines
 
+    @log_call
+    def _format_dataframe(self, df, entry_type):
+        """
+        Format the DataFrame according to the desired column structure.
+        
+        Args:
+            df (pd.DataFrame): The DataFrame to format.
+            entry_type (str): The type of entry (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+        
+        Returns:
+            pd.DataFrame: The formatted DataFrame.
+        """
+        if df.empty:
+            return df
+        
+        if entry_type == 'Plan':
+            # Set required column order
+            first_cols = ['plan_number', 'unsteady_number', 'geometry_number']
+            
+            # Standard plan key columns in the exact order specified
+            plan_key_cols = [
+                'Plan Title', 'Program Version', 'Short Identifier', 'Simulation Date',
+                'Std Step Tol', 'Computation Interval', 'Output Interval', 'Instantaneous Interval',
+                'Mapping Interval', 'Run HTab', 'Run UNet', 'Run Sediment', 'Run PostProcess',
+                'Run WQNet', 'Run RASMapper', 'UNET Use Existing IB Tables', 'HDF_Results_Path',
+                'UNET 1D Methodology', 'Write IC File', 'Write IC File at Fixed DateTime',
+                'IC Time', 'Write IC File Reoccurance', 'Write IC File at Sim End'
+            ]
+            
+            # Additional convenience columns
+            file_path_cols = ['Geom File', 'Geom Path', 'Flow File', 'Flow Path']
+            
+            # Special columns that must be preserved
+            special_cols = ['HDF_Results_Path']
+            
+            # Build the final column list
+            all_cols = first_cols.copy()
+            
+            # Add plan key columns if they exist
+            for col in plan_key_cols:
+                if col in df.columns and col not in all_cols and col not in special_cols:
+                    all_cols.append(col)
+            
+            # Add any remaining columns not explicitly specified
+            other_cols = [col for col in df.columns if col not in all_cols + file_path_cols + special_cols + ['full_path']]
+            all_cols.extend(other_cols)
+            
+            # Add HDF_Results_Path if it exists (ensure it comes before file paths)
+            for special_col in special_cols:
+                if special_col in df.columns and special_col not in all_cols:
+                    all_cols.append(special_col)
+            
+            # Add file path columns at the end
+            all_cols.extend(file_path_cols)
+            
+            # Rename plan_number column
+            df = df.rename(columns={f'{entry_type.lower()}_number': 'plan_number'})
+            
+            # Fill in missing columns with None
+            for col in all_cols:
+                if col not in df.columns:
+                    df[col] = None
+            
+            # Make sure full_path column is preserved and included
+            if 'full_path' in df.columns and 'full_path' not in all_cols:
+                all_cols.append('full_path')
+            
+            # Return DataFrame with specified column order
+            cols_to_return = [col for col in all_cols if col in df.columns]
+            return df[cols_to_return]
+        
+        return df
+
+    @log_call
+    def _get_prj_entries(self, entry_type):
+        """
+        Extract entries of a specific type from the HEC-RAS project file.
+        """
+        entries = []
+        pattern = re.compile(rf"{entry_type} File=(\w+)")
+
+        try:
+            with open(self.prj_file, 'r') as file:
+                for line in file:
+                    match = pattern.match(line.strip())
+                    if match:
+                        file_name = match.group(1)
+                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                        entry = self._create_entry(entry_type, file_name, full_path)
+                        entries.append(entry)
+        
+            return self._format_dataframe(pd.DataFrame(entries), entry_type)
+        
+        except Exception as e:
+            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
+            raise
+
+    def _create_entry(self, entry_type, file_name, full_path):
+        """Helper method to create entry dictionary."""
+        entry_number = file_name[1:]
+        entry = {
+            f'{entry_type.lower()}_number': entry_number,
+            'full_path': full_path,
+            'unsteady_number': None,
+            'geometry_number': None
+        }
+        
+        if entry_type == 'Unsteady':
+            entry['unsteady_number'] = entry_number
+            entry.update(self._parse_unsteady_file(Path(full_path)))
+        elif entry_type == 'Plan':
+            self._update_plan_entry(entry, entry_number, full_path)
+        
+        return entry
+
+    def _update_plan_entry(self, entry, entry_number, full_path):
+        """Helper method to update plan entry with additional information."""
+        plan_info = self._parse_plan_file(Path(full_path))
+        if plan_info:
+            # Handle Flow File
+            flow_file = plan_info.get('Flow File')
+            if flow_file:
+                if flow_file.startswith('u'):
+                    entry.update({'unsteady_number': flow_file[1:], 'Flow File': flow_file[1:]})
+                else:
+                    entry['Flow File'] = flow_file[1:] if flow_file.startswith('f') else None
+            
+            # Handle Geom File
+            geom_file = plan_info.get('Geom File')
+            if geom_file and geom_file.startswith('g'):
+                entry.update({'geometry_number': geom_file[1:], 'Geom File': geom_file[1:]})
+            
+            # Add remaining plan info
+            entry.update({k: v for k, v in plan_info.items() if k not in ['Flow File', 'Geom File']})
+            
+            # Add HDF results path
+            hdf_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+            entry['HDF_Results_Path'] = str(hdf_path) if hdf_path.exists() else None
+
 
 # Create a global instance named 'ras'
 # Defining the global instance allows the init_ras_project function to initialize the project.
@@ -881,7 +1173,7 @@ def get_ras_exe(ras_version=None):
     
     Args:
         ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
-                                     If None, the function will attempt to use the version from the global 'ras' object
+                                     If None, the function will first check the global 'ras' object for a path.
                                      or a default path.
     
     Returns:

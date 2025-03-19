@@ -216,30 +216,49 @@ class RasUtils:
         Returns:
         Path: Full path to the plan file
 
+        Raises:
+        ValueError: If plan number is not between 1 and 99
+        TypeError: If input type is invalid
+        FileNotFoundError: If the plan file does not exist
+
         Example:
         >>> plan_path = RasUtils.get_plan_path(1)
         >>> print(f"Plan file path: {plan_path}")
         >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
         >>> print(f"Plan file path: {plan_path}")
         """
-        
+        # Validate RAS object
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
+        # Handle direct file path input
         plan_path = Path(current_plan_number_or_path)
         if plan_path.is_file():
             logger.info(f"Using provided plan file path: {plan_path}")
             return plan_path
         
+        # Handle plan number input
         try:
-            current_plan_number = f"{int(current_plan_number_or_path):02d}"  # Ensure two-digit format
+            plan_num = int(current_plan_number_or_path)
+            if not 1 <= plan_num <= 99:
+                raise ValueError(f"Plan number must be between 1 and 99, got: {plan_num}")
+            current_plan_number = f"{plan_num:02d}"  # Ensure two-digit format
             logger.debug(f"Converted plan number to two-digit format: {current_plan_number}")
-        except ValueError:
+        except (ValueError, TypeError) as e:
+            if isinstance(e, TypeError):
+                logger.error(f"Invalid input type: {type(current_plan_number_or_path)}. Expected string, number, or Path.")
+                raise TypeError(f"Invalid input type: {type(current_plan_number_or_path)}. Expected string, number, or Path.")
             logger.error(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
             raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
         
+        # Construct and validate plan path
         plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
         full_plan_path = ras_obj.project_folder / plan_name
+        
+        if not full_plan_path.exists():
+            logger.error(f"Plan file does not exist: {full_plan_path}")
+            raise FileNotFoundError(f"Plan file does not exist: {full_plan_path}")
+        
         logger.info(f"Constructed plan file path: {full_plan_path}")
         return full_plan_path
 

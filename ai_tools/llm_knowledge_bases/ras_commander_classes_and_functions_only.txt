@@ -6,6 +6,7 @@ from typing import Union
 import logging
 import h5py
 import inspect
+import pandas as pd
 
 
 def log_call(func):
@@ -46,16 +47,23 @@ def standardize_input(file_type: str = 'plan_hdf'):
             sig = inspect.signature(func)
             param_names = list(sig.parameters.keys())
             
-            # If first parameter is 'hdf_file', skip path processing
+            # If first parameter is 'hdf_file', pass an h5py object
             if param_names and param_names[0] == 'hdf_file':
-                return func(*args, **kwargs)
+                if isinstance(args[0], h5py.File):
+                    return func(*args, **kwargs)
+                elif isinstance(args[0], (str, Path)):
+                    with h5py.File(args[0], 'r') as hdf:
+                        return func(hdf, *args[1:], **kwargs)
+                else:
+                    raise ValueError(f"Expected h5py.File or path, got {type(args[0])}")
                 
             # Handle both static method calls and regular function calls
             if args and isinstance(args[0], type):
                 # Static method call, remove the class argument
                 args = args[1:]
             
-            hdf_input = kwargs.pop('hdf_path', None) or kwargs.pop('hdf_input', None) or (args[0] if args else None)
+            # Get hdf_input from kwargs if provided with hdf_path key, or take first positional arg
+            hdf_input = kwargs.pop('hdf_path', None) if 'hdf_path' in kwargs else (args[0] if args else None)
             
             # Import ras here to ensure we get the most current instance
             from .RasPrj import ras as ras
@@ -66,80 +74,134 @@ def standardize_input(file_type: str = 'plan_hdf'):
             if hdf_input is None:
                 return func(*args, **kwargs)
 
-            # NEW: If input is already a Path and exists, use it directly regardless of file_type
-            if isinstance(hdf_input, Path) and hdf_input.is_file():
-                logger.info(f"Using existing HDF file: {hdf_input}")
-                new_args = (hdf_input,) + args[1:]
-                return func(*new_args, **kwargs)
-
             hdf_path = None
 
-            # If hdf_input is already an h5py.File object, use its filename
-            if isinstance(hdf_input, h5py.File):
-                hdf_path = Path(hdf_input.filename)
-            # Handle Path objects
-            elif isinstance(hdf_input, Path):
-                if hdf_input.is_file():
+            # Clean and normalize string inputs
+            if isinstance(hdf_input, str):
+                # Clean the string (remove extra whitespace, normalize path separators)
+                hdf_input = hdf_input.strip()
+                
+                # Check if it's a raw file path that exists
+                try:
+                    test_path = Path(hdf_input)
+                    if test_path.is_file():
+                        hdf_path = test_path
+                        logger.info(f"Using HDF file from direct string path: {hdf_path}")
+                except Exception as e:
+                    logger.debug(f"Error converting string to path: {str(e)}")
+
+            # If a valid path wasn't created from string processing, continue with normal flow
+            if hdf_path is None:
+                # If hdf_input is already a Path and exists, use it directly
+                if isinstance(hdf_input, Path) and hdf_input.is_file():
                     hdf_path = hdf_input
-            # Handle string inputs
-            elif isinstance(hdf_input, str):
-                # Check if it's a file path
-                if Path(hdf_input).is_file():
-                    hdf_path = Path(hdf_input)
-                # Check if it's a number (with or without 'p' prefix)
-                elif hdf_input.isdigit() or (len(hdf_input) > 1 and hdf_input[0] == 'p' and hdf_input[1:].isdigit()):
+                    logger.info(f"Using existing Path object HDF file: {hdf_path}")
+                # If hdf_input is an h5py.File object, use its filename
+                elif isinstance(hdf_input, h5py.File):
+                    hdf_path = Path(hdf_input.filename)
+                    logger.info(f"Using HDF file from h5py.File object: {hdf_path}")
+                # Handle Path objects that might not be verified yet
+                elif isinstance(hdf_input, Path):
+                    if hdf_input.is_file():
+                        hdf_path = hdf_input
+                        logger.info(f"Using verified Path object HDF file: {hdf_path}")
+                # Handle string inputs that are plan/geom numbers
+                elif isinstance(hdf_input, str) and (hdf_input.isdigit() or (len(hdf_input) > 1 and hdf_input[0] == 'p' and hdf_input[1:].isdigit())):
                     try:
                         ras_obj.check_initialized()
                     except Exception as e:
                         raise ValueError(f"RAS object is not initialized: {str(e)}")
                         
-                    # Extract the numeric part and convert to integer for comparison
                     number_str = hdf_input if hdf_input.isdigit() else hdf_input[1:]
                     number_int = int(number_str)
                     
                     if file_type == 'plan_hdf':
-                        # Convert plan_number column to integers for comparison
-                        plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
-                        if not plan_info.empty:
-                            hdf_path = Path(plan_info.iloc[0]['HDF_Results_Path'])
+                        try:
+                            # Convert plan_number column to integers for comparison
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Make sure HDF_Results_Path is a string and not None
+                                hdf_path_str = plan_info.iloc[0]['HDF_Results_Path']
+                                if pd.notna(hdf_path_str):
+                                    hdf_path = Path(str(hdf_path_str))
+                        except Exception as e:
+                            logger.warning(f"Error retrieving plan HDF path: {str(e)}")
+
+
                     elif file_type == 'geom_hdf':
-                        # Convert geom_number column to integers for comparison
-                        geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'].astype(int) == number_int]
-                        if not geom_info.empty:
-                            hdf_path = Path(geom_info.iloc[0]['HDF_Path'])
+                        try:
+                            # Convert geometry_number column to integers for comparison
+                            geom_info = ras_obj.plan_df[ras_obj.plan_df['geometry_number'].astype(int) == number_int]
+                            if not geom_info.empty:
+                                hdf_path_str = ras_obj.geom_df.iloc[0]['hdf_path'] 
+                                if pd.notna(hdf_path_str):
+                                    hdf_path = Path(str(hdf_path_str))
+                        except Exception as e:
+                            logger.warning(f"Error retrieving geometry HDF path: {str(e)}")
                     else:
                         raise ValueError(f"Invalid file type: {file_type}")
-            # Handle integer inputs (assuming they're plan or geom numbers)
-            elif isinstance(hdf_input, int):
-                try:
-                    ras_obj.check_initialized()
-                except Exception as e:
-                    raise ValueError(f"RAS object is not initialized: {str(e)}")
                     
-                number_int = hdf_input
-                
-                if file_type == 'plan_hdf':
-                    # Convert plan_number column to integers for comparison
-                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
-                    if not plan_info.empty:
-                        hdf_path = Path(plan_info.iloc[0]['HDF_Results_Path'])
-                elif file_type == 'geom_hdf':
-                    # Convert geom_number column to integers for comparison
-                    geom_info = ras_obj.geom_df[ras_obj.geom_df['geom_number'].astype(int) == number_int]
-                    if not geom_info.empty:
-                        hdf_path = Path(geom_info.iloc[0]['HDF_Path'])
-                else:
-                    raise ValueError(f"Invalid file type: {file_type}")
 
-            if hdf_path is None or not hdf_path.is_file():
+
+                
+                # Handle integer inputs (assuming they're plan or geom numbers)
+                elif isinstance(hdf_input, int):
+                    try:
+                        ras_obj.check_initialized()
+                    except Exception as e:
+                        raise ValueError(f"RAS object is not initialized: {str(e)}")
+                        
+                    number_int = hdf_input
+                    
+                    if file_type == 'plan_hdf':
+                        try:
+                            # Convert plan_number column to integers for comparison
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Make sure HDF_Results_Path is a string and not None
+                                hdf_path_str = plan_info.iloc[0]['HDF_Results_Path']
+                                if pd.notna(hdf_path_str):
+                                    hdf_path = Path(str(hdf_path_str))
+                        except Exception as e:
+                            logger.warning(f"Error retrieving plan HDF path: {str(e)}")
+                    elif file_type == 'geom_hdf':
+                        try:
+                            # Convert geometry_number column to integers for comparison
+                            geom_info = ras_obj.plan_df[ras_obj.plan_df['geometry_number'].astype(int) == number_int]
+                            if not geom_info.empty:
+                                hdf_path_str = ras_obj.geom_df.iloc[0]['hdf_path'] 
+                                if pd.notna(hdf_path_str):
+                                    hdf_path = Path(str(hdf_path_str))
+                        except Exception as e:
+                            logger.warning(f"Error retrieving geometry HDF path: {str(e)}")
+                    else:
+                        raise ValueError(f"Invalid file type: {file_type}")
+
+            # Final verification that the path exists
+            if hdf_path is None or not hdf_path.exists():
                 error_msg = f"HDF file not found: {hdf_input}"
                 logger.error(error_msg)
                 raise FileNotFoundError(error_msg)
-
-            logger.info(f"Using HDF file: {hdf_path}")
+                
+            logger.info(f"Final validated HDF file path: {hdf_path}")
+            
+            # Now try to validate the HDF file structure (but don't fail if validation fails)
+            try:
+                with h5py.File(hdf_path, 'r') as test_file:
+                    # Just open to verify it's a valid HDF5 file
+                    logger.debug(f"Successfully opened HDF file for validation: {hdf_path}")
+            except Exception as e:
+                logger.warning(f"Warning: Could not validate HDF file: {str(e)}")
+                # Continue anyway, let the function handle detailed validation
             
             # Pass all original arguments and keywords, replacing hdf_input with standardized hdf_path
-            new_args = (hdf_path,) + args[1:]
+            # If the original input was positional, replace the first argument
+            if args and 'hdf_path' not in kwargs:
+                new_args = (hdf_path,) + args[1:]
+            else:
+                new_args = args
+                kwargs['hdf_path'] = hdf_path
+                
             return func(*new_args, **kwargs)
 
         return wrapper
@@ -3098,25 +3160,7 @@ The file has been forked and modified for use in RAS Commander.
 
 All of the methods in this class are static and are designed to be used without instantiation.
 
-List of Functions in HdfPlan:
-- get_simulation_start_time()
-- get_simulation_end_time()
-- get_unsteady_datetimes()
-- get_plan_info_attrs()
-- get_plan_parameters()
-- get_meteorology_precip_attrs()
-- get_geom_attrs()
 
-
-REVISIONS NEEDED: 
-
-Use get_ prefix for functions that return data.  
-Since we are extracting plan data, we should use get_plan_...
-BUT, we will never set results data, so we should use results_
-
-We need to shorten names where possible.
-
-List of Revised Functions in HdfPlan:
 - get_plan_start_time()
 - get_plan_end_time()
 - get_plan_timestamps_list()     
@@ -3370,7 +3414,7 @@ class HdfPlan:
         
     @staticmethod
     @log_call
-    @standardize_input(file_type='plan_hdf')
+    @standardize_input(file_type='geom_hdf')
     def get_geometry_information(hdf_path: Path) -> pd.DataFrame:
         """
         Get root level geometry attributes from the HDF plan file.
@@ -4001,8 +4045,8 @@ class HdfResultsMesh:
         Valid variables include:
             "Water Surface", "Face Velocity", "Cell Velocity X"...
         """
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            return HdfResultsMesh._get_mesh_timeseries_output(hdf_file, mesh_name, var, truncate)
+        with h5py.File(hdf_path, 'r') as hdf_path:
+            return HdfResultsMesh._get_mesh_timeseries_output(hdf_path, mesh_name, var, truncate)
 
     @staticmethod
     @log_call
@@ -4061,8 +4105,8 @@ class HdfResultsMesh:
                 - Variable metadata
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                return HdfResultsMesh._get_mesh_cells_timeseries_output(hdf_file, mesh_names, var, truncate)
+            with h5py.File(hdf_path, 'r') as hdf_path:
+                return HdfResultsMesh._get_mesh_cells_timeseries_output(hdf_path, mesh_names, var, truncate)
         except Exception as e:
             logger.error(f"Error in get_mesh_cells_timeseries: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
@@ -4070,7 +4114,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_last_iter(hdf_path: Path) -> pd.DataFrame:
+    def get_mesh_last_iter(hdf_file: Path) -> pd.DataFrame:
         """
         Get last iteration count for each mesh cell.
 
@@ -4080,7 +4124,7 @@ class HdfResultsMesh:
         Returns:
             pd.DataFrame: DataFrame containing last iteration counts.
         """
-        return HdfResultsMesh.get_mesh_summary_output(hdf_path, "Cell Last Iteration")
+        return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Cell Last Iteration")
 
 
     @staticmethod
@@ -4245,7 +4289,7 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_cells_timeseries_output(hdf_file: h5py.File, 
+    def _get_mesh_cells_timeseries_output(hdf_path: h5py.File, 
                                          mesh_names: Optional[Union[str, List[str]]] = None,
                                          var: Optional[str] = None, 
                                          truncate: bool = False) -> Dict[str, xr.Dataset]:
@@ -4253,7 +4297,7 @@ class HdfResultsMesh:
         Get mesh cells timeseries output for specified meshes and variables.
         
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_names (Optional[Union[str, List[str]]]): Name(s) of the mesh(es). If None, processes all available meshes.
             var (Optional[str]): Name of the variable to retrieve. If None, retrieves all variables.
             truncate (bool): If True, truncates the output to remove trailing zeros.
@@ -4282,11 +4326,11 @@ class HdfResultsMesh:
         }
 
         try:
-            start_time = HdfBase.get_simulation_start_time(hdf_file)
-            time_stamps = HdfBase.get_unsteady_timestamps(hdf_file)
+            start_time = HdfBase.get_simulation_start_time(hdf_path)
+            time_stamps = HdfBase.get_unsteady_timestamps(hdf_path)
 
             if mesh_names is None:
-                mesh_names = HdfResultsMesh._get_available_meshes(hdf_file)
+                mesh_names = HdfResultsMesh._get_available_meshes(hdf_path)
             elif isinstance(mesh_names, str):
                 mesh_names = [mesh_names]
 
@@ -4301,7 +4345,7 @@ class HdfResultsMesh:
                 for variable in variables:
                     try:
                         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, variable)
-                        dataset = hdf_file[path]
+                        dataset = hdf_path[path]
                         values = dataset[:]
                         units = dataset.attrs.get("Units", "").decode("utf-8")
 
@@ -4346,12 +4390,12 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_timeseries_output(hdf_file: h5py.File, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
+    def _get_mesh_timeseries_output(hdf_path: h5py.File, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
         """
         Get timeseries output for a specific mesh and variable.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Variable name to retrieve.
             truncate (bool): Whether to truncate the output to remove trailing zeros (default True).
@@ -4365,18 +4409,18 @@ class HdfResultsMesh:
         try:
             path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
             
-            if path not in hdf_file:
+            if path not in hdf_path:
                 raise ValueError(f"Path {path} not found in HDF file")
 
-            dataset = hdf_file[path]
+            dataset = hdf_path[path]
             values = dataset[:]
             units = dataset.attrs.get("Units", "").decode("utf-8")
             
             # Get start time and timesteps
-            start_time = HdfBase.get_simulation_start_time(hdf_file)
+            start_time = HdfBase.get_simulation_start_time(hdf_path)
             # Updated to use the new function name from HdfUtils
             timesteps = HdfUtils.convert_timesteps_to_datetimes(
-                np.array(hdf_file["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"][:]),
+                np.array(hdf_path["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"][:]),
                 start_time
             )
 
@@ -4406,12 +4450,12 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_timeseries_output_values_units(hdf_file: h5py.File, mesh_name: str, var: str) -> Tuple[np.ndarray, str]:
+    def _get_mesh_timeseries_output_values_units(hdf_path: h5py.File, mesh_name: str, var: str) -> Tuple[np.ndarray, str]:
         """
         Get the mesh timeseries output values and units for a specific variable from the HDF file.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Variable name to retrieve.
 
@@ -4419,7 +4463,7 @@ class HdfResultsMesh:
             Tuple[np.ndarray, str]: A tuple containing the output values and units.
         """
         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
-        group = hdf_file[path]
+        group = hdf_path[path]
         values = group[:]
         units = group.attrs.get("Units")
         if units is not None:
@@ -4428,17 +4472,17 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_available_meshes(hdf_file: h5py.File) -> List[str]:
+    def _get_available_meshes(hdf_path: h5py.File) -> List[str]:
         """
         Get the names of all available meshes in the HDF file.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
 
         Returns:
             List[str]: A list of mesh names.
         """
-        return HdfMesh.get_mesh_area_names(hdf_file)
+        return HdfMesh.get_mesh_area_names(hdf_path)
     
     
     @staticmethod
@@ -4450,7 +4494,7 @@ class HdfResultsMesh:
 
         Parameters
         ----------
-        hdf_file : h5py.File
+        hdf_path : h5py.File
             Open HDF file object.
         var : str
             The summary output variable to retrieve.
@@ -4585,7 +4629,7 @@ class HdfResultsMesh:
         Return the HDF group for a given mesh and summary output variable.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_path (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Name of the summary output variable.
 
@@ -8181,6 +8225,11 @@ List of Functions in RasPlan:
 - update_plan_description(): Update the description in a plan file
 - read_plan_description(): Read the description from a plan file
 - update_simulation_date(): Update simulation start and end dates
+- get_shortid(): Get the Short Identifier from a plan file
+- set_shortid(): Set the Short Identifier in a plan file
+- get_plan_title(): Get the Plan Title from a plan file
+- set_plan_title(): Set the Plan Title in a plan file
+
 
         
 """
@@ -8232,11 +8281,10 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Ensure plan_number and new_geom are strings
         plan_number = str(plan_number).zfill(2)
         new_geom = str(new_geom).zfill(2)
 
-        # Before doing anything, make sure the plan, geom, flow, and unsteady dataframes are current
+        # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
@@ -8246,18 +8294,19 @@ class RasPlan:
             logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
-        # Update the geometry for the specified plan
-        ras_obj.plan_df.loc[ras_obj.plan_df['plan_number'] == plan_number, 'geom_number'] = new_geom
+        # Update all geometry-related columns
+        mask = ras_obj.plan_df['plan_number'] == plan_number
+        ras_obj.plan_df.loc[mask, 'geom_number'] = new_geom
+        ras_obj.plan_df.loc[mask, 'Geom File'] = f"g{new_geom}"
+        geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
+        ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
 
         logger.info(f"Geometry for plan {plan_number} set to {new_geom}")
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
-        # Update the project file
-        prj_file_path = ras_obj.prj_file
-        RasUtils.update_file(prj_file_path, RasPlan._update_geom_in_file, plan_number, new_geom)
-
-        # Re-initialize the ras object to reflect changes
+        # Update project file and reinitialize
+        RasUtils.update_file(ras_obj.prj_file, RasPlan._update_geom_in_file, plan_number, new_geom)
         ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
 
         return ras_obj.plan_df
@@ -8304,24 +8353,35 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
                         
-        # Update the flow dataframe in the ras instance to ensure it is current
         ras_obj.flow_df = ras_obj.get_flow_entries()
         
         if new_steady_flow_number not in ras_obj.flow_df['flow_number'].values:
             raise ValueError(f"Steady flow number {new_steady_flow_number} not found in project file.")
         
-        # Resolve the full path of the plan file
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
-        RasUtils.update_file(plan_file_path, RasPlan._update_steady_in_file, new_steady_flow_number)
-
-        # Update the ras object's dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        try:
+            RasUtils.update_file(plan_file_path, RasPlan._update_steady_in_file, new_steady_flow_number)
+            
+            # Update all dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            
+            # Update flow-related columns
+            mask = ras_obj.plan_df['plan_number'] == plan_number
+            flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_steady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow File'] = f"f{new_steady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow Path'] = str(flow_path)
+            ras_obj.plan_df.loc[mask, 'unsteady_number'] = None
+            
+            # Update remaining dataframes
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            
+        except Exception as e:
+            raise IOError(f"Failed to update steady flow file: {e}")
 
     @staticmethod
     def _update_steady_in_file(lines, new_steady_flow_number):
@@ -8354,27 +8414,47 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
-        # Update the unsteady dataframe in the ras instance to ensure it is current
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         if new_unsteady_flow_number not in ras_obj.unsteady_df['unsteady_number'].values:
             raise ValueError(f"Unsteady number {new_unsteady_flow_number} not found in project file.")
         
-        # Get the full path of the plan file
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
         try:
-            RasUtils.update_file(plan_file_path, RasPlan._update_unsteady_in_file, new_unsteady_flow_number)
-        except Exception as e:
-            raise Exception(f"Failed to update unsteady flow file: {e}")
+            # Read the plan file
+            with open(plan_file_path, 'r') as f:
+                lines = f.readlines()
 
-        # Update the ras object's dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            # Update the Flow File line
+            for i, line in enumerate(lines):
+                if line.startswith("Flow File="):
+                    lines[i] = f"Flow File=u{new_unsteady_flow_number}\n"
+                    break
+            
+            # Write back to the plan file
+            with open(plan_file_path, 'w') as f:
+                f.writelines(lines)
+            
+            # Update all dataframes
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            
+            # Update flow-related columns
+            mask = ras_obj.plan_df['plan_number'] == plan_number
+            flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow File'] = f"u{new_unsteady_flow_number}"
+            ras_obj.plan_df.loc[mask, 'Flow Path'] = str(flow_path)
+            ras_obj.plan_df.loc[mask, 'unsteady_number'] = new_unsteady_flow_number
+            
+            # Update remaining dataframes
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            
+        except Exception as e:
+            raise IOError(f"Failed to update unsteady flow file: {e}")
 
     @staticmethod
     def _update_unsteady_in_file(lines, new_unsteady_flow_number):
@@ -8583,16 +8663,17 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
-        # Use updated plan dataframe
         plan_df = ras_obj.get_plan_entries()
         
         plan_path = plan_df[plan_df['plan_number'] == plan_number]
         
         if not plan_path.empty:
-            full_path = plan_path['full_path'].iloc[0]
-            return full_path
-        else:
-            return None
+            if 'full_path' in plan_path.columns and not pd.isna(plan_path['full_path'].iloc[0]):
+                return plan_path['full_path'].iloc[0]
+            else:
+                # Fallback to constructing path
+                return str(ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}")
+        return None
 
     @staticmethod
     @log_call
@@ -9388,7 +9469,210 @@ class RasPlan:
             ras_object.plan_df = ras_object.get_plan_entries()
             ras_object.unsteady_df = ras_object.get_unsteady_entries()
 
+    @staticmethod
+    @log_call
+    def get_shortid(plan_number_or_path: Union[str, Path], ras_object=None) -> str:
+        """
+        Get the Short Identifier from a HEC-RAS plan file.
 
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            str: The Short Identifier from the plan file.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from the plan file.
+
+        Example:
+            >>> shortid = RasPlan.get_shortid('01')
+            >>> print(f"Plan's Short Identifier: {shortid}")
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the Short Identifier using get_plan_value
+        shortid = RasPlan.get_plan_value(plan_number_or_path, "Short Identifier", ras_obj)
+        
+        if shortid is None:
+            logger.warning(f"Short Identifier not found in plan: {plan_number_or_path}")
+            return ""
+        
+        logger.info(f"Retrieved Short Identifier: {shortid}")
+        return shortid
+
+    @staticmethod
+    @log_call
+    def set_shortid(plan_number_or_path: Union[str, Path], new_shortid: str, ras_object=None) -> None:
+        """
+        Set the Short Identifier in a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            new_shortid (str): The new Short Identifier to set (max 24 characters).
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Raises:
+            ValueError: If the plan file is not found or if new_shortid is too long.
+            IOError: If there's an error updating the plan file.
+
+        Example:
+            >>> RasPlan.set_shortid('01', 'NewShortIdentifier')
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Ensure new_shortid is not too long (HEC-RAS limits short identifiers to 24 characters)
+        if len(new_shortid) > 24:
+            logger.warning(f"Short Identifier too long (24 char max). Truncating: {new_shortid}")
+            new_shortid = new_shortid[:24]
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Update the Short Identifier line
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith("Short Identifier="):
+                    lines[i] = f"Short Identifier={new_shortid}\n"
+                    updated = True
+                    break
+
+            # If Short Identifier line not found, add it after Plan Title
+            if not updated:
+                for i, line in enumerate(lines):
+                    if line.startswith("Plan Title="):
+                        lines.insert(i+1, f"Short Identifier={new_shortid}\n")
+                        updated = True
+                        break
+                
+                # If Plan Title not found either, add at the beginning
+                if not updated:
+                    lines.insert(0, f"Short Identifier={new_shortid}\n")
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Updated Short Identifier in plan file to: {new_shortid}")
+
+        except IOError as e:
+            logger.error(f"Error updating Short Identifier in plan file {plan_file_path}: {e}")
+            raise ValueError(f"Error updating Short Identifier: {e}")
+
+        # Refresh RasPrj dataframes if ras_object provided
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()
+
+    @staticmethod
+    @log_call
+    def get_plan_title(plan_number_or_path: Union[str, Path], ras_object=None) -> str:
+        """
+        Get the Plan Title from a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            str: The Plan Title from the plan file.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from the plan file.
+
+        Example:
+            >>> title = RasPlan.get_plan_title('01')
+            >>> print(f"Plan Title: {title}")
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the Plan Title using get_plan_value
+        title = RasPlan.get_plan_value(plan_number_or_path, "Plan Title", ras_obj)
+        
+        if title is None:
+            logger.warning(f"Plan Title not found in plan: {plan_number_or_path}")
+            return ""
+        
+        logger.info(f"Retrieved Plan Title: {title}")
+        return title
+
+    @staticmethod
+    @log_call
+    def set_plan_title(plan_number_or_path: Union[str, Path], new_title: str, ras_object=None) -> None:
+        """
+        Set the Plan Title in a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            new_title (str): The new Plan Title to set.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error updating the plan file.
+
+        Example:
+            >>> RasPlan.set_plan_title('01', 'Updated Plan Scenario')
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Update the Plan Title line
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith("Plan Title="):
+                    lines[i] = f"Plan Title={new_title}\n"
+                    updated = True
+                    break
+
+            # If Plan Title line not found, add it at the beginning
+            if not updated:
+                lines.insert(0, f"Plan Title={new_title}\n")
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Updated Plan Title in plan file to: {new_title}")
+
+        except IOError as e:
+            logger.error(f"Error updating Plan Title in plan file {plan_file_path}: {e}")
+            raise ValueError(f"Error updating Plan Title: {e}")
+
+        # Refresh RasPrj dataframes if ras_object provided
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasPrj.py
@@ -9555,18 +9839,107 @@ class RasPrj:
         Load project data from the HEC-RAS project file.
 
         This method initializes DataFrames for plan, flow, unsteady, and geometry entries
-        by calling the _get_prj_entries method for each entry type.
+        and ensures all required columns are present with appropriate paths.
         """
-        # Initialize DataFrames
-        self.plan_df = self._get_prj_entries('Plan')
-        self.flow_df = self._get_prj_entries('Flow')
-        self.unsteady_df = self._get_prj_entries('Unsteady')
-        self.geom_df = self.get_geom_entries()  # Use get_geom_entries instead of _get_prj_entries
-        
-        # Add Geom_File to plan_df
-        self.plan_df['Geom_File'] = self.plan_df.apply(lambda row: self._get_geom_file_for_plan(row['plan_number']), axis=1)
+        try:
+            # Load data frames
+            self.unsteady_df = self._get_prj_entries('Unsteady')
+            self.plan_df = self._get_prj_entries('Plan')
+            self.flow_df = self._get_prj_entries('Flow')
+            self.geom_df = self.get_geom_entries()
+            
+            # Ensure required columns exist
+            self._ensure_required_columns()
+            
+            # Set paths for geometry and flow files
+            self._set_file_paths()
+            
+            # Make sure all plan paths are properly set
+            self._set_plan_paths()
+            
+        except Exception as e:
+            logger.error(f"Error loading project data: {e}")
+            raise
 
-    
+    def _ensure_required_columns(self):
+        """Ensure all required columns exist in plan_df."""
+        required_columns = [
+            'plan_number', 'unsteady_number', 'geometry_number',
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+        ]
+        
+        for col in required_columns:
+            if col not in self.plan_df.columns:
+                self.plan_df[col] = None
+        
+        if not self.plan_df['full_path'].any():
+            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+                lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
+            )
+
+    def _set_file_paths(self):
+        """Set geometry and flow paths in plan_df."""
+        for idx, row in self.plan_df.iterrows():
+            try:
+                self._set_geom_path(idx, row)
+                self._set_flow_path(idx, row)
+                
+                if not self.suppress_logging:
+                    logger.info(f"Plan {row['plan_number']} paths set up")
+            except Exception as e:
+                logger.error(f"Error processing plan file {row['plan_number']}: {e}")
+
+    def _set_geom_path(self, idx: int, row: pd.Series):
+        """Set geometry path for a plan entry."""
+        if pd.notna(row['Geom File']):
+            geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+            self.plan_df.at[idx, 'Geom Path'] = str(geom_path)
+
+    def _set_flow_path(self, idx: int, row: pd.Series):
+        """Set flow path for a plan entry."""
+        if pd.notna(row['Flow File']):
+            prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+            flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+            self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+    def _set_plan_paths(self):
+        """Set full path information for plan files and their associated geometry and flow files."""
+        if self.plan_df.empty:
+            logger.debug("Plan DataFrame is empty, no paths to set")
+            return
+        
+        # Ensure full path is set for all plan entries
+        if 'full_path' not in self.plan_df.columns or self.plan_df['full_path'].isna().any():
+            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+                lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
+            )
+        
+        # Create the Geom Path and Flow Path columns if they don't exist
+        if 'Geom Path' not in self.plan_df.columns:
+            self.plan_df['Geom Path'] = None
+        if 'Flow Path' not in self.plan_df.columns:
+            self.plan_df['Flow Path'] = None
+        
+        # Update paths for each plan entry
+        for idx, row in self.plan_df.iterrows():
+            try:
+                # Set geometry path if Geom File exists and Geom Path is missing or invalid
+                if pd.notna(row['Geom File']):
+                    geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+                    self.plan_df.at[idx, 'Geom Path'] = str(geom_path)
+                
+                # Set flow path if Flow File exists and Flow Path is missing or invalid
+                if pd.notna(row['Flow File']):
+                    # Determine the prefix (u for unsteady, f for steady flow)
+                    prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+                    flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+                    self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+                
+                if not self.suppress_logging:
+                    logger.debug(f"Plan {row['plan_number']} paths set up")
+            except Exception as e:
+                logger.error(f"Error setting paths for plan {row.get('plan_number', idx)}: {e}")
+
     def _get_geom_file_for_plan(self, plan_number):
         """
         Get the geometry file path for a given plan number.
@@ -9771,51 +10144,115 @@ class RasPrj:
         
         return plan_info
 
+    @log_call
     def _get_prj_entries(self, entry_type):
         """
         Extract entries of a specific type from the HEC-RAS project file.
-
+        
         Args:
             entry_type (str): The type of entry to extract (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
-
+        
         Returns:
             pd.DataFrame: A DataFrame containing the extracted entries.
-
-        Note:
-            This method reads the project file and extracts entries matching the specified type.
-            For 'Unsteady' entries, it parses additional information from the unsteady file.
+        
+        Raises:
+            Exception: If there's an error reading or processing the project file.
         """
         entries = []
         pattern = re.compile(rf"{entry_type} File=(\w+)")
 
         try:
-            with open(self.prj_file, 'r') as file:
+            with open(self.prj_file, 'r', encoding='utf-8') as file:
                 for line in file:
                     match = pattern.match(line.strip())
                     if match:
                         file_name = match.group(1)
                         full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                        entry_number = file_name[1:]
+                        
                         entry = {
-                            f'{entry_type.lower()}_number': file_name[1:],
+                            f'{entry_type.lower()}_number': entry_number,
                             'full_path': full_path
                         }
-
-                        if entry_type == 'Plan':
-                            plan_info = self._parse_plan_file(Path(full_path))
-                            entry.update(plan_info)
-                            
-                            hdf_results_path = self.project_folder / f"{self.project_name}.p{file_name[1:]}.hdf"
-                            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
-
+                        
+                        # Handle Unsteady entries
                         if entry_type == 'Unsteady':
-                            unsteady_info = self._parse_unsteady_file(Path(full_path))
-                            entry.update(unsteady_info)
-
+                            entry.update(self._process_unsteady_entry(entry_number, full_path))
+                        else:
+                            entry.update(self._process_default_entry())
+                        
+                        # Handle Plan entries
+                        if entry_type == 'Plan':
+                            entry.update(self._process_plan_entry(entry_number, full_path))
+                        
                         entries.append(entry)
+            
+            df = pd.DataFrame(entries)
+            return self._format_dataframe(df, entry_type)
+        
         except Exception as e:
+            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
             raise
 
-        return pd.DataFrame(entries)
+    def _process_unsteady_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process unsteady entry data."""
+        entry = {'unsteady_number': entry_number}
+        unsteady_info = self._parse_unsteady_file(Path(full_path))
+        entry.update(unsteady_info)
+        return entry
+
+    def _process_default_entry(self) -> dict:
+        """Process default entry data."""
+        return {
+            'unsteady_number': None,
+            'geometry_number': None
+        }
+
+    def _process_plan_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process plan entry data."""
+        entry = {}
+        plan_info = self._parse_plan_file(Path(full_path))
+        
+        if plan_info:
+            entry.update(self._process_flow_file(plan_info))
+            entry.update(self._process_geom_file(plan_info))
+            
+            # Add remaining plan info
+            for key, value in plan_info.items():
+                if key not in ['Flow File', 'Geom File']:
+                    entry[key] = value
+            
+            # Add HDF results path
+            hdf_results_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
+        
+        return entry
+
+    def _process_flow_file(self, plan_info: dict) -> dict:
+        """Process flow file information from plan info."""
+        flow_file = plan_info.get('Flow File')
+        if flow_file and flow_file.startswith('u'):
+            return {
+                'unsteady_number': flow_file[1:],
+                'Flow File': flow_file[1:]
+            }
+        return {
+            'unsteady_number': None,
+            'Flow File': flow_file[1:] if flow_file and flow_file.startswith('f') else None
+        }
+
+    def _process_geom_file(self, plan_info: dict) -> dict:
+        """Process geometry file information from plan info."""
+        geom_file = plan_info.get('Geom File')
+        if geom_file and geom_file.startswith('g'):
+            return {
+                'geometry_number': geom_file[1:],
+                'Geom File': geom_file[1:]
+            }
+        return {
+            'geometry_number': None,
+            'Geom File': None
+        }
 
     def _parse_unsteady_file(self, unsteady_file_path):
         """
@@ -10206,6 +10643,145 @@ class RasPrj:
         
         return bc_info, unparsed_lines
 
+    @log_call
+    def _format_dataframe(self, df, entry_type):
+        """
+        Format the DataFrame according to the desired column structure.
+        
+        Args:
+            df (pd.DataFrame): The DataFrame to format.
+            entry_type (str): The type of entry (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+        
+        Returns:
+            pd.DataFrame: The formatted DataFrame.
+        """
+        if df.empty:
+            return df
+        
+        if entry_type == 'Plan':
+            # Set required column order
+            first_cols = ['plan_number', 'unsteady_number', 'geometry_number']
+            
+            # Standard plan key columns in the exact order specified
+            plan_key_cols = [
+                'Plan Title', 'Program Version', 'Short Identifier', 'Simulation Date',
+                'Std Step Tol', 'Computation Interval', 'Output Interval', 'Instantaneous Interval',
+                'Mapping Interval', 'Run HTab', 'Run UNet', 'Run Sediment', 'Run PostProcess',
+                'Run WQNet', 'Run RASMapper', 'UNET Use Existing IB Tables', 'HDF_Results_Path',
+                'UNET 1D Methodology', 'Write IC File', 'Write IC File at Fixed DateTime',
+                'IC Time', 'Write IC File Reoccurance', 'Write IC File at Sim End'
+            ]
+            
+            # Additional convenience columns
+            file_path_cols = ['Geom File', 'Geom Path', 'Flow File', 'Flow Path']
+            
+            # Special columns that must be preserved
+            special_cols = ['HDF_Results_Path']
+            
+            # Build the final column list
+            all_cols = first_cols.copy()
+            
+            # Add plan key columns if they exist
+            for col in plan_key_cols:
+                if col in df.columns and col not in all_cols and col not in special_cols:
+                    all_cols.append(col)
+            
+            # Add any remaining columns not explicitly specified
+            other_cols = [col for col in df.columns if col not in all_cols + file_path_cols + special_cols + ['full_path']]
+            all_cols.extend(other_cols)
+            
+            # Add HDF_Results_Path if it exists (ensure it comes before file paths)
+            for special_col in special_cols:
+                if special_col in df.columns and special_col not in all_cols:
+                    all_cols.append(special_col)
+            
+            # Add file path columns at the end
+            all_cols.extend(file_path_cols)
+            
+            # Rename plan_number column
+            df = df.rename(columns={f'{entry_type.lower()}_number': 'plan_number'})
+            
+            # Fill in missing columns with None
+            for col in all_cols:
+                if col not in df.columns:
+                    df[col] = None
+            
+            # Make sure full_path column is preserved and included
+            if 'full_path' in df.columns and 'full_path' not in all_cols:
+                all_cols.append('full_path')
+            
+            # Return DataFrame with specified column order
+            cols_to_return = [col for col in all_cols if col in df.columns]
+            return df[cols_to_return]
+        
+        return df
+
+    @log_call
+    def _get_prj_entries(self, entry_type):
+        """
+        Extract entries of a specific type from the HEC-RAS project file.
+        """
+        entries = []
+        pattern = re.compile(rf"{entry_type} File=(\w+)")
+
+        try:
+            with open(self.prj_file, 'r') as file:
+                for line in file:
+                    match = pattern.match(line.strip())
+                    if match:
+                        file_name = match.group(1)
+                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                        entry = self._create_entry(entry_type, file_name, full_path)
+                        entries.append(entry)
+        
+            return self._format_dataframe(pd.DataFrame(entries), entry_type)
+        
+        except Exception as e:
+            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
+            raise
+
+    def _create_entry(self, entry_type, file_name, full_path):
+        """Helper method to create entry dictionary."""
+        entry_number = file_name[1:]
+        entry = {
+            f'{entry_type.lower()}_number': entry_number,
+            'full_path': full_path,
+            'unsteady_number': None,
+            'geometry_number': None
+        }
+        
+        if entry_type == 'Unsteady':
+            entry['unsteady_number'] = entry_number
+            entry.update(self._parse_unsteady_file(Path(full_path)))
+        elif entry_type == 'Plan':
+            self._update_plan_entry(entry, entry_number, full_path)
+        
+        return entry
+
+    def _update_plan_entry(self, entry, entry_number, full_path):
+        """Helper method to update plan entry with additional information."""
+        plan_info = self._parse_plan_file(Path(full_path))
+        if plan_info:
+            # Handle Flow File
+            flow_file = plan_info.get('Flow File')
+            if flow_file:
+                if flow_file.startswith('u'):
+                    entry.update({'unsteady_number': flow_file[1:], 'Flow File': flow_file[1:]})
+                else:
+                    entry['Flow File'] = flow_file[1:] if flow_file.startswith('f') else None
+            
+            # Handle Geom File
+            geom_file = plan_info.get('Geom File')
+            if geom_file and geom_file.startswith('g'):
+                entry.update({'geometry_number': geom_file[1:], 'Geom File': geom_file[1:]})
+            
+            # Add remaining plan info
+            entry.update({k: v for k, v in plan_info.items() if k not in ['Flow File', 'Geom File']})
+            
+            # Add HDF results path
+            hdf_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+            entry['HDF_Results_Path'] = str(hdf_path) if hdf_path.exists() else None
+
 
 # Create a global instance named 'ras'
 # Defining the global instance allows the init_ras_project function to initialize the project.
@@ -10276,7 +10852,7 @@ def get_ras_exe(ras_version=None):
     
     Args:
         ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
-                                     If None, the function will attempt to use the version from the global 'ras' object
+                                     If None, the function will first check the global 'ras' object for a path.
                                      or a default path.
     
     Returns:
@@ -11308,30 +11884,49 @@ class RasUtils:
         Returns:
         Path: Full path to the plan file
 
+        Raises:
+        ValueError: If plan number is not between 1 and 99
+        TypeError: If input type is invalid
+        FileNotFoundError: If the plan file does not exist
+
         Example:
         >>> plan_path = RasUtils.get_plan_path(1)
         >>> print(f"Plan file path: {plan_path}")
         >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
         >>> print(f"Plan file path: {plan_path}")
         """
-        
+        # Validate RAS object
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
+        # Handle direct file path input
         plan_path = Path(current_plan_number_or_path)
         if plan_path.is_file():
             logger.info(f"Using provided plan file path: {plan_path}")
             return plan_path
         
+        # Handle plan number input
         try:
-            current_plan_number = f"{int(current_plan_number_or_path):02d}"  # Ensure two-digit format
+            plan_num = int(current_plan_number_or_path)
+            if not 1 <= plan_num <= 99:
+                raise ValueError(f"Plan number must be between 1 and 99, got: {plan_num}")
+            current_plan_number = f"{plan_num:02d}"  # Ensure two-digit format
             logger.debug(f"Converted plan number to two-digit format: {current_plan_number}")
-        except ValueError:
+        except (ValueError, TypeError) as e:
+            if isinstance(e, TypeError):
+                logger.error(f"Invalid input type: {type(current_plan_number_or_path)}. Expected string, number, or Path.")
+                raise TypeError(f"Invalid input type: {type(current_plan_number_or_path)}. Expected string, number, or Path.")
             logger.error(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
             raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
         
+        # Construct and validate plan path
         plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
         full_plan_path = ras_obj.project_folder / plan_name
+        
+        if not full_plan_path.exists():
+            logger.error(f"Plan file does not exist: {full_plan_path}")
+            raise FileNotFoundError(f"Plan file does not exist: {full_plan_path}")
+        
         logger.info(f"Constructed plan file path: {full_plan_path}")
         return full_plan_path
 
@@ -12002,7 +12597,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.62.0"
+    __version__ = "0.70.0"
 
 # Set up logging
 setup_logging()
