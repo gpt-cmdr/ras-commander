@@ -61,30 +61,29 @@ class RasUnsteady:
     @log_call
     def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
         """
-        Update the Flow Title in an unsteady flow file.
-        
-        Parameters:
-        unsteady_file (str): Full path to the unsteady flow file
-        new_title (str): New flow title (max 24 characters)
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
-        Returns:
-        None
+        Update the Flow Title in an unsteady flow file (.u*).
 
-        Note:
-            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
-        
+        The Flow Title provides a descriptive identifier for unsteady flow scenarios in HEC-RAS. 
+        It appears in the HEC-RAS interface and helps differentiate between different flow files.
+
+        Parameters:
+            unsteady_file (str): Path to the unsteady flow file or unsteady flow number
+            new_title (str): New flow title (max 24 characters, will be truncated if longer)
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            None: The function modifies the file in-place and updates the ras object's unsteady dataframe
+
         Example:
-            from ras_commander import RasCmdr
+            # Clone an existing unsteady flow file
+            new_unsteady_number = RasPlan.clone_unsteady("02")
             
-            # Initialize RAS project
-            ras_cmdr = RasCmdr()
-            ras_cmdr.init_ras_project(project_folder, ras_version)
+            # Get path to the new unsteady flow file
+            new_unsteady_file = RasPlan.get_unsteady_path(new_unsteady_number)
             
-            # Update flow title
-            unsteady_file = r"path/to/unsteady_file.u01"
-            new_title = "New Flow Title"
-            RasUnsteady.update_flow_title(unsteady_file, new_title, ras_object=ras_cmdr.ras)
+            # Update the flow title
+            new_title = "Modified Flow Scenario"
+            RasUnsteady.update_flow_title(new_unsteady_file, new_title)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -134,30 +133,29 @@ class RasUnsteady:
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
         """
-        Update the Use Restart settings in an unsteady flow file.
-        
-        Parameters:
-        unsteady_file (str): Full path to the unsteady flow file
-        use_restart (bool): Whether to use restart (True) or not (False)
-        restart_filename (str, optional): Name of the restart file (required if use_restart is True)
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
-        Returns:
-        None
+        Update the restart file settings in an unsteady flow file.
 
-        Note:
-            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
-        
+        Restart files in HEC-RAS allow simulations to continue from a previously saved state,
+        which is useful for long simulations or when making downstream changes.
+
+        Parameters:
+            unsteady_file (str): Path to the unsteady flow file
+            use_restart (bool): Whether to use a restart file (True) or not (False)
+            restart_filename (str, optional): Path to the restart file (.rst)
+                                             Required if use_restart is True
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            None: The function modifies the file in-place and updates the ras object's unsteady dataframe
+
         Example:
-            from ras_commander import RasCmdr
-            
-            # Initialize RAS project
-            ras_cmdr = RasCmdr()
-            ras_cmdr.init_ras_project(project_folder, ras_version)
-            
-            # Update restart settings
-            unsteady_file = r"path/to/unsteady_file.u01"
-            RasUnsteady.update_restart_settings(unsteady_file, True, "restartfile.rst", ras_object=ras_cmdr.ras)
+            # Enable restart file for an unsteady flow
+            unsteady_file = RasPlan.get_unsteady_path("03")
+            RasUnsteady.update_restart_settings(
+                unsteady_file, 
+                use_restart=True, 
+                restart_filename="model_restart.rst"
+            )
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -219,8 +217,29 @@ class RasUnsteady:
     @log_call
     def extract_boundary_and_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> pd.DataFrame:
         """
-        Extracts Boundary Location blocks, DSS File entries, and their associated 
-        fixed-width tables from the specified unsteady file.
+        Extract boundary conditions and their associated tables from an unsteady flow file.
+
+        Boundary conditions in HEC-RAS define time-varying inputs like flow hydrographs,
+        stage hydrographs, gate operations, and lateral inflows. This function parses these
+        conditions and their data tables from the unsteady flow file.
+
+        Parameters:
+            unsteady_file (str): Path to the unsteady flow file
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            pd.DataFrame: DataFrame containing boundary conditions with the following columns:
+                - River Name, Reach Name, River Station: Location information
+                - DSS File: Associated DSS file path if any
+                - Tables: Dictionary containing DataFrames of time-series values
+
+        Example:
+            # Get the path to unsteady flow file "02"
+            unsteady_file = RasPlan.get_unsteady_path("02")
+            
+            # Extract boundary conditions and tables
+            boundaries_df = RasUnsteady.extract_boundary_and_tables(unsteady_file)
+            print(f"Extracted {len(boundaries_df)} boundary conditions from the file.")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -363,10 +382,25 @@ class RasUnsteady:
     @log_call
     def print_boundaries_and_tables(boundaries_df: pd.DataFrame) -> None:
         """
-        Prints the boundaries and their associated tables from the extracted DataFrame.
-        
+        Print boundary conditions and their associated tables in a formatted, readable way.
+
+        This function is useful for quickly visualizing the complex nested structure of 
+        boundary conditions extracted by extract_boundary_and_tables().
+
         Parameters:
-        - boundaries_df: DataFrame containing boundary information and nested tables data
+            boundaries_df (pd.DataFrame): DataFrame containing boundary information and 
+                                         nested tables data from extract_boundary_and_tables()
+
+        Returns:
+            None: Output is printed to console
+
+        Example:
+            # Extract boundary conditions and tables
+            boundaries_df = RasUnsteady.extract_boundary_and_tables(unsteady_file)
+            
+            # Print in a formatted way
+            print("Detailed boundary conditions and tables:")
+            RasUnsteady.print_boundaries_and_tables(boundaries_df)
         """
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_rows', None)
@@ -396,13 +430,28 @@ class RasUnsteady:
     @log_call
     def identify_tables(lines: List[str]) -> List[Tuple[str, int, int]]:
         """
-        Identify the start and end of each table in the unsteady flow file.
-        
+        Identify the start and end line numbers of tables in an unsteady flow file.
+
+        HEC-RAS unsteady flow files contain numeric tables in a fixed-width format.
+        This function locates these tables within the file and provides their positions.
+
         Parameters:
-        lines (List[str]): List of file lines
-        
+            lines (List[str]): List of file lines (typically from file.readlines())
+
         Returns:
-        List[Tuple[str, int, int]]: List of tuples containing (table_name, start_line, end_line)
+            List[Tuple[str, int, int]]: List of tuples where each tuple contains:
+                - table_name (str): The type of table (e.g., 'Flow Hydrograph=')
+                - start_line (int): Line number where the table data begins
+                - end_line (int): Line number where the table data ends
+
+        Example:
+            # Read the unsteady flow file
+            with open(new_unsteady_file, 'r') as f:
+                lines = f.readlines()
+                
+            # Identify tables in the file
+            tables = RasUnsteady.identify_tables(lines)
+            print(f"Identified {len(tables)} tables in the unsteady flow file.")
         """
         table_types = [
             'Flow Hydrograph=', 
@@ -437,15 +486,26 @@ class RasUnsteady:
     @log_call
     def parse_fixed_width_table(lines: List[str], start: int, end: int) -> pd.DataFrame:
         """
-        Parse a fixed-width table into a pandas DataFrame.
-        
+        Parse a fixed-width table from an unsteady flow file into a pandas DataFrame.
+
+        HEC-RAS uses a fixed-width format (8 characters per value) for numeric tables.
+        This function converts this format into a DataFrame for easier manipulation.
+
         Parameters:
-        lines (List[str]): List of file lines
-        start (int): Starting line number for table
-        end (int): Ending line number for table
-        
+            lines (List[str]): List of file lines (from file.readlines())
+            start (int): Starting line number for table data
+            end (int): Ending line number for table data
+
         Returns:
-        pd.DataFrame: DataFrame containing parsed table values
+            pd.DataFrame: DataFrame with a single column 'Value' containing the parsed numeric values
+
+        Example:
+            # Identify tables in the file
+            tables = RasUnsteady.identify_tables(lines)
+            
+            # Parse a specific table (e.g., first flow hydrograph)
+            table_name, start_line, end_line = tables[0]
+            table_df = RasUnsteady.parse_fixed_width_table(lines, start_line, end_line)
         """
         data = []
         for line in lines[start:end]:
@@ -489,14 +549,30 @@ class RasUnsteady:
     @log_call
     def extract_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> Dict[str, pd.DataFrame]:
         """
-        Extract all tables from the unsteady flow file and return them as DataFrames.
-        
+        Extract all tables from an unsteady flow file and return them as DataFrames.
+
+        This function combines identify_tables() and parse_fixed_width_table() to extract
+        all tables from an unsteady flow file in a single operation.
+
         Parameters:
-        unsteady_file (str): Path to the unsteady flow file
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+            unsteady_file (str): Path to the unsteady flow file
+            ras_object (optional): Custom RAS object to use instead of the global one
+
         Returns:
-        Dict[str, pd.DataFrame]: Dictionary of table names to DataFrames
+            Dict[str, pd.DataFrame]: Dictionary where:
+                - Keys are table names (e.g., 'Flow Hydrograph=')
+                - Values are DataFrames with a 'Value' column containing numeric data
+
+        Example:
+            # Extract all tables from the unsteady flow file
+            all_tables = RasUnsteady.extract_tables(new_unsteady_file)
+            print(f"Extracted {len(all_tables)} tables from the file.")
+            
+            # Access a specific table
+            flow_tables = [name for name in all_tables.keys() if 'Flow Hydrograph=' in name]
+            if flow_tables:
+                flow_df = all_tables[flow_tables[0]]
+                print(f"Flow table has {len(flow_df)} values")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -529,14 +605,32 @@ class RasUnsteady:
     def write_table_to_file(unsteady_file: str, table_name: str, df: pd.DataFrame, 
                            start_line: int, ras_object: Optional[Any] = None) -> None:
         """
-        Write updated table back to file in fixed-width format.
-        
+        Write an updated table back to an unsteady flow file in the required fixed-width format.
+
+        This function takes a modified DataFrame and writes it back to the unsteady flow file,
+        preserving the 8-character fixed-width format that HEC-RAS requires.
+
         Parameters:
-        unsteady_file (str): Path to the unsteady flow file
-        table_name (str): Name of the table to update
-        df (pd.DataFrame): DataFrame containing the updated values
-        start_line (int): Line number where the table starts
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            unsteady_file (str): Path to the unsteady flow file
+            table_name (str): Name of the table to update (e.g., 'Flow Hydrograph=')
+            df (pd.DataFrame): DataFrame containing the updated values with a 'Value' column
+            start_line (int): Line number where the table data begins in the file
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            None: The function modifies the file in-place
+
+        Example:
+            # Identify tables in the unsteady flow file
+            tables = RasUnsteady.identify_tables(lines)
+            table_name, start_line, end_line = tables[0]
+            
+            # Parse and modify the table
+            table_df = RasUnsteady.parse_fixed_width_table(lines, start_line, end_line)
+            table_df['Value'] = table_df['Value'] * 0.75  # Scale values to 75%
+            
+            # Write modified table back to the file
+            RasUnsteady.write_table_to_file(new_unsteady_file, table_name, table_df, start_line)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()

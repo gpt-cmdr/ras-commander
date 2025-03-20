@@ -101,23 +101,66 @@ class RasCmdr:
         overwrite_dest=False
     ):
         """
-        Execute a HEC-RAS plan.
+        Execute a single HEC-RAS plan in a specified location.
+
+        This function runs a HEC-RAS plan by launching the HEC-RAS executable through command line, 
+        allowing for destination folder specification, core count control, and geometry preprocessor management.
 
         Args:
             plan_number (str, Path): The plan number to execute (e.g., "01", "02") or the full path to the plan file.
+                Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
             dest_folder (str, Path, optional): Name of the folder or full path for computation.
                 If a string is provided, it will be created in the same parent directory as the project folder.
                 If a full path is provided, it will be used as is.
+                If None, computation occurs in the original project folder, modifying the original project.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+                Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
-            num_cores (int, optional): Number of cores to use for the plan execution. If None, the current setting is not changed.
+                Set to True when geometry has been modified to force recomputation of preprocessor files.
+            num_cores (int, optional): Number of cores to use for the plan execution. 
+                If None, the current setting in the plan file is not changed.
+                Generally, 2-4 cores provides good performance for most models.
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+                Set to True to replace an existing destination folder with the same name.
 
         Returns:
             bool: True if the execution was successful, False otherwise.
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
+            FileNotFoundError: If the plan file or project file cannot be found.
+            PermissionError: If there are issues accessing or writing to the destination folder.
+            subprocess.CalledProcessError: If the HEC-RAS execution fails.
+
+        Examples:
+            # Run a plan in the original project folder
+            RasCmdr.compute_plan("01")
+            
+            # Run a plan in a separate folder
+            RasCmdr.compute_plan("01", dest_folder="computation_folder")
+            
+            # Run a plan with a specific number of cores
+            RasCmdr.compute_plan("01", num_cores=4)
+            
+            # Run a plan in a specific folder, overwriting if it exists
+            RasCmdr.compute_plan("01", dest_folder="computation_folder", overwrite_dest=True)
+            
+            # Run a plan in a specific folder with multiple options
+            RasCmdr.compute_plan(
+                "01", 
+                dest_folder="computation_folder",
+                num_cores=2,
+                clear_geompre=True,
+                overwrite_dest=True
+            )
+            
+        Notes:
+            - For executing multiple plans, consider using compute_parallel() or compute_test_mode().
+            - Setting num_cores appropriately is important for performance:
+              * 1-2 cores: Highest efficiency per core, good for small models
+              * 3-8 cores: Good balance for most models
+              * >8 cores: May have diminishing returns due to overhead
+            - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
         """
         try:
             ras_obj = ras_object if ras_object is not None else ras
@@ -206,8 +249,6 @@ class RasCmdr:
 
     @staticmethod
     @log_call
-    @staticmethod
-    @log_call
     def compute_parallel(
         plan_number: Union[str, List[str], None] = None,
         max_workers: int = 2,
@@ -218,19 +259,83 @@ class RasCmdr:
         overwrite_dest: bool = False
     ) -> Dict[str, bool]:
         """
-        Compute multiple HEC-RAS plans in parallel.
+        Execute multiple HEC-RAS plans in parallel using multiple worker instances.
+
+        This method creates separate worker folders for each parallel process, runs plans
+        in those folders, and then consolidates results to a final destination folder.
+        It's ideal for running independent plans simultaneously to make better use of system resources.
 
         Args:
-            plan_number (Union[str, List[str], None]): Plan number(s) to compute. If None, all plans are computed.
-            max_workers (int): Maximum number of parallel workers.
+            plan_number (Union[str, List[str], None]): Plan number(s) to compute. 
+                If None, all plans in the project are computed.
+                If string, only that plan will be computed.
+                If list, all specified plans will be computed.
+                Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
+            max_workers (int): Maximum number of parallel workers (separate HEC-RAS instances).
+                Each worker gets a separate folder with a copy of the project.
+                Optimal value depends on CPU cores and memory available.
+                A good starting point is: max_workers = floor(physical_cores / num_cores).
             num_cores (int): Number of cores to use per plan computation.
-            clear_geompre (bool): Whether to clear geometry preprocessor files.
-            ras_object (Optional[RasPrj]): RAS project object. If None, uses global instance.
+                Controls computational resources allocated to each individual HEC-RAS instance.
+                For parallel execution, 2-4 cores per worker often provides the best balance.
+            clear_geompre (bool): Whether to clear geometry preprocessor files before computation.
+                Set to True when geometry has been modified to force recomputation.
+            ras_object (Optional[RasPrj]): RAS project object. If None, uses global 'ras' instance.
+                Useful when working with multiple projects simultaneously.
             dest_folder (Union[str, Path, None]): Destination folder for computed results.
+                If None, creates a "[Computed]" folder adjacent to the project folder.
+                If string, creates folder in the project's parent directory.
+                If Path, uses the exact path provided.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
+                Set to True to replace an existing destination folder with the same name.
 
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
+                Keys are plan numbers and values are boolean success indicators.
+
+        Raises:
+            ValueError: If the destination folder already exists, is not empty, and overwrite_dest is False.
+            FileNotFoundError: If project files cannot be found.
+            PermissionError: If there are issues accessing or writing to folders.
+            RuntimeError: If worker initialization fails.
+
+        Examples:
+            # Run all plans in parallel with default settings
+            RasCmdr.compute_parallel()
+            
+            # Run all plans with 4 workers, 2 cores per worker
+            RasCmdr.compute_parallel(max_workers=4, num_cores=2)
+            
+            # Run specific plans in parallel
+            RasCmdr.compute_parallel(plan_number=["01", "03"], max_workers=2)
+            
+            # Run all plans with dynamic worker allocation based on system resources
+            import psutil
+            physical_cores = psutil.cpu_count(logical=False)
+            cores_per_worker = 2
+            max_workers = max(1, physical_cores // cores_per_worker)
+            RasCmdr.compute_parallel(max_workers=max_workers, num_cores=cores_per_worker)
+            
+            # Run all plans in a specific destination folder
+            RasCmdr.compute_parallel(dest_folder="parallel_results", overwrite_dest=True)
+
+        Notes:
+            - Worker Assignment: Plans are assigned to workers in a round-robin fashion.
+              For example, with 3 workers and 5 plans, assignment would be:
+              Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
+            
+            - Resource Management: Each HEC-RAS instance (worker) typically requires:
+              * 2-4 GB of RAM
+              * 2-4 cores for optimal performance
+            
+            - When to use parallel vs. sequential:
+              * Parallel: For independent plans, faster overall completion
+              * Sequential: For dependent plans, consistent resource usage, easier debugging
+            
+            - The function creates worker folders during execution and consolidates results
+              to the destination folder upon completion.
+              
+            - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
         """
         try:
             ras_obj = ras_object or ras
@@ -399,49 +504,86 @@ class RasCmdr:
         overwrite_dest=False
     ):
         """
-        Execute HEC-RAS plans in test mode. This is a re-creation of the HEC-RAS command line -test flag, 
-        which does not work in recent versions of HEC-RAS.
-        
-        As a special-purpose function that emulates the original -test flag, it operates differently than the 
-        other two compute_ functions. Per the original HEC-RAS test flag, it creates a separate test folder,
-        copies the project there, and executes the specified plans in sequential order.
-        
-        For most purposes, just copying the project folder, initing that new folder, then running each plan 
-        with compute_plan is a simpler and more flexible approach.  This is shown in the examples provided
-        in the ras-commander library.
+        Execute HEC-RAS plans sequentially in a separate test folder.
+
+        This function creates a separate test folder, copies the project there, and executes
+        the specified plans in sequential order. It's useful for batch processing plans that 
+        need to be run in a specific order or when you want to ensure consistent resource usage.
 
         Args:
             plan_number (str, list[str], optional): Plan number or list of plan numbers to execute. 
                 If None, all plans will be executed. Default is None.
-            dest_folder_suffix (str, optional): Suffix to append to the test folder name to create dest_folder. 
+                Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
+            dest_folder_suffix (str, optional): Suffix to append to the test folder name. 
                 Defaults to "[Test]".
-                dest_folder is always created in the project folder's parent directory.
+                The test folder is always created in the project folder's parent directory.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files.
                 Defaults to False.
-            num_cores (int, optional): Maximum number of cores to use for each plan.
-                If None, the current setting is not changed. Default is None.
+                Set to True when geometry has been modified to force recomputation.
+            num_cores (int, optional): Number of cores to use for each plan.
+                If None, the current setting in the plan file is not changed. Default is None.
+                For sequential execution, 4-8 cores often provides good performance.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+                Useful when working with multiple projects simultaneously.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. 
+                Defaults to False.
+                Set to True to replace an existing test folder with the same name.
 
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
+                Keys are plan numbers and values are boolean success indicators.
 
-        Example:
-            Run all plans: RasCommander.compute_test_mode()
-            Run a specific plan: RasCommander.compute_test_mode(plan_number="01")
-            Run multiple plans: RasCommander.compute_test_mode(plan_number=["01", "03", "05"])
-            Run plans with a custom folder suffix: RasCommander.compute_test_mode(dest_folder_suffix="[TestRun]")
-            Run plans and clear geometry preprocessor files: RasCommander.compute_test_mode(clear_geompre=True)
-            Run plans with a specific number of cores: RasCommander.compute_test_mode(num_cores=4)
+        Raises:
+            ValueError: If the destination folder already exists, is not empty, and overwrite_dest is False.
+            FileNotFoundError: If project files cannot be found.
+            PermissionError: If there are issues accessing or writing to folders.
+
+        Examples:
+            # Run all plans sequentially
+            RasCmdr.compute_test_mode()
             
+            # Run a specific plan
+            RasCmdr.compute_test_mode(plan_number="01")
+            
+            # Run multiple specific plans
+            RasCmdr.compute_test_mode(plan_number=["01", "03", "05"])
+            
+            # Run plans with a custom folder suffix
+            RasCmdr.compute_test_mode(dest_folder_suffix="[SequentialRun]")
+            
+            # Run plans with a specific number of cores
+            RasCmdr.compute_test_mode(num_cores=4)
+            
+            # Run specific plans with multiple options
+            RasCmdr.compute_test_mode(
+                plan_number=["01", "02"],
+                dest_folder_suffix="[SpecificSequential]",
+                clear_geompre=True,
+                num_cores=6,
+                overwrite_dest=True
+            )
+
         Notes:
-            - This function executes plans in a separate folder for isolated testing.
-            - If plan_number is not provided, all plans in the project will be executed.
-            - The function does not change the geometry preprocessor and IB tables settings.  
-                - To force recomputing of geometry preprocessor and IB tables, use the clear_geompre=True option.
-            - Plans are executed sequentially.
-            - Because copying the project is implicit, only a dest_folder_suffix option is provided.
-            - For more flexible run management, use the compute_parallel or compute_sequential functions.
+            - This function was created to replicate the original HEC-RAS command line -test flag,
+              which does not work in recent versions of HEC-RAS.
+            
+            - Key differences from other compute functions:
+              * compute_plan: Runs a single plan, with option for destination folder
+              * compute_parallel: Runs multiple plans simultaneously in worker folders
+              * compute_test_mode: Runs multiple plans sequentially in a single test folder
+            
+            - Use cases:
+              * Running plans in a specific order
+              * Ensuring consistent resource usage
+              * Easier debugging (one plan at a time)
+              * Isolated test environment
+            
+            - Performance considerations:
+              * Sequential execution is generally slower overall than parallel execution
+              * Each plan gets consistent resource usage
+              * Execution time scales linearly with the number of plans
+            
+            - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
         """
         try:
             ras_obj = ras_object or ras
@@ -1039,13 +1181,18 @@ class RasGeo:
         ras_object = None
     ) -> None:
         """
-        Clear HEC-RAS geometry preprocessor files for specified plan files or all plan files in the project directory.
-        
+        Clear HEC-RAS geometry preprocessor files for specified plan files.
+
+        Geometry preprocessor files (.c* extension) contain computed hydraulic properties derived
+        from the geometry. These should be cleared when the geometry changes to ensure that
+        HEC-RAS recomputes all hydraulic tables with updated geometry information.
+
         Limitations/Future Work:
         - This function only deletes the geometry preprocessor file.
         - It does not clear the IB tables.
         - It also does not clear geometry preprocessor tables from the geometry HDF.
-        - All of these features will need to be added to reliably remove geometry preprocessor files for 1D and 2D projects.
+        - All of these features will need to be added to reliably remove geometry preprocessor 
+          files for 1D and 2D projects.
         
         Parameters:
             plan_files (Union[str, Path, List[Union[str, Path]]], optional): 
@@ -1054,20 +1201,20 @@ class RasGeo:
             ras_object: An optional RAS object instance.
         
         Returns:
-            None
-        
-        Examples:
-            # Clear all geometry preprocessor files in the project directory
-            RasGeo.clear_geompre_files()
-            
-            # Clear a single plan file
-            RasGeo.clear_geompre_files(r'path/to/plan.p01')
-            
-            # Clear multiple plan files
-            RasGeo.clear_geompre_files([r'path/to/plan1.p01', r'path/to/plan2.p02'])
+            None: The function deletes files and updates the ras object's geometry dataframe
 
-        Note:
-            This function updates the ras object's geometry dataframe after clearing the preprocessor files.
+        Example:
+            # Clone a plan and geometry
+            new_plan_number = RasPlan.clone_plan("01")
+            new_geom_number = RasPlan.clone_geom("01")
+            
+            # Set the new geometry for the cloned plan
+            RasPlan.set_geom(new_plan_number, new_geom_number)
+            plan_path = RasPlan.get_plan_path(new_plan_number)
+            
+            # Clear geometry preprocessor files to ensure clean results
+            RasGeo.clear_geompre_files(plan_path)
+            print(f"Cleared geometry preprocessor files for plan {new_plan_number}")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -1120,34 +1267,6 @@ class RasGeo:
 
 
 
-==================================================
-
-File: c:\GH\ras-commander\ras_commander\RasMapper.py
-==================================================
-"""
-Class: RasMapper
-
-List of Functions:
-    get_raster_map(hdf_path: Path) 
-    clip_raster_with_boundary(raster_path: Path, boundary_path: Path) 
-    calculate_zonal_stats(boundary_path: Path, raster_data, transform, nodata) 
-
-"""
-
-
-
-from pathlib import Path
-import pandas as pd
-import geopandas as gpd
-import rasterio
-from rasterio.mask import mask
-import h5py
-from .Decorators import log_call, standardize_input
-from .HdfInfiltration import HdfInfiltration
-
-class RasMapper:
-    """Class for handling RAS Mapper operations and data extraction"""
-    # PLACEHOLDER FOR FUTURE DEVELOPMENT
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasPlan.py
@@ -2123,7 +2242,7 @@ class RasPlan:
                 return None
 
 
-#  NEW FUNCTIONS THAT NEED TESTING AND EXAMPLES
+
 
 
     @staticmethod
@@ -2776,22 +2895,25 @@ class RasPrj:
     @log_call
     def initialize(self, project_folder, ras_exe_path, suppress_logging=True):
         """
-        Initialize a RasPrj instance.
+        Initialize a RasPrj instance with project folder and RAS executable path.
 
-        This method sets up the RasPrj instance with the given project folder and RAS executable path.
-        It finds the project file, loads project data, sets the initialization flag, and now also
-        extracts boundary conditions.
+        IMPORTANT: External users should use init_ras_project() function instead of this method.
+        This method is intended for internal use only.
 
         Args:
             project_folder (str or Path): Path to the HEC-RAS project folder.
             ras_exe_path (str or Path): Path to the HEC-RAS executable.
-            suppress_logging (bool): If True, suppresses initialization logging messages.
+            suppress_logging (bool, default=True): If True, suppresses initialization logging messages.
 
         Raises:
             ValueError: If no HEC-RAS project file is found in the specified folder.
 
         Note:
-            This method is intended for internal use. External users should use the init_ras_project function instead.
+            This method sets up the RasPrj instance by:
+            1. Finding the project file (.prj)
+            2. Loading project data (plans, geometries, flows)
+            3. Extracting boundary conditions
+            4. Setting the initialization flag
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
@@ -2817,8 +2939,13 @@ class RasPrj:
         """
         Load project data from the HEC-RAS project file.
 
-        This method initializes DataFrames for plan, flow, unsteady, and geometry entries
-        and ensures all required columns are present with appropriate paths.
+        This internal method:
+        1. Initializes DataFrames for plan, flow, unsteady, and geometry entries
+        2. Ensures all required columns are present with appropriate default values
+        3. Sets file paths for all components (geometries, flows, plans)
+
+        Raises:
+            Exception: If there's an error loading or processing project data.
         """
         try:
             # Load data frames
@@ -3290,10 +3417,14 @@ class RasPrj:
     @log_call
     def check_initialized(self):
         """
-        Ensure that the RasPrj instance has been initialized.
+        Ensure that the RasPrj instance has been initialized before operations.
 
         Raises:
-            RuntimeError: If the project has not been initialized.
+            RuntimeError: If the project has not been initialized with init_ras_project().
+
+        Note:
+            This method is called by other methods to validate the project state before
+            performing operations. Users typically don't need to call this directly.
         """
         if not self.initialized:
             raise RuntimeError("Project not initialized. Call init_ras_project() first.")
@@ -3304,11 +3435,23 @@ class RasPrj:
         """
         Find the appropriate HEC-RAS project file (.prj) in the given folder.
         
-        Parameters:
-        folder_path (str or Path): Path to the folder containing HEC-RAS files.
+        This method uses several strategies to locate the correct project file:
+        1. If only one .prj file exists, it is selected
+        2. If multiple .prj files exist, it tries to match with .rasmap file names
+        3. As a last resort, it scans files for "Proj Title=" content
+        
+        Args:
+            folder_path (str or Path): Path to the folder containing HEC-RAS files.
         
         Returns:
-        Path: The full path of the selected .prj file or None if no suitable file is found.
+            Path: The full path of the selected .prj file or None if no suitable file is found.
+        
+        Example:
+            >>> project_file = RasPrj.find_ras_prj("/path/to/ras_project")
+            >>> if project_file:
+            ...     print(f"Found project file: {project_file}")
+            ... else:
+            ...     print("No project file found")
         """
         folder_path = Path(folder_path)
         prj_files = list(folder_path.glob("*.prj"))
@@ -3335,13 +3478,17 @@ class RasPrj:
     @log_call
     def get_project_name(self):
         """
-        Get the name of the HEC-RAS project.
+        Get the name of the HEC-RAS project (without file extension).
 
         Returns:
             str: The name of the project.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> project_name = ras.get_project_name()
+            >>> print(f"Working with project: {project_name}")
         """
         self.check_initialized()
         return self.project_name
@@ -3351,14 +3498,26 @@ class RasPrj:
         """
         Get entries of a specific type from the HEC-RAS project.
 
+        This method extracts files of the specified type from the project file,
+        parses their content, and returns a structured DataFrame.
+
         Args:
-            entry_type (str): The type of entry to retrieve (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+            entry_type (str): The type of entry to retrieve ('Plan', 'Flow', 'Unsteady', or 'Geom').
 
         Returns:
-            pd.DataFrame: A DataFrame containing the requested entries.
+            pd.DataFrame: A DataFrame containing the requested entries with appropriate columns.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> # Get all geometry files in the project
+            >>> geom_entries = ras.get_prj_entries('Geom')
+            >>> print(f"Project contains {len(geom_entries)} geometry files")
+        
+        Note:
+            This is a generic method. For specific file types, use the dedicated methods:
+            get_plan_entries(), get_flow_entries(), get_unsteady_entries(), get_geom_entries()
         """
         self.check_initialized()
         return self._get_prj_entries(entry_type)
@@ -3367,12 +3526,23 @@ class RasPrj:
     def get_plan_entries(self):
         """
         Get all plan entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all plan files (.p*) in the project
+        with their associated properties, paths and settings.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all plan entries.
+            pd.DataFrame: A DataFrame with columns including 'plan_number', 'full_path',
+                          'unsteady_number', 'geometry_number', etc.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> plan_entries = ras.get_plan_entries()
+            >>> print(f"Project contains {len(plan_entries)} plan files")
+            >>> # Display the first plan's properties
+            >>> if not plan_entries.empty:
+            ...     print(plan_entries.iloc[0])
         """
         self.check_initialized()
         return self._get_prj_entries('Plan')
@@ -3381,12 +3551,22 @@ class RasPrj:
     def get_flow_entries(self):
         """
         Get all flow entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all flow files (.f*) in the project
+        with their associated properties and paths.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all flow entries.
+            pd.DataFrame: A DataFrame with columns including 'flow_number', 'full_path', etc.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> flow_entries = ras.get_flow_entries()
+            >>> print(f"Project contains {len(flow_entries)} flow files")
+            >>> # Display the first flow file's properties
+            >>> if not flow_entries.empty:
+            ...     print(flow_entries.iloc[0])
         """
         self.check_initialized()
         return self._get_prj_entries('Flow')
@@ -3395,12 +3575,22 @@ class RasPrj:
     def get_unsteady_entries(self):
         """
         Get all unsteady flow entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all unsteady flow files (.u*) in the project
+        with their associated properties and paths.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all unsteady flow entries.
+            pd.DataFrame: A DataFrame with columns including 'unsteady_number', 'full_path', etc.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> unsteady_entries = ras.get_unsteady_entries()
+            >>> print(f"Project contains {len(unsteady_entries)} unsteady flow files")
+            >>> # Display the first unsteady file's properties
+            >>> if not unsteady_entries.empty:
+            ...     print(unsteady_entries.iloc[0])
         """
         self.check_initialized()
         return self._get_prj_entries('Unsteady')
@@ -3408,11 +3598,26 @@ class RasPrj:
     @log_call
     def get_geom_entries(self):
         """
-        Get geometry entries from the project file.
+        Get all geometry entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all geometry files (.g*) in the project
+        with their associated properties, paths and HDF links.
 
         Returns:
-            pd.DataFrame: DataFrame containing geometry entries.
+            pd.DataFrame: A DataFrame with columns including 'geom_number', 'full_path', 
+                          'hdf_path', etc.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> geom_entries = ras.get_geom_entries()
+            >>> print(f"Project contains {len(geom_entries)} geometry files")
+            >>> # Display the first geometry file's properties
+            >>> if not geom_entries.empty:
+            ...     print(geom_entries.iloc[0])
         """
+        self.check_initialized()
         geom_pattern = re.compile(r'Geom File=(\w+)')
         geom_entries = []
 
@@ -3438,11 +3643,28 @@ class RasPrj:
     @log_call
     def get_hdf_entries(self):
         """
-        Get HDF entries for plans that have results.
+        Get all plan entries that have associated HDF results files.
+        
+        This method identifies which plans have been successfully computed
+        and have HDF results available for further analysis.
         
         Returns:
             pd.DataFrame: A DataFrame containing plan entries with HDF results.
-                      Returns an empty DataFrame if no HDF entries are found.
+                          Returns an empty DataFrame if no results are found.
+        
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> hdf_entries = ras.get_hdf_entries()
+            >>> if hdf_entries.empty:
+            ...     print("No computed results found. Run simulations first.")
+            ... else:
+            ...     print(f"Found results for {len(hdf_entries)} plans")
+        
+        Note:
+            This is useful for identifying which plans have been successfully computed
+            and can be used for further results analysis.
         """
         self.check_initialized()
         
@@ -3456,7 +3678,23 @@ class RasPrj:
     
     @log_call
     def print_data(self):
-        """Print all RAS Object data for this instance."""
+        """
+        Print a comprehensive summary of all RAS Object data for this instance.
+        
+        This method outputs:
+        - Project information (name, folder, file paths)
+        - Summary of plans, flows, geometries, and unsteady files
+        - HDF results availability
+        - Boundary conditions
+        
+        Useful for debugging, validation, and exploring project structure.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> ras.print_data()  # Displays complete project overview
+        """
         self.check_initialized()
         logger.info(f"--- Data for {self.project_name} ---")
         logger.info(f"Project folder: {self.project_folder}")
@@ -3479,33 +3717,37 @@ class RasPrj:
     @log_call
     def get_boundary_conditions(self) -> pd.DataFrame:
         """
-        Extract boundary conditions from unsteady flow files and create a DataFrame.
+        Extract boundary conditions from unsteady flow files into a structured DataFrame.
 
-        This method parses unsteady flow files to extract boundary condition information.
-        It creates a DataFrame with structured data for known boundary condition types
-        and parameters, and associates this information with the corresponding unsteady flow file.
+        This method:
+        1. Parses all unsteady flow files to extract boundary condition information
+        2. Creates a structured DataFrame with boundary locations, types and parameters
+        3. Links boundary conditions to their respective unsteady flow files
 
-        Note:
-        Any lines in the boundary condition blocks that are not explicitly parsed and
-        incorporated into the DataFrame are captured in a multi-line string. This string
-        is logged at the DEBUG level for each boundary condition. This feature is crucial
-        for developers incorporating new boundary condition types or parameters, as it
-        allows them to see what information might be missing from the current parsing logic.
-        If no unsteady flow files are present, it returns an empty DataFrame.
+        Supported boundary condition types include:
+        - Flow Hydrograph
+        - Stage Hydrograph
+        - Normal Depth
+        - Lateral Inflow Hydrograph
+        - Uniform Lateral Inflow Hydrograph
+        - Gate Opening
 
         Returns:
-            pd.DataFrame: A DataFrame containing detailed boundary condition information,
-                                      linked to the unsteady flow files.
-
-        Usage:
-            To see the unparsed lines, set the logging level to DEBUG before calling this method:
-            
+            pd.DataFrame: A DataFrame containing detailed boundary condition information.
+                              Returns an empty DataFrame if no unsteady flow files are present.
+        
+        Example:
+            >>> boundaries = ras.get_boundary_conditions()
+            >>> if not boundaries.empty:
+            ...     print(f"Found {len(boundaries)} boundary conditions")
+            ...     # Show flow hydrographs only
+            ...     flow_hydrographs = boundaries[boundaries['bc_type'] == 'Flow Hydrograph']
+            ...     print(f"Project has {len(flow_hydrographs)} flow hydrographs")
+        
+        Note:
+            To see unparsed boundary condition lines for debugging, set logging to DEBUG:
             import logging
-            getLogger().setLevel(logging.DEBUG)
-            
-            boundaries_df = ras_project.get_boundary_conditions()
-                          linked to the unsteady flow files. Returns an empty DataFrame if
-                          no unsteady flow files are present.
+            logging.getLogger().setLevel(logging.DEBUG)
         """
         boundary_data = []
         
@@ -3775,27 +4017,38 @@ ras = RasPrj()
 @log_call
 def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     """
-    Initialize a RAS project.
+    Initialize a RAS project for use with the ras-commander library.
 
-    USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
+    This is the primary function for setting up a HEC-RAS project. It:
+    1. Finds the project file (.prj) in the specified folder
+    2. Identifies the appropriate HEC-RAS executable
+    3. Loads project data (plans, geometries, flows)
+    4. Creates dataframes containing project components
 
-    Parameters:
-    -----------
-    ras_project_folder : str
-        The path to the RAS project folder.
-    ras_version : str, optional
-        The version of RAS to use (e.g., "6.6").
-        The version can also be a full path to the Ras.exe file.
-        If None, the function will attempt to use the version from the global 'ras' object or a default path.
-    ras_object : RasPrj or str, optional
-        If None, the global 'ras' object is updated.
-        If a RasPrj instance, that instance is updated.
-        If any other value is provided, a new RasPrj instance is created and returned.
+    Args:
+        ras_project_folder (str or Path): The path to the RAS project folder.
+        ras_version (str, optional): The version of RAS to use (e.g., "6.6").
+                                    Can also be a full path to the Ras.exe file.
+                                    If None, will attempt to use a default path.
+        ras_object (RasPrj, optional): If None, updates the global 'ras' object.
+                                       If a RasPrj instance, updates that instance.
+                                       If any other value, creates and returns a new RasPrj instance.
 
     Returns:
-    --------
-    RasPrj
-        An initialized RasPrj instance.
+        RasPrj: An initialized RasPrj instance.
+        
+    Raises:
+        FileNotFoundError: If the specified project folder doesn't exist.
+        ValueError: If no HEC-RAS project file is found in the folder.
+        
+    Example:
+        >>> # Initialize using the global 'ras' object (most common)
+        >>> init_ras_project("/path/to/project", "6.6")
+        >>> print(f"Initialized project: {ras.project_name}")
+        >>>
+        >>> # Create a new RasPrj instance
+        >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
+        >>> print(f"Created project instance: {my_project.project_name}")
     """
     if not Path(ras_project_folder).exists():
         logger.error(f"The specified RAS project folder does not exist: {ras_project_folder}")
@@ -3829,23 +4082,31 @@ def get_ras_exe(ras_version=None):
     """
     Determine the HEC-RAS executable path based on the input.
     
+    This function attempts to find the HEC-RAS executable in the following order:
+    1. If ras_version is a valid file path to an .exe file, use that path
+    2. If ras_version is a known version number, use default installation path
+    3. If global 'ras' object has ras_exe_path, use that
+    4. As a fallback, return a default path (which may not exist)
+    
     Args:
         ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
-                                     If None, the function will first check the global 'ras' object for a path.
-                                     or a default path.
     
     Returns:
         str: The full path to the HEC-RAS executable.
     
-    Raises:
-        ValueError: If the input is neither a valid version number nor a valid file path.
-    
-    Notes:
-        - If ras_version is not provided, the function will first check the global 'ras' object for a path.
-        - If the global 'ras' object is not initialized or doesn't have a path, a default path will be used.
-        - The default path allows the library to function in environments without HEC-RAS installed.
-        - This enables the HEC-Commander GPT to operate without stopping, even if HEC-RAS is not present.
-        - End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.
+    Note:
+        - HEC-RAS version numbers include: "6.6", "6.5", "6.4.1", "6.3", etc.
+        - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
+        - Returns a default path ("Ras.exe") if no valid path is found
+        - This allows the library to function even without HEC-RAS installed
+        
+    Example:
+        >>> # Get path for specific version
+        >>> ras_path = get_ras_exe("6.6")
+        >>> print(f"HEC-RAS 6.6 executable: {ras_path}")
+        >>>
+        >>> # Provide direct path to executable
+        >>> custom_path = get_ras_exe("C:/My_Programs/HEC-RAS/Ras.exe")
     """
     if ras_version is None:
         if hasattr(ras, 'ras_exe_path') and ras.ras_exe_path:
@@ -3959,30 +4220,29 @@ class RasUnsteady:
     @log_call
     def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
         """
-        Update the Flow Title in an unsteady flow file.
-        
-        Parameters:
-        unsteady_file (str): Full path to the unsteady flow file
-        new_title (str): New flow title (max 24 characters)
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
-        Returns:
-        None
+        Update the Flow Title in an unsteady flow file (.u*).
 
-        Note:
-            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
-        
+        The Flow Title provides a descriptive identifier for unsteady flow scenarios in HEC-RAS. 
+        It appears in the HEC-RAS interface and helps differentiate between different flow files.
+
+        Parameters:
+            unsteady_file (str): Path to the unsteady flow file or unsteady flow number
+            new_title (str): New flow title (max 24 characters, will be truncated if longer)
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            None: The function modifies the file in-place and updates the ras object's unsteady dataframe
+
         Example:
-            from ras_commander import RasCmdr
+            # Clone an existing unsteady flow file
+            new_unsteady_number = RasPlan.clone_unsteady("02")
             
-            # Initialize RAS project
-            ras_cmdr = RasCmdr()
-            ras_cmdr.init_ras_project(project_folder, ras_version)
+            # Get path to the new unsteady flow file
+            new_unsteady_file = RasPlan.get_unsteady_path(new_unsteady_number)
             
-            # Update flow title
-            unsteady_file = r"path/to/unsteady_file.u01"
-            new_title = "New Flow Title"
-            RasUnsteady.update_flow_title(unsteady_file, new_title, ras_object=ras_cmdr.ras)
+            # Update the flow title
+            new_title = "Modified Flow Scenario"
+            RasUnsteady.update_flow_title(new_unsteady_file, new_title)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -4032,30 +4292,29 @@ class RasUnsteady:
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
         """
-        Update the Use Restart settings in an unsteady flow file.
-        
-        Parameters:
-        unsteady_file (str): Full path to the unsteady flow file
-        use_restart (bool): Whether to use restart (True) or not (False)
-        restart_filename (str, optional): Name of the restart file (required if use_restart is True)
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
-        Returns:
-        None
+        Update the restart file settings in an unsteady flow file.
 
-        Note:
-            This function updates the ras object's unsteady dataframe after modifying the unsteady flow file.
-        
+        Restart files in HEC-RAS allow simulations to continue from a previously saved state,
+        which is useful for long simulations or when making downstream changes.
+
+        Parameters:
+            unsteady_file (str): Path to the unsteady flow file
+            use_restart (bool): Whether to use a restart file (True) or not (False)
+            restart_filename (str, optional): Path to the restart file (.rst)
+                                             Required if use_restart is True
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            None: The function modifies the file in-place and updates the ras object's unsteady dataframe
+
         Example:
-            from ras_commander import RasCmdr
-            
-            # Initialize RAS project
-            ras_cmdr = RasCmdr()
-            ras_cmdr.init_ras_project(project_folder, ras_version)
-            
-            # Update restart settings
-            unsteady_file = r"path/to/unsteady_file.u01"
-            RasUnsteady.update_restart_settings(unsteady_file, True, "restartfile.rst", ras_object=ras_cmdr.ras)
+            # Enable restart file for an unsteady flow
+            unsteady_file = RasPlan.get_unsteady_path("03")
+            RasUnsteady.update_restart_settings(
+                unsteady_file, 
+                use_restart=True, 
+                restart_filename="model_restart.rst"
+            )
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -4117,8 +4376,29 @@ class RasUnsteady:
     @log_call
     def extract_boundary_and_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> pd.DataFrame:
         """
-        Extracts Boundary Location blocks, DSS File entries, and their associated 
-        fixed-width tables from the specified unsteady file.
+        Extract boundary conditions and their associated tables from an unsteady flow file.
+
+        Boundary conditions in HEC-RAS define time-varying inputs like flow hydrographs,
+        stage hydrographs, gate operations, and lateral inflows. This function parses these
+        conditions and their data tables from the unsteady flow file.
+
+        Parameters:
+            unsteady_file (str): Path to the unsteady flow file
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            pd.DataFrame: DataFrame containing boundary conditions with the following columns:
+                - River Name, Reach Name, River Station: Location information
+                - DSS File: Associated DSS file path if any
+                - Tables: Dictionary containing DataFrames of time-series values
+
+        Example:
+            # Get the path to unsteady flow file "02"
+            unsteady_file = RasPlan.get_unsteady_path("02")
+            
+            # Extract boundary conditions and tables
+            boundaries_df = RasUnsteady.extract_boundary_and_tables(unsteady_file)
+            print(f"Extracted {len(boundaries_df)} boundary conditions from the file.")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -4261,10 +4541,25 @@ class RasUnsteady:
     @log_call
     def print_boundaries_and_tables(boundaries_df: pd.DataFrame) -> None:
         """
-        Prints the boundaries and their associated tables from the extracted DataFrame.
-        
+        Print boundary conditions and their associated tables in a formatted, readable way.
+
+        This function is useful for quickly visualizing the complex nested structure of 
+        boundary conditions extracted by extract_boundary_and_tables().
+
         Parameters:
-        - boundaries_df: DataFrame containing boundary information and nested tables data
+            boundaries_df (pd.DataFrame): DataFrame containing boundary information and 
+                                         nested tables data from extract_boundary_and_tables()
+
+        Returns:
+            None: Output is printed to console
+
+        Example:
+            # Extract boundary conditions and tables
+            boundaries_df = RasUnsteady.extract_boundary_and_tables(unsteady_file)
+            
+            # Print in a formatted way
+            print("Detailed boundary conditions and tables:")
+            RasUnsteady.print_boundaries_and_tables(boundaries_df)
         """
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_rows', None)
@@ -4294,13 +4589,28 @@ class RasUnsteady:
     @log_call
     def identify_tables(lines: List[str]) -> List[Tuple[str, int, int]]:
         """
-        Identify the start and end of each table in the unsteady flow file.
-        
+        Identify the start and end line numbers of tables in an unsteady flow file.
+
+        HEC-RAS unsteady flow files contain numeric tables in a fixed-width format.
+        This function locates these tables within the file and provides their positions.
+
         Parameters:
-        lines (List[str]): List of file lines
-        
+            lines (List[str]): List of file lines (typically from file.readlines())
+
         Returns:
-        List[Tuple[str, int, int]]: List of tuples containing (table_name, start_line, end_line)
+            List[Tuple[str, int, int]]: List of tuples where each tuple contains:
+                - table_name (str): The type of table (e.g., 'Flow Hydrograph=')
+                - start_line (int): Line number where the table data begins
+                - end_line (int): Line number where the table data ends
+
+        Example:
+            # Read the unsteady flow file
+            with open(new_unsteady_file, 'r') as f:
+                lines = f.readlines()
+                
+            # Identify tables in the file
+            tables = RasUnsteady.identify_tables(lines)
+            print(f"Identified {len(tables)} tables in the unsteady flow file.")
         """
         table_types = [
             'Flow Hydrograph=', 
@@ -4335,15 +4645,26 @@ class RasUnsteady:
     @log_call
     def parse_fixed_width_table(lines: List[str], start: int, end: int) -> pd.DataFrame:
         """
-        Parse a fixed-width table into a pandas DataFrame.
-        
+        Parse a fixed-width table from an unsteady flow file into a pandas DataFrame.
+
+        HEC-RAS uses a fixed-width format (8 characters per value) for numeric tables.
+        This function converts this format into a DataFrame for easier manipulation.
+
         Parameters:
-        lines (List[str]): List of file lines
-        start (int): Starting line number for table
-        end (int): Ending line number for table
-        
+            lines (List[str]): List of file lines (from file.readlines())
+            start (int): Starting line number for table data
+            end (int): Ending line number for table data
+
         Returns:
-        pd.DataFrame: DataFrame containing parsed table values
+            pd.DataFrame: DataFrame with a single column 'Value' containing the parsed numeric values
+
+        Example:
+            # Identify tables in the file
+            tables = RasUnsteady.identify_tables(lines)
+            
+            # Parse a specific table (e.g., first flow hydrograph)
+            table_name, start_line, end_line = tables[0]
+            table_df = RasUnsteady.parse_fixed_width_table(lines, start_line, end_line)
         """
         data = []
         for line in lines[start:end]:
@@ -4387,14 +4708,30 @@ class RasUnsteady:
     @log_call
     def extract_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> Dict[str, pd.DataFrame]:
         """
-        Extract all tables from the unsteady flow file and return them as DataFrames.
-        
+        Extract all tables from an unsteady flow file and return them as DataFrames.
+
+        This function combines identify_tables() and parse_fixed_width_table() to extract
+        all tables from an unsteady flow file in a single operation.
+
         Parameters:
-        unsteady_file (str): Path to the unsteady flow file
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+            unsteady_file (str): Path to the unsteady flow file
+            ras_object (optional): Custom RAS object to use instead of the global one
+
         Returns:
-        Dict[str, pd.DataFrame]: Dictionary of table names to DataFrames
+            Dict[str, pd.DataFrame]: Dictionary where:
+                - Keys are table names (e.g., 'Flow Hydrograph=')
+                - Values are DataFrames with a 'Value' column containing numeric data
+
+        Example:
+            # Extract all tables from the unsteady flow file
+            all_tables = RasUnsteady.extract_tables(new_unsteady_file)
+            print(f"Extracted {len(all_tables)} tables from the file.")
+            
+            # Access a specific table
+            flow_tables = [name for name in all_tables.keys() if 'Flow Hydrograph=' in name]
+            if flow_tables:
+                flow_df = all_tables[flow_tables[0]]
+                print(f"Flow table has {len(flow_df)} values")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -4427,14 +4764,32 @@ class RasUnsteady:
     def write_table_to_file(unsteady_file: str, table_name: str, df: pd.DataFrame, 
                            start_line: int, ras_object: Optional[Any] = None) -> None:
         """
-        Write updated table back to file in fixed-width format.
-        
+        Write an updated table back to an unsteady flow file in the required fixed-width format.
+
+        This function takes a modified DataFrame and writes it back to the unsteady flow file,
+        preserving the 8-character fixed-width format that HEC-RAS requires.
+
         Parameters:
-        unsteady_file (str): Path to the unsteady flow file
-        table_name (str): Name of the table to update
-        df (pd.DataFrame): DataFrame containing the updated values
-        start_line (int): Line number where the table starts
-        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+            unsteady_file (str): Path to the unsteady flow file
+            table_name (str): Name of the table to update (e.g., 'Flow Hydrograph=')
+            df (pd.DataFrame): DataFrame containing the updated values with a 'Value' column
+            start_line (int): Line number where the table data begins in the file
+            ras_object (optional): Custom RAS object to use instead of the global one
+
+        Returns:
+            None: The function modifies the file in-place
+
+        Example:
+            # Identify tables in the unsteady flow file
+            tables = RasUnsteady.identify_tables(lines)
+            table_name, start_line, end_line = tables[0]
+            
+            # Parse and modify the table
+            table_df = RasUnsteady.parse_fixed_width_table(lines, start_line, end_line)
+            table_df['Value'] = table_df['Value'] * 0.75  # Scale values to 75%
+            
+            # Write modified table back to the file
+            RasUnsteady.write_table_to_file(new_unsteady_file, table_name, table_df, start_line)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()

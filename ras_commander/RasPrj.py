@@ -118,22 +118,25 @@ class RasPrj:
     @log_call
     def initialize(self, project_folder, ras_exe_path, suppress_logging=True):
         """
-        Initialize a RasPrj instance.
+        Initialize a RasPrj instance with project folder and RAS executable path.
 
-        This method sets up the RasPrj instance with the given project folder and RAS executable path.
-        It finds the project file, loads project data, sets the initialization flag, and now also
-        extracts boundary conditions.
+        IMPORTANT: External users should use init_ras_project() function instead of this method.
+        This method is intended for internal use only.
 
         Args:
             project_folder (str or Path): Path to the HEC-RAS project folder.
             ras_exe_path (str or Path): Path to the HEC-RAS executable.
-            suppress_logging (bool): If True, suppresses initialization logging messages.
+            suppress_logging (bool, default=True): If True, suppresses initialization logging messages.
 
         Raises:
             ValueError: If no HEC-RAS project file is found in the specified folder.
 
         Note:
-            This method is intended for internal use. External users should use the init_ras_project function instead.
+            This method sets up the RasPrj instance by:
+            1. Finding the project file (.prj)
+            2. Loading project data (plans, geometries, flows)
+            3. Extracting boundary conditions
+            4. Setting the initialization flag
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
@@ -159,8 +162,13 @@ class RasPrj:
         """
         Load project data from the HEC-RAS project file.
 
-        This method initializes DataFrames for plan, flow, unsteady, and geometry entries
-        and ensures all required columns are present with appropriate paths.
+        This internal method:
+        1. Initializes DataFrames for plan, flow, unsteady, and geometry entries
+        2. Ensures all required columns are present with appropriate default values
+        3. Sets file paths for all components (geometries, flows, plans)
+
+        Raises:
+            Exception: If there's an error loading or processing project data.
         """
         try:
             # Load data frames
@@ -632,10 +640,14 @@ class RasPrj:
     @log_call
     def check_initialized(self):
         """
-        Ensure that the RasPrj instance has been initialized.
+        Ensure that the RasPrj instance has been initialized before operations.
 
         Raises:
-            RuntimeError: If the project has not been initialized.
+            RuntimeError: If the project has not been initialized with init_ras_project().
+
+        Note:
+            This method is called by other methods to validate the project state before
+            performing operations. Users typically don't need to call this directly.
         """
         if not self.initialized:
             raise RuntimeError("Project not initialized. Call init_ras_project() first.")
@@ -646,11 +658,23 @@ class RasPrj:
         """
         Find the appropriate HEC-RAS project file (.prj) in the given folder.
         
-        Parameters:
-        folder_path (str or Path): Path to the folder containing HEC-RAS files.
+        This method uses several strategies to locate the correct project file:
+        1. If only one .prj file exists, it is selected
+        2. If multiple .prj files exist, it tries to match with .rasmap file names
+        3. As a last resort, it scans files for "Proj Title=" content
+        
+        Args:
+            folder_path (str or Path): Path to the folder containing HEC-RAS files.
         
         Returns:
-        Path: The full path of the selected .prj file or None if no suitable file is found.
+            Path: The full path of the selected .prj file or None if no suitable file is found.
+        
+        Example:
+            >>> project_file = RasPrj.find_ras_prj("/path/to/ras_project")
+            >>> if project_file:
+            ...     print(f"Found project file: {project_file}")
+            ... else:
+            ...     print("No project file found")
         """
         folder_path = Path(folder_path)
         prj_files = list(folder_path.glob("*.prj"))
@@ -677,13 +701,17 @@ class RasPrj:
     @log_call
     def get_project_name(self):
         """
-        Get the name of the HEC-RAS project.
+        Get the name of the HEC-RAS project (without file extension).
 
         Returns:
             str: The name of the project.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> project_name = ras.get_project_name()
+            >>> print(f"Working with project: {project_name}")
         """
         self.check_initialized()
         return self.project_name
@@ -693,14 +721,26 @@ class RasPrj:
         """
         Get entries of a specific type from the HEC-RAS project.
 
+        This method extracts files of the specified type from the project file,
+        parses their content, and returns a structured DataFrame.
+
         Args:
-            entry_type (str): The type of entry to retrieve (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+            entry_type (str): The type of entry to retrieve ('Plan', 'Flow', 'Unsteady', or 'Geom').
 
         Returns:
-            pd.DataFrame: A DataFrame containing the requested entries.
+            pd.DataFrame: A DataFrame containing the requested entries with appropriate columns.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> # Get all geometry files in the project
+            >>> geom_entries = ras.get_prj_entries('Geom')
+            >>> print(f"Project contains {len(geom_entries)} geometry files")
+        
+        Note:
+            This is a generic method. For specific file types, use the dedicated methods:
+            get_plan_entries(), get_flow_entries(), get_unsteady_entries(), get_geom_entries()
         """
         self.check_initialized()
         return self._get_prj_entries(entry_type)
@@ -709,12 +749,23 @@ class RasPrj:
     def get_plan_entries(self):
         """
         Get all plan entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all plan files (.p*) in the project
+        with their associated properties, paths and settings.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all plan entries.
+            pd.DataFrame: A DataFrame with columns including 'plan_number', 'full_path',
+                          'unsteady_number', 'geometry_number', etc.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> plan_entries = ras.get_plan_entries()
+            >>> print(f"Project contains {len(plan_entries)} plan files")
+            >>> # Display the first plan's properties
+            >>> if not plan_entries.empty:
+            ...     print(plan_entries.iloc[0])
         """
         self.check_initialized()
         return self._get_prj_entries('Plan')
@@ -723,12 +774,22 @@ class RasPrj:
     def get_flow_entries(self):
         """
         Get all flow entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all flow files (.f*) in the project
+        with their associated properties and paths.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all flow entries.
+            pd.DataFrame: A DataFrame with columns including 'flow_number', 'full_path', etc.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> flow_entries = ras.get_flow_entries()
+            >>> print(f"Project contains {len(flow_entries)} flow files")
+            >>> # Display the first flow file's properties
+            >>> if not flow_entries.empty:
+            ...     print(flow_entries.iloc[0])
         """
         self.check_initialized()
         return self._get_prj_entries('Flow')
@@ -737,12 +798,22 @@ class RasPrj:
     def get_unsteady_entries(self):
         """
         Get all unsteady flow entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all unsteady flow files (.u*) in the project
+        with their associated properties and paths.
 
         Returns:
-            pd.DataFrame: A DataFrame containing all unsteady flow entries.
+            pd.DataFrame: A DataFrame with columns including 'unsteady_number', 'full_path', etc.
 
         Raises:
             RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> unsteady_entries = ras.get_unsteady_entries()
+            >>> print(f"Project contains {len(unsteady_entries)} unsteady flow files")
+            >>> # Display the first unsteady file's properties
+            >>> if not unsteady_entries.empty:
+            ...     print(unsteady_entries.iloc[0])
         """
         self.check_initialized()
         return self._get_prj_entries('Unsteady')
@@ -750,11 +821,26 @@ class RasPrj:
     @log_call
     def get_geom_entries(self):
         """
-        Get geometry entries from the project file.
+        Get all geometry entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all geometry files (.g*) in the project
+        with their associated properties, paths and HDF links.
 
         Returns:
-            pd.DataFrame: DataFrame containing geometry entries.
+            pd.DataFrame: A DataFrame with columns including 'geom_number', 'full_path', 
+                          'hdf_path', etc.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> geom_entries = ras.get_geom_entries()
+            >>> print(f"Project contains {len(geom_entries)} geometry files")
+            >>> # Display the first geometry file's properties
+            >>> if not geom_entries.empty:
+            ...     print(geom_entries.iloc[0])
         """
+        self.check_initialized()
         geom_pattern = re.compile(r'Geom File=(\w+)')
         geom_entries = []
 
@@ -780,11 +866,28 @@ class RasPrj:
     @log_call
     def get_hdf_entries(self):
         """
-        Get HDF entries for plans that have results.
+        Get all plan entries that have associated HDF results files.
+        
+        This method identifies which plans have been successfully computed
+        and have HDF results available for further analysis.
         
         Returns:
             pd.DataFrame: A DataFrame containing plan entries with HDF results.
-                      Returns an empty DataFrame if no HDF entries are found.
+                          Returns an empty DataFrame if no results are found.
+        
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> hdf_entries = ras.get_hdf_entries()
+            >>> if hdf_entries.empty:
+            ...     print("No computed results found. Run simulations first.")
+            ... else:
+            ...     print(f"Found results for {len(hdf_entries)} plans")
+        
+        Note:
+            This is useful for identifying which plans have been successfully computed
+            and can be used for further results analysis.
         """
         self.check_initialized()
         
@@ -798,7 +901,23 @@ class RasPrj:
     
     @log_call
     def print_data(self):
-        """Print all RAS Object data for this instance."""
+        """
+        Print a comprehensive summary of all RAS Object data for this instance.
+        
+        This method outputs:
+        - Project information (name, folder, file paths)
+        - Summary of plans, flows, geometries, and unsteady files
+        - HDF results availability
+        - Boundary conditions
+        
+        Useful for debugging, validation, and exploring project structure.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> ras.print_data()  # Displays complete project overview
+        """
         self.check_initialized()
         logger.info(f"--- Data for {self.project_name} ---")
         logger.info(f"Project folder: {self.project_folder}")
@@ -821,33 +940,37 @@ class RasPrj:
     @log_call
     def get_boundary_conditions(self) -> pd.DataFrame:
         """
-        Extract boundary conditions from unsteady flow files and create a DataFrame.
+        Extract boundary conditions from unsteady flow files into a structured DataFrame.
 
-        This method parses unsteady flow files to extract boundary condition information.
-        It creates a DataFrame with structured data for known boundary condition types
-        and parameters, and associates this information with the corresponding unsteady flow file.
+        This method:
+        1. Parses all unsteady flow files to extract boundary condition information
+        2. Creates a structured DataFrame with boundary locations, types and parameters
+        3. Links boundary conditions to their respective unsteady flow files
 
-        Note:
-        Any lines in the boundary condition blocks that are not explicitly parsed and
-        incorporated into the DataFrame are captured in a multi-line string. This string
-        is logged at the DEBUG level for each boundary condition. This feature is crucial
-        for developers incorporating new boundary condition types or parameters, as it
-        allows them to see what information might be missing from the current parsing logic.
-        If no unsteady flow files are present, it returns an empty DataFrame.
+        Supported boundary condition types include:
+        - Flow Hydrograph
+        - Stage Hydrograph
+        - Normal Depth
+        - Lateral Inflow Hydrograph
+        - Uniform Lateral Inflow Hydrograph
+        - Gate Opening
 
         Returns:
-            pd.DataFrame: A DataFrame containing detailed boundary condition information,
-                                      linked to the unsteady flow files.
-
-        Usage:
-            To see the unparsed lines, set the logging level to DEBUG before calling this method:
-            
+            pd.DataFrame: A DataFrame containing detailed boundary condition information.
+                              Returns an empty DataFrame if no unsteady flow files are present.
+        
+        Example:
+            >>> boundaries = ras.get_boundary_conditions()
+            >>> if not boundaries.empty:
+            ...     print(f"Found {len(boundaries)} boundary conditions")
+            ...     # Show flow hydrographs only
+            ...     flow_hydrographs = boundaries[boundaries['bc_type'] == 'Flow Hydrograph']
+            ...     print(f"Project has {len(flow_hydrographs)} flow hydrographs")
+        
+        Note:
+            To see unparsed boundary condition lines for debugging, set logging to DEBUG:
             import logging
-            getLogger().setLevel(logging.DEBUG)
-            
-            boundaries_df = ras_project.get_boundary_conditions()
-                          linked to the unsteady flow files. Returns an empty DataFrame if
-                          no unsteady flow files are present.
+            logging.getLogger().setLevel(logging.DEBUG)
         """
         boundary_data = []
         
@@ -1117,27 +1240,38 @@ ras = RasPrj()
 @log_call
 def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     """
-    Initialize a RAS project.
+    Initialize a RAS project for use with the ras-commander library.
 
-    USE THIS FUNCTION TO INITIALIZE A RAS PROJECT, NOT THE INITIALIZE METHOD OF THE RasPrj CLASS.
+    This is the primary function for setting up a HEC-RAS project. It:
+    1. Finds the project file (.prj) in the specified folder
+    2. Identifies the appropriate HEC-RAS executable
+    3. Loads project data (plans, geometries, flows)
+    4. Creates dataframes containing project components
 
-    Parameters:
-    -----------
-    ras_project_folder : str
-        The path to the RAS project folder.
-    ras_version : str, optional
-        The version of RAS to use (e.g., "6.6").
-        The version can also be a full path to the Ras.exe file.
-        If None, the function will attempt to use the version from the global 'ras' object or a default path.
-    ras_object : RasPrj or str, optional
-        If None, the global 'ras' object is updated.
-        If a RasPrj instance, that instance is updated.
-        If any other value is provided, a new RasPrj instance is created and returned.
+    Args:
+        ras_project_folder (str or Path): The path to the RAS project folder.
+        ras_version (str, optional): The version of RAS to use (e.g., "6.6").
+                                    Can also be a full path to the Ras.exe file.
+                                    If None, will attempt to use a default path.
+        ras_object (RasPrj, optional): If None, updates the global 'ras' object.
+                                       If a RasPrj instance, updates that instance.
+                                       If any other value, creates and returns a new RasPrj instance.
 
     Returns:
-    --------
-    RasPrj
-        An initialized RasPrj instance.
+        RasPrj: An initialized RasPrj instance.
+        
+    Raises:
+        FileNotFoundError: If the specified project folder doesn't exist.
+        ValueError: If no HEC-RAS project file is found in the folder.
+        
+    Example:
+        >>> # Initialize using the global 'ras' object (most common)
+        >>> init_ras_project("/path/to/project", "6.6")
+        >>> print(f"Initialized project: {ras.project_name}")
+        >>>
+        >>> # Create a new RasPrj instance
+        >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
+        >>> print(f"Created project instance: {my_project.project_name}")
     """
     if not Path(ras_project_folder).exists():
         logger.error(f"The specified RAS project folder does not exist: {ras_project_folder}")
@@ -1171,23 +1305,31 @@ def get_ras_exe(ras_version=None):
     """
     Determine the HEC-RAS executable path based on the input.
     
+    This function attempts to find the HEC-RAS executable in the following order:
+    1. If ras_version is a valid file path to an .exe file, use that path
+    2. If ras_version is a known version number, use default installation path
+    3. If global 'ras' object has ras_exe_path, use that
+    4. As a fallback, return a default path (which may not exist)
+    
     Args:
         ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
-                                     If None, the function will first check the global 'ras' object for a path.
-                                     or a default path.
     
     Returns:
         str: The full path to the HEC-RAS executable.
     
-    Raises:
-        ValueError: If the input is neither a valid version number nor a valid file path.
-    
-    Notes:
-        - If ras_version is not provided, the function will first check the global 'ras' object for a path.
-        - If the global 'ras' object is not initialized or doesn't have a path, a default path will be used.
-        - The default path allows the library to function in environments without HEC-RAS installed.
-        - This enables the HEC-Commander GPT to operate without stopping, even if HEC-RAS is not present.
-        - End users MUST use logging to check for operational errors, as full code stops prevent the GPT from running.
+    Note:
+        - HEC-RAS version numbers include: "6.6", "6.5", "6.4.1", "6.3", etc.
+        - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
+        - Returns a default path ("Ras.exe") if no valid path is found
+        - This allows the library to function even without HEC-RAS installed
+        
+    Example:
+        >>> # Get path for specific version
+        >>> ras_path = get_ras_exe("6.6")
+        >>> print(f"HEC-RAS 6.6 executable: {ras_path}")
+        >>>
+        >>> # Provide direct path to executable
+        >>> custom_path = get_ras_exe("C:/My_Programs/HEC-RAS/Ras.exe")
     """
     if ras_version is None:
         if hasattr(ras, 'ras_exe_path') and ras.ras_exe_path:

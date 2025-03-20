@@ -99,23 +99,66 @@ class RasCmdr:
         overwrite_dest=False
     ):
         """
-        Execute a HEC-RAS plan.
+        Execute a single HEC-RAS plan in a specified location.
+
+        This function runs a HEC-RAS plan by launching the HEC-RAS executable through command line, 
+        allowing for destination folder specification, core count control, and geometry preprocessor management.
 
         Args:
             plan_number (str, Path): The plan number to execute (e.g., "01", "02") or the full path to the plan file.
+                Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
             dest_folder (str, Path, optional): Name of the folder or full path for computation.
                 If a string is provided, it will be created in the same parent directory as the project folder.
                 If a full path is provided, it will be used as is.
+                If None, computation occurs in the original project folder, modifying the original project.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+                Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
-            num_cores (int, optional): Number of cores to use for the plan execution. If None, the current setting is not changed.
+                Set to True when geometry has been modified to force recomputation of preprocessor files.
+            num_cores (int, optional): Number of cores to use for the plan execution. 
+                If None, the current setting in the plan file is not changed.
+                Generally, 2-4 cores provides good performance for most models.
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+                Set to True to replace an existing destination folder with the same name.
 
         Returns:
             bool: True if the execution was successful, False otherwise.
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
+            FileNotFoundError: If the plan file or project file cannot be found.
+            PermissionError: If there are issues accessing or writing to the destination folder.
+            subprocess.CalledProcessError: If the HEC-RAS execution fails.
+
+        Examples:
+            # Run a plan in the original project folder
+            RasCmdr.compute_plan("01")
+            
+            # Run a plan in a separate folder
+            RasCmdr.compute_plan("01", dest_folder="computation_folder")
+            
+            # Run a plan with a specific number of cores
+            RasCmdr.compute_plan("01", num_cores=4)
+            
+            # Run a plan in a specific folder, overwriting if it exists
+            RasCmdr.compute_plan("01", dest_folder="computation_folder", overwrite_dest=True)
+            
+            # Run a plan in a specific folder with multiple options
+            RasCmdr.compute_plan(
+                "01", 
+                dest_folder="computation_folder",
+                num_cores=2,
+                clear_geompre=True,
+                overwrite_dest=True
+            )
+            
+        Notes:
+            - For executing multiple plans, consider using compute_parallel() or compute_test_mode().
+            - Setting num_cores appropriately is important for performance:
+              * 1-2 cores: Highest efficiency per core, good for small models
+              * 3-8 cores: Good balance for most models
+              * >8 cores: May have diminishing returns due to overhead
+            - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
         """
         try:
             ras_obj = ras_object if ras_object is not None else ras
@@ -204,8 +247,6 @@ class RasCmdr:
 
     @staticmethod
     @log_call
-    @staticmethod
-    @log_call
     def compute_parallel(
         plan_number: Union[str, List[str], None] = None,
         max_workers: int = 2,
@@ -216,19 +257,83 @@ class RasCmdr:
         overwrite_dest: bool = False
     ) -> Dict[str, bool]:
         """
-        Compute multiple HEC-RAS plans in parallel.
+        Execute multiple HEC-RAS plans in parallel using multiple worker instances.
+
+        This method creates separate worker folders for each parallel process, runs plans
+        in those folders, and then consolidates results to a final destination folder.
+        It's ideal for running independent plans simultaneously to make better use of system resources.
 
         Args:
-            plan_number (Union[str, List[str], None]): Plan number(s) to compute. If None, all plans are computed.
-            max_workers (int): Maximum number of parallel workers.
+            plan_number (Union[str, List[str], None]): Plan number(s) to compute. 
+                If None, all plans in the project are computed.
+                If string, only that plan will be computed.
+                If list, all specified plans will be computed.
+                Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
+            max_workers (int): Maximum number of parallel workers (separate HEC-RAS instances).
+                Each worker gets a separate folder with a copy of the project.
+                Optimal value depends on CPU cores and memory available.
+                A good starting point is: max_workers = floor(physical_cores / num_cores).
             num_cores (int): Number of cores to use per plan computation.
-            clear_geompre (bool): Whether to clear geometry preprocessor files.
-            ras_object (Optional[RasPrj]): RAS project object. If None, uses global instance.
+                Controls computational resources allocated to each individual HEC-RAS instance.
+                For parallel execution, 2-4 cores per worker often provides the best balance.
+            clear_geompre (bool): Whether to clear geometry preprocessor files before computation.
+                Set to True when geometry has been modified to force recomputation.
+            ras_object (Optional[RasPrj]): RAS project object. If None, uses global 'ras' instance.
+                Useful when working with multiple projects simultaneously.
             dest_folder (Union[str, Path, None]): Destination folder for computed results.
+                If None, creates a "[Computed]" folder adjacent to the project folder.
+                If string, creates folder in the project's parent directory.
+                If Path, uses the exact path provided.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
+                Set to True to replace an existing destination folder with the same name.
 
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
+                Keys are plan numbers and values are boolean success indicators.
+
+        Raises:
+            ValueError: If the destination folder already exists, is not empty, and overwrite_dest is False.
+            FileNotFoundError: If project files cannot be found.
+            PermissionError: If there are issues accessing or writing to folders.
+            RuntimeError: If worker initialization fails.
+
+        Examples:
+            # Run all plans in parallel with default settings
+            RasCmdr.compute_parallel()
+            
+            # Run all plans with 4 workers, 2 cores per worker
+            RasCmdr.compute_parallel(max_workers=4, num_cores=2)
+            
+            # Run specific plans in parallel
+            RasCmdr.compute_parallel(plan_number=["01", "03"], max_workers=2)
+            
+            # Run all plans with dynamic worker allocation based on system resources
+            import psutil
+            physical_cores = psutil.cpu_count(logical=False)
+            cores_per_worker = 2
+            max_workers = max(1, physical_cores // cores_per_worker)
+            RasCmdr.compute_parallel(max_workers=max_workers, num_cores=cores_per_worker)
+            
+            # Run all plans in a specific destination folder
+            RasCmdr.compute_parallel(dest_folder="parallel_results", overwrite_dest=True)
+
+        Notes:
+            - Worker Assignment: Plans are assigned to workers in a round-robin fashion.
+              For example, with 3 workers and 5 plans, assignment would be:
+              Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
+            
+            - Resource Management: Each HEC-RAS instance (worker) typically requires:
+              * 2-4 GB of RAM
+              * 2-4 cores for optimal performance
+            
+            - When to use parallel vs. sequential:
+              * Parallel: For independent plans, faster overall completion
+              * Sequential: For dependent plans, consistent resource usage, easier debugging
+            
+            - The function creates worker folders during execution and consolidates results
+              to the destination folder upon completion.
+              
+            - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
         """
         try:
             ras_obj = ras_object or ras
@@ -397,49 +502,86 @@ class RasCmdr:
         overwrite_dest=False
     ):
         """
-        Execute HEC-RAS plans in test mode. This is a re-creation of the HEC-RAS command line -test flag, 
-        which does not work in recent versions of HEC-RAS.
-        
-        As a special-purpose function that emulates the original -test flag, it operates differently than the 
-        other two compute_ functions. Per the original HEC-RAS test flag, it creates a separate test folder,
-        copies the project there, and executes the specified plans in sequential order.
-        
-        For most purposes, just copying the project folder, initing that new folder, then running each plan 
-        with compute_plan is a simpler and more flexible approach.  This is shown in the examples provided
-        in the ras-commander library.
+        Execute HEC-RAS plans sequentially in a separate test folder.
+
+        This function creates a separate test folder, copies the project there, and executes
+        the specified plans in sequential order. It's useful for batch processing plans that 
+        need to be run in a specific order or when you want to ensure consistent resource usage.
 
         Args:
             plan_number (str, list[str], optional): Plan number or list of plan numbers to execute. 
                 If None, all plans will be executed. Default is None.
-            dest_folder_suffix (str, optional): Suffix to append to the test folder name to create dest_folder. 
+                Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
+            dest_folder_suffix (str, optional): Suffix to append to the test folder name. 
                 Defaults to "[Test]".
-                dest_folder is always created in the project folder's parent directory.
+                The test folder is always created in the project folder's parent directory.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files.
                 Defaults to False.
-            num_cores (int, optional): Maximum number of cores to use for each plan.
-                If None, the current setting is not changed. Default is None.
+                Set to True when geometry has been modified to force recomputation.
+            num_cores (int, optional): Number of cores to use for each plan.
+                If None, the current setting in the plan file is not changed. Default is None.
+                For sequential execution, 4-8 cores often provides good performance.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
+                Useful when working with multiple projects simultaneously.
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. 
+                Defaults to False.
+                Set to True to replace an existing test folder with the same name.
 
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
+                Keys are plan numbers and values are boolean success indicators.
 
-        Example:
-            Run all plans: RasCommander.compute_test_mode()
-            Run a specific plan: RasCommander.compute_test_mode(plan_number="01")
-            Run multiple plans: RasCommander.compute_test_mode(plan_number=["01", "03", "05"])
-            Run plans with a custom folder suffix: RasCommander.compute_test_mode(dest_folder_suffix="[TestRun]")
-            Run plans and clear geometry preprocessor files: RasCommander.compute_test_mode(clear_geompre=True)
-            Run plans with a specific number of cores: RasCommander.compute_test_mode(num_cores=4)
+        Raises:
+            ValueError: If the destination folder already exists, is not empty, and overwrite_dest is False.
+            FileNotFoundError: If project files cannot be found.
+            PermissionError: If there are issues accessing or writing to folders.
+
+        Examples:
+            # Run all plans sequentially
+            RasCmdr.compute_test_mode()
             
+            # Run a specific plan
+            RasCmdr.compute_test_mode(plan_number="01")
+            
+            # Run multiple specific plans
+            RasCmdr.compute_test_mode(plan_number=["01", "03", "05"])
+            
+            # Run plans with a custom folder suffix
+            RasCmdr.compute_test_mode(dest_folder_suffix="[SequentialRun]")
+            
+            # Run plans with a specific number of cores
+            RasCmdr.compute_test_mode(num_cores=4)
+            
+            # Run specific plans with multiple options
+            RasCmdr.compute_test_mode(
+                plan_number=["01", "02"],
+                dest_folder_suffix="[SpecificSequential]",
+                clear_geompre=True,
+                num_cores=6,
+                overwrite_dest=True
+            )
+
         Notes:
-            - This function executes plans in a separate folder for isolated testing.
-            - If plan_number is not provided, all plans in the project will be executed.
-            - The function does not change the geometry preprocessor and IB tables settings.  
-                - To force recomputing of geometry preprocessor and IB tables, use the clear_geompre=True option.
-            - Plans are executed sequentially.
-            - Because copying the project is implicit, only a dest_folder_suffix option is provided.
-            - For more flexible run management, use the compute_parallel or compute_sequential functions.
+            - This function was created to replicate the original HEC-RAS command line -test flag,
+              which does not work in recent versions of HEC-RAS.
+            
+            - Key differences from other compute functions:
+              * compute_plan: Runs a single plan, with option for destination folder
+              * compute_parallel: Runs multiple plans simultaneously in worker folders
+              * compute_test_mode: Runs multiple plans sequentially in a single test folder
+            
+            - Use cases:
+              * Running plans in a specific order
+              * Ensuring consistent resource usage
+              * Easier debugging (one plan at a time)
+              * Isolated test environment
+            
+            - Performance considerations:
+              * Sequential execution is generally slower overall than parallel execution
+              * Each plan gets consistent resource usage
+              * Execution time scales linearly with the number of plans
+            
+            - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
         """
         try:
             ras_obj = ras_object or ras

@@ -56,13 +56,18 @@ class RasGeo:
         ras_object = None
     ) -> None:
         """
-        Clear HEC-RAS geometry preprocessor files for specified plan files or all plan files in the project directory.
-        
+        Clear HEC-RAS geometry preprocessor files for specified plan files.
+
+        Geometry preprocessor files (.c* extension) contain computed hydraulic properties derived
+        from the geometry. These should be cleared when the geometry changes to ensure that
+        HEC-RAS recomputes all hydraulic tables with updated geometry information.
+
         Limitations/Future Work:
         - This function only deletes the geometry preprocessor file.
         - It does not clear the IB tables.
         - It also does not clear geometry preprocessor tables from the geometry HDF.
-        - All of these features will need to be added to reliably remove geometry preprocessor files for 1D and 2D projects.
+        - All of these features will need to be added to reliably remove geometry preprocessor 
+          files for 1D and 2D projects.
         
         Parameters:
             plan_files (Union[str, Path, List[Union[str, Path]]], optional): 
@@ -71,20 +76,20 @@ class RasGeo:
             ras_object: An optional RAS object instance.
         
         Returns:
-            None
-        
-        Examples:
-            # Clear all geometry preprocessor files in the project directory
-            RasGeo.clear_geompre_files()
-            
-            # Clear a single plan file
-            RasGeo.clear_geompre_files(r'path/to/plan.p01')
-            
-            # Clear multiple plan files
-            RasGeo.clear_geompre_files([r'path/to/plan1.p01', r'path/to/plan2.p02'])
+            None: The function deletes files and updates the ras object's geometry dataframe
 
-        Note:
-            This function updates the ras object's geometry dataframe after clearing the preprocessor files.
+        Example:
+            # Clone a plan and geometry
+            new_plan_number = RasPlan.clone_plan("01")
+            new_geom_number = RasPlan.clone_geom("01")
+            
+            # Set the new geometry for the cloned plan
+            RasPlan.set_geom(new_plan_number, new_geom_number)
+            plan_path = RasPlan.get_plan_path(new_plan_number)
+            
+            # Clear geometry preprocessor files to ensure clean results
+            RasGeo.clear_geompre_files(plan_path)
+            print(f"Cleared geometry preprocessor files for plan {new_plan_number}")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()

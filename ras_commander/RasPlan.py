@@ -969,7 +969,7 @@ class RasPlan:
                 return None
 
 
-#  NEW FUNCTIONS THAT NEED TESTING AND EXAMPLES
+
 
 
     @staticmethod
