@@ -213,10 +213,45 @@ async def chat(request: Request, message: dict):
                 logger.info(f"Chat interaction completed successfully - Conversation ID: {conversation_id}")
                 
             except Exception as e:
-                error_msg = f"Error during streaming: {str(e)}"
+                # Extract detailed API error information
+                error_details = str(e)
+                
+                # Handle provider-specific API errors
+                if provider == "anthropic":
+                    # For Anthropic errors, try to extract the message from the error object
+                    if hasattr(e, 'body') and e.body:
+                        try:
+                            error_body = e.body
+                            if isinstance(error_body, dict) and 'error' in error_body:
+                                if isinstance(error_body['error'], dict) and 'message' in error_body['error']:
+                                    error_details = f"Anthropic API Error: {error_body['error']['message']}"
+                                else:
+                                    error_details = f"Anthropic API Error: {error_body['error']}"
+                        except Exception:
+                            pass
+                    # Fallback for API error parsing
+                    elif "rate_limit_error" in error_details:
+                        error_details = "Rate limit exceeded. The API is receiving too many requests. Please try again later or reduce your token usage."
+                
+                elif provider == "openai":
+                    # For OpenAI errors, try to extract the message
+                    if hasattr(e, 'message'):
+                        error_details = f"OpenAI API Error: {e.message}"
+                    elif hasattr(e, 'response') and hasattr(e.response, 'json'):
+                        try:
+                            error_json = e.response.json()
+                            if 'error' in error_json and 'message' in error_json['error']:
+                                error_details = f"OpenAI API Error: {error_json['error']['message']}"
+                        except Exception:
+                            pass
+                
+                # Log the full error for debugging
+                error_msg = f"Error during streaming: {error_details}"
                 logger.error(error_msg)
                 log_error(e, "Streaming error")
-                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                
+                # Send user-friendly error message to the frontend
+                yield f"data: {json.dumps({'error': error_details})}\n\n"
 
         return StreamingResponse(
             stream_response(),
@@ -308,8 +343,8 @@ async def save_conversation_endpoint():
 async def get_file_tree():
     """Get the file tree structure for the project."""
     try:
-        # Get the parent directory of the current project
-        root_dir = Path(__file__).parent.parent.parent
+        # Use the set_context_folder function instead of hardcoding the path
+        root_dir = set_context_folder()
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         
         def count_tokens(content):
@@ -357,8 +392,8 @@ async def get_file_tree():
 async def get_file_content(path: str):
     """Get the content of a specific file."""
     try:
-        # Get the project root directory
-        root_dir = Path(__file__).parent.parent.parent
+        # Use the set_context_folder function to get the root directory
+        root_dir = set_context_folder()
         file_path = root_dir / path
         
         # Validate the path is within the project directory

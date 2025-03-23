@@ -10,6 +10,7 @@ import json
 
 # Initialize global variables for context
 preprocessed_context = ""
+file_token_mapping = {}  # Add global variable definition here
 conversation_context = {}  # Store context for each conversation
 
 def initialize_context():
@@ -17,7 +18,26 @@ def initialize_context():
     Initializes the full context processing.
     """
     global preprocessed_context
+    global file_token_mapping  # Using global declaration here is fine since we already defined it above
     
+    # Try to use the preprocessor version if available
+    try:
+        import importlib
+        context_integration = importlib.import_module('utils.context_integration')
+        if hasattr(context_integration, 'initialize_context_with_preprocessing'):
+            # Use the enhanced version with notebook preprocessing
+            if context_integration.initialize_context_with_preprocessing():
+                # Copy over the processed context from the integration module
+                preprocessed_context = context_integration.preprocessed_context
+                
+                # Copy over file token mapping
+                file_token_mapping = context_integration.file_token_mapping
+                
+                return True
+    except (ImportError, AttributeError) as e:
+        print(f"Info: Using original context initialization (no preprocessing available): {e}")
+    
+    # If we get here, use the original implementation
     try:
         # Load settings
         settings = load_settings()
@@ -42,7 +62,6 @@ def initialize_context():
         preprocessed_context = combined_text
         
         # Store token counts for files
-        global file_token_mapping
         file_token_mapping = file_token_counts
         
         return True

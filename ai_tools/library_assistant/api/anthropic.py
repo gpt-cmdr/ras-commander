@@ -55,10 +55,27 @@ async def anthropic_stream_response(
                 if text.strip():
                     yield text
                 
+    except AuthenticationError as e:
+        error_msg = f"Authentication error with Anthropic API: {str(e)}"
+        print(error_msg)  # Log the error
+        raise APIError(error_msg, body={"error": {"message": error_msg}})
+    
+    except APIError as e:
+        # Preserve the original API error but make sure it has the required structure
+        error_msg = f"Anthropic API error: {str(e)}"
+        print(error_msg)  # Log the error
+        
+        # If the error already has a body, pass it through
+        if hasattr(e, 'body') and e.body:
+            raise
+        else:
+            # Otherwise, create a properly formatted error
+            raise APIError(error_msg, body={"error": {"message": error_msg}})
+            
     except Exception as e:
         error_msg = f"Unexpected error in Anthropic API call: {str(e)}"
         print(error_msg)  # Log the error
-        raise APIError(error_msg, request=None)  # Include required request parameter
+        raise APIError(error_msg, body={"error": {"message": error_msg}})  # Include required body parameter
 
 def get_anthropic_client(api_key: str, async_client: bool = True) -> Union[Anthropic, AsyncAnthropic]:
     """

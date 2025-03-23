@@ -17,62 +17,62 @@ from typing import Dict, Optional
 MODEL_CONFIG = {
     "claude-3-7-sonnet-20250219": {
         "max_context_tokens": 200000,
-        "prompt_cost_per_1m": 3000.0,      # $3.00 per million tokens
-        "completion_cost_per_1m": 15000.0,  # $15.00 per million tokens
+        "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
+        "completion_cost_per_1m": 15.0,  # $15.00 per million tokens
         "default_output_tokens": 8192
     },
     "claude-3-5-sonnet-20241022": {
         "max_context_tokens": 200000,
-        "prompt_cost_per_1m": 3000.0,      # $3.00 per million tokens
-        "completion_cost_per_1m": 15000.0,  # $15.00 per million tokens
+        "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
+        "completion_cost_per_1m": 15.0,  # $15.00 per million tokens
         "default_output_tokens": 8192
     },
     "gpt-4o-latest": {
         "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 2500.0,      # $2.50 per million tokens
-        "completion_cost_per_1m": 10000.0,  # $10.00 per million tokens
+        "prompt_cost_per_1m": 2.5,      # $2.50 per million tokens
+        "completion_cost_per_1m": 10.0,  # $10.00 per million tokens
         "default_output_tokens": 16384
     },
     "gpt-4o-mini": {
         "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 150.0,       # $0.15 per million tokens
-        "completion_cost_per_1m": 600.0,    # $0.60 per million tokens
+        "prompt_cost_per_1m": 0.15,     # $0.15 per million tokens
+        "completion_cost_per_1m": 0.6,   # $0.60 per million tokens
         "default_output_tokens": 16384
     },
     "o1": {
         "max_context_tokens": 200000,
-        "prompt_cost_per_1m": 15000.0,     # $15.00 per million tokens
-        "completion_cost_per_1m": 60000.0,  # $60.00 per million tokens
+        "prompt_cost_per_1m": 15.0,     # $15.00 per million tokens
+        "completion_cost_per_1m": 60.0,  # $60.00 per million tokens
         "default_output_tokens": 100000
     },
     "o1-mini": {
         "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 3000.0,      # $3.00 per million tokens
-        "completion_cost_per_1m": 12000.0,  # $12.00 per million tokens
+        "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
+        "completion_cost_per_1m": 12.0,  # $12.00 per million tokens
         "default_output_tokens": 65536
     },
     "o3-mini-2025-01-31": {
         "max_context_tokens": 200000,
-        "prompt_cost_per_1m": 1.10,        # $0.0011 per million tokens
-        "completion_cost_per_1m": 4.40,     # $0.0044 per million tokens
+        "prompt_cost_per_1m": 0.0011,   # $0.0011 per million tokens
+        "completion_cost_per_1m": 0.0044, # $0.0044 per million tokens
         "default_output_tokens": 100000
     },
     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {
         "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 880.0,       # $0.88 per million tokens
-        "completion_cost_per_1m": 880.0,    # $0.88 per million tokens
+        "prompt_cost_per_1m": 0.88,     # $0.88 per million tokens
+        "completion_cost_per_1m": 0.88,  # $0.88 per million tokens
         "default_output_tokens": 8192
     },
     "deepseek-ai/DeepSeek-V3": {
         "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 1250.0,      # $1.25 per million tokens
-        "completion_cost_per_1m": 1250.0,   # $1.25 per million tokens
+        "prompt_cost_per_1m": 1.25,     # $1.25 per million tokens
+        "completion_cost_per_1m": 1.25,  # $1.25 per million tokens
         "default_output_tokens": 8192
     },
     "deepseek-ai/DeepSeek-R1": {
         "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 7000.0,      # $7.00 per million tokens
-        "completion_cost_per_1m": 7000.0,   # $7.00 per million tokens
+        "prompt_cost_per_1m": 7.0,      # $7.00 per million tokens
+        "completion_cost_per_1m": 7.0,   # $7.00 per million tokens
         "default_output_tokens": 8192
     }
 }

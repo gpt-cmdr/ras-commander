@@ -104,10 +104,27 @@ document.addEventListener('DOMContentLoaded', () => {
                   copyButton.onclick = () => copyToClipboard(fullResponse);
                   assistantMessage.appendChild(copyButton);
                 } else if (data.error) {
+                  // Improve error display
                   const errorDiv = document.createElement('div');
-                  errorDiv.className = 'error';
-                  errorDiv.textContent = data.error;
+                  errorDiv.className = 'error-message alert alert-danger mt-2';
+                  errorDiv.innerHTML = `<strong>Error:</strong> ${data.error}`;
                   assistantMessage.appendChild(errorDiv);
+                  
+                  // Add a retry button
+                  const retryButton = document.createElement('button');
+                  retryButton.textContent = 'Retry';
+                  retryButton.className = 'btn btn-sm btn-outline-danger mt-2';
+                  retryButton.onclick = () => {
+                    // Re-submit the same message
+                    userInputArea.value = messageContent;
+                    // Remove the current assistant message
+                    chatBox.removeChild(assistantMessage);
+                    // Remove the user message to prevent duplicates
+                    chatBox.removeChild(userMessageDiv);
+                    // Submit the form again
+                    chatForm.dispatchEvent(new Event('submit'));
+                  };
+                  assistantMessage.appendChild(retryButton);
                 }
               } catch (err) {
                 console.error('Error parsing SSE data:', err);
@@ -117,10 +134,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (error) {
         console.error('Error:', error);
+        // Improve the error message display for fetch/connection errors
         const errorMessage = document.createElement('div');
-        errorMessage.className = 'message assistant error';
-        errorMessage.textContent = 'Error: ' + error.message;
-        chatBox.appendChild(errorMessage);
+        errorMessage.className = 'message assistant';
+        errorMessage.innerHTML = 'Assistant: <div class="error-message alert alert-danger mt-2"><strong>Connection Error:</strong> ' + error.message + '</div>';
+        
+        // Add a retry button for connection errors too
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry';
+        retryButton.className = 'btn btn-sm btn-outline-danger mt-2';
+        retryButton.onclick = () => {
+          // Re-submit the same message
+          userInputArea.value = messageContent;
+          // Remove the error message
+          chatBox.removeChild(errorMessage);
+          // Remove the user message to prevent duplicates
+          chatBox.removeChild(userMessageDiv);
+          // Submit the form again
+          chatForm.dispatchEvent(new Event('submit'));
+        };
+        errorMessage.appendChild(retryButton);
+        
+        // Replace the existing assistant message with our error message
+        chatBox.replaceChild(errorMessage, assistantMessage);
       } finally {
         // Hide loading animation
         loadingDots.classList.remove('active');

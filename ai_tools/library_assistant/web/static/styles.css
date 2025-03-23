@@ -52,4 +52,32 @@
 /* Style partially selected nodes */
 .node.partial .checkbox-item:indeterminate {
     background-color: #86b7fe;
+}
+
+/* Error message styling */
+.error-message {
+    margin-top: 1rem;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid #f5c6cb;
+    border-radius: 0.25rem;
+    color: #721c24;
+    background-color: #f8d7da;
+    font-size: 0.9rem;
+}
+
+.error-message strong {
+    margin-right: 0.5rem;
+}
+
+/* Retry button styling */
+.btn-outline-danger {
+    color: #dc3545;
+    border-color: #dc3545;
+    margin-right: 0.5rem;
+}
+
+.btn-outline-danger:hover {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
 } 

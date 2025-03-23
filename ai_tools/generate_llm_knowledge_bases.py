@@ -49,6 +49,7 @@ of detail about the project structure, documentation, and examples.
 import os
 from pathlib import Path
 import re
+import json
 
 # Configuration
 OMIT_FOLDERS = [
@@ -98,8 +99,373 @@ def should_omit(filepath):
         return True
     return False
 
-def read_file_contents(filepath):
+def process_notebook_content(filepath):
+    """
+    Process a Jupyter notebook to remove images and truncate dataframe outputs.
+    
+    Args:
+        filepath: Path to the notebook file
+        
+    Returns:
+        Processed notebook content as a string
+    """
     try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            notebook = json.load(f)
+        
+        # Process each cell
+        for cell in notebook.get('cells', []):
+            if cell.get('cell_type') == 'code':
+                # Process outputs
+                if 'outputs' in cell:
+                    cell['outputs'] = clean_notebook_outputs(cell['outputs'])
+        
+        # Convert back to string with indentation for readability
+        return json.dumps(notebook, indent=2)
+    
+    except Exception as e:
+        print(f"Error processing notebook {filepath}: {e}")
+        # Fall back to original content
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return f.read()
+
+def process_notebook_no_outputs(filepath):
+    """
+    Process a Jupyter notebook to completely remove all outputs.
+    
+    Args:
+        filepath: Path to the notebook file
+        
+    Returns:
+        Processed notebook content as a string with all outputs removed
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            notebook = json.load(f)
+        
+        # Process each cell
+        for cell in notebook.get('cells', []):
+            if cell.get('cell_type') == 'code':
+                # Remove all outputs
+                cell['outputs'] = []
+                # Reset execution count
+                if 'execution_count' in cell:
+                    cell['execution_count'] = None
+        
+        # Convert back to string with indentation for readability
+        return json.dumps(notebook, indent=2)
+    
+    except Exception as e:
+        print(f"Error processing notebook {filepath}: {e}")
+        # Fall back to original content
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return f.read()
+
+def save_cleaned_notebooks(summarize_subfolder, output_dir):
+    """
+    Save cleaned versions of all notebooks to a separate subfolder.
+    All notebooks will be placed directly in the root of example_notebooks_cleaned.
+    
+    Args:
+        summarize_subfolder: Root folder to search for notebooks
+        output_dir: Base output directory
+    """
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
+    cleaned_notebooks_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Creating cleaned notebooks directory: {cleaned_notebooks_dir}")
+    
+    # Find all notebooks
+    notebooks = list(summarize_subfolder.rglob('*.ipynb'))
+    
+    for notebook_path in notebooks:
+        if should_omit(notebook_path):
+            continue
+            
+        try:
+            # Process the notebook to clean outputs
+            with open(notebook_path, 'r', encoding='utf-8') as f:
+                notebook = json.load(f)
+            
+            # Process each cell
+            for cell in notebook.get('cells', []):
+                if cell.get('cell_type') == 'code':
+                    # Process outputs
+                    if 'outputs' in cell:
+                        cell['outputs'] = clean_notebook_outputs(cell['outputs'])
+            
+            # Use only the filename for the target path (no subdirectories)
+            target_path = cleaned_notebooks_dir / notebook_path.name
+            
+            # If a file with the same name already exists, add a suffix to make it unique
+            counter = 1
+            original_stem = target_path.stem
+            while target_path.exists():
+                target_path = cleaned_notebooks_dir / f"{original_stem}_{counter}{target_path.suffix}"
+                counter += 1
+            
+            # Save the cleaned notebook
+            with open(target_path, 'w', encoding='utf-8') as f:
+                json.dump(notebook, f, indent=2)
+                
+            print(f"Saved cleaned notebook: {target_path}")
+            
+        except Exception as e:
+            print(f"Error processing notebook {notebook_path}: {e}")
+
+def clean_notebook_outputs(outputs):
+    """
+    Clean cell outputs by removing images and truncating dataframes.
+    
+    Args:
+        outputs: List of cell output dictionaries
+        
+    Returns:
+        Cleaned outputs
+    """
+    cleaned_outputs = []
+    
+    for output in outputs:
+        output_type = output.get('output_type', '')
+        
+        # Handle display_data outputs (images, HTML, etc.)
+        if output_type == 'display_data':
+            new_output = output.copy()
+            
+            # Remove image data (png, jpeg, etc.)
+            if 'data' in new_output:
+                # Remove all image formats
+                for img_format in ['image/png', 'image/jpeg', 'image/svg+xml']:
+                    if img_format in new_output['data']:
+                        del new_output['data'][img_format]
+                
+                # Check if this might be a DataFrame or other rich HTML display
+                if 'text/html' in new_output['data']:
+                    html_content = new_output['data']['text/html']
+                    new_output['data']['text/html'] = process_html_output(html_content)
+                
+                # If data dict is now empty or only has empty values, add a placeholder
+                if not new_output['data'] or all(not v for v in new_output['data'].values()):
+                    new_output['data']['text/plain'] = '[Image or rich display removed during preprocessing]'
+            
+            cleaned_outputs.append(new_output)
+            continue
+        
+        # Handle execute_result outputs (including dataframes, xarrays)
+        elif output_type == 'execute_result':
+            new_output = output.copy()
+            
+            if 'data' in new_output:
+                # Process HTML content (DataFrames, xarray objects)
+                if 'text/html' in new_output['data']:
+                    html_content = new_output['data']['text/html']
+                    new_output['data']['text/html'] = process_html_output(html_content)
+                
+                # Process plain text output
+                if 'text/plain' in new_output['data']:
+                    text_content = new_output['data']['text/plain']
+                    new_output['data']['text/plain'] = process_text_output(text_content)
+            
+            cleaned_outputs.append(new_output)
+        
+        # Handle stream outputs (stdout/stderr)
+        elif output_type == 'stream':
+            new_output = output.copy()
+            
+            # Truncate very long text outputs
+            if 'text' in new_output and isinstance(new_output['text'], str):
+                text = new_output['text']
+                lines = text.splitlines()
+                
+                # Truncate if more than 20 lines
+                if len(lines) > 20:
+                    truncated_text = '\n'.join(lines[:10]) + '\n...\n' + '\n'.join(lines[-5:])
+                    truncated_text += f"\n[Output truncated, {len(lines)} lines total]"
+                    new_output['text'] = truncated_text
+            
+            cleaned_outputs.append(new_output)
+        
+        # Handle error outputs
+        elif output_type == 'error':
+            # Keep error outputs as they are (they're usually important)
+            cleaned_outputs.append(output)
+        
+        else:
+            # For other output types, include them as is
+            cleaned_outputs.append(output)
+    
+    return cleaned_outputs
+
+def process_html_output(html_content):
+    """
+    Process HTML output content to truncate and simplify it.
+    
+    Args:
+        html_content: HTML content to process
+        
+    Returns:
+        Processed HTML content
+    """
+    # Handle case where html_content is not a string
+    if not isinstance(html_content, str):
+        try:
+            # Try to convert to string if possible
+            html_content = str(html_content)
+        except Exception:
+            # If conversion fails, return a placeholder
+            return "<div><pre>[Non-string HTML content removed during preprocessing]</pre></div>"
+    
+    # Check for DataFrame HTML pattern
+    if '<table' in html_content and ('dataframe' in html_content or '<style' in html_content):
+        return truncate_dataframe_html(html_content)
+    
+    # Check for xarray HTML pattern
+    elif 'xarray' in html_content.lower() and ('<table' in html_content or '<div' in html_content):
+        # Extract xarray type
+        xarray_type = "xarray.Dataset" if "xarray.Dataset" in html_content else "xarray.DataArray"
+        
+        # Extract dimensions if possible
+        dims_match = re.search(r'Dimensions:(.+?)<', html_content, re.DOTALL)
+        dims_info = dims_match.group(1).strip() if dims_match else "Unknown dimensions"
+        
+        # Return simplified version
+        return f"""<div><pre>{xarray_type} with {dims_info}
+[Full xarray output truncated during preprocessing]</pre></div>"""
+    
+    # Check for other kinds of rich HTML content (plots, widgets, etc.)
+    elif any(pattern in html_content.lower() for pattern in 
+            ['<svg', 'matplotlib', 'bokeh', 'plotly', 'widget', 'vis']):
+        return """<div><pre>[Visualization or interactive content removed during preprocessing]</pre></div>"""
+    
+    # Other HTML content - truncate if very long
+    elif len(html_content) > 5000:
+        return f"""<div><pre>[Long HTML output truncated: {len(html_content)} characters]</pre></div>"""
+    
+    # Otherwise, keep the HTML content as is
+    return html_content
+
+def process_text_output(text_content):
+    """
+    Process text output content to truncate and simplify it.
+    
+    Args:
+        text_content: Text content to process
+        
+    Returns:
+        Processed text content
+    """
+    # Handle case where text_content is not a string
+    if not isinstance(text_content, str):
+        try:
+            # Try to convert to string if possible
+            text_content = str(text_content)
+        except Exception:
+            # If conversion fails, return a placeholder
+            return "[Non-string text content removed during preprocessing]"
+    
+    # Check for DataFrame text representation
+    if ('DataFrame' in text_content and '\n' in text_content) or \
+       ('[' in text_content and ']' in text_content and '\n' in text_content):
+        
+        # Count the number of lines
+        lines = text_content.splitlines()
+        if len(lines) > 10:
+            # Simple truncation for DataFrames
+            return "[DataFrame output truncated, showing preview only]\n" + '\n'.join(lines[:7]) + '\n...'
+    
+    # Check for xarray text representation
+    elif 'xarray.Dataset' in text_content or 'xarray.DataArray' in text_content:
+        # Extract xarray type
+        xarray_type = "xarray.Dataset" if "xarray.Dataset" in text_content else "xarray.DataArray"
+        
+        # Extract dimensions if possible
+        dims_match = re.search(r'Dimensions:(.+?)\n', text_content)
+        dims_info = dims_match.group(1).strip() if dims_match else "Unknown dimensions"
+        
+        # Abbreviated description
+        return f"{xarray_type} with {dims_info}\n[Full xarray output truncated during preprocessing]"
+    
+    # Truncate general long text outputs
+    elif len(text_content) > 2000:
+        lines = text_content.splitlines()
+        if len(lines) > 20:
+            return '\n'.join(lines[:10]) + '\n...\n' + '\n'.join(lines[-5:]) + \
+                   f"\n[Output truncated, {len(lines)} lines total]"
+        else:
+            return text_content[:1000] + f"\n...\n[Output truncated, {len(text_content)} characters total]"
+    
+    # Otherwise, keep the text as is
+    return text_content
+
+def truncate_dataframe_html(html_content):
+    """
+    Truncate an HTML dataframe to show only the header and a few rows.
+    
+    Args:
+        html_content: HTML content containing a dataframe
+        
+    Returns:
+        Truncated HTML content
+    """
+    # Handle case where html_content is not a string
+    if not isinstance(html_content, str):
+        try:
+            # Try to convert to string if possible
+            html_content = str(html_content)
+        except Exception:
+            # If conversion fails, return a placeholder
+            return "<div><pre>[Non-string HTML DataFrame content removed during preprocessing]</pre></div>"
+    
+    # Keep the styling information
+    style_match = re.search(r'<style.*?</style>', html_content, re.DOTALL)
+    style_section = style_match.group(0) if style_match else ""
+    
+    # Find the table
+    table_match = re.search(r'<table.*?</table>', html_content, re.DOTALL)
+    if not table_match:
+        return html_content  # Not a table, return as is
+    
+    table_content = table_match.group(0)
+    
+    # Extract the header
+    header_match = re.search(r'<thead.*?</thead>', table_content, re.DOTALL)
+    header_section = header_match.group(0) if header_match else ""
+    
+    # Extract the first few data rows (up to 5)
+    body_match = re.search(r'<tbody.*?</tbody>', table_content, re.DOTALL)
+    if body_match:
+        body_content = body_match.group(0)
+        row_matches = re.findall(r'<tr>.*?</tr>', body_content, re.DOTALL)
+        
+        max_rows = min(5, len(row_matches))
+        first_rows = ''.join(row_matches[:max_rows])
+        
+        # Construct a new tbody with limited rows plus truncation message
+        truncated_body = f"<tbody>\n    {first_rows}\n    <tr><td colspan=\"100%\" style=\"text-align:center\">[... additional rows truncated ...]</td></tr>\n  </tbody>"
+    else:
+        truncated_body = "<tbody><tr><td>[No data rows]</td></tr></tbody>"
+    
+    # Reconstruct the table
+    table_start_match = re.search(r'<table.*?>', table_content)
+    table_start = table_start_match.group(0) if table_start_match else "<table>"
+    
+    truncated_table = f"{table_start}\n  {header_section}\n  {truncated_body}\n</table>"
+    
+    # Put it all together
+    return f"<div>\n{style_section}\n{truncated_table}\n</div>"
+
+def read_file_contents(filepath, for_examples=False):
+    try:
+        # Process Jupyter notebooks specially
+        if filepath.suffix.lower() == '.ipynb':
+            print(f"Processing notebook: {filepath}")
+            if for_examples:
+                # For examples.txt, remove all outputs
+                return process_notebook_no_outputs(filepath)
+            else:
+                # For other summaries, truncate outputs
+                return process_notebook_content(filepath)
+        
+        # Regular file reading for other files
         with open(filepath, 'r', encoding='utf-8') as infile:
             content = infile.read()
             print(f"Reading content of file: {filepath}")
@@ -240,7 +606,8 @@ def generate_split_summary(summarize_subfolder, output_dir):
                 if filepath.is_file():
                     outfile.write(f"File: {filepath}\n")
                     outfile.write("="*50 + "\n")
-                    content = read_file_contents(filepath)
+                    # For examples.txt, use for_examples=True to remove all notebook outputs
+                    content = read_file_contents(filepath, for_examples=(folder_name == "examples"))
                     outfile.write(content)
                     outfile.write("\n" + "="*50 + "\n\n")
                     print(f"Added file to split summary '{output_file}': {filepath}")
@@ -327,7 +694,8 @@ def generate_library_assistant_summary(summarize_subfolder, output_dir):
     output_file_path = output_dir / output_file_name
     print(f"Generating Library Assistant Summary: {output_file_path}")
 
-    library_assistant_folder = summarize_subfolder / "library_assistant"
+    # Update the path to reflect the new location of library_assistant within ai_tools
+    library_assistant_folder = summarize_subfolder / "ai_tools" / "library_assistant"
     if not library_assistant_folder.exists():
         print(f"Warning: library_assistant folder not found at {library_assistant_folder}")
         return
@@ -359,6 +727,9 @@ def main():
 
     # Ensure the output directory exists
     output_dir = ensure_output_dir(Path(__file__).parent)
+    
+    # Save cleaned notebooks to a separate subfolder
+    save_cleaned_notebooks(summarize_subfolder, output_dir)
 
     # Generate summaries
     generate_full_summary(summarize_subfolder, output_dir)

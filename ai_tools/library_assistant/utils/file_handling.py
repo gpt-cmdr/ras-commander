@@ -44,6 +44,9 @@ def read_api_key(file_path):
 def read_system_message():
     """
     Reads the system message from .cursorrules file.
+    
+    Updated to handle the new folder structure where library_assistant
+    is in ai_tools/library_assistant instead of the root folder.
 
     Returns:
         str: The system message.
@@ -53,10 +56,12 @@ def read_system_message():
         ValueError: If no system message is found in the file.
     """
     current_dir = Path.cwd()
-    cursor_rules_path = current_dir.parent / '.cursorrules'
+    print(f"Current directory: {current_dir}")
+    cursor_rules_path = current_dir.parent.parent / '.cursorrules'  # Changed from parent to parent.parent
+    print(f"Cursor rules path: {cursor_rules_path}")
 
     if not cursor_rules_path.exists():
-        raise FileNotFoundError("This script expects to be in a directory within the ras_commander repo which has a .cursorrules file in its parent directory.")
+        raise FileNotFoundError("This script expects to be in a directory within the ras_commander repo which has a .cursorrules file in its parent.parent directory.")
 
     with open(cursor_rules_path, 'r') as f:
         system_message = f.read().strip()
@@ -69,11 +74,32 @@ def read_system_message():
 def set_context_folder():
     """
     Sets the context folder for file processing.
+    
+    Since the library_assistant is now located in ai_tools/library_assistant,
+    we need to go up two directory levels to reach the root folder.
+    
+    If a preprocessed context folder exists, it will be used instead.
 
     Returns:
         Path: The path to the context folder.
     """
-    return Path.cwd().parent
+    # Check if we have a context_integration module and a preprocessed folder
+    try:
+        # Attempt to import dynamically to avoid circular imports
+        import importlib
+        context_integration_module = importlib.import_module('utils.context_integration')
+        
+        # If the module has a function to get the preprocessed folder, use it
+        if hasattr(context_integration_module, 'set_context_folder_with_preprocessing'):
+            return context_integration_module.set_context_folder_with_preprocessing()
+    except (ImportError, AttributeError) as e:
+        # If anything fails, just continue with original implementation
+        print(f"Info: Using original context folder (no preprocessing available): {e}")
+    
+    # Original implementation
+    context_folder = Path.cwd().parent.parent
+    print(f"Setting context folder to: {context_folder}")
+    return context_folder
 
 class FunctionStripper(ast.NodeTransformer):
     """AST NodeTransformer to strip code from function bodies."""
