@@ -1,6 +1,6 @@
 Library Assistant: AI-Powered Tool for Managing and Querying Library Content
 
-[Library Assistan is available as a Standalone Windows Executable](https://github.com/gpt-cmdr/ras-commander/blob/30bab76f376a260a24f7e61668242197a685b3f5/ai_tools/library_assistant/assistant.exe)
+[Library Assistant is available as a Standalone Windows Executable](https://github.com/gpt-cmdr/ras-commander/blob/30bab76f376a260a24f7e61668242197a685b3f5/ai_tools/library_assistant/assistant.exe)
 Just provide the API keys for your preferred provider and go!
 
 
