@@ -1,55 +1,57 @@
 # Web framework and ASGI server
-fastapi>=0.109.0
-uvicorn>=0.27.0
+fastapi
+uvicorn
 
 # Database ORM
-sqlalchemy>=2.0.25
+sqlalchemy
 
 # Template engine
-jinja2>=3.1.3
+jinja2
 
 # Data manipulation
-pandas>=2.2.0
+pandas
 
 # AI/ML libraries
-anthropic>=0.18.1
-openai>=1.12.0
-tiktoken>=0.6.0
+anthropic
+openai
+tiktoken
 
 # Code parsing and manipulation
-astor>=0.8.1
+astor
 
 # Markdown processing
-markdown>=3.5.2
+markdown
 
 # Form handling for FastAPI
-python-multipart>=0.0.7
+python-multipart
 
 # HTTP clients for Python
-requests>=2.31.0
-httpx>=0.26.0
+requests
+httpx
 
 # Environment variable management
-python-dotenv>=1.0.0
+python-dotenv
 
 # YAML parsing (if needed for configuration)
-pyyaml>=6.0.1
+pyyaml
 
 # Date and time manipulation
-python-dateutil>=2.8.2
+python-dateutil
 
 # Progress bars (optional, for long-running tasks)
-tqdm>=4.66.1
+tqdm
 
-# Testing framework
-pytest>=8.0.0
+together
 
-# Linting and code formatting
-flake8>=7.0.0
-black>=24.1.1
+# Testing framework - not needed for compilation
+# pytest
 
-# Type checking
-mypy>=1.8.0
+# Linting and code formatting - not needed for compilation
+# flake8
+# black
 
-# Documentation generation
-sphinx>=7.2.6
+# Type checking - not needed for compilation
+# mypy
+
+# Documentation generation - not needed for compilation
+# sphinx

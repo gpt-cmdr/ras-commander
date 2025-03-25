@@ -6,7 +6,17 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('web/templates', 'web/templates'), ('web/static', 'web/static')],
-    hiddenimports=[],
+    hiddenimports=[
+        'together',  
+        'tiktoken',
+        'tiktoken.core',
+        'tiktoken.registry',
+        'tiktoken.model',
+        'tiktoken_ext',
+        'tiktoken_ext.openai_public',  # This contains cl100k_base and other encodings
+        'utils.context_integration',
+        'utils.context_preprocessor'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

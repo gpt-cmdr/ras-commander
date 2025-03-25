@@ -55,7 +55,7 @@ import json
 OMIT_FOLDERS = [
     "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant", "__pycache__",
     "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info", "log_folder", "logs",
-    "example_projects", "llm_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models", "hdf_example_data", "ras_example_categories", "html", "data", "apidocs"
+    "example_projects", "llm_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models", "hdf_example_data", "ras_example_categories", "html", "data", "apidocs", "build", "dist", "ras_commander.egg-info", "venv", "log_folder", "logs",
 ]
 OMIT_FILES = [
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",
@@ -196,12 +196,9 @@ def save_cleaned_notebooks(summarize_subfolder, output_dir):
             # Use only the filename for the target path (no subdirectories)
             target_path = cleaned_notebooks_dir / notebook_path.name
             
-            # If a file with the same name already exists, add a suffix to make it unique
-            counter = 1
-            original_stem = target_path.stem
-            while target_path.exists():
-                target_path = cleaned_notebooks_dir / f"{original_stem}_{counter}{target_path.suffix}"
-                counter += 1
+            # Overwrite any existing file with the same name
+            if target_path.exists():
+                target_path.unlink()
             
             # Save the cleaned notebook
             with open(target_path, 'w', encoding='utf-8') as f:
@@ -727,6 +724,11 @@ def main():
 
     # Ensure the output directory exists
     output_dir = ensure_output_dir(Path(__file__).parent)
+
+    # Delete all existing files in the output directory and its subfolders
+    for file in output_dir.rglob('*'):
+        if file.is_file():
+            file.unlink()
     
     # Save cleaned notebooks to a separate subfolder
     save_cleaned_notebooks(summarize_subfolder, output_dir)

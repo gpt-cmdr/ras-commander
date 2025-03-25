@@ -80,4 +80,29 @@
     color: #fff;
     background-color: #dc3545;
     border-color: #dc3545;
+}
+
+/* Token count styling */
+.token-count {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    background-color: #f0f0f0;
+    color: #495057;
+    min-width: 80px;
+    text-align: center;
+}
+
+/* Hover effect for token counts */
+.file-item:hover .token-count,
+.folder:hover .token-count {
+    background-color: #e2e6ea;
+}
+
+/* Selected file token count styling */
+.file-checkbox:checked ~ .token-count {
+    background-color: #cfe2ff;
+    color: #0d6efd;
 } 

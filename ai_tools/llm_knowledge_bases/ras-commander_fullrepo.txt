@@ -1770,6 +1770,53 @@ build-backend = "setuptools.build_meta:__legacy__"
 
 ==================================================
 
+File: c:\GH\ras-commander\ras-commander_logo.svg
+==================================================
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 300">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#05386B" />
+      <stop offset="100%" stop-color="#0B93C7" />
+    </linearGradient>
+    
+    <!-- Digital circuit pattern -->
+    <pattern id="circuit-pattern" patternUnits="userSpaceOnUse" width="50" height="50" patternTransform="rotate(45)">
+      <path d="M10,0 L10,50 M0,10 L50,10 M20,20 L30,20 L30,30 M40,10 L40,40 L30,40" fill="none" stroke="#5CDB95" stroke-width="0.5" stroke-opacity="0.3" />
+    </pattern>
+  </defs>
+  
+  <!-- Main background -->
+  <rect width="450" height="300" fill="url(#bg-gradient)" />
+  
+  <!-- Circuit pattern overlay -->
+  <rect width="450" height="300" fill="url(#circuit-pattern)" opacity="0.2" />
+  
+  <!-- Central circular emblem with horizontal rectangle overlay -->
+  <circle cx="225" cy="150" r="100" fill="#05386B" stroke="#5CDB95" stroke-width="2" />
+  <rect x="55" y="185" width="340" height="50" fill="#05386B" stroke="#5CDB95" stroke-width="2" rx="2" ry="2" />
+  
+  <!-- Command line prompt at top of circle -->
+  <rect x="160" y="75" width="130" height="55" rx="5" ry="5" fill="#000" fill-opacity="0.85" />
+  <text x="170" y="95" font-family="Consolas, monospace" font-size="16" fill="#5CDB95">$ pip install</text>
+  <text x="170" y="120" font-family="Consolas, monospace" font-size="16" fill="#5CDB95">ras-commander</text>
+  <rect x="170" y="125" width="8" height="2" fill="#5CDB95">
+    <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite" />
+  </rect>
+  
+  <!-- Dynamic water wave bands - centered in circle -->
+  <g opacity="0.7">
+    <path d="M125,130 C145,120 165,140 185,130 C205,120 225,140 245,130 C265,120 285,140 325,130" fill="none" stroke="#5CDB95" stroke-width="4" />
+    <path d="M125,150 C145,140 165,160 185,150 C205,140 225,160 245,150 C265,140 285,160 325,150" fill="none" stroke="#5CDB95" stroke-width="4" />
+    <path d="M125,170 C145,160 165,180 185,170 C205,160 225,180 245,170 C265,160 285,180 325,170" fill="none" stroke="#5CDB95" stroke-width="4" />
+  </g>
+  
+  <!-- Text elements - moved RAS-COMMANDER up, tagline below the circle -->
+  <text x="225" y="220" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
+  <text x="225" y="265" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#8EE4AF">Automate • Analyze • Visualize</text>
+</svg>
+==================================================
+
 Folder: c:\GH\ras-commander\ras_commander
 ==================================================
 
@@ -1795,7 +1842,7 @@ This repository has several methods of interaction with Large Language Models an
 
 2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
-3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/library_assistant)**: A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.  To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses.  A dashboard shows you the total context and estimated cost of each request.  **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai**
+3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/library_assistant) (Currently Under Revision, Check Back Soon)**: A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.  To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses.  A dashboard shows you the total context and estimated cost of each request.  **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai**
 
 
 4. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized ChatGPT "GPT" with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter cannot run HEC-RAS but can open and view smaller HDF files and projects for demonstration purposes_
@@ -28465,9 +28512,6 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
 }
 ==================================================
 
-Folder: c:\GH\ras-commander\examples\hyetographs
-==================================================
-
 File: c:\GH\ras-commander\examples\README.md
 ==================================================
 # RAS Commander Examples
@@ -41757,186 +41801,6 @@ __all__ = [
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
 ]
-
-==================================================
-
-File: c:\GH\ras-commander\examples\hyetographs\hyetograph_ARI_100_years_pos50pct_24hr.csv
-==================================================
-Time_hour,Precipitation_in
-1,0.09040491041908805
-2,0.0955077907605224
-3,0.10146987810261088
-4,0.10855497206608167
-5,0.1171543680932885
-6,0.1278780203205363
-7,0.146970561522203
-8,0.16593941033554094
-9,0.1936155742022425
-10,0.2697157353332229
-11,0.3599999999999999
-12,1.2
-13,0.47
-14,0.306960245354186
-15,0.2433240193125914
-16,0.17831774068604123
-17,0.15566677680236962
-18,0.13948993645160312
-19,0.1221999761240089
-20,0.11263390133511564
-21,0.10485136436093967
-22,0.09836722663443354
-23,0.09286196347106301
-24,0.08811562831231079
-
-==================================================
-
-File: c:\GH\ras-commander\examples\hyetographs\hyetograph_ARI_10_years_pos50pct_24hr.csv
-==================================================
-Time_hour,Precipitation_in
-1,0.06039156315395777
-2,0.06375521611108814
-3,0.06768230354162785
-4,0.07234523361103751
-5,0.07799952445440228
-6,0.0850430998832925
-7,0.09928617513316373
-8,0.11172527137238264
-9,0.1298047855496105
-10,0.18441307951840247
-11,0.24
-12,0.714
-13,0.32600000000000007
-14,0.20806923839369285
-15,0.16751768208790474
-16,0.11982101594250372
-17,0.10499403807898
-18,0.09436871392335933
-19,0.08131460382996858
-20,0.07502791218397897
-21,0.06990827571771163
-22,0.06563904234299356
-23,0.06201147001043372
-24,0.05888175515950733
-
-==================================================
-
-File: c:\GH\ras-commander\examples\hyetographs\hyetograph_ARI_25_years_pos50pct_24hr.csv
-==================================================
-Time_hour,Precipitation_in
-1,0.07260426998002334
-2,0.07665162231333023
-3,0.08137715944970658
-4,0.0869884475092384
-5,0.09379312728081013
-6,0.10227032363387689
-7,0.1187727466883497
-8,0.13373867053642075
-9,0.1555066993867329
-10,0.21723588907914926
-11,0.29000000000000004
-12,0.886
-13,0.384
-14,0.24600987393864338
-15,0.1967542369822075
-16,0.14348388189104222
-17,0.1256388908154591
-18,0.11285911068199495
-19,0.09778286786544221
-20,0.09021687457399974
-21,0.08405581609065793
-22,0.07891843577904822
-23,0.07455341770829094
-24,0.07078763781557518
-
-==================================================
-
-File: c:\GH\ras-commander\examples\hyetographs\hyetograph_ARI_2_years_pos50pct_24hr.csv
-==================================================
-Time_hour,Precipitation_in
-1,0.039444248438275764
-2,0.04167741641696132
-3,0.04428704307942355
-4,0.04738880027716674
-5,0.05115429786673542
-6,0.055851100908542506
-7,0.06613796588496257
-8,0.07448873415720048
-9,0.08663816527821133
-10,0.1248195283605078
-11,0.16500000000000004
-12,0.474
-13,0.22199999999999998
-14,0.140734851235629
-15,0.11344562040386319
-16,0.07992740765575301
-17,0.06996893628396816
-18,0.0628387907399044
-19,0.053364049126953805
-20,0.04917477333825038
-21,0.04576733441289149
-22,0.042928943389559215
-23,0.0405194807297482
-24,0.03844251201549165
-
-==================================================
-
-File: c:\GH\ras-commander\examples\hyetographs\hyetograph_ARI_50_years_pos50pct_24hr.csv
-==================================================
-Time_hour,Precipitation_in
-1,0.08192031837455449
-2,0.08649776823482647
-3,0.09184292815034834
-4,0.09819090381104534
-5,0.10589020511972391
-6,0.11548369828277005
-7,0.13208308858222972
-8,0.14899627794001002
-9,0.17364775403361454
-10,0.24348456417803233
-11,0.32000000000000006
-12,1.03
-13,0.43999999999999995
-14,0.27642512827887034
-15,0.2200903075430971
-16,0.1600253022656406
-17,0.13983878833910923
-18,0.12540878883939577
-19,0.11040508620362299
-20,0.10184361090041572
-21,0.09487313550894516
-22,0.08906171957461506
-23,0.08412468238815496
-24,0.07986594345097853
-
-==================================================
-
-File: c:\GH\ras-commander\examples\hyetographs\hyetograph_ARI_5_years_pos50pct_24hr.csv
-==================================================
-Time_hour,Precipitation_in
-1,0.05100624290168243
-2,0.053861614565144045
-3,0.0571962224527196
-4,0.06115689800693991
-5,0.06596132300525692
-6,0.07194862056091855
-7,0.08420784635189071
-8,0.09480066356128192
-9,0.11020467787180732
-10,0.15808375054017998
-11,0.21000000000000008
-12,0.601
-13,0.279
-14,0.1782322703437993
-15,0.1436839791160207
-16,0.10169725937061136
-17,0.08906792110929018
-18,0.08002163173511834
-19,0.06877894224371994
-20,0.06343613417866356
-21,0.05908679180980725
-22,0.05546110471921306
-23,0.052381270043452055
-24,0.049724835512482635
 
 ==================================================
 

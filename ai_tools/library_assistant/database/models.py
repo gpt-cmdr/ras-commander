@@ -15,9 +15,21 @@ Constants:
 from sqlalchemy import create_engine, Column, String, Text, Integer, inspect, text
 from sqlalchemy.orm import declarative_base
 import logging
+import os
+from pathlib import Path
 
-# Define the database URL
-DATABASE_URL = "sqlite:///./settings.db"
+# Get user home directory
+user_home = Path.home()
+app_data_dir = user_home / ".library_assistant"
+
+# Create app data directory if it doesn't exist
+os.makedirs(app_data_dir, exist_ok=True)
+
+# Define the database URL in user's home directory
+DATABASE_URL = f"sqlite:///{app_data_dir}/settings.db"
+
+# Log the database location
+logging.info(f"Using database at: {app_data_dir}/settings.db")
 
 # Create the SQLAlchemy engine
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

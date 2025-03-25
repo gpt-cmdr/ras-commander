@@ -412,6 +412,12 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleApiKeys();
       autoSaveSettings();
       await updateModelLimits();
+      
+      // Clear token calculation cache when model changes
+      tokenCalculationCache.clear();
+      
+      // Immediately update token display with new model's pricing
+      updateTokenDisplay();
     });
   }
 
@@ -609,8 +615,51 @@ function initFileTreeViewer() {
           throw new Error('No file tree data received');
         }
         this.renderFileTree(data.fileTree);
+        
+        // Add this: Select default files after tree is rendered
+        setTimeout(() => this.selectDefaultFiles(data.fileTree), 500);
       } catch (error) {
         console.error('Error loading file tree:', error);
+      }
+    }
+
+    // Add this new method to select default files
+    async selectDefaultFiles(rootNode) {
+      const defaultFiles = ['.cursorrules', 'Comprehensive Library Guide.md'];
+      
+      // Function to recursively search for files
+      const findAndSelectFiles = async (node, currentPath = '') => {
+        const nodePath = currentPath ? `${currentPath}/${node.name}` : node.name;
+        
+        if (node.type === 'file' && defaultFiles.includes(node.name)) {
+          console.log(`Found default file to select: ${nodePath}`);
+          
+          // Find checkbox in DOM
+          const fileItems = this.container.querySelectorAll('.file-item');
+          for (const item of fileItems) {
+            if (item.dataset.path === nodePath) {
+              const checkbox = item.querySelector('input[type="checkbox"]');
+              if (checkbox) {
+                checkbox.checked = true;
+                await this.handleFileSelect(nodePath, node.tokens || 0, true);
+                console.log(`Selected default file: ${nodePath}`);
+              }
+              break;
+            }
+          }
+        }
+        
+        // Recursively search children
+        if (node.children) {
+          for (const child of node.children) {
+            await findAndSelectFiles(child, nodePath);
+          }
+        }
+      };
+      
+      // Start recursive search from root
+      if (rootNode) {
+        await findAndSelectFiles(rootNode);
       }
     }
 

@@ -30,7 +30,9 @@ const FileNode = ({ file, path, onSelect, isSelected, isOmitted }) => (
       <span className="me-2">📄</span>
       <span>{file.name}</span>
       {!isOmitted && (
-        <small className="text-muted ms-2">({file.tokens?.toLocaleString() || 0} tokens)</small>
+        <span className="token-count badge bg-light text-dark">
+          {file.tokens?.toLocaleString() || 0} tokens
+        </span>
       )}
     </div>
   </div>
@@ -49,7 +51,9 @@ const FolderNode = ({ folder, path, expanded, onToggle, children, isOmitted }) =
       <span className="me-2">📁</span>
       <span>{folder.name}</span>
       {!isOmitted && (
-        <small className="text-muted ms-2">({folder.tokens?.toLocaleString() || 0} tokens)</small>
+        <span className="token-count badge bg-light text-dark">
+          {folder.tokens?.toLocaleString() || 0} tokens
+        </span>
       )}
     </div>
     {expanded && <div className="children ps-3">{children}</div>}
