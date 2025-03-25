@@ -1,4 +1,8 @@
-# Library Assistant
+# RAS-Commander Library Assistant
+
+<p align="center">
+  <img src="ras-commander_library_assistant.svg" width=70%>
+</p>
 
 ## Overview
 
