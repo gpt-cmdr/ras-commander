@@ -23,8 +23,6 @@ This repository has several methods of interaction with Large Language Models an
 
 <img align="left" width="40%" src="ai_tools/library_assistant/ras-commander_library_assistant.svg" />
 
-## 3. **RAS-Commander Library Assistant**
-
 A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context. The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow. To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses. A dashboard shows you the total context and estimated cost of each request. **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai, and available as a [Standalone Windows Executable](https://github.com/gpt-cmdr/ras-commander/blob/30bab76f376a260a24f7e61668242197a685b3f5/ai_tools/library_assistant/assistant.exe)**
 
 
