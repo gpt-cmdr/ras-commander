@@ -19,9 +19,9 @@ This repository has several methods of interaction with Large Language Models an
 2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
 3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
-ras-commander_library_assistant.svg
+
 <p align="center">
-  <img src="ai_tools/ai_assistant/ras-commander_library_assistant.svg" width=40%>
+  <img src="ai_tools/library_assistant/ras-commander_library_assistant.svg" width=40%>
 </p>
 
 A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.  To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses.  A dashboard shows you the total context and estimated cost of each request.  **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai, and available as a [Standalone Windows Executable](https://github.com/gpt-cmdr/ras-commander/blob/30bab76f376a260a24f7e61668242197a685b3f5/ai_tools/library_assistant/assistant.exe)**
