@@ -20,7 +20,7 @@ This repository has several methods of interaction with Large Language Models an
 
 3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
 
-<p align="center">
+<p align="left">
   <img src="ai_tools/library_assistant/ras-commander_library_assistant.svg" width=40%>
 </p>
 
