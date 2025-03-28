@@ -38,6 +38,6 @@
   </g>
   
   <!-- Text elements - moved RAS-COMMANDER up, tagline below the circle -->
-  <text x="225" y="220" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
+  <text x="225" y="222" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
   <text x="225" y="265" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#8EE4AF">Automate • Analyze • Visualize</text>
 </svg>
