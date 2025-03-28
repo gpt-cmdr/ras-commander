@@ -20,7 +20,7 @@ library_assistant/config/
 # Ignore Python egg info
 *.egg-info/
 .eggs/
-
+.conda/
 # Ignore the Example_Projects_6_5.zip file
 Example_Projects_6_5.zip
 

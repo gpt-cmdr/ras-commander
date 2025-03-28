@@ -53,7 +53,7 @@ import json
 
 # Configuration
 OMIT_FOLDERS = [
-    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant", "__pycache__",
+    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant", "__pycache__", ".conda",
     "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info", "log_folder", "logs",
     "example_projects", "llm_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models", "hdf_example_data", "ras_example_categories", "html", "data", "apidocs", "build", "dist", "ras_commander.egg-info", "venv", "log_folder", "logs",
 ]
@@ -699,6 +699,10 @@ def generate_library_assistant_summary(summarize_subfolder, output_dir):
 
     with open(output_file_path, 'w', encoding='utf-8') as outfile:
         for filepath in library_assistant_folder.rglob('*'):
+            # Skip executable files
+            if filepath.suffix.lower() in ['.exe', '.dll', '.so']:
+                continue
+                
             if filepath.is_file():
                 outfile.write(f"File: {filepath}\n")
                 outfile.write("="*50 + "\n")

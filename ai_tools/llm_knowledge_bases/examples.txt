@@ -278,7 +278,7 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
       "outputs": [],
       "source": [
         "# 1. Install ras-commander from pip (uncomment to install if needed)\n",
-        "#!pip install ras-commander\n",
+        "!pip install ras-commander\n",
         "# This installs ras-commander and all dependencies"
       ]
     },
@@ -392,23 +392,23 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
         "    print(f\"PRJ File: {ras_obj.prj_file}\")\n",
         "    print(f\"HEC-RAS Executable Path: {ras_obj.ras_exe_path}\")\n",
         "    \n",
-        "    print(\"\\nPlan Files DataFrame:\")\n",
+        "    print(\"\\nPlan Files DataFrame (ras.plan_df):\")\n",
         "    with pd.option_context('display.max_columns', None):\n",
         "        display.display(ras_obj.plan_df)\n",
         "    \n",
         "    print(\"\\nFlow Files DataFrame:\")\n",
         "    display.display(ras_obj.flow_df)\n",
         "    \n",
-        "    print(\"\\nUnsteady Flow Files DataFrame:\")\n",
+        "    print(\"\\nUnsteady Flow Files DataFrame (ras.unsteady_df):\")\n",
         "    display.display(ras_obj.unsteady_df)\n",
         "    \n",
-        "    print(\"\\nGeometry Files DataFrame:\")\n",
+        "    print(\"\\nGeometry Files DataFrame (ras.geom_df):\")\n",
         "    display.display(ras_obj.geom_df)\n",
         "    \n",
-        "    print(\"\\nHDF Entries DataFrame:\")\n",
+        "    print(\"\\nHDF Entries DataFrame (ras.get_hdf_entries()):\")\n",
         "    display.display(ras_obj.get_hdf_entries())\n",
         "    \n",
-        "    print(\"\\nBoundary Conditions DataFrame:\")\n",
+        "    print(\"\\nBoundary Conditions DataFrame (ras.boundaries_df):\")\n",
         "    display.display(ras_obj.boundaries_df)"
       ]
     },
@@ -710,7 +710,7 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "cmdr_pip_1",
+      "display_name": "Python 3",
       "language": "python",
       "name": "python3"
     },
