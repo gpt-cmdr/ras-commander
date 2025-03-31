@@ -146,10 +146,14 @@ class RasPrj:
             raise ValueError(f"No HEC-RAS project file found in {self.project_folder}")
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
-        self._load_project_data()
-        self.boundaries_df = self.get_boundary_conditions()  # Extract boundary conditions
+        
+        # Set initialized to True before loading project data
         self.initialized = True
         
+        # Now load the project data
+        self._load_project_data()
+        self.boundaries_df = self.get_boundary_conditions()
+
         if not suppress_logging:
             logger.info(f"Initialization complete for project: {self.project_name}")
             logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "

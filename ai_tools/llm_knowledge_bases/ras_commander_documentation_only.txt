@@ -1,4 +1,4 @@
-File: c:\GH\ras-commander\Comprehensive_Library_Guide.md
+File: C:\GH\ras-commander\Comprehensive_Library_Guide.md
 ==================================================
 ```markdown
 # Comprehensive RAS-Commander Library Guide
@@ -1561,7 +1561,7 @@ For further assistance, bug reports, or feature requests, please refer to the li
 ```
 ==================================================
 
-File: c:\GH\ras-commander\STYLE_GUIDE.md
+File: C:\GH\ras-commander\STYLE_GUIDE.md
 ==================================================
 # RAS Commander (ras-commander) Style Guide
 
@@ -1971,7 +1971,7 @@ class HdfMesh:
 ```
 ==================================================
 
-File: c:\GH\ras-commander\README.md
+File: C:\GH\ras-commander\README.md
 ==================================================
 # RAS Commander (ras-commander)
 
@@ -1993,10 +1993,15 @@ This repository has several methods of interaction with Large Language Models an
 
 2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
-3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/library_assistant) (Currently Under Revision, Check Back Soon)**: A full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context.  The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow.  To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses.  A dashboard shows you the total context and estimated cost of each request.  **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai**
+3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
+  
+
+<img align="left" width="25%" hspace="40" src="ai_tools/library_assistant/ras-commander_library_assistant.svg">
+
+The RAS-Commander library Assistant is a full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context. The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow. To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses. A dashboard shows you the total context and estimated cost of each request. **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai, and available as a standalone windows executable that runs within the repository**
 
 
-4. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized ChatGPT "GPT" with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter cannot run HEC-RAS but can open and view smaller HDF files and projects for demonstration purposes_
+8. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized ChatGPT "GPT" with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter cannot run HEC-RAS but can open and view smaller HDF files and projects for demonstration purposes_
 
 
 ## Background
@@ -2466,7 +2471,7 @@ William Katzenmeyer, P.E., C.F.M. - heccommander@gmail.com
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\Decorators.py
+File: C:\GH\ras-commander\ras_commander\Decorators.py
 ==================================================
 from functools import wraps
 from pathlib import Path
@@ -2482,7 +2487,7 @@ def log_call(func):
     return decorator
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBase.py
+File: C:\GH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -2846,7 +2851,7 @@ class HdfBase:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBndry.py
+File: C:\GH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -3247,7 +3252,7 @@ class HdfBndry:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -3805,7 +3810,7 @@ class HdfFluvialPluvial:
         return boundary_edges
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -4225,7 +4230,7 @@ HdfInfiltration.save_statistics(soil_stats, Path('soil_statistics.csv'))
 """
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -4691,7 +4696,7 @@ class HdfMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPipe.py
+File: C:\GH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -5419,7 +5424,7 @@ class HdfPipe:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -5736,7 +5741,7 @@ class HdfPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -5844,7 +5849,7 @@ class HdfPlot:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPump.py
+File: C:\GH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -6165,7 +6170,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -6922,7 +6927,7 @@ class HdfResultsMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -7307,7 +7312,7 @@ class HdfResultsPlan:
             return pd.DataFrame()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -7494,7 +7499,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -7811,7 +7816,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfStruc.py
+File: C:\GH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -8113,7 +8118,7 @@ class HdfStruc:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfUtils.py
+File: C:\GH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -8552,7 +8557,7 @@ class HdfUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -9198,7 +9203,7 @@ class HdfXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\LoggingConfig.py
+File: C:\GH\ras-commander\ras_commander\LoggingConfig.py
 ==================================================
 # logging_config.py
 
@@ -9222,7 +9227,7 @@ def setup_logging(log_file=None, log_level=logging.INFO):
 setup_logging()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+File: C:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -9582,11 +9587,17 @@ class RasCmdr:
                 logger.info(f"Copied project folder to destination: {dest_folder_path}")
                 project_folder = dest_folder_path
 
+            # Store filtered plan numbers separately to ensure only these are executed
+            filtered_plan_numbers = []
+            
             if plan_number:
                 if isinstance(plan_number, str):
                     plan_number = [plan_number]
                 ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
-                logger.info(f"Filtered plans to execute: {plan_number}")
+                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
+                logger.info(f"Filtered plans to execute: {filtered_plan_numbers}")
+            else:
+                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
 
             num_plans = len(ras_obj.plan_df)
             max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
@@ -9613,8 +9624,9 @@ class RasCmdr:
                     logger.critical(f"Failed to initialize RAS project for worker {worker_id}: {str(e)}")
                     worker_ras_objects[worker_id] = None
 
+            # Explicitly use the filtered plan numbers for assignments
             worker_cycle = cycle(range(1, max_workers + 1))
-            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in ras_obj.plan_df['plan_number']]
+            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in filtered_plan_numbers]
 
             execution_results: Dict[str, bool] = {}
 
@@ -9917,7 +9929,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasExamples.py
+File: C:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -10345,7 +10357,7 @@ class RasExamples:
         return int(number * units[unit])
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGeo.py
+File: C:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -10386,6 +10398,7 @@ List of Functions in RasGeo:
 import os
 from pathlib import Path
 from typing import List, Union
+import pandas as pd  # Added pandas import
 from .RasPlan import RasPlan
 from .RasPrj import ras
 from .LoggingConfig import get_logger
@@ -10485,7 +10498,243 @@ class RasGeo:
 
 
 
+    @staticmethod
+    def get_mannings_override_tables(geom_file_path, ras_object=None):
+        """
+        Extracts Manning's override region tables from a HEC-RAS geometry file.
+        
+        Args:
+            geom_file_path (str or Path): Geometry file path or geometry number (e.g., "01").
+            ras_object (RasPrj, optional): RAS project object for context. Defaults to global 'ras'.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing Manning's override region tables with columns:
+                - Region Name: Name of the override region
+                - Land Use Type: Land use type or description
+                - Mannings N Value: Manning's n value for the land use type
+                - Polygon Value: Polygon value or ID associated with the region
+                
+        Raises:
+            FileNotFoundError: If the geometry file doesn't exist.
+            ValueError: If the geometry file number is invalid.
+        """
+        # Get the full path to the geometry file if a number was provided
+        if isinstance(geom_file_path, (str, int)) and not str(geom_file_path).endswith('.g'):
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            geom_file_path = RasPlan.get_geom_path(str(geom_file_path), ras_object=ras_obj)
+            if geom_file_path is None:
+                raise ValueError(f"Geometry file number '{geom_file_path}' not found in project")
+        
+        geom_file_path = Path(geom_file_path)
+        if not geom_file_path.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file_path}")
+        
+        # Lists for storing data
+        region_names, land_use_types, mannings_values, polygon_values = [], [], [], []
+        
+        region_name, table_value, polygon_value = "", 0, ""
+        
+        with open(geom_file_path, 'r') as file:
+            lines = file.readlines()
+            
+            i = 0  # Initialize line counter
+            while i < len(lines):
+                line = lines[i].strip()
+                
+                if "LCMann Region Name=" in line:
+                    region_name = line.split("=")[1]
+                    i += 1  # Move to the next line
+                    continue
+                    
+                if "LCMann Region Table=" in line:
+                    table_value = int(line.split("=")[1])
+                    i += 1  # Skip to the next line which starts the table entries
+                    for j in range(table_value):
+                        if i+j < len(lines):
+                            # Handle multiple commas by splitting from the right
+                            parts = lines[i+j].strip().rsplit(",", 1)
+                            if len(parts) == 2:
+                                land_use, mannings = parts
+                                try:
+                                    mannings_float = float(mannings)
+                                    region_names.append(region_name)
+                                    land_use_types.append(land_use)
+                                    mannings_values.append(mannings_float)
+                                    polygon_values.append(polygon_value)  # This will repeat the last polygon_value
+                                except ValueError:
+                                    # Skip if Manning's value is not a valid float
+                                    pass
+                    
+                    i += table_value  # Skip past the table entries
+                    continue
+                    
+                if "LCMann Region Polygon=" in line:
+                    polygon_value = line.split("=")[1]
+                    i += 1  # Move to the next line
+                    continue
+                    
+                i += 1  # Move to the next line if none of the conditions above are met
+        
+        # Create DataFrame
+        mannings_tables = pd.DataFrame({
+            "Region Name": region_names,
+            "Land Use Type": land_use_types,
+            "Mannings N Value": mannings_values,
+            "Polygon Value": polygon_values
+        })
+        
+        return mannings_tables
 
+
+
+    @staticmethod
+    @log_call
+    def set_mannings_override_tables(geom_file_path, mannings_df, ras_object=None):
+        """
+        Updates Manning's override region tables in a HEC-RAS geometry file based on provided dataframe.
+        
+        This function takes a dataframe of Manning's values (similar to the one returned by
+        extract_mannings_override_tables) and updates the corresponding values in the geometry file.
+        If Region Name is specified in the dataframe, only updates that specific region.
+        If no Region Name is given for a row, it updates all instances of the Land Use Type
+        across all regions in the geometry file.
+        
+        Args:
+            geom_file_path (str or Path): Geometry file path or geometry number (e.g., "01").
+            mannings_df (pd.DataFrame): DataFrame containing Manning's override values with columns:
+                - Land Use Type: Land use type or description (required)
+                - Mannings N Value: Manning's n value for the land use type (required)
+                - Region Name: Name of the override region (optional)
+            ras_object (RasPrj, optional): RAS project object for context. Defaults to global 'ras'.
+                    
+        Returns:
+            bool: True if successful, False otherwise.
+            
+        Raises:
+            FileNotFoundError: If the geometry file doesn't exist.
+            ValueError: If the geometry file number is invalid or required columns are missing.
+            
+        Example:
+            # Get existing Manning's tables
+            mannings_tables = RasGeo.extract_mannings_override_tables("01")
+            
+            # Update specific values
+            mannings_tables.loc[mannings_tables['Land Use Type'] == 'Open Water', 'Mannings N Value'] = 0.030
+            
+            # Update all forest types in all regions
+            forest_updates = pd.DataFrame({
+                'Land Use Type': ['Mixed Forest', 'Deciduous Forest', 'Evergreen Forest'],
+                'Mannings N Value': [0.040, 0.042, 0.045]
+            })
+            
+            # Apply the changes
+            RasGeo.set_mannings_override_tables("01", mannings_tables)
+            # Or apply just the forest updates to all regions
+            RasGeo.set_mannings_override_tables("01", forest_updates)
+        """
+        # Get the full path to the geometry file if a number was provided
+        if isinstance(geom_file_path, (str, int)) and not str(geom_file_path).endswith('.g'):
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            geom_file_path = RasPlan.get_geom_path(str(geom_file_path), ras_object=ras_obj)
+            if geom_file_path is None:
+                raise ValueError(f"Geometry file number '{geom_file_path}' not found in project")
+        
+        geom_file_path = Path(geom_file_path)
+        if not geom_file_path.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file_path}")
+        
+        # Verify required columns exist
+        required_columns = ['Land Use Type', 'Mannings N Value']
+        if not all(col in mannings_df.columns for col in required_columns):
+            raise ValueError(f"DataFrame must contain columns: {required_columns}")
+        
+        # Create a dictionary for easier lookups
+        update_dict = {}
+        for _, row in mannings_df.iterrows():
+            land_use = row['Land Use Type']
+            manning_value = row['Mannings N Value']
+            region_name = row.get('Region Name', None)  # Optional column
+            
+            if region_name:
+                if region_name not in update_dict:
+                    update_dict[region_name] = {}
+                update_dict[region_name][land_use] = manning_value
+            else:
+                # Special key for updates that apply to all regions
+                if 'ALL_REGIONS' not in update_dict:
+                    update_dict['ALL_REGIONS'] = {}
+                update_dict['ALL_REGIONS'][land_use] = manning_value
+        
+        logger.info(f"Updating Manning's n values in geometry file: {geom_file_path}")
+        
+        # Read the entire file
+        with open(geom_file_path, 'r') as file:
+            lines = file.readlines()
+        
+        # Process the file line by line
+        modified_lines = []
+        current_region = None
+        in_table = False
+        table_start_index = -1
+        table_size = 0
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            modified_lines.append(line)  # Add line by default, may modify later
+            
+            if "LCMann Region Name=" in line:
+                current_region = line.split("=")[1].strip()
+                in_table = False
+            
+            elif "LCMann Region Table=" in line:
+                in_table = True
+                table_start_index = len(modified_lines)
+                try:
+                    table_size = int(line.split("=")[1].strip())
+                except ValueError:
+                    logger.warning(f"Invalid table size at line: {line}")
+                    table_size = 0
+            
+            elif in_table and table_size > 0:
+                # We're inside a Manning's table
+                land_use_entry = line.strip()
+                if "," in land_use_entry:
+                    parts = land_use_entry.rsplit(",", 1)
+                    if len(parts) == 2:
+                        land_use, _ = parts
+                        
+                        # Check if we should update this entry
+                        update_value = None
+                        
+                        # First check region-specific updates
+                        if current_region in update_dict and land_use in update_dict[current_region]:
+                            update_value = update_dict[current_region][land_use]
+                        
+                        # Then check global updates (ALL_REGIONS)
+                        elif 'ALL_REGIONS' in update_dict and land_use in update_dict['ALL_REGIONS']:
+                            update_value = update_dict['ALL_REGIONS'][land_use]
+                        
+                        if update_value is not None:
+                            # Replace the last entry in modified_lines with updated Manning's value
+                            modified_lines[-1] = f"{land_use},{update_value}\n"
+                            logger.debug(f"Updated '{land_use}' in region '{current_region}' to {update_value}")
+                
+                # Decrement counter for table entries
+                table_size -= 1
+                if table_size == 0:
+                    in_table = False
+            
+            i += 1
+        
+        # Write the file back
+        with open(geom_file_path, 'w') as file:
+            file.writelines(modified_lines)
+        
+        logger.info(f"Successfully updated Manning's n values in geometry file: {geom_file_path}")
+        return True
 
 
 
@@ -10493,7 +10742,7 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPlan.py
+File: C:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -10584,7 +10833,7 @@ class RasPlan:
     @log_call
     def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
-        Set the geometry for the specified plan.
+        Set the geometry for the specified plan by updating only the plan file.
 
         Parameters:
             plan_number (Union[str, int]): The plan number to update.
@@ -10598,7 +10847,8 @@ class RasPlan:
             updated_geom_df = RasPlan.set_geom('02', '03')
 
         Note:
-            This function updates the ras object's dataframes after modifying the project structure.
+            This function updates the Geom File= line in the plan file and 
+            updates the ras object's dataframes without modifying the PRJ file.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -10609,16 +10859,37 @@ class RasPlan:
         # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         if new_geom not in ras_obj.geom_df['geom_number'].values:
             logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
-        # Update all geometry-related columns
+        # Get the plan file path
+        plan_file_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
+        if not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_file_path}")
+            raise ValueError(f"Plan file not found: {plan_file_path}")
+        
+        # Read the plan file and update the Geom File line
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+            
+            for i, line in enumerate(lines):
+                if line.startswith("Geom File="):
+                    lines[i] = f"Geom File=g{new_geom}\n"
+                    logger.info(f"Updated Geom File in plan file to g{new_geom} for plan {plan_number}")
+                    break
+                
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+        except Exception as e:
+            logger.error(f"Error updating plan file: {e}")
+            raise
+        # Update the plan_df without reinitializing
         mask = ras_obj.plan_df['plan_number'] == plan_number
         ras_obj.plan_df.loc[mask, 'geom_number'] = new_geom
+        ras_obj.plan_df.loc[mask, 'geometry_number'] = new_geom  # Update geometry_number column
         ras_obj.plan_df.loc[mask, 'Geom File'] = f"g{new_geom}"
         geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
         ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
@@ -10627,26 +10898,7 @@ class RasPlan:
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
-        # Update project file and reinitialize
-        RasUtils.update_file(ras_obj.prj_file, RasPlan._update_geom_in_file, plan_number, new_geom)
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
-
         return ras_obj.plan_df
-
-    @staticmethod
-    def _update_geom_in_file(lines, plan_number, new_geom):
-        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
-        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
-        
-        for i, line in enumerate(lines):
-            if plan_pattern.match(line):
-                for j in range(i+1, len(lines)):
-                    if geom_pattern.match(lines[j]):
-                        lines[j] = f"Geom File=g{new_geom}\n"
-                        logger.info(f"Updated Geom File in project file to g{new_geom} for plan {plan_number}")
-                        break
-                break
-        return lines
 
     @staticmethod
     @log_call
@@ -11997,7 +12249,7 @@ class RasPlan:
             ras_object.plan_df = ras_object.get_plan_entries()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPrj.py
+File: C:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -12173,7 +12425,7 @@ def get_ras_exe(ras_version=None):
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -13016,7 +13268,7 @@ Lava Param=,2500,
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUtils.py
+File: C:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -13935,7 +14187,7 @@ class RasUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\__init__.py
+File: C:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 """
 ras-commander: A Python library for automating HEC-RAS operations
@@ -13949,7 +14201,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.70.0"
+    __version__ = "0.71.0"
 
 # Set up logging
 setup_logging()

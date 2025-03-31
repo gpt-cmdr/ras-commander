@@ -1,4 +1,4 @@
-File: c:\GH\ras-commander\.cursorrules
+File: C:\GH\ras-commander\.cursorrules
 ==================================================
 RAS Commander (ras-commander) Coding Assistant
 
@@ -271,10 +271,10 @@ Remind users about clear_geompre=True or RasGeo.clear_geompre_files() after geom
 Prefer Hdf* classes for reading HDF data over manual h5py operations unless necessary for very specific tasks not covered by the library.
 ==================================================
 
-Folder: c:\GH\ras-commander\.gitignore
+Folder: C:\GH\ras-commander\.gitignore
 ==================================================
 
-File: c:\GH\ras-commander\api.md
+File: C:\GH\ras-commander\api.md
 ==================================================
 ```markdown
 # RAS Commander API Documentation
@@ -1994,10 +1994,10 @@ Contains static methods for extracting 1D cross-section *geometry* data from HEC
 ```
 ==================================================
 
-Folder: c:\GH\ras-commander\examples
+Folder: C:\GH\ras-commander\examples
 ==================================================
 
-File: c:\GH\ras-commander\LICENSE
+File: C:\GH\ras-commander\LICENSE
 ==================================================
 MIT License
 
@@ -2007,7 +2007,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 ==================================================
 
-File: c:\GH\ras-commander\pyproject.toml
+File: C:\GH\ras-commander\pyproject.toml
 ==================================================
 [build-system]
 requires = ["setuptools>=45", "wheel"]
@@ -2015,7 +2015,7 @@ build-backend = "setuptools.build_meta:__legacy__"
 
 ==================================================
 
-File: c:\GH\ras-commander\ras-commander_logo.svg
+File: C:\GH\ras-commander\ras-commander_logo.svg
 ==================================================
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 300">
   <!-- Background with gradient -->
@@ -2057,15 +2057,16 @@ File: c:\GH\ras-commander\ras-commander_logo.svg
   </g>
   
   <!-- Text elements - moved RAS-COMMANDER up, tagline below the circle -->
-  <text x="225" y="220" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
+  <text x="225" y="222" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
   <text x="225" y="265" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#8EE4AF">Automate • Analyze • Visualize</text>
 </svg>
+
 ==================================================
 
-Folder: c:\GH\ras-commander\ras_commander
+Folder: C:\GH\ras-commander\ras_commander
 ==================================================
 
-File: c:\GH\ras-commander\settings.db
+File: C:\GH\ras-commander\settings.db
 ==================================================
 SQLite format 3   @                                                                     .v  n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            N)eindexix_settings_idsettingsCREATE INDEX ix_settings_id ON settings (id)VtablesettingssettingsCREATE TABLE settings (
 	id VARCHAR NOT NULL, 
@@ -2085,7 +2086,7 @@ SQLite format 3   @                                                     
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
 ==================================================
 
-File: c:\GH\ras-commander\setup.py
+File: C:\GH\ras-commander\setup.py
 ==================================================
 from setuptools import setup, find_packages
 from setuptools.command.build_py import build_py
@@ -2117,7 +2118,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.70.0",
+    version="0.71.0",
     packages=find_packages(),
     include_package_data=True,
     python_requires='>=3.10',
@@ -2184,7 +2185,7 @@ For more information, visit: https://packaging.python.org/tutorials/packaging-pr
 
 ==================================================
 
-File: c:\GH\ras-commander\.gitignore\.gitignore
+File: C:\GH\ras-commander\.gitignore\.gitignore
 ==================================================
 # Ignore the example_projects folder and all its subfolders
 examples/example_projects/
@@ -2242,7 +2243,7 @@ venv/
 Thumbs.db
 ==================================================
 
-File: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+File: C:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
 ==================================================
 {
   "cells": [
@@ -2613,7 +2614,7 @@ File: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+File: C:\GH\ras-commander\examples\01_project_initialization.ipynb
 ==================================================
 {
   "cells": [
@@ -4596,7 +4597,7 @@ File: c:\GH\ras-commander\examples\01_project_initialization.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+File: C:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
 ==================================================
 {
   "cells": [
@@ -5930,7 +5931,7 @@ File: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+File: C:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
 ==================================================
 {
   "cells": [
@@ -8309,7 +8310,7 @@ File: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+File: C:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
 ==================================================
 {
   "cells": [
@@ -9496,7 +9497,7 @@ File: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+File: C:\GH\ras-commander\examples\05_single_plan_execution.ipynb
 ==================================================
 {
   "cells": [
@@ -10133,7 +10134,7 @@ File: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+File: C:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
 ==================================================
 {
   "cells": [
@@ -10786,7 +10787,7 @@ File: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+File: C:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
 ==================================================
 {
   "cells": [
@@ -11532,7 +11533,7 @@ File: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+File: C:\GH\ras-commander\examples\08_parallel_execution.ipynb
 ==================================================
 {
   "cells": [
@@ -12744,7 +12745,7 @@ File: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+File: C:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
 ==================================================
 {
   "cells": [
@@ -14387,7 +14388,7 @@ File: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+File: C:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
 ==================================================
 {
   "cells": [
@@ -14570,7 +14571,7 @@ File: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+File: C:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
 ==================================================
 {
   "cells": [
@@ -14910,7 +14911,7 @@ File: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+File: C:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
 ==================================================
 {
   "cells": [
@@ -16472,7 +16473,7 @@ File: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+File: C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
 ==================================================
 {
   "cells": [
@@ -19046,7 +19047,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+File: C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
 ==================================================
 {
   "cells": [
@@ -23118,7 +23119,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+File: C:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
 ==================================================
 {
   "cells": [
@@ -23239,8 +23240,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:49 - ras_commander.RasPrj - INFO - Initializing global 'ras' object via init_ras_project function.\n",
-            "2025-03-20 12:03:49 - ras_commander.RasPrj - INFO - Project initialized. ras_object project folder: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\n"
+            "2025-03-27 22:56:45 - ras_commander.RasPrj - INFO - Initializing global 'ras' object via init_ras_project function.\n",
+            "2025-03-27 22:56:45 - ras_commander.RasPrj - INFO - Project initialized. ras_object project folder: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\n"
           ]
         },
         {
@@ -23514,7 +23515,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:49 - ras_commander.HdfResultsPlan - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:45 - ras_commander.HdfResultsPlan - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:45 - ras_commander.HdfResultsPlan - INFO - Extracting Plan Information from: DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -23529,15 +23531,14 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:49 - ras_commander.HdfResultsPlan - INFO - Extracting Plan Information from: DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:49 - ras_commander.HdfResultsPlan - INFO - Plan Name: Full System ROM with Pump\n",
-            "2025-03-20 12:03:49 - ras_commander.HdfResultsPlan - INFO - Simulation Duration (hours): 36.0\n"
+            "2025-03-27 22:56:45 - ras_commander.HdfResultsPlan - INFO - Plan Name: Full System ROM with Pump\n",
+            "2025-03-27 22:56:45 - ras_commander.HdfResultsPlan - INFO - Simulation Duration (hours): 36.0\n"
           ]
         },
         {
           "data": {
-            "text/html": "<div>\n<style scoped>\\n', '    .dataframe tbody tr th:only-of-type {\\n', '        vertical-align: middle;\\n', '    }\\n', '\\n', '    .dataframe tbody tr th {\\n', '        vertical-align: top;\\n', '    }\\n', '\\n', '    .dataframe thead th {\\n', '        text-align: right;\\n', '    }\\n', '</style>\n<table border=\"1\" class=\"dataframe\">\n  <thead>\\n', '    <tr style=\"text-align: right;\">\\n', '      <th></th>\\n', '      <th>Plan Name</th>\\n', '      <th>File Name</th>\\n', '      <th>Simulation Start Time</th>\\n', '      <th>Simulation End Time</th>\\n', '      <th>Simulation Duration (s)</th>\\n', '      <th>Simulation Time (hr)</th>\\n', '      <th>Completing Geometry (hr)</th>\\n', '      <th>Preprocessing Geometry (hr)</th>\\n', '      <th>Completing Event Conditions (hr)</th>\\n', '      <th>Unsteady Flow Computations (hr)</th>\\n', '      <th>Complete Process (hr)</th>\\n', '      <th>Unsteady Flow Speed (hr/hr)</th>\\n', '      <th>Complete Process Speed (hr/hr)</th>\\n', '    </tr>\\n', '  </thead>\n  <tbody>\n    <tr>\\n', '      <th>0</th>\\n', '      <td>Full System ROM with Pump</td>\\n', '      <td>DavisStormSystem.p02.hdf</td>\\n', '      <td>2000-01-10 12:00:00</td>\\n', '      <td>2000-01-12</td>\\n', '      <td>129600.0</td>\\n', '      <td>36.0</td>\\n', '      <td>N/A</td>\\n', '      <td>0.000026</td>\\n', '      <td>N/A</td>\\n', '      <td>0.020581</td>\\n', '      <td>0.021966</td>\\n', '      <td>1749.153091</td>\\n', '      <td>1638.908912</td>\\n', '    </tr>\n    <tr><td colspan=\"100%\" style=\"text-align:center\">[... additional rows truncated ...]</td></tr>\n  </tbody>\n</table>\n</div>",
-            "text/plain": "['                   Plan Name                 File Name Simulation Start Time  \\\\\\n', '0  Full System ROM with Pump  DavisStormSystem.p02.hdf   2000-01-10 12:00:00   \\n', '\\n', '  Simulation End Time  Simulation Duration (s)  Simulation Time (hr)  \\\\\\n', '0          2000-01-12                 129600.0                  36.0   \\n', '\\n', '  Completing Geometry (hr)  Preprocessing Geometry (hr)  \\\\\\n', '0                      N/A                     0.000026   \\n', '\\n', '  Completing Event Conditions (hr)  Unsteady Flow Computations (hr)  \\\\\\n', '0                              N/A                         0.020581   \\n', '\\n', '   Complete Process (hr)  Unsteady Flow Speed (hr/hr)  \\\\\\n', '0               0.021966                  1749.153091   \\n', '\\n', '   Complete Process Speed (hr/hr)  \\n', '0                     1638.908912  ']"
+            "text/html": "<div>\n<style scoped>\\n', '    .dataframe tbody tr th:only-of-type {\\n', '        vertical-align: middle;\\n', '    }\\n', '\\n', '    .dataframe tbody tr th {\\n', '        vertical-align: top;\\n', '    }\\n', '\\n', '    .dataframe thead th {\\n', '        text-align: right;\\n', '    }\\n', '</style>\n<table border=\"1\" class=\"dataframe\">\n  <thead>\\n', '    <tr style=\"text-align: right;\">\\n', '      <th></th>\\n', '      <th>Plan Name</th>\\n', '      <th>File Name</th>\\n', '      <th>Simulation Start Time</th>\\n', '      <th>Simulation End Time</th>\\n', '      <th>Simulation Duration (s)</th>\\n', '      <th>Simulation Time (hr)</th>\\n', '      <th>Completing Geometry (hr)</th>\\n', '      <th>Preprocessing Geometry (hr)</th>\\n', '      <th>Completing Event Conditions (hr)</th>\\n', '      <th>Unsteady Flow Computations (hr)</th>\\n', '      <th>Complete Process (hr)</th>\\n', '      <th>Unsteady Flow Speed (hr/hr)</th>\\n', '      <th>Complete Process Speed (hr/hr)</th>\\n', '    </tr>\\n', '  </thead>\n  <tbody>\n    <tr>\\n', '      <th>0</th>\\n', '      <td>Full System ROM with Pump</td>\\n', '      <td>DavisStormSystem.p02.hdf</td>\\n', '      <td>2000-01-10 12:00:00</td>\\n', '      <td>2000-01-12</td>\\n', '      <td>129600.0</td>\\n', '      <td>36.0</td>\\n', '      <td>N/A</td>\\n', '      <td>0.000104</td>\\n', '      <td>N/A</td>\\n', '      <td>0.020755</td>\\n', '      <td>0.022648</td>\\n', '      <td>1734.498588</td>\\n', '      <td>1589.579424</td>\\n', '    </tr>\n    <tr><td colspan=\"100%\" style=\"text-align:center\">[... additional rows truncated ...]</td></tr>\n  </tbody>\n</table>\n</div>",
+            "text/plain": "['                   Plan Name                 File Name Simulation Start Time  \\\\\\n', '0  Full System ROM with Pump  DavisStormSystem.p02.hdf   2000-01-10 12:00:00   \\n', '\\n', '  Simulation End Time  Simulation Duration (s)  Simulation Time (hr)  \\\\\\n', '0          2000-01-12                 129600.0                  36.0   \\n', '\\n', '  Completing Geometry (hr)  Preprocessing Geometry (hr)  \\\\\\n', '0                      N/A                     0.000104   \\n', '\\n', '  Completing Event Conditions (hr)  Unsteady Flow Computations (hr)  \\\\\\n', '0                              N/A                         0.020755   \\n', '\\n', '   Complete Process (hr)  Unsteady Flow Speed (hr/hr)  \\\\\\n', '0               0.022648                  1734.498588   \\n', '\\n', '   Complete Process Speed (hr/hr)  \\n', '0                     1589.579424  ']"
           },
           "execution_count": 13,
           "metadata": {},
@@ -23574,7 +23575,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:49 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:45 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -23736,8 +23737,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:47 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -23784,9 +23785,9 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - root - INFO - Selected Pipe Network: Davis\n"
+            "2025-03-27 22:56:47 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - root - INFO - Selected Pipe Network: Davis\n"
           ]
         },
         {
@@ -23823,11 +23824,11 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:47 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -23864,8 +23865,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:47 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -23902,9 +23903,9 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n"
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n"
           ]
         },
         {
@@ -23933,27 +23934,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stdout",
           "output_type": "stream",
           "text": [
-            "Pipe Conduits GeoDataFrame columns:"
-          ]
-        },
-        {
-          "name": "stderr",
-          "output_type": "stream",
-          "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n"
-          ]
-        },
-        {
-          "name": "stdout",
-          "output_type": "stream",
-          "text": [
-            "\n",
+            "Pipe Conduits GeoDataFrame columns:\n",
             "Index(['Name', 'System Name', 'US Node', 'DS Node', 'Modeling Approach',\n",
             "       'Conduit Length', 'Max Cell Length', 'Shape', 'Rise', 'Span',\n",
             "       'Manning's n', 'US Offset', 'DS Offset', 'US Elevation', 'DS Elevation',\n",
@@ -23970,7 +23951,26 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
             "       'Drop Inlet Elevation', 'Drop Inlet Weir Length',\n",
             "       'Drop Inlet Weir Coefficient', 'Drop Inlet Orifice Area',\n",
             "       'Drop Inlet Orifice Coefficient', 'Total Connection Count', 'geometry'],\n",
-            "      dtype='object')\n",
+            "      dtype='object')\n"
+          ]
+        },
+        {
+          "name": "stderr",
+          "output_type": "stream",
+          "text": [
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n"
+          ]
+        },
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
             "\n",
             "Perimeter Polygons GeoDataFrame columns:\n",
             "Index(['mesh_name', 'geometry'], dtype='object')\n"
@@ -24006,20 +24006,20 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:51 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:52 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:52 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
-            "2025-03-20 12:03:52 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n"
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfMesh - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:47 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:48 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:48 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n",
+            "2025-03-27 22:56:48 - ras_commander.HdfBase - INFO - Found projection in HDF file: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.g02.hdf\n"
           ]
         },
         {
@@ -24114,7 +24114,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "C:\\Users\\billk\\AppData\\Local\\Temp\\ipykernel_19960\\1821049155.py:10: UserWarning: Legend does not support handles for PatchCollection instances.\n",
+            "C:\\Users\\billk\\AppData\\Local\\Temp\\ipykernel_3188\\1821049155.py:10: UserWarning: Legend does not support handles for PatchCollection instances.\n",
             "See: https://matplotlib.org/stable/tutorials/intermediate/legend_guide.html#implementing-a-custom-legend-handler\n",
             "  ax.legend()\n"
           ]
@@ -24152,20 +24152,20 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24379,8 +24379,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24396,8 +24396,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:55 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:52 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24413,8 +24413,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:56 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:56 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:53 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:53 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24430,8 +24430,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:56 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:56 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:53 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:53 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24447,8 +24447,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:56 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:56 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:53 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:53 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24464,8 +24464,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:57 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:57 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:54 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:54 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24481,8 +24481,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:57 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:57 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:54 - ras_commander.HdfPipe - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:54 - ras_commander.HdfPipe - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24559,8 +24559,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:57 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:57 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:54 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:54 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24574,9 +24574,9 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
             "       [ 0.       , 24.6      , 38.888123 ,  0.       ,  0.       ],\n",
             "       [ 0.       , 24.6      , 38.888123 ,  0.       ,  0.       ],\n",
             "       ...,\n",
-            "       [29.879196 , 25.919882 , 40.72616  , 29.879196 ,  0.8800183],\n",
-            "       [ 0.       , 25.509325 , 40.719368 ,  0.       ,  0.       ],\n",
-            "       [ 0.       , 25.691107 , 40.62319  ,  0.       ,  0.       ]],\n",
+            "       [29.879713 , 25.919964 , 40.726162 , 29.879713 ,  0.8800183],\n",
+            "       [ 0.       , 25.509436 , 40.71937  ,  0.       ,  0.       ],\n",
+            "       [ 0.       , 25.691196 , 40.623196 ,  0.       ,  0.       ]],\n",
             "      shape=(217, 5), dtype=float32)\n",
             "Coordinates:\n",
             "  * time      (time) datetime64[ns] 2kB 2000-01-10T12:00:00 ... 2000-01-12\n",
@@ -24605,8 +24605,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:57 - ras_commander.HdfBase - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:57 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:54 - ras_commander.HdfBase - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:54 - ras_commander.HdfBase - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24688,8 +24688,8 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-03-20 12:03:57 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
-            "2025-03-20 12:03:57 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
+            "2025-03-27 22:56:54 - ras_commander.HdfPump - INFO - Using HDF file from direct string path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n",
+            "2025-03-27 22:56:54 - ras_commander.HdfPump - INFO - Final validated HDF file path: c:\\GH\\ras-commander\\examples\\example_projects\\Davis\\DavisStormSystem.p02.hdf\n"
           ]
         },
         {
@@ -24703,9 +24703,9 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
             "       [ 0.       , 24.6      , 38.888123 ,  0.       ,  0.       ],\n",
             "       [ 0.       , 24.6      , 38.888123 ,  0.       ,  0.       ],\n",
             "       ...,\n",
-            "       [29.879196 , 25.919882 , 40.72616  , 29.879196 ,  0.8800183],\n",
-            "       [ 0.       , 25.509325 , 40.719368 ,  0.       ,  0.       ],\n",
-            "       [ 0.       , 25.691107 , 40.62319  ,  0.       ,  0.       ]],\n",
+            "       [29.879713 , 25.919964 , 40.726162 , 29.879713 ,  0.8800183],\n",
+            "       [ 0.       , 25.509436 , 40.71937  ,  0.       ,  0.       ],\n",
+            "       [ 0.       , 25.691196 , 40.623196 ,  0.       ,  0.       ]],\n",
             "      shape=(217, 5), dtype=float32)\n",
             "Coordinates:\n",
             "  * time      (time) datetime64[ns] 2kB 2000-01-10T12:00:00 ... 2000-01-12\n",
@@ -24827,7 +24827,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+File: C:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
 ==================================================
 {
   "cells": [
@@ -27138,7 +27138,7 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+File: C:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
 ==================================================
 {
   "cells": [
@@ -27977,7 +27977,7 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
 }
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\Decorators.py
+File: C:\GH\ras-commander\ras_commander\Decorators.py
 ==================================================
 from functools import wraps
 from pathlib import Path
@@ -28187,7 +28187,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
     return decorator
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBase.py
+File: C:\GH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -28551,7 +28551,7 @@ class HdfBase:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBndry.py
+File: C:\GH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -28952,7 +28952,7 @@ class HdfBndry:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -29510,7 +29510,7 @@ class HdfFluvialPluvial:
         return boundary_edges
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -29930,7 +29930,7 @@ HdfInfiltration.save_statistics(soil_stats, Path('soil_statistics.csv'))
 """
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -30396,7 +30396,7 @@ class HdfMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPipe.py
+File: C:\GH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -31124,7 +31124,7 @@ class HdfPipe:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -31441,7 +31441,7 @@ class HdfPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -31549,7 +31549,7 @@ class HdfPlot:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPump.py
+File: C:\GH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -31870,7 +31870,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -32627,7 +32627,7 @@ class HdfResultsMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -33012,7 +33012,7 @@ class HdfResultsPlan:
             return pd.DataFrame()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -33199,7 +33199,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -33516,7 +33516,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfStruc.py
+File: C:\GH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -33818,7 +33818,7 @@ class HdfStruc:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfUtils.py
+File: C:\GH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -34257,7 +34257,7 @@ class HdfUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -34903,7 +34903,7 @@ class HdfXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\LoggingConfig.py
+File: C:\GH\ras-commander\ras_commander\LoggingConfig.py
 ==================================================
 # logging_config.py
 
@@ -34998,7 +34998,7 @@ def log_call(logger=None):
 setup_logging()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+File: C:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -35358,11 +35358,17 @@ class RasCmdr:
                 logger.info(f"Copied project folder to destination: {dest_folder_path}")
                 project_folder = dest_folder_path
 
+            # Store filtered plan numbers separately to ensure only these are executed
+            filtered_plan_numbers = []
+            
             if plan_number:
                 if isinstance(plan_number, str):
                     plan_number = [plan_number]
                 ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
-                logger.info(f"Filtered plans to execute: {plan_number}")
+                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
+                logger.info(f"Filtered plans to execute: {filtered_plan_numbers}")
+            else:
+                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
 
             num_plans = len(ras_obj.plan_df)
             max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
@@ -35389,8 +35395,9 @@ class RasCmdr:
                     logger.critical(f"Failed to initialize RAS project for worker {worker_id}: {str(e)}")
                     worker_ras_objects[worker_id] = None
 
+            # Explicitly use the filtered plan numbers for assignments
             worker_cycle = cycle(range(1, max_workers + 1))
-            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in ras_obj.plan_df['plan_number']]
+            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in filtered_plan_numbers]
 
             execution_results: Dict[str, bool] = {}
 
@@ -35693,7 +35700,7 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasExamples.py
+File: C:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -36121,7 +36128,7 @@ class RasExamples:
         return int(number * units[unit])
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGeo.py
+File: C:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -36162,6 +36169,7 @@ List of Functions in RasGeo:
 import os
 from pathlib import Path
 from typing import List, Union
+import pandas as pd  # Added pandas import
 from .RasPlan import RasPlan
 from .RasPrj import ras
 from .LoggingConfig import get_logger
@@ -36261,7 +36269,243 @@ class RasGeo:
 
 
 
+    @staticmethod
+    def get_mannings_override_tables(geom_file_path, ras_object=None):
+        """
+        Extracts Manning's override region tables from a HEC-RAS geometry file.
+        
+        Args:
+            geom_file_path (str or Path): Geometry file path or geometry number (e.g., "01").
+            ras_object (RasPrj, optional): RAS project object for context. Defaults to global 'ras'.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing Manning's override region tables with columns:
+                - Region Name: Name of the override region
+                - Land Use Type: Land use type or description
+                - Mannings N Value: Manning's n value for the land use type
+                - Polygon Value: Polygon value or ID associated with the region
+                
+        Raises:
+            FileNotFoundError: If the geometry file doesn't exist.
+            ValueError: If the geometry file number is invalid.
+        """
+        # Get the full path to the geometry file if a number was provided
+        if isinstance(geom_file_path, (str, int)) and not str(geom_file_path).endswith('.g'):
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            geom_file_path = RasPlan.get_geom_path(str(geom_file_path), ras_object=ras_obj)
+            if geom_file_path is None:
+                raise ValueError(f"Geometry file number '{geom_file_path}' not found in project")
+        
+        geom_file_path = Path(geom_file_path)
+        if not geom_file_path.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file_path}")
+        
+        # Lists for storing data
+        region_names, land_use_types, mannings_values, polygon_values = [], [], [], []
+        
+        region_name, table_value, polygon_value = "", 0, ""
+        
+        with open(geom_file_path, 'r') as file:
+            lines = file.readlines()
+            
+            i = 0  # Initialize line counter
+            while i < len(lines):
+                line = lines[i].strip()
+                
+                if "LCMann Region Name=" in line:
+                    region_name = line.split("=")[1]
+                    i += 1  # Move to the next line
+                    continue
+                    
+                if "LCMann Region Table=" in line:
+                    table_value = int(line.split("=")[1])
+                    i += 1  # Skip to the next line which starts the table entries
+                    for j in range(table_value):
+                        if i+j < len(lines):
+                            # Handle multiple commas by splitting from the right
+                            parts = lines[i+j].strip().rsplit(",", 1)
+                            if len(parts) == 2:
+                                land_use, mannings = parts
+                                try:
+                                    mannings_float = float(mannings)
+                                    region_names.append(region_name)
+                                    land_use_types.append(land_use)
+                                    mannings_values.append(mannings_float)
+                                    polygon_values.append(polygon_value)  # This will repeat the last polygon_value
+                                except ValueError:
+                                    # Skip if Manning's value is not a valid float
+                                    pass
+                    
+                    i += table_value  # Skip past the table entries
+                    continue
+                    
+                if "LCMann Region Polygon=" in line:
+                    polygon_value = line.split("=")[1]
+                    i += 1  # Move to the next line
+                    continue
+                    
+                i += 1  # Move to the next line if none of the conditions above are met
+        
+        # Create DataFrame
+        mannings_tables = pd.DataFrame({
+            "Region Name": region_names,
+            "Land Use Type": land_use_types,
+            "Mannings N Value": mannings_values,
+            "Polygon Value": polygon_values
+        })
+        
+        return mannings_tables
 
+
+
+    @staticmethod
+    @log_call
+    def set_mannings_override_tables(geom_file_path, mannings_df, ras_object=None):
+        """
+        Updates Manning's override region tables in a HEC-RAS geometry file based on provided dataframe.
+        
+        This function takes a dataframe of Manning's values (similar to the one returned by
+        extract_mannings_override_tables) and updates the corresponding values in the geometry file.
+        If Region Name is specified in the dataframe, only updates that specific region.
+        If no Region Name is given for a row, it updates all instances of the Land Use Type
+        across all regions in the geometry file.
+        
+        Args:
+            geom_file_path (str or Path): Geometry file path or geometry number (e.g., "01").
+            mannings_df (pd.DataFrame): DataFrame containing Manning's override values with columns:
+                - Land Use Type: Land use type or description (required)
+                - Mannings N Value: Manning's n value for the land use type (required)
+                - Region Name: Name of the override region (optional)
+            ras_object (RasPrj, optional): RAS project object for context. Defaults to global 'ras'.
+                    
+        Returns:
+            bool: True if successful, False otherwise.
+            
+        Raises:
+            FileNotFoundError: If the geometry file doesn't exist.
+            ValueError: If the geometry file number is invalid or required columns are missing.
+            
+        Example:
+            # Get existing Manning's tables
+            mannings_tables = RasGeo.extract_mannings_override_tables("01")
+            
+            # Update specific values
+            mannings_tables.loc[mannings_tables['Land Use Type'] == 'Open Water', 'Mannings N Value'] = 0.030
+            
+            # Update all forest types in all regions
+            forest_updates = pd.DataFrame({
+                'Land Use Type': ['Mixed Forest', 'Deciduous Forest', 'Evergreen Forest'],
+                'Mannings N Value': [0.040, 0.042, 0.045]
+            })
+            
+            # Apply the changes
+            RasGeo.set_mannings_override_tables("01", mannings_tables)
+            # Or apply just the forest updates to all regions
+            RasGeo.set_mannings_override_tables("01", forest_updates)
+        """
+        # Get the full path to the geometry file if a number was provided
+        if isinstance(geom_file_path, (str, int)) and not str(geom_file_path).endswith('.g'):
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            geom_file_path = RasPlan.get_geom_path(str(geom_file_path), ras_object=ras_obj)
+            if geom_file_path is None:
+                raise ValueError(f"Geometry file number '{geom_file_path}' not found in project")
+        
+        geom_file_path = Path(geom_file_path)
+        if not geom_file_path.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file_path}")
+        
+        # Verify required columns exist
+        required_columns = ['Land Use Type', 'Mannings N Value']
+        if not all(col in mannings_df.columns for col in required_columns):
+            raise ValueError(f"DataFrame must contain columns: {required_columns}")
+        
+        # Create a dictionary for easier lookups
+        update_dict = {}
+        for _, row in mannings_df.iterrows():
+            land_use = row['Land Use Type']
+            manning_value = row['Mannings N Value']
+            region_name = row.get('Region Name', None)  # Optional column
+            
+            if region_name:
+                if region_name not in update_dict:
+                    update_dict[region_name] = {}
+                update_dict[region_name][land_use] = manning_value
+            else:
+                # Special key for updates that apply to all regions
+                if 'ALL_REGIONS' not in update_dict:
+                    update_dict['ALL_REGIONS'] = {}
+                update_dict['ALL_REGIONS'][land_use] = manning_value
+        
+        logger.info(f"Updating Manning's n values in geometry file: {geom_file_path}")
+        
+        # Read the entire file
+        with open(geom_file_path, 'r') as file:
+            lines = file.readlines()
+        
+        # Process the file line by line
+        modified_lines = []
+        current_region = None
+        in_table = False
+        table_start_index = -1
+        table_size = 0
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            modified_lines.append(line)  # Add line by default, may modify later
+            
+            if "LCMann Region Name=" in line:
+                current_region = line.split("=")[1].strip()
+                in_table = False
+            
+            elif "LCMann Region Table=" in line:
+                in_table = True
+                table_start_index = len(modified_lines)
+                try:
+                    table_size = int(line.split("=")[1].strip())
+                except ValueError:
+                    logger.warning(f"Invalid table size at line: {line}")
+                    table_size = 0
+            
+            elif in_table and table_size > 0:
+                # We're inside a Manning's table
+                land_use_entry = line.strip()
+                if "," in land_use_entry:
+                    parts = land_use_entry.rsplit(",", 1)
+                    if len(parts) == 2:
+                        land_use, _ = parts
+                        
+                        # Check if we should update this entry
+                        update_value = None
+                        
+                        # First check region-specific updates
+                        if current_region in update_dict and land_use in update_dict[current_region]:
+                            update_value = update_dict[current_region][land_use]
+                        
+                        # Then check global updates (ALL_REGIONS)
+                        elif 'ALL_REGIONS' in update_dict and land_use in update_dict['ALL_REGIONS']:
+                            update_value = update_dict['ALL_REGIONS'][land_use]
+                        
+                        if update_value is not None:
+                            # Replace the last entry in modified_lines with updated Manning's value
+                            modified_lines[-1] = f"{land_use},{update_value}\n"
+                            logger.debug(f"Updated '{land_use}' in region '{current_region}' to {update_value}")
+                
+                # Decrement counter for table entries
+                table_size -= 1
+                if table_size == 0:
+                    in_table = False
+            
+            i += 1
+        
+        # Write the file back
+        with open(geom_file_path, 'w') as file:
+            file.writelines(modified_lines)
+        
+        logger.info(f"Successfully updated Manning's n values in geometry file: {geom_file_path}")
+        return True
 
 
 
@@ -36269,7 +36513,7 @@ class RasGeo:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPlan.py
+File: C:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -36360,7 +36604,7 @@ class RasPlan:
     @log_call
     def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
-        Set the geometry for the specified plan.
+        Set the geometry for the specified plan by updating only the plan file.
 
         Parameters:
             plan_number (Union[str, int]): The plan number to update.
@@ -36374,7 +36618,8 @@ class RasPlan:
             updated_geom_df = RasPlan.set_geom('02', '03')
 
         Note:
-            This function updates the ras object's dataframes after modifying the project structure.
+            This function updates the Geom File= line in the plan file and 
+            updates the ras object's dataframes without modifying the PRJ file.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -36385,16 +36630,37 @@ class RasPlan:
         # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         if new_geom not in ras_obj.geom_df['geom_number'].values:
             logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
-        # Update all geometry-related columns
+        # Get the plan file path
+        plan_file_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
+        if not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_file_path}")
+            raise ValueError(f"Plan file not found: {plan_file_path}")
+        
+        # Read the plan file and update the Geom File line
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+            
+            for i, line in enumerate(lines):
+                if line.startswith("Geom File="):
+                    lines[i] = f"Geom File=g{new_geom}\n"
+                    logger.info(f"Updated Geom File in plan file to g{new_geom} for plan {plan_number}")
+                    break
+                
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+        except Exception as e:
+            logger.error(f"Error updating plan file: {e}")
+            raise
+        # Update the plan_df without reinitializing
         mask = ras_obj.plan_df['plan_number'] == plan_number
         ras_obj.plan_df.loc[mask, 'geom_number'] = new_geom
+        ras_obj.plan_df.loc[mask, 'geometry_number'] = new_geom  # Update geometry_number column
         ras_obj.plan_df.loc[mask, 'Geom File'] = f"g{new_geom}"
         geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
         ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
@@ -36403,26 +36669,7 @@ class RasPlan:
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
-        # Update project file and reinitialize
-        RasUtils.update_file(ras_obj.prj_file, RasPlan._update_geom_in_file, plan_number, new_geom)
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
-
         return ras_obj.plan_df
-
-    @staticmethod
-    def _update_geom_in_file(lines, plan_number, new_geom):
-        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
-        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
-        
-        for i, line in enumerate(lines):
-            if plan_pattern.match(line):
-                for j in range(i+1, len(lines)):
-                    if geom_pattern.match(lines[j]):
-                        lines[j] = f"Geom File=g{new_geom}\n"
-                        logger.info(f"Updated Geom File in project file to g{new_geom} for plan {plan_number}")
-                        break
-                break
-        return lines
 
     @staticmethod
     @log_call
@@ -37773,7 +38020,7 @@ class RasPlan:
             ras_object.plan_df = ras_object.get_plan_entries()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPrj.py
+File: C:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -37923,10 +38170,14 @@ class RasPrj:
             raise ValueError(f"No HEC-RAS project file found in {self.project_folder}")
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
-        self._load_project_data()
-        self.boundaries_df = self.get_boundary_conditions()  # Extract boundary conditions
+        
+        # Set initialized to True before loading project data
         self.initialized = True
         
+        # Now load the project data
+        self._load_project_data()
+        self.boundaries_df = self.get_boundary_conditions()
+
         if not suppress_logging:
             logger.info(f"Initialization complete for project: {self.project_name}")
             logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
@@ -39155,7 +39406,7 @@ def get_ras_exe(ras_version=None):
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -39998,7 +40249,7 @@ Lava Param=,2500,
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUtils.py
+File: C:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library
@@ -40917,7 +41168,7 @@ class RasUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\__init__.py
+File: C:\GH\ras-commander\ras_commander\__init__.py
 ==================================================
 """
 ras-commander: A Python library for automating HEC-RAS operations
@@ -40931,7 +41182,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.70.0"
+    __version__ = "0.71.0"
 
 # Set up logging
 setup_logging()

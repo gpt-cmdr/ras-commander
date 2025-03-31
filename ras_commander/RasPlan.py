@@ -87,7 +87,7 @@ class RasPlan:
     @log_call
     def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
         """
-        Set the geometry for the specified plan.
+        Set the geometry for the specified plan by updating only the plan file.
 
         Parameters:
             plan_number (Union[str, int]): The plan number to update.
@@ -101,7 +101,8 @@ class RasPlan:
             updated_geom_df = RasPlan.set_geom('02', '03')
 
         Note:
-            This function updates the ras object's dataframes after modifying the project structure.
+            This function updates the Geom File= line in the plan file and 
+            updates the ras object's dataframes without modifying the PRJ file.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -112,16 +113,37 @@ class RasPlan:
         # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
         
         if new_geom not in ras_obj.geom_df['geom_number'].values:
             logger.error(f"Geometry {new_geom} not found in project.")
             raise ValueError(f"Geometry {new_geom} not found in project.")
 
-        # Update all geometry-related columns
+        # Get the plan file path
+        plan_file_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
+        if not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_file_path}")
+            raise ValueError(f"Plan file not found: {plan_file_path}")
+        
+        # Read the plan file and update the Geom File line
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+            
+            for i, line in enumerate(lines):
+                if line.startswith("Geom File="):
+                    lines[i] = f"Geom File=g{new_geom}\n"
+                    logger.info(f"Updated Geom File in plan file to g{new_geom} for plan {plan_number}")
+                    break
+                
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+        except Exception as e:
+            logger.error(f"Error updating plan file: {e}")
+            raise
+        # Update the plan_df without reinitializing
         mask = ras_obj.plan_df['plan_number'] == plan_number
         ras_obj.plan_df.loc[mask, 'geom_number'] = new_geom
+        ras_obj.plan_df.loc[mask, 'geometry_number'] = new_geom  # Update geometry_number column
         ras_obj.plan_df.loc[mask, 'Geom File'] = f"g{new_geom}"
         geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
         ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
@@ -130,26 +152,7 @@ class RasPlan:
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
-        # Update project file and reinitialize
-        RasUtils.update_file(ras_obj.prj_file, RasPlan._update_geom_in_file, plan_number, new_geom)
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
-
         return ras_obj.plan_df
-
-    @staticmethod
-    def _update_geom_in_file(lines, plan_number, new_geom):
-        plan_pattern = re.compile(rf"^Plan File=p{plan_number}", re.IGNORECASE)
-        geom_pattern = re.compile(r"^Geom File=g\d+", re.IGNORECASE)
-        
-        for i, line in enumerate(lines):
-            if plan_pattern.match(line):
-                for j in range(i+1, len(lines)):
-                    if geom_pattern.match(lines[j]):
-                        lines[j] = f"Geom File=g{new_geom}\n"
-                        logger.info(f"Updated Geom File in project file to g{new_geom} for plan {plan_number}")
-                        break
-                break
-        return lines
 
     @staticmethod
     @log_call

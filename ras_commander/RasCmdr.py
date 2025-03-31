@@ -356,11 +356,17 @@ class RasCmdr:
                 logger.info(f"Copied project folder to destination: {dest_folder_path}")
                 project_folder = dest_folder_path
 
+            # Store filtered plan numbers separately to ensure only these are executed
+            filtered_plan_numbers = []
+            
             if plan_number:
                 if isinstance(plan_number, str):
                     plan_number = [plan_number]
                 ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
-                logger.info(f"Filtered plans to execute: {plan_number}")
+                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
+                logger.info(f"Filtered plans to execute: {filtered_plan_numbers}")
+            else:
+                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
 
             num_plans = len(ras_obj.plan_df)
             max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
@@ -387,8 +393,9 @@ class RasCmdr:
                     logger.critical(f"Failed to initialize RAS project for worker {worker_id}: {str(e)}")
                     worker_ras_objects[worker_id] = None
 
+            # Explicitly use the filtered plan numbers for assignments
             worker_cycle = cycle(range(1, max_workers + 1))
-            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in ras_obj.plan_df['plan_number']]
+            plan_assignments = [(next(worker_cycle), plan_num) for plan_num in filtered_plan_numbers]
 
             execution_results: Dict[str, bool] = {}
 
