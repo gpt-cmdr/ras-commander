@@ -24,15 +24,14 @@ Example:
         # Function logic here
         
         
-        
------
-
 All of the methods in this class are static and are designed to be used without instantiation.
 
 List of Functions in RasGeo:
-- clear_geompre_files()
-        
-        
+- clear_geompre_files(): Clears geometry preprocessor files for specified plan files
+- get_mannings_baseoverrides(): Reads base Manning's n table from a geometry file
+- get_mannings_regionoverrides(): Reads Manning's n region overrides from a geometry file
+- set_mannings_baseoverrides(): Writes base Manning's n values to a geometry file
+- set_mannings_regionoverrides(): Writes regional Manning's n overrides to a geometry file
 """
 import os
 from pathlib import Path
@@ -135,246 +134,391 @@ class RasGeo:
             logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise
 
-
-
-    @staticmethod
-    def get_mannings_override_tables(geom_file_path, ras_object=None):
+    @log_call
+    def get_mannings_baseoverrides(geom_file_path):
         """
-        Extracts Manning's override region tables from a HEC-RAS geometry file.
+        Reads the base Manning's n table from a HEC-RAS geometry file.
         
-        Args:
-            geom_file_path (str or Path): Geometry file path or geometry number (e.g., "01").
-            ras_object (RasPrj, optional): RAS project object for context. Defaults to global 'ras'.
+        Parameters:
+        -----------
+        geom_file_path : str or Path
+            Path to the geometry file (.g##)
         
         Returns:
-            pd.DataFrame: DataFrame containing Manning's override region tables with columns:
-                - Region Name: Name of the override region
-                - Land Use Type: Land use type or description
-                - Mannings N Value: Manning's n value for the land use type
-                - Polygon Value: Polygon value or ID associated with the region
-                
-        Raises:
-            FileNotFoundError: If the geometry file doesn't exist.
-            ValueError: If the geometry file number is invalid.
+        --------
+        pandas.DataFrame
+            DataFrame with Table Number, Land Cover Name, and Base Manning's n Value
         """
-        # Get the full path to the geometry file if a number was provided
-        if isinstance(geom_file_path, (str, int)) and not str(geom_file_path).endswith('.g'):
-            ras_obj = ras_object or ras
-            ras_obj.check_initialized()
-            geom_file_path = RasPlan.get_geom_path(str(geom_file_path), ras_object=ras_obj)
-            if geom_file_path is None:
-                raise ValueError(f"Geometry file number '{geom_file_path}' not found in project")
+        import pandas as pd
+        from pathlib import Path
         
-        geom_file_path = Path(geom_file_path)
-        if not geom_file_path.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file_path}")
+        # Convert to Path object if it's a string
+        if isinstance(geom_file_path, str):
+            geom_file_path = Path(geom_file_path)
         
-        # Lists for storing data
-        region_names, land_use_types, mannings_values, polygon_values = [], [], [], []
+        base_table_rows = []
+        table_number = None
         
-        region_name, table_value, polygon_value = "", 0, ""
+        # Read the geometry file
+        with open(geom_file_path, 'r') as f:
+            lines = f.readlines()
         
-        with open(geom_file_path, 'r') as file:
-            lines = file.readlines()
+        # Parse the file
+        reading_base_table = False
+        for line in lines:
+            line = line.strip()
             
-            i = 0  # Initialize line counter
-            while i < len(lines):
-                line = lines[i].strip()
+            # Find the table number
+            if line.startswith('LCMann Table='):
+                table_number = line.split('=')[1]
+                reading_base_table = True
+                continue
+            
+            # Stop reading when we hit a line without a comma or starting with LCMann
+            if reading_base_table and (not ',' in line or line.startswith('LCMann')):
+                reading_base_table = False
+                continue
                 
-                if "LCMann Region Name=" in line:
-                    region_name = line.split("=")[1]
-                    i += 1  # Move to the next line
+            # Parse data rows in base table
+            if reading_base_table and ',' in line:
+                # Check if there are multiple commas in the line
+                parts = line.split(',')
+                if len(parts) > 2:
+                    # Handle case where land cover name contains commas
+                    name = ','.join(parts[:-1])
+                    value = parts[-1]
+                else:
+                    name, value = parts
+                
+                try:
+                    base_table_rows.append([table_number, name, float(value)])
+                except ValueError:
+                    # Log the error and continue
+                    print(f"Error parsing line: {line}")
                     continue
-                    
-                if "LCMann Region Table=" in line:
-                    table_value = int(line.split("=")[1])
-                    i += 1  # Skip to the next line which starts the table entries
-                    for j in range(table_value):
-                        if i+j < len(lines):
-                            # Handle multiple commas by splitting from the right
-                            parts = lines[i+j].strip().rsplit(",", 1)
-                            if len(parts) == 2:
-                                land_use, mannings = parts
-                                try:
-                                    mannings_float = float(mannings)
-                                    region_names.append(region_name)
-                                    land_use_types.append(land_use)
-                                    mannings_values.append(mannings_float)
-                                    polygon_values.append(polygon_value)  # This will repeat the last polygon_value
-                                except ValueError:
-                                    # Skip if Manning's value is not a valid float
-                                    pass
-                    
-                    i += table_value  # Skip past the table entries
-                    continue
-                    
-                if "LCMann Region Polygon=" in line:
-                    polygon_value = line.split("=")[1]
-                    i += 1  # Move to the next line
-                    continue
-                    
-                i += 1  # Move to the next line if none of the conditions above are met
         
         # Create DataFrame
-        mannings_tables = pd.DataFrame({
-            "Region Name": region_names,
-            "Land Use Type": land_use_types,
-            "Mannings N Value": mannings_values,
-            "Polygon Value": polygon_values
-        })
-        
-        return mannings_tables
+        if base_table_rows:
+            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            return df
+        else:
+            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
 
+
+    @log_call
+    def get_mannings_regionoverrides(geom_file_path):
+        """
+        Reads the Manning's n region overrides from a HEC-RAS geometry file.
+        
+        Parameters:
+        -----------
+        geom_file_path : str or Path
+            Path to the geometry file (.g##)
+        
+        Returns:
+        --------
+        pandas.DataFrame
+            DataFrame with Table Number, Land Cover Name, MainChannel value, and region name
+        """
+        import pandas as pd
+        from pathlib import Path
+        
+        # Convert to Path object if it's a string
+        if isinstance(geom_file_path, str):
+            geom_file_path = Path(geom_file_path)
+        
+        region_rows = []
+        current_region = None
+        current_table = None
+        
+        # Read the geometry file
+        with open(geom_file_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Parse the file
+        reading_region_table = False
+        for line in lines:
+            line = line.strip()
+            
+            # Find region name
+            if line.startswith('LCMann Region Name='):
+                current_region = line.split('=')[1]
+                continue
+                
+            # Find region table number
+            if line.startswith('LCMann Region Table='):
+                current_table = line.split('=')[1]
+                reading_region_table = True
+                continue
+            
+            # Stop reading when we hit a line without a comma or starting with LCMann
+            if reading_region_table and (not ',' in line or line.startswith('LCMann')):
+                reading_region_table = False
+                continue
+                
+            # Parse data rows in region table
+            if reading_region_table and ',' in line and current_region is not None:
+                # Check if there are multiple commas in the line
+                parts = line.split(',')
+                if len(parts) > 2:
+                    # Handle case where land cover name contains commas
+                    name = ','.join(parts[:-1])
+                    value = parts[-1]
+                else:
+                    name, value = parts
+                
+                try:
+                    region_rows.append([current_table, name, float(value), current_region])
+                except ValueError:
+                    # Log the error and continue
+                    print(f"Error parsing line: {line}")
+                    continue
+        
+        # Create DataFrame
+        if region_rows:
+            return pd.DataFrame(region_rows, columns=['Table Number', 'Land Cover Name', 'MainChannel', 'Region Name'])
+        else:
+            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'MainChannel', 'Region Name'])
+        
 
 
     @staticmethod
     @log_call
-    def set_mannings_override_tables(geom_file_path, mannings_df, ras_object=None):
+    def set_mannings_baseoverrides(geom_file_path, mannings_data):
         """
-        Updates Manning's override region tables in a HEC-RAS geometry file based on provided dataframe.
+        Writes base Manning's n values to a HEC-RAS geometry file.
         
-        This function takes a dataframe of Manning's values (similar to the one returned by
-        extract_mannings_override_tables) and updates the corresponding values in the geometry file.
-        If Region Name is specified in the dataframe, only updates that specific region.
-        If no Region Name is given for a row, it updates all instances of the Land Use Type
-        across all regions in the geometry file.
+        Parameters:
+        -----------
+        geom_file_path : str or Path
+            Path to the geometry file (.g##)
+        mannings_data : DataFrame
+            DataFrame with columns 'Table Number', 'Land Cover Name', and 'Base Manning\'s n Value'
         
-        Args:
-            geom_file_path (str or Path): Geometry file path or geometry number (e.g., "01").
-            mannings_df (pd.DataFrame): DataFrame containing Manning's override values with columns:
-                - Land Use Type: Land use type or description (required)
-                - Mannings N Value: Manning's n value for the land use type (required)
-                - Region Name: Name of the override region (optional)
-            ras_object (RasPrj, optional): RAS project object for context. Defaults to global 'ras'.
-                    
         Returns:
-            bool: True if successful, False otherwise.
-            
-        Raises:
-            FileNotFoundError: If the geometry file doesn't exist.
-            ValueError: If the geometry file number is invalid or required columns are missing.
-            
-        Example:
-            # Get existing Manning's tables
-            mannings_tables = RasGeo.extract_mannings_override_tables("01")
-            
-            # Update specific values
-            mannings_tables.loc[mannings_tables['Land Use Type'] == 'Open Water', 'Mannings N Value'] = 0.030
-            
-            # Update all forest types in all regions
-            forest_updates = pd.DataFrame({
-                'Land Use Type': ['Mixed Forest', 'Deciduous Forest', 'Evergreen Forest'],
-                'Mannings N Value': [0.040, 0.042, 0.045]
-            })
-            
-            # Apply the changes
-            RasGeo.set_mannings_override_tables("01", mannings_tables)
-            # Or apply just the forest updates to all regions
-            RasGeo.set_mannings_override_tables("01", forest_updates)
+        --------
+        bool
+            True if successful
         """
-        # Get the full path to the geometry file if a number was provided
-        if isinstance(geom_file_path, (str, int)) and not str(geom_file_path).endswith('.g'):
-            ras_obj = ras_object or ras
-            ras_obj.check_initialized()
-            geom_file_path = RasPlan.get_geom_path(str(geom_file_path), ras_object=ras_obj)
-            if geom_file_path is None:
-                raise ValueError(f"Geometry file number '{geom_file_path}' not found in project")
+        from pathlib import Path
+        import shutil
+        import pandas as pd
+        import datetime
         
-        geom_file_path = Path(geom_file_path)
-        if not geom_file_path.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file_path}")
+        # Convert to Path object if it's a string
+        if isinstance(geom_file_path, str):
+            geom_file_path = Path(geom_file_path)
         
-        # Verify required columns exist
-        required_columns = ['Land Use Type', 'Mannings N Value']
-        if not all(col in mannings_df.columns for col in required_columns):
-            raise ValueError(f"DataFrame must contain columns: {required_columns}")
-        
-        # Create a dictionary for easier lookups
-        update_dict = {}
-        for _, row in mannings_df.iterrows():
-            land_use = row['Land Use Type']
-            manning_value = row['Mannings N Value']
-            region_name = row.get('Region Name', None)  # Optional column
-            
-            if region_name:
-                if region_name not in update_dict:
-                    update_dict[region_name] = {}
-                update_dict[region_name][land_use] = manning_value
-            else:
-                # Special key for updates that apply to all regions
-                if 'ALL_REGIONS' not in update_dict:
-                    update_dict['ALL_REGIONS'] = {}
-                update_dict['ALL_REGIONS'][land_use] = manning_value
-        
-        logger.info(f"Updating Manning's n values in geometry file: {geom_file_path}")
+        # Create backup
+        backup_path = geom_file_path.with_suffix(geom_file_path.suffix + '.bak')
+        shutil.copy2(geom_file_path, backup_path)
         
         # Read the entire file
-        with open(geom_file_path, 'r') as file:
-            lines = file.readlines()
+        with open(geom_file_path, 'r') as f:
+            lines = f.readlines()
         
-        # Process the file line by line
-        modified_lines = []
-        current_region = None
-        in_table = False
-        table_start_index = -1
-        table_size = 0
+        # Find the Manning's table section
+        table_number = str(mannings_data['Table Number'].iloc[0])
+        start_idx = None
+        end_idx = None
         
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            modified_lines.append(line)  # Add line by default, may modify later
-            
-            if "LCMann Region Name=" in line:
-                current_region = line.split("=")[1].strip()
-                in_table = False
-            
-            elif "LCMann Region Table=" in line:
-                in_table = True
-                table_start_index = len(modified_lines)
-                try:
-                    table_size = int(line.split("=")[1].strip())
-                except ValueError:
-                    logger.warning(f"Invalid table size at line: {line}")
-                    table_size = 0
-            
-            elif in_table and table_size > 0:
-                # We're inside a Manning's table
-                land_use_entry = line.strip()
-                if "," in land_use_entry:
-                    parts = land_use_entry.rsplit(",", 1)
-                    if len(parts) == 2:
-                        land_use, _ = parts
-                        
-                        # Check if we should update this entry
-                        update_value = None
-                        
-                        # First check region-specific updates
-                        if current_region in update_dict and land_use in update_dict[current_region]:
-                            update_value = update_dict[current_region][land_use]
-                        
-                        # Then check global updates (ALL_REGIONS)
-                        elif 'ALL_REGIONS' in update_dict and land_use in update_dict['ALL_REGIONS']:
-                            update_value = update_dict['ALL_REGIONS'][land_use]
-                        
-                        if update_value is not None:
-                            # Replace the last entry in modified_lines with updated Manning's value
-                            modified_lines[-1] = f"{land_use},{update_value}\n"
-                            logger.debug(f"Updated '{land_use}' in region '{current_region}' to {update_value}")
-                
-                # Decrement counter for table entries
-                table_size -= 1
-                if table_size == 0:
-                    in_table = False
-            
-            i += 1
+        for i, line in enumerate(lines):
+            if line.strip() == f"LCMann Table={table_number}":
+                start_idx = i
+                # Find the end of this table (next LCMann directive or end of file)
+                for j in range(i+1, len(lines)):
+                    if lines[j].strip().startswith('LCMann'):
+                        end_idx = j
+                        break
+                if end_idx is None:  # If we reached the end of the file
+                    end_idx = len(lines)
+                break
         
-        # Write the file back
-        with open(geom_file_path, 'w') as file:
-            file.writelines(modified_lines)
+        if start_idx is None:
+            raise ValueError(f"Manning's table {table_number} not found in the geometry file")
         
-        logger.info(f"Successfully updated Manning's n values in geometry file: {geom_file_path}")
+        # Extract existing land cover names from the file
+        existing_landcover = []
+        for i in range(start_idx+1, end_idx):
+            line = lines[i].strip()
+            if ',' in line:
+                parts = line.split(',')
+                if len(parts) > 2:
+                    # Handle case where land cover name contains commas
+                    name = ','.join(parts[:-1])
+                else:
+                    name = parts[0]
+                existing_landcover.append(name)
+        
+        # Check if all land cover names in the dataframe match the file
+        df_landcover = mannings_data['Land Cover Name'].tolist()
+        if set(df_landcover) != set(existing_landcover):
+            missing = set(existing_landcover) - set(df_landcover)
+            extra = set(df_landcover) - set(existing_landcover)
+            error_msg = "Land cover names don't match between file and dataframe.\n"
+            if missing:
+                error_msg += f"Missing in dataframe: {missing}\n"
+            if extra:
+                error_msg += f"Extra in dataframe: {extra}"
+            raise ValueError(error_msg)
+        
+        # Create new content for the table
+        new_content = [f"LCMann Table={table_number}\n"]
+        
+        # Add base table entries
+        for _, row in mannings_data.iterrows():
+            new_content.append(f"{row['Land Cover Name']},{row['Base Manning\'s n Value']}\n")
+        
+        # Replace the section in the original file
+        updated_lines = lines[:start_idx] + new_content + lines[end_idx:]
+        
+        # Update the time stamp
+        current_time = datetime.datetime.now().strftime("%b/%d/%Y %H:%M:%S")
+        for i, line in enumerate(updated_lines):
+            if line.strip().startswith("LCMann Time="):
+                updated_lines[i] = f"LCMann Time={current_time}\n"
+                break
+        
+        # Write the updated file
+        with open(geom_file_path, 'w') as f:
+            f.writelines(updated_lines)
+        
         return True
 
 
 
 
+
+
+
+    @staticmethod
+    @log_call
+    def set_mannings_regionoverrides(geom_file_path, mannings_data):
+        """
+        Writes regional Manning's n overrides to a HEC-RAS geometry file.
+        
+        Parameters:
+        -----------
+        geom_file_path : str or Path
+            Path to the geometry file (.g##)
+        mannings_data : DataFrame
+            DataFrame with columns 'Table Number', 'Land Cover Name', 'MainChannel', and 'Region Name'
+        
+        Returns:
+        --------
+        bool
+            True if successful
+        """
+        from pathlib import Path
+        import shutil
+        import pandas as pd
+        import datetime
+        
+        # Convert to Path object if it's a string
+        if isinstance(geom_file_path, str):
+            geom_file_path = Path(geom_file_path)
+        
+        # Create backup
+        backup_path = geom_file_path.with_suffix(geom_file_path.suffix + '.bak')
+        shutil.copy2(geom_file_path, backup_path)
+        
+        # Read the entire file
+        with open(geom_file_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Group data by region
+        regions = mannings_data.groupby('Region Name')
+        
+        # Find the Manning's region sections
+        for region_name, region_data in regions:
+            table_number = str(region_data['Table Number'].iloc[0])
+            
+            # Find the region section
+            region_start_idx = None
+            region_table_idx = None
+            region_end_idx = None
+            region_polygon_line = None
+            
+            for i, line in enumerate(lines):
+                if line.strip() == f"LCMann Region Name={region_name}":
+                    region_start_idx = i
+                
+                if region_start_idx is not None and line.strip() == f"LCMann Region Table={table_number}":
+                    region_table_idx = i
+                    
+                    # Find the end of this region (next LCMann Region or end of file)
+                    for j in range(i+1, len(lines)):
+                        if lines[j].strip().startswith('LCMann Region Name=') or lines[j].strip().startswith('LCMann Region Polygon='):
+                            if lines[j].strip().startswith('LCMann Region Polygon='):
+                                region_polygon_line = lines[j]
+                            region_end_idx = j
+                            break
+                    if region_end_idx is None:  # If we reached the end of the file
+                        region_end_idx = len(lines)
+                    break
+            
+            if region_start_idx is None or region_table_idx is None:
+                raise ValueError(f"Region {region_name} with table {table_number} not found in the geometry file")
+            
+            # Extract existing land cover names from the file
+            existing_landcover = []
+            for i in range(region_table_idx+1, region_end_idx):
+                line = lines[i].strip()
+                if ',' in line and not line.startswith('LCMann'):
+                    parts = line.split(',')
+                    if len(parts) > 2:
+                        # Handle case where land cover name contains commas
+                        name = ','.join(parts[:-1])
+                    else:
+                        name = parts[0]
+                    existing_landcover.append(name)
+            
+            # Check if all land cover names in the dataframe match the file
+            df_landcover = region_data['Land Cover Name'].tolist()
+            if set(df_landcover) != set(existing_landcover):
+                missing = set(existing_landcover) - set(df_landcover)
+                extra = set(df_landcover) - set(existing_landcover)
+                error_msg = f"Land cover names for region {region_name} don't match between file and dataframe.\n"
+                if missing:
+                    error_msg += f"Missing in dataframe: {missing}\n"
+                if extra:
+                    error_msg += f"Extra in dataframe: {extra}"
+                raise ValueError(error_msg)
+            
+            # Create new content for the region
+            new_content = [
+                f"LCMann Region Name={region_name}\n",
+                f"LCMann Region Table={table_number}\n"
+            ]
+            
+            # Add region table entries
+            for _, row in region_data.iterrows():
+                new_content.append(f"{row['Land Cover Name']},{row['MainChannel']}\n")
+            
+            # Add the region polygon line if it exists
+            if region_polygon_line:
+                new_content.append(region_polygon_line)
+            
+            # Replace the section in the original file
+            if region_polygon_line:
+                # If we have a polygon line, include it in the replacement
+                updated_lines = lines[:region_start_idx] + new_content + lines[region_end_idx+1:]
+            else:
+                # If no polygon line, just replace up to the end index
+                updated_lines = lines[:region_start_idx] + new_content + lines[region_end_idx:]
+            
+            # Update the lines for the next region
+            lines = updated_lines
+        
+        # Update the time stamp
+        current_time = datetime.datetime.now().strftime("%b/%d/%Y %H:%M:%S")
+        for i, line in enumerate(lines):
+            if line.strip().startswith("LCMann Region Time="):
+                lines[i] = f"LCMann Region Time={current_time}\n"
+                break
+        
+        # Write the updated file
+        with open(geom_file_path, 'w') as f:
+            f.writelines(lines)
+        
+        return True

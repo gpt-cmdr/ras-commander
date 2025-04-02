@@ -137,13 +137,14 @@ class RasPrj:
             2. Loading project data (plans, geometries, flows)
             3. Extracting boundary conditions
             4. Setting the initialization flag
+            5. Loading RASMapper data (.rasmap)
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
         self.prj_file = self.find_ras_prj(self.project_folder)
         if self.prj_file is None:
             logger.error(f"No HEC-RAS project file found in {self.project_folder}")
-            raise ValueError(f"No HEC-RAS project file found in {self.project_folder}")
+            raise ValueError(f"No HEC-RAS project file found in {self.project_folder}. Please check the path and try again.")
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
         
@@ -153,6 +154,22 @@ class RasPrj:
         # Now load the project data
         self._load_project_data()
         self.boundaries_df = self.get_boundary_conditions()
+        
+        # Load RASMapper data if available
+        try:
+            # Import here to avoid circular imports
+            from .RasMap import RasMap
+            self.rasmap_df = RasMap.initialize_rasmap_df(self)
+        except ImportError:
+            logger.warning("RasMap module not available. RASMapper data will not be loaded.")
+            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
+                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
+                                                'current_settings'])
+        except Exception as e:
+            logger.error(f"Error initializing RASMapper data: {e}")
+            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
+                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
+                                                'current_settings'])
 
         if not suppress_logging:
             logger.info(f"Initialization complete for project: {self.project_name}")
@@ -160,6 +177,7 @@ class RasPrj:
                          f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
                          f"Boundary conditions: {len(self.boundaries_df)}")
             logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
+            logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
 
     @log_call
     def _load_project_data(self):
