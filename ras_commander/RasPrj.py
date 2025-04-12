@@ -1324,7 +1324,8 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         
         # Look for .pXX files in project folder
         logger.info(f"Searching for plan files in {project_folder}")
-        plan_files = list(project_folder.glob(f"{project_folder.stem}.p[0-9][0-9]"))
+        # Search for any file with .p01 through .p99 extension, regardless of base name
+        plan_files = list(project_folder.glob("*.p[0-9][0-9]"))
         
         if not plan_files:
             logger.info(f"No plan files found in {project_folder}")
@@ -1344,6 +1345,10 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
                 if line.startswith("Program Version="):
                     version = line.split("=")[1].strip()
                     logger.info(f"Found Program Version={version} in {plan_file.name}")
+                    
+                    # Replace 00 in version string if present
+                    if "00" in version:
+                        version = version.replace("00", "0")
                     
                     # Try to get RAS executable for this version
                     test_exe_path = get_ras_exe(version)
