@@ -750,3 +750,248 @@ class HdfResultsMesh:
             raise ValueError(f"Dataset not found at path '{output_path}'")
         return output_item
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_boundary_conditions_timeseries(hdf_path: Path) -> xr.Dataset:
+        """
+        Get timeseries output for all boundary conditions as a single combined xarray Dataset.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+
+        Returns:
+            xr.Dataset: Dataset containing all boundary condition data with:
+                - Dimensions: time, bc_name (boundary condition name), face_id
+                - Variables: stage, flow, flow_per_face, stage_per_face
+                - Coordinates and attributes preserving original metadata
+
+        Example:
+            >>> bc_data = HdfResultsMesh.get_boundary_conditions_timeseries_combined(hdf_path)
+            >>> print(bc_data)
+            >>> # Plot flow for all boundary conditions
+            >>> bc_data.flow.plot(x='time', hue='bc_name')
+            >>> # Extract data for a specific boundary condition
+            >>> upstream_data = bc_data.sel(bc_name='Upstream Inflow')
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Get the base path and check if boundary conditions exist
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+                bc_base_path = f"{base_path}/Boundary Conditions"
+                
+                if bc_base_path not in hdf_file:
+                    logger.warning(f"No boundary conditions found in HDF file")
+                    return xr.Dataset()
+                
+                # Get timestamps
+                start_time = HdfBase.get_simulation_start_time(hdf_file)
+                time_data = hdf_file[f"{base_path}/Time"][:]
+                timestamps = HdfUtils.convert_timesteps_to_datetimes(time_data, start_time)
+                
+                # Get all boundary condition names (excluding those with " - Flow per Face" or " - Stage per Face" suffix)
+                bc_names = [name for name in hdf_file[bc_base_path].keys() 
+                        if " - Flow per Face" not in name and " - Stage per Face" not in name]
+                
+                if not bc_names:
+                    logger.warning(f"No boundary conditions found in HDF file")
+                    return xr.Dataset()
+                
+                # Initialize arrays for main stage and flow data
+                num_timesteps = len(timestamps)
+                num_bcs = len(bc_names)
+                
+                stage_data = np.full((num_timesteps, num_bcs), np.nan)
+                flow_data = np.full((num_timesteps, num_bcs), np.nan)
+                
+                # Dictionary to store face-specific data
+                face_data = {
+                    'flow_per_face': {},
+                    'stage_per_face': {}
+                }
+                
+                # Extract metadata from all boundary conditions
+                bc_metadata = {}
+                
+                # Process each boundary condition
+                for bc_idx, bc_name in enumerate(bc_names):
+                    bc_path = f"{bc_base_path}/{bc_name}"
+                    
+                    try:
+                        # Extract main boundary data
+                        bc_data = hdf_file[bc_path][:]
+                        bc_attrs = dict(hdf_file[bc_path].attrs)
+                        
+                        # Store metadata
+                        bc_metadata[bc_name] = {
+                            k: v.decode('utf-8') if isinstance(v, bytes) else v 
+                            for k, v in bc_attrs.items()
+                        }
+                        
+                        # Get column indices for Stage and Flow
+                        if 'Columns' in bc_attrs:
+                            columns = [col.decode('utf-8') if isinstance(col, bytes) else col 
+                                    for col in bc_attrs['Columns']]
+                            
+                            stage_idx = columns.index('Stage') if 'Stage' in columns else None
+                            flow_idx = columns.index('Flow') if 'Flow' in columns else None
+                            
+                            if stage_idx is not None:
+                                stage_data[:, bc_idx] = bc_data[:, stage_idx]
+                            if flow_idx is not None:
+                                flow_data[:, bc_idx] = bc_data[:, flow_idx]
+                        
+                        # Extract Flow per Face data
+                        flow_face_path = f"{bc_path} - Flow per Face"
+                        if flow_face_path in hdf_file:
+                            flow_face_data = hdf_file[flow_face_path][:]
+                            flow_face_attrs = dict(hdf_file[flow_face_path].attrs)
+                            
+                            # Get face IDs
+                            face_ids = flow_face_attrs.get('Faces', [])
+                            if isinstance(face_ids, np.ndarray):
+                                face_ids = face_ids.tolist()
+                            else:
+                                face_ids = list(range(flow_face_data.shape[1]))
+                            
+                            face_data['flow_per_face'][bc_name] = {
+                                'data': flow_face_data,
+                                'faces': face_ids,
+                                'attrs': {
+                                    k: v.decode('utf-8') if isinstance(v, bytes) else v 
+                                    for k, v in flow_face_attrs.items()
+                                }
+                            }
+                        
+                        # Extract Stage per Face data
+                        stage_face_path = f"{bc_path} - Stage per Face"
+                        if stage_face_path in hdf_file:
+                            stage_face_data = hdf_file[stage_face_path][:]
+                            stage_face_attrs = dict(hdf_file[stage_face_path].attrs)
+                            
+                            # Get face IDs
+                            face_ids = stage_face_attrs.get('Faces', [])
+                            if isinstance(face_ids, np.ndarray):
+                                face_ids = face_ids.tolist()
+                            else:
+                                face_ids = list(range(stage_face_data.shape[1]))
+                            
+                            face_data['stage_per_face'][bc_name] = {
+                                'data': stage_face_data,
+                                'faces': face_ids,
+                                'attrs': {
+                                    k: v.decode('utf-8') if isinstance(v, bytes) else v 
+                                    for k, v in stage_face_attrs.items()
+                                }
+                            }
+                    
+                    except Exception as e:
+                        logger.warning(f"Error processing boundary condition '{bc_name}': {str(e)}")
+                        continue
+                
+                # Create base dataset with stage and flow data
+                ds = xr.Dataset(
+                    data_vars={
+                        'stage': xr.DataArray(
+                            stage_data,
+                            dims=['time', 'bc_name'],
+                            coords={
+                                'time': timestamps,
+                                'bc_name': bc_names
+                            },
+                            attrs={'description': 'Water surface elevation at boundary condition'}
+                        ),
+                        'flow': xr.DataArray(
+                            flow_data,
+                            dims=['time', 'bc_name'],
+                            coords={
+                                'time': timestamps,
+                                'bc_name': bc_names
+                            },
+                            attrs={'description': 'Flow at boundary condition'}
+                        )
+                    },
+                    attrs={
+                        'source': 'HEC-RAS HDF Boundary Conditions',
+                        'start_time': start_time
+                    }
+                )
+                
+                # Add metadata as coordinates
+                for key in bc_metadata[bc_names[0]]:
+                    if key != 'Columns':  # Skip Columns attribute as it's used for Stage/Flow
+                        try:
+                            values = [bc_metadata[bc].get(key, '') for bc in bc_names]
+                            ds = ds.assign_coords({f'{key.lower()}': ('bc_name', values)})
+                        except Exception as e:
+                            logger.debug(f"Could not add metadata coordinate '{key}': {str(e)}")
+                
+                # Add face-specific data variables if available
+                if face_data['flow_per_face']:
+                    # First determine the maximum number of faces across all BCs
+                    all_flow_faces = set()
+                    for bc_name in face_data['flow_per_face']:
+                        all_flow_faces.update(face_data['flow_per_face'][bc_name]['faces'])
+                    
+                    # Create a merged array with NaN values for missing faces
+                    all_flow_faces = sorted(list(all_flow_faces))
+                    flow_face_data = np.full((num_timesteps, num_bcs, len(all_flow_faces)), np.nan)
+                    
+                    # Fill in the data where available
+                    for bc_idx, bc_name in enumerate(bc_names):
+                        if bc_name in face_data['flow_per_face']:
+                            bc_faces = face_data['flow_per_face'][bc_name]['faces']
+                            bc_data = face_data['flow_per_face'][bc_name]['data']
+                            
+                            for face_idx, face_id in enumerate(bc_faces):
+                                if face_id in all_flow_faces:
+                                    target_idx = all_flow_faces.index(face_id)
+                                    flow_face_data[:, bc_idx, target_idx] = bc_data[:, face_idx]
+                    
+                    # Add to the dataset
+                    ds['flow_per_face'] = xr.DataArray(
+                        flow_face_data,
+                        dims=['time', 'bc_name', 'face_id'],
+                        coords={
+                            'time': timestamps,
+                            'bc_name': bc_names,
+                            'face_id': all_flow_faces
+                        },
+                        attrs={'description': 'Flow per face at boundary condition'}
+                    )
+                
+                # Similar approach for stage per face
+                if face_data['stage_per_face']:
+                    all_stage_faces = set()
+                    for bc_name in face_data['stage_per_face']:
+                        all_stage_faces.update(face_data['stage_per_face'][bc_name]['faces'])
+                    
+                    all_stage_faces = sorted(list(all_stage_faces))
+                    stage_face_data = np.full((num_timesteps, num_bcs, len(all_stage_faces)), np.nan)
+                    
+                    for bc_idx, bc_name in enumerate(bc_names):
+                        if bc_name in face_data['stage_per_face']:
+                            bc_faces = face_data['stage_per_face'][bc_name]['faces']
+                            bc_data = face_data['stage_per_face'][bc_name]['data']
+                            
+                            for face_idx, face_id in enumerate(bc_faces):
+                                if face_id in all_stage_faces:
+                                    target_idx = all_stage_faces.index(face_id)
+                                    stage_face_data[:, bc_idx, target_idx] = bc_data[:, face_idx]
+                    
+                    ds['stage_per_face'] = xr.DataArray(
+                        stage_face_data,
+                        dims=['time', 'bc_name', 'face_id'],
+                        coords={
+                            'time': timestamps,
+                            'bc_name': bc_names,
+                            'face_id': all_stage_faces
+                        },
+                        attrs={'description': 'Water surface elevation per face at boundary condition'}
+                    )
+                
+                return ds
+                
+        except Exception as e:
+            logger.error(f"Error getting all boundary conditions timeseries: {str(e)}")
+            return xr.Dataset()

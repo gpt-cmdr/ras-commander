@@ -110,13 +110,17 @@ def standardize_input(file_type: str = 'plan_hdf'):
                     except Exception as e:
                         raise ValueError(f"RAS object is not initialized: {str(e)}")
                         
+                    # Extract the number part and strip leading zeros
                     number_str = hdf_input if hdf_input.isdigit() else hdf_input[1:]
-                    number_int = int(number_str)
+                    stripped_number = number_str.lstrip('0')
+                    if stripped_number == '':  # Handle case where input was '0' or '00'
+                        stripped_number = '0'
+                    number_int = int(stripped_number)
                     
                     if file_type == 'plan_hdf':
                         try:
-                            # Convert plan_number column to integers for comparison
-                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            # Convert plan_number column to integers for comparison after stripping zeros
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].str.lstrip('0').astype(int) == number_int]
                             if not plan_info.empty:
                                 # Make sure HDF_Results_Path is a string and not None
                                 hdf_path_str = plan_info.iloc[0]['HDF_Results_Path']
@@ -128,12 +132,35 @@ def standardize_input(file_type: str = 'plan_hdf'):
 
                     elif file_type == 'geom_hdf':
                         try:
-                            # Convert geometry_number column to integers for comparison
-                            geom_info = ras_obj.plan_df[ras_obj.plan_df['geometry_number'].astype(int) == number_int]
-                            if not geom_info.empty:
-                                hdf_path_str = ras_obj.geom_df.iloc[0]['hdf_path'] 
-                                if pd.notna(hdf_path_str):
-                                    hdf_path = Path(str(hdf_path_str))
+                            # First try to get the geometry number from the plan
+                            from ras_commander import RasPlan
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Extract the geometry number from the plan
+                                geom_number = plan_info.iloc[0]['geometry_number']
+                                if pd.notna(geom_number) and geom_number is not None:
+                                    # Handle different types of geom_number (string or int)
+                                    try:
+                                        # Get the geometry path using RasPlan
+                                        geom_path = RasPlan.get_geom_path(str(geom_number), ras_obj)
+                                        
+                                        if geom_path is not None:
+                                            # Create the HDF path by adding .hdf to the geometry path
+                                            hdf_path = Path(str(geom_path) + ".hdf")
+                                            if hdf_path.exists():
+                                                logger.info(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
+                                            else:
+                                                # Try to find it in the geom_df if direct path doesn't exist
+                                                geom_info = ras_obj.geom_df[ras_obj.geom_df['full_path'] == str(geom_path)]
+                                                if not geom_info.empty and 'hdf_path' in geom_info.columns:
+                                                    hdf_path_str = geom_info.iloc[0]['hdf_path']
+                                                    if pd.notna(hdf_path_str):
+                                                        hdf_path = Path(str(hdf_path_str))
+                                                        logger.info(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
+                                    except (TypeError, ValueError) as e:
+                                        logger.warning(f"Error processing geometry number {geom_number}: {str(e)}")
+                                else:
+                                    logger.warning(f"No valid geometry number found for plan {number_int}")
                         except Exception as e:
                             logger.warning(f"Error retrieving geometry HDF path: {str(e)}")
                     else:
@@ -153,8 +180,8 @@ def standardize_input(file_type: str = 'plan_hdf'):
                     
                     if file_type == 'plan_hdf':
                         try:
-                            # Convert plan_number column to integers for comparison
-                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            # Convert plan_number column to integers for comparison after stripping zeros
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].str.lstrip('0').astype(int) == number_int]
                             if not plan_info.empty:
                                 # Make sure HDF_Results_Path is a string and not None
                                 hdf_path_str = plan_info.iloc[0]['HDF_Results_Path']
@@ -162,14 +189,38 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                     hdf_path = Path(str(hdf_path_str))
                         except Exception as e:
                             logger.warning(f"Error retrieving plan HDF path: {str(e)}")
+                            
                     elif file_type == 'geom_hdf':
                         try:
-                            # Convert geometry_number column to integers for comparison
-                            geom_info = ras_obj.plan_df[ras_obj.plan_df['geometry_number'].astype(int) == number_int]
-                            if not geom_info.empty:
-                                hdf_path_str = ras_obj.geom_df.iloc[0]['hdf_path'] 
-                                if pd.notna(hdf_path_str):
-                                    hdf_path = Path(str(hdf_path_str))
+                            # First try finding plan info to get geometry number
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Extract the geometry number from the plan
+                                geom_number = plan_info.iloc[0]['geometry_number']
+                                if pd.notna(geom_number) and geom_number is not None:
+                                    # Handle different types of geom_number (string or int)
+                                    try:
+                                        # Get the geometry path using RasPlan
+                                        from ras_commander import RasPlan
+                                        geom_path = RasPlan.get_geom_path(str(geom_number), ras_obj)
+                                        
+                                        if geom_path is not None:
+                                            # Create the HDF path by adding .hdf to the geometry path
+                                            hdf_path = Path(str(geom_path) + ".hdf")
+                                            if hdf_path.exists():
+                                                logger.info(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
+                                            else:
+                                                # Try to find it in the geom_df if direct path doesn't exist
+                                                geom_info = ras_obj.geom_df[ras_obj.geom_df['full_path'] == str(geom_path)]
+                                                if not geom_info.empty and 'hdf_path' in geom_info.columns:
+                                                    hdf_path_str = geom_info.iloc[0]['hdf_path']
+                                                    if pd.notna(hdf_path_str):
+                                                        hdf_path = Path(str(hdf_path_str))
+                                                        logger.info(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
+                                    except (TypeError, ValueError) as e:
+                                        logger.warning(f"Error processing geometry number {geom_number}: {str(e)}")
+                                else:
+                                    logger.warning(f"No valid geometry number found for plan {number_int}")
                         except Exception as e:
                             logger.warning(f"Error retrieving geometry HDF path: {str(e)}")
                     else:

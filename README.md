@@ -52,6 +52,25 @@ HDF Data Access & Analysis
 - Pipe network and pump station analysis
 - Fluvial-pluvial boundary calculations
 - Infiltration and precipitation data handling
+- Infiltration and soil data handling
+- Land cover and terrain data integration
+- Weighted parameter calculations for hydrologic modeling
+
+RASMapper Data Integration
+- RASMapper configuration parsing (.rasmap files)
+- Terrain, soil, and land cover HDF paths
+- Profile line paths
+
+Manning's n Coefficient Management
+- Base Manning's n table extraction and modification
+- Regional overrides for spatially-varied roughness
+- Direct editing of geometry file Manning values
+
+Infiltration & Soil Analysis
+- Soil statistics calculation and analysis
+- Infiltration parameter management and scaling
+- Weighted average parameter calculation
+- Raster-based soil data processing
 
 RAS ASCII File Operations
 - Plan file creation and modification
@@ -233,6 +252,7 @@ This is useful for comparing different river systems, running scenario analyses 
 - `RasGeo`: Handles operations related to geometry files
 - `RasUnsteady`: Manages unsteady flow file operations
 - `RasUtils`: Contains utility functions for file operations and data management
+- `RasMap`: Parses and manages RASMapper configuration data
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
 #### HDF Data Access Classes
@@ -247,7 +267,6 @@ This is useful for comparing different river systems, running scenario analyses 
 - `HdfPipe`: Pipe network analysis tools
 - `HdfPump`: Pump station analysis capabilities
 - `HdfFluvialPluvial`: Fluvial-pluvial boundary analysis
-- `RasMapper`: RASMapper Functions
 - `HdfPlot` & `HdfResultsPlot`: Specialized plotting utilities
 
 ### Project Organization Diagram

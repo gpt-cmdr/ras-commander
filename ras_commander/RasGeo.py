@@ -134,6 +134,7 @@ class RasGeo:
             logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise
 
+    @staticmethod
     @log_call
     def get_mannings_baseoverrides(geom_file_path):
         """
@@ -148,6 +149,12 @@ class RasGeo:
         --------
         pandas.DataFrame
             DataFrame with Table Number, Land Cover Name, and Base Manning's n Value
+            
+        Example:
+        --------
+        >>> geom_path = RasPlan.get_geom_path("01")
+        >>> mannings_df = RasGeo.get_mannings_baseoverrides(geom_path)
+        >>> print(mannings_df)
         """
         import pandas as pd
         from pathlib import Path
@@ -205,6 +212,7 @@ class RasGeo:
             return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
 
 
+    @staticmethod
     @log_call
     def get_mannings_regionoverrides(geom_file_path):
         """
@@ -218,7 +226,13 @@ class RasGeo:
         Returns:
         --------
         pandas.DataFrame
-            DataFrame with Table Number, Land Cover Name, MainChannel value, and region name
+            DataFrame with Table Number, Land Cover Name, MainChannel value, and Region Name
+            
+        Example:
+        --------
+        >>> geom_path = RasPlan.get_geom_path("01")
+        >>> region_overrides_df = RasGeo.get_mannings_regionoverrides(geom_path)
+        >>> print(region_overrides_df)
         """
         import pandas as pd
         from pathlib import Path

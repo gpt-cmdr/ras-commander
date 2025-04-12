@@ -1274,7 +1274,7 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         ras_project_folder (str or Path): The path to the RAS project folder.
         ras_version (str, optional): The version of RAS to use (e.g., "6.6").
                                     Can also be a full path to the Ras.exe file.
-                                    If None, will attempt to use a default path.
+                                    If None, will attempt to detect from plan files.
         ras_object (RasPrj, optional): If None, updates the global 'ras' object.
                                        If a RasPrj instance, updates that instance.
                                        If any other value, creates and returns a new RasPrj instance.
@@ -1295,31 +1295,86 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
     """
-    if not Path(ras_project_folder).exists():
-        logger.error(f"The specified RAS project folder does not exist: {ras_project_folder}")
-        raise FileNotFoundError(f"The specified RAS project folder does not exist: {ras_project_folder}. Please check the path and try again.")
-
-    ras_exe_path = get_ras_exe(ras_version)
+    project_folder = Path(ras_project_folder)
+    if not project_folder.exists():
+        logger.error(f"The specified RAS project folder does not exist: {project_folder}")
+        raise FileNotFoundError(f"The specified RAS project folder does not exist: {project_folder}. Please check the path and try again.")
 
     # Determine which RasPrj instance to use
     if ras_object is None:
         # Use the global 'ras' object
-        logger.info("Initializing global 'ras' object via init_ras_project function.")
+        logger.debug("Initializing global 'ras' object via init_ras_project function.")
         ras_object = ras
     elif not isinstance(ras_object, RasPrj):
         # Create a new RasPrj instance
-        logger.info("Creating a new RasPrj instance.")
+        logger.debug("Creating a new RasPrj instance.")
         ras_object = RasPrj()
-
-    # Initialize the RasPrj instance
-    ras_object.initialize(ras_project_folder, ras_exe_path)
+    
+    ras_exe_path = None
+    
+    # Use version specified by user if provided
+    if ras_version is not None:
+        ras_exe_path = get_ras_exe(ras_version)
+        if ras_exe_path == "Ras.exe" and ras_version != "Ras.exe":
+            logger.warning(f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail.")
+    else:
+        # No version specified, try to detect from plan files
+        detected_version = None
+        logger.info("No HEC-RAS Version Specified.Attempting to detect HEC-RAS version from plan files.")
+        
+        # Look for .pXX files in project folder
+        logger.info(f"Searching for plan files in {project_folder}")
+        plan_files = list(project_folder.glob(f"{project_folder.stem}.p[0-9][0-9]"))
+        
+        if not plan_files:
+            logger.info(f"No plan files found in {project_folder}")
+        
+        for plan_file in plan_files:
+            logger.info(f"Found plan file: {plan_file.name}")
+            content, encoding = read_file_with_fallback_encoding(plan_file)
+            
+            if not content:
+                logger.info(f"Could not read content from {plan_file.name}")
+                continue
+                
+            logger.info(f"Successfully read plan file with {encoding} encoding")
+            
+            # Look for Program Version in plan file
+            for line in content.splitlines():
+                if line.startswith("Program Version="):
+                    version = line.split("=")[1].strip()
+                    logger.info(f"Found Program Version={version} in {plan_file.name}")
+                    
+                    # Try to get RAS executable for this version
+                    test_exe_path = get_ras_exe(version)
+                    logger.info(f"Checking RAS executable path: {test_exe_path}")
+                    
+                    if test_exe_path != "Ras.exe":
+                        detected_version = version
+                        ras_exe_path = test_exe_path
+                        logger.debug(f"Found valid HEC-RAS version {version} in plan file {plan_file.name}")
+                        break
+                    else:
+                        logger.info(f"Version {version} not found in default installation path")
+            
+            if detected_version:
+                break
+        
+        if not detected_version:
+            logger.error("No valid HEC-RAS version found in any plan files.")
+            ras_exe_path = "Ras.exe"
+            logger.warning("No valid HEC-RAS version was detected. Running HEC-RAS will fail.")
+    
+    # Initialize or re-initialize with the determined executable path
+    ras_object.initialize(project_folder, ras_exe_path)
     
     # Always update the global ras object as well
     if ras_object is not ras:
-        ras.initialize(ras_project_folder, ras_exe_path)
-        logger.info("Global 'ras' object also updated to match the new project.")
+        ras.initialize(project_folder, ras_exe_path)
+        logger.debug("Global 'ras' object also updated to match the new project.")
     
-    logger.info(f"Project initialized. ras_object project folder: {ras_object.project_folder}")
+    logger.debug(f"Project initialized. Project folder: {ras_object.project_folder}")
+    logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")
     return ras_object
 
 @log_call
@@ -1331,36 +1386,29 @@ def get_ras_exe(ras_version=None):
     1. If ras_version is a valid file path to an .exe file, use that path
     2. If ras_version is a known version number, use default installation path
     3. If global 'ras' object has ras_exe_path, use that
-    4. As a fallback, return a default path (which may not exist)
+    4. As a fallback, return "Ras.exe" but log an error
     
     Args:
         ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
     
     Returns:
-        str: The full path to the HEC-RAS executable.
+        str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
     
     Note:
         - HEC-RAS version numbers include: "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
-        - Returns a default path ("Ras.exe") if no valid path is found
-        - This allows the library to function even without HEC-RAS installed
-        
-    Example:
-        >>> # Get path for specific version
-        >>> ras_path = get_ras_exe("6.6")
-        >>> print(f"HEC-RAS 6.6 executable: {ras_path}")
-        >>>
-        >>> # Provide direct path to executable
-        >>> custom_path = get_ras_exe("C:/My_Programs/HEC-RAS/Ras.exe")
+        - Returns "Ras.exe" if no valid path is found, with error logged
+        - Allows the library to function even without HEC-RAS installed
     """
     if ras_version is None:
         if hasattr(ras, 'ras_exe_path') and ras.ras_exe_path:
             logger.debug(f"Using HEC-RAS executable from global 'ras' object: {ras.ras_exe_path}")
             return ras.ras_exe_path
         else:
-            default_path = Path("Ras.exe")
-            logger.warning(f"No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path. Using default path: {default_path}. The RAS Commander (ras-commander) Library Assistant can ignore this error since it does not have HEC-RAS installed.")
-            return str(default_path)
+            default_path = "Ras.exe"
+            logger.debug(f"No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
+            logger.warning(f"HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
+            return default_path
     
     ras_version_numbers = [
         "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
@@ -1368,32 +1416,54 @@ def get_ras_exe(ras_version=None):
         "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
     ]
     
+    # Check if input is a direct path to an executable
     hecras_path = Path(ras_version)
-    
     if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
         logger.debug(f"HEC-RAS executable found at specified path: {hecras_path}")
         return str(hecras_path)
     
-    if ras_version in ras_version_numbers:
+    # Check known version numbers
+    if str(ras_version) in ras_version_numbers:
         default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
         if default_path.is_file():
             logger.debug(f"HEC-RAS executable found at default path: {default_path}")
             return str(default_path)
         else:
-            logger.critical(f"HEC-RAS executable not found at the expected path: {default_path}")
+            error_msg = f"HEC-RAS Version {ras_version} is not found at expected path. Running HEC-RAS will fail unless a valid installed version is specified."
+            logger.error(error_msg)
+            return "Ras.exe"
     
+    # Try to handle other version formats (e.g., just the number without dots)
     try:
-        version_float = float(ras_version)
-        if version_float > max(float(v) for v in ras_version_numbers):
-            newer_version_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
-            if newer_version_path.is_file():
-                logger.debug(f"Newer version of HEC-RAS executable found at: {newer_version_path}")
-                return str(newer_version_path)
-            else:
-                logger.critical("Newer version of HEC-RAS was specified, but the executable was not found.")
-    except ValueError:
-        pass
+        # First check if it's a direct version number
+        version_str = str(ras_version)
+        
+        # Check for paths like "C:/Path/To/Ras.exe"
+        if os.path.sep in version_str and version_str.lower().endswith('.exe'):
+            exe_path = Path(version_str)
+            if exe_path.is_file():
+                logger.debug(f"HEC-RAS executable found at specified path: {exe_path}")
+                return str(exe_path)
+        
+        # Try to find a matching version from our list
+        for known_version in ras_version_numbers:
+            if version_str in known_version or known_version.replace('.', '') == version_str:
+                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{known_version}/Ras.exe")
+                if default_path.is_file():
+                    logger.debug(f"HEC-RAS executable found at default path: {default_path}")
+                    return str(default_path)
+        
+        # Check if it's a newer version
+        if '.' in version_str:
+            major_version = int(version_str.split('.')[0])
+            if major_version >= 6:
+                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
+                if default_path.is_file():
+                    logger.debug(f"HEC-RAS executable found at path for newer version: {default_path}")
+                    return str(default_path)
+    except Exception as e:
+        logger.error(f"Error parsing version or finding path: {e}")
     
-    logger.error(f"Invalid HEC-RAS version or path: {ras_version}, returning default path: {default_path}")
-    return str(default_path)
-    
+    error_msg = f"HEC-RAS Version {ras_version} is not recognized or installed. Running HEC-RAS will fail unless a valid installed version is specified."
+    logger.error(error_msg)
+    return "Ras.exe"

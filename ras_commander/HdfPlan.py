@@ -280,17 +280,18 @@ class HdfPlan:
         Raises:
             ValueError: If Geometry group is missing or there's an error reading attributes.
         """
-        print(f"Getting geometry attributes from {hdf_path}")
+        logger.info(f"Getting geometry attributes from {hdf_path}")
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 geom_attrs_path = "Geometry"
-                print(f"Checking for Geometry group in {hdf_path}")
+                logger.info(f"Checking for Geometry group in {hdf_path}")
                 if geom_attrs_path not in hdf_file:
+                    logger.error(f"Geometry group not found in {hdf_path}")
                     raise ValueError(f"Geometry group not found in {hdf_path}")
 
                 attrs = {}
                 geom_group = hdf_file[geom_attrs_path]
-                print("Getting root level geometry attributes")
+                logger.info("Getting root level geometry attributes")
                 # Get root level geometry attributes only
                 for key, value in geom_group.attrs.items():
                     if isinstance(value, bytes):
@@ -300,13 +301,16 @@ class HdfPlan:
                             logger.warning(f"Failed to decode byte string for root attribute {key}")
                             continue
                     attrs[key] = value
+                    logger.debug(f"Geometry attribute: {key} = {value}")
 
-                print("Successfully extracted root level geometry attributes")
+                logger.info(f"Successfully extracted {len(attrs)} root level geometry attributes")
                 return pd.DataFrame.from_dict(attrs, orient='index', columns=['Value'])
 
         except (OSError, RuntimeError) as e:
+            logger.error(f"Failed to read HDF file {hdf_path}: {str(e)}")
             raise ValueError(f"Failed to read HDF file {hdf_path}: {str(e)}")
         except Exception as e:
+            logger.error(f"Failed to get geometry attributes: {str(e)}")
             raise ValueError(f"Failed to get geometry attributes: {str(e)}")
 
 

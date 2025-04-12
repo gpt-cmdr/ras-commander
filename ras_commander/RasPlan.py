@@ -579,12 +579,12 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_geom_path(geom_number: str, ras_object=None) -> Optional[str]:
+    def get_geom_path(geom_number: Union[str, int], ras_object=None) -> Optional[str]:
         """
         Return the full path for a given geometry number.
 
         Args:
-        geom_number (str): The geometry number to search for.
+        geom_number (Union[str, int]): The geometry number to search for.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
@@ -601,17 +601,51 @@ class RasPlan:
         ... else:
         ...     print("Geometry file not found.")
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
+        logger = get_logger(__name__)
         
-        # Use updated geom dataframe
-        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
-        
-        geom_path = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == geom_number]
-        if not geom_path.empty:
-            full_path = geom_path['full_path'].iloc[0]
-            return full_path
-        else:
+        if geom_number is None:
+            logger.warning("Provided geometry number is None")
+            return None
+            
+        try:
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            
+            # Ensure geom_number is a string with proper formatting
+            if isinstance(geom_number, int):
+                geom_number = f"{geom_number:02d}"
+            elif isinstance(geom_number, str):
+                # Strip any leading zeros and reformat
+                stripped = geom_number.lstrip('0')
+                if not stripped:  # Handle case where input was '0' or '00'
+                    geom_number = '00'
+                else:
+                    geom_number = f"{int(stripped):02d}"
+            else:
+                # Handle unexpected types
+                logger.warning(f"Unexpected type for geom_number: {type(geom_number)}")
+                return None
+            
+            # Use updated geom dataframe
+            ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
+            
+            # Find the geometry file path
+            geom_path = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == geom_number]
+            if not geom_path.empty:
+                if 'full_path' in geom_path.columns and pd.notna(geom_path['full_path'].iloc[0]):
+                    full_path = geom_path['full_path'].iloc[0]
+                    logger.info(f"Found geometry path: {full_path}")
+                    return full_path
+                else:
+                    # Fallback to constructing path
+                    constructed_path = str(ras_obj.project_folder / f"{ras_obj.project_name}.g{geom_number}")
+                    logger.info(f"Constructed geometry path: {constructed_path}")
+                    return constructed_path
+            else:
+                logger.warning(f"No geometry file found with number: {geom_number}")
+                return None
+        except Exception as e:
+            logger.error(f"Error in get_geom_path: {str(e)}")
             return None
 
     # Clone Functions to copy unsteady, flow, and geometry files from templates

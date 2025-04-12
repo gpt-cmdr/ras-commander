@@ -73,6 +73,15 @@ After:
 Bank Sta=2408.322,2509.271
 ```
 
+
+## Notes and Limitations
+- Always review results after processing to ensure proper conversion
+- The tool will not affect cross sections that already use the standard L/MC/R format
+- Creates a backup of the original file with .bak extension (or .bak1, .bak2, etc. if multiple backups exist)
+- Modifies the original file in place after creating the backup
+
+
+
 ## Compiling to Executable
 If you wish to compile the script to an executable yourself:
 
@@ -93,11 +102,8 @@ For enhanced drag-and-drop functionality:
 pyinstaller --onefile --windowed --add-data "C:\path\to\python\site-packages\tkinterdnd2;tkinterdnd2" 1D_Mannings_to_L-MC-R.py
 ```
 
-## Notes and Limitations
-- Always review results after processing to ensure proper conversion
-- The tool will not affect cross sections that already use the standard L/MC/R format
-- Creates a backup of the original file with .bak extension (or .bak1, .bak2, etc. if multiple backups exist)
-- Modifies the original file in place after creating the backup
+
+
 
 ## Acknowledgments
 This tool was created in response to discussions within the HEC-RAS user community about workflow improvements for 1D modeling. Special thanks to the hydraulic modelers who identified this common pain point.

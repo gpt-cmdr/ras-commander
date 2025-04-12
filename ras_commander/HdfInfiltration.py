@@ -83,34 +83,6 @@ class HdfInfiltration:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    @staticmethod
-    def _get_table_info(hdf_file: h5py.File, table_path: str) -> Tuple[List[str], List[str], List[str]]:
-        """Get column names and types from HDF table
-        
-        Args:
-            hdf_file: Open HDF file object
-            table_path: Path to table in HDF file
-            
-        Returns:
-            Tuple of (column names, numpy dtypes, column descriptions)
-        """
-        if table_path not in hdf_file:
-            return [], [], []
-            
-        dataset = hdf_file[table_path]
-        dtype = dataset.dtype
-        
-        # Extract column names and types
-        col_names = []
-        col_types = []
-        col_descs = []
-        
-        for name in dtype.names:
-            col_names.append(name)
-            col_types.append(dtype[name].str)
-            col_descs.append(name)  # Could be enhanced to get actual descriptions
-            
-        return col_names, col_types, col_descs
 
     @staticmethod
     @log_call 
@@ -160,6 +132,15 @@ class HdfInfiltration:
             logger.error(f"Error reading infiltration data from {hdf_path}: {str(e)}")
             return None
         
+
+
+    # set_infiltration_baseoverrides goes here, once finalized tested and fixed. 
+
+
+
+    # Since the infiltration base overrides are in the geometry file, the above functions work on the geometry files
+    # The below functions work on the infiltration layer HDF files.  Changes only take effect if no base overrides are present. 
+           
     @staticmethod
     @log_call 
     def get_infiltration_layer_data(hdf_path: Path) -> Optional[pd.DataFrame]:
@@ -201,6 +182,7 @@ class HdfInfiltration:
         except Exception as e:
             logger.error(f"Error reading infiltration layer data from {hdf_path}: {str(e)}")
             return None
+        
 
     @staticmethod
     @log_call
@@ -276,6 +258,10 @@ class HdfInfiltration:
         except Exception as e:
             logger.error(f"Error setting infiltration layer data in {hdf_path}: {str(e)}")
             return None
+        
+
+
+
     @staticmethod
     @standardize_input(file_type='geom_hdf')
     @log_call
@@ -320,9 +306,694 @@ class HdfInfiltration:
             logger.error(f"Error scaling infiltration data in {hdf_path}: {str(e)}")
             return None
 
+
+
+    # Need to reorganize these soil staatistics functions so they are more straightforward.  
+
+
     @staticmethod
     @log_call
-    @standardize_input
+    @standardize_input(file_type='geom_hdf')
+    def get_soils_raster_stats(
+        geom_hdf_path: Path,
+        soil_hdf_path: Path = None,
+        ras_object: Any = None
+    ) -> pd.DataFrame:
+        """
+        Calculate soil group statistics for each 2D flow area using the area's perimeter.
+        
+        Parameters
+        ----------
+        geom_hdf_path : Path
+            Path to the HEC-RAS geometry HDF file containing the 2D flow areas
+        soil_hdf_path : Path, optional
+            Path to the soil HDF file. If None, uses soil_layer_path from rasmap_df
+        ras_object : Any, optional
+            Optional RAS object. If not provided, uses global ras instance
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with soil statistics for each 2D flow area, including:
+            - mesh_name: Name of the 2D flow area
+            - mukey: Soil mukey identifier
+            - percentage: Percentage of 2D flow area covered by this soil type
+            - area_sqm: Area in square meters
+            - area_acres: Area in acres
+            - area_sqmiles: Area in square miles
+        
+        Notes
+        -----
+        Requires the rasterstats package to be installed.
+        """
+        try:
+            from rasterstats import zonal_stats
+            import shapely
+            import geopandas as gpd
+            import numpy as np
+            import tempfile
+            import os
+        except ImportError as e:
+            logger.error(f"Failed to import required package: {e}. Please run 'pip install rasterstats shapely geopandas'")
+            raise e
+        
+        # Import here to avoid circular imports
+        from .HdfMesh import HdfMesh
+        
+        # Get the soil HDF path
+        if soil_hdf_path is None:
+            if ras_object is None:
+                from .RasPrj import ras
+                ras_object = ras
+            
+            # Try to get soil_layer_path from rasmap_df
+            try:
+                soil_hdf_path = Path(ras_object.rasmap_df.loc[0, 'soil_layer_path'][0])
+                if not soil_hdf_path.exists():
+                    logger.warning(f"Soil HDF path from rasmap_df does not exist: {soil_hdf_path}")
+                    return pd.DataFrame()
+            except (KeyError, IndexError, AttributeError, TypeError) as e:
+                logger.error(f"Error retrieving soil_layer_path from rasmap_df: {str(e)}")
+                return pd.DataFrame()
+        
+        # Get infiltration map - pass as hdf_path to ensure standardize_input works correctly
+        try:
+            raster_map = HdfInfiltration.get_infiltration_map(hdf_path=soil_hdf_path, ras_object=ras_object)
+            if not raster_map:
+                logger.error(f"No infiltration map found in {soil_hdf_path}")
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error getting infiltration map: {str(e)}")
+            return pd.DataFrame()
+        
+        # Get 2D flow areas
+        mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path)
+        if mesh_areas.empty:
+            logger.warning(f"No 2D flow areas found in {geom_hdf_path}")
+            return pd.DataFrame()
+        
+        # Extract the raster data for analysis
+        tif_path = soil_hdf_path.with_suffix('.tif')
+        if not tif_path.exists():
+            logger.error(f"No raster file found at {tif_path}")
+            return pd.DataFrame()
+            
+        # Read the raster data and info
+        import rasterio
+        with rasterio.open(tif_path) as src:
+            grid_data = src.read(1)
+            
+            # Get transform directly from rasterio
+            transform = src.transform
+            no_data = src.nodata if src.nodata is not None else -9999
+            
+            # List to store all results
+            all_results = []
+            
+            # Calculate zonal statistics for each 2D flow area
+            for _, mesh_row in mesh_areas.iterrows():
+                mesh_name = mesh_row['mesh_name']
+                mesh_geom = mesh_row['geometry']
+                
+                # Get zonal statistics directly using numpy array
+                try:
+                    stats = zonal_stats(
+                        mesh_geom,
+                        grid_data,
+                        affine=transform,
+                        categorical=True,
+                        nodata=no_data
+                    )[0]
+                    
+                    # Skip if no stats
+                    if not stats:
+                        logger.warning(f"No soil data found for 2D flow area: {mesh_name}")
+                        continue
+                    
+                    # Calculate total area and percentages
+                    total_area_sqm = sum(stats.values())
+                    
+                    # Process each mukey
+                    for raster_val, area_sqm in stats.items():
+                        # Skip NoData values
+                        if raster_val is None or raster_val == no_data:
+                            continue
+                            
+                        try:
+                            mukey = raster_map.get(int(raster_val), f"Unknown-{raster_val}")
+                        except (ValueError, TypeError):
+                            mukey = f"Unknown-{raster_val}"
+                            
+                        percentage = (area_sqm / total_area_sqm) * 100 if total_area_sqm > 0 else 0
+                        
+                        all_results.append({
+                            'mesh_name': mesh_name,
+                            'mukey': mukey,
+                            'percentage': percentage,
+                            'area_sqm': area_sqm,
+                            'area_acres': area_sqm * HdfInfiltration.SQM_TO_ACRE,
+                            'area_sqmiles': area_sqm * HdfInfiltration.SQM_TO_SQMILE
+                        })
+                except Exception as e:
+                    logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                    continue
+        
+        # Create DataFrame with results
+        results_df = pd.DataFrame(all_results)
+        
+        # Sort by mesh_name and percentage (descending)
+        if not results_df.empty:
+            results_df = results_df.sort_values(['mesh_name', 'percentage'], ascending=[True, False])
+        
+        return results_df
+
+
+
+
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_soil_raster_stats(
+        geom_hdf_path: Path,
+        landcover_hdf_path: Path = None,
+        soil_hdf_path: Path = None,
+        ras_object: Any = None
+    ) -> pd.DataFrame:
+        """
+        Calculate combined land cover and soil infiltration statistics for each 2D flow area.
+        
+        This function processes both land cover and soil data to calculate statistics
+        for each combination (Land Cover : Soil Type) within each 2D flow area.
+        
+        Parameters
+        ----------
+        geom_hdf_path : Path
+            Path to the HEC-RAS geometry HDF file containing the 2D flow areas
+        landcover_hdf_path : Path, optional
+            Path to the land cover HDF file. If None, uses landcover_hdf_path from rasmap_df
+        soil_hdf_path : Path, optional
+            Path to the soil HDF file. If None, uses soil_layer_path from rasmap_df
+        ras_object : Any, optional
+            Optional RAS object. If not provided, uses global ras instance
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with combined statistics for each 2D flow area, including:
+            - mesh_name: Name of the 2D flow area
+            - combined_type: Combined land cover and soil type (e.g. "Mixed Forest : B")
+            - percentage: Percentage of 2D flow area covered by this combination
+            - area_sqm: Area in square meters
+            - area_acres: Area in acres
+            - area_sqmiles: Area in square miles
+            - curve_number: Curve number for this combination
+            - abstraction_ratio: Abstraction ratio for this combination
+            - min_infiltration_rate: Minimum infiltration rate for this combination
+        
+        Notes
+        -----
+        Requires the rasterstats package to be installed.
+        """
+        try:
+            from rasterstats import zonal_stats
+            import shapely
+            import geopandas as gpd
+            import numpy as np
+            import tempfile
+            import os
+            import rasterio
+            from rasterio.merge import merge
+        except ImportError as e:
+            logger.error(f"Failed to import required package: {e}. Please run 'pip install rasterstats shapely geopandas rasterio'")
+            raise e
+        
+        # Import here to avoid circular imports
+        from .HdfMesh import HdfMesh
+        
+        # Get RAS object
+        if ras_object is None:
+            from .RasPrj import ras
+            ras_object = ras
+        
+        # Get the landcover HDF path
+        if landcover_hdf_path is None:
+            try:
+                landcover_hdf_path = Path(ras_object.rasmap_df.loc[0, 'landcover_hdf_path'][0])
+                if not landcover_hdf_path.exists():
+                    logger.warning(f"Land cover HDF path from rasmap_df does not exist: {landcover_hdf_path}")
+                    return pd.DataFrame()
+            except (KeyError, IndexError, AttributeError, TypeError) as e:
+                logger.error(f"Error retrieving landcover_hdf_path from rasmap_df: {str(e)}")
+                return pd.DataFrame()
+        
+        # Get the soil HDF path
+        if soil_hdf_path is None:
+            try:
+                soil_hdf_path = Path(ras_object.rasmap_df.loc[0, 'soil_layer_path'][0])
+                if not soil_hdf_path.exists():
+                    logger.warning(f"Soil HDF path from rasmap_df does not exist: {soil_hdf_path}")
+                    return pd.DataFrame()
+            except (KeyError, IndexError, AttributeError, TypeError) as e:
+                logger.error(f"Error retrieving soil_layer_path from rasmap_df: {str(e)}")
+                return pd.DataFrame()
+        
+        # Get land cover map (raster to ID mapping)
+        try:
+            with h5py.File(landcover_hdf_path, 'r') as hdf:
+                if '//Raster Map' not in hdf:
+                    logger.error(f"No Raster Map found in {landcover_hdf_path}")
+                    return pd.DataFrame()
+                
+                landcover_map_data = hdf['//Raster Map'][()]
+                landcover_map = {int(item[0]): item[1].decode('utf-8').strip() for item in landcover_map_data}
+        except Exception as e:
+            logger.error(f"Error reading land cover data from HDF: {str(e)}")
+            return pd.DataFrame()
+        
+        # Get soil map (raster to ID mapping)
+        try:
+            soil_map = HdfInfiltration.get_infiltration_map(hdf_path=soil_hdf_path, ras_object=ras_object)
+            if not soil_map:
+                logger.error(f"No soil map found in {soil_hdf_path}")
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error getting soil map: {str(e)}")
+            return pd.DataFrame()
+        
+        # Get infiltration parameters
+        try:
+            infiltration_params = HdfInfiltration.get_infiltration_layer_data(soil_hdf_path)
+            if infiltration_params is None or infiltration_params.empty:
+                logger.warning(f"No infiltration parameters found in {soil_hdf_path}")
+                infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
+        except Exception as e:
+            logger.error(f"Error getting infiltration parameters: {str(e)}")
+            infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
+        
+        # Get 2D flow areas
+        mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path)
+        if mesh_areas.empty:
+            logger.warning(f"No 2D flow areas found in {geom_hdf_path}")
+            return pd.DataFrame()
+        
+        # Check for the TIF files with same name as HDF
+        landcover_tif_path = landcover_hdf_path.with_suffix('.tif')
+        soil_tif_path = soil_hdf_path.with_suffix('.tif')
+        
+        if not landcover_tif_path.exists():
+            logger.error(f"No land cover raster file found at {landcover_tif_path}")
+            return pd.DataFrame()
+        
+        if not soil_tif_path.exists():
+            logger.error(f"No soil raster file found at {soil_tif_path}")
+            return pd.DataFrame()
+        
+        # List to store all results
+        all_results = []
+        
+        # Read the raster data
+        try:
+            with rasterio.open(landcover_tif_path) as landcover_src, rasterio.open(soil_tif_path) as soil_src:
+                landcover_nodata = landcover_src.nodata if landcover_src.nodata is not None else -9999
+                soil_nodata = soil_src.nodata if soil_src.nodata is not None else -9999
+                
+                # Calculate zonal statistics for each 2D flow area
+                for _, mesh_row in mesh_areas.iterrows():
+                    mesh_name = mesh_row['mesh_name']
+                    mesh_geom = mesh_row['geometry']
+                    
+                    # Get zonal statistics for land cover
+                    try:
+                        landcover_stats = zonal_stats(
+                            mesh_geom,
+                            landcover_tif_path,
+                            categorical=True,
+                            nodata=landcover_nodata
+                        )[0]
+                        
+                        # Get zonal statistics for soil
+                        soil_stats = zonal_stats(
+                            mesh_geom,
+                            soil_tif_path,
+                            categorical=True,
+                            nodata=soil_nodata
+                        )[0]
+                        
+                        # Skip if no stats
+                        if not landcover_stats or not soil_stats:
+                            logger.warning(f"No land cover or soil data found for 2D flow area: {mesh_name}")
+                            continue
+                        
+                        # Calculate total area
+                        landcover_total = sum(landcover_stats.values())
+                        soil_total = sum(soil_stats.values())
+                        
+                        # Create a cross-tabulation of land cover and soil types
+                        # This is an approximation since we don't have the exact pixel-by-pixel overlap
+                        mesh_area_sqm = mesh_row['geometry'].area
+                        
+                        # Calculate percentage of each land cover type
+                        landcover_pct = {k: v/landcover_total for k, v in landcover_stats.items() if k is not None and k != landcover_nodata}
+                        
+                        # Calculate percentage of each soil type
+                        soil_pct = {k: v/soil_total for k, v in soil_stats.items() if k is not None and k != soil_nodata}
+                        
+                        # Generate combinations
+                        for lc_id, lc_pct in landcover_pct.items():
+                            lc_name = landcover_map.get(int(lc_id), f"Unknown-{lc_id}")
+                            
+                            for soil_id, soil_pct in soil_pct.items():
+                                try:
+                                    soil_name = soil_map.get(int(soil_id), f"Unknown-{soil_id}")
+                                except (ValueError, TypeError):
+                                    soil_name = f"Unknown-{soil_id}"
+                                
+                                # Calculate combined percentage (approximate)
+                                # This is a simplification; actual overlap would require pixel-by-pixel analysis
+                                combined_pct = lc_pct * soil_pct * 100
+                                combined_area_sqm = mesh_area_sqm * (combined_pct / 100)
+                                
+                                # Create combined name
+                                combined_name = f"{lc_name} : {soil_name}"
+                                
+                                # Look up infiltration parameters
+                                param_row = infiltration_params[infiltration_params['Name'] == combined_name]
+                                if param_row.empty:
+                                    # Try with NoData for soil type
+                                    param_row = infiltration_params[infiltration_params['Name'] == f"{lc_name} : NoData"]
+                                
+                                if not param_row.empty:
+                                    curve_number = param_row.iloc[0]['Curve Number']
+                                    abstraction_ratio = param_row.iloc[0]['Abstraction Ratio']
+                                    min_infiltration_rate = param_row.iloc[0]['Minimum Infiltration Rate']
+                                else:
+                                    curve_number = None
+                                    abstraction_ratio = None
+                                    min_infiltration_rate = None
+                                
+                                all_results.append({
+                                    'mesh_name': mesh_name,
+                                    'combined_type': combined_name,
+                                    'percentage': combined_pct,
+                                    'area_sqm': combined_area_sqm,
+                                    'area_acres': combined_area_sqm * HdfInfiltration.SQM_TO_ACRE,
+                                    'area_sqmiles': combined_area_sqm * HdfInfiltration.SQM_TO_SQMILE,
+                                    'curve_number': curve_number,
+                                    'abstraction_ratio': abstraction_ratio,
+                                    'min_infiltration_rate': min_infiltration_rate
+                                })
+                    except Exception as e:
+                        logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                        continue
+        except Exception as e:
+            logger.error(f"Error opening raster files: {str(e)}")
+            return pd.DataFrame()
+        
+        # Create DataFrame with results
+        results_df = pd.DataFrame(all_results)
+        
+        # Sort by mesh_name, percentage (descending)
+        if not results_df.empty:
+            results_df = results_df.sort_values(['mesh_name', 'percentage'], ascending=[True, False])
+        
+        return results_df
+
+
+
+
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_infiltration_stats(
+        geom_hdf_path: Path,
+        landcover_hdf_path: Path = None,
+        soil_hdf_path: Path = None,
+        ras_object: Any = None
+    ) -> pd.DataFrame:
+        """
+        Calculate combined land cover and soil infiltration statistics for each 2D flow area.
+        
+        This function processes both land cover and soil data to calculate statistics
+        for each combination (Land Cover : Soil Type) within each 2D flow area.
+        
+        Parameters
+        ----------
+        geom_hdf_path : Path
+            Path to the HEC-RAS geometry HDF file containing the 2D flow areas
+        landcover_hdf_path : Path, optional
+            Path to the land cover HDF file. If None, uses landcover_hdf_path from rasmap_df
+        soil_hdf_path : Path, optional
+            Path to the soil HDF file. If None, uses soil_layer_path from rasmap_df
+        ras_object : Any, optional
+            Optional RAS object. If not provided, uses global ras instance
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with combined statistics for each 2D flow area, including:
+            - mesh_name: Name of the 2D flow area
+            - combined_type: Combined land cover and soil type (e.g. "Mixed Forest : B")
+            - percentage: Percentage of 2D flow area covered by this combination
+            - area_sqm: Area in square meters
+            - area_acres: Area in acres
+            - area_sqmiles: Area in square miles
+            - curve_number: Curve number for this combination
+            - abstraction_ratio: Abstraction ratio for this combination
+            - min_infiltration_rate: Minimum infiltration rate for this combination
+        
+        Notes
+        -----
+        Requires the rasterstats package to be installed.
+        """
+        try:
+            from rasterstats import zonal_stats
+            import shapely
+            import geopandas as gpd
+            import numpy as np
+            import tempfile
+            import os
+            import rasterio
+            from rasterio.merge import merge
+        except ImportError as e:
+            logger.error(f"Failed to import required package: {e}. Please run 'pip install rasterstats shapely geopandas rasterio'")
+            raise e
+        
+        # Import here to avoid circular imports
+        from .HdfMesh import HdfMesh
+        
+        # Get RAS object
+        if ras_object is None:
+            from .RasPrj import ras
+            ras_object = ras
+        
+        # Get the landcover HDF path
+        if landcover_hdf_path is None:
+            try:
+                landcover_hdf_path = Path(ras_object.rasmap_df.loc[0, 'landcover_hdf_path'][0])
+                if not landcover_hdf_path.exists():
+                    logger.warning(f"Land cover HDF path from rasmap_df does not exist: {landcover_hdf_path}")
+                    return pd.DataFrame()
+            except (KeyError, IndexError, AttributeError, TypeError) as e:
+                logger.error(f"Error retrieving landcover_hdf_path from rasmap_df: {str(e)}")
+                return pd.DataFrame()
+        
+        # Get the soil HDF path
+        if soil_hdf_path is None:
+            try:
+                soil_hdf_path = Path(ras_object.rasmap_df.loc[0, 'soil_layer_path'][0])
+                if not soil_hdf_path.exists():
+                    logger.warning(f"Soil HDF path from rasmap_df does not exist: {soil_hdf_path}")
+                    return pd.DataFrame()
+            except (KeyError, IndexError, AttributeError, TypeError) as e:
+                logger.error(f"Error retrieving soil_layer_path from rasmap_df: {str(e)}")
+                return pd.DataFrame()
+        
+        # Get land cover map (raster to ID mapping)
+        try:
+            with h5py.File(landcover_hdf_path, 'r') as hdf:
+                if '//Raster Map' not in hdf:
+                    logger.error(f"No Raster Map found in {landcover_hdf_path}")
+                    return pd.DataFrame()
+                
+                landcover_map_data = hdf['//Raster Map'][()]
+                landcover_map = {int(item[0]): item[1].decode('utf-8').strip() for item in landcover_map_data}
+        except Exception as e:
+            logger.error(f"Error reading land cover data from HDF: {str(e)}")
+            return pd.DataFrame()
+        
+        # Get soil map (raster to ID mapping)
+        try:
+            soil_map = HdfInfiltration.get_infiltration_map(hdf_path=soil_hdf_path, ras_object=ras_object)
+            if not soil_map:
+                logger.error(f"No soil map found in {soil_hdf_path}")
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error getting soil map: {str(e)}")
+            return pd.DataFrame()
+        
+        # Get infiltration parameters
+        try:
+            infiltration_params = HdfInfiltration.get_infiltration_layer_data(soil_hdf_path)
+            if infiltration_params is None or infiltration_params.empty:
+                logger.warning(f"No infiltration parameters found in {soil_hdf_path}")
+                infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
+        except Exception as e:
+            logger.error(f"Error getting infiltration parameters: {str(e)}")
+            infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
+        
+        # Get 2D flow areas
+        mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path)
+        if mesh_areas.empty:
+            logger.warning(f"No 2D flow areas found in {geom_hdf_path}")
+            return pd.DataFrame()
+        
+        # Check for the TIF files with same name as HDF
+        landcover_tif_path = landcover_hdf_path.with_suffix('.tif')
+        soil_tif_path = soil_hdf_path.with_suffix('.tif')
+        
+        if not landcover_tif_path.exists():
+            logger.error(f"No land cover raster file found at {landcover_tif_path}")
+            return pd.DataFrame()
+        
+        if not soil_tif_path.exists():
+            logger.error(f"No soil raster file found at {soil_tif_path}")
+            return pd.DataFrame()
+        
+        # List to store all results
+        all_results = []
+        
+        # Read the raster data
+        try:
+            with rasterio.open(landcover_tif_path) as landcover_src, rasterio.open(soil_tif_path) as soil_src:
+                landcover_nodata = landcover_src.nodata if landcover_src.nodata is not None else -9999
+                soil_nodata = soil_src.nodata if soil_src.nodata is not None else -9999
+                
+                # Calculate zonal statistics for each 2D flow area
+                for _, mesh_row in mesh_areas.iterrows():
+                    mesh_name = mesh_row['mesh_name']
+                    mesh_geom = mesh_row['geometry']
+                    
+                    # Get zonal statistics for land cover
+                    try:
+                        landcover_stats = zonal_stats(
+                            mesh_geom,
+                            landcover_tif_path,
+                            categorical=True,
+                            nodata=landcover_nodata
+                        )[0]
+                        
+                        # Get zonal statistics for soil
+                        soil_stats = zonal_stats(
+                            mesh_geom,
+                            soil_tif_path,
+                            categorical=True,
+                            nodata=soil_nodata
+                        )[0]
+                        
+                        # Skip if no stats
+                        if not landcover_stats or not soil_stats:
+                            logger.warning(f"No land cover or soil data found for 2D flow area: {mesh_name}")
+                            continue
+                        
+                        # Calculate total area
+                        landcover_total = sum(landcover_stats.values())
+                        soil_total = sum(soil_stats.values())
+                        
+                        # Create a cross-tabulation of land cover and soil types
+                        # This is an approximation since we don't have the exact pixel-by-pixel overlap
+                        mesh_area_sqm = mesh_row['geometry'].area
+                        
+                        # Calculate percentage of each land cover type
+                        landcover_pct = {k: v/landcover_total for k, v in landcover_stats.items() if k is not None and k != landcover_nodata}
+                        
+                        # Calculate percentage of each soil type
+                        soil_pct = {k: v/soil_total for k, v in soil_stats.items() if k is not None and k != soil_nodata}
+                        
+                        # Generate combinations
+                        for lc_id, lc_pct in landcover_pct.items():
+                            lc_name = landcover_map.get(int(lc_id), f"Unknown-{lc_id}")
+                            
+                            for soil_id, soil_pct in soil_pct.items():
+                                try:
+                                    soil_name = soil_map.get(int(soil_id), f"Unknown-{soil_id}")
+                                except (ValueError, TypeError):
+                                    soil_name = f"Unknown-{soil_id}"
+                                
+                                # Calculate combined percentage (approximate)
+                                # This is a simplification; actual overlap would require pixel-by-pixel analysis
+                                combined_pct = lc_pct * soil_pct * 100
+                                combined_area_sqm = mesh_area_sqm * (combined_pct / 100)
+                                
+                                # Create combined name
+                                combined_name = f"{lc_name} : {soil_name}"
+                                
+                                # Look up infiltration parameters
+                                param_row = infiltration_params[infiltration_params['Name'] == combined_name]
+                                if param_row.empty:
+                                    # Try with NoData for soil type
+                                    param_row = infiltration_params[infiltration_params['Name'] == f"{lc_name} : NoData"]
+                                
+                                if not param_row.empty:
+                                    curve_number = param_row.iloc[0]['Curve Number']
+                                    abstraction_ratio = param_row.iloc[0]['Abstraction Ratio']
+                                    min_infiltration_rate = param_row.iloc[0]['Minimum Infiltration Rate']
+                                else:
+                                    curve_number = None
+                                    abstraction_ratio = None
+                                    min_infiltration_rate = None
+                                
+                                all_results.append({
+                                    'mesh_name': mesh_name,
+                                    'combined_type': combined_name,
+                                    'percentage': combined_pct,
+                                    'area_sqm': combined_area_sqm,
+                                    'area_acres': combined_area_sqm * HdfInfiltration.SQM_TO_ACRE,
+                                    'area_sqmiles': combined_area_sqm * HdfInfiltration.SQM_TO_SQMILE,
+                                    'curve_number': curve_number,
+                                    'abstraction_ratio': abstraction_ratio,
+                                    'min_infiltration_rate': min_infiltration_rate
+                                })
+                    except Exception as e:
+                        logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                        continue
+        except Exception as e:
+            logger.error(f"Error opening raster files: {str(e)}")
+            return pd.DataFrame()
+        
+        # Create DataFrame with results
+        results_df = pd.DataFrame(all_results)
+        
+        # Sort by mesh_name, percentage (descending)
+        if not results_df.empty:
+            results_df = results_df.sort_values(['mesh_name', 'percentage'], ascending=[True, False])
+        
+        return results_df
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
     def get_infiltration_map(hdf_path: Path = None, ras_object: Any = None) -> dict:
         """Read the infiltration raster map from HDF file
         
@@ -502,55 +1173,218 @@ class HdfInfiltration:
         return weighted_params
     
 
+    @staticmethod
+    def _get_table_info(hdf_file: h5py.File, table_path: str) -> Tuple[List[str], List[str], List[str]]:
+        """Get column names and types from HDF table
+        
+        Args:
+            hdf_file: Open HDF file object
+            table_path: Path to table in HDF file
+            
+        Returns:
+            Tuple of (column names, numpy dtypes, column descriptions)
+        """
+        if table_path not in hdf_file:
+            return [], [], []
+            
+        dataset = hdf_file[table_path]
+        dtype = dataset.dtype
+        
+        # Extract column names and types
+        col_names = []
+        col_types = []
+        col_descs = []
+        
+        for name in dtype.names:
+            col_names.append(name)
+            col_types.append(dtype[name].str)
+            col_descs.append(name)  # Could be enhanced to get actual descriptions
+            
+        return col_names, col_types, col_descs
 
 
-
-
-# Example usage:
-"""
-from pathlib import Path
-
-# Initialize paths
-raster_path = Path('input_files/gSSURGO_InfiltrationDC.tif')
-boundary_path = Path('input_files/WF_Boundary_Simple.shp')
-hdf_path = raster_path.with_suffix('.hdf')
-
-# Get infiltration mapping
-infil_map = HdfInfiltration.get_infiltration_map(hdf_path)
-
-# Get zonal statistics (using RasMapper class)
-clipped_data, transform, nodata = RasMapper.clip_raster_with_boundary(
-    raster_path, boundary_path)
-stats = RasMapper.calculate_zonal_stats(
-    boundary_path, clipped_data, transform, nodata)
-
-# Calculate soil statistics
-soil_stats = HdfInfiltration.calculate_soil_statistics(stats, infil_map)
-
-# Get significant mukeys (>1%)
-significant = HdfInfiltration.get_significant_mukeys(soil_stats, threshold=1.0)
-
-# Calculate total percentage of significant mukeys
-total_significant = HdfInfiltration.calculate_total_significant_percentage(significant)
-print(f"Total percentage of significant mukeys: {total_significant}%")
-
-# Get infiltration parameters for each significant mukey
-infiltration_params = {}
-for mukey in significant['mukey']:
-    params = HdfInfiltration.get_infiltration_parameters(hdf_path, mukey)
-    if params:
-        infiltration_params[mukey] = params
-
-# Calculate weighted parameters
-weighted_params = HdfInfiltration.calculate_weighted_parameters(
-    significant, infiltration_params)
-print("Weighted infiltration parameters:", weighted_params)
-
-# Save results
-HdfInfiltration.save_statistics(soil_stats, Path('soil_statistics.csv'))
-"""
-
-
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_landcover_raster_stats(
+        geom_hdf_path: Path,
+        landcover_hdf_path: Path = None,
+        ras_object: Any = None
+    ) -> pd.DataFrame:
+        """
+        Calculate land cover statistics for each 2D flow area using the area's perimeter.
+        
+        Parameters
+        ----------
+        geom_hdf_path : Path
+            Path to the HEC-RAS geometry HDF file containing the 2D flow areas
+        landcover_hdf_path : Path, optional
+            Path to the land cover HDF file. If None, uses landcover_hdf_path from rasmap_df
+        ras_object : Any, optional
+            Optional RAS object. If not provided, uses global ras instance
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with land cover statistics for each 2D flow area, including:
+            - mesh_name: Name of the 2D flow area
+            - land_cover: Land cover classification name
+            - percentage: Percentage of 2D flow area covered by this land cover type
+            - area_sqm: Area in square meters
+            - area_acres: Area in acres
+            - area_sqmiles: Area in square miles
+            - mannings_n: Manning's n value for this land cover type
+            - percent_impervious: Percent impervious for this land cover type
+        
+        Notes
+        -----
+        Requires the rasterstats package to be installed.
+        """
+        try:
+            from rasterstats import zonal_stats
+            import shapely
+            import geopandas as gpd
+            import numpy as np
+            import tempfile
+            import os
+            import rasterio
+        except ImportError as e:
+            logger.error(f"Failed to import required package: {e}. Please run 'pip install rasterstats shapely geopandas rasterio'")
+            raise e
+        
+        # Import here to avoid circular imports
+        from .HdfMesh import HdfMesh
+        
+        # Get the landcover HDF path
+        if landcover_hdf_path is None:
+            if ras_object is None:
+                from .RasPrj import ras
+                ras_object = ras
+            
+            # Try to get landcover_hdf_path from rasmap_df
+            try:
+                landcover_hdf_path = Path(ras_object.rasmap_df.loc[0, 'landcover_hdf_path'][0])
+                if not landcover_hdf_path.exists():
+                    logger.warning(f"Land cover HDF path from rasmap_df does not exist: {landcover_hdf_path}")
+                    return pd.DataFrame()
+            except (KeyError, IndexError, AttributeError, TypeError) as e:
+                logger.error(f"Error retrieving landcover_hdf_path from rasmap_df: {str(e)}")
+                return pd.DataFrame()
+        
+        # Get land cover map (raster to ID mapping)
+        try:
+            with h5py.File(landcover_hdf_path, 'r') as hdf:
+                if '//Raster Map' not in hdf:
+                    logger.error(f"No Raster Map found in {landcover_hdf_path}")
+                    return pd.DataFrame()
+                
+                raster_map_data = hdf['//Raster Map'][()]
+                raster_map = {int(item[0]): item[1].decode('utf-8').strip() for item in raster_map_data}
+                
+                # Get land cover variables (mannings_n and percent_impervious)
+                variables = {}
+                if '//Variables' in hdf:
+                    var_data = hdf['//Variables'][()]
+                    for row in var_data:
+                        name = row[0].decode('utf-8').strip()
+                        mannings_n = float(row[1])
+                        percent_impervious = float(row[2])
+                        variables[name] = {
+                            'mannings_n': mannings_n,
+                            'percent_impervious': percent_impervious
+                        }
+        except Exception as e:
+            logger.error(f"Error reading land cover data from HDF: {str(e)}")
+            return pd.DataFrame()
+        
+        # Get 2D flow areas
+        mesh_areas = HdfMesh.get_mesh_areas(geom_hdf_path)
+        if mesh_areas.empty:
+            logger.warning(f"No 2D flow areas found in {geom_hdf_path}")
+            return pd.DataFrame()
+        
+        # Check for the TIF file with same name as HDF
+        tif_path = landcover_hdf_path.with_suffix('.tif')
+        if not tif_path.exists():
+            logger.error(f"No raster file found at {tif_path}")
+            return pd.DataFrame()
+        
+        # List to store all results
+        all_results = []
+        
+        # Read the raster data and info
+        try:
+            with rasterio.open(tif_path) as src:
+                # Get transform directly from rasterio
+                transform = src.transform
+                no_data = src.nodata if src.nodata is not None else -9999
+                
+                # Calculate zonal statistics for each 2D flow area
+                for _, mesh_row in mesh_areas.iterrows():
+                    mesh_name = mesh_row['mesh_name']
+                    mesh_geom = mesh_row['geometry']
+                    
+                    # Get zonal statistics directly using rasterio grid
+                    try:
+                        stats = zonal_stats(
+                            mesh_geom,
+                            tif_path,
+                            categorical=True,
+                            nodata=no_data
+                        )[0]
+                        
+                        # Skip if no stats
+                        if not stats:
+                            logger.warning(f"No land cover data found for 2D flow area: {mesh_name}")
+                            continue
+                        
+                        # Calculate total area and percentages
+                        total_area_sqm = sum(stats.values())
+                        
+                        # Process each land cover type
+                        for raster_val, area_sqm in stats.items():
+                            # Skip NoData values
+                            if raster_val is None or raster_val == no_data:
+                                continue
+                                
+                            try:
+                                # Get land cover name from raster map
+                                land_cover = raster_map.get(int(raster_val), f"Unknown-{raster_val}")
+                                
+                                # Get Manning's n and percent impervious
+                                mannings_n = variables.get(land_cover, {}).get('mannings_n', None)
+                                percent_impervious = variables.get(land_cover, {}).get('percent_impervious', None)
+                                
+                                percentage = (area_sqm / total_area_sqm) * 100 if total_area_sqm > 0 else 0
+                                
+                                all_results.append({
+                                    'mesh_name': mesh_name,
+                                    'land_cover': land_cover,
+                                    'percentage': percentage,
+                                    'area_sqm': area_sqm,
+                                    'area_acres': area_sqm * HdfInfiltration.SQM_TO_ACRE,
+                                    'area_sqmiles': area_sqm * HdfInfiltration.SQM_TO_SQMILE,
+                                    'mannings_n': mannings_n,
+                                    'percent_impervious': percent_impervious
+                                })
+                            except Exception as e:
+                                logger.warning(f"Error processing raster value {raster_val}: {e}")
+                                continue
+                    except Exception as e:
+                        logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                        continue
+        except Exception as e:
+            logger.error(f"Error opening raster file {tif_path}: {str(e)}")
+            return pd.DataFrame()
+        
+        # Create DataFrame with results
+        results_df = pd.DataFrame(all_results)
+        
+        # Sort by mesh_name, percentage (descending)
+        if not results_df.empty:
+            results_df = results_df.sort_values(['mesh_name', 'percentage'], ascending=[True, False])
+        
+        return results_df
 
 
 

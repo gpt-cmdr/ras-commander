@@ -1,4 +1,3 @@
-```markdown
 # Comprehensive RAS-Commander Library Guide
 
 ## Introduction
@@ -19,6 +18,7 @@ pip install --upgrade ras-commander
 1.  **RAS Objects (`RasPrj`)**:
     *   Represent HEC-RAS projects containing information about plans, geometries, and flow files.
     *   Support both a global `ras` object (imported from `ras_commander`) and custom named `RasPrj` instances to handle multiple projects.
+    *   Include `rasmap_df` attribute providing access to spatial datasets referenced in RASMapper.
 
 2.  **Project Initialization**:
     *   Use `init_ras_project()` to initialize projects and set up `RasPrj` objects.
@@ -90,23 +90,24 @@ pip install --upgrade ras-commander
 5.  **RasUnsteady**: Handles unsteady flow file (`.u*`) operations (updating title, restart settings, extracting boundary tables).
 6.  **RasUtils**: Offers general utility functions (file handling, path finding, data conversion, error metrics, spatial queries).
 7.  **RasExamples**: Manages downloading and extracting official HEC-RAS example projects.
-8.  **HdfBase**: Provides base functionality for HDF file operations (time parsing, attribute access, projection).
-9.  **HdfBndry**: Handles boundary *geometry* features (BC lines, breaklines, etc.) from geometry HDF files.
-10. **HdfMesh**: Manages mesh *geometry* data (cell polygons, points, faces, attributes) from HDF files.
-11. **HdfPlan**: Handles plan-level information (simulation times, parameters) from plan HDF files.
-12. **HdfResultsMesh**: Processes mesh *results* (WSE, velocity, depth timeseries, summaries) from plan HDF files.
-13. **HdfResultsPlan**: Handles plan-level *results* (volume accounting, runtime stats) from plan HDF files.
-14. **HdfResultsXsec**: Processes 1D cross-section *results* (WSE, flow, velocity timeseries) from plan HDF files.
-15. **HdfStruc**: Manages structure *geometry* data (centerlines, profiles) from geometry HDF files.
-16. **HdfUtils**: Provides utility functions specifically for HDF data handling (data type conversions, spatial queries).
-17. **HdfXsec**: Handles 1D cross-section and river *geometry* (cut lines, centerlines, banks) from geometry HDF files.
-18. **HdfPipe**: Handles pipe network geometry and results data from HDF files.
-19. **HdfPump**: Manages pump station geometry and results data from HDF files.
-20. **HdfFluvialPluvial**: Analyzes fluvial vs. pluvial boundaries based on results timing in plan HDF files.
-21. **HdfInfiltration**: Handles infiltration layer data (parameters, maps) from geometry or `.tif.hdf` files.
-22. **HdfPlot & HdfResultsPlot**: Basic visualization utilities for HDF data and results.
-23. **Decorators**: Contains `@log_call` and `@standardize_input`.
-24. **LoggingConfig**: Sets up and provides access to the library's logging system.
+8.  **RasMap**: Parses HEC-RAS mapper configuration files (.rasmap) to extract paths to terrain, soil layer, land cover data, and other spatial datasets. Provides access to projection information and RASMapper settings.
+9.  **HdfBase**: Provides base functionality for HDF file operations (time parsing, attribute access, projection).
+10. **HdfBndry**: Handles boundary *geometry* features (BC lines, breaklines, etc.) from geometry HDF files.
+11. **HdfMesh**: Manages mesh *geometry* data (cell polygons, points, faces, attributes) from HDF files.
+12. **HdfPlan**: Handles plan-level information (simulation times, parameters) from plan HDF files.
+13. **HdfResultsMesh**: Processes mesh *results* (WSE, velocity, depth timeseries, summaries) from plan HDF files.
+14. **HdfResultsPlan**: Handles plan-level *results* (volume accounting, runtime stats) from plan HDF files.
+15. **HdfResultsXsec**: Processes 1D cross-section *results* (WSE, flow, velocity timeseries) from plan HDF files.
+16. **HdfStruc**: Manages structure *geometry* data (centerlines, profiles) from geometry HDF files.
+17. **HdfUtils**: Provides utility functions specifically for HDF data handling (data type conversions, spatial queries).
+18. **HdfXsec**: Handles 1D cross-section and river *geometry* (cut lines, centerlines, banks) from geometry HDF files.
+19. **HdfPipe**: Handles pipe network geometry and results data from HDF files.
+20. **HdfPump**: Manages pump station geometry and results data from HDF files.
+21. **HdfFluvialPluvial**: Analyzes fluvial vs. pluvial boundaries based on results timing in plan HDF files.
+22. **HdfInfiltration**: Handles infiltration layer data (parameters, maps) from geometry or `.tif.hdf` files.
+23. **HdfPlot & HdfResultsPlot**: Basic visualization utilities for HDF data and results.
+24. **Decorators**: Contains `@log_call` and `@standardize_input`.
+25. **LoggingConfig**: Sets up and provides access to the library's logging system.
 
 ## Best Practices
 
@@ -1187,77 +1188,103 @@ If many plans share the same geometry, preprocess it *once* before the parallel 
     ```
     *Self-Correction:* `compute_parallel` doesn't directly take `update_run_flags`. The flags should be set *before* calling `compute_parallel`. It might be better to modify the *template* plans to have `Run HTab=0` before the parallel run, or modify them in the worker folders (more complex). The easiest is often to ensure the `.p*` files are saved correctly beforehand.
 
-## Troubleshooting
 
-### 1. Project Initialization Issues (`init_ras_project`)
+### Working with RASMapper Data
 
-*   **Error:** `FileNotFoundError: ... project folder does not exist`
-    *   **Cause:** Incorrect path provided for `ras_project_folder`.
-    *   **Fix:** Verify the path to the project directory containing the `.prj` file is correct. Use absolute paths if unsure.
-*   **Error:** `ValueError: No HEC-RAS project file found in ...`
-    *   **Cause:** The specified folder exists but doesn't contain a `.prj` file, or multiple `.prj` files exist and the library couldn't determine the correct one.
-    *   **Fix:** Ensure a single, valid `.prj` file exists in the folder. Check `RasPrj.find_ras_prj` logic if multiple `.prj` files are necessary.
-*   **Error:** `Critical: HEC-RAS executable not found at the expected path...` (from `get_ras_exe`)
-    *   **Cause:** The specified `ras_version` doesn't correspond to an installed HEC-RAS version at the default location, and a valid path wasn't provided.
-    *   **Fix:** Ensure the HEC-RAS version is installed, provide the full path to `Ras.exe`, or check the version string.
+RAS Commander now provides access to RASMapper configuration data through the `rasmap_df` attribute of the `RasPrj` class, which is initialized automatically when a project is loaded. This enables integration with spatial datasets referenced in RASMapper.
 
-### 2. Execution Failures (`RasCmdr`)
+When you run init_ras_project, rasmap_df is populated with data from the project's .rasmap file
 
-*   **Error:** `FileNotFoundError: Plan file not found...` (within `compute_plan` or workers)
-    *   **Cause:** Invalid `plan_number` provided, or the corresponding `.p*` file is missing.
-    *   **Fix:** Verify the plan number exists in `ras.plan_df` and the file exists on disk.
-*   **Error:** `subprocess.CalledProcessError: Command '...' returned non-zero exit status ...`
-    *   **Cause:** HEC-RAS computation failed. The error message often contains output from HEC-RAS itself.
-    *   **Fix:**
-        *   Check the HEC-RAS output/logs within the computation folder (`dest_folder` or worker folder) for specific HEC-RAS errors (e.g., unstable model, missing input data).
-        *   Ensure all input files (geometry, flow) referenced by the plan exist and are valid.
-        *   Try running the plan manually in HEC-RAS to diagnose the issue.
-        *   Ensure `clear_geompre=True` is used if geometry was modified.
-*   **Error:** `ValueError: Destination folder ... exists and is not empty...`
-    *   **Cause:** Trying to run into a folder that already contains files, and `overwrite_dest=False`.
-    *   **Fix:** Set `overwrite_dest=True` if overwriting is intended, or choose a different `dest_folder`.
+The `rasmap_df` contains paths to:
+- Terrain data (DEM)
+- Soil layers (Hydrologic Soil Groups)  
+- Land cover datasets
+- Infiltration data
+- Profile lines and other features
+- Project settings and current visualization state
 
-### 3. Parallel Execution Problems (`compute_parallel`)
+This allows programmatic access to the same spatial data being used in RASMapper visualizations.
 
-*   **Issue:** Runs are very slow or system becomes unresponsive.
-    *   **Cause:** `max_workers` or `num_cores` set too high for system resources (CPU or RAM).
-    *   **Fix:** Reduce `max_workers` and/or `num_cores`. Monitor system resource usage during the run.
-*   **Issue:** Inconsistent results between runs or compared to single runs.
-    *   **Cause:** Potential race conditions if plans modify shared files (unlikely if using worker folders correctly), or inconsistent environment setup. Using `clear_geompre=False` when geometry changed.
-    *   **Fix:** Ensure plans are independent. Use `clear_geompre=True` if geometry might differ or was changed. Verify input data consistency.
-*   **Error:** `PermissionError` during result consolidation or worker folder cleanup.
-    *   **Cause:** Files might still be locked by HEC-RAS processes that haven't fully terminated, or by other applications (like HEC-RAS GUI).
-    *   **Fix:** Ensure HEC-RAS GUI is closed. The library includes retries (`remove_with_retry`), but persistent locks might require manual intervention or investigating hanging processes.
+### Modifying Manning's n Values
 
-### 4. File Access Errors
+RAS Commander provides functions for reading and writing Manning's n values in geometry files through the `RasGeo` class. This allows automation of roughness coefficient adjustments for calibration and sensitivity analysis.
 
-*   **Error:** `PermissionError: ...` (when reading/writing plan, unsteady, prj files)
-    *   **Cause:** Lack of read/write permissions for the script in the project directory. Files might be read-only or locked by another process (like HEC-RAS GUI).
-    *   **Fix:** Check file/folder permissions. Close HEC-RAS GUI or other applications accessing the project files.
-*   **Error:** `FileNotFoundError` (when accessing `.g*`, `.u*`, `.f*` files referenced by a plan)
-    *   **Cause:** Plan file references a geometry or flow file that doesn't exist with the expected naming convention.
-    *   **Fix:** Verify file existence and naming (`ProjectName.gXX`, `ProjectName.uXX`, etc.). Check `ras.plan_df` for correct 'Geom File' and 'Flow File' references.
+```python
+from ras_commander import RasGeo, RasPlan, init_ras_project
 
-### 5. HDF File Problems (`Hdf*` classes)
+init_ras_project("/path/to/project", "6.5")
 
-*   **Error:** `FileNotFoundError: HDF file not found...` (from `@standardize_input`)
-    *   **Cause:** The specified plan/geom number doesn't have a corresponding `.hdf` file, or the provided path is incorrect. For results HDF (`.p*.hdf`), the plan may not have been computed successfully.
-    *   **Fix:** Verify the plan was computed. Check the path/number. Ensure the correct `file_type` ('plan_hdf' or 'geom_hdf') is used by the function/decorator context.
-*   **Error:** `KeyError: 'Unable to open object (object ... does not exist)'` (from `h5py`)
-    *   **Cause:** Trying to access an internal HDF path (e.g., a specific results variable or geometry group) that doesn't exist in that particular HDF file. The simulation might not have included that output, or the HDF structure differs from expectations.
-    *   **Fix:** Use `HdfBase.get_dataset_info()` to explore the actual HDF structure. Check HEC-RAS output settings. Ensure you are using the correct HDF file type (plan vs. geometry).
-*   **Error:** `ValueError` or `TypeError` during data processing (e.g., time conversion).
-    *   **Cause:** Unexpected data format within the HDF file.
-    *   **Fix:** Inspect the specific HDF dataset causing the error using tools like HDFView or by printing raw data via `h5py`. Report issue if it seems like a library bug.
+# Get the geometry file path
+geom_path = RasPlan.get_geom_path("01")
 
-### 6. Performance Issues
+# Read base Manning's n values
+mannings_df = RasGeo.get_mannings_baseoverrides(geom_path)
+print(f"Current Manning's n values:\n{mannings_df}")
 
-*   **Issue:** Single plan runs are slow.
-    *   **Cause:** Model complexity, small time step, large 2D mesh, insufficient `num_cores`.
-    *   **Fix:** Increase `num_cores` (up to 4-8 typically). Review model settings (time step, 2D mesh parameters). Ensure sufficient RAM.
-*   **Issue:** Parallel runs are not much faster than sequential.
-    *   **Cause:** I/O bottleneck (slow disk), RAM limitations causing swapping, too few physical cores, overhead of copying project folders for workers.
-    *   **Fix:** Monitor disk I/O and RAM usage. Adjust `max_workers` and `num_cores`. Use faster storage (SSD). Ensure plans are truly independent.
+# Read region-specific Manning's n overrides
+region_df = RasGeo.get_mannings_regionoverrides(geom_path)
+print(f"Regional Manning's n overrides:\n{region_df}")
+
+# Modify Manning's n values (example: increase all values by 20%)
+mannings_df['Base Manning\'s n Value'] *= 1.2
+RasGeo.set_mannings_baseoverrides(geom_path, mannings_df)
+print("Updated Manning's n values in geometry file")
+
+# Clear preprocessor files to ensure geometry changes take effect
+RasGeo.clear_geompre_files()
+```
+
+Common applications include:
+- Automated calibration workflows
+- Sensitivity analysis by batch-modifying roughness values
+- Scenario analysis using different roughness sets
+- Seasonal roughness adjustments
+
+### Advanced Infiltration Data Handling
+
+The enhanced `HdfInfiltration` class provides comprehensive tools for working with soil and infiltration data in HEC-RAS projects.
+
+```python
+from ras_commander import HdfInfiltration, init_ras_project
+
+init_ras_project("/path/to/project", "6.5")
+
+# Get the infiltration layer HDF path from the RASMapper configuration
+infiltration_path = ras.rasmap_df['infiltration_hdf_path'][0][0]
+
+# Read current infiltration parameters
+infil_df = HdfInfiltration.get_infiltration_baseoverrides(infiltration_path)
+print(f"Current infiltration parameters:\n{infil_df}")
+
+# Scale infiltration parameters
+scale_factors = {
+    'Maximum Deficit': 1.2,  # Increase by 20%
+    'Initial Deficit': 1.0,  # No change
+    'Potential Percolation Rate': 0.8  # Decrease by 20%
+}
+updated_df = HdfInfiltration.scale_infiltration_data(
+    infiltration_path, infil_df, scale_factors
+)
+print("Updated infiltration parameters")
+
+# Get infiltration map (raster value to mukey mapping)
+infil_map = HdfInfiltration.get_infiltration_map()
+
+# Calculate weighted parameters based on soil coverage
+significant_soils = HdfInfiltration.get_significant_mukeys(soil_stats, threshold=1.0)
+weighted_params = HdfInfiltration.calculate_weighted_parameters(
+    significant_soils, infiltration_params
+)
+print(f"Weighted infiltration parameters:\n{weighted_params}")
+```
+
+Key capabilities include:
+- Retrieving and modifying infiltration parameters
+- Scaling parameter values for sensitivity analysis
+- Calculating soil statistics from raster data
+- Computing area-weighted infiltration parameters
+- Extracting and analyzing soil map unit data
+
 
 ## Approaching Your End User Needs with Ras Commander
 
@@ -1556,4 +1583,4 @@ Remember to consult the specific docstrings of functions for detailed parameter 
 For further assistance, bug reports, or feature requests, please refer to the library's [GitHub repository](https://github.com/billk-FM/ras-commander) and issue tracker.
 
 **Happy Modeling!**
-```
+

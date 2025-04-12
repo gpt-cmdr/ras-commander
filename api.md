@@ -1,4 +1,3 @@
-```markdown
 # RAS Commander API Documentation
 
 This document provides a detailed reference for the public Application Programming Interface (API) of the `ras_commander` library. It lists all public classes and functions available for interacting with HEC-RAS projects.
@@ -131,6 +130,19 @@ Manages HEC-RAS project data and state. Provides access to project files, plans,
 *   **Parameters:** None.
 *   **Returns:** `pd.DataFrame`: DataFrame containing detailed boundary condition data (location, type, parameters, associated unsteady file info). Returns empty DataFrame if no unsteady files or boundaries are found.
 *   **Raises:** `RuntimeError` if not initialized.
+
+### `RasPrj` Attributes
+
+*   `project_folder` (`Path`): Path to the project folder.
+*   `project_name` (`str`): Name of the project.
+*   `prj_file` (`Path`): Path to the project file.
+*   `ras_exe_path` (`str`): Path to the HEC-RAS executable.
+*   `plan_df` (`pd.DataFrame`): DataFrame containing plan file information.
+*   `flow_df` (`pd.DataFrame`): DataFrame containing flow file information.
+*   `unsteady_df` (`pd.DataFrame`): DataFrame containing unsteady flow file information.
+*   `geom_df` (`pd.DataFrame`): DataFrame containing geometry file information.
+*   `boundaries_df` (`pd.DataFrame`): DataFrame containing boundary condition information.
+*   `rasmap_df` (`pd.DataFrame`): DataFrame containing RASMapper configuration data including paths to terrain, soil layer, infiltration, and land cover data.
 
 ---
 
@@ -420,6 +432,36 @@ Contains static methods for operating on HEC-RAS geometry files (`.g*`) and asso
     *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`.
 *   **Returns:** `None`. Deletes files and updates the `ras_object`'s geometry DataFrame.
 *   **Raises:** `PermissionError`, `OSError`.
+
+### `RasGeo.get_mannings_baseoverrides(geom_file_path)`
+
+*   **Purpose:** Reads the base Manning's n table from a HEC-RAS geometry file.
+*   **Parameters:**
+    *   `geom_file_path` (Input handled by `@standardize_input`): Path identifier for the geometry file (.g##).
+*   **Returns:** `pd.DataFrame`: DataFrame with Table Number, Land Cover Name, and Base Manning's n Value.
+
+### `RasGeo.get_mannings_regionoverrides(geom_file_path)`
+
+*   **Purpose:** Reads the Manning's n region overrides from a HEC-RAS geometry file.
+*   **Parameters:**
+    *   `geom_file_path` (Input handled by `@standardize_input`): Path identifier for the geometry file (.g##).
+*   **Returns:** `pd.DataFrame`: DataFrame with Table Number, Land Cover Name, MainChannel value, and Region Name.
+
+### `RasGeo.set_mannings_baseoverrides(geom_file_path, mannings_data)`
+
+*   **Purpose:** Writes base Manning's n values to a HEC-RAS geometry file.
+*   **Parameters:**
+    *   `geom_file_path` (Input handled by `@standardize_input`): Path identifier for the geometry file (.g##).
+    *   `mannings_data` (`pd.DataFrame`): DataFrame with columns 'Table Number', 'Land Cover Name', and 'Base Manning\'s n Value'.
+*   **Returns:** `bool`: True if successful.
+
+### `RasGeo.set_mannings_regionoverrides(geom_file_path, mannings_data)`
+
+*   **Purpose:** Writes regional Manning's n overrides to a HEC-RAS geometry file.
+*   **Parameters:**
+    *   `geom_file_path` (Input handled by `@standardize_input`): Path identifier for the geometry file (.g##).
+    *   `mannings_data` (`pd.DataFrame`): DataFrame with columns 'Table Number', 'Land Cover Name', 'MainChannel', and 'Region Name'.
+*   **Returns:** `bool`: True if successful.
 
 ---
 
@@ -952,78 +994,93 @@ Contains static methods for analyzing fluvial-pluvial boundaries based on simula
 
 Contains static methods for handling infiltration data within HEC-RAS HDF files (typically geometry HDF).
 
-### `HdfInfiltration.scale_infiltration_data(hdf_path, infiltration_df, scale_md=1.0, scale_id=1.0, scale_pr=1.0)`
+### `HdfInfiltration.get_infiltration_baseoverrides(hdf_path: Path) -> Optional[pd.DataFrame]`
 
-*   **Purpose:** Modifies the 'Base Overrides' infiltration parameters in a geometry HDF file by applying scaling factors.
+*   **Purpose:** Retrieves current infiltration parameters from a HEC-RAS geometry HDF file.
 *   **Parameters:**
     *   `hdf_path` (Input handled by `@standardize_input`, `file_type='geom_hdf'`): Path identifier for the geometry HDF.
-    *   `infiltration_df` (`pd.DataFrame`): DataFrame containing current infiltration parameters (usually obtained via `get_infiltration_data`).
-    *   `scale_md` (`float`, optional): Scaling factor for 'Maximum Deficit'. Default 1.0.
-    *   `scale_id` (`float`, optional): Scaling factor for 'Initial Deficit'. Default 1.0.
-    *   `scale_pr` (`float`, optional): Scaling factor for 'Potential Percolation Rate'. Default 1.0.
-*   **Returns:** (`pd.DataFrame` or `None`): The *updated* infiltration DataFrame if successful, `None` on failure. Modifies the HDF file in-place.
+*   **Returns:** `Optional[pd.DataFrame]`: DataFrame containing infiltration parameters if successful, None if operation fails.
 
-### `HdfInfiltration.get_infiltration_data(hdf_path)`
+### `HdfInfiltration.get_infiltration_layer_data(hdf_path: Path) -> Optional[pd.DataFrame]`
 
-*   **Purpose:** Retrieves the current 'Base Overrides' infiltration parameters from a geometry HDF file.
+*   **Purpose:** Retrieves current infiltration parameters from a HEC-RAS infiltration layer HDF file.
+*   **Parameters:**
+    *   `hdf_path` (Input handled by `@standardize_input`): Path identifier for the infiltration layer HDF.
+*   **Returns:** `Optional[pd.DataFrame]`: DataFrame containing infiltration parameters if successful, None if operation fails.
+
+### `HdfInfiltration.set_infiltration_layer_data(hdf_path: Path, infiltration_df: pd.DataFrame) -> Optional[pd.DataFrame]`
+
+*   **Purpose:** Sets infiltration layer data in the infiltration layer HDF file directly from the provided DataFrame.
+*   **Parameters:**
+    *   `hdf_path` (Input handled by `@standardize_input`): Path identifier for the infiltration layer HDF.
+    *   `infiltration_df` (`pd.DataFrame`): DataFrame containing infiltration parameters.
+*   **Returns:** `Optional[pd.DataFrame]`: The infiltration DataFrame if successful, None if operation fails.
+
+### `HdfInfiltration.scale_infiltration_data(hdf_path: Path, infiltration_df: pd.DataFrame, scale_factors: Dict[str, float]) -> Optional[pd.DataFrame]`
+
+*   **Purpose:** Updates infiltration parameters in the HDF file with scaling factors.
 *   **Parameters:**
     *   `hdf_path` (Input handled by `@standardize_input`, `file_type='geom_hdf'`): Path identifier for the geometry HDF.
-*   **Returns:** (`pd.DataFrame` or `None`): DataFrame with columns ['Name', 'Maximum Deficit', 'Initial Deficit', 'Potential Percolation Rate'], or `None` if data not found.
+    *   `infiltration_df` (`pd.DataFrame`): DataFrame containing infiltration parameters.
+    *   `scale_factors` (`Dict[str, float]`): Dictionary mapping column names to their scaling factors.
+*   **Returns:** `Optional[pd.DataFrame]`: The updated infiltration DataFrame if successful, None if operation fails.
 
-### `HdfInfiltration.get_infiltration_map(hdf_path)`
+### `HdfInfiltration.get_infiltration_map(hdf_path: Path = None, ras_object: Any = None) -> dict`
 
-*   **Purpose:** Reads the mapping between raster values and soil map unit keys (mukeys) for infiltration layers from the HDF file.
+*   **Purpose:** Reads the infiltration raster map from HDF file.
 *   **Parameters:**
-    *   `hdf_path` (Input handled by `@standardize_input`): Path identifier for the HDF file (typically `.tif.hdf`).
-*   **Returns:** `Dict[int, str]`: Dictionary mapping integer raster values to string mukeys.
+    *   `hdf_path` (Input handled by `@standardize_input`): Path identifier for the HDF file. If not provided, uses first infiltration_hdf_path from rasmap_df.
+    *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
+*   **Returns:** `dict`: Dictionary mapping raster values to mukeys.
 
-### `HdfInfiltration.calculate_soil_statistics(zonal_stats, raster_map)`
+### `HdfInfiltration.calculate_soil_statistics(zonal_stats: list, raster_map: dict) -> pd.DataFrame`
 
-*   **Purpose:** Calculates the area and percentage coverage for each soil type (mukey) based on zonal statistics results (requires `rasterstats` library).
+*   **Purpose:** Calculates soil statistics from zonal statistics.
 *   **Parameters:**
-    *   `zonal_stats` (`list`): List of dictionaries from `rasterstats.zonal_stats` (usually with `categorical=True`).
-    *   `raster_map` (`Dict[int, str]`): Mapping from raster values to mukeys (from `get_infiltration_map`).
-*   **Returns:** `pd.DataFrame`: DataFrame with columns ['mukey', 'Percentage', 'Area in Acres', 'Area in Square Miles'].
+    *   `zonal_stats` (`list`): List of zonal statistics.
+    *   `raster_map` (`dict`): Dictionary mapping raster values to mukeys.
+*   **Returns:** `pd.DataFrame`: DataFrame with soil statistics including percentages and areas.
 
-### `HdfInfiltration.get_significant_mukeys(soil_stats, threshold=1.0)`
+### `HdfInfiltration.get_significant_mukeys(soil_stats: pd.DataFrame, threshold: float = 1.0) -> pd.DataFrame`
 
-*   **Purpose:** Filters soil statistics to include only those mukeys covering a percentage greater than the threshold.
+*   **Purpose:** Gets mukeys with percentage greater than threshold.
 *   **Parameters:**
-    *   `soil_stats` (`pd.DataFrame`): DataFrame from `calculate_soil_statistics`.
-    *   `threshold` (`float`, optional): Minimum percentage coverage. Default 1.0.
-*   **Returns:** `pd.DataFrame`: Filtered and sorted DataFrame of significant mukeys.
+    *   `soil_stats` (`pd.DataFrame`): DataFrame with soil statistics.
+    *   `threshold` (`float`, optional): Minimum percentage threshold. Default 1.0.
+*   **Returns:** `pd.DataFrame`: DataFrame with significant mukeys and their statistics.
 
-### `HdfInfiltration.calculate_total_significant_percentage(significant_mukeys)`
+### `HdfInfiltration.calculate_total_significant_percentage(significant_mukeys: pd.DataFrame) -> float`
 
-*   **Purpose:** Calculates the sum of percentages for the significant mukeys.
+*   **Purpose:** Calculates total percentage covered by significant mukeys.
 *   **Parameters:**
-    *   `significant_mukeys` (`pd.DataFrame`): DataFrame from `get_significant_mukeys`.
-*   **Returns:** (`float`): Total percentage covered.
+    *   `significant_mukeys` (`pd.DataFrame`): DataFrame of significant mukeys.
+*   **Returns:** `float`: Total percentage covered by significant mukeys.
 
-### `HdfInfiltration.save_statistics(soil_stats, output_path, include_timestamp=True)`
+### `HdfInfiltration.save_statistics(soil_stats: pd.DataFrame, output_path: Path, include_timestamp: bool = True)`
 
-*   **Purpose:** Saves the soil statistics DataFrame to a CSV file.
+*   **Purpose:** Saves soil statistics to CSV.
 *   **Parameters:**
-    *   `soil_stats` (`pd.DataFrame`): DataFrame to save.
-    *   `output_path` (`Path`): Path for the output CSV file.
-    *   `include_timestamp` (`bool`, optional): If `True`, appends a timestamp to the filename. Default `True`.
-*   **Returns:** `None`.
+    *   `soil_stats` (`pd.DataFrame`): DataFrame with soil statistics.
+    *   `output_path` (`Path`): Path to save CSV file.
+    *   `include_timestamp` (`bool`, optional): Whether to include timestamp in filename. Default True.
+*   **Returns:** None
 
-### `HdfInfiltration.get_infiltration_parameters(hdf_path, mukey)`
+### `HdfInfiltration.get_infiltration_parameters(hdf_path: Path = None, mukey: str = None, ras_object: Any = None) -> dict`
 
-*   **Purpose:** Retrieves the specific infiltration parameters (Initial Loss, Constant Rate, Impervious Area) associated with a given soil map unit key (mukey) from the HDF file.
+*   **Purpose:** Gets infiltration parameters for a specific mukey from HDF file.
 *   **Parameters:**
-    *   `hdf_path` (Input handled by `@standardize_input`): Path identifier for the HDF file (typically `.tif.hdf`).
-    *   `mukey` (`str`): The soil map unit key to look up.
-*   **Returns:** (`Dict[str, float]` or `None`): Dictionary containing the parameters, or `None` if the mukey is not found.
+    *   `hdf_path` (Input handled by `@standardize_input`): Path identifier for the HDF file. If not provided, uses first infiltration_hdf_path from rasmap_df.
+    *   `mukey` (`str`): Mukey identifier.
+    *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
+*   **Returns:** `dict`: Dictionary of infiltration parameters.
 
-### `HdfInfiltration.calculate_weighted_parameters(soil_stats, infiltration_params)`
+### `HdfInfiltration.calculate_weighted_parameters(soil_stats: pd.DataFrame, infiltration_params: dict) -> dict`
 
-*   **Purpose:** Calculates area-weighted average infiltration parameters based on the percentage coverage of different soil types.
+*   **Purpose:** Calculates weighted infiltration parameters based on soil statistics.
 *   **Parameters:**
-    *   `soil_stats` (`pd.DataFrame`): DataFrame containing percentage coverage for each mukey (e.g., from `get_significant_mukeys`).
-    *   `infiltration_params` (`Dict[str, Dict[str, float]]`): Dictionary mapping mukeys to their specific parameters (e.g., from multiple calls to `get_infiltration_parameters`).
-*   **Returns:** `Dict[str, float]`: Dictionary containing the weighted average parameters ('Initial Loss (in)', 'Constant Loss Rate (in/hr)', 'Impervious Area (%)').
+    *   `soil_stats` (`pd.DataFrame`): DataFrame with soil statistics.
+    *   `infiltration_params` (`dict`): Dictionary of infiltration parameters by mukey.
+*   **Returns:** `dict`: Dictionary of weighted average infiltration parameters.
 
 ---
 
@@ -1713,4 +1770,32 @@ Contains static methods for extracting 1D cross-section *geometry* data from HEC
 *   **Parameters:**
     *   `name` (`str`): Name for the logger (typically `__name__`).
 *   **Returns:** (`logging.Logger`): A standard Python logger instance.
-```
+
+---
+
+## Class: RasMap
+
+Contains static methods for parsing and accessing information from HEC-RAS mapper configuration files (.rasmap).
+
+### `RasMap.parse_rasmap(rasmap_path: Union[str, Path], ras_object=None) -> pd.DataFrame`
+
+*   **Purpose:** Parse a .rasmap file and extract relevant information.
+*   **Parameters:**
+    *   `rasmap_path` (`Union[str, Path]`): Path to the .rasmap file.
+    *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
+*   **Returns:** `pd.DataFrame`: DataFrame containing extracted information from the .rasmap file.
+*   **Raises:** Various exceptions for file access or parsing failures.
+
+### `RasMap.get_rasmap_path(ras_object=None) -> Optional[Path]`
+
+*   **Purpose:** Get the path to the .rasmap file based on the current project.
+*   **Parameters:**
+    *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
+*   **Returns:** `Optional[Path]`: Path to the .rasmap file if found, None otherwise.
+
+### `RasMap.initialize_rasmap_df(ras_object=None) -> pd.DataFrame`
+
+*   **Purpose:** Initialize the rasmap_df as part of project initialization.
+*   **Parameters:**
+    *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
+*   **Returns:** `pd.DataFrame`: DataFrame containing information from the .rasmap file.

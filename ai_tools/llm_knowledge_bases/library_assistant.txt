@@ -1,4 +1,4 @@
-File: C:\GH\ras-commander\ai_tools\library_assistant\.cursorrules
+File: c:\GH\ras-commander\ai_tools\library_assistant\.cursorrules
 ==================================================
 Library Assistant: AI-Powered Tool for Managing and Querying Library Content
 
@@ -82,10 +82,10 @@ The assistant should provide accurate, context-aware, and helpful responses whil
 
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\api
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\api
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\assistant.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\assistant.py
 ==================================================
 """
 Main entry point for the Library Assistant application.
@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\assistant.spec
+File: c:\GH\ras-commander\ai_tools\library_assistant\assistant.spec
 ==================================================
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -216,13 +216,13 @@ exe = EXE(
 )
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\config
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\config
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\database
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\database
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\dev roadmap notes.txt
+File: c:\GH\ras-commander\ai_tools\library_assistant\dev roadmap notes.txt
 ==================================================
 The cost estimation should update when a new model is selected in settings
 
@@ -243,10 +243,10 @@ The model name in the upper right hand corner should change with model selection
 store settings.db in user folder to prevent key leaks
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\docs
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\docs
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\main.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\main.py
 ==================================================
 from fastapi import FastAPI
 from api.logging import router as logging_router
@@ -257,7 +257,7 @@ app = FastAPI()
 app.include_router(logging_router, prefix="/api") 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\package-lock.json
+File: c:\GH\ras-commander\ai_tools\library_assistant\package-lock.json
 ==================================================
 {
   "name": "library_assistant",
@@ -368,7 +368,7 @@ File: C:\GH\ras-commander\ai_tools\library_assistant\package-lock.json
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\package.json
+File: c:\GH\ras-commander\ai_tools\library_assistant\package.json
 ==================================================
 {
   "dependencies": {
@@ -378,7 +378,7 @@ File: C:\GH\ras-commander\ai_tools\library_assistant\package.json
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\ras-commander_library_assistant.svg
+File: c:\GH\ras-commander\ai_tools\library_assistant\ras-commander_library_assistant.svg
 ==================================================
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 300">
   <!-- Background with gradient -->
@@ -417,7 +417,7 @@ File: C:\GH\ras-commander\ai_tools\library_assistant\ras-commander_library_assis
 </svg>
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\REAME.md
+File: c:\GH\ras-commander\ai_tools\library_assistant\REAME.md
 ==================================================
 # RAS-Commander Library Assistant
 
@@ -639,7 +639,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\requirements.txt
+File: c:\GH\ras-commander\ai_tools\library_assistant\requirements.txt
 ==================================================
 # Web framework and ASGI server
 fastapi
@@ -700,13 +700,13 @@ together
 # sphinx
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\utils
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\utils
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\web
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\web
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\api\anthropic.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\api\anthropic.py
 ==================================================
 """
 Anthropic API integration for the Library Assistant.
@@ -864,7 +864,7 @@ async def stream_response(
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\api\logging.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\api\logging.py
 ==================================================
 """
 Logging configuration for the Library Assistant.
@@ -976,7 +976,7 @@ async def log_message(request: Request):
         return {"status": "error", "message": str(e)} 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\api\openai.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\api\openai.py
 ==================================================
 """
 OpenAI API integration for the Library Assistant.
@@ -1290,7 +1290,7 @@ def get_openai_models() -> List[Dict[str, Any]]:
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\api\together.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\api\together.py
 ==================================================
 """
 Together.ai API integration for the Library Assistant.
@@ -1443,7 +1443,7 @@ async def async_chat_completions(
     return responses 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\config\config.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\config\config.py
 ==================================================
 """
 Configuration module for the Library Assistant.
@@ -1574,7 +1574,7 @@ def update_settings(data):
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\database\models.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\database\models.py
 ==================================================
 """
 Database models for the Library Assistant.
@@ -1678,7 +1678,7 @@ migrate_database()
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\docs\notebook_preprocessing.md
+File: c:\GH\ras-commander\ai_tools\library_assistant\docs\notebook_preprocessing.md
 ==================================================
 # Notebook Preprocessing for Library Assistant
 
@@ -1792,7 +1792,7 @@ Possible future enhancements to consider:
 4. Add support for processing other file types that might contain large binary data 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\utils\context_integration.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\utils\context_integration.py
 ==================================================
 """
 Integration of context preprocessing into the Library Assistant application.
@@ -1918,7 +1918,7 @@ def set_context_folder_with_preprocessing():
         return context_folder 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\utils\context_preprocessor.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\utils\context_preprocessor.py
 ==================================================
 """
 Context folder preprocessing module for Library Assistant.
@@ -2384,7 +2384,7 @@ def preprocess_context_folder(
     return processed_folder 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\utils\context_processing.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\utils\context_processing.py
 ==================================================
 """
 Utility functions for context processing in the Library Assistant.
@@ -2551,7 +2551,7 @@ def clear_conversation_history(conversation_id: str):
         conversation_context[conversation_id]['history'] = []
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\utils\conversation.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\utils\conversation.py
 ==================================================
 """
 Utility functions for conversation handling in the Library Assistant.
@@ -2649,7 +2649,7 @@ def get_last_message():
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\utils\cost_estimation.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\utils\cost_estimation.py
 ==================================================
 """
 Utility functions for cost estimation in the Library Assistant.
@@ -2927,7 +2927,7 @@ def get_context_window(pricing_df):
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\utils\file_handling.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\utils\file_handling.py
 ==================================================
 """
 Utility functions for file handling in the Library Assistant.
@@ -3198,7 +3198,7 @@ def combine_files(summarize_subfolder, omit_folders, omit_extensions, omit_files
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\web\routes.py
+File: c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py
 ==================================================
 """
 Web routes for the Library Assistant.
@@ -3692,13 +3692,13 @@ async def add_root_folder(request: Request):
     )
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\web\static
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\web\static
 ==================================================
 
-Folder: C:\GH\ras-commander\ai_tools\library_assistant\web\templates
+Folder: c:\GH\ras-commander\ai_tools\library_assistant\web\templates
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\web\static\fileTree.js
+File: c:\GH\ras-commander\ai_tools\library_assistant\web\static\fileTree.js
 ==================================================
 import React, { useState, useEffect } from 'react';
 
@@ -4016,7 +4016,7 @@ const FileTreeViewer = ({ initialData }) => {
 export default FileTreeViewer;
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\web\static\main.js
+File: c:\GH\ras-commander\ai_tools\library_assistant\web\static\main.js
 ==================================================
 /**
  * main.js
@@ -5010,7 +5010,7 @@ function getSelectedFiles() {
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\web\static\styles.css
+File: c:\GH\ras-commander\ai_tools\library_assistant\web\static\styles.css
 ==================================================
 /* Add these styles to your existing CSS */
 .file-tree-dropdown {
@@ -5122,7 +5122,7 @@ File: C:\GH\ras-commander\ai_tools\library_assistant\web\static\styles.css
 } 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\web\static\tokendisplay.js
+File: c:\GH\ras-commander\ai_tools\library_assistant\web\static\tokendisplay.js
 ==================================================
 /******************************************
  * tokenDisplay.js (type="text/babel")
@@ -5407,7 +5407,7 @@ if (document.readyState === 'loading') {
 
 ==================================================
 
-File: C:\GH\ras-commander\ai_tools\library_assistant\web\templates\index.html
+File: c:\GH\ras-commander\ai_tools\library_assistant\web\templates\index.html
 ==================================================
 <!DOCTYPE html>
 <html lang="en">
