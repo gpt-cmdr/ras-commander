@@ -10702,6 +10702,8 @@ from itertools import cycle
 from typing import Union, List, Optional, Dict
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .RasRemote import RasRemote # Add this import
+from itertools import cycle       # Add this import
 
 logger = get_logger(__name__)
 
@@ -11336,6 +11338,261 @@ class RasCmdr:
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
             return {}
+        
+
+
+
+
+
+
+        # ------ RAS REMOTE FUNCTIONS ------
+
+
+    @staticmethod
+    @log_call
+    def compute_parallel_remote(
+        plan_number: Union[str, List[str], None],
+        remote_ras_list: List[RasRemote],
+        ras_object: RasPrj, # Source project object
+        num_cores: int = 2,
+        clear_geompre: bool = False,
+        dest_folder: Union[str, Path, None] = None,
+        overwrite_dest: bool = False,
+        safety_prefix: str = "RAS_Remote_"
+    ) -> Dict[str, bool]:
+        """
+        Execute HEC-RAS plans in parallel across multiple remote (or local) machines.
+
+        Args:
+            plan_number: Plan number(s) to compute (e.g., "01", ["01", "02"]). If None, all plans are computed.
+            remote_ras_list: List of initialized RasRemote instances representing target machines.
+            ras_object: The RasPrj instance representing the source HEC-RAS project.
+            num_cores: Number of cores per HEC-RAS instance on remote machines. Default 2.
+            clear_geompre: Clear geom preprocessor files before running. Default False.
+            dest_folder: Local destination folder for consolidated results. If None, creates
+                         a "[ComputedRemote]" folder adjacent to the source project folder.
+            overwrite_dest: Overwrite the destination folder if it exists. Default False.
+            safety_prefix: Prefix for worker folders created on remote machines for safe cleanup.
+                           Default "RAS_Remote_".
+
+        Returns:
+            Dict[str, bool]: Dictionary mapping plan numbers to execution success status.
+
+        Raises:
+            ValueError: If no remote targets are provided or if dest_folder handling fails.
+            RuntimeError: If preparation or execution steps fail critically.
+
+        Example:
+            >>> remote1 = init_remote_ras("\\\\MACHINE1\\Share\\RasRuns", remote_root_path="C:\\Temp")
+            >>> remote2 = init_remote_ras("C:\\LocalRasRuns") # Local target
+            >>> source_proj = init_ras_project("/path/to/source")
+            >>> results = RasCmdr.compute_parallel_remote(
+            ...     plan_number=["01", "02", "03"],
+            ...     remote_ras_list=[remote1, remote2],
+            ...     ras_object=source_proj,
+            ...     dest_folder="/path/to/consolidated_results",
+            ...     overwrite_dest=True
+            ... )
+            >>> print(results)
+            {'01': True, '02': True, '03': False}
+        """
+        if not remote_ras_list:
+            logger.error("No remote RAS targets provided for parallel remote execution.")
+            raise ValueError("remote_ras_list cannot be empty.")
+
+        ras_obj = ras_object # Use the provided source object
+        ras_obj.check_initialized()
+        source_project_folder = Path(ras_obj.project_folder)
+        source_project_name = ras_obj.project_name
+
+        # --- Destination Folder Handling ---
+        if dest_folder is None:
+            final_dest_folder = source_project_folder.parent / f"{source_project_folder.name} [ComputedRemote]"
+        else:
+            final_dest_folder = Path(dest_folder)
+
+        if final_dest_folder.exists():
+            if overwrite_dest:
+                logger.info(f"Destination folder '{final_dest_folder}' exists. Overwriting.")
+                if not RasUtils.remove_with_retry(final_dest_folder, is_folder=True):
+                     raise RuntimeError(f"Failed to remove existing destination folder: {final_dest_folder}")
+            elif any(final_dest_folder.iterdir()):
+                error_msg = f"Destination folder '{final_dest_folder}' exists and is not empty. Use overwrite_dest=True."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        try:
+            final_dest_folder.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+             raise RuntimeError(f"Failed to create destination folder: {final_dest_folder}: {e}")
+
+        logger.info(f"Final destination for results: {final_dest_folder}")
+
+        # --- Filter Plans ---
+        if plan_number:
+            if isinstance(plan_number, str):
+                plans_to_run = [plan_number]
+            else:
+                plans_to_run = list(plan_number)
+            # Ensure plans exist in the source object's dataframe
+            valid_plans_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plans_to_run)]
+            plans_to_run = list(valid_plans_df['plan_number']) # Use only valid plans
+            logger.info(f"Filtered plans to execute: {plans_to_run}")
+        else:
+            plans_to_run = list(ras_obj.plan_df['plan_number'])
+            logger.info(f"Executing all {len(plans_to_run)} plans in the project.")
+
+        if not plans_to_run:
+             logger.warning("No valid plans selected for execution.")
+             return {}
+
+        # --- Prepare Remote Folders ---
+        logger.info("Preparing remote worker folders...")
+        prep_futures = {}
+        # Prepare folders in parallel across machines
+        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
+             for remote_instance in remote_ras_list:
+                  future = executor.submit(remote_instance.prepare_remote_folders, source_project_folder, safety_prefix)
+                  prep_futures[future] = remote_instance.machine_name
+             preparation_successful = True
+             for future in as_completed(prep_futures):
+                  machine_name = prep_futures[future]
+                  try:
+                      if not future.result():
+                           logger.error(f"Failed to prepare remote folders on {machine_name}.")
+                           preparation_successful = False # Mark failure but let others finish
+                  except Exception as e:
+                      logger.error(f"Error during remote folder preparation on {machine_name}: {e}")
+                      preparation_successful = False
+        if not preparation_successful:
+             raise RuntimeError("Failed to prepare one or more remote targets. Aborting.")
+        logger.info("Remote worker folders prepared successfully.")
+
+        # --- Generate Batch Files ---
+        logger.info("Generating remote batch files...")
+        gen_futures = {}
+        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
+             for remote_instance in remote_ras_list:
+                  future = executor.submit(remote_instance._generate_remote_batch_files, ras_obj, safety_prefix)
+                  gen_futures[future] = remote_instance.machine_name
+             batch_gen_successful = True
+             for future in as_completed(gen_futures):
+                  machine_name = gen_futures[future]
+                  try:
+                      if not future.result():
+                           logger.error(f"Failed to generate batch files on {machine_name}.")
+                           batch_gen_successful = False # Log error but maybe continue
+                  except Exception as e:
+                       logger.error(f"Error during remote batch file generation on {machine_name}: {e}")
+                       batch_gen_successful = False
+        if not batch_gen_successful:
+             logger.warning("Failed to generate batch files on one or more remote targets. Execution might fail for some plans.")
+        else:
+            logger.info("Remote batch file generation completed successfully.")
+
+
+        # --- Distribute and Execute Plans ---
+        worker_slots = [] # List of (remote_instance, worker_id) tuples
+        for remote_instance in remote_ras_list:
+             for i in range(1, remote_instance.worker_count_per_machine + 1):
+                  worker_slots.append((remote_instance, i))
+
+        if not worker_slots:
+            raise RuntimeError("No worker slots available for execution.")
+
+        total_slots = len(worker_slots)
+        logger.info(f"Total available worker slots across all machines: {total_slots}")
+
+        slot_cycle = cycle(worker_slots)
+        plan_assignments = {} # plan_num: (remote_instance, worker_id)
+        for plan_num in plans_to_run:
+             remote_instance, worker_id = next(slot_cycle)
+             plan_assignments[plan_num] = (remote_instance, worker_id)
+             logger.debug(f"Assigning plan {plan_num} to {remote_instance.machine_name} worker {worker_id}")
+
+        execution_results: Dict[str, bool] = {}
+        execution_lock = Lock() # Lock for updating shared results safely
+
+        # Use total slots as max workers for execution phase
+        max_concurrent_workers = total_slots
+        logger.info(f"Starting parallel execution with up to {max_concurrent_workers} concurrent tasks.")
+
+        with ThreadPoolExecutor(max_workers=max_concurrent_workers) as executor:
+             futures = {
+                  executor.submit(
+                       remote_instance.compute_plan_remote,
+                       plan_num,
+                       worker_id,
+                       ras_obj, # Pass source object for names/paths
+                       safety_prefix,
+                       clear_geompre,
+                       num_cores
+                  ): plan_num
+                  for plan_num, (remote_instance, worker_id) in plan_assignments.items()
+             }
+
+             for future in as_completed(futures):
+                  plan_num = futures[future]
+                  remote_instance, worker_id = plan_assignments[plan_num]
+                  try:
+                      success = future.result()
+                      with execution_lock:
+                           execution_results[plan_num] = success
+                      logger.info(f"Plan {plan_num} executed on {remote_instance.machine_name} worker {worker_id}: {'Successful' if success else 'Failed'}")
+                  except Exception as e:
+                       with execution_lock:
+                           execution_results[plan_num] = False
+                       logger.error(f"Plan {plan_num} on {remote_instance.machine_name} worker {worker_id} failed: {str(e)}")
+
+        logger.info("Parallel remote execution phase completed.")
+
+        # --- Collect Results ---
+        logger.info("Collecting results from remote machines...")
+        collect_futures = {}
+        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
+             for remote_instance in remote_ras_list:
+                  future = executor.submit(remote_instance.collect_results, final_dest_folder, safety_prefix, source_project_name)
+                  collect_futures[future] = remote_instance.machine_name
+             for future in as_completed(collect_futures):
+                  machine_name = collect_futures[future]
+                  try:
+                      if not future.result():
+                           logger.error(f"Failed to fully collect results from {machine_name}.")
+                           # Continue collecting from others
+                  except Exception as e:
+                       logger.error(f"Error during results collection from {machine_name}: {e}")
+        logger.info("Results collection completed.")
+
+        # --- Cleanup Remote Folders ---
+        logger.info("Cleaning up remote worker folders...")
+        cleanup_futures = {}
+        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
+             for remote_instance in remote_ras_list:
+                  future = executor.submit(remote_instance.cleanup_remote_folders, safety_prefix, source_project_name)
+                  cleanup_futures[future] = remote_instance.machine_name
+             for future in as_completed(cleanup_futures):
+                  machine_name = cleanup_futures[future]
+                  try:
+                      if not future.result():
+                           logger.error(f"Failed to cleanup remote folders on {machine_name}.")
+                           # Log but don't halt
+                  except Exception as e:
+                       logger.error(f"Error during remote cleanup on {machine_name}: {e}")
+        logger.info("Remote cleanup completed.")
+
+        # --- Final Summary ---
+        logger.info("\n--- Remote Parallel Execution Summary ---")
+        successful_plans = [p for p, s in execution_results.items() if s]
+        failed_plans = [p for p, s in execution_results.items() if not s]
+        logger.info(f"Total Plans Attempted: {len(plans_to_run)}")
+        logger.info(f"Successful: {len(successful_plans)}")
+        logger.info(f"Failed: {len(failed_plans)}")
+        if failed_plans:
+            logger.warning(f"Failed plans: {', '.join(failed_plans)}")
+        logger.info(f"Results consolidated to: {final_dest_folder}")
+        logger.info("--- End Summary ---")
+
+        return execution_results        
+
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasExamples.py
@@ -14273,6 +14530,730 @@ def get_ras_exe(ras_version=None):
 
 ==================================================
 
+File: c:\GH\ras-commander\ras_commander\RasRemote.py
+==================================================
+
+import os
+import subprocess
+import shutil
+from pathlib import Path
+import keyring
+import getpass
+import tempfile
+import urllib.request
+import zipfile
+from urllib.error import URLError, HTTPError
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
+from typing import Union, List, Optional, Dict, Any, Tuple
+import pandas as pd
+
+# Internal imports - relative paths for library structure
+from .RasPrj import RasPrj, ras, get_ras_exe # Assuming ras is the global default
+from .RasPlan import RasPlan
+from .RasUtils import RasUtils
+from .LoggingConfig import get_logger
+from .Decorators import log_call
+
+logger = get_logger(__name__)
+
+# --- Constants for Credential Management ---
+USERNAME_FILE = "remote_username.txt" # Use a different name to avoid conflict if run locally
+SERVICE_NAME = "ras_commander_remote_credential"
+
+class RasRemote:
+    """
+    Represents a remote execution target for HEC-RAS computations.
+
+    Manages connection details, credentials, folder paths, and execution parameters
+    for a specific machine where HEC-RAS plans can be run. Instances should typically
+    be created using the `init_remote_ras` factory function.
+
+    Attributes:
+        machine_name (str): Network name of the machine (e.g., "MYCOMPUTER" or "NetworkName1").
+        local_share_path (Path): Path to the target execution folder *as seen from the local machine*
+                                 (e.g., Path("\\\\NetworkName1\\Share\\TempRuns")).
+        remote_target_base_dir (Path): Base path on the *remote* machine where worker folders will be created
+                                       (e.g., Path("C:\\TempRuns")). Derived from local_share_path
+                                       and remote_root_path.
+        remote_root_path (Path): The root path on the remote machine corresponding to the share's root
+                                 (e.g., Path("C:\\")).
+        psexec_path (Path): Path to the PsExec64.exe executable.
+        username (str): Username for remote access.
+        password (str): Password for remote access (retrieved from keyring).
+        run_in_system_account (bool): Whether to run PsExec as SYSTEM.
+        session_id (int): Session ID for interactive PsExec execution (if not system).
+        priority (str): PsExec priority level ('low', 'belownormal', 'normal', etc.).
+        physical_cores (int): Number of physical cores available on the target machine.
+        worker_count_per_machine (int): How many parallel HEC-RAS instances (copies of the project)
+                                       to run on this machine.
+        initialized (bool): Flag indicating if the instance is ready.
+    """
+    def __init__(self,
+                 machine_name: str,
+                 local_share_path: Path,
+                 remote_target_base_dir: Path,
+                 remote_root_path: Path,
+                 psexec_path: Path,
+                 username: str,
+                 password: str,
+                 run_in_system_account: bool,
+                 session_id: int,
+                 priority: str,
+                 physical_cores: int,
+                 worker_count_per_machine: int):
+        """Initializes a RasRemote instance. Direct instantiation is discouraged; use init_remote_ras."""
+        self.machine_name = machine_name
+        self.local_share_path = local_share_path
+        self.remote_target_base_dir = remote_target_base_dir
+        self.remote_root_path = remote_root_path
+        self.psexec_path = psexec_path
+        self.username = username
+        self.password = password # Stored temporarily, primarily used via _run_psexec_command
+        self.run_in_system_account = run_in_system_account
+        self.session_id = session_id
+        self.priority = priority
+        self.physical_cores = physical_cores
+        self.worker_count_per_machine = worker_count_per_machine
+        self.initialized = True # Mark as initialized after storing attributes
+
+    @log_call
+    def test_connection(self) -> bool:
+        """
+        Test the PsExec connection to the remote machine using 'ipconfig'.
+
+        Returns:
+            bool: True if the connection is successful, False otherwise.
+        """
+        logger.info(f"Testing connection to {self.machine_name}...")
+        success = self._run_psexec_command('ipconfig')
+        if success:
+            logger.info(f"Successfully connected to {self.machine_name} via PsExec.")
+        else:
+            logger.error(f"Failed to connect to {self.machine_name} via PsExec. Check configuration and credentials.")
+        return success
+
+    def _run_psexec_command(self, command: str, target_path: Optional[Path] = None) -> bool:
+        """
+        Internal helper to execute a command on the remote machine via PsExec.
+
+        Args:
+            command (str): The command string to execute (e.g., 'ipconfig', '"C:\\path\\to\\script.bat"').
+            target_path (Optional[Path]): If provided, sets the working directory for the command execution
+                                           on the remote machine.
+
+        Returns:
+            bool: True if the command executed successfully (return code 0), False otherwise.
+        """
+        # Ensure target_path uses correct separators for the target OS (Windows assumed)
+        cwd_path = str(target_path).replace('/', '\\') if target_path else None
+
+        # Construct PsExec command for remote execution
+        if not self.psexec_path or not self.psexec_path.exists():
+             logger.error("PsExec path is not configured or invalid.")
+             return False
+
+        psexec_base = f'"{self.psexec_path}" \\\\{self.machine_name}'
+        # Use stored credentials safely
+        credentials = f'-u "{self.username}" -p "{self.password}"' if self.username and self.password else ''
+        session_flag = f'-s' if self.run_in_system_account else f'-i {self.session_id}'
+        priority_flag = f'-{self.priority}' if self.priority else ''
+        working_dir_flag = f'-w "{cwd_path}"' if cwd_path else ''
+
+        # Ensure the command path uses remote perspective backslashes
+        remote_command = str(command).replace('/', '\\')
+        # Quote the command if it contains spaces and isn't already quoted
+        if ' ' in remote_command and not (remote_command.startswith('"') and remote_command.endswith('"')):
+             remote_command = f'"{remote_command}"'
+
+        # Using cmd /c can be more robust for executing batch files than PowerShell
+        full_command = f'{psexec_base} {credentials} {session_flag} {priority_flag} {working_dir_flag} -accepteula cmd /c {remote_command}'
+
+        obfuscated_command = full_command.replace(self.password, '********') if self.password else full_command
+        logger.debug(f"Executing PsExec command: {obfuscated_command}")
+
+        try:
+            result = subprocess.run(full_command, check=True, shell=True, capture_output=True, text=True)
+            logger.debug(f"PsExec stdout for '{Path(command).name}': {result.stdout[:200]}...") # Log snippet
+            logger.debug(f"PsExec stderr for '{Path(command).name}': {result.stderr}")
+            logger.info(f"PsExec command for '{Path(command).name}' executed successfully on {self.machine_name}.")
+            return True
+        except subprocess.CalledProcessError as e:
+            obfuscated_error = str(e).replace(self.password, '********') if self.password else str(e)
+            obfuscated_stderr = e.stderr.replace(self.password, '********') if self.password else e.stderr
+            logger.error(f"PsExec command for '{Path(command).name}' failed on {self.machine_name}: {obfuscated_error}")
+            logger.error(f"PsExec stderr: {obfuscated_stderr}")
+            return False
+        except Exception as e:
+            obfuscated_error = str(e).replace(self.password, '********') if self.password else str(e)
+            logger.error(f"Unexpected error during PsExec execution of '{Path(command).name}': {obfuscated_error}")
+            return False
+
+    @log_call
+    def prepare_remote_folders(self, source_project_folder: Path, safety_prefix: str) -> bool:
+        """
+        Prepare the target directory by clearing old folders and copying the project.
+
+        Args:
+            source_project_folder (Path): The local path to the HEC-RAS project to copy.
+            safety_prefix (str): Prefix used to identify folders managed by this script for safe deletion.
+
+        Returns:
+            bool: True if preparation was successful, False otherwise.
+        """
+        target_path = self.local_share_path # Use local path for file operations
+        logger.info(f"Preparing worker folders on {self.machine_name} at {target_path}")
+
+        # 1. Clear existing folders on the target (using local path to access share or local dir)
+        if not target_path.exists():
+             logger.info(f"Target directory {target_path} does not exist. Creating.")
+             try:
+                 target_path.mkdir(parents=True, exist_ok=True)
+             except Exception as e:
+                 logger.error(f"Failed to create target directory {target_path}: {e}")
+                 return False
+        else:
+             logger.info(f"Clearing existing worker folders matching prefix '{safety_prefix}' in {target_path}...")
+             items_to_remove = list(target_path.glob(f"{safety_prefix}*"))
+             if not items_to_remove:
+                 logger.info("No existing folders found matching the safety prefix. No deletion required.")
+             else:
+                 logger.info(f"Found {len(items_to_remove)} items matching prefix '{safety_prefix}*' to remove.")
+                 all_removed = True
+                 for item_path in items_to_remove:
+                    if item_path.name.startswith(safety_prefix):
+                         is_folder = item_path.is_dir()
+                         if not RasUtils.remove_with_retry(item_path, is_folder=is_folder):
+                             logger.error(f"Failed to remove item: {item_path}")
+                             all_removed = False
+                         else:
+                            logger.info(f"Successfully removed {'folder' if is_folder else 'file'}: {item_path}")
+                    else:
+                        logger.warning(f"Skipping item {item_path.name} as it doesn't match safety prefix '{safety_prefix}'.")
+
+                 if not all_removed:
+                     logger.error("Failed to clear all existing worker folders. Aborting preparation.")
+                     return False
+                 logger.info("Existing worker folders cleared successfully.")
+
+        # 2. Copy the project worker_count_per_machine times
+        logger.info(f"Copying project from {source_project_folder} to {target_path} ({self.worker_count_per_machine} copies)...")
+        source_name = source_project_folder.name
+        copy_futures = {}
+        # Limit copy threads, especially important for network shares
+        with ThreadPoolExecutor(max_workers=min(4, self.worker_count_per_machine)) as executor:
+            for i in range(1, self.worker_count_per_machine + 1):
+                # Ensure safety prefix is applied correctly
+                worker_folder_name = f"{safety_prefix}{source_name}_Worker_{i}"
+                dest_path = target_path / worker_folder_name
+                logger.debug(f"Submitting copy task for worker {i} to {dest_path}")
+                # Use dirs_exist_ok=False to catch errors if cleanup failed, but log warning if exists
+                future = executor.submit(shutil.copytree, source_project_folder, dest_path, dirs_exist_ok=False)
+                copy_futures[future] = dest_path
+
+            for future in as_completed(copy_futures):
+                dest_path = copy_futures[future]
+                try:
+                    future.result() # Check for exceptions during copy
+                    logger.info(f"Successfully copied project to {dest_path}")
+                except FileExistsError:
+                     logger.warning(f"Worker folder already exists (unexpected): {dest_path}. Skipping copy for this worker.")
+                except Exception as e:
+                    logger.error(f"Failed to copy project to {dest_path}: {e}")
+                    return False # Abort if any copy fails
+
+        logger.info(f"Successfully prepared worker folders on {self.machine_name}.")
+        return True
+
+    @log_call
+    def _generate_remote_batch_files(self, source_ras_object: RasPrj, safety_prefix: str) -> bool:
+        """
+        Generates .bat files for all plans within each worker folder on the target machine.
+
+        Args:
+            source_ras_object (RasPrj): The RasPrj object representing the source project structure.
+            safety_prefix (str): The prefix used for worker folder names.
+
+        Returns:
+            bool: True if batch files generated successfully, False otherwise.
+        """
+        logger.info(f"Generating batch files on {self.machine_name}...")
+        all_success = True
+        source_project_name = source_ras_object.project_name
+        # Determine remote RAS exe path - assumes same version/path structure as source for simplicity
+        # A more robust solution might require specifying remote exe path during init
+        remote_ras_exe_path = get_ras_exe(source_ras_object.ras_version)
+        if remote_ras_exe_path == "Ras.exe":
+            logger.warning(f"Could not determine a specific HEC-RAS executable path for {self.machine_name}. Using generic 'Ras.exe'. Execution might fail if not in PATH.")
+
+        for i in range(1, self.worker_count_per_machine + 1):
+            worker_folder_name = f"{safety_prefix}{source_project_name}_Worker_{i}"
+            remote_worker_path = self.remote_target_base_dir / worker_folder_name # Path ON REMOTE machine
+            local_worker_path_view = self.local_share_path / worker_folder_name # Path for WRITING batch file
+
+            logger.debug(f"Generating batch files for remote worker {i} ({remote_worker_path}) via local path {local_worker_path_view}")
+
+            if not local_worker_path_view.is_dir():
+                logger.error(f"Local view of worker folder does not exist: {local_worker_path_view}. Cannot generate batch files.")
+                all_success = False
+                continue
+
+            for _, plan_row in source_ras_object.plan_df.iterrows():
+                plan_number = plan_row['plan_number']
+                remote_prj_path = remote_worker_path / f"{source_project_name}.prj"
+                remote_plan_path = remote_worker_path / f"{source_project_name}.p{plan_number}"
+                local_bat_path = local_worker_path_view / f"{source_project_name}.p{plan_number}.run.bat"
+
+                # Use backslashes for Windows paths in the batch file command string
+                cmd_prj = str(remote_prj_path).replace('/', '\\')
+                cmd_plan = str(remote_plan_path).replace('/', '\\')
+                cmd_exe = str(remote_ras_exe_path).replace('/', '\\')
+
+                batch_content = f'@echo off\nchcp 65001 > nul\n"{cmd_exe}" -c "{cmd_prj}" "{cmd_plan}"\n'
+
+                try:
+                    with open(local_bat_path, 'w', encoding='utf-8') as f: # Use utf-8 for safety
+                        f.write(batch_content)
+                    logger.debug(f"Generated batch file: {local_bat_path}")
+                except Exception as e:
+                    logger.error(f"Failed to write batch file {local_bat_path}: {e}")
+                    all_success = False
+
+        if all_success:
+            logger.info(f"Batch file generation complete for {self.machine_name}.")
+        else:
+            logger.error(f"Failed to generate some batch files on {self.machine_name}.")
+        return all_success
+
+    @log_call
+    def compute_plan_remote(self, plan_number: str, worker_id: int, source_ras_object: RasPrj, safety_prefix: str, clear_geompre: bool = False, num_cores: Optional[int] = None) -> bool:
+        """
+        Executes a specific HEC-RAS plan in a specific worker folder on this target machine.
+
+        Args:
+            plan_number (str): The plan number to execute (e.g., "01").
+            worker_id (int): The ID of the worker folder (1 to worker_count_per_machine).
+            source_ras_object (RasPrj): The RasPrj object for the source project (used for names/paths).
+            safety_prefix (str): The prefix used for worker folder names.
+            clear_geompre (bool): Whether to clear geometry preprocessor files (.c*) before running.
+            num_cores (Optional[int]): Number of cores to use (updates the plan file).
+
+        Returns:
+            bool: True if execution was successful, False otherwise.
+        """
+        logger.info(f"Executing plan {plan_number} in worker {worker_id} on {self.machine_name}...")
+
+        worker_folder_name = f"{safety_prefix}{source_ras_object.project_name}_Worker_{worker_id}"
+        local_worker_path = self.local_share_path / worker_folder_name # Path for local file ops
+        remote_worker_path = self.remote_target_base_dir / worker_folder_name # Path on remote machine
+
+        # 1. Prepare the specific plan file in the worker folder (optional steps via local path)
+        try:
+            temp_worker_ras = RasPrj()
+            # Initialize temporary object with the correct remote exe path if available
+            remote_ras_exe = self.psexec_path
+            temp_worker_ras.initialize(local_worker_path, remote_ras_exe, suppress_logging=True)
+
+            plan_path_local = RasPlan.get_plan_path(plan_number, ras_object=temp_worker_ras)
+            if not plan_path_local or not Path(plan_path_local).exists():
+                 logger.error(f"Plan file {plan_number} not found in worker folder {local_worker_path}")
+                 return False
+
+            if clear_geompre:
+                from .RasGeo import RasGeo # Avoid circular import at module level
+                RasGeo.clear_geompre_files(plan_path_local, ras_object=temp_worker_ras)
+                logger.info(f"Cleared geompre for plan {plan_number} in worker {worker_id}")
+
+            if num_cores is not None:
+                RasPlan.set_num_cores(plan_path_local, num_cores, ras_object=temp_worker_ras)
+                logger.info(f"Set cores={num_cores} for plan {plan_number} in worker {worker_id}")
+
+        except Exception as e:
+            logger.error(f"Error preparing plan {plan_number} in worker {worker_id}: {e}")
+            return False
+
+        # 2. Define the command: path to the batch file ON THE REMOTE machine
+        remote_bat_path = remote_worker_path / f"{source_ras_object.project_name}.p{plan_number}.run.bat"
+
+        # 3. Execute the command remotely using the remote worker path as CWD
+        logger.info(f"Running PsExec for {remote_bat_path} on {self.machine_name}")
+        success = self._run_psexec_command(str(remote_bat_path), target_path=remote_worker_path)
+
+        if success:
+            logger.info(f"Successfully executed plan {plan_number} in worker {worker_id} on {self.machine_name}.")
+        else:
+            logger.error(f"Failed to execute plan {plan_number} in worker {worker_id} on {self.machine_name}.")
+
+        return success
+
+    @log_call
+    def collect_results(self, dest_folder: Path, safety_prefix: str, source_project_name: str) -> bool:
+        """
+        Collect result files (.hdf, .log, etc.) from all worker folders on this machine.
+
+        Args:
+            dest_folder (Path): The local directory to copy the results into.
+            safety_prefix (str): The prefix used for worker folder names.
+            source_project_name (str): The base name of the HEC-RAS project.
+
+        Returns:
+            bool: True if results collection was generally successful, False if major errors occurred.
+        """
+        target_path = self.local_share_path # Use local path for file ops
+        logger.info(f"Collecting results from {self.machine_name} ({target_path}) to {dest_folder}")
+        all_success = True
+        copied_files_count = 0
+
+        for i in range(1, self.worker_count_per_machine + 1):
+            worker_folder_name = f"{safety_prefix}{source_project_name}_Worker_{i}"
+            local_worker_path = target_path / worker_folder_name
+
+            if not local_worker_path.is_dir():
+                logger.warning(f"Worker folder not found, cannot collect results: {local_worker_path}")
+                continue
+
+            logger.debug(f"Scanning worker folder: {local_worker_path}")
+            try:
+                # Define patterns for result files (adapt as needed)
+                result_patterns = ["*.hdf", "*.log", "*.compute_log*"]
+                for pattern in result_patterns:
+                    for source_file in local_worker_path.glob(pattern):
+                        # Exclude geometry HDF files unless specifically needed
+                        if ".g" in source_file.suffixes and ".hdf" in source_file.suffixes:
+                            continue
+                        # Exclude any input HDF files if named specifically
+                        if "input.hdf" in source_file.name.lower(): # Example exclusion
+                            continue
+
+                        dest_file = dest_folder / source_file.name
+                        try:
+                            if not dest_folder.exists():
+                                dest_folder.mkdir(parents=True, exist_ok=True)
+
+                            # Copy if destination doesn't exist or source is newer
+                            if not dest_file.exists() or source_file.stat().st_mtime > dest_file.stat().st_mtime:
+                                shutil.copy2(source_file, dest_file)
+                                logger.debug(f"Copied {source_file.name} to {dest_folder}")
+                                copied_files_count += 1
+                            else:
+                                logger.debug(f"Skipped {source_file.name} (destination is newer or same)")
+                        except Exception as copy_err:
+                            logger.error(f"Failed to copy {source_file.name} from {local_worker_path}: {copy_err}")
+                            all_success = False
+            except Exception as e:
+                logger.error(f"Error accessing or collecting results from {local_worker_path}: {e}")
+                all_success = False
+
+        logger.info(f"Collected {copied_files_count} result files from {self.machine_name}.")
+        return all_success
+
+    @log_call
+    def cleanup_remote_folders(self, safety_prefix: str, source_project_name: str) -> bool:
+        """
+        Remove all worker folders matching the safety prefix from this target machine.
+
+        Args:
+            safety_prefix (str): The prefix used to identify worker folders.
+            source_project_name (str): The base name of the HEC-RAS project.
+
+        Returns:
+            bool: True if cleanup was successful for all targeted folders, False otherwise.
+        """
+        target_path = self.local_share_path # Use local path for file ops
+        logger.info(f"Cleaning up worker folders on {self.machine_name} at {target_path} with prefix '{safety_prefix}'")
+        all_success = True
+
+        # Use glob to find all matching folders
+        pattern = f"{safety_prefix}{source_project_name}_Worker_*"
+        folders_to_remove = list(target_path.glob(pattern))
+
+        if not folders_to_remove:
+            logger.info(f"No worker folders found matching '{pattern}' for cleanup.")
+            return True
+
+        logger.info(f"Found {len(folders_to_remove)} worker folders to remove.")
+
+        for worker_path in folders_to_remove:
+             if worker_path.is_dir() and worker_path.name.startswith(safety_prefix): # Double check prefix
+                 logger.debug(f"Attempting to remove worker folder: {worker_path}")
+                 if not RasUtils.remove_with_retry(worker_path, is_folder=True):
+                     logger.error(f"Failed to remove worker folder: {worker_path}")
+                     all_success = False
+             elif not worker_path.is_dir():
+                  logger.warning(f"Item matched pattern but is not a directory: {worker_path}. Skipping.")
+             else:
+                  logger.warning(f"Item {worker_path.name} does not match safety prefix. Skipping removal.")
+
+        if all_success:
+            logger.info(f"Successfully cleaned up worker folders on {self.machine_name}.")
+        else:
+            logger.error(f"Failed to clean up some or all worker folders on {self.machine_name}.")
+        return all_success
+
+
+# --- Factory Function ---
+
+@log_call
+def init_remote_ras(
+    local_share_path: str,
+    remote_root_path: str = "C:\\",
+    psexec_run_in_system_account: bool = False,
+    psexec_session_id: int = 2,
+    psexec_priority: str = "low",
+    physical_cores: int = 4,
+    worker_count_per_machine: int = 2,
+    psexec_path: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None
+) -> RasRemote:
+    """
+    Factory function to create and initialize a RasRemote instance.
+
+    Handles PsExec setup, credential loading, and path calculations for a remote
+    HEC-RAS execution target.
+
+    Args:
+        local_share_path (str): Path to the target execution folder *as seen from the local machine*
+                                (e.g., "\\\\NetworkName1\\Share\\TempRuns").
+        remote_root_path (str): The root path on the *remote* machine corresponding to the share's root
+                                (e.g., "C:\\" if \\\\Machine\\Share maps to C:\\Share).
+                                Default "C:\\".
+        psexec_run_in_system_account (bool): Run PsExec as SYSTEM account. Default False.
+        psexec_session_id (int): Session ID for interactive PsExec. Default 2. Ignored if system account is used.
+        psexec_priority (str): PsExec priority ('low', 'belownormal', 'normal'). Default 'low'.
+        physical_cores (int): Number of physical cores on the target machine. Default 4.
+        worker_count_per_machine (int): Number of parallel workers (project copies) for this machine. Default 2.
+        psexec_path (Optional[str]): Explicit path to PsExec64.exe. If None, attempts download/default.
+        username (Optional[str]): Username for remote connection. If None, prompts or uses stored.
+        password (Optional[str]): Password for remote connection. If None, prompts or uses keyring.
+
+    Returns:
+        RasRemote: An initialized RasRemote instance ready for use.
+
+    Raises:
+        FileNotFoundError: If PsExec cannot be found or downloaded.
+        ValueError: If required parameters are missing, invalid paths, or credentials missing.
+        Exception: For errors during credential handling or connection testing.
+    """
+    logger.info(f"Initializing remote RAS target: {local_share_path}")
+
+    local_share_path_obj = Path(local_share_path)
+    remote_root_path_obj = Path(remote_root_path)
+
+    # Determine machine name
+    machine_name = ""
+    remote_target_base_dir = None
+
+    if local_share_path_obj.is_absolute() and local_share_path_obj.drive.startswith('\\\\'):
+        try:
+            # UNC path: \\Machine\Share\Optional\Subdirs
+            machine_name = local_share_path_obj.parts[1]
+            share_name = local_share_path_obj.parts[2]
+            
+            # If path parts > 2, it includes a share name.
+            if len(local_share_path_obj.parts) > 2:
+                 # Parts after the share name form the relative path
+                 relative_path_parts = local_share_path_obj.parts[3:]
+                 remote_target_base_dir = remote_root_path_obj.joinpath(*relative_path_parts)
+            else:
+                 # Path is just \\Machine\Share - implies target base is the remote root itself
+                 remote_target_base_dir = remote_root_path_obj
+
+            logger.info(f"Target path is remote: {machine_name}")
+        except IndexError:
+             raise ValueError(f"Invalid UNC path format: {local_share_path}. Expected \\\\MachineName\\ShareName\\...")
+    else:
+         raise ValueError(f"local_share_path must be a UNC path: {local_share_path}")
+
+    logger.info(f"Remote target base directory calculated as: {remote_target_base_dir}")
+
+    # --- PsExec Handling ---
+    resolved_psexec_path = _find_or_download_psexec(psexec_path)
+    if not resolved_psexec_path:
+         raise FileNotFoundError("PsExec64.exe could not be found or downloaded.")
+
+    # --- Credential Handling ---
+    stored_username = None
+    stored_password = None
+    
+    # Use provided credentials directly if both are given
+    if username is not None and password is not None:
+        stored_username = username
+        stored_password = password
+        logger.info("Using provided username and password.")
+    elif username is not None and password is None:
+        # Username provided, fetch/prompt for password for that specific user
+        stored_username = username
+        stored_password = _load_or_prompt_password(stored_username)
+        if not stored_password:
+             raise ValueError(f"Password required for remote user '{username}' but none provided or found.")
+    elif username is None:
+        # Neither provided, load/prompt for both
+        stored_username, stored_password = _load_or_prompt_credentials()
+        if not stored_username or not stored_password:
+            raise ValueError("Username and password are required for remote execution but were not provided or found.")
+
+    # Create the RasRemote instance
+    remote_instance = RasRemote(
+        machine_name=machine_name,
+        local_share_path=local_share_path_obj,
+        remote_target_base_dir=remote_target_base_dir,
+        remote_root_path=remote_root_path_obj,
+        psexec_path=resolved_psexec_path,
+        username=stored_username,
+        password=stored_password, # Store the loaded/provided password
+        run_in_system_account=psexec_run_in_system_account,
+        session_id=psexec_session_id,
+        priority=psexec_priority,
+        physical_cores=physical_cores,
+        worker_count_per_machine=worker_count_per_machine
+    )
+
+    # Test connection immediately
+    if not remote_instance.test_connection():
+         # Allow initialization but warn the user connection failed
+         logger.warning(f"Initial connection test failed for {machine_name}. Please check configuration.")
+         # Depending on strictness, could raise ConnectionError here
+
+    logger.info(f"Remote RAS target '{machine_name}' initialized successfully.")
+    return remote_instance
+
+# --- Helper Functions for Credential Management and PsExec ---
+
+def _find_or_download_psexec(specified_path: Optional[str] = None) -> Optional[Path]:
+    """Find PsExec64.exe or download PSTools if not found."""
+    if specified_path:
+        psexec_path = Path(specified_path)
+        if psexec_path.is_file() and psexec_path.name.lower() == 'psexec64.exe':
+            logger.info(f"Using specified PsExec path: {psexec_path}")
+            return psexec_path
+        else:
+            logger.warning(f"Specified PsExec path is invalid: {specified_path}. Attempting default locations.")
+
+    # Check common locations or temp directory
+    possible_locations = [
+        Path("C:/psexec/PsExec64.exe"),
+        Path(tempfile.gettempdir()) / "psexec" / "PsExec64.exe",
+        Path("./psexec/PsExec64.exe") # Relative path in CWD
+    ]
+
+    for loc in possible_locations:
+        if loc.is_file():
+            logger.info(f"Found PsExec at: {loc}")
+            return loc
+
+    # If not found, attempt download to temp directory
+    logger.info("PsExec not found in common locations. Attempting to download PSTools...")
+    download_dir = Path(tempfile.gettempdir()) / "psexec"
+    download_url = 'https://download.sysinternals.com/files/PSTools.zip'
+    zip_file_path = download_dir / 'PSTools.zip'
+    psexec_final_path = download_dir / "PsExec64.exe"
+
+    try:
+        download_dir.mkdir(parents=True, exist_ok=True)
+        if not psexec_final_path.exists():
+             logger.info(f"Downloading {download_url} to {zip_file_path}")
+             # Use context manager for request
+             with urllib.request.urlopen(download_url) as response, open(zip_file_path, 'wb') as out_file:
+                  shutil.copyfileobj(response, out_file)
+
+             logger.info(f"Extracting PSTools.zip to {download_dir}")
+             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                 # Extract only PsExec64.exe to minimize clutter/potential issues
+                 for member in zip_ref.namelist():
+                     if member.lower().endswith('psexec64.exe'):
+                         zip_ref.extract(member, download_dir)
+                         # Rename if extracted into a subdirectory (ZipFile might preserve paths)
+                         extracted_file = download_dir / member
+                         if extracted_file != psexec_final_path:
+                             extracted_file.rename(psexec_final_path)
+                         break
+                 else:
+                      logger.error("PsExec64.exe not found within the downloaded PSTools.zip")
+                      return None # Explicitly return None if not found in zip
+
+             logger.info(f"PSTools extracted.")
+             # Clean up zip file
+             zip_file_path.unlink()
+        else:
+             logger.info("PsExec64.exe already exists in temp download directory.")
+
+        if psexec_final_path.is_file():
+            logger.info(f"PsExec is now available at: {psexec_final_path}")
+            return psexec_final_path
+        else:
+             logger.error("PsExec64.exe not found even after extraction attempt.")
+             return None
+
+    except (HTTPError, URLError) as e:
+        logger.error(f"Could not download PSTools.zip due to: {e}. Please download manually and provide path if needed.")
+        return None
+    except Exception as e:
+        logger.error(f"Error during PsExec download/extraction: {e}")
+        return None
+
+def _load_or_prompt_credentials() -> Tuple[Optional[str], Optional[str]]:
+    """Load username from file and password from keyring, prompting if necessary."""
+    username = None
+    username_file_path = Path(USERNAME_FILE)
+    if username_file_path.exists():
+        try:
+            with open(username_file_path, 'r') as f:
+                username = f.read().strip()
+            if username:
+                logger.info(f"Loaded username '{username}' from {USERNAME_FILE}")
+            else:
+                 logger.warning(f"{USERNAME_FILE} exists but is empty. Prompting for username.")
+        except Exception as e:
+            logger.warning(f"Could not read username file {USERNAME_FILE}: {e}. Prompting.")
+
+    if not username:
+        # Use input instead of getpass for username visibility
+        username_input = input("Enter the username for remote machines (DOMAIN\\USER, leave blank to skip): ").strip()
+        if username_input:
+            username = username_input
+            try:
+                with open(username_file_path, 'w') as f:
+                    f.write(username)
+            except Exception as e:
+                logger.error(f"Could not write username file {USERNAME_FILE}: {e}")
+        else:
+            logger.warning("No username provided. Assuming local execution or anonymous access.")
+            return None, None
+
+    # Load or prompt for password only if a username was determined
+    password = _load_or_prompt_password(username)
+    return username, password
+
+def _load_or_prompt_password(username: str) -> Optional[str]:
+    """Load password from keyring or prompt user."""
+    try:
+         password = keyring.get_password(SERVICE_NAME, username)
+         if password is None:
+             logger.info(f"Password for '{username}' not found in keyring. Prompting.")
+             # Use getpass for password to hide input
+             password_input = getpass.getpass(f"Enter password for {username}: ")
+             if password_input:
+                  password = password_input
+                  try:
+                      keyring.set_password(SERVICE_NAME, username, password)
+                      logger.info(f"Password for '{username}' stored securely in keyring.")
+                  except Exception as e:
+                      logger.error(f"Could not store password in keyring: {e}")
+             else:
+                  logger.warning("No password provided.")
+                  return None
+         else:
+             logger.info(f"Loaded password for '{username}' from keyring.")
+         return password
+    except Exception as e:
+         logger.error(f"Error accessing keyring: {e}. Cannot load/store password.")
+         # Fallback to prompt without storing if keyring fails
+         password_input = getpass.getpass(f"Enter password for {username} (keyring unavailable): ")
+         return password_input if password_input else None
+==================================================
+
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
@@ -16049,7 +17030,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.75.0"
+    __version__ = "0.77.0" # Increment version appropriately
 
 # Set up logging
 setup_logging()
@@ -16064,6 +17045,7 @@ from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
 from .RasMap import RasMap
 from .HdfFluvialPluvial import HdfFluvialPluvial
+from .RasRemote import RasRemote, init_remote_ras # Added imports
 
 # HDF handling
 from .HdfBase import HdfBase
@@ -16090,19 +17072,19 @@ __all__ = [
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
     'RasExamples', 'RasCmdr', 'RasMap', 'HdfFluvialPluvial',
-    
+    'RasRemote', 'init_remote_ras', # Added new items
+
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration',
-    
+
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',
-    
+
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
 ]
-
 ==================================================
 

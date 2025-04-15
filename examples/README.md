@@ -230,6 +230,31 @@ This notebook demonstrates how to delineate fluvial and pluvial flooding areas b
 - Understanding the difference between river-driven and rainfall-driven flooding
 - Using cell polygon geometry for spatial analysis
 
+### [15_mannings_sensitivity_bulk_analysis.ipynb](15_mannings_sensitivity_bulk_analysis.ipynb)
+
+This notebook provides tools for analyzing the sensitivity of HEC-RAS models to changes in Manning's n values applied *in bulk* across land cover types based on literature ranges.
+
+**Key contents:**
+- Defining Manning's n ranges (min/max) for various land cover types.
+- Automating the creation of scenarios (min, max, current n values).
+- Applying bulk changes to base and/or regional Manning's overrides.
+- Running sensitivity scenarios in parallel.
+- Extracting results at a point of interest.
+- Comparing and visualizing the impact of bulk Manning's n changes on water surface elevation.
+
+### [16_mannings_sensitivity_multi-interval.ipynb](16_mannings_sensitivity_multi-interval.ipynb)
+
+This notebook performs a more detailed Manning's n sensitivity analysis by varying the roughness coefficient for *individual significant land uses* across a range of values.
+
+**Key contents:**
+- Analyzing land cover statistics within 2D mesh areas.
+- Identifying significant land cover types based on area threshold.
+- Generating multiple test plans by varying the n value for one land cover type at a time, across its literature-based range (min to max).
+- Applying changes individually to base or regional overrides.
+- Running sensitivity scenarios in parallel.
+- Extracting and visualizing results to show sensitivity to specific land cover roughness.
+- Estimating the number of plans to be generated and managing potential HEC-RAS limits.
+
 ### [101_Core_Sensitivity.ipynb](101_Core_Sensitivity.ipynb)
 
 This notebook tests HEC-RAS performance with different CPU core configurations to optimize computational efficiency.
