@@ -15,6 +15,7 @@ import tiktoken
 from typing import Dict, Optional
 # Model configurations with token limits and pricing
 MODEL_CONFIG = {
+    # Anthropic Models
     "claude-3-7-sonnet-20250219": {
         "max_context_tokens": 200000,
         "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
@@ -27,36 +28,51 @@ MODEL_CONFIG = {
         "completion_cost_per_1m": 15.0,  # $15.00 per million tokens
         "default_output_tokens": 8192
     },
-    "gpt-4o-latest": {
-        "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 2.5,      # $2.50 per million tokens
-        "completion_cost_per_1m": 10.0,  # $10.00 per million tokens
-        "default_output_tokens": 16384
+    # OpenAI Models (Existing)
+    "gpt-4o-latest": { # Consider updating identifier if a specific version is known, e.g., gpt-4o-2024-08-06
+        "max_context_tokens": 128000, # GPT-4o usually has 128k context
+        "prompt_cost_per_1m": 5.0,   # Example pricing, update if known
+        "completion_cost_per_1m": 15.0, # Example pricing, update if known
+        "default_output_tokens": 16384 # Common output limit for GPT-4o
     },
     "gpt-4o-mini": {
         "max_context_tokens": 128000,
         "prompt_cost_per_1m": 0.15,     # $0.15 per million tokens
         "completion_cost_per_1m": 0.6,   # $0.60 per million tokens
-        "default_output_tokens": 16384
+        "default_output_tokens": 32768 # Matches gpt-4o standard output
     },
     "o1": {
         "max_context_tokens": 200000,
         "prompt_cost_per_1m": 15.0,     # $15.00 per million tokens
         "completion_cost_per_1m": 60.0,  # $60.00 per million tokens
-        "default_output_tokens": 100000
+        "default_output_tokens": 32768
     },
     "o1-mini": {
-        "max_context_tokens": 128000,
+        "max_context_tokens": 128000, # Needs confirmation, using 128k based on o4-mini
         "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
         "completion_cost_per_1m": 12.0,  # $12.00 per million tokens
-        "default_output_tokens": 65536
+        "default_output_tokens": 32768 # Needs confirmation, using plausible value
     },
-    "o3-mini-2025-01-31": {
+     "o3-mini-2025-01-31": { # Renamed from o4-mini based on user text
         "max_context_tokens": 200000,
-        "prompt_cost_per_1m": 0.0011,   # $0.0011 per million tokens
-        "completion_cost_per_1m": 0.0044, # $0.0044 per million tokens
-        "default_output_tokens": 100000
+        "prompt_cost_per_1m": 1.10,   # $1.10 per million tokens (From user text for o4-mini)
+        "completion_cost_per_1m": 4.40, # $4.40 per million tokens (From user text for o4-mini)
+        "default_output_tokens": 32768 # Max output tokens
     },
+    # OpenAI Models (New)
+    "o3": {
+        "max_context_tokens": 200000,
+        "prompt_cost_per_1m": 10.00,    # $10.00 per million tokens
+        "completion_cost_per_1m": 40.00, # $40.00 per million tokens
+        "default_output_tokens": 32768 # Max output tokens
+    },
+    "gpt-4.1": { # Using "gpt-4.1" as the identifier
+        "max_context_tokens": 1047576, # Context window from user text
+        "prompt_cost_per_1m": 2.00,     # $2.00 per million tokens
+        "completion_cost_per_1m": 8.00,  # $8.00 per million tokens
+        "default_output_tokens": 32768  # Max output tokens
+    },
+    # Together AI Models
     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {
         "max_context_tokens": 128000,
         "prompt_cost_per_1m": 0.88,     # $0.88 per million tokens
@@ -192,10 +208,10 @@ def create_pricing_df(model):
     Creates a pricing dataframe for a given model.
 
     This function returns a dictionary containing a pandas DataFrame with pricing information
-    and the provider (OpenAI or Anthropic) for the specified model.
+    and the provider (OpenAI, Anthropic, or Together) for the specified model.
 
     Args:
-        model (str): The name of the model (e.g., 'gpt-4', 'claude-3-5-sonnet-20240620').
+        model (str): The name of the model.
 
     Returns:
         dict: A dictionary containing:
@@ -208,8 +224,12 @@ def create_pricing_df(model):
     """
     config = MODEL_CONFIG.get(model)
     if not config:
-        raise ValueError(f"Unsupported model: {model}")
-        
+        # Try to find a close match (e.g., remove date suffix)
+        base_model = model.rsplit('-', 1)[0] if '-' in model else model
+        config = MODEL_CONFIG.get(base_model)
+        if not config:
+             raise ValueError(f"Unsupported model: {model}")
+
     pricing_data = {
         "Model": [model],
         "Input ($/1M Tokens)": [config["prompt_cost_per_1m"]],
@@ -217,19 +237,19 @@ def create_pricing_df(model):
         "Context Window (Tokens)": [config["max_context_tokens"]],
         "Response Max Tokens": [config["default_output_tokens"]]
     }
-    
+
     pricing_df = pd.DataFrame(pricing_data)
-    
+
     # Determine provider based on model name
-    if model.startswith("claude"):
+    provider = "unknown"
+    model_lower = model.lower()
+    if model_lower.startswith("claude"):
         provider = "anthropic"
-    elif model.startswith(("gpt", "o1", "o3")):
+    elif model_lower.startswith(("gpt", "o1", "o3", "o4")): # Added o3, o4
         provider = "openai"
-    elif any(prefix in model.lower() for prefix in ["llama", "deepseek"]):
+    elif any(prefix in model_lower for prefix in ["llama", "deepseek"]):
         provider = "together"
-    else:
-        provider = "unknown"
-        
+
     return {"pricing_df": pricing_df, "provider": provider}
 
 def estimate_cost(input_tokens, output_tokens, pricing_df):

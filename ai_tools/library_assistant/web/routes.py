@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Streamin
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from config.config import load_settings, update_settings
 from utils.conversation import add_to_history, get_full_conversation, save_conversation
 from utils.context_processing import prepare_full_prompt, update_conversation_history, initialize_context
@@ -74,120 +74,132 @@ async def read_root(request: Request):
 @router.post("/chat")
 async def chat(request: Request, message: dict):
     """
-    Handles chat interactions with the AI model, supporting streaming responses.
+    Handles chat interactions with the AI model, supporting streaming responses
+    and extended output for specific models.
     """
     conversation_id = message.get("conversation_id", str(uuid.uuid4()))
     logger.info(f"Starting chat interaction - Conversation ID: {conversation_id}")
-    
+
     try:
-        # Validate input
         user_message = message.get("message")
         if not user_message:
             logger.warning("Empty message received")
             raise HTTPException(status_code=400, detail="No message provided.")
-            
-        # Get selected files for context if provided
+
         selected_files = message.get("selectedFiles", [])
         logger.debug(f"Selected files for context: {selected_files}")
-        
-        # Add user message to history
+
         add_to_history("user", user_message)
         logger.debug(f"Added user message to history: {user_message[:100]}...")
-        
-        # Load settings and prepare context
+
         settings = load_settings()
         selected_model = settings.selected_model
+        if not selected_model:
+             raise HTTPException(status_code=400, detail="No model selected in settings.")
         logger.info(f"Using model: {selected_model}")
-        
-        # Set output length based on model
-        output_length = None
+
+        # --- Start Model Specific Adjustments ---
+        output_length = int(message.get("output_length", 0)) # Get user desired length if provided
+        model_config = MODEL_CONFIG.get(selected_model, {})
+        max_possible_output = model_config.get("default_output_tokens", 8192)
+        anthropic_headers = None
+
+        # Adjust for Claude 3.7 Sonnet extended output
         if selected_model == "claude-3-7-sonnet-20250219":
-            output_length = 32000  # Support for extended output length (32k tokens)
-        
-        # Prepare prompt with conversation history
+             # Use user specified length up to 128k, otherwise default to 128k
+            output_length = min(output_length if output_length > 0 else 128000, 128000)
+            anthropic_headers = {"anthropic-beta": "output-128k-2025-02-19"}
+            logger.info(f"Claude 3.7 Sonnet selected. Enabling extended output up to {output_length} tokens.")
+        elif output_length <= 0:
+             # Use model default if user didn't specify
+             output_length = max_possible_output
+        else:
+             # Use user specified length, capped by model max
+             output_length = min(output_length, max_possible_output)
+        # --- End Model Specific Adjustments ---
+
         full_prompt = prepare_full_prompt(
             user_message,
             selected_files,
             conversation_id
         )
         logger.debug(f"Prepared prompt length: {len(full_prompt)} characters")
-        
-        # Update conversation history
+
         update_conversation_history(conversation_id, "user", user_message)
-        
-        # Calculate token usage and validate against limits
+
         usage_data = calculate_usage_and_cost(
             model_name=selected_model,
             conversation_history=get_full_conversation(),
             user_input=user_message,
-            rag_context="".join(selected_files),
-            system_message=settings.system_message,
-            output_length=output_length
+            rag_context="".join(selected_files), # This might not be the best way to represent context tokens
+            system_message=settings.system_message or "",
+            output_length=output_length # Use the calculated/adjusted output length
         )
-        
-        # Check if we're exceeding token limits
+
         if usage_data["remaining_tokens"] < 0:
             raise HTTPException(
                 status_code=400,
-                detail="Request exceeds maximum token limit. Please reduce context or message length."
+                detail=f"Request exceeds maximum token limit ({usage_data['max_tokens']} tokens). Current estimate: {usage_data['total_tokens_with_output']}. Please reduce context or message length."
             )
-            
+
         logger.info(f"Token usage - Input: {usage_data['total_tokens_used']}, Output: {usage_data['output_length']}")
         logger.info(f"Estimated cost: ${usage_data['cost_estimate']:.6f}")
 
-        # Get provider info from pricing data
         pricing_info = create_pricing_df(selected_model)
         provider = pricing_info["provider"]
         logger.info(f"Using provider: {provider}")
 
         async def stream_response():
-            """Generator for streaming the AI response"""
             accumulated_response = []
             try:
                 if provider == "anthropic":
                     logger.info("Using Anthropic API")
                     client = get_anthropic_client(settings.anthropic_api_key)
-                    logger.info(f"Sending Anthropic API request with model: {selected_model}")
+                    logger.info(f"Sending Anthropic API request with model: {selected_model}, max_tokens: {output_length}")
                     async for chunk in anthropic_stream_response(
-                        client, 
+                        client,
                         full_prompt,
                         system_message=settings.system_message,
-                        max_tokens=usage_data["output_length"]
+                        max_tokens=output_length, # Pass adjusted max_tokens
+                        model=selected_model,      # Explicitly pass model
+                        extra_headers=anthropic_headers # Pass beta header if applicable
                     ):
                         accumulated_response.append(chunk)
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-                        
+
                 elif provider == "openai":
                     logger.info("Using OpenAI API")
                     client = get_openai_client(settings.openai_api_key)
                     messages = [
                         {"role": "system", "content": settings.system_message or "You are a helpful AI assistant."},
-                        {"role": "user", "content": full_prompt}
+                        {"role": "user", "content": full_prompt} # Consider structuring messages differently if needed
                     ]
-                    logger.info(f"Sending OpenAI API request with model: {selected_model}")
+                    logger.info(f"Sending OpenAI API request with model: {selected_model}, max_tokens: {output_length}")
                     async for chunk in openai_stream_response(
-                        client, 
-                        selected_model, 
+                        client,
+                        selected_model,
                         messages,
-                        max_tokens=usage_data["output_length"]
+                        max_tokens=output_length # Pass adjusted max_tokens
                     ):
                         accumulated_response.append(chunk)
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-                        
+
                 elif provider == "together":
                     logger.info("Using Together.ai API")
                     messages = [
                         {"role": "system", "content": settings.system_message or "You are a helpful AI assistant."},
                         {"role": "user", "content": full_prompt}
                     ]
-                    logger.info(f"Sending Together.ai API request with model: {selected_model}")
+                    logger.info(f"Sending Together.ai API request with model: {selected_model}, max_tokens: {output_length}")
+                    # Note: Together.ai API might not support streaming this way.
+                    # Assuming non-streaming response for simplicity based on existing code.
                     response = together_chat_completion(
                         settings.together_api_key,
                         selected_model,
                         messages,
-                        max_tokens=usage_data["output_length"]
+                        max_tokens=output_length # Pass adjusted max_tokens
                     )
-                    
+
                     if response and response.choices and response.choices[0].message:
                         response_text = response.choices[0].message.content
                         accumulated_response.append(response_text)
@@ -199,19 +211,26 @@ async def chat(request: Request, message: dict):
                 else:
                     logger.error(f"Unsupported provider: {provider}")
                     raise HTTPException(status_code=400, detail="Unsupported provider selected.")
-                
-                # Add complete response to history
+
                 complete_response = "".join(accumulated_response)
                 logger.debug(f"Complete response length: {len(complete_response)} characters")
                 add_to_history("assistant", complete_response)
-                
-                # Update history with assistant response
                 update_conversation_history(conversation_id, "assistant", complete_response)
-                
-                # Send the cost estimate as a final message
-                yield f"data: {json.dumps({'cost': usage_data['cost_estimate'], 'provider': provider})}\n\n"
+
+                # Recalculate final cost based on actual tokens if possible (hard with streaming)
+                # For now, send the initial estimate
+                final_usage_data = calculate_usage_and_cost( # Recalculate with actual response? Hard for streaming.
+                    model_name=selected_model,
+                    conversation_history=get_full_conversation()[:-len(complete_response)], # History before response
+                    user_input=user_message,
+                    rag_context="".join(selected_files),
+                    system_message=settings.system_message or "",
+                    output_length=tiktoken.encoding_for_model("gpt-3.5-turbo").encode(complete_response) # Estimate actual output tokens
+                 )
+
+                yield f"data: {json.dumps({'cost': final_usage_data['cost_estimate'], 'provider': provider})}\n\n"
                 logger.info(f"Chat interaction completed successfully - Conversation ID: {conversation_id}")
-                
+
             except Exception as e:
                 # Extract detailed API error information
                 error_details = str(e)
@@ -245,12 +264,9 @@ async def chat(request: Request, message: dict):
                         except Exception:
                             pass
                 
-                # Log the full error for debugging
                 error_msg = f"Error during streaming: {error_details}"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True) # Log traceback
                 log_error(e, "Streaming error")
-                
-                # Send user-friendly error message to the frontend
                 yield f"data: {json.dumps({'error': error_details})}\n\n"
 
         return StreamingResponse(
@@ -263,9 +279,13 @@ async def chat(request: Request, message: dict):
             }
         )
 
+    except HTTPException as http_exc:
+        logger.error(f"HTTP Exception in /chat: {http_exc.detail}", exc_info=True)
+        raise http_exc
     except Exception as e:
         log_error(e, f"Chat endpoint error - Conversation ID: {conversation_id}")
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        logger.error(f"Unexpected error in /chat: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.post("/submit")
 async def handle_submit(
@@ -419,40 +439,52 @@ async def get_file_content(path: str):
 async def calculate_tokens(request: TokenCalcRequest):
     """
     Calculate token usage, cost, and color coding for the next request.
-    
-    Args:
-        request (TokenCalcRequest): The request containing model and content information
-        
-    Returns:
-        dict: Usage data including token counts, costs, and color coding
+    Adjusts output length based on the selected model's capabilities.
     """
     try:
-        # Get settings for system message if not provided
-        if not request.system_message:
+        model_name = request.model_name
+        if not model_name:
+            raise ValueError("Model name is required for token calculation.")
+
+        system_message = request.system_message
+        if not system_message:
             settings = load_settings()
-            request.system_message = settings.system_message
-            
-        # Set default output length based on model if not specified
-        if not request.output_length:
-            if request.model_name == "claude-3-7-sonnet-20250219":
-                request.output_length = 32000  # Support for extended output length (32k tokens)
-            else:
-                request.output_length = 8192  # Default for other models
-            
-        # Calculate usage data
+            system_message = settings.system_message or ""
+
+        # Determine the output length based on user input and model defaults
+        output_length = request.output_length
+        model_config = MODEL_CONFIG.get(model_name, {})
+        max_possible_output = model_config.get("default_output_tokens", 8192)
+
+        if output_length is None or output_length <= 0:
+            # If user didn't specify, use the model's max potential output
+            output_length = max_possible_output
+        else:
+            # Use user-specified length, but cap it at the model's max potential
+            output_length = min(output_length, max_possible_output)
+
+        logger.debug(f"Calculating tokens for model: {model_name} with output_length: {output_length}")
+
+        # Calculate usage data using the determined output_length
         usage_data = calculate_usage_and_cost(
-            model_name=request.model_name,
+            model_name=model_name,
             conversation_history=request.conversation_history,
             user_input=request.user_input,
-            rag_context=request.rag_context,
-            system_message=request.system_message,
-            output_length=request.output_length
+            rag_context=request.rag_context, # Note: RAG context token calculation might need refinement
+            system_message=system_message,
+            output_length=output_length # Pass the adjusted output length
         )
-        
+
+        # Add the actual max output token value to the response for the frontend
+        usage_data["max_output_tokens"] = max_possible_output
+
         return usage_data
-        
+
+    except ValueError as ve:
+         logger.warning(f"Value error calculating tokens: {str(ve)}")
+         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.error(f"Error calculating tokens: {str(e)}")
+        logger.error(f"Error calculating tokens: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error calculating tokens: {str(e)}")
 
 """

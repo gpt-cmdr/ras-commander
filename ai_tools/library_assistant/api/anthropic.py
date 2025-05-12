@@ -6,14 +6,19 @@ For extended output length (up to 128k tokens), include the beta header output-1
 """
 
 from anthropic import AsyncAnthropic, Anthropic, APIError, AuthenticationError
-from typing import AsyncGenerator, List, Optional, Union
+from typing import AsyncGenerator, List, Optional, Union, Dict, Any
+import logging
+
+# Configure logging
+logger = logging.getLogger("library_assistant.anthropic")
 
 async def anthropic_stream_response(
     client: Union[AsyncAnthropic, Anthropic], 
     prompt: str, 
     max_tokens: int = 8192,
     model: Optional[str] = None,
-    system_message: Optional[str] = None
+    system_message: Optional[str] = None,
+    extra_headers: Optional[Dict[str, str]] = None
 ) -> AsyncGenerator[str, None]:
     """
     Streams a response from the Anthropic API using the Claude model.
@@ -21,9 +26,10 @@ async def anthropic_stream_response(
     Args:
         client: An initialized Anthropic client (sync or async)
         prompt: The prompt to send to the API
-        max_tokens: The maximum number of tokens to generate (default: 8192)
+        max_tokens: The maximum number of tokens to generate
         model: The model to use (default: claude-3-7-sonnet-20250219)
         system_message: Optional system message to set the AI's behavior
+        extra_headers: Optional dictionary of headers to send with the request
 
     Yields:
         str: Chunks of the response text from the API
@@ -38,13 +44,23 @@ async def anthropic_stream_response(
         # Convert to async client if needed
         async_client = client if isinstance(client, AsyncAnthropic) else AsyncAnthropic(api_key=client.api_key)
         
-        # Create the streaming response with system message as top-level parameter
+        # Prepare API call parameters
+        api_params: Dict[str, Any] = {
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+            "model": model,
+            "system": system_message if system_message else None,
+            "stream": True
+        }
+
+        # Log if extra headers are being used
+        if extra_headers:
+            logger.info(f"Using extra headers for Anthropic API call: {extra_headers}")
+        
+        # Create the streaming response with system message and optional headers
         stream = await async_client.messages.create(
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-            model=model,
-            system=system_message if system_message else None,
-            stream=True
+            **api_params,
+            extra_headers=extra_headers
         )
         
         # Process the stream events
@@ -57,13 +73,13 @@ async def anthropic_stream_response(
                 
     except AuthenticationError as e:
         error_msg = f"Authentication error with Anthropic API: {str(e)}"
-        print(error_msg)  # Log the error
+        logger.error(error_msg)
         raise APIError(error_msg, body={"error": {"message": error_msg}})
     
     except APIError as e:
         # Preserve the original API error but make sure it has the required structure
         error_msg = f"Anthropic API error: {str(e)}"
-        print(error_msg)  # Log the error
+        logger.error(error_msg)
         
         # If the error already has a body, pass it through
         if hasattr(e, 'body') and e.body:
@@ -74,7 +90,7 @@ async def anthropic_stream_response(
             
     except Exception as e:
         error_msg = f"Unexpected error in Anthropic API call: {str(e)}"
-        print(error_msg)  # Log the error
+        logger.error(error_msg)
         raise APIError(error_msg, body={"error": {"message": error_msg}})  # Include required body parameter
 
 def get_anthropic_client(api_key: str, async_client: bool = True) -> Union[Anthropic, AsyncAnthropic]:

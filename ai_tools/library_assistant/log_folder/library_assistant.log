@@ -1,0 +1,305 @@
+2025-05-12 09:27:05,890 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 09:27:05,928 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 09:27:05,929 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 09:27:05,937 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3
+2025-05-12 09:27:05,944 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 09:27:05,947 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:27:05,988 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:27:05,989 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:27:06,036 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:27:06,038 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:27:06,061 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:27:06,062 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:27:06,071 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:27:06,072 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:27:06,083 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:27:06,084 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:27:06,094 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:27:06,095 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:27:06,113 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:27:06,114 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:27:06,116 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:27:06,116 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:27:06,132 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:27:06,132 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:27:06,147 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:27:06,147 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:27:06,221 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:27:06,223 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:27:06,228 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:27:06,229 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,297 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,298 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,412 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,415 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:27:06,444 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:27:06,447 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:27:06,513 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:27:06,515 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:27:06,558 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:27:06,559 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:27:06,573 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:27:06,575 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:27:06,586 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:27:06,588 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:27:06,597 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:27:06,597 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 09:27:06,630 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 09:27:06,729 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 09:27:06,777 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ras_commander\__pycache__
+2025-05-12 09:27:06,778 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 09:27:06,795 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 09:27:06,808 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 09:27:06,814 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:27:08,125 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:27:08,136 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 4, 'errors': 0}
+2025-05-12 09:27:08,137 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander
+2025-05-12 09:27:12,918 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 09:27:12,919 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 09:27:13,442 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 09:27:13,442 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 09:27:14,952 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander
+2025-05-12 09:42:55,432 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3
+2025-05-12 09:43:19,517 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 09:43:19,539 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 09:43:19,540 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 09:43:19,546 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z
+2025-05-12 09:43:19,549 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 09:43:19,551 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 09:43:19,555 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:43:19,560 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:43:19,560 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:43:19,563 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:43:19,564 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:43:19,572 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:43:19,573 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:43:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:43:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:43:19,600 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:43:19,601 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:43:19,605 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:43:19,606 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:43:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:43:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:43:19,614 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:43:19,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:43:19,622 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:43:19,622 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:43:19,629 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:43:19,630 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:43:19,633 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:43:19,634 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:43:19,646 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:43:19,647 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:43:19,671 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:43:19,672 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:43:19,676 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:43:19,676 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,705 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,706 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,752 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,753 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:43:19,767 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:43:19,768 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:43:19,788 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:43:19,789 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:43:19,802 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:43:19,803 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:43:19,808 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:43:19,809 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:43:19,813 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:43:19,813 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:43:19,816 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:43:19,816 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:43:19,822 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:43:19,823 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 09:43:19,823 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 09:43:19,823 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 09:43:19,829 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 09:43:19,852 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 09:43:19,863 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 09:43:19,867 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 09:43:19,870 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 09:43:19,871 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:43:20,679 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:43:20,698 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 3, 'errors': 0}
+2025-05-12 09:43:20,698 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander
+2025-05-12 09:43:24,856 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 09:43:24,857 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 09:43:25,315 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 09:43:25,316 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 09:43:26,566 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander
+2025-05-12 10:00:30,309 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z
+2025-05-12 10:05:19,099 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 10:05:19,109 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 10:05:19,110 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 10:05:19,112 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e
+2025-05-12 10:05:19,115 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 10:05:19,117 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 10:05:19,118 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:05:19,137 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:05:19,138 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:05:19,151 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:05:19,152 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:05:19,168 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:05:19,169 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:05:19,195 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:05:19,195 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:05:19,201 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:05:19,201 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:05:19,217 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:05:19,217 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:05:19,232 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:05:19,232 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:05:19,248 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:05:19,248 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:05:19,264 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:05:19,264 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:05:19,279 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:05:19,279 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:05:19,310 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:05:19,310 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:05:19,326 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:05:19,326 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:05:19,359 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:05:19,360 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:05:19,373 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:05:19,374 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,395 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,395 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,474 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,476 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:05:19,493 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:05:19,493 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:05:19,532 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:05:19,533 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:05:19,562 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:05:19,562 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:05:19,578 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:05:19,578 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:05:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:05:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:05:19,595 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:05:19,595 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 10:05:19,626 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 10:05:19,641 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 10:05:19,641 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 10:05:19,661 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 10:05:19,663 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 10:05:19,665 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:05:20,313 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:05:20,322 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 3, 'errors': 0}
+2025-05-12 10:05:20,322 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander
+2025-05-12 10:05:24,453 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 10:05:24,453 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 10:05:24,950 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 10:05:24,951 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 10:05:26,177 - library_assistant - ERROR - routes:503 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 472, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:05:26,202 - library_assistant - ERROR - routes:503 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 472, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:05:26,220 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander
+2025-05-12 10:19:11,458 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e
+2025-05-12 10:30:39,850 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 10:30:39,859 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 10:30:39,860 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 10:30:39,862 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o
+2025-05-12 10:30:39,867 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 10:30:39,870 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 10:30:39,874 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:30:39,877 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:30:39,877 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:30:39,879 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:30:39,880 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:30:39,891 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:30:39,891 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:30:39,911 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:30:39,911 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:30:39,918 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:30:39,918 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:30:39,921 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:30:39,922 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:30:39,926 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:30:39,927 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:30:39,930 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:30:39,931 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:30:39,936 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:30:39,937 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:30:39,942 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:30:39,942 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:30:39,945 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:30:39,945 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:30:39,955 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:30:39,956 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:30:39,974 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:30:39,974 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:30:39,978 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:30:39,979 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,002 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,003 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,050 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,051 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:30:40,066 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:30:40,067 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:30:40,092 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:30:40,093 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:30:40,108 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:30:40,108 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:30:40,114 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:30:40,114 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:30:40,123 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:30:40,124 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:30:40,128 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:30:40,128 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:30:40,134 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:30:40,134 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 10:30:40,135 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 10:30:40,135 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 10:30:40,140 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 10:30:40,159 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 10:30:40,168 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 10:30:40,172 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 10:30:40,174 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 10:30:40,175 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:30:40,942 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:30:40,950 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 3, 'errors': 0}
+2025-05-12 10:30:40,951 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander
+2025-05-12 10:30:45,636 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 10:30:45,638 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 10:30:46,212 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 10:30:46,212 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 10:30:47,445 - library_assistant - ERROR - routes:487 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 456, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:30:47,472 - library_assistant - ERROR - routes:487 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 456, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:30:47,490 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander
+2025-05-12 10:32:40,914 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o

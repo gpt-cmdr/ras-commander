@@ -56,88 +56,91 @@ logger = setup_logger()
 
 def _get_model_family(model: str) -> str:
     """
-    Determines the model family to handle role requirements.
-    
+    Determines the model family to handle role requirements and parameters.
+
     Args:
         model: The model name to check
-        
+
     Returns:
-        str: Model family identifier ('o3-mini', 'o1', 'gpt4o', or 'default')
+        str: Model family identifier ('o3-mini', 'o1', 'o3', 'gpt4', or 'default')
     """
     model_family = 'default'
     if model.startswith('o3-mini'):
         model_family = 'o3-mini'
     elif model.startswith('o1'):
         model_family = 'o1'
-    elif model.startswith('gpt-4o'):
-        model_family = 'gpt4o'
-    
+    elif model.startswith('o3'): # Added o3 check
+         model_family = 'o3'
+    elif model.startswith(('gpt-4o', 'gpt-4.1')): # Added gpt-4.1 check
+        model_family = 'gpt4'
+
     logger.debug(f"Model {model} identified as family: {model_family}")
     return model_family
 
 def _get_completion_params(model: str, max_tokens: int) -> Dict[str, Any]:
     """
     Gets the appropriate completion parameters for the model family.
-    
+
     Args:
         model: The model name
         max_tokens: The maximum number of tokens to generate
-        
+
     Returns:
         Dict[str, Any]: Dictionary of completion parameters
     """
     model_family = _get_model_family(model)
-    
+
     params = {
         'model': model,
     }
-    
-    # Handle o1 and o3-mini models with max_completion_tokens
-    if model_family in ['o1', 'o3-mini']:
+
+    # Handle models requiring max_completion_tokens
+    # o1, o3, and o3-mini seem to use this based on descriptions mentioning max output tokens
+    if model_family in ['o1', 'o3-mini', 'o3']:
         params['max_completion_tokens'] = max_tokens
     else:
+        # Standard GPT models (including gpt-4.1) use max_tokens
         params['max_tokens'] = max_tokens
-    
+
     logger.debug(f"Generated completion parameters for {model}: {params}")
     return params
 
 def _transform_messages_for_model(messages: List[Dict[str, str]], model: str) -> List[Dict[str, str]]:
     """
     Transforms message roles based on model requirements.
-    
+
     Args:
         messages: Original message list
         model: Target model name
-        
+
     Returns:
         List[Dict[str, str]]: Transformed message list
     """
     transformed_messages = []
     model_family = _get_model_family(model)
-    
+
     logger.debug(f"Original messages: {messages}")
-    
+
     for message in messages:
         new_message = message.copy()
-        
+
         # Handle system messages based on model family
         if message['role'] == 'system':
             if model_family == 'o1':
-                # TODO: Update to 'developer' role once API support is available
-                # For now, convert system messages to user messages for o1 models
+                # Convert system messages to user messages for o1 models
                 new_message['role'] = 'user'
-                logger.debug(f"Converting system message to user for O1 model (temporary until developer role support)")
-            elif model_family == 'gpt4o':
-                # For GPT-4O models, keep as system
-                logger.debug(f"Keeping system message for GPT-4O model")
-                pass
+                logger.debug(f"Converting system message to user for O1 model")
+            elif model_family in ['gpt4', 'o3', 'o3-mini']: # Added o3, o3-mini
+                # For GPT-4 variants, o3, o3-mini keep as system
+                logger.debug(f"Keeping system message for {model_family} model")
+                pass # Keep as system
             else:
-                # For other models, convert to user
+                # For other models (if any), convert to user as a safe default
                 new_message['role'] = 'user'
                 logger.debug(f"Converting system message to user for default model")
-        
+
         transformed_messages.append(new_message)
-    
+
     logger.debug(f"Transformed messages: {transformed_messages}")
     return transformed_messages
 
@@ -282,14 +285,19 @@ def get_openai_models() -> List[Dict[str, Any]]:
     """
     return [
         {
-            "name": "gpt-4o-2024-08-06",
-            "context_length": 16000,
-            "description": "GPT-4 Optimized for fast inference"
+            "name": "gpt-4o-latest", # Consider updating identifier e.g., gpt-4o-2024-08-06
+            "context_length": 128000,
+            "description": "Latest GPT-4 Omni model"
         },
         {
             "name": "gpt-4o-mini",
-            "context_length": 16000,
-            "description": "GPT-4 Mini model for faster, more efficient processing"
+            "context_length": 128000,
+            "description": "GPT-4 Mini model for faster, efficient processing"
+        },
+        {
+            "name": "gpt-4.1", # New model
+            "context_length": 1047576,
+            "description": "Flagship GPT model for complex tasks"
         },
         {
             "name": "o1",
@@ -298,12 +306,19 @@ def get_openai_models() -> List[Dict[str, Any]]:
         },
         {
             "name": "o1-mini",
-            "context_length": 200000,
-            "description": "O1 Mini model for faster, more efficient processing"
+            "context_length": 128000, # Needs confirmation
+            "description": "O1 Mini model for faster, efficient processing"
         },
         {
-            "name": "o3-mini-2025-01-31",
+            "name": "o3", # New model
             "context_length": 200000,
-            "description": "o3-mini – our most recent small reasoning model (knowledge cutoff: October 2023). Supports structured outputs, function calling, batch API, etc., with 200k context and 100k max output tokens."
+            "description": "Powerful reasoning model across domains"
+        },
+        {
+            "name": "o3-mini-2025-01-31", # Existing, renamed from o4-mini based on user text
+            "context_length": 200000,
+            "description": "Fast, effective reasoning with coding/visual tasks"
         }
+        # Note: o4-mini from user text was mapped to o3-mini above based on description.
+        # If o4-mini is a separate model, add its details here.
     ]

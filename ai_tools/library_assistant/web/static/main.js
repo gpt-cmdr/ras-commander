@@ -487,6 +487,34 @@ function saveConversation() {
 }
 
 /**
+ * Update the model name displayed
+ */
+function updateModelDisplay(modelValue) {
+  const displayEl = document.getElementById('current-model-display');
+  if (!displayEl) return;
+
+  let displayName = 'Select Model';
+  // Map model values to display names
+  const modelNameMap = {
+    'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
+    'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet',
+    'gpt-4o-latest': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gpt-4.1': 'GPT-4.1', // New
+    'o1': 'o1',
+    'o1-mini': 'o1 Mini',
+    'o3': 'o3', // New
+    'o3-mini-2025-01-31': 'o3-mini', // Was o4-mini
+    'meta-llama/Llama-3.3-70B-Instruct-Turbo': 'Llama 3 70B Instruct',
+    'deepseek-ai/DeepSeek-V3': 'DeepSeek V3',
+    'deepseek-ai/DeepSeek-R1': 'DeepSeek R1'
+  };
+
+  displayName = modelNameMap[modelValue] || 'Select Model';
+  displayEl.textContent = displayName;
+}
+
+/**
  * Toggle API key inputs
  */
 function toggleApiKeys() {
@@ -497,50 +525,21 @@ function toggleApiKeys() {
 
   if (!anthropicGroup || !openaiGroup || !togetherGroup) return;
 
-  anthropicGroup.classList.add('hidden');
-  openaiGroup.classList.add('hidden');
-  togetherGroup.classList.add('hidden');
-
-  if (model.startsWith('claude')) {
-    anthropicGroup.classList.remove('hidden');
-  } else if (model.startsWith('gpt') || model.startsWith('o1')) {
-    openaiGroup.classList.remove('hidden');
-  } else if (model.startsWith('meta-llama/') || model.startsWith('deepseek-ai/')) {
-    togetherGroup.classList.remove('hidden');
+  // Determine provider based on model name prefix/content
+  let provider = 'unknown';
+  const modelLower = model.toLowerCase();
+  if (modelLower.startsWith('claude')) {
+    provider = 'anthropic';
+  } else if (modelLower.startsWith('gpt') || modelLower.startsWith('o1') || modelLower.startsWith('o3')) { // Added o3
+    provider = 'openai';
+  } else if (modelLower.includes('llama') || modelLower.includes('deepseek')) {
+    provider = 'together';
   }
-}
 
-/**
- * Update the model name displayed
- */
-function updateModelDisplay(modelValue) {
-  const displayEl = document.getElementById('current-model-display');
-  if (!displayEl) return;
-
-  let displayName = 'Select Model';
-  if (modelValue === 'claude-3-7-sonnet-20250219') {
-    displayName = 'Claude 3.7 Sonnet';
-  } else if (modelValue === 'claude-3-5-sonnet-20241022') {
-    displayName = 'Claude 3.5 Sonnet';
-  } else if (modelValue === 'gpt-4o-latest') {
-    displayName = 'GPT-4o';
-  } else if (modelValue === 'gpt-4o-mini') {
-    displayName = 'GPT-4o Mini';
-  } else if (modelValue === 'o1') {
-    displayName = 'o1';
-  } else if (modelValue === 'o1-mini') {
-    displayName = 'o1 Mini';
-  } else if (modelValue === 'o3-mini-2025-01-31') {
-    displayName = 'o3-mini';
-  } else if (modelValue === 'meta-llama/Llama-3.3-70B-Instruct-Turbo') {
-    displayName = 'Llama 3 70B Instruct';
-  } else if (modelValue === 'deepseek-ai/DeepSeek-V3') {
-    displayName = 'DeepSeek V3';
-  } else if (modelValue === 'deepseek-ai/DeepSeek-R1') {
-    displayName = 'DeepSeek R1';
-  }
-  
-  displayEl.textContent = displayName;
+  // Show/hide based on provider
+  anthropicGroup.classList.toggle('hidden', provider !== 'anthropic');
+  openaiGroup.classList.toggle('hidden', provider !== 'openai');
+  togetherGroup.classList.toggle('hidden', provider !== 'together');
 }
 
 /**
@@ -549,35 +548,52 @@ function updateModelDisplay(modelValue) {
 async function updateModelLimits() {
   const modelName = document.getElementById('selected_model')?.value;
   const outputLengthInput = document.getElementById('output_length');
-  if (!modelName || !outputLengthInput) return;
+  const helpText = document.getElementById('output_length_help');
+  if (!modelName || !outputLengthInput || !helpText) return;
 
   try {
+    console.log(`Updating limits for model: ${modelName}`);
+    // Call backend to get model specific info, including max output tokens
     const response = await fetch('/calculate_tokens', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_name: modelName,
+        // Send minimal data just to get config
         conversation_history: '',
         user_input: '',
         rag_context: '',
         system_message: '',
-        output_length: null
+        output_length: null // Let backend determine default/max
       })
     });
+
     if (response.ok) {
       const data = await response.json();
-      const defaultMax = data?.output_length || 8192;
-      outputLengthInput.max = defaultMax;
-      if (parseInt(outputLengthInput.value, 10) > defaultMax) {
-        outputLengthInput.value = defaultMax;
+      // Use max_output_tokens field from the backend response
+      const maxOutput = data?.max_output_tokens || 8192;
+
+      console.log(`Received max output for ${modelName}: ${maxOutput}`);
+
+      outputLengthInput.max = maxOutput;
+      // If current value exceeds new max, reset it (or set to max)
+      if (parseInt(outputLengthInput.value, 10) > maxOutput) {
+        outputLengthInput.value = maxOutput; // Set to new max
+      } else if (!outputLengthInput.value || parseInt(outputLengthInput.value, 10) <= 0) {
+          // If input is empty or invalid, set a reasonable default or the max
+          outputLengthInput.value = Math.min(8192, maxOutput); // Default to 8k or max, whichever is smaller
       }
-      const helpText = outputLengthInput.nextElementSibling;
-      if (helpText) {
-        helpText.textContent = `Maximum number of tokens in the AI's response (max ${defaultMax})`;
-      }
+
+      helpText.textContent = `Maximum number of tokens in the AI's response (max ${maxOutput.toLocaleString()})`;
+    } else {
+        console.error(`Failed to get limits for ${modelName}: ${response.status}`);
+         helpText.textContent = `Could not fetch limits for ${modelName}. Defaulting max to 8,192.`;
+         outputLengthInput.max = 8192;
     }
   } catch (error) {
     console.error('Error updating model limits:', error);
+    helpText.textContent = 'Error fetching model limits. Defaulting max to 8,192.';
+    outputLengthInput.max = 8192;
   }
 }
 
