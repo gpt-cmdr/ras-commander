@@ -23,7 +23,7 @@ from typing import Optional, List, Dict, Any
 from config.config import load_settings, update_settings
 from utils.conversation import add_to_history, get_full_conversation, save_conversation
 from utils.context_processing import prepare_full_prompt, update_conversation_history, initialize_context
-from utils.cost_estimation import create_pricing_df, estimate_cost, calculate_usage_and_cost
+from utils.cost_estimation import create_pricing_df, estimate_cost, calculate_usage_and_cost, MODEL_CONFIG
 from utils.file_handling import set_context_folder
 from api.anthropic import anthropic_stream_response, get_anthropic_client
 from api.openai import openai_stream_response, get_openai_client
