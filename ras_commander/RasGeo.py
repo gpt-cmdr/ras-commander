@@ -381,7 +381,7 @@ class RasGeo:
         
         # Add base table entries
         for _, row in mannings_data.iterrows():
-            new_content.append(f"{row['Land Cover Name']},{row['Base Manning\'s n Value']}\n")
+            new_content.append(f"{row['Land Cover Name']},{row['Base Manning''s n Value']}\n")
         
         # Replace the section in the original file
         updated_lines = lines[:start_idx] + new_content + lines[end_idx:]
