@@ -10,7 +10,9 @@ RAS Commander is a Python library for automating HEC-RAS operations, providing a
 [William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)
 -----  
 
-## Don't Ask Me, Ask GPT!
+*[Check out the ASFPM Presentation on RAS-Commander Here](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)*
+
+## Don't Ask Me, Ask a GPT!
 
 This repository has several methods of interaction with Large Language Models and LLM-Assisted Coding built right in: 
 
@@ -19,14 +21,14 @@ This repository has several methods of interaction with Large Language Models an
 2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
 3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
-  
+
+4. [RAS-Commander library as indexed by Deepwiki](https://deepwiki.com/gpt-cmdr/ras-commander) which includes lots of LLM-generated diagrams and analysis of the library. 
 
 <img align="left" width="25%" hspace="40" src="ai_tools/library_assistant/ras-commander_library_assistant.svg">
 
 The RAS-Commander library Assistant is a full-featured interface for multi-turn conversations, using your own API keys and the ras-commander library for context. The library assistant allows you to load your own scripts and chat with specific examples and/or function classes in the RAS-Commander library to effectively utilize the library's functions in your workflow. To reduce hallucinations, a file browser is included which adds full files to the conversation to ensure grounded responses. A dashboard shows you the total context and estimated cost of each request. **Now with support for Claude 3.7, OpenAI's o1 and o3-mini, and Deepseek V3 and R1 models using US-based Together.ai, and available as a standalone windows executable that runs within the repository**
 
-
-8. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized ChatGPT "GPT" with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter cannot run HEC-RAS but can [open and view smaller HDF files and projects for demonstration purposes](https://chatgpt.com/share/67e7cdb7-49e0-8010-bbac-61d2c54d473f)_
+5. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized ChatGPT "GPT" with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter cannot run HEC-RAS but can [open and view smaller HDF files and projects for demonstration purposes](https://chatgpt.com/share/67e7cdb7-49e0-8010-bbac-61d2c54d473f)_
 
 
 ## Background
