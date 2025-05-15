@@ -20,9 +20,9 @@ This repository has several methods of interaction with Large Language Models an
 
 2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursorrules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
-3. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
+3. [RAS-Commander library as indexed by Deepwiki](https://deepwiki.com/gpt-cmdr/ras-commander) which includes lots of LLM-generated diagrams and analysis of the library. 
 
-4. [RAS-Commander library as indexed by Deepwiki](https://deepwiki.com/gpt-cmdr/ras-commander) which includes lots of LLM-generated diagrams and analysis of the library. 
+4. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
 
 <img align="left" width="25%" hspace="40" src="ai_tools/library_assistant/ras-commander_library_assistant.svg">
 
