@@ -63,6 +63,7 @@ OMIT_FILES = [
     ".DS_Store", "Thumbs.db", "example_projects.zip",
     "Example_Projects_6_6.zip", "example_projects.ipynb", "11_Using_RasExamples.ipynb", 
     "future_dev_roadmap.ipynb", "structures_attributes.csv", "example_projects.csv",
+    ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".avi", ".mov", ".mp3", ".wav", ".m4a", ".m4v", ".ogg", ".webm"
 ]
 SUMMARY_OUTPUT_DIR = "llm_knowledge_bases"
 SCRIPT_NAME = Path(__file__).name
@@ -165,10 +166,7 @@ def save_cleaned_notebooks(summarize_subfolder, output_dir):
     """
     Save cleaned versions of all notebooks to a separate subfolder.
     All notebooks will be placed directly in the root of example_notebooks_cleaned.
-    
-    Args:
-        summarize_subfolder: Root folder to search for notebooks
-        output_dir: Base output directory
+    If the cleaned notebook is >100KB, remove all outputs.
     """
     cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
     cleaned_notebooks_dir.mkdir(parents=True, exist_ok=True)
@@ -180,32 +178,30 @@ def save_cleaned_notebooks(summarize_subfolder, output_dir):
     for notebook_path in notebooks:
         if should_omit(notebook_path):
             continue
-            
         try:
             # Process the notebook to clean outputs
             with open(notebook_path, 'r', encoding='utf-8') as f:
                 notebook = json.load(f)
-            
             # Process each cell
             for cell in notebook.get('cells', []):
                 if cell.get('cell_type') == 'code':
-                    # Process outputs
                     if 'outputs' in cell:
                         cell['outputs'] = clean_notebook_outputs(cell['outputs'])
-            
             # Use only the filename for the target path (no subdirectories)
             target_path = cleaned_notebooks_dir / notebook_path.name
-            
             # Overwrite any existing file with the same name
             if target_path.exists():
                 target_path.unlink()
-            
             # Save the cleaned notebook
             with open(target_path, 'w', encoding='utf-8') as f:
                 json.dump(notebook, f, indent=2)
-                
+            # Check file size; if >100KB, remove all outputs and save again
+            if target_path.stat().st_size > 100 * 1024:
+                print(f"Notebook {notebook_path} cleaned version >100KB, removing all outputs.")
+                no_output_content = process_notebook_no_outputs(notebook_path)
+                with open(target_path, 'w', encoding='utf-8') as f:
+                    f.write(no_output_content)
             print(f"Saved cleaned notebook: {target_path}")
-            
         except Exception as e:
             print(f"Error processing notebook {notebook_path}: {e}")
 
@@ -496,77 +492,95 @@ def strip_code_from_functions(content):
     stripped_content = pattern.sub(replacer, content)
     return stripped_content
 
+def build_project_tree(filepaths, base_path):
+    """
+    Build a project structure tree as a string, given a list of filepaths.
+    Only includes files actually included in the knowledge base.
+    """
+    from collections import defaultdict
+    tree = lambda: defaultdict(tree)
+    file_tree = tree()
+    for path in filepaths:
+        rel_parts = Path(path).relative_to(base_path).parts
+        subtree = file_tree
+        for part in rel_parts[:-1]:
+            subtree = subtree[part]
+        subtree[rel_parts[-1]] = None
+    def render(subtree, prefix=""):
+        lines = []
+        for i, (name, child) in enumerate(sorted(subtree.items())):
+            connector = "└── " if i == len(subtree)-1 else "├── "
+            lines.append(f"{prefix}{connector}{name}")
+            if child:
+                extension = "    " if i == len(subtree)-1 else "│   "
+                lines.extend(render(child, prefix + extension))
+        return lines
+    return '\n'.join(render(file_tree))
+
+def write_project_tree_and_content(outfile, filepaths, base_path, cleaned_notebooks_dir):
+    """
+    Write the project structure tree and then the content for each file.
+    """
+    tree_str = build_project_tree(filepaths, base_path)
+    outfile.write("Project Structure (files included):\n")
+    outfile.write(tree_str + "\n\n")
+    for filepath in filepaths:
+        outfile.write(f"File: {filepath}\n")
+        outfile.write("="*50 + "\n")
+        if filepath.suffix.lower() == '.ipynb':
+            # Use cleaned notebook if available
+            cleaned_notebook_path = cleaned_notebooks_dir / filepath.name
+            if cleaned_notebook_path.exists():
+                with open(cleaned_notebook_path, 'r', encoding='utf-8') as cleanfile:
+                    content = cleanfile.read()
+                outfile.write(content)
+                outfile.write("\n" + "="*50 + "\n\n")
+                continue
+        content = read_file_contents(filepath)
+        outfile.write(content)
+        outfile.write("\n" + "="*50 + "\n\n")
+
 def generate_full_summary(summarize_subfolder, output_dir):
     output_file_name = f"{summarize_subfolder.name}_fullrepo.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating Full Summary: {output_file_path}")
-
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
+    filepaths = []
+    for filepath in summarize_subfolder.rglob('*'):
+        if should_omit(filepath):
+            continue
+        if filepath.is_file():
+            filepaths.append(filepath)
     with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        for filepath in summarize_subfolder.rglob('*'):
-            if should_omit(filepath):
-                continue
-            if filepath.is_file():
-                outfile.write(f"File: {filepath}\n")
-                outfile.write("="*50 + "\n")
-                content = read_file_contents(filepath)
-                outfile.write(content)
-                outfile.write("\n" + "="*50 + "\n\n")
-                print(f"Added file to full summary: {filepath}")
-            elif filepath.is_dir():
-                outfile.write(f"Folder: {filepath}\n")
-                outfile.write("="*50 + "\n\n")
-                print(f"Added folder to full summary: {filepath}")
-
+        write_project_tree_and_content(outfile, filepaths, summarize_subfolder, cleaned_notebooks_dir)
     print(f"Full summary created at '{output_file_path}'")
 
-
-
 def generate_documentation_only_summary(summarize_subfolder, output_dir):
-    """Generate documentation-only summary from the ras_commander folder."""
     target_folder = summarize_subfolder / "ras_commander"
     output_file_name = "ras_commander_documentation_only.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating Documentation-Only Summary: {output_file_path}")
-
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
+    filepaths = []
+    # Add markdown files
+    markdown_files = ["Comprehensive_Library_Guide.md", "STYLE_GUIDE.md", "README.md"]
+    for md_file in markdown_files:
+        filepath = summarize_subfolder / md_file
+        if filepath.exists():
+            filepaths.append(filepath)
+    # Add logging_config.py
+    logging_config = target_folder / "logging_config.py"
+    if logging_config.exists():
+        filepaths.append(logging_config)
+    # Add all .py files
+    for filepath in target_folder.rglob('*'):
+        if should_omit(filepath):
+            continue
+        if filepath.is_file() and filepath.suffix == ".py":
+            filepaths.append(filepath)
     with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        # First add markdown files
-        markdown_files = ["Comprehensive_Library_Guide.md", "STYLE_GUIDE.md", "README.md"]
-        for md_file in markdown_files:
-            filepath = summarize_subfolder / md_file
-            if filepath.exists():
-                outfile.write(f"File: {filepath}\n")
-                outfile.write("="*50 + "\n")
-                content = read_file_contents(filepath)
-                outfile.write(content)
-                outfile.write("\n" + "="*50 + "\n\n")
-                print(f"Added markdown file: {filepath}")
-
-        # Add logging_config.py
-        logging_config = target_folder / "logging_config.py"
-        if logging_config.exists():
-            outfile.write(f"File: {logging_config}\n")
-            outfile.write("="*50 + "\n")
-            content = read_file_contents(logging_config)
-            outfile.write(content)
-            outfile.write("\n" + "="*50 + "\n\n")
-            print(f"Added logging config file: {logging_config}")
-
-        # Process Python files for docstrings
-        for filepath in target_folder.rglob('*'):
-            if should_omit(filepath):
-                continue
-            if filepath.is_file() and filepath.suffix == ".py":
-                outfile.write(f"File: {filepath}\n")
-                outfile.write("="*50 + "\n")
-                content = read_file_contents(filepath)
-                # Extract only docstrings and function signatures
-                stripped_content = strip_code_from_functions(content)
-                outfile.write(stripped_content)
-                outfile.write("\n" + "="*50 + "\n\n")
-                print(f"Added documentation-only file: {filepath}")
-
+        write_project_tree_and_content(outfile, filepaths, summarize_subfolder, cleaned_notebooks_dir)
     print(f"Documentation-only summary created at '{output_file_path}'")
-
 
 def generate_split_summary(summarize_subfolder, output_dir):
     """Generate separate summaries for examples, ras_commander, Ras files and Hdf files."""
@@ -576,7 +590,7 @@ def generate_split_summary(summarize_subfolder, output_dir):
         "ras_files": "ras_commander_ras_functions_only.txt",
         "hdf_files": "ras_commander_hdf_functions_only.txt"
     }
-
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
     for folder_name, output_file in split_files_mapping.items():
         if folder_name in ["examples", "ras_commander"]:
             target_folder = summarize_subfolder / folder_name
@@ -585,77 +599,42 @@ def generate_split_summary(summarize_subfolder, output_dir):
                 continue
         else:
             target_folder = summarize_subfolder / "ras_commander"
-
+        filepaths = []
+        for filepath in target_folder.rglob('*'):
+            if should_omit(filepath):
+                continue
+            if folder_name == "ras_files" and not (filepath.name.startswith("Ras") and filepath.suffix == ".py"):
+                continue
+            if folder_name == "hdf_files" and not (filepath.name.startswith("Hdf") and filepath.suffix == ".py"):
+                continue
+            if filepath.is_file():
+                filepaths.append(filepath)
         output_file_path = output_dir / output_file
         print(f"Generating Split Summary for '{folder_name}': {output_file_path}")
-
         with open(output_file_path, 'w', encoding='utf-8') as outfile:
-            for filepath in target_folder.rglob('*'):
-                if should_omit(filepath):
-                    continue
-                
-                # Special handling for Ras and Hdf files
-                if folder_name == "ras_files" and not (filepath.name.startswith("Ras") and filepath.suffix == ".py"):
-                    continue
-                if folder_name == "hdf_files" and not (filepath.name.startswith("Hdf") and filepath.suffix == ".py"):
-                    continue
-                    
-                if filepath.is_file():
-                    outfile.write(f"File: {filepath}\n")
-                    outfile.write("="*50 + "\n")
-                    # For examples.txt, use for_examples=True to remove all notebook outputs
-                    content = read_file_contents(filepath, for_examples=(folder_name == "examples"))
-                    outfile.write(content)
-                    outfile.write("\n" + "="*50 + "\n\n")
-                    print(f"Added file to split summary '{output_file}': {filepath}")
-                elif filepath.is_dir() and folder_name not in ["ras_files", "hdf_files"]:
-                    outfile.write(f"Folder: {filepath}\n")
-                    outfile.write("="*50 + "\n\n")
-                    print(f"Added folder to split summary '{output_file}': {filepath}")
-
+            write_project_tree_and_content(outfile, filepaths, target_folder, cleaned_notebooks_dir)
         print(f"Split summary '{output_file}' created at '{output_file_path}'")
 
-
-
 def generate_full_docsonly_summary(summarize_subfolder, output_dir):
-    """
-    Generate a summary of the ras_commander folder with all function implementation code
-    stripped out, leaving only the function headers and docstrings.
-    """
     ras_commander_folder = summarize_subfolder / "ras_commander"
     output_file_name = "ras-commander_all_without_code.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating Full Documentation-Only Summary (code omitted): {output_file_path}")
-
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
+    filepaths = []
+    for filepath in ras_commander_folder.rglob('*'):
+        if should_omit(filepath):
+            continue
+        if filepath.is_file():
+            filepaths.append(filepath)
     with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        for filepath in ras_commander_folder.rglob('*'):
-            if should_omit(filepath):
-                continue
-            if filepath.is_file():
-                outfile.write(f"File: {filepath}\n")
-                outfile.write("="*50 + "\n")
-                content = read_file_contents(filepath)
-                if filepath.suffix == ".py":
-                    # For Python files, strip out the function bodies while keeping headers and docstrings
-                    stripped_content = strip_code_from_functions(content)
-                    outfile.write(stripped_content)
-                else:
-                    # For non-Python files, include full content
-                    outfile.write(content)
-                outfile.write("\n" + "="*50 + "\n\n")
-                print(f"Added file to all_without_code summary: {filepath}")
-            elif filepath.is_dir():
-                outfile.write(f"Folder: {filepath}\n")
-                outfile.write("="*50 + "\n\n")
-                print(f"Added folder to all_without_code summary: {filepath}")
-
+        write_project_tree_and_content(outfile, filepaths, ras_commander_folder, cleaned_notebooks_dir)
     print(f"All_without_code summary created at '{output_file_path}'")
 
 def generate_gpt_summary(summarize_subfolder, output_dir):
     output_file_name = "ras-commander_gpt.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating GPT Summary: {output_file_path}")
-
     excluded_files = [
         "Comprehensive_Library_Guide.md",
         "STYLE_GUIDE.md",
@@ -663,58 +642,38 @@ def generate_gpt_summary(summarize_subfolder, output_dir):
         "future_dev_roadmap.ipynb"
     ]
     excluded_folders = ["ai_tools", "library_assistant"]
-
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
+    filepaths = []
+    for filepath in summarize_subfolder.rglob('*'):
+        if should_omit(filepath):
+            continue
+        if any(folder in filepath.parts for folder in excluded_folders):
+            continue
+        if filepath.name in excluded_files:
+            continue
+        if filepath.is_file():
+            filepaths.append(filepath)
     with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        for filepath in summarize_subfolder.rglob('*'):
-            if should_omit(filepath):
-                continue
-            if any(folder in filepath.parts for folder in excluded_folders):
-                continue
-            if filepath.name in excluded_files:
-                continue
-            if filepath.is_file():
-                outfile.write(f"File: {filepath}\n")
-                outfile.write("="*50 + "\n")
-                content = read_file_contents(filepath)
-                outfile.write(content)
-                outfile.write("\n" + "="*50 + "\n\n")
-                print(f"Added file to GPT summary: {filepath}")
-            elif filepath.is_dir():
-                outfile.write(f"Folder: {filepath}\n")
-                outfile.write("="*50 + "\n\n")
-                print(f"Added folder to GPT summary: {filepath}")
-
+        write_project_tree_and_content(outfile, filepaths, summarize_subfolder, cleaned_notebooks_dir)
     print(f"GPT summary created at '{output_file_path}'")
 
 def generate_library_assistant_summary(summarize_subfolder, output_dir):
     output_file_name = "library_assistant.txt"
     output_file_path = output_dir / output_file_name
     print(f"Generating Library Assistant Summary: {output_file_path}")
-
-    # Update the path to reflect the new location of library_assistant within ai_tools
     library_assistant_folder = summarize_subfolder / "ai_tools" / "library_assistant"
     if not library_assistant_folder.exists():
         print(f"Warning: library_assistant folder not found at {library_assistant_folder}")
         return
-
+    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
+    filepaths = []
+    for filepath in library_assistant_folder.rglob('*'):
+        if filepath.suffix.lower() in ['.exe', '.dll', '.so']:
+            continue
+        if filepath.is_file():
+            filepaths.append(filepath)
     with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        for filepath in library_assistant_folder.rglob('*'):
-            # Skip executable files
-            if filepath.suffix.lower() in ['.exe', '.dll', '.so']:
-                continue
-                
-            if filepath.is_file():
-                outfile.write(f"File: {filepath}\n")
-                outfile.write("="*50 + "\n")
-                content = read_file_contents(filepath)
-                outfile.write(content)
-                outfile.write("\n" + "="*50 + "\n\n")
-                print(f"Added file to library assistant summary: {filepath}")
-            elif filepath.is_dir():
-                outfile.write(f"Folder: {filepath}\n")
-                outfile.write("="*50 + "\n\n")
-                print(f"Added folder to library assistant summary: {filepath}")
-
+        write_project_tree_and_content(outfile, filepaths, library_assistant_folder, cleaned_notebooks_dir)
     print(f"Library assistant summary created at '{output_file_path}'")
 
 def main():

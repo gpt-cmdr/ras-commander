@@ -1,3 +1,46 @@
+Project Structure (files included):
+├── .cursorrules
+├── REAME.md
+├── api
+│   ├── anthropic.py
+│   ├── logging.py
+│   ├── openai.py
+│   └── together.py
+├── assistant.py
+├── assistant.spec
+├── config
+│   └── config.py
+├── database
+│   └── models.py
+├── dev roadmap notes.txt
+├── docs
+│   └── notebook_preprocessing.md
+├── log_folder
+│   └── library_assistant.log
+├── logs
+│   └── openai_api.log
+├── main.py
+├── package-lock.json
+├── package.json
+├── ras-commander_library_assistant.svg
+├── requirements.txt
+├── utils
+│   ├── context_integration.py
+│   ├── context_preprocessor.py
+│   ├── context_processing.py
+│   ├── conversation.py
+│   ├── cost_estimation.py
+│   └── file_handling.py
+└── web
+    ├── routes.py
+    ├── static
+    │   ├── fileTree.js
+    │   ├── main.js
+    │   ├── styles.css
+    │   └── tokendisplay.js
+    └── templates
+        └── index.html
+
 File: c:\GH\ras-commander\ai_tools\library_assistant\.cursorrules
 ==================================================
 Library Assistant: AI-Powered Tool for Managing and Querying Library Content
@@ -80,9 +123,6 @@ The AI assistant interacting with the Library Assistant is a helpful expert with
 
 The assistant should provide accurate, context-aware, and helpful responses while adhering to the Library Assistant's capabilities and limitations. It should offer guidance on effective use of the tool, including query formulation and settings management, while maintaining a professional and knowledgeable persona throughout all interactions.
 
-==================================================
-
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\api
 ==================================================
 
 File: c:\GH\ras-commander\ai_tools\library_assistant\assistant.py
@@ -216,12 +256,6 @@ exe = EXE(
 )
 ==================================================
 
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\config
-==================================================
-
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\database
-==================================================
-
 File: c:\GH\ras-commander\ai_tools\library_assistant\dev roadmap notes.txt
 ==================================================
 The cost estimation should update when a new model is selected in settings
@@ -241,9 +275,6 @@ The model name in the upper right hand corner should change with model selection
 
 
 store settings.db in user folder to prevent key leaks
-==================================================
-
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\docs
 ==================================================
 
 File: c:\GH\ras-commander\ai_tools\library_assistant\main.py
@@ -700,12 +731,6 @@ together
 # sphinx
 ==================================================
 
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\utils
-==================================================
-
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\web
-==================================================
-
 File: c:\GH\ras-commander\ai_tools\library_assistant\api\anthropic.py
 ==================================================
 """
@@ -716,14 +741,19 @@ For extended output length (up to 128k tokens), include the beta header output-1
 """
 
 from anthropic import AsyncAnthropic, Anthropic, APIError, AuthenticationError
-from typing import AsyncGenerator, List, Optional, Union
+from typing import AsyncGenerator, List, Optional, Union, Dict, Any
+import logging
+
+# Configure logging
+logger = logging.getLogger("library_assistant.anthropic")
 
 async def anthropic_stream_response(
     client: Union[AsyncAnthropic, Anthropic], 
     prompt: str, 
     max_tokens: int = 8192,
     model: Optional[str] = None,
-    system_message: Optional[str] = None
+    system_message: Optional[str] = None,
+    extra_headers: Optional[Dict[str, str]] = None
 ) -> AsyncGenerator[str, None]:
     """
     Streams a response from the Anthropic API using the Claude model.
@@ -731,9 +761,10 @@ async def anthropic_stream_response(
     Args:
         client: An initialized Anthropic client (sync or async)
         prompt: The prompt to send to the API
-        max_tokens: The maximum number of tokens to generate (default: 8192)
+        max_tokens: The maximum number of tokens to generate
         model: The model to use (default: claude-3-7-sonnet-20250219)
         system_message: Optional system message to set the AI's behavior
+        extra_headers: Optional dictionary of headers to send with the request
 
     Yields:
         str: Chunks of the response text from the API
@@ -748,13 +779,23 @@ async def anthropic_stream_response(
         # Convert to async client if needed
         async_client = client if isinstance(client, AsyncAnthropic) else AsyncAnthropic(api_key=client.api_key)
         
-        # Create the streaming response with system message as top-level parameter
+        # Prepare API call parameters
+        api_params: Dict[str, Any] = {
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+            "model": model,
+            "system": system_message if system_message else None,
+            "stream": True
+        }
+
+        # Log if extra headers are being used
+        if extra_headers:
+            logger.info(f"Using extra headers for Anthropic API call: {extra_headers}")
+        
+        # Create the streaming response with system message and optional headers
         stream = await async_client.messages.create(
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-            model=model,
-            system=system_message if system_message else None,
-            stream=True
+            **api_params,
+            extra_headers=extra_headers
         )
         
         # Process the stream events
@@ -767,13 +808,13 @@ async def anthropic_stream_response(
                 
     except AuthenticationError as e:
         error_msg = f"Authentication error with Anthropic API: {str(e)}"
-        print(error_msg)  # Log the error
+        logger.error(error_msg)
         raise APIError(error_msg, body={"error": {"message": error_msg}})
     
     except APIError as e:
         # Preserve the original API error but make sure it has the required structure
         error_msg = f"Anthropic API error: {str(e)}"
-        print(error_msg)  # Log the error
+        logger.error(error_msg)
         
         # If the error already has a body, pass it through
         if hasattr(e, 'body') and e.body:
@@ -784,7 +825,7 @@ async def anthropic_stream_response(
             
     except Exception as e:
         error_msg = f"Unexpected error in Anthropic API call: {str(e)}"
-        print(error_msg)  # Log the error
+        logger.error(error_msg)
         raise APIError(error_msg, body={"error": {"message": error_msg}})  # Include required body parameter
 
 def get_anthropic_client(api_key: str, async_client: bool = True) -> Union[Anthropic, AsyncAnthropic]:
@@ -1036,88 +1077,91 @@ logger = setup_logger()
 
 def _get_model_family(model: str) -> str:
     """
-    Determines the model family to handle role requirements.
-    
+    Determines the model family to handle role requirements and parameters.
+
     Args:
         model: The model name to check
-        
+
     Returns:
-        str: Model family identifier ('o3-mini', 'o1', 'gpt4o', or 'default')
+        str: Model family identifier ('o3-mini', 'o1', 'o3', 'gpt4', or 'default')
     """
     model_family = 'default'
     if model.startswith('o3-mini'):
         model_family = 'o3-mini'
     elif model.startswith('o1'):
         model_family = 'o1'
-    elif model.startswith('gpt-4o'):
-        model_family = 'gpt4o'
-    
+    elif model.startswith('o3'): # Added o3 check
+         model_family = 'o3'
+    elif model.startswith(('gpt-4o', 'gpt-4.1')): # Added gpt-4.1 check
+        model_family = 'gpt4'
+
     logger.debug(f"Model {model} identified as family: {model_family}")
     return model_family
 
 def _get_completion_params(model: str, max_tokens: int) -> Dict[str, Any]:
     """
     Gets the appropriate completion parameters for the model family.
-    
+
     Args:
         model: The model name
         max_tokens: The maximum number of tokens to generate
-        
+
     Returns:
         Dict[str, Any]: Dictionary of completion parameters
     """
     model_family = _get_model_family(model)
-    
+
     params = {
         'model': model,
     }
-    
-    # Handle o1 and o3-mini models with max_completion_tokens
-    if model_family in ['o1', 'o3-mini']:
+
+    # Handle models requiring max_completion_tokens
+    # o1, o3, and o3-mini seem to use this based on descriptions mentioning max output tokens
+    if model_family in ['o1', 'o3-mini', 'o3']:
         params['max_completion_tokens'] = max_tokens
     else:
+        # Standard GPT models (including gpt-4.1) use max_tokens
         params['max_tokens'] = max_tokens
-    
+
     logger.debug(f"Generated completion parameters for {model}: {params}")
     return params
 
 def _transform_messages_for_model(messages: List[Dict[str, str]], model: str) -> List[Dict[str, str]]:
     """
     Transforms message roles based on model requirements.
-    
+
     Args:
         messages: Original message list
         model: Target model name
-        
+
     Returns:
         List[Dict[str, str]]: Transformed message list
     """
     transformed_messages = []
     model_family = _get_model_family(model)
-    
+
     logger.debug(f"Original messages: {messages}")
-    
+
     for message in messages:
         new_message = message.copy()
-        
+
         # Handle system messages based on model family
         if message['role'] == 'system':
             if model_family == 'o1':
-                # TODO: Update to 'developer' role once API support is available
-                # For now, convert system messages to user messages for o1 models
+                # Convert system messages to user messages for o1 models
                 new_message['role'] = 'user'
-                logger.debug(f"Converting system message to user for O1 model (temporary until developer role support)")
-            elif model_family == 'gpt4o':
-                # For GPT-4O models, keep as system
-                logger.debug(f"Keeping system message for GPT-4O model")
-                pass
+                logger.debug(f"Converting system message to user for O1 model")
+            elif model_family in ['gpt4', 'o3', 'o3-mini']: # Added o3, o3-mini
+                # For GPT-4 variants, o3, o3-mini keep as system
+                logger.debug(f"Keeping system message for {model_family} model")
+                pass # Keep as system
             else:
-                # For other models, convert to user
+                # For other models (if any), convert to user as a safe default
                 new_message['role'] = 'user'
                 logger.debug(f"Converting system message to user for default model")
-        
+
         transformed_messages.append(new_message)
-    
+
     logger.debug(f"Transformed messages: {transformed_messages}")
     return transformed_messages
 
@@ -1262,14 +1306,19 @@ def get_openai_models() -> List[Dict[str, Any]]:
     """
     return [
         {
-            "name": "gpt-4o-2024-08-06",
-            "context_length": 16000,
-            "description": "GPT-4 Optimized for fast inference"
+            "name": "gpt-4o-latest", # Consider updating identifier e.g., gpt-4o-2024-08-06
+            "context_length": 128000,
+            "description": "Latest GPT-4 Omni model"
         },
         {
             "name": "gpt-4o-mini",
-            "context_length": 16000,
-            "description": "GPT-4 Mini model for faster, more efficient processing"
+            "context_length": 128000,
+            "description": "GPT-4 Mini model for faster, efficient processing"
+        },
+        {
+            "name": "gpt-4.1", # New model
+            "context_length": 1047576,
+            "description": "Flagship GPT model for complex tasks"
         },
         {
             "name": "o1",
@@ -1278,14 +1327,21 @@ def get_openai_models() -> List[Dict[str, Any]]:
         },
         {
             "name": "o1-mini",
-            "context_length": 200000,
-            "description": "O1 Mini model for faster, more efficient processing"
+            "context_length": 128000, # Needs confirmation
+            "description": "O1 Mini model for faster, efficient processing"
         },
         {
-            "name": "o3-mini-2025-01-31",
+            "name": "o3", # New model
             "context_length": 200000,
-            "description": "o3-mini – our most recent small reasoning model (knowledge cutoff: October 2023). Supports structured outputs, function calling, batch API, etc., with 200k context and 100k max output tokens."
+            "description": "Powerful reasoning model across domains"
+        },
+        {
+            "name": "o3-mini-2025-01-31", # Existing, renamed from o4-mini based on user text
+            "context_length": 200000,
+            "description": "Fast, effective reasoning with coding/visual tasks"
         }
+        # Note: o4-mini from user text was mapped to o3-mini above based on description.
+        # If o4-mini is a separate model, add its details here.
     ]
 
 ==================================================
@@ -1790,6 +1846,321 @@ Possible future enhancements to consider:
 2. Add more granular control over what gets processed and how
 3. Implement caching to avoid reprocessing unchanged notebooks
 4. Add support for processing other file types that might contain large binary data 
+==================================================
+
+File: c:\GH\ras-commander\ai_tools\library_assistant\logs\openai_api.log
+==================================================
+
+==================================================
+
+File: c:\GH\ras-commander\ai_tools\library_assistant\log_folder\library_assistant.log
+==================================================
+2025-05-12 09:27:05,890 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 09:27:05,928 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 09:27:05,929 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 09:27:05,937 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3
+2025-05-12 09:27:05,944 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 09:27:05,947 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:27:05,952 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:27:05,988 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:27:05,989 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:27:06,036 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:27:06,038 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:27:06,061 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:27:06,062 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:27:06,071 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:27:06,072 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:27:06,083 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:27:06,084 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:27:06,094 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:27:06,095 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:27:06,113 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:27:06,114 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:27:06,116 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:27:06,116 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:27:06,132 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:27:06,132 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:27:06,147 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:27:06,147 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:27:06,221 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:27:06,223 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:27:06,228 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:27:06,229 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,297 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,298 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,412 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:27:06,415 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:27:06,444 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:27:06,447 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:27:06,513 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:27:06,515 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:27:06,558 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:27:06,559 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:27:06,573 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:27:06,575 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:27:06,586 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:27:06,588 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:27:06,597 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:27:06,597 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 09:27:06,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 09:27:06,630 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 09:27:06,729 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 09:27:06,777 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ras_commander\__pycache__
+2025-05-12 09:27:06,778 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 09:27:06,795 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 09:27:06,808 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 09:27:06,814 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:27:08,125 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:27:08,136 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 4, 'errors': 0}
+2025-05-12 09:27:08,137 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander
+2025-05-12 09:27:12,918 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 09:27:12,919 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 09:27:13,442 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 09:27:13,442 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 09:27:14,952 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3\ras-commander
+2025-05-12 09:42:55,432 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_yeevvdw3
+2025-05-12 09:43:19,517 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 09:43:19,539 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 09:43:19,540 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 09:43:19,546 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z
+2025-05-12 09:43:19,549 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 09:43:19,551 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 09:43:19,555 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:43:19,560 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 09:43:19,560 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:43:19,563 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 09:43:19,564 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:43:19,572 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 09:43:19,573 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:43:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 09:43:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:43:19,600 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 09:43:19,601 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:43:19,605 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 09:43:19,606 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:43:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 09:43:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:43:19,614 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 09:43:19,615 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:43:19,622 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 09:43:19,622 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:43:19,629 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 09:43:19,630 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:43:19,633 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 09:43:19,634 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:43:19,646 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 09:43:19,647 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:43:19,671 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 09:43:19,672 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:43:19,676 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 09:43:19,676 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,705 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,706 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,752 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 09:43:19,753 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:43:19,767 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 09:43:19,768 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:43:19,788 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 09:43:19,789 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:43:19,802 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 09:43:19,803 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:43:19,808 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 09:43:19,809 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:43:19,813 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 09:43:19,813 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:43:19,816 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 09:43:19,816 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:43:19,822 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 09:43:19,823 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 09:43:19,823 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 09:43:19,823 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 09:43:19,829 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 09:43:19,852 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 09:43:19,863 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 09:43:19,867 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 09:43:19,870 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 09:43:19,871 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:43:20,679 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 09:43:20,698 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 3, 'errors': 0}
+2025-05-12 09:43:20,698 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander
+2025-05-12 09:43:24,856 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 09:43:24,857 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 09:43:25,315 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 09:43:25,316 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 09:43:26,566 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z\ras-commander
+2025-05-12 10:00:30,309 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_4s_dy60z
+2025-05-12 10:05:19,099 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 10:05:19,109 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 10:05:19,110 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 10:05:19,112 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e
+2025-05-12 10:05:19,115 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 10:05:19,117 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 10:05:19,118 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:05:19,137 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:05:19,138 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:05:19,151 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:05:19,152 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:05:19,168 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:05:19,169 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:05:19,195 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:05:19,195 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:05:19,201 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:05:19,201 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:05:19,217 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:05:19,217 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:05:19,232 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:05:19,232 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:05:19,248 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:05:19,248 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:05:19,264 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:05:19,264 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:05:19,279 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:05:19,279 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:05:19,310 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:05:19,310 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:05:19,326 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:05:19,326 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:05:19,359 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:05:19,360 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:05:19,373 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:05:19,374 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,395 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,395 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,474 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:05:19,476 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:05:19,493 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:05:19,493 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:05:19,532 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:05:19,533 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:05:19,562 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:05:19,562 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:05:19,578 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:05:19,578 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:05:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:05:19,593 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:05:19,595 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:05:19,595 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 10:05:19,610 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 10:05:19,626 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 10:05:19,641 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 10:05:19,641 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 10:05:19,661 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 10:05:19,663 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 10:05:19,665 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:05:20,313 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:05:20,322 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 3, 'errors': 0}
+2025-05-12 10:05:20,322 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander
+2025-05-12 10:05:24,453 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 10:05:24,453 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 10:05:24,950 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 10:05:24,951 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 10:05:26,177 - library_assistant - ERROR - routes:503 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 472, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:05:26,202 - library_assistant - ERROR - routes:503 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 472, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:05:26,220 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e\ras-commander
+2025-05-12 10:19:11,458 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_clcoxd4e
+2025-05-12 10:30:39,850 - library_assistant - INFO - assistant:61 - Initializing context...
+2025-05-12 10:30:39,859 - library_assistant.context_integration - INFO - context_integration:46 - Getting original context folder: c:\GH\ras-commander
+2025-05-12 10:30:39,860 - library_assistant.context_integration - INFO - context_integration:53 - Creating processed copy of context folder: c:\GH\ras-commander
+2025-05-12 10:30:39,862 - library_assistant.context_preprocessor - INFO - context_preprocessor:68 - Created temporary directory: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o
+2025-05-12 10:30:39,867 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\.git
+2025-05-12 10:30:39,870 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\ai_tools
+2025-05-12 10:30:39,874 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:30:39,877 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\00_Using_RasExamples.ipynb
+2025-05-12 10:30:39,877 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:30:39,879 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\01_project_initialization.ipynb
+2025-05-12 10:30:39,880 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:30:39,891 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\02_plan_and_geometry_operations.ipynb
+2025-05-12 10:30:39,891 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:30:39,911 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\03_unsteady_flow_operations.ipynb
+2025-05-12 10:30:39,911 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:30:39,918 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\04_multiple_project_operations.ipynb
+2025-05-12 10:30:39,918 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:30:39,921 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\05_single_plan_execution.ipynb
+2025-05-12 10:30:39,922 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:30:39,926 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\06_executing_plan_sets.ipynb
+2025-05-12 10:30:39,927 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:30:39,930 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\07_sequential_plan_execution.ipynb
+2025-05-12 10:30:39,931 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:30:39,936 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\08_parallel_execution.ipynb
+2025-05-12 10:30:39,937 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:30:39,942 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\09_plan_parameter_operations.ipynb
+2025-05-12 10:30:39,942 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:30:39,945 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\101_Core_Sensitivity.ipynb
+2025-05-12 10:30:39,945 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:30:39,955 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\102_benchmarking_versions_6.1_to_6.6.ipynb
+2025-05-12 10:30:39,956 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:30:39,974 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\103_Running_AEP_Events_from_Atlas_14.ipynb
+2025-05-12 10:30:39,974 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:30:39,978 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\105_Infiltration_Base_Sensitivity preview.ipynb
+2025-05-12 10:30:39,979 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,002 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,003 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,050 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
+2025-05-12 10:30:40,051 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:30:40,066 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipynb
+2025-05-12 10:30:40,067 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:30:40,092 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
+2025-05-12 10:30:40,093 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:30:40,108 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
+2025-05-12 10:30:40,108 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:30:40,114 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\15_mannings_sensitivity_bulk_analysis.ipynb
+2025-05-12 10:30:40,114 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:30:40,123 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\16_mannings_sensitivity_multi-interval.ipynb
+2025-05-12 10:30:40,124 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:30:40,128 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\17_remote_ras_execution.ipynb
+2025-05-12 10:30:40,128 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:30:40,134 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\examples\17_remote_ras_execution_save.ipynb
+2025-05-12 10:30:40,134 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:99 - Skipping folder (in omit list): c:\GH\ras-commander\examples\data
+2025-05-12 10:30:40,135 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\examples\example_projects.csv
+2025-05-12 10:30:40,135 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-05-12 10:30:40,140 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras-commander_logo.svg
+2025-05-12 10:30:40,159 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:112 - Skipping file (in omit list): c:\GH\ras-commander\ras_commander\RasExamples.py
+2025-05-12 10:30:40,168 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\ras_commander.zip
+2025-05-12 10:30:40,172 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\1D_Mannings_to_L-MC-R.exe
+2025-05-12 10:30:40,174 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:117 - Skipping file (extension in omit list): c:\GH\ras-commander\tools\1D Mannings to L-MC-R\water_icon.ico
+2025-05-12 10:30:40,175 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:147 - Processing notebook: c:\GH\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:30:40,942 - library_assistant.context_preprocessor - DEBUG - context_preprocessor:169 - Notebook processed successfully: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander\tools\Model Indexing.ipynb
+2025-05-12 10:30:40,950 - library_assistant.context_preprocessor - INFO - context_preprocessor:78 - Preprocessing complete: {'total_files': 73, 'notebooks_processed': 24, 'files_copied': 42, 'files_skipped': 7, 'folders_skipped': 3, 'errors': 0}
+2025-05-12 10:30:40,951 - library_assistant.context_integration - INFO - context_integration:63 - Using processed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander
+2025-05-12 10:30:45,636 - library_assistant - INFO - assistant:63 - Context initialized successfully
+2025-05-12 10:30:45,638 - library_assistant - INFO - assistant:69 - Opening web browser
+2025-05-12 10:30:46,212 - library_assistant - INFO - assistant:73 - Starting application server
+2025-05-12 10:30:46,212 - library_assistant - INFO - assistant:55 - Starting Library Assistant application
+2025-05-12 10:30:47,445 - library_assistant - ERROR - routes:487 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 456, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:30:47,472 - library_assistant - ERROR - routes:487 - Error calculating tokens: name 'MODEL_CONFIG' is not defined
+Traceback (most recent call last):
+  File "c:\GH\ras-commander\ai_tools\library_assistant\web\routes.py", line 456, in calculate_tokens
+    model_config = MODEL_CONFIG.get(model_name, {})
+                   ^^^^^^^^^^^^
+NameError: name 'MODEL_CONFIG' is not defined
+2025-05-12 10:30:47,490 - library_assistant.context_integration - DEBUG - context_integration:115 - Using preprocessed context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o\ras-commander
+2025-05-12 10:32:40,914 - library_assistant.context_integration - INFO - context_integration:101 - Cleaning up temporary context folder: C:\Users\billk\AppData\Local\Temp\library_assistant_context_kev9di5o
+
 ==================================================
 
 File: c:\GH\ras-commander\ai_tools\library_assistant\utils\context_integration.py
@@ -2668,6 +3039,7 @@ import tiktoken
 from typing import Dict, Optional
 # Model configurations with token limits and pricing
 MODEL_CONFIG = {
+    # Anthropic Models
     "claude-3-7-sonnet-20250219": {
         "max_context_tokens": 200000,
         "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
@@ -2680,36 +3052,51 @@ MODEL_CONFIG = {
         "completion_cost_per_1m": 15.0,  # $15.00 per million tokens
         "default_output_tokens": 8192
     },
-    "gpt-4o-latest": {
-        "max_context_tokens": 128000,
-        "prompt_cost_per_1m": 2.5,      # $2.50 per million tokens
-        "completion_cost_per_1m": 10.0,  # $10.00 per million tokens
-        "default_output_tokens": 16384
+    # OpenAI Models (Existing)
+    "gpt-4o-latest": { # Consider updating identifier if a specific version is known, e.g., gpt-4o-2024-08-06
+        "max_context_tokens": 128000, # GPT-4o usually has 128k context
+        "prompt_cost_per_1m": 5.0,   # Example pricing, update if known
+        "completion_cost_per_1m": 15.0, # Example pricing, update if known
+        "default_output_tokens": 16384 # Common output limit for GPT-4o
     },
     "gpt-4o-mini": {
         "max_context_tokens": 128000,
         "prompt_cost_per_1m": 0.15,     # $0.15 per million tokens
         "completion_cost_per_1m": 0.6,   # $0.60 per million tokens
-        "default_output_tokens": 16384
+        "default_output_tokens": 32768 # Matches gpt-4o standard output
     },
     "o1": {
         "max_context_tokens": 200000,
         "prompt_cost_per_1m": 15.0,     # $15.00 per million tokens
         "completion_cost_per_1m": 60.0,  # $60.00 per million tokens
-        "default_output_tokens": 100000
+        "default_output_tokens": 32768
     },
     "o1-mini": {
-        "max_context_tokens": 128000,
+        "max_context_tokens": 128000, # Needs confirmation, using 128k based on o4-mini
         "prompt_cost_per_1m": 3.0,      # $3.00 per million tokens
         "completion_cost_per_1m": 12.0,  # $12.00 per million tokens
-        "default_output_tokens": 65536
+        "default_output_tokens": 32768 # Needs confirmation, using plausible value
     },
-    "o3-mini-2025-01-31": {
+     "o3-mini-2025-01-31": { # Renamed from o4-mini based on user text
         "max_context_tokens": 200000,
-        "prompt_cost_per_1m": 0.0011,   # $0.0011 per million tokens
-        "completion_cost_per_1m": 0.0044, # $0.0044 per million tokens
-        "default_output_tokens": 100000
+        "prompt_cost_per_1m": 1.10,   # $1.10 per million tokens (From user text for o4-mini)
+        "completion_cost_per_1m": 4.40, # $4.40 per million tokens (From user text for o4-mini)
+        "default_output_tokens": 32768 # Max output tokens
     },
+    # OpenAI Models (New)
+    "o3": {
+        "max_context_tokens": 200000,
+        "prompt_cost_per_1m": 10.00,    # $10.00 per million tokens
+        "completion_cost_per_1m": 40.00, # $40.00 per million tokens
+        "default_output_tokens": 32768 # Max output tokens
+    },
+    "gpt-4.1": { # Using "gpt-4.1" as the identifier
+        "max_context_tokens": 1047576, # Context window from user text
+        "prompt_cost_per_1m": 2.00,     # $2.00 per million tokens
+        "completion_cost_per_1m": 8.00,  # $8.00 per million tokens
+        "default_output_tokens": 32768  # Max output tokens
+    },
+    # Together AI Models
     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {
         "max_context_tokens": 128000,
         "prompt_cost_per_1m": 0.88,     # $0.88 per million tokens
@@ -2845,10 +3232,10 @@ def create_pricing_df(model):
     Creates a pricing dataframe for a given model.
 
     This function returns a dictionary containing a pandas DataFrame with pricing information
-    and the provider (OpenAI or Anthropic) for the specified model.
+    and the provider (OpenAI, Anthropic, or Together) for the specified model.
 
     Args:
-        model (str): The name of the model (e.g., 'gpt-4', 'claude-3-5-sonnet-20240620').
+        model (str): The name of the model.
 
     Returns:
         dict: A dictionary containing:
@@ -2861,8 +3248,12 @@ def create_pricing_df(model):
     """
     config = MODEL_CONFIG.get(model)
     if not config:
-        raise ValueError(f"Unsupported model: {model}")
-        
+        # Try to find a close match (e.g., remove date suffix)
+        base_model = model.rsplit('-', 1)[0] if '-' in model else model
+        config = MODEL_CONFIG.get(base_model)
+        if not config:
+             raise ValueError(f"Unsupported model: {model}")
+
     pricing_data = {
         "Model": [model],
         "Input ($/1M Tokens)": [config["prompt_cost_per_1m"]],
@@ -2870,19 +3261,19 @@ def create_pricing_df(model):
         "Context Window (Tokens)": [config["max_context_tokens"]],
         "Response Max Tokens": [config["default_output_tokens"]]
     }
-    
+
     pricing_df = pd.DataFrame(pricing_data)
-    
+
     # Determine provider based on model name
-    if model.startswith("claude"):
+    provider = "unknown"
+    model_lower = model.lower()
+    if model_lower.startswith("claude"):
         provider = "anthropic"
-    elif model.startswith(("gpt", "o1", "o3")):
+    elif model_lower.startswith(("gpt", "o1", "o3", "o4")): # Added o3, o4
         provider = "openai"
-    elif any(prefix in model.lower() for prefix in ["llama", "deepseek"]):
+    elif any(prefix in model_lower for prefix in ["llama", "deepseek"]):
         provider = "together"
-    else:
-        provider = "unknown"
-        
+
     return {"pricing_df": pricing_df, "provider": provider}
 
 def estimate_cost(input_tokens, output_tokens, pricing_df):
@@ -3221,11 +3612,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Streamin
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from config.config import load_settings, update_settings
 from utils.conversation import add_to_history, get_full_conversation, save_conversation
 from utils.context_processing import prepare_full_prompt, update_conversation_history, initialize_context
-from utils.cost_estimation import create_pricing_df, estimate_cost, calculate_usage_and_cost
+from utils.cost_estimation import create_pricing_df, estimate_cost, calculate_usage_and_cost, MODEL_CONFIG
 from utils.file_handling import set_context_folder
 from api.anthropic import anthropic_stream_response, get_anthropic_client
 from api.openai import openai_stream_response, get_openai_client
@@ -3276,120 +3667,132 @@ async def read_root(request: Request):
 @router.post("/chat")
 async def chat(request: Request, message: dict):
     """
-    Handles chat interactions with the AI model, supporting streaming responses.
+    Handles chat interactions with the AI model, supporting streaming responses
+    and extended output for specific models.
     """
     conversation_id = message.get("conversation_id", str(uuid.uuid4()))
     logger.info(f"Starting chat interaction - Conversation ID: {conversation_id}")
-    
+
     try:
-        # Validate input
         user_message = message.get("message")
         if not user_message:
             logger.warning("Empty message received")
             raise HTTPException(status_code=400, detail="No message provided.")
-            
-        # Get selected files for context if provided
+
         selected_files = message.get("selectedFiles", [])
         logger.debug(f"Selected files for context: {selected_files}")
-        
-        # Add user message to history
+
         add_to_history("user", user_message)
         logger.debug(f"Added user message to history: {user_message[:100]}...")
-        
-        # Load settings and prepare context
+
         settings = load_settings()
         selected_model = settings.selected_model
+        if not selected_model:
+             raise HTTPException(status_code=400, detail="No model selected in settings.")
         logger.info(f"Using model: {selected_model}")
-        
-        # Set output length based on model
-        output_length = None
+
+        # --- Start Model Specific Adjustments ---
+        output_length = int(message.get("output_length", 0)) # Get user desired length if provided
+        model_config = MODEL_CONFIG.get(selected_model, {})
+        max_possible_output = model_config.get("default_output_tokens", 8192)
+        anthropic_headers = None
+
+        # Adjust for Claude 3.7 Sonnet extended output
         if selected_model == "claude-3-7-sonnet-20250219":
-            output_length = 32000  # Support for extended output length (32k tokens)
-        
-        # Prepare prompt with conversation history
+             # Use user specified length up to 128k, otherwise default to 128k
+            output_length = min(output_length if output_length > 0 else 128000, 128000)
+            anthropic_headers = {"anthropic-beta": "output-128k-2025-02-19"}
+            logger.info(f"Claude 3.7 Sonnet selected. Enabling extended output up to {output_length} tokens.")
+        elif output_length <= 0:
+             # Use model default if user didn't specify
+             output_length = max_possible_output
+        else:
+             # Use user specified length, capped by model max
+             output_length = min(output_length, max_possible_output)
+        # --- End Model Specific Adjustments ---
+
         full_prompt = prepare_full_prompt(
             user_message,
             selected_files,
             conversation_id
         )
         logger.debug(f"Prepared prompt length: {len(full_prompt)} characters")
-        
-        # Update conversation history
+
         update_conversation_history(conversation_id, "user", user_message)
-        
-        # Calculate token usage and validate against limits
+
         usage_data = calculate_usage_and_cost(
             model_name=selected_model,
             conversation_history=get_full_conversation(),
             user_input=user_message,
-            rag_context="".join(selected_files),
-            system_message=settings.system_message,
-            output_length=output_length
+            rag_context="".join(selected_files), # This might not be the best way to represent context tokens
+            system_message=settings.system_message or "",
+            output_length=output_length # Use the calculated/adjusted output length
         )
-        
-        # Check if we're exceeding token limits
+
         if usage_data["remaining_tokens"] < 0:
             raise HTTPException(
                 status_code=400,
-                detail="Request exceeds maximum token limit. Please reduce context or message length."
+                detail=f"Request exceeds maximum token limit ({usage_data['max_tokens']} tokens). Current estimate: {usage_data['total_tokens_with_output']}. Please reduce context or message length."
             )
-            
+
         logger.info(f"Token usage - Input: {usage_data['total_tokens_used']}, Output: {usage_data['output_length']}")
         logger.info(f"Estimated cost: ${usage_data['cost_estimate']:.6f}")
 
-        # Get provider info from pricing data
         pricing_info = create_pricing_df(selected_model)
         provider = pricing_info["provider"]
         logger.info(f"Using provider: {provider}")
 
         async def stream_response():
-            """Generator for streaming the AI response"""
             accumulated_response = []
             try:
                 if provider == "anthropic":
                     logger.info("Using Anthropic API")
                     client = get_anthropic_client(settings.anthropic_api_key)
-                    logger.info(f"Sending Anthropic API request with model: {selected_model}")
+                    logger.info(f"Sending Anthropic API request with model: {selected_model}, max_tokens: {output_length}")
                     async for chunk in anthropic_stream_response(
-                        client, 
+                        client,
                         full_prompt,
                         system_message=settings.system_message,
-                        max_tokens=usage_data["output_length"]
+                        max_tokens=output_length, # Pass adjusted max_tokens
+                        model=selected_model,      # Explicitly pass model
+                        extra_headers=anthropic_headers # Pass beta header if applicable
                     ):
                         accumulated_response.append(chunk)
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-                        
+
                 elif provider == "openai":
                     logger.info("Using OpenAI API")
                     client = get_openai_client(settings.openai_api_key)
                     messages = [
                         {"role": "system", "content": settings.system_message or "You are a helpful AI assistant."},
-                        {"role": "user", "content": full_prompt}
+                        {"role": "user", "content": full_prompt} # Consider structuring messages differently if needed
                     ]
-                    logger.info(f"Sending OpenAI API request with model: {selected_model}")
+                    logger.info(f"Sending OpenAI API request with model: {selected_model}, max_tokens: {output_length}")
                     async for chunk in openai_stream_response(
-                        client, 
-                        selected_model, 
+                        client,
+                        selected_model,
                         messages,
-                        max_tokens=usage_data["output_length"]
+                        max_tokens=output_length # Pass adjusted max_tokens
                     ):
                         accumulated_response.append(chunk)
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-                        
+
                 elif provider == "together":
                     logger.info("Using Together.ai API")
                     messages = [
                         {"role": "system", "content": settings.system_message or "You are a helpful AI assistant."},
                         {"role": "user", "content": full_prompt}
                     ]
-                    logger.info(f"Sending Together.ai API request with model: {selected_model}")
+                    logger.info(f"Sending Together.ai API request with model: {selected_model}, max_tokens: {output_length}")
+                    # Note: Together.ai API might not support streaming this way.
+                    # Assuming non-streaming response for simplicity based on existing code.
                     response = together_chat_completion(
                         settings.together_api_key,
                         selected_model,
                         messages,
-                        max_tokens=usage_data["output_length"]
+                        max_tokens=output_length # Pass adjusted max_tokens
                     )
-                    
+
                     if response and response.choices and response.choices[0].message:
                         response_text = response.choices[0].message.content
                         accumulated_response.append(response_text)
@@ -3401,19 +3804,26 @@ async def chat(request: Request, message: dict):
                 else:
                     logger.error(f"Unsupported provider: {provider}")
                     raise HTTPException(status_code=400, detail="Unsupported provider selected.")
-                
-                # Add complete response to history
+
                 complete_response = "".join(accumulated_response)
                 logger.debug(f"Complete response length: {len(complete_response)} characters")
                 add_to_history("assistant", complete_response)
-                
-                # Update history with assistant response
                 update_conversation_history(conversation_id, "assistant", complete_response)
-                
-                # Send the cost estimate as a final message
-                yield f"data: {json.dumps({'cost': usage_data['cost_estimate'], 'provider': provider})}\n\n"
+
+                # Recalculate final cost based on actual tokens if possible (hard with streaming)
+                # For now, send the initial estimate
+                final_usage_data = calculate_usage_and_cost( # Recalculate with actual response? Hard for streaming.
+                    model_name=selected_model,
+                    conversation_history=get_full_conversation()[:-len(complete_response)], # History before response
+                    user_input=user_message,
+                    rag_context="".join(selected_files),
+                    system_message=settings.system_message or "",
+                    output_length=tiktoken.encoding_for_model("gpt-3.5-turbo").encode(complete_response) # Estimate actual output tokens
+                 )
+
+                yield f"data: {json.dumps({'cost': final_usage_data['cost_estimate'], 'provider': provider})}\n\n"
                 logger.info(f"Chat interaction completed successfully - Conversation ID: {conversation_id}")
-                
+
             except Exception as e:
                 # Extract detailed API error information
                 error_details = str(e)
@@ -3447,12 +3857,9 @@ async def chat(request: Request, message: dict):
                         except Exception:
                             pass
                 
-                # Log the full error for debugging
                 error_msg = f"Error during streaming: {error_details}"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True) # Log traceback
                 log_error(e, "Streaming error")
-                
-                # Send user-friendly error message to the frontend
                 yield f"data: {json.dumps({'error': error_details})}\n\n"
 
         return StreamingResponse(
@@ -3465,9 +3872,13 @@ async def chat(request: Request, message: dict):
             }
         )
 
+    except HTTPException as http_exc:
+        logger.error(f"HTTP Exception in /chat: {http_exc.detail}", exc_info=True)
+        raise http_exc
     except Exception as e:
         log_error(e, f"Chat endpoint error - Conversation ID: {conversation_id}")
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        logger.error(f"Unexpected error in /chat: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.post("/submit")
 async def handle_submit(
@@ -3621,40 +4032,52 @@ async def get_file_content(path: str):
 async def calculate_tokens(request: TokenCalcRequest):
     """
     Calculate token usage, cost, and color coding for the next request.
-    
-    Args:
-        request (TokenCalcRequest): The request containing model and content information
-        
-    Returns:
-        dict: Usage data including token counts, costs, and color coding
+    Adjusts output length based on the selected model's capabilities.
     """
     try:
-        # Get settings for system message if not provided
-        if not request.system_message:
+        model_name = request.model_name
+        if not model_name:
+            raise ValueError("Model name is required for token calculation.")
+
+        system_message = request.system_message
+        if not system_message:
             settings = load_settings()
-            request.system_message = settings.system_message
-            
-        # Set default output length based on model if not specified
-        if not request.output_length:
-            if request.model_name == "claude-3-7-sonnet-20250219":
-                request.output_length = 32000  # Support for extended output length (32k tokens)
-            else:
-                request.output_length = 8192  # Default for other models
-            
-        # Calculate usage data
+            system_message = settings.system_message or ""
+
+        # Determine the output length based on user input and model defaults
+        output_length = request.output_length
+        model_config = MODEL_CONFIG.get(model_name, {})
+        max_possible_output = model_config.get("default_output_tokens", 8192)
+
+        if output_length is None or output_length <= 0:
+            # If user didn't specify, use the model's max potential output
+            output_length = max_possible_output
+        else:
+            # Use user-specified length, but cap it at the model's max potential
+            output_length = min(output_length, max_possible_output)
+
+        logger.debug(f"Calculating tokens for model: {model_name} with output_length: {output_length}")
+
+        # Calculate usage data using the determined output_length
         usage_data = calculate_usage_and_cost(
-            model_name=request.model_name,
+            model_name=model_name,
             conversation_history=request.conversation_history,
             user_input=request.user_input,
-            rag_context=request.rag_context,
-            system_message=request.system_message,
-            output_length=request.output_length
+            rag_context=request.rag_context, # Note: RAG context token calculation might need refinement
+            system_message=system_message,
+            output_length=output_length # Pass the adjusted output length
         )
-        
+
+        # Add the actual max output token value to the response for the frontend
+        usage_data["max_output_tokens"] = max_possible_output
+
         return usage_data
-        
+
+    except ValueError as ve:
+         logger.warning(f"Value error calculating tokens: {str(ve)}")
+         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.error(f"Error calculating tokens: {str(e)}")
+        logger.error(f"Error calculating tokens: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error calculating tokens: {str(e)}")
 
 """
@@ -3690,12 +4113,6 @@ async def add_root_folder(request: Request):
         status_code=501,
         detail="This feature is not yet implemented."
     )
-==================================================
-
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\web\static
-==================================================
-
-Folder: c:\GH\ras-commander\ai_tools\library_assistant\web\templates
 ==================================================
 
 File: c:\GH\ras-commander\ai_tools\library_assistant\web\static\fileTree.js
@@ -4507,6 +4924,34 @@ function saveConversation() {
 }
 
 /**
+ * Update the model name displayed
+ */
+function updateModelDisplay(modelValue) {
+  const displayEl = document.getElementById('current-model-display');
+  if (!displayEl) return;
+
+  let displayName = 'Select Model';
+  // Map model values to display names
+  const modelNameMap = {
+    'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
+    'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet',
+    'gpt-4o-latest': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gpt-4.1': 'GPT-4.1', // New
+    'o1': 'o1',
+    'o1-mini': 'o1 Mini',
+    'o3': 'o3', // New
+    'o3-mini-2025-01-31': 'o3-mini', // Was o4-mini
+    'meta-llama/Llama-3.3-70B-Instruct-Turbo': 'Llama 3 70B Instruct',
+    'deepseek-ai/DeepSeek-V3': 'DeepSeek V3',
+    'deepseek-ai/DeepSeek-R1': 'DeepSeek R1'
+  };
+
+  displayName = modelNameMap[modelValue] || 'Select Model';
+  displayEl.textContent = displayName;
+}
+
+/**
  * Toggle API key inputs
  */
 function toggleApiKeys() {
@@ -4517,50 +4962,21 @@ function toggleApiKeys() {
 
   if (!anthropicGroup || !openaiGroup || !togetherGroup) return;
 
-  anthropicGroup.classList.add('hidden');
-  openaiGroup.classList.add('hidden');
-  togetherGroup.classList.add('hidden');
-
-  if (model.startsWith('claude')) {
-    anthropicGroup.classList.remove('hidden');
-  } else if (model.startsWith('gpt') || model.startsWith('o1')) {
-    openaiGroup.classList.remove('hidden');
-  } else if (model.startsWith('meta-llama/') || model.startsWith('deepseek-ai/')) {
-    togetherGroup.classList.remove('hidden');
+  // Determine provider based on model name prefix/content
+  let provider = 'unknown';
+  const modelLower = model.toLowerCase();
+  if (modelLower.startsWith('claude')) {
+    provider = 'anthropic';
+  } else if (modelLower.startsWith('gpt') || modelLower.startsWith('o1') || modelLower.startsWith('o3')) { // Added o3
+    provider = 'openai';
+  } else if (modelLower.includes('llama') || modelLower.includes('deepseek')) {
+    provider = 'together';
   }
-}
 
-/**
- * Update the model name displayed
- */
-function updateModelDisplay(modelValue) {
-  const displayEl = document.getElementById('current-model-display');
-  if (!displayEl) return;
-
-  let displayName = 'Select Model';
-  if (modelValue === 'claude-3-7-sonnet-20250219') {
-    displayName = 'Claude 3.7 Sonnet';
-  } else if (modelValue === 'claude-3-5-sonnet-20241022') {
-    displayName = 'Claude 3.5 Sonnet';
-  } else if (modelValue === 'gpt-4o-latest') {
-    displayName = 'GPT-4o';
-  } else if (modelValue === 'gpt-4o-mini') {
-    displayName = 'GPT-4o Mini';
-  } else if (modelValue === 'o1') {
-    displayName = 'o1';
-  } else if (modelValue === 'o1-mini') {
-    displayName = 'o1 Mini';
-  } else if (modelValue === 'o3-mini-2025-01-31') {
-    displayName = 'o3-mini';
-  } else if (modelValue === 'meta-llama/Llama-3.3-70B-Instruct-Turbo') {
-    displayName = 'Llama 3 70B Instruct';
-  } else if (modelValue === 'deepseek-ai/DeepSeek-V3') {
-    displayName = 'DeepSeek V3';
-  } else if (modelValue === 'deepseek-ai/DeepSeek-R1') {
-    displayName = 'DeepSeek R1';
-  }
-  
-  displayEl.textContent = displayName;
+  // Show/hide based on provider
+  anthropicGroup.classList.toggle('hidden', provider !== 'anthropic');
+  openaiGroup.classList.toggle('hidden', provider !== 'openai');
+  togetherGroup.classList.toggle('hidden', provider !== 'together');
 }
 
 /**
@@ -4569,35 +4985,52 @@ function updateModelDisplay(modelValue) {
 async function updateModelLimits() {
   const modelName = document.getElementById('selected_model')?.value;
   const outputLengthInput = document.getElementById('output_length');
-  if (!modelName || !outputLengthInput) return;
+  const helpText = document.getElementById('output_length_help');
+  if (!modelName || !outputLengthInput || !helpText) return;
 
   try {
+    console.log(`Updating limits for model: ${modelName}`);
+    // Call backend to get model specific info, including max output tokens
     const response = await fetch('/calculate_tokens', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_name: modelName,
+        // Send minimal data just to get config
         conversation_history: '',
         user_input: '',
         rag_context: '',
         system_message: '',
-        output_length: null
+        output_length: null // Let backend determine default/max
       })
     });
+
     if (response.ok) {
       const data = await response.json();
-      const defaultMax = data?.output_length || 8192;
-      outputLengthInput.max = defaultMax;
-      if (parseInt(outputLengthInput.value, 10) > defaultMax) {
-        outputLengthInput.value = defaultMax;
+      // Use max_output_tokens field from the backend response
+      const maxOutput = data?.max_output_tokens || 8192;
+
+      console.log(`Received max output for ${modelName}: ${maxOutput}`);
+
+      outputLengthInput.max = maxOutput;
+      // If current value exceeds new max, reset it (or set to max)
+      if (parseInt(outputLengthInput.value, 10) > maxOutput) {
+        outputLengthInput.value = maxOutput; // Set to new max
+      } else if (!outputLengthInput.value || parseInt(outputLengthInput.value, 10) <= 0) {
+          // If input is empty or invalid, set a reasonable default or the max
+          outputLengthInput.value = Math.min(8192, maxOutput); // Default to 8k or max, whichever is smaller
       }
-      const helpText = outputLengthInput.nextElementSibling;
-      if (helpText) {
-        helpText.textContent = `Maximum number of tokens in the AI's response (max ${defaultMax})`;
-      }
+
+      helpText.textContent = `Maximum number of tokens in the AI's response (max ${maxOutput.toLocaleString()})`;
+    } else {
+        console.error(`Failed to get limits for ${modelName}: ${response.status}`);
+         helpText.textContent = `Could not fetch limits for ${modelName}. Defaulting max to 8,192.`;
+         outputLengthInput.max = 8192;
     }
   } catch (error) {
     console.error('Error updating model limits:', error);
+    helpText.textContent = 'Error fetching model limits. Defaulting max to 8,192.';
+    outputLengthInput.max = 8192;
   }
 }
 
@@ -5802,28 +6235,19 @@ File: c:\GH\ras-commander\ai_tools\library_assistant\web\templates\index.html
                 <div class="model-display">
                     <span class="model-icon">🤖</span>
                     <span class="model-name" id="current-model-display">
-                        {%- if settings.selected_model == 'claude-3-7-sonnet-20250219' -%}
-                            Claude 3.7 Sonnet
-                        {%- elif settings.selected_model == 'claude-3-5-sonnet-20241022' -%}
-                            Claude 3.5 Sonnet
-                        {%- elif settings.selected_model == 'gpt-4o-latest' -%}
-                            GPT-4o
-                        {%- elif settings.selected_model == 'gpt-4o-mini' -%}
-                            GPT-4o Mini
-                        {%- elif settings.selected_model == 'o1' -%}
-                            o1
-                        {%- elif settings.selected_model == 'o1-mini' -%}
-                            o1 Mini
-                        {%- elif settings.selected_model == 'o3-mini-2025-01-31' -%}
-                            o3-mini
-                        {%- elif settings.selected_model == 'meta-llama/Llama-3.3-70B-Instruct-Turbo' -%}
-                            Llama 3 70B Instruct
-                        {%- elif settings.selected_model == 'deepseek-ai/DeepSeek-V3' -%}
-                            DeepSeek V3
-                        {%- elif settings.selected_model == 'deepseek-ai/DeepSeek-R1' -%}
-                            DeepSeek R1
-                        {%- else -%}
-                            Select Model
+                        {%- if settings.selected_model == 'claude-3-7-sonnet-20250219' -%}Claude 3.7 Sonnet
+                        {%- elif settings.selected_model == 'claude-3-5-sonnet-20241022' -%}Claude 3.5 Sonnet
+                        {%- elif settings.selected_model == 'gpt-4o-latest' -%}GPT-4o
+                        {%- elif settings.selected_model == 'gpt-4o-mini' -%}GPT-4o Mini
+                        {%- elif settings.selected_model == 'gpt-4.1' -%}GPT-4.1
+                        {%- elif settings.selected_model == 'o1' -%}o1
+                        {%- elif settings.selected_model == 'o1-mini' -%}o1 Mini
+                        {%- elif settings.selected_model == 'o3' -%}o3
+                        {%- elif settings.selected_model == 'o3-mini-2025-01-31' -%}o3-mini
+                        {%- elif settings.selected_model == 'meta-llama/Llama-3.3-70B-Instruct-Turbo' -%}Llama 3 70B Instruct
+                        {%- elif settings.selected_model == 'deepseek-ai/DeepSeek-V3' -%}DeepSeek V3
+                        {%- elif settings.selected_model == 'deepseek-ai/DeepSeek-R1' -%}DeepSeek R1
+                        {%- else -%}Select Model
                         {%- endif -%}
                     </span>
                 </div>
@@ -5849,17 +6273,25 @@ File: c:\GH\ras-commander\ai_tools\library_assistant\web\templates\index.html
                         <div class="form-group">
                             <label for="selected_model">Select Model:</label>
                             <select id="selected_model" name="selected_model" class="form-select" required>
-                                <option value="" disabled>Select a model</option>
-                                <option value="claude-3-7-sonnet-20250219" {% if settings.selected_model == 'claude-3-7-sonnet-20250219' %}selected{% endif %}>Claude 3.7 Sonnet (Anthropic)</option>
-                                <option value="claude-3-5-sonnet-20241022" {% if settings.selected_model == 'claude-3-5-sonnet-20241022' %}selected{% endif %}>Claude 3.5 Sonnet (Anthropic)</option>
-                                <option value="gpt-4o-latest" {% if settings.selected_model == 'gpt-4o-latest' %}selected{% endif %}>GPT-4o (OpenAI)</option>
-                                <option value="gpt-4o-mini" {% if settings.selected_model == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o-mini (OpenAI)</option>
-                                <option value="o1" {% if settings.selected_model == 'o1' %}selected{% endif %}>o1 (OpenAI)</option>
-                                <option value="o1-mini" {% if settings.selected_model == 'o1-mini' %}selected{% endif %}>o1-mini (OpenAI)</option>
-                                <option value="o3-mini-2025-01-31" {% if settings.selected_model == 'o3-mini-2025-01-31' %}selected{% endif %}>o3-mini (OpenAI)</option>
-                                <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo" {% if settings.selected_model == 'meta-llama/Llama-3.3-70B-Instruct-Turbo' %}selected{% endif %}>Llama 3 70B Instruct Turbo (Together)</option>
-                                <option value="deepseek-ai/DeepSeek-V3" {% if settings.selected_model == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>DeepSeek V3 (Together)</option>
-                                <option value="deepseek-ai/DeepSeek-R1" {% if settings.selected_model == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>DeepSeek R1 (Together)</option>
+                                <option value="" disabled {% if not settings.selected_model %}selected{% endif %}>Select a model</option>
+                                <optgroup label="Anthropic">
+                                    <option value="claude-3-7-sonnet-20250219" {% if settings.selected_model == 'claude-3-7-sonnet-20250219' %}selected{% endif %}>Claude 3.7 Sonnet</option>
+                                    <option value="claude-3-5-sonnet-20241022" {% if settings.selected_model == 'claude-3-5-sonnet-20241022' %}selected{% endif %}>Claude 3.5 Sonnet</option>
+                                </optgroup>
+                                <optgroup label="OpenAI">
+                                    <option value="gpt-4o-latest" {% if settings.selected_model == 'gpt-4o-latest' %}selected{% endif %}>GPT-4o</option>
+                                    <option value="gpt-4o-mini" {% if settings.selected_model == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o-mini</option>
+                                    <option value="gpt-4.1" {% if settings.selected_model == 'gpt-4.1' %}selected{% endif %}>GPT-4.1</option>
+                                    <option value="o1" {% if settings.selected_model == 'o1' %}selected{% endif %}>o1</option>
+                                    <option value="o1-mini" {% if settings.selected_model == 'o1-mini' %}selected{% endif %}>o1-mini</option>
+                                    <option value="o3" {% if settings.selected_model == 'o3' %}selected{% endif %}>o3</option>
+                                    <option value="o3-mini-2025-01-31" {% if settings.selected_model == 'o3-mini-2025-01-31' %}selected{% endif %}>o3-mini</option>
+                                </optgroup>
+                                <optgroup label="Together AI">
+                                    <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo" {% if settings.selected_model == 'meta-llama/Llama-3.3-70B-Instruct-Turbo' %}selected{% endif %}>Llama 3 70B Instruct Turbo</option>
+                                    <option value="deepseek-ai/DeepSeek-V3" {% if settings.selected_model == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>DeepSeek V3</option>
+                                    <option value="deepseek-ai/DeepSeek-R1" {% if settings.selected_model == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>DeepSeek R1</option>
+                                </optgroup>
                             </select>
                         </div>
                         <!-- API key inputs - Always visible -->
@@ -5884,15 +6316,16 @@ File: c:\GH\ras-commander\ai_tools\library_assistant\web\templates\index.html
                             <small class="form-text text-muted">This message sets the behavior and role of the AI assistant.</small>
                         </div>
                         <div class="form-group mt-3">
-                            <label for="output_length">Output Length (tokens):</label>
-                            <input type="number" 
-                                   id="output_length" 
-                                   name="output_length" 
-                                   class="form-control" 
-                                   min="1" 
-                                   max="8192" 
-                                   value="8192">
-                            <small class="form-text text-muted">Maximum number of tokens in the AI's response (max 8,192)</small>
+                            <label for="output_length">Max Output Length (tokens):</label>
+                            <input type="number"
+                                   id="output_length"
+                                   name="output_length"
+                                   class="form-control"
+                                   min="1"
+                                   max="8192"
+                                   value="8192"
+                                   placeholder="Model default">
+                            <small class="form-text text-muted" id="output_length_help">Maximum number of tokens in the AI's response (updates based on model selection).</small>
                         </div>
                     </form>
                 </div>

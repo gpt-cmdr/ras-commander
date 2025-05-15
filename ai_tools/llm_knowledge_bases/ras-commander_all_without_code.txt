@@ -1,3 +1,32 @@
+Project Structure (files included):
+├── Decorators.py
+├── HdfBase.py
+├── HdfBndry.py
+├── HdfFluvialPluvial.py
+├── HdfInfiltration.py
+├── HdfMesh.py
+├── HdfPipe.py
+├── HdfPlan.py
+├── HdfPlot.py
+├── HdfPump.py
+├── HdfResultsMesh.py
+├── HdfResultsPlan.py
+├── HdfResultsPlot.py
+├── HdfResultsXsec.py
+├── HdfStruc.py
+├── HdfUtils.py
+├── HdfXsec.py
+├── LoggingConfig.py
+├── RasCmdr.py
+├── RasExamples.py
+├── RasGeo.py
+├── RasMap.py
+├── RasPlan.py
+├── RasPrj.py
+├── RasUnsteady.py
+├── RasUtils.py
+└── __init__.py
+
 File: c:\GH\ras-commander\ras_commander\Decorators.py
 ==================================================
 from functools import wraps
@@ -10,7 +39,252 @@ import pandas as pd
 
 
 def log_call(func):
-    """Docs only, implementation omitted."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        logger = logging.getLogger(func.__module__)
+        logger.debug(f"Calling {func.__name__}")
+        result = func(*args, **kwargs)
+        logger.debug(f"Finished {func.__name__}")
+        return result
+    return wrapper
+
+def standardize_input(file_type: str = 'plan_hdf'):
+    """
+    Decorator to standardize input for HDF file operations.
+    
+    This decorator processes various input types and converts them to a Path object
+    pointing to the correct HDF file. It handles the following input types:
+    - h5py.File objects
+    - pathlib.Path objects
+    - Strings (file paths or plan/geom numbers)
+    - Integers (interpreted as plan/geom numbers)
+    
+    The decorator also manages RAS object references and logging.
+    
+    Args:
+        file_type (str): Specifies whether to look for 'plan_hdf' or 'geom_hdf' files.
+    
+    Returns:
+        A decorator that wraps the function to standardize its input to a Path object.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            logger = logging.getLogger(func.__module__)
+            
+            # Check if the function expects an hdf_path parameter
+            sig = inspect.signature(func)
+            param_names = list(sig.parameters.keys())
+            
+            # If first parameter is 'hdf_file', pass an h5py object
+            if param_names and param_names[0] == 'hdf_file':
+                if isinstance(args[0], h5py.File):
+                    return func(*args, **kwargs)
+                elif isinstance(args[0], (str, Path)):
+                    with h5py.File(args[0], 'r') as hdf:
+                        return func(hdf, *args[1:], **kwargs)
+                else:
+                    raise ValueError(f"Expected h5py.File or path, got {type(args[0])}")
+                
+            # Handle both static method calls and regular function calls
+            if args and isinstance(args[0], type):
+                # Static method call, remove the class argument
+                args = args[1:]
+            
+            # Get hdf_input from kwargs if provided with hdf_path key, or take first positional arg
+            hdf_input = kwargs.pop('hdf_path', None) if 'hdf_path' in kwargs else (args[0] if args else None)
+            
+            # Import ras here to ensure we get the most current instance
+            from .RasPrj import ras as ras
+            ras_object = kwargs.pop('ras_object', None) or (args[1] if len(args) > 1 else None)
+            ras_obj = ras_object or ras
+
+            # If no hdf_input provided, return the function unmodified
+            if hdf_input is None:
+                return func(*args, **kwargs)
+
+            hdf_path = None
+
+            # Clean and normalize string inputs
+            if isinstance(hdf_input, str):
+                # Clean the string (remove extra whitespace, normalize path separators)
+                hdf_input = hdf_input.strip()
+                
+                # Check if it's a raw file path that exists
+                try:
+                    test_path = Path(hdf_input)
+                    if test_path.is_file():
+                        hdf_path = test_path
+                        logger.info(f"Using HDF file from direct string path: {hdf_path}")
+                except Exception as e:
+                    logger.debug(f"Error converting string to path: {str(e)}")
+
+            # If a valid path wasn't created from string processing, continue with normal flow
+            if hdf_path is None:
+                # If hdf_input is already a Path and exists, use it directly
+                if isinstance(hdf_input, Path) and hdf_input.is_file():
+                    hdf_path = hdf_input
+                    logger.info(f"Using existing Path object HDF file: {hdf_path}")
+                # If hdf_input is an h5py.File object, use its filename
+                elif isinstance(hdf_input, h5py.File):
+                    hdf_path = Path(hdf_input.filename)
+                    logger.info(f"Using HDF file from h5py.File object: {hdf_path}")
+                # Handle Path objects that might not be verified yet
+                elif isinstance(hdf_input, Path):
+                    if hdf_input.is_file():
+                        hdf_path = hdf_input
+                        logger.info(f"Using verified Path object HDF file: {hdf_path}")
+                # Handle string inputs that are plan/geom numbers
+                elif isinstance(hdf_input, str) and (hdf_input.isdigit() or (len(hdf_input) > 1 and hdf_input[0] == 'p' and hdf_input[1:].isdigit())):
+                    try:
+                        ras_obj.check_initialized()
+                    except Exception as e:
+                        raise ValueError(f"RAS object is not initialized: {str(e)}")
+                        
+                    # Extract the number part and strip leading zeros
+                    number_str = hdf_input if hdf_input.isdigit() else hdf_input[1:]
+                    stripped_number = number_str.lstrip('0')
+                    if stripped_number == '':  # Handle case where input was '0' or '00'
+                        stripped_number = '0'
+                    number_int = int(stripped_number)
+                    
+                    if file_type == 'plan_hdf':
+                        try:
+                            # Convert plan_number column to integers for comparison after stripping zeros
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].str.lstrip('0').astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Make sure HDF_Results_Path is a string and not None
+                                hdf_path_str = plan_info.iloc[0]['HDF_Results_Path']
+                                if pd.notna(hdf_path_str):
+                                    hdf_path = Path(str(hdf_path_str))
+                        except Exception as e:
+                            logger.warning(f"Error retrieving plan HDF path: {str(e)}")
+
+
+                    elif file_type == 'geom_hdf':
+                        try:
+                            # First try to get the geometry number from the plan
+                            from ras_commander import RasPlan
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Extract the geometry number from the plan
+                                geom_number = plan_info.iloc[0]['geometry_number']
+                                if pd.notna(geom_number) and geom_number is not None:
+                                    # Handle different types of geom_number (string or int)
+                                    try:
+                                        # Get the geometry path using RasPlan
+                                        geom_path = RasPlan.get_geom_path(str(geom_number), ras_obj)
+                                        
+                                        if geom_path is not None:
+                                            # Create the HDF path by adding .hdf to the geometry path
+                                            hdf_path = Path(str(geom_path) + ".hdf")
+                                            if hdf_path.exists():
+                                                logger.info(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
+                                            else:
+                                                # Try to find it in the geom_df if direct path doesn't exist
+                                                geom_info = ras_obj.geom_df[ras_obj.geom_df['full_path'] == str(geom_path)]
+                                                if not geom_info.empty and 'hdf_path' in geom_info.columns:
+                                                    hdf_path_str = geom_info.iloc[0]['hdf_path']
+                                                    if pd.notna(hdf_path_str):
+                                                        hdf_path = Path(str(hdf_path_str))
+                                                        logger.info(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
+                                    except (TypeError, ValueError) as e:
+                                        logger.warning(f"Error processing geometry number {geom_number}: {str(e)}")
+                                else:
+                                    logger.warning(f"No valid geometry number found for plan {number_int}")
+                        except Exception as e:
+                            logger.warning(f"Error retrieving geometry HDF path: {str(e)}")
+                    else:
+                        raise ValueError(f"Invalid file type: {file_type}")
+                    
+
+
+                
+                # Handle integer inputs (assuming they're plan or geom numbers)
+                elif isinstance(hdf_input, int):
+                    try:
+                        ras_obj.check_initialized()
+                    except Exception as e:
+                        raise ValueError(f"RAS object is not initialized: {str(e)}")
+                        
+                    number_int = hdf_input
+                    
+                    if file_type == 'plan_hdf':
+                        try:
+                            # Convert plan_number column to integers for comparison after stripping zeros
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].str.lstrip('0').astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Make sure HDF_Results_Path is a string and not None
+                                hdf_path_str = plan_info.iloc[0]['HDF_Results_Path']
+                                if pd.notna(hdf_path_str):
+                                    hdf_path = Path(str(hdf_path_str))
+                        except Exception as e:
+                            logger.warning(f"Error retrieving plan HDF path: {str(e)}")
+                            
+                    elif file_type == 'geom_hdf':
+                        try:
+                            # First try finding plan info to get geometry number
+                            plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'].astype(int) == number_int]
+                            if not plan_info.empty:
+                                # Extract the geometry number from the plan
+                                geom_number = plan_info.iloc[0]['geometry_number']
+                                if pd.notna(geom_number) and geom_number is not None:
+                                    # Handle different types of geom_number (string or int)
+                                    try:
+                                        # Get the geometry path using RasPlan
+                                        from ras_commander import RasPlan
+                                        geom_path = RasPlan.get_geom_path(str(geom_number), ras_obj)
+                                        
+                                        if geom_path is not None:
+                                            # Create the HDF path by adding .hdf to the geometry path
+                                            hdf_path = Path(str(geom_path) + ".hdf")
+                                            if hdf_path.exists():
+                                                logger.info(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
+                                            else:
+                                                # Try to find it in the geom_df if direct path doesn't exist
+                                                geom_info = ras_obj.geom_df[ras_obj.geom_df['full_path'] == str(geom_path)]
+                                                if not geom_info.empty and 'hdf_path' in geom_info.columns:
+                                                    hdf_path_str = geom_info.iloc[0]['hdf_path']
+                                                    if pd.notna(hdf_path_str):
+                                                        hdf_path = Path(str(hdf_path_str))
+                                                        logger.info(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
+                                    except (TypeError, ValueError) as e:
+                                        logger.warning(f"Error processing geometry number {geom_number}: {str(e)}")
+                                else:
+                                    logger.warning(f"No valid geometry number found for plan {number_int}")
+                        except Exception as e:
+                            logger.warning(f"Error retrieving geometry HDF path: {str(e)}")
+                    else:
+                        raise ValueError(f"Invalid file type: {file_type}")
+
+            # Final verification that the path exists
+            if hdf_path is None or not hdf_path.exists():
+                error_msg = f"HDF file not found: {hdf_input}"
+                logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
+                
+            logger.info(f"Final validated HDF file path: {hdf_path}")
+            
+            # Now try to validate the HDF file structure (but don't fail if validation fails)
+            try:
+                with h5py.File(hdf_path, 'r') as test_file:
+                    # Just open to verify it's a valid HDF5 file
+                    logger.debug(f"Successfully opened HDF file for validation: {hdf_path}")
+            except Exception as e:
+                logger.warning(f"Warning: Could not validate HDF file: {str(e)}")
+                # Continue anyway, let the function handle detailed validation
+            
+            # Pass all original arguments and keywords, replacing hdf_input with standardized hdf_path
+            # If the original input was positional, replace the first argument
+            if args and 'hdf_path' not in kwargs:
+                new_args = (hdf_path,) + args[1:]
+            else:
+                new_args = args
+                kwargs['hdf_path'] = hdf_path
+                
+            return func(*new_args, **kwargs)
+
+        return wrapper
     return decorator
 ==================================================
 
@@ -8113,6 +8387,77 @@ _logging_setup_done = False
 
 def setup_logging(log_file=None, log_level=logging.INFO):
     """Set up logging configuration for the ras-commander library."""
+    global _logging_setup_done
+    if _logging_setup_done:
+        return
+    
+    # Define log format
+    log_format = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # Configure console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_format)
+
+    # Set up root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.addHandler(console_handler)
+
+    # Configure file handler if log_file is provided
+    if log_file:
+        log_dir = Path('logs')
+        log_dir.mkdir(exist_ok=True)
+        log_file_path = log_dir / log_file
+
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file_path, maxBytes=10*1024*1024, backupCount=5
+        )
+        file_handler.setFormatter(log_format)
+        root_logger.addHandler(file_handler)
+    
+    _logging_setup_done = True
+
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger instance with the specified name.
+    
+    Args:
+        name: The name for the logger, typically __name__ or module path
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    logger = logging.getLogger(name)
+    if not logger.handlers:  # Only add handler if none exists
+        setup_logging()  # Ensure logging is configured
+    return logger
+
+def log_call(logger=None):
+    """Decorator to log function calls."""
+    def get_logger():
+        # Check if logger is None or doesn't have a debug method
+        if logger is None or not hasattr(logger, 'debug'):
+            return logging.getLogger(__name__)
+        return logger
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            log = get_logger()
+            log.debug(f"Calling {func.__name__}")
+            result = func(*args, **kwargs)
+            log.debug(f"Finished {func.__name__}")
+            return result
+        return wrapper
+    
+    # Check if we're being called as @log_call or @log_call()
+    if callable(logger):
+        return decorator(logger)
+    return decorator
+
+# Set up logging when this module is imported
 setup_logging()
 ==================================================
 
@@ -8182,8 +8527,6 @@ from itertools import cycle
 from typing import Union, List, Optional, Dict
 from .LoggingConfig import get_logger
 from .Decorators import log_call
-from .RasRemote import RasRemote # Add this import
-from itertools import cycle       # Add this import
 
 logger = get_logger(__name__)
 
@@ -8818,261 +9161,6 @@ class RasCmdr:
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
             return {}
-        
-
-
-
-
-
-
-        # ------ RAS REMOTE FUNCTIONS ------
-
-
-    @staticmethod
-    @log_call
-    def compute_parallel_remote(
-        plan_number: Union[str, List[str], None],
-        remote_ras_list: List[RasRemote],
-        ras_object: RasPrj, # Source project object
-        num_cores: int = 2,
-        clear_geompre: bool = False,
-        dest_folder: Union[str, Path, None] = None,
-        overwrite_dest: bool = False,
-        safety_prefix: str = "RAS_Remote_"
-    ) -> Dict[str, bool]:
-        """
-        Execute HEC-RAS plans in parallel across multiple remote (or local) machines.
-
-        Args:
-            plan_number: Plan number(s) to compute (e.g., "01", ["01", "02"]). If None, all plans are computed.
-            remote_ras_list: List of initialized RasRemote instances representing target machines.
-            ras_object: The RasPrj instance representing the source HEC-RAS project.
-            num_cores: Number of cores per HEC-RAS instance on remote machines. Default 2.
-            clear_geompre: Clear geom preprocessor files before running. Default False.
-            dest_folder: Local destination folder for consolidated results. If None, creates
-                         a "[ComputedRemote]" folder adjacent to the source project folder.
-            overwrite_dest: Overwrite the destination folder if it exists. Default False.
-            safety_prefix: Prefix for worker folders created on remote machines for safe cleanup.
-                           Default "RAS_Remote_".
-
-        Returns:
-            Dict[str, bool]: Dictionary mapping plan numbers to execution success status.
-
-        Raises:
-            ValueError: If no remote targets are provided or if dest_folder handling fails.
-            RuntimeError: If preparation or execution steps fail critically.
-
-        Example:
-            >>> remote1 = init_remote_ras("\\\\MACHINE1\\Share\\RasRuns", remote_root_path="C:\\Temp")
-            >>> remote2 = init_remote_ras("C:\\LocalRasRuns") # Local target
-            >>> source_proj = init_ras_project("/path/to/source")
-            >>> results = RasCmdr.compute_parallel_remote(
-            ...     plan_number=["01", "02", "03"],
-            ...     remote_ras_list=[remote1, remote2],
-            ...     ras_object=source_proj,
-            ...     dest_folder="/path/to/consolidated_results",
-            ...     overwrite_dest=True
-            ... )
-            >>> print(results)
-            {'01': True, '02': True, '03': False}
-        """
-        if not remote_ras_list:
-            logger.error("No remote RAS targets provided for parallel remote execution.")
-            raise ValueError("remote_ras_list cannot be empty.")
-
-        ras_obj = ras_object # Use the provided source object
-        ras_obj.check_initialized()
-        source_project_folder = Path(ras_obj.project_folder)
-        source_project_name = ras_obj.project_name
-
-        # --- Destination Folder Handling ---
-        if dest_folder is None:
-            final_dest_folder = source_project_folder.parent / f"{source_project_folder.name} [ComputedRemote]"
-        else:
-            final_dest_folder = Path(dest_folder)
-
-        if final_dest_folder.exists():
-            if overwrite_dest:
-                logger.info(f"Destination folder '{final_dest_folder}' exists. Overwriting.")
-                if not RasUtils.remove_with_retry(final_dest_folder, is_folder=True):
-                     raise RuntimeError(f"Failed to remove existing destination folder: {final_dest_folder}")
-            elif any(final_dest_folder.iterdir()):
-                error_msg = f"Destination folder '{final_dest_folder}' exists and is not empty. Use overwrite_dest=True."
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-        try:
-            final_dest_folder.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-             raise RuntimeError(f"Failed to create destination folder: {final_dest_folder}: {e}")
-
-        logger.info(f"Final destination for results: {final_dest_folder}")
-
-        # --- Filter Plans ---
-        if plan_number:
-            if isinstance(plan_number, str):
-                plans_to_run = [plan_number]
-            else:
-                plans_to_run = list(plan_number)
-            # Ensure plans exist in the source object's dataframe
-            valid_plans_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plans_to_run)]
-            plans_to_run = list(valid_plans_df['plan_number']) # Use only valid plans
-            logger.info(f"Filtered plans to execute: {plans_to_run}")
-        else:
-            plans_to_run = list(ras_obj.plan_df['plan_number'])
-            logger.info(f"Executing all {len(plans_to_run)} plans in the project.")
-
-        if not plans_to_run:
-             logger.warning("No valid plans selected for execution.")
-             return {}
-
-        # --- Prepare Remote Folders ---
-        logger.info("Preparing remote worker folders...")
-        prep_futures = {}
-        # Prepare folders in parallel across machines
-        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
-             for remote_instance in remote_ras_list:
-                  future = executor.submit(remote_instance.prepare_remote_folders, source_project_folder, safety_prefix)
-                  prep_futures[future] = remote_instance.machine_name
-             preparation_successful = True
-             for future in as_completed(prep_futures):
-                  machine_name = prep_futures[future]
-                  try:
-                      if not future.result():
-                           logger.error(f"Failed to prepare remote folders on {machine_name}.")
-                           preparation_successful = False # Mark failure but let others finish
-                  except Exception as e:
-                      logger.error(f"Error during remote folder preparation on {machine_name}: {e}")
-                      preparation_successful = False
-        if not preparation_successful:
-             raise RuntimeError("Failed to prepare one or more remote targets. Aborting.")
-        logger.info("Remote worker folders prepared successfully.")
-
-        # --- Generate Batch Files ---
-        logger.info("Generating remote batch files...")
-        gen_futures = {}
-        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
-             for remote_instance in remote_ras_list:
-                  future = executor.submit(remote_instance._generate_remote_batch_files, ras_obj, safety_prefix)
-                  gen_futures[future] = remote_instance.machine_name
-             batch_gen_successful = True
-             for future in as_completed(gen_futures):
-                  machine_name = gen_futures[future]
-                  try:
-                      if not future.result():
-                           logger.error(f"Failed to generate batch files on {machine_name}.")
-                           batch_gen_successful = False # Log error but maybe continue
-                  except Exception as e:
-                       logger.error(f"Error during remote batch file generation on {machine_name}: {e}")
-                       batch_gen_successful = False
-        if not batch_gen_successful:
-             logger.warning("Failed to generate batch files on one or more remote targets. Execution might fail for some plans.")
-        else:
-            logger.info("Remote batch file generation completed successfully.")
-
-
-        # --- Distribute and Execute Plans ---
-        worker_slots = [] # List of (remote_instance, worker_id) tuples
-        for remote_instance in remote_ras_list:
-             for i in range(1, remote_instance.worker_count_per_machine + 1):
-                  worker_slots.append((remote_instance, i))
-
-        if not worker_slots:
-            raise RuntimeError("No worker slots available for execution.")
-
-        total_slots = len(worker_slots)
-        logger.info(f"Total available worker slots across all machines: {total_slots}")
-
-        slot_cycle = cycle(worker_slots)
-        plan_assignments = {} # plan_num: (remote_instance, worker_id)
-        for plan_num in plans_to_run:
-             remote_instance, worker_id = next(slot_cycle)
-             plan_assignments[plan_num] = (remote_instance, worker_id)
-             logger.debug(f"Assigning plan {plan_num} to {remote_instance.machine_name} worker {worker_id}")
-
-        execution_results: Dict[str, bool] = {}
-        execution_lock = Lock() # Lock for updating shared results safely
-
-        # Use total slots as max workers for execution phase
-        max_concurrent_workers = total_slots
-        logger.info(f"Starting parallel execution with up to {max_concurrent_workers} concurrent tasks.")
-
-        with ThreadPoolExecutor(max_workers=max_concurrent_workers) as executor:
-             futures = {
-                  executor.submit(
-                       remote_instance.compute_plan_remote,
-                       plan_num,
-                       worker_id,
-                       ras_obj, # Pass source object for names/paths
-                       safety_prefix,
-                       clear_geompre,
-                       num_cores
-                  ): plan_num
-                  for plan_num, (remote_instance, worker_id) in plan_assignments.items()
-             }
-
-             for future in as_completed(futures):
-                  plan_num = futures[future]
-                  remote_instance, worker_id = plan_assignments[plan_num]
-                  try:
-                      success = future.result()
-                      with execution_lock:
-                           execution_results[plan_num] = success
-                      logger.info(f"Plan {plan_num} executed on {remote_instance.machine_name} worker {worker_id}: {'Successful' if success else 'Failed'}")
-                  except Exception as e:
-                       with execution_lock:
-                           execution_results[plan_num] = False
-                       logger.error(f"Plan {plan_num} on {remote_instance.machine_name} worker {worker_id} failed: {str(e)}")
-
-        logger.info("Parallel remote execution phase completed.")
-
-        # --- Collect Results ---
-        logger.info("Collecting results from remote machines...")
-        collect_futures = {}
-        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
-             for remote_instance in remote_ras_list:
-                  future = executor.submit(remote_instance.collect_results, final_dest_folder, safety_prefix, source_project_name)
-                  collect_futures[future] = remote_instance.machine_name
-             for future in as_completed(collect_futures):
-                  machine_name = collect_futures[future]
-                  try:
-                      if not future.result():
-                           logger.error(f"Failed to fully collect results from {machine_name}.")
-                           # Continue collecting from others
-                  except Exception as e:
-                       logger.error(f"Error during results collection from {machine_name}: {e}")
-        logger.info("Results collection completed.")
-
-        # --- Cleanup Remote Folders ---
-        logger.info("Cleaning up remote worker folders...")
-        cleanup_futures = {}
-        with ThreadPoolExecutor(max_workers=len(remote_ras_list)) as executor:
-             for remote_instance in remote_ras_list:
-                  future = executor.submit(remote_instance.cleanup_remote_folders, safety_prefix, source_project_name)
-                  cleanup_futures[future] = remote_instance.machine_name
-             for future in as_completed(cleanup_futures):
-                  machine_name = cleanup_futures[future]
-                  try:
-                      if not future.result():
-                           logger.error(f"Failed to cleanup remote folders on {machine_name}.")
-                           # Log but don't halt
-                  except Exception as e:
-                       logger.error(f"Error during remote cleanup on {machine_name}: {e}")
-        logger.info("Remote cleanup completed.")
-
-        # --- Final Summary ---
-        logger.info("\n--- Remote Parallel Execution Summary ---")
-        successful_plans = [p for p, s in execution_results.items() if s]
-        failed_plans = [p for p, s in execution_results.items() if not s]
-        logger.info(f"Total Plans Attempted: {len(plans_to_run)}")
-        logger.info(f"Successful: {len(successful_plans)}")
-        logger.info(f"Failed: {len(failed_plans)}")
-        if failed_plans:
-            logger.warning(f"Failed plans: {', '.join(failed_plans)}")
-        logger.info(f"Results consolidated to: {final_dest_folder}")
-        logger.info("--- End Summary ---")
-
-        return execution_results        
-
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasExamples.py
@@ -9888,7 +9976,7 @@ class RasGeo:
         
         # Add base table entries
         for _, row in mannings_data.iterrows():
-            new_content.append(f"{row['Land Cover Name']},{row['Base Manning\'s n Value']}\n")
+            new_content.append(f"{row['Land Cover Name']},{row['Base Manning''s n Value']}\n")
         
         # Replace the section in the original file
         updated_lines = lines[:start_idx] + new_content + lines[end_idx:]
@@ -11940,6 +12028,1162 @@ def read_file_with_fallback_encoding(file_path, encodings=['utf-8', 'latin1', 'c
     Returns:
         tuple: (content, encoding) or (None, None) if all encodings fail
     """
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                content = file.read()
+                return content, encoding
+        except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            logger.error(f"Error reading file {file_path} with {encoding} encoding: {e}")
+            continue
+    
+    logger.error(f"Failed to read file {file_path} with any of the attempted encodings: {encodings}")
+    return None, None
+
+class RasPrj:
+    
+    def __init__(self):
+        self.initialized = False
+        self.boundaries_df = None  # New attribute to store boundary conditions
+        self.suppress_logging = False  # Add suppress_logging as instance variable
+
+    @log_call
+    def initialize(self, project_folder, ras_exe_path, suppress_logging=True):
+        """
+        Initialize a RasPrj instance with project folder and RAS executable path.
+
+        IMPORTANT: External users should use init_ras_project() function instead of this method.
+        This method is intended for internal use only.
+
+        Args:
+            project_folder (str or Path): Path to the HEC-RAS project folder.
+            ras_exe_path (str or Path): Path to the HEC-RAS executable.
+            suppress_logging (bool, default=True): If True, suppresses initialization logging messages.
+
+        Raises:
+            ValueError: If no HEC-RAS project file is found in the specified folder.
+
+        Note:
+            This method sets up the RasPrj instance by:
+            1. Finding the project file (.prj)
+            2. Loading project data (plans, geometries, flows)
+            3. Extracting boundary conditions
+            4. Setting the initialization flag
+            5. Loading RASMapper data (.rasmap)
+        """
+        self.suppress_logging = suppress_logging  # Store suppress_logging state
+        self.project_folder = Path(project_folder)
+        self.prj_file = self.find_ras_prj(self.project_folder)
+        if self.prj_file is None:
+            logger.error(f"No HEC-RAS project file found in {self.project_folder}")
+            raise ValueError(f"No HEC-RAS project file found in {self.project_folder}. Please check the path and try again.")
+        self.project_name = Path(self.prj_file).stem
+        self.ras_exe_path = ras_exe_path
+        
+        # Set initialized to True before loading project data
+        self.initialized = True
+        
+        # Now load the project data
+        self._load_project_data()
+        self.boundaries_df = self.get_boundary_conditions()
+        
+        # Load RASMapper data if available
+        try:
+            # Import here to avoid circular imports
+            from .RasMap import RasMap
+            self.rasmap_df = RasMap.initialize_rasmap_df(self)
+        except ImportError:
+            logger.warning("RasMap module not available. RASMapper data will not be loaded.")
+            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
+                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
+                                                'current_settings'])
+        except Exception as e:
+            logger.error(f"Error initializing RASMapper data: {e}")
+            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
+                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
+                                                'current_settings'])
+
+        if not suppress_logging:
+            logger.info(f"Initialization complete for project: {self.project_name}")
+            logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
+                         f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
+                         f"Boundary conditions: {len(self.boundaries_df)}")
+            logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
+            logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
+
+    @log_call
+    def _load_project_data(self):
+        """
+        Load project data from the HEC-RAS project file.
+
+        This internal method:
+        1. Initializes DataFrames for plan, flow, unsteady, and geometry entries
+        2. Ensures all required columns are present with appropriate default values
+        3. Sets file paths for all components (geometries, flows, plans)
+
+        Raises:
+            Exception: If there's an error loading or processing project data.
+        """
+        try:
+            # Load data frames
+            self.unsteady_df = self._get_prj_entries('Unsteady')
+            self.plan_df = self._get_prj_entries('Plan')
+            self.flow_df = self._get_prj_entries('Flow')
+            self.geom_df = self.get_geom_entries()
+            
+            # Ensure required columns exist
+            self._ensure_required_columns()
+            
+            # Set paths for geometry and flow files
+            self._set_file_paths()
+            
+            # Make sure all plan paths are properly set
+            self._set_plan_paths()
+            
+        except Exception as e:
+            logger.error(f"Error loading project data: {e}")
+            raise
+
+    def _ensure_required_columns(self):
+        """Ensure all required columns exist in plan_df."""
+        required_columns = [
+            'plan_number', 'unsteady_number', 'geometry_number',
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+        ]
+        
+        for col in required_columns:
+            if col not in self.plan_df.columns:
+                self.plan_df[col] = None
+        
+        if not self.plan_df['full_path'].any():
+            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+                lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
+            )
+
+    def _set_file_paths(self):
+        """Set geometry and flow paths in plan_df."""
+        for idx, row in self.plan_df.iterrows():
+            try:
+                self._set_geom_path(idx, row)
+                self._set_flow_path(idx, row)
+                
+                if not self.suppress_logging:
+                    logger.info(f"Plan {row['plan_number']} paths set up")
+            except Exception as e:
+                logger.error(f"Error processing plan file {row['plan_number']}: {e}")
+
+    def _set_geom_path(self, idx: int, row: pd.Series):
+        """Set geometry path for a plan entry."""
+        if pd.notna(row['Geom File']):
+            geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+            self.plan_df.at[idx, 'Geom Path'] = str(geom_path)
+
+    def _set_flow_path(self, idx: int, row: pd.Series):
+        """Set flow path for a plan entry."""
+        if pd.notna(row['Flow File']):
+            prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+            flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+            self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+    def _set_plan_paths(self):
+        """Set full path information for plan files and their associated geometry and flow files."""
+        if self.plan_df.empty:
+            logger.debug("Plan DataFrame is empty, no paths to set")
+            return
+        
+        # Ensure full path is set for all plan entries
+        if 'full_path' not in self.plan_df.columns or self.plan_df['full_path'].isna().any():
+            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+                lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
+            )
+        
+        # Create the Geom Path and Flow Path columns if they don't exist
+        if 'Geom Path' not in self.plan_df.columns:
+            self.plan_df['Geom Path'] = None
+        if 'Flow Path' not in self.plan_df.columns:
+            self.plan_df['Flow Path'] = None
+        
+        # Update paths for each plan entry
+        for idx, row in self.plan_df.iterrows():
+            try:
+                # Set geometry path if Geom File exists and Geom Path is missing or invalid
+                if pd.notna(row['Geom File']):
+                    geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+                    self.plan_df.at[idx, 'Geom Path'] = str(geom_path)
+                
+                # Set flow path if Flow File exists and Flow Path is missing or invalid
+                if pd.notna(row['Flow File']):
+                    # Determine the prefix (u for unsteady, f for steady flow)
+                    prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+                    flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+                    self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+                
+                if not self.suppress_logging:
+                    logger.debug(f"Plan {row['plan_number']} paths set up")
+            except Exception as e:
+                logger.error(f"Error setting paths for plan {row.get('plan_number', idx)}: {e}")
+
+    def _get_geom_file_for_plan(self, plan_number):
+        """
+        Get the geometry file path for a given plan number.
+        
+        Args:
+            plan_number (str): The plan number to find the geometry file for.
+        
+        Returns:
+            str: The full path to the geometry HDF file, or None if not found.
+        """
+        plan_file_path = self.project_folder / f"{self.project_name}.p{plan_number}"
+        content, encoding = read_file_with_fallback_encoding(plan_file_path)
+        
+        if content is None:
+            return None
+        
+        try:
+            for line in content.splitlines():
+                if line.startswith("Geom File="):
+                    geom_file = line.strip().split('=')[1]
+                    geom_hdf_path = self.project_folder / f"{self.project_name}.{geom_file}.hdf"
+                    if geom_hdf_path.exists():
+                        return str(geom_hdf_path)
+                    else:
+                        return None
+        except Exception as e:
+            logger.error(f"Error reading plan file for geometry: {e}")
+        return None
+
+
+    @staticmethod
+    @log_call
+    def get_plan_value(
+        plan_number_or_path: Union[str, Path],
+        key: str,
+        ras_object=None
+    ) -> Any:
+        """
+        Retrieve a specific value from a HEC-RAS plan file.
+
+        Parameters:
+        plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        key (str): The key to retrieve from the plan file
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+        Any: The value associated with the specified key
+
+        Raises:
+        ValueError: If the plan file is not found
+        IOError: If there's an error reading the plan file
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # These must exactly match the keys in supported_plan_keys from _parse_plan_file
+        valid_keys = {
+            'Computation Interval',
+            'DSS File',
+            'Flow File',
+            'Friction Slope Method',
+            'Geom File',
+            'Mapping Interval',
+            'Plan Title',
+            'Program Version',
+            'Run HTab',
+            'Run PostProcess',
+            'Run Sediment',
+            'Run UNet',
+            'Run WQNet',
+            'Short Identifier',
+            'Simulation Date',
+            'UNET D1 Cores',
+            'UNET D2 Cores',
+            'PS Cores',
+            'UNET Use Existing IB Tables',
+            'UNET 1D Methodology',
+            'UNET D2 SolverType',
+            'UNET D2 Name',
+            'description'  # Special case for description block
+        }
+
+        if key not in valid_keys:
+            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(sorted(valid_keys))}")
+            return None
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
+            if not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                content = file.read()
+        except IOError as e:
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        if key == 'description':
+            match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            return match.group(1).strip() if match else None
+        else:
+            pattern = f"{key}=(.*)"
+            match = re.search(pattern, content)
+            if match:
+                value = match.group(1).strip()
+                # Convert core values to integers
+                if key in ['UNET D1 Cores', 'UNET D2 Cores', 'PS Cores']:
+                    try:
+                        return int(value)
+                    except ValueError:
+                        logger.warning(f"Could not convert {key} value '{value}' to integer")
+                        return None
+                return value
+            
+            # Use DEBUG level for missing core values, ERROR for other missing keys
+            if key in ['UNET D1 Cores', 'UNET D2 Cores', 'PS Cores']:
+                logger.debug(f"Core setting '{key}' not found in plan file")
+            else:
+                logger.error(f"Key '{key}' not found in the plan file")
+            return None
+
+    def _parse_plan_file(self, plan_file_path):
+        """
+        Parse a plan file and extract critical information.
+        
+        Args:
+            plan_file_path (Path): Path to the plan file.
+        
+        Returns:
+            dict: Dictionary containing extracted plan information.
+        """
+        plan_info = {}
+        content, encoding = read_file_with_fallback_encoding(plan_file_path)
+        
+        if content is None:
+            logger.error(f"Could not read plan file {plan_file_path} with any supported encoding")
+            return plan_info
+        
+        try:
+            # Extract description
+            description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            if description_match:
+                plan_info['description'] = description_match.group(1).strip()
+            
+            # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
+            
+            # Extract other critical information
+            supported_plan_keys = {
+                'Computation Interval': r'Computation Interval=(.+)',
+                'DSS File': r'DSS File=(.+)',
+                'Flow File': r'Flow File=(.+)',
+                'Friction Slope Method': r'Friction Slope Method=(.+)',
+                'Geom File': r'Geom File=(.+)',
+                'Mapping Interval': r'Mapping Interval=(.+)',
+                'Plan Title': r'Plan Title=(.+)',
+                'Program Version': r'Program Version=(.+)',
+                'Run HTab': r'Run HTab=(.+)',
+                'Run PostProcess': r'Run PostProcess=(.+)',
+                'Run Sediment': r'Run Sediment=(.+)',
+                'Run UNet': r'Run UNet=(.+)',
+                'Run WQNet': r'Run WQNet=(.+)',
+                'Short Identifier': r'Short Identifier=(.+)',
+                'Simulation Date': r'Simulation Date=(.+)',
+                'UNET D1 Cores': r'UNET D1 Cores=(.+)',
+                'UNET D2 Cores': r'UNET D2 Cores=(.+)',
+                'PS Cores': r'PS Cores=(.+)',
+                'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
+                'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
+                'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
+                'UNET D2 Name': r'UNET D2 Name=(.+)'
+            }
+            
+            # END Exception to Style Guide
+            
+            # First, explicitly set None for core values
+            core_keys = ['UNET D1 Cores', 'UNET D2 Cores', 'PS Cores']
+            for key in core_keys:
+                plan_info[key] = None
+            
+            for key, pattern in supported_plan_keys.items():
+                match = re.search(pattern, content)
+                if match:
+                    value = match.group(1).strip()
+                    # Convert core values to integers if they exist
+                    if key in core_keys and value:
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            logger.warning(f"Could not convert {key} value '{value}' to integer in plan file {plan_file_path}")
+                            value = None
+                    plan_info[key] = value
+                elif key in core_keys:
+                    logger.debug(f"Core setting '{key}' not found in plan file {plan_file_path}")
+            
+            logger.debug(f"Parsed plan file: {plan_file_path} using {encoding} encoding")
+        except Exception as e:
+            logger.error(f"Error parsing plan file {plan_file_path}: {e}")
+        
+        return plan_info
+
+    @log_call
+    def _get_prj_entries(self, entry_type):
+        """
+        Extract entries of a specific type from the HEC-RAS project file.
+        
+        Args:
+            entry_type (str): The type of entry to extract (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+        
+        Returns:
+            pd.DataFrame: A DataFrame containing the extracted entries.
+        
+        Raises:
+            Exception: If there's an error reading or processing the project file.
+        """
+        entries = []
+        pattern = re.compile(rf"{entry_type} File=(\w+)")
+
+        try:
+            with open(self.prj_file, 'r', encoding='utf-8') as file:
+                for line in file:
+                    match = pattern.match(line.strip())
+                    if match:
+                        file_name = match.group(1)
+                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                        entry_number = file_name[1:]
+                        
+                        entry = {
+                            f'{entry_type.lower()}_number': entry_number,
+                            'full_path': full_path
+                        }
+                        
+                        # Handle Unsteady entries
+                        if entry_type == 'Unsteady':
+                            entry.update(self._process_unsteady_entry(entry_number, full_path))
+                        else:
+                            entry.update(self._process_default_entry())
+                        
+                        # Handle Plan entries
+                        if entry_type == 'Plan':
+                            entry.update(self._process_plan_entry(entry_number, full_path))
+                        
+                        entries.append(entry)
+            
+            df = pd.DataFrame(entries)
+            return self._format_dataframe(df, entry_type)
+        
+        except Exception as e:
+            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
+            raise
+
+    def _process_unsteady_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process unsteady entry data."""
+        entry = {'unsteady_number': entry_number}
+        unsteady_info = self._parse_unsteady_file(Path(full_path))
+        entry.update(unsteady_info)
+        return entry
+
+    def _process_default_entry(self) -> dict:
+        """Process default entry data."""
+        return {
+            'unsteady_number': None,
+            'geometry_number': None
+        }
+
+    def _process_plan_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process plan entry data."""
+        entry = {}
+        plan_info = self._parse_plan_file(Path(full_path))
+        
+        if plan_info:
+            entry.update(self._process_flow_file(plan_info))
+            entry.update(self._process_geom_file(plan_info))
+            
+            # Add remaining plan info
+            for key, value in plan_info.items():
+                if key not in ['Flow File', 'Geom File']:
+                    entry[key] = value
+            
+            # Add HDF results path
+            hdf_results_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
+        
+        return entry
+
+    def _process_flow_file(self, plan_info: dict) -> dict:
+        """Process flow file information from plan info."""
+        flow_file = plan_info.get('Flow File')
+        if flow_file and flow_file.startswith('u'):
+            return {
+                'unsteady_number': flow_file[1:],
+                'Flow File': flow_file[1:]
+            }
+        return {
+            'unsteady_number': None,
+            'Flow File': flow_file[1:] if flow_file and flow_file.startswith('f') else None
+        }
+
+    def _process_geom_file(self, plan_info: dict) -> dict:
+        """Process geometry file information from plan info."""
+        geom_file = plan_info.get('Geom File')
+        if geom_file and geom_file.startswith('g'):
+            return {
+                'geometry_number': geom_file[1:],
+                'Geom File': geom_file[1:]
+            }
+        return {
+            'geometry_number': None,
+            'Geom File': None
+        }
+
+    def _parse_unsteady_file(self, unsteady_file_path):
+        """
+        Parse an unsteady flow file and extract critical information.
+        
+        Args:
+            unsteady_file_path (Path): Path to the unsteady flow file.
+        
+        Returns:
+            dict: Dictionary containing extracted unsteady flow information.
+        """
+        unsteady_info = {}
+        content, encoding = read_file_with_fallback_encoding(unsteady_file_path)
+        
+        if content is None:
+            return unsteady_info
+        
+        try:
+            # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the unsteady file keys.
+            
+            supported_unsteady_keys = {
+                'Flow Title': r'Flow Title=(.+)',
+                'Program Version': r'Program Version=(.+)',
+                'Use Restart': r'Use Restart=(.+)',
+                'Precipitation Mode': r'Precipitation Mode=(.+)',
+                'Wind Mode': r'Wind Mode=(.+)',
+                'Met BC=Precipitation|Mode': r'Met BC=Precipitation\|Mode=(.+)',
+                'Met BC=Evapotranspiration|Mode': r'Met BC=Evapotranspiration\|Mode=(.+)',
+                'Met BC=Precipitation|Expanded View': r'Met BC=Precipitation\|Expanded View=(.+)',
+                'Met BC=Precipitation|Constant Units': r'Met BC=Precipitation\|Constant Units=(.+)',
+                'Met BC=Precipitation|Gridded Source': r'Met BC=Precipitation\|Gridded Source=(.+)'
+            }
+            
+            # END Exception to Style Guide
+            
+            for key, pattern in supported_unsteady_keys.items():
+                match = re.search(pattern, content)
+                if match:
+                    unsteady_info[key] = match.group(1).strip()
+        
+        except Exception as e:
+            logger.error(f"Error parsing unsteady file {unsteady_file_path}: {e}")
+        
+        return unsteady_info
+
+    @property
+    def is_initialized(self):
+        """
+        Check if the RasPrj instance has been initialized.
+
+        Returns:
+            bool: True if the instance has been initialized, False otherwise.
+        """
+        return self.initialized
+
+    @log_call
+    def check_initialized(self):
+        """
+        Ensure that the RasPrj instance has been initialized before operations.
+
+        Raises:
+            RuntimeError: If the project has not been initialized with init_ras_project().
+
+        Note:
+            This method is called by other methods to validate the project state before
+            performing operations. Users typically don't need to call this directly.
+        """
+        if not self.initialized:
+            raise RuntimeError("Project not initialized. Call init_ras_project() first.")
+
+    @staticmethod
+    @log_call
+    def find_ras_prj(folder_path):
+        """
+        Find the appropriate HEC-RAS project file (.prj) in the given folder.
+        
+        This method uses several strategies to locate the correct project file:
+        1. If only one .prj file exists, it is selected
+        2. If multiple .prj files exist, it tries to match with .rasmap file names
+        3. As a last resort, it scans files for "Proj Title=" content
+        
+        Args:
+            folder_path (str or Path): Path to the folder containing HEC-RAS files.
+        
+        Returns:
+            Path: The full path of the selected .prj file or None if no suitable file is found.
+        
+        Example:
+            >>> project_file = RasPrj.find_ras_prj("/path/to/ras_project")
+            >>> if project_file:
+            ...     print(f"Found project file: {project_file}")
+            ... else:
+            ...     print("No project file found")
+        """
+        folder_path = Path(folder_path)
+        prj_files = list(folder_path.glob("*.prj"))
+        rasmap_files = list(folder_path.glob("*.rasmap"))
+        if len(prj_files) == 1:
+            return prj_files[0].resolve()
+        if len(prj_files) > 1:
+            if len(rasmap_files) == 1:
+                base_filename = rasmap_files[0].stem
+                prj_file = folder_path / f"{base_filename}.prj"
+                if prj_file.exists():
+                    return prj_file.resolve()
+            for prj_file in prj_files:
+                try:
+                    with open(prj_file, 'r') as file:
+                        content = file.read()
+                        if "Proj Title=" in content:
+                            return prj_file.resolve()
+                except Exception:
+                    continue
+        return None
+
+
+    @log_call
+    def get_project_name(self):
+        """
+        Get the name of the HEC-RAS project (without file extension).
+
+        Returns:
+            str: The name of the project.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> project_name = ras.get_project_name()
+            >>> print(f"Working with project: {project_name}")
+        """
+        self.check_initialized()
+        return self.project_name
+
+    @log_call
+    def get_prj_entries(self, entry_type):
+        """
+        Get entries of a specific type from the HEC-RAS project.
+
+        This method extracts files of the specified type from the project file,
+        parses their content, and returns a structured DataFrame.
+
+        Args:
+            entry_type (str): The type of entry to retrieve ('Plan', 'Flow', 'Unsteady', or 'Geom').
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the requested entries with appropriate columns.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> # Get all geometry files in the project
+            >>> geom_entries = ras.get_prj_entries('Geom')
+            >>> print(f"Project contains {len(geom_entries)} geometry files")
+        
+        Note:
+            This is a generic method. For specific file types, use the dedicated methods:
+            get_plan_entries(), get_flow_entries(), get_unsteady_entries(), get_geom_entries()
+        """
+        self.check_initialized()
+        return self._get_prj_entries(entry_type)
+
+    @log_call
+    def get_plan_entries(self):
+        """
+        Get all plan entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all plan files (.p*) in the project
+        with their associated properties, paths and settings.
+
+        Returns:
+            pd.DataFrame: A DataFrame with columns including 'plan_number', 'full_path',
+                          'unsteady_number', 'geometry_number', etc.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> plan_entries = ras.get_plan_entries()
+            >>> print(f"Project contains {len(plan_entries)} plan files")
+            >>> # Display the first plan's properties
+            >>> if not plan_entries.empty:
+            ...     print(plan_entries.iloc[0])
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Plan')
+
+    @log_call
+    def get_flow_entries(self):
+        """
+        Get all flow entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all flow files (.f*) in the project
+        with their associated properties and paths.
+
+        Returns:
+            pd.DataFrame: A DataFrame with columns including 'flow_number', 'full_path', etc.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> flow_entries = ras.get_flow_entries()
+            >>> print(f"Project contains {len(flow_entries)} flow files")
+            >>> # Display the first flow file's properties
+            >>> if not flow_entries.empty:
+            ...     print(flow_entries.iloc[0])
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Flow')
+
+    @log_call
+    def get_unsteady_entries(self):
+        """
+        Get all unsteady flow entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all unsteady flow files (.u*) in the project
+        with their associated properties and paths.
+
+        Returns:
+            pd.DataFrame: A DataFrame with columns including 'unsteady_number', 'full_path', etc.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> unsteady_entries = ras.get_unsteady_entries()
+            >>> print(f"Project contains {len(unsteady_entries)} unsteady flow files")
+            >>> # Display the first unsteady file's properties
+            >>> if not unsteady_entries.empty:
+            ...     print(unsteady_entries.iloc[0])
+        """
+        self.check_initialized()
+        return self._get_prj_entries('Unsteady')
+
+    @log_call
+    def get_geom_entries(self):
+        """
+        Get all geometry entries from the HEC-RAS project.
+        
+        Returns a DataFrame containing all geometry files (.g*) in the project
+        with their associated properties, paths and HDF links.
+
+        Returns:
+            pd.DataFrame: A DataFrame with columns including 'geom_number', 'full_path', 
+                          'hdf_path', etc.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> geom_entries = ras.get_geom_entries()
+            >>> print(f"Project contains {len(geom_entries)} geometry files")
+            >>> # Display the first geometry file's properties
+            >>> if not geom_entries.empty:
+            ...     print(geom_entries.iloc[0])
+        """
+        self.check_initialized()
+        geom_pattern = re.compile(r'Geom File=(\w+)')
+        geom_entries = []
+
+        try:
+            with open(self.prj_file, 'r') as f:
+                for line in f:
+                    match = geom_pattern.search(line)
+                    if match:
+                        geom_entries.append(match.group(1))
+        
+            geom_df = pd.DataFrame({'geom_file': geom_entries})
+            geom_df['geom_number'] = geom_df['geom_file'].str.extract(r'(\d+)$')
+            geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
+            geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
+            
+            if not self.suppress_logging:  # Only log if suppress_logging is False
+                logger.info(f"Found {len(geom_df)} geometry entries")
+            return geom_df
+        except Exception as e:
+            logger.error(f"Error reading geometry entries from project file: {e}")
+            raise
+    
+    @log_call
+    def get_hdf_entries(self):
+        """
+        Get all plan entries that have associated HDF results files.
+        
+        This method identifies which plans have been successfully computed
+        and have HDF results available for further analysis.
+        
+        Returns:
+            pd.DataFrame: A DataFrame containing plan entries with HDF results.
+                          Returns an empty DataFrame if no results are found.
+        
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> hdf_entries = ras.get_hdf_entries()
+            >>> if hdf_entries.empty:
+            ...     print("No computed results found. Run simulations first.")
+            ... else:
+            ...     print(f"Found results for {len(hdf_entries)} plans")
+        
+        Note:
+            This is useful for identifying which plans have been successfully computed
+            and can be used for further results analysis.
+        """
+        self.check_initialized()
+        
+        hdf_entries = self.plan_df[self.plan_df['HDF_Results_Path'].notna()].copy()
+        
+        if hdf_entries.empty:
+            return pd.DataFrame(columns=self.plan_df.columns)
+        
+        return hdf_entries
+    
+    
+    @log_call
+    def print_data(self):
+        """
+        Print a comprehensive summary of all RAS Object data for this instance.
+        
+        This method outputs:
+        - Project information (name, folder, file paths)
+        - Summary of plans, flows, geometries, and unsteady files
+        - HDF results availability
+        - Boundary conditions
+        
+        Useful for debugging, validation, and exploring project structure.
+
+        Raises:
+            RuntimeError: If the project has not been initialized.
+        
+        Example:
+            >>> ras.print_data()  # Displays complete project overview
+        """
+        self.check_initialized()
+        logger.info(f"--- Data for {self.project_name} ---")
+        logger.info(f"Project folder: {self.project_folder}")
+        logger.info(f"PRJ file: {self.prj_file}")
+        logger.info(f"HEC-RAS executable: {self.ras_exe_path}")
+        logger.info("Plan files:")
+        logger.info(f"\n{self.plan_df}")
+        logger.info("Flow files:")
+        logger.info(f"\n{self.flow_df}")
+        logger.info("Unsteady flow files:")
+        logger.info(f"\n{self.unsteady_df}")
+        logger.info("Geometry files:")
+        logger.info(f"\n{self.geom_df}")
+        logger.info("HDF entries:")
+        logger.info(f"\n{self.get_hdf_entries()}")
+        logger.info("Boundary conditions:")
+        logger.info(f"\n{self.boundaries_df}")
+        logger.info("----------------------------")
+
+    @log_call
+    def get_boundary_conditions(self) -> pd.DataFrame:
+        """
+        Extract boundary conditions from unsteady flow files into a structured DataFrame.
+
+        This method:
+        1. Parses all unsteady flow files to extract boundary condition information
+        2. Creates a structured DataFrame with boundary locations, types and parameters
+        3. Links boundary conditions to their respective unsteady flow files
+
+        Supported boundary condition types include:
+        - Flow Hydrograph
+        - Stage Hydrograph
+        - Normal Depth
+        - Lateral Inflow Hydrograph
+        - Uniform Lateral Inflow Hydrograph
+        - Gate Opening
+
+        Returns:
+            pd.DataFrame: A DataFrame containing detailed boundary condition information.
+                              Returns an empty DataFrame if no unsteady flow files are present.
+        
+        Example:
+            >>> boundaries = ras.get_boundary_conditions()
+            >>> if not boundaries.empty:
+            ...     print(f"Found {len(boundaries)} boundary conditions")
+            ...     # Show flow hydrographs only
+            ...     flow_hydrographs = boundaries[boundaries['bc_type'] == 'Flow Hydrograph']
+            ...     print(f"Project has {len(flow_hydrographs)} flow hydrographs")
+        
+        Note:
+            To see unparsed boundary condition lines for debugging, set logging to DEBUG:
+            import logging
+            logging.getLogger().setLevel(logging.DEBUG)
+        """
+        boundary_data = []
+        
+        # Check if unsteady_df is empty
+        if self.unsteady_df.empty:
+            logger.info("No unsteady flow files found in the project.")
+            return pd.DataFrame()  # Return an empty DataFrame
+        
+        for _, row in self.unsteady_df.iterrows():
+            unsteady_file_path = row['full_path']
+            unsteady_number = row['unsteady_number']
+            
+            try:
+                with open(unsteady_file_path, 'r') as file:
+                    content = file.read()
+            except IOError as e:
+                logger.error(f"Error reading unsteady file {unsteady_file_path}: {e}")
+                continue
+                
+            bc_blocks = re.split(r'(?=Boundary Location=)', content)[1:]
+            
+            for i, block in enumerate(bc_blocks, 1):
+                bc_info, unparsed_lines = self._parse_boundary_condition(block, unsteady_number, i)
+                boundary_data.append(bc_info)
+                
+                if unparsed_lines:
+                    logger.debug(f"Unparsed lines for boundary condition {i} in unsteady file {unsteady_number}:\n{unparsed_lines}")
+        
+        if not boundary_data:
+            logger.info("No boundary conditions found in unsteady flow files.")
+            return pd.DataFrame()  # Return an empty DataFrame if no boundary conditions were found
+        
+        boundaries_df = pd.DataFrame(boundary_data)
+        
+        # Merge with unsteady_df to get relevant unsteady flow file information
+        merged_df = pd.merge(boundaries_df, self.unsteady_df, 
+                             left_on='unsteady_number', right_on='unsteady_number', how='left')
+        
+        return merged_df
+
+    def _parse_boundary_condition(self, block: str, unsteady_number: str, bc_number: int) -> Tuple[Dict, str]:
+        lines = block.split('\n')
+        bc_info = {
+            'unsteady_number': unsteady_number,
+            'boundary_condition_number': bc_number
+        }
+        
+        parsed_lines = set()
+        
+        # Parse Boundary Location
+        boundary_location = lines[0].split('=')[1].strip()
+        fields = [field.strip() for field in boundary_location.split(',')]
+        bc_info.update({
+            'river_reach_name': fields[0] if len(fields) > 0 else '',
+            'river_station': fields[1] if len(fields) > 1 else '',
+            'storage_area_name': fields[2] if len(fields) > 2 else '',
+            'pump_station_name': fields[3] if len(fields) > 3 else ''
+        })
+        parsed_lines.add(0)
+        
+        # Determine BC Type
+        bc_types = {
+            'Flow Hydrograph=': 'Flow Hydrograph',
+            'Lateral Inflow Hydrograph=': 'Lateral Inflow Hydrograph',
+            'Uniform Lateral Inflow Hydrograph=': 'Uniform Lateral Inflow Hydrograph',
+            'Stage Hydrograph=': 'Stage Hydrograph',
+            'Friction Slope=': 'Normal Depth',
+            'Gate Name=': 'Gate Opening'
+        }
+        
+        bc_info['bc_type'] = 'Unknown'
+        bc_info['hydrograph_type'] = None
+        for i, line in enumerate(lines[1:], 1):
+            for key, bc_type in bc_types.items():
+                if line.startswith(key):
+                    bc_info['bc_type'] = bc_type
+                    if 'Hydrograph' in bc_type:
+                        bc_info['hydrograph_type'] = bc_type
+                    parsed_lines.add(i)
+                    break
+            if bc_info['bc_type'] != 'Unknown':
+                break
+        
+        # Parse other fields
+        known_fields = ['Interval', 'DSS Path', 'Use DSS', 'Use Fixed Start Time', 'Fixed Start Date/Time',
+                        'Is Critical Boundary', 'Critical Boundary Flow', 'DSS File']
+        for i, line in enumerate(lines):
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                if key in known_fields:
+                    bc_info[key] = value.strip()
+                    parsed_lines.add(i)
+        
+        # Handle hydrograph values
+        bc_info['hydrograph_num_values'] = 0
+        if bc_info['hydrograph_type']:
+            hydrograph_key = f"{bc_info['hydrograph_type']}="
+            hydrograph_line = next((line for i, line in enumerate(lines) if line.startswith(hydrograph_key)), None)
+            if hydrograph_line:
+                hydrograph_index = lines.index(hydrograph_line)
+                values_count = int(hydrograph_line.split('=')[1].strip())
+                bc_info['hydrograph_num_values'] = values_count
+                if values_count > 0:
+                    values = ' '.join(lines[hydrograph_index + 1:]).split()[:values_count]
+                    bc_info['hydrograph_values'] = values
+                    parsed_lines.update(range(hydrograph_index, hydrograph_index + (values_count // 5) + 2))
+        
+        # Collect unparsed lines
+        unparsed_lines = '\n'.join(line for i, line in enumerate(lines) if i not in parsed_lines and line.strip())
+        
+        if unparsed_lines:
+            logger.debug(f"Unparsed lines for boundary condition {bc_number} in unsteady file {unsteady_number}:\n{unparsed_lines}")
+        
+        return bc_info, unparsed_lines
+
+    @log_call
+    def _format_dataframe(self, df, entry_type):
+        """
+        Format the DataFrame according to the desired column structure.
+        
+        Args:
+            df (pd.DataFrame): The DataFrame to format.
+            entry_type (str): The type of entry (e.g., 'Plan', 'Flow', 'Unsteady', 'Geom').
+        
+        Returns:
+            pd.DataFrame: The formatted DataFrame.
+        """
+        if df.empty:
+            return df
+        
+        if entry_type == 'Plan':
+            # Set required column order
+            first_cols = ['plan_number', 'unsteady_number', 'geometry_number']
+            
+            # Standard plan key columns in the exact order specified
+            plan_key_cols = [
+                'Plan Title', 'Program Version', 'Short Identifier', 'Simulation Date',
+                'Std Step Tol', 'Computation Interval', 'Output Interval', 'Instantaneous Interval',
+                'Mapping Interval', 'Run HTab', 'Run UNet', 'Run Sediment', 'Run PostProcess',
+                'Run WQNet', 'Run RASMapper', 'UNET Use Existing IB Tables', 'HDF_Results_Path',
+                'UNET 1D Methodology', 'Write IC File', 'Write IC File at Fixed DateTime',
+                'IC Time', 'Write IC File Reoccurance', 'Write IC File at Sim End'
+            ]
+            
+            # Additional convenience columns
+            file_path_cols = ['Geom File', 'Geom Path', 'Flow File', 'Flow Path']
+            
+            # Special columns that must be preserved
+            special_cols = ['HDF_Results_Path']
+            
+            # Build the final column list
+            all_cols = first_cols.copy()
+            
+            # Add plan key columns if they exist
+            for col in plan_key_cols:
+                if col in df.columns and col not in all_cols and col not in special_cols:
+                    all_cols.append(col)
+            
+            # Add any remaining columns not explicitly specified
+            other_cols = [col for col in df.columns if col not in all_cols + file_path_cols + special_cols + ['full_path']]
+            all_cols.extend(other_cols)
+            
+            # Add HDF_Results_Path if it exists (ensure it comes before file paths)
+            for special_col in special_cols:
+                if special_col in df.columns and special_col not in all_cols:
+                    all_cols.append(special_col)
+            
+            # Add file path columns at the end
+            all_cols.extend(file_path_cols)
+            
+            # Rename plan_number column
+            df = df.rename(columns={f'{entry_type.lower()}_number': 'plan_number'})
+            
+            # Fill in missing columns with None
+            for col in all_cols:
+                if col not in df.columns:
+                    df[col] = None
+            
+            # Make sure full_path column is preserved and included
+            if 'full_path' in df.columns and 'full_path' not in all_cols:
+                all_cols.append('full_path')
+            
+            # Return DataFrame with specified column order
+            cols_to_return = [col for col in all_cols if col in df.columns]
+            return df[cols_to_return]
+        
+        return df
+
+    @log_call
+    def _get_prj_entries(self, entry_type):
+        """
+        Extract entries of a specific type from the HEC-RAS project file.
+        """
+        entries = []
+        pattern = re.compile(rf"{entry_type} File=(\w+)")
+
+        try:
+            with open(self.prj_file, 'r') as file:
+                for line in file:
+                    match = pattern.match(line.strip())
+                    if match:
+                        file_name = match.group(1)
+                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                        entry = self._create_entry(entry_type, file_name, full_path)
+                        entries.append(entry)
+        
+            return self._format_dataframe(pd.DataFrame(entries), entry_type)
+        
+        except Exception as e:
+            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
+            raise
+
+    def _create_entry(self, entry_type, file_name, full_path):
+        """Helper method to create entry dictionary."""
+        entry_number = file_name[1:]
+        entry = {
+            f'{entry_type.lower()}_number': entry_number,
+            'full_path': full_path,
+            'unsteady_number': None,
+            'geometry_number': None
+        }
+        
+        if entry_type == 'Unsteady':
+            entry['unsteady_number'] = entry_number
+            entry.update(self._parse_unsteady_file(Path(full_path)))
+        elif entry_type == 'Plan':
+            self._update_plan_entry(entry, entry_number, full_path)
+        
+        return entry
+
+    def _update_plan_entry(self, entry, entry_number, full_path):
+        """Helper method to update plan entry with additional information."""
+        plan_info = self._parse_plan_file(Path(full_path))
+        if plan_info:
+            # Handle Flow File
+            flow_file = plan_info.get('Flow File')
+            if flow_file:
+                if flow_file.startswith('u'):
+                    entry.update({'unsteady_number': flow_file[1:], 'Flow File': flow_file[1:]})
+                else:
+                    entry['Flow File'] = flow_file[1:] if flow_file.startswith('f') else None
+            
+            # Handle Geom File
+            geom_file = plan_info.get('Geom File')
+            if geom_file and geom_file.startswith('g'):
+                entry.update({'geometry_number': geom_file[1:], 'Geom File': geom_file[1:]})
+            
+            # Add remaining plan info
+            entry.update({k: v for k, v in plan_info.items() if k not in ['Flow File', 'Geom File']})
+            
+            # Add HDF results path
+            hdf_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+            entry['HDF_Results_Path'] = str(hdf_path) if hdf_path.exists() else None
+
+
+# Create a global instance named 'ras'
 # Defining the global instance allows the init_ras_project function to initialize the project.
 # This only happens on the library initialization, not when the user calls init_ras_project.
 ras = RasPrj()
@@ -11962,9 +13206,9 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
 
     Args:
         ras_project_folder (str or Path): The path to the RAS project folder.
-        ras_version (str, optional): The version of RAS to use (e.g., "6.6").
-                                    Can also be a full path to the Ras.exe file.
-                                    If None, will attempt to detect from plan files.
+        ras_version (str, optional): The version of RAS to use (e.g., "6.6") OR
+                                     a full path to the Ras.exe file (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
+                                     If None, will attempt to detect from plan files.
         ras_object (RasPrj, optional): If None, updates the global 'ras' object.
                                        If a RasPrj instance, updates that instance.
                                        If any other value, creates and returns a new RasPrj instance.
@@ -11985,18 +13229,109 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
     """
+    project_folder = Path(ras_project_folder)
+    if not project_folder.exists():
+        logger.error(f"The specified RAS project folder does not exist: {project_folder}")
+        raise FileNotFoundError(f"The specified RAS project folder does not exist: {project_folder}. Please check the path and try again.")
+
+    # Determine which RasPrj instance to use
+    if ras_object is None:
+        # Use the global 'ras' object
+        logger.debug("Initializing global 'ras' object via init_ras_project function.")
+        ras_object = ras
+    elif not isinstance(ras_object, RasPrj):
+        # Create a new RasPrj instance
+        logger.debug("Creating a new RasPrj instance.")
+        ras_object = RasPrj()
+    
+    ras_exe_path = None
+    
+    # Use version specified by user if provided
+    if ras_version is not None:
+        ras_exe_path = get_ras_exe(ras_version)
+        if ras_exe_path == "Ras.exe" and ras_version != "Ras.exe":
+            logger.warning(f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail.")
+    else:
+        # No version specified, try to detect from plan files
+        detected_version = None
+        logger.info("No HEC-RAS Version Specified.Attempting to detect HEC-RAS version from plan files.")
+        
+        # Look for .pXX files in project folder
+        logger.info(f"Searching for plan files in {project_folder}")
+        # Search for any file with .p01 through .p99 extension, regardless of base name
+        plan_files = list(project_folder.glob("*.p[0-9][0-9]"))
+        
+        if not plan_files:
+            logger.info(f"No plan files found in {project_folder}")
+        
+        for plan_file in plan_files:
+            logger.info(f"Found plan file: {plan_file.name}")
+            content, encoding = read_file_with_fallback_encoding(plan_file)
+            
+            if not content:
+                logger.info(f"Could not read content from {plan_file.name}")
+                continue
+                
+            logger.info(f"Successfully read plan file with {encoding} encoding")
+            
+            # Look for Program Version in plan file
+            for line in content.splitlines():
+                if line.startswith("Program Version="):
+                    version = line.split("=")[1].strip()
+                    logger.info(f"Found Program Version={version} in {plan_file.name}")
+                    
+                    # Replace 00 in version string if present
+                    if "00" in version:
+                        version = version.replace("00", "0")
+                    
+                    # Try to get RAS executable for this version
+                    test_exe_path = get_ras_exe(version)
+                    logger.info(f"Checking RAS executable path: {test_exe_path}")
+                    
+                    if test_exe_path != "Ras.exe":
+                        detected_version = version
+                        ras_exe_path = test_exe_path
+                        logger.debug(f"Found valid HEC-RAS version {version} in plan file {plan_file.name}")
+                        break
+                    else:
+                        logger.info(f"Version {version} not found in default installation path")
+            
+            if detected_version:
+                break
+        
+        if not detected_version:
+            logger.error("No valid HEC-RAS version found in any plan files.")
+            ras_exe_path = "Ras.exe"
+            logger.warning("No valid HEC-RAS version was detected. Running HEC-RAS will fail.")
+    
+    # Initialize or re-initialize with the determined executable path
+    ras_object.initialize(project_folder, ras_exe_path)
+    
+    # Always update the global ras object as well
+    if ras_object is not ras:
+        ras.initialize(project_folder, ras_exe_path)
+        logger.debug("Global 'ras' object also updated to match the new project.")
+    
+    logger.debug(f"Project initialized. Project folder: {ras_object.project_folder}")
+    logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")
+    return ras_object
+
+@log_call
 def get_ras_exe(ras_version=None):
     """
     Determine the HEC-RAS executable path based on the input.
     
     This function attempts to find the HEC-RAS executable in the following order:
-    1. If ras_version is a valid file path to an .exe file, use that path
-    2. If ras_version is a known version number, use default installation path
+    1. If ras_version is a valid file path to an .exe file, use that path directly
+       (useful for non-standard installations or non-C: drive installations)
+    2. If ras_version is a known version number, use default installation path (on C: drive)
     3. If global 'ras' object has ras_exe_path, use that
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
+        ras_version (str, optional): Either a version number (e.g., "6.6") or 
+                                     a full path to the HEC-RAS executable 
+                                     (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
     Returns:
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
@@ -12004,734 +13339,78 @@ def get_ras_exe(ras_version=None):
     Note:
         - HEC-RAS version numbers include: "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
+        - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
         - Allows the library to function even without HEC-RAS installed
     """
-
-==================================================
-
-File: c:\GH\ras-commander\ras_commander\RasRemote.py
-==================================================
-
-import os
-import subprocess
-import shutil
-from pathlib import Path
-import keyring
-import getpass
-import tempfile
-import urllib.request
-import zipfile
-from urllib.error import URLError, HTTPError
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
-from typing import Union, List, Optional, Dict, Any, Tuple
-import pandas as pd
-
-# Internal imports - relative paths for library structure
-from .RasPrj import RasPrj, ras, get_ras_exe # Assuming ras is the global default
-from .RasPlan import RasPlan
-from .RasUtils import RasUtils
-from .LoggingConfig import get_logger
-from .Decorators import log_call
-
-logger = get_logger(__name__)
-
-# --- Constants for Credential Management ---
-USERNAME_FILE = "remote_username.txt" # Use a different name to avoid conflict if run locally
-SERVICE_NAME = "ras_commander_remote_credential"
-
-class RasRemote:
-    """
-    Represents a remote execution target for HEC-RAS computations.
-
-    Manages connection details, credentials, folder paths, and execution parameters
-    for a specific machine where HEC-RAS plans can be run. Instances should typically
-    be created using the `init_remote_ras` factory function.
-
-    Attributes:
-        machine_name (str): Network name of the machine (e.g., "MYCOMPUTER" or "NetworkName1").
-        local_share_path (Path): Path to the target execution folder *as seen from the local machine*
-                                 (e.g., Path("\\\\NetworkName1\\Share\\TempRuns")).
-        remote_target_base_dir (Path): Base path on the *remote* machine where worker folders will be created
-                                       (e.g., Path("C:\\TempRuns")). Derived from local_share_path
-                                       and remote_root_path.
-        remote_root_path (Path): The root path on the remote machine corresponding to the share's root
-                                 (e.g., Path("C:\\")).
-        psexec_path (Path): Path to the PsExec64.exe executable.
-        username (str): Username for remote access.
-        password (str): Password for remote access (retrieved from keyring).
-        run_in_system_account (bool): Whether to run PsExec as SYSTEM.
-        session_id (int): Session ID for interactive PsExec execution (if not system).
-        priority (str): PsExec priority level ('low', 'belownormal', 'normal', etc.).
-        physical_cores (int): Number of physical cores available on the target machine.
-        worker_count_per_machine (int): How many parallel HEC-RAS instances (copies of the project)
-                                       to run on this machine.
-        initialized (bool): Flag indicating if the instance is ready.
-    """
-    def __init__(self,
-                 machine_name: str,
-                 local_share_path: Path,
-                 remote_target_base_dir: Path,
-                 remote_root_path: Path,
-                 psexec_path: Path,
-                 username: str,
-                 password: str,
-                 run_in_system_account: bool,
-                 session_id: int,
-                 priority: str,
-                 physical_cores: int,
-                 worker_count_per_machine: int):
-        """Initializes a RasRemote instance. Direct instantiation is discouraged; use init_remote_ras."""
-        self.machine_name = machine_name
-        self.local_share_path = local_share_path
-        self.remote_target_base_dir = remote_target_base_dir
-        self.remote_root_path = remote_root_path
-        self.psexec_path = psexec_path
-        self.username = username
-        self.password = password # Stored temporarily, primarily used via _run_psexec_command
-        self.run_in_system_account = run_in_system_account
-        self.session_id = session_id
-        self.priority = priority
-        self.physical_cores = physical_cores
-        self.worker_count_per_machine = worker_count_per_machine
-        self.initialized = True # Mark as initialized after storing attributes
-
-    @log_call
-    def test_connection(self) -> bool:
-        """
-        Test the PsExec connection to the remote machine using 'ipconfig'.
-
-        Returns:
-            bool: True if the connection is successful, False otherwise.
-        """
-        logger.info(f"Testing connection to {self.machine_name}...")
-        success = self._run_psexec_command('ipconfig')
-        if success:
-            logger.info(f"Successfully connected to {self.machine_name} via PsExec.")
+    if ras_version is None:
+        if hasattr(ras, 'ras_exe_path') and ras.ras_exe_path:
+            logger.debug(f"Using HEC-RAS executable from global 'ras' object: {ras.ras_exe_path}")
+            return ras.ras_exe_path
         else:
-            logger.error(f"Failed to connect to {self.machine_name} via PsExec. Check configuration and credentials.")
-        return success
-
-    def _run_psexec_command(self, command: str, target_path: Optional[Path] = None) -> bool:
-        """
-        Internal helper to execute a command on the remote machine via PsExec.
-
-        Args:
-            command (str): The command string to execute (e.g., 'ipconfig', '"C:\\path\\to\\script.bat"').
-            target_path (Optional[Path]): If provided, sets the working directory for the command execution
-                                           on the remote machine.
-
-        Returns:
-            bool: True if the command executed successfully (return code 0), False otherwise.
-        """
-        # Ensure target_path uses correct separators for the target OS (Windows assumed)
-        cwd_path = str(target_path).replace('/', '\\') if target_path else None
-
-        # Construct PsExec command for remote execution
-        if not self.psexec_path or not self.psexec_path.exists():
-             logger.error("PsExec path is not configured or invalid.")
-             return False
-
-        psexec_base = f'"{self.psexec_path}" \\\\{self.machine_name}'
-        # Use stored credentials safely
-        credentials = f'-u "{self.username}" -p "{self.password}"' if self.username and self.password else ''
-        session_flag = f'-s' if self.run_in_system_account else f'-i {self.session_id}'
-        priority_flag = f'-{self.priority}' if self.priority else ''
-        working_dir_flag = f'-w "{cwd_path}"' if cwd_path else ''
-
-        # Ensure the command path uses remote perspective backslashes
-        remote_command = str(command).replace('/', '\\')
-        # Quote the command if it contains spaces and isn't already quoted
-        if ' ' in remote_command and not (remote_command.startswith('"') and remote_command.endswith('"')):
-             remote_command = f'"{remote_command}"'
-
-        # Using cmd /c can be more robust for executing batch files than PowerShell
-        full_command = f'{psexec_base} {credentials} {session_flag} {priority_flag} {working_dir_flag} -accepteula cmd /c {remote_command}'
-
-        obfuscated_command = full_command.replace(self.password, '********') if self.password else full_command
-        logger.debug(f"Executing PsExec command: {obfuscated_command}")
-
-        try:
-            result = subprocess.run(full_command, check=True, shell=True, capture_output=True, text=True)
-            logger.debug(f"PsExec stdout for '{Path(command).name}': {result.stdout[:200]}...") # Log snippet
-            logger.debug(f"PsExec stderr for '{Path(command).name}': {result.stderr}")
-            logger.info(f"PsExec command for '{Path(command).name}' executed successfully on {self.machine_name}.")
-            return True
-        except subprocess.CalledProcessError as e:
-            obfuscated_error = str(e).replace(self.password, '********') if self.password else str(e)
-            obfuscated_stderr = e.stderr.replace(self.password, '********') if self.password else e.stderr
-            logger.error(f"PsExec command for '{Path(command).name}' failed on {self.machine_name}: {obfuscated_error}")
-            logger.error(f"PsExec stderr: {obfuscated_stderr}")
-            return False
-        except Exception as e:
-            obfuscated_error = str(e).replace(self.password, '********') if self.password else str(e)
-            logger.error(f"Unexpected error during PsExec execution of '{Path(command).name}': {obfuscated_error}")
-            return False
-
-    @log_call
-    def prepare_remote_folders(self, source_project_folder: Path, safety_prefix: str) -> bool:
-        """
-        Prepare the target directory by clearing old folders and copying the project.
-
-        Args:
-            source_project_folder (Path): The local path to the HEC-RAS project to copy.
-            safety_prefix (str): Prefix used to identify folders managed by this script for safe deletion.
-
-        Returns:
-            bool: True if preparation was successful, False otherwise.
-        """
-        target_path = self.local_share_path # Use local path for file operations
-        logger.info(f"Preparing worker folders on {self.machine_name} at {target_path}")
-
-        # 1. Clear existing folders on the target (using local path to access share or local dir)
-        if not target_path.exists():
-             logger.info(f"Target directory {target_path} does not exist. Creating.")
-             try:
-                 target_path.mkdir(parents=True, exist_ok=True)
-             except Exception as e:
-                 logger.error(f"Failed to create target directory {target_path}: {e}")
-                 return False
-        else:
-             logger.info(f"Clearing existing worker folders matching prefix '{safety_prefix}' in {target_path}...")
-             items_to_remove = list(target_path.glob(f"{safety_prefix}*"))
-             if not items_to_remove:
-                 logger.info("No existing folders found matching the safety prefix. No deletion required.")
-             else:
-                 logger.info(f"Found {len(items_to_remove)} items matching prefix '{safety_prefix}*' to remove.")
-                 all_removed = True
-                 for item_path in items_to_remove:
-                    if item_path.name.startswith(safety_prefix):
-                         is_folder = item_path.is_dir()
-                         if not RasUtils.remove_with_retry(item_path, is_folder=is_folder):
-                             logger.error(f"Failed to remove item: {item_path}")
-                             all_removed = False
-                         else:
-                            logger.info(f"Successfully removed {'folder' if is_folder else 'file'}: {item_path}")
-                    else:
-                        logger.warning(f"Skipping item {item_path.name} as it doesn't match safety prefix '{safety_prefix}'.")
-
-                 if not all_removed:
-                     logger.error("Failed to clear all existing worker folders. Aborting preparation.")
-                     return False
-                 logger.info("Existing worker folders cleared successfully.")
-
-        # 2. Copy the project worker_count_per_machine times
-        logger.info(f"Copying project from {source_project_folder} to {target_path} ({self.worker_count_per_machine} copies)...")
-        source_name = source_project_folder.name
-        copy_futures = {}
-        # Limit copy threads, especially important for network shares
-        with ThreadPoolExecutor(max_workers=min(4, self.worker_count_per_machine)) as executor:
-            for i in range(1, self.worker_count_per_machine + 1):
-                # Ensure safety prefix is applied correctly
-                worker_folder_name = f"{safety_prefix}{source_name}_Worker_{i}"
-                dest_path = target_path / worker_folder_name
-                logger.debug(f"Submitting copy task for worker {i} to {dest_path}")
-                # Use dirs_exist_ok=False to catch errors if cleanup failed, but log warning if exists
-                future = executor.submit(shutil.copytree, source_project_folder, dest_path, dirs_exist_ok=False)
-                copy_futures[future] = dest_path
-
-            for future in as_completed(copy_futures):
-                dest_path = copy_futures[future]
-                try:
-                    future.result() # Check for exceptions during copy
-                    logger.info(f"Successfully copied project to {dest_path}")
-                except FileExistsError:
-                     logger.warning(f"Worker folder already exists (unexpected): {dest_path}. Skipping copy for this worker.")
-                except Exception as e:
-                    logger.error(f"Failed to copy project to {dest_path}: {e}")
-                    return False # Abort if any copy fails
-
-        logger.info(f"Successfully prepared worker folders on {self.machine_name}.")
-        return True
-
-    @log_call
-    def _generate_remote_batch_files(self, source_ras_object: RasPrj, safety_prefix: str) -> bool:
-        """
-        Generates .bat files for all plans within each worker folder on the target machine.
-
-        Args:
-            source_ras_object (RasPrj): The RasPrj object representing the source project structure.
-            safety_prefix (str): The prefix used for worker folder names.
-
-        Returns:
-            bool: True if batch files generated successfully, False otherwise.
-        """
-        logger.info(f"Generating batch files on {self.machine_name}...")
-        all_success = True
-        source_project_name = source_ras_object.project_name
-        # Determine remote RAS exe path - assumes same version/path structure as source for simplicity
-        # A more robust solution might require specifying remote exe path during init
-        remote_ras_exe_path = get_ras_exe(source_ras_object.ras_version)
-        if remote_ras_exe_path == "Ras.exe":
-            logger.warning(f"Could not determine a specific HEC-RAS executable path for {self.machine_name}. Using generic 'Ras.exe'. Execution might fail if not in PATH.")
-
-        for i in range(1, self.worker_count_per_machine + 1):
-            worker_folder_name = f"{safety_prefix}{source_project_name}_Worker_{i}"
-            remote_worker_path = self.remote_target_base_dir / worker_folder_name # Path ON REMOTE machine
-            local_worker_path_view = self.local_share_path / worker_folder_name # Path for WRITING batch file
-
-            logger.debug(f"Generating batch files for remote worker {i} ({remote_worker_path}) via local path {local_worker_path_view}")
-
-            if not local_worker_path_view.is_dir():
-                logger.error(f"Local view of worker folder does not exist: {local_worker_path_view}. Cannot generate batch files.")
-                all_success = False
-                continue
-
-            for _, plan_row in source_ras_object.plan_df.iterrows():
-                plan_number = plan_row['plan_number']
-                remote_prj_path = remote_worker_path / f"{source_project_name}.prj"
-                remote_plan_path = remote_worker_path / f"{source_project_name}.p{plan_number}"
-                local_bat_path = local_worker_path_view / f"{source_project_name}.p{plan_number}.run.bat"
-
-                # Use backslashes for Windows paths in the batch file command string
-                cmd_prj = str(remote_prj_path).replace('/', '\\')
-                cmd_plan = str(remote_plan_path).replace('/', '\\')
-                cmd_exe = str(remote_ras_exe_path).replace('/', '\\')
-
-                batch_content = f'@echo off\nchcp 65001 > nul\n"{cmd_exe}" -c "{cmd_prj}" "{cmd_plan}"\n'
-
-                try:
-                    with open(local_bat_path, 'w', encoding='utf-8') as f: # Use utf-8 for safety
-                        f.write(batch_content)
-                    logger.debug(f"Generated batch file: {local_bat_path}")
-                except Exception as e:
-                    logger.error(f"Failed to write batch file {local_bat_path}: {e}")
-                    all_success = False
-
-        if all_success:
-            logger.info(f"Batch file generation complete for {self.machine_name}.")
-        else:
-            logger.error(f"Failed to generate some batch files on {self.machine_name}.")
-        return all_success
-
-    @log_call
-    def compute_plan_remote(self, plan_number: str, worker_id: int, source_ras_object: RasPrj, safety_prefix: str, clear_geompre: bool = False, num_cores: Optional[int] = None) -> bool:
-        """
-        Executes a specific HEC-RAS plan in a specific worker folder on this target machine.
-
-        Args:
-            plan_number (str): The plan number to execute (e.g., "01").
-            worker_id (int): The ID of the worker folder (1 to worker_count_per_machine).
-            source_ras_object (RasPrj): The RasPrj object for the source project (used for names/paths).
-            safety_prefix (str): The prefix used for worker folder names.
-            clear_geompre (bool): Whether to clear geometry preprocessor files (.c*) before running.
-            num_cores (Optional[int]): Number of cores to use (updates the plan file).
-
-        Returns:
-            bool: True if execution was successful, False otherwise.
-        """
-        logger.info(f"Executing plan {plan_number} in worker {worker_id} on {self.machine_name}...")
-
-        worker_folder_name = f"{safety_prefix}{source_ras_object.project_name}_Worker_{worker_id}"
-        local_worker_path = self.local_share_path / worker_folder_name # Path for local file ops
-        remote_worker_path = self.remote_target_base_dir / worker_folder_name # Path on remote machine
-
-        # 1. Prepare the specific plan file in the worker folder (optional steps via local path)
-        try:
-            temp_worker_ras = RasPrj()
-            # Initialize temporary object with the correct remote exe path if available
-            remote_ras_exe = self.psexec_path
-            temp_worker_ras.initialize(local_worker_path, remote_ras_exe, suppress_logging=True)
-
-            plan_path_local = RasPlan.get_plan_path(plan_number, ras_object=temp_worker_ras)
-            if not plan_path_local or not Path(plan_path_local).exists():
-                 logger.error(f"Plan file {plan_number} not found in worker folder {local_worker_path}")
-                 return False
-
-            if clear_geompre:
-                from .RasGeo import RasGeo # Avoid circular import at module level
-                RasGeo.clear_geompre_files(plan_path_local, ras_object=temp_worker_ras)
-                logger.info(f"Cleared geompre for plan {plan_number} in worker {worker_id}")
-
-            if num_cores is not None:
-                RasPlan.set_num_cores(plan_path_local, num_cores, ras_object=temp_worker_ras)
-                logger.info(f"Set cores={num_cores} for plan {plan_number} in worker {worker_id}")
-
-        except Exception as e:
-            logger.error(f"Error preparing plan {plan_number} in worker {worker_id}: {e}")
-            return False
-
-        # 2. Define the command: path to the batch file ON THE REMOTE machine
-        remote_bat_path = remote_worker_path / f"{source_ras_object.project_name}.p{plan_number}.run.bat"
-
-        # 3. Execute the command remotely using the remote worker path as CWD
-        logger.info(f"Running PsExec for {remote_bat_path} on {self.machine_name}")
-        success = self._run_psexec_command(str(remote_bat_path), target_path=remote_worker_path)
-
-        if success:
-            logger.info(f"Successfully executed plan {plan_number} in worker {worker_id} on {self.machine_name}.")
-        else:
-            logger.error(f"Failed to execute plan {plan_number} in worker {worker_id} on {self.machine_name}.")
-
-        return success
-
-    @log_call
-    def collect_results(self, dest_folder: Path, safety_prefix: str, source_project_name: str) -> bool:
-        """
-        Collect result files (.hdf, .log, etc.) from all worker folders on this machine.
-
-        Args:
-            dest_folder (Path): The local directory to copy the results into.
-            safety_prefix (str): The prefix used for worker folder names.
-            source_project_name (str): The base name of the HEC-RAS project.
-
-        Returns:
-            bool: True if results collection was generally successful, False if major errors occurred.
-        """
-        target_path = self.local_share_path # Use local path for file ops
-        logger.info(f"Collecting results from {self.machine_name} ({target_path}) to {dest_folder}")
-        all_success = True
-        copied_files_count = 0
-
-        for i in range(1, self.worker_count_per_machine + 1):
-            worker_folder_name = f"{safety_prefix}{source_project_name}_Worker_{i}"
-            local_worker_path = target_path / worker_folder_name
-
-            if not local_worker_path.is_dir():
-                logger.warning(f"Worker folder not found, cannot collect results: {local_worker_path}")
-                continue
-
-            logger.debug(f"Scanning worker folder: {local_worker_path}")
-            try:
-                # Define patterns for result files (adapt as needed)
-                result_patterns = ["*.hdf", "*.log", "*.compute_log*"]
-                for pattern in result_patterns:
-                    for source_file in local_worker_path.glob(pattern):
-                        # Exclude geometry HDF files unless specifically needed
-                        if ".g" in source_file.suffixes and ".hdf" in source_file.suffixes:
-                            continue
-                        # Exclude any input HDF files if named specifically
-                        if "input.hdf" in source_file.name.lower(): # Example exclusion
-                            continue
-
-                        dest_file = dest_folder / source_file.name
-                        try:
-                            if not dest_folder.exists():
-                                dest_folder.mkdir(parents=True, exist_ok=True)
-
-                            # Copy if destination doesn't exist or source is newer
-                            if not dest_file.exists() or source_file.stat().st_mtime > dest_file.stat().st_mtime:
-                                shutil.copy2(source_file, dest_file)
-                                logger.debug(f"Copied {source_file.name} to {dest_folder}")
-                                copied_files_count += 1
-                            else:
-                                logger.debug(f"Skipped {source_file.name} (destination is newer or same)")
-                        except Exception as copy_err:
-                            logger.error(f"Failed to copy {source_file.name} from {local_worker_path}: {copy_err}")
-                            all_success = False
-            except Exception as e:
-                logger.error(f"Error accessing or collecting results from {local_worker_path}: {e}")
-                all_success = False
-
-        logger.info(f"Collected {copied_files_count} result files from {self.machine_name}.")
-        return all_success
-
-    @log_call
-    def cleanup_remote_folders(self, safety_prefix: str, source_project_name: str) -> bool:
-        """
-        Remove all worker folders matching the safety prefix from this target machine.
-
-        Args:
-            safety_prefix (str): The prefix used to identify worker folders.
-            source_project_name (str): The base name of the HEC-RAS project.
-
-        Returns:
-            bool: True if cleanup was successful for all targeted folders, False otherwise.
-        """
-        target_path = self.local_share_path # Use local path for file ops
-        logger.info(f"Cleaning up worker folders on {self.machine_name} at {target_path} with prefix '{safety_prefix}'")
-        all_success = True
-
-        # Use glob to find all matching folders
-        pattern = f"{safety_prefix}{source_project_name}_Worker_*"
-        folders_to_remove = list(target_path.glob(pattern))
-
-        if not folders_to_remove:
-            logger.info(f"No worker folders found matching '{pattern}' for cleanup.")
-            return True
-
-        logger.info(f"Found {len(folders_to_remove)} worker folders to remove.")
-
-        for worker_path in folders_to_remove:
-             if worker_path.is_dir() and worker_path.name.startswith(safety_prefix): # Double check prefix
-                 logger.debug(f"Attempting to remove worker folder: {worker_path}")
-                 if not RasUtils.remove_with_retry(worker_path, is_folder=True):
-                     logger.error(f"Failed to remove worker folder: {worker_path}")
-                     all_success = False
-             elif not worker_path.is_dir():
-                  logger.warning(f"Item matched pattern but is not a directory: {worker_path}. Skipping.")
-             else:
-                  logger.warning(f"Item {worker_path.name} does not match safety prefix. Skipping removal.")
-
-        if all_success:
-            logger.info(f"Successfully cleaned up worker folders on {self.machine_name}.")
-        else:
-            logger.error(f"Failed to clean up some or all worker folders on {self.machine_name}.")
-        return all_success
-
-
-# --- Factory Function ---
-
-@log_call
-def init_remote_ras(
-    local_share_path: str,
-    remote_root_path: str = "C:\\",
-    psexec_run_in_system_account: bool = False,
-    psexec_session_id: int = 2,
-    psexec_priority: str = "low",
-    physical_cores: int = 4,
-    worker_count_per_machine: int = 2,
-    psexec_path: Optional[str] = None,
-    username: Optional[str] = None,
-    password: Optional[str] = None
-) -> RasRemote:
-    """
-    Factory function to create and initialize a RasRemote instance.
-
-    Handles PsExec setup, credential loading, and path calculations for a remote
-    HEC-RAS execution target.
-
-    Args:
-        local_share_path (str): Path to the target execution folder *as seen from the local machine*
-                                (e.g., "\\\\NetworkName1\\Share\\TempRuns").
-        remote_root_path (str): The root path on the *remote* machine corresponding to the share's root
-                                (e.g., "C:\\" if \\\\Machine\\Share maps to C:\\Share).
-                                Default "C:\\".
-        psexec_run_in_system_account (bool): Run PsExec as SYSTEM account. Default False.
-        psexec_session_id (int): Session ID for interactive PsExec. Default 2. Ignored if system account is used.
-        psexec_priority (str): PsExec priority ('low', 'belownormal', 'normal'). Default 'low'.
-        physical_cores (int): Number of physical cores on the target machine. Default 4.
-        worker_count_per_machine (int): Number of parallel workers (project copies) for this machine. Default 2.
-        psexec_path (Optional[str]): Explicit path to PsExec64.exe. If None, attempts download/default.
-        username (Optional[str]): Username for remote connection. If None, prompts or uses stored.
-        password (Optional[str]): Password for remote connection. If None, prompts or uses keyring.
-
-    Returns:
-        RasRemote: An initialized RasRemote instance ready for use.
-
-    Raises:
-        FileNotFoundError: If PsExec cannot be found or downloaded.
-        ValueError: If required parameters are missing, invalid paths, or credentials missing.
-        Exception: For errors during credential handling or connection testing.
-    """
-    logger.info(f"Initializing remote RAS target: {local_share_path}")
-
-    local_share_path_obj = Path(local_share_path)
-    remote_root_path_obj = Path(remote_root_path)
-
-    # Determine machine name
-    machine_name = ""
-    remote_target_base_dir = None
-
-    if local_share_path_obj.is_absolute() and local_share_path_obj.drive.startswith('\\\\'):
-        try:
-            # UNC path: \\Machine\Share\Optional\Subdirs
-            machine_name = local_share_path_obj.parts[1]
-            share_name = local_share_path_obj.parts[2]
-            
-            # If path parts > 2, it includes a share name.
-            if len(local_share_path_obj.parts) > 2:
-                 # Parts after the share name form the relative path
-                 relative_path_parts = local_share_path_obj.parts[3:]
-                 remote_target_base_dir = remote_root_path_obj.joinpath(*relative_path_parts)
-            else:
-                 # Path is just \\Machine\Share - implies target base is the remote root itself
-                 remote_target_base_dir = remote_root_path_obj
-
-            logger.info(f"Target path is remote: {machine_name}")
-        except IndexError:
-             raise ValueError(f"Invalid UNC path format: {local_share_path}. Expected \\\\MachineName\\ShareName\\...")
-    else:
-         raise ValueError(f"local_share_path must be a UNC path: {local_share_path}")
-
-    logger.info(f"Remote target base directory calculated as: {remote_target_base_dir}")
-
-    # --- PsExec Handling ---
-    resolved_psexec_path = _find_or_download_psexec(psexec_path)
-    if not resolved_psexec_path:
-         raise FileNotFoundError("PsExec64.exe could not be found or downloaded.")
-
-    # --- Credential Handling ---
-    stored_username = None
-    stored_password = None
+            default_path = "Ras.exe"
+            logger.debug(f"No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
+            logger.warning(f"HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
+            return default_path
     
-    # Use provided credentials directly if both are given
-    if username is not None and password is not None:
-        stored_username = username
-        stored_password = password
-        logger.info("Using provided username and password.")
-    elif username is not None and password is None:
-        # Username provided, fetch/prompt for password for that specific user
-        stored_username = username
-        stored_password = _load_or_prompt_password(stored_username)
-        if not stored_password:
-             raise ValueError(f"Password required for remote user '{username}' but none provided or found.")
-    elif username is None:
-        # Neither provided, load/prompt for both
-        stored_username, stored_password = _load_or_prompt_credentials()
-        if not stored_username or not stored_password:
-            raise ValueError("Username and password are required for remote execution but were not provided or found.")
-
-    # Create the RasRemote instance
-    remote_instance = RasRemote(
-        machine_name=machine_name,
-        local_share_path=local_share_path_obj,
-        remote_target_base_dir=remote_target_base_dir,
-        remote_root_path=remote_root_path_obj,
-        psexec_path=resolved_psexec_path,
-        username=stored_username,
-        password=stored_password, # Store the loaded/provided password
-        run_in_system_account=psexec_run_in_system_account,
-        session_id=psexec_session_id,
-        priority=psexec_priority,
-        physical_cores=physical_cores,
-        worker_count_per_machine=worker_count_per_machine
-    )
-
-    # Test connection immediately
-    if not remote_instance.test_connection():
-         # Allow initialization but warn the user connection failed
-         logger.warning(f"Initial connection test failed for {machine_name}. Please check configuration.")
-         # Depending on strictness, could raise ConnectionError here
-
-    logger.info(f"Remote RAS target '{machine_name}' initialized successfully.")
-    return remote_instance
-
-# --- Helper Functions for Credential Management and PsExec ---
-
-def _find_or_download_psexec(specified_path: Optional[str] = None) -> Optional[Path]:
-    """Find PsExec64.exe or download PSTools if not found."""
-    if specified_path:
-        psexec_path = Path(specified_path)
-        if psexec_path.is_file() and psexec_path.name.lower() == 'psexec64.exe':
-            logger.info(f"Using specified PsExec path: {psexec_path}")
-            return psexec_path
-        else:
-            logger.warning(f"Specified PsExec path is invalid: {specified_path}. Attempting default locations.")
-
-    # Check common locations or temp directory
-    possible_locations = [
-        Path("C:/psexec/PsExec64.exe"),
-        Path(tempfile.gettempdir()) / "psexec" / "PsExec64.exe",
-        Path("./psexec/PsExec64.exe") # Relative path in CWD
+    ras_version_numbers = [
+        "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
+        "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
     ]
-
-    for loc in possible_locations:
-        if loc.is_file():
-            logger.info(f"Found PsExec at: {loc}")
-            return loc
-
-    # If not found, attempt download to temp directory
-    logger.info("PsExec not found in common locations. Attempting to download PSTools...")
-    download_dir = Path(tempfile.gettempdir()) / "psexec"
-    download_url = 'https://download.sysinternals.com/files/PSTools.zip'
-    zip_file_path = download_dir / 'PSTools.zip'
-    psexec_final_path = download_dir / "PsExec64.exe"
-
+    
+    # Check if input is a direct path to an executable
+    hecras_path = Path(ras_version)
+    if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
+        logger.debug(f"HEC-RAS executable found at specified path: {hecras_path}")
+        return str(hecras_path)
+    
+    # Check known version numbers
+    if str(ras_version) in ras_version_numbers:
+        default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
+        if default_path.is_file():
+            logger.debug(f"HEC-RAS executable found at default path: {default_path}")
+            return str(default_path)
+        else:
+            error_msg = f"HEC-RAS Version {ras_version} is not found at expected path. Running HEC-RAS will fail unless a valid installed version is specified."
+            logger.error(error_msg)
+            return "Ras.exe"
+    
+    # Try to handle other version formats (e.g., just the number without dots)
     try:
-        download_dir.mkdir(parents=True, exist_ok=True)
-        if not psexec_final_path.exists():
-             logger.info(f"Downloading {download_url} to {zip_file_path}")
-             # Use context manager for request
-             with urllib.request.urlopen(download_url) as response, open(zip_file_path, 'wb') as out_file:
-                  shutil.copyfileobj(response, out_file)
-
-             logger.info(f"Extracting PSTools.zip to {download_dir}")
-             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                 # Extract only PsExec64.exe to minimize clutter/potential issues
-                 for member in zip_ref.namelist():
-                     if member.lower().endswith('psexec64.exe'):
-                         zip_ref.extract(member, download_dir)
-                         # Rename if extracted into a subdirectory (ZipFile might preserve paths)
-                         extracted_file = download_dir / member
-                         if extracted_file != psexec_final_path:
-                             extracted_file.rename(psexec_final_path)
-                         break
-                 else:
-                      logger.error("PsExec64.exe not found within the downloaded PSTools.zip")
-                      return None # Explicitly return None if not found in zip
-
-             logger.info(f"PSTools extracted.")
-             # Clean up zip file
-             zip_file_path.unlink()
-        else:
-             logger.info("PsExec64.exe already exists in temp download directory.")
-
-        if psexec_final_path.is_file():
-            logger.info(f"PsExec is now available at: {psexec_final_path}")
-            return psexec_final_path
-        else:
-             logger.error("PsExec64.exe not found even after extraction attempt.")
-             return None
-
-    except (HTTPError, URLError) as e:
-        logger.error(f"Could not download PSTools.zip due to: {e}. Please download manually and provide path if needed.")
-        return None
+        # First check if it's a direct version number
+        version_str = str(ras_version)
+        
+        # Check for paths like "C:/Path/To/Ras.exe"
+        if os.path.sep in version_str and version_str.lower().endswith('.exe'):
+            exe_path = Path(version_str)
+            if exe_path.is_file():
+                logger.debug(f"HEC-RAS executable found at specified path: {exe_path}")
+                return str(exe_path)
+        
+        # Try to find a matching version from our list
+        for known_version in ras_version_numbers:
+            if version_str in known_version or known_version.replace('.', '') == version_str:
+                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{known_version}/Ras.exe")
+                if default_path.is_file():
+                    logger.debug(f"HEC-RAS executable found at default path: {default_path}")
+                    return str(default_path)
+        
+        # Check if it's a newer version
+        if '.' in version_str:
+            major_version = int(version_str.split('.')[0])
+            if major_version >= 6:
+                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
+                if default_path.is_file():
+                    logger.debug(f"HEC-RAS executable found at path for newer version: {default_path}")
+                    return str(default_path)
     except Exception as e:
-        logger.error(f"Error during PsExec download/extraction: {e}")
-        return None
+        logger.error(f"Error parsing version or finding path: {e}")
+    
+    error_msg = f"HEC-RAS Version {ras_version} is not recognized or installed. Running HEC-RAS will fail unless a valid installed version is specified."
+    logger.error(error_msg)
+    return "Ras.exe"
 
-def _load_or_prompt_credentials() -> Tuple[Optional[str], Optional[str]]:
-    """Load username from file and password from keyring, prompting if necessary."""
-    username = None
-    username_file_path = Path(USERNAME_FILE)
-    if username_file_path.exists():
-        try:
-            with open(username_file_path, 'r') as f:
-                username = f.read().strip()
-            if username:
-                logger.info(f"Loaded username '{username}' from {USERNAME_FILE}")
-            else:
-                 logger.warning(f"{USERNAME_FILE} exists but is empty. Prompting for username.")
-        except Exception as e:
-            logger.warning(f"Could not read username file {USERNAME_FILE}: {e}. Prompting.")
-
-    if not username:
-        # Use input instead of getpass for username visibility
-        username_input = input("Enter the username for remote machines (DOMAIN\\USER, leave blank to skip): ").strip()
-        if username_input:
-            username = username_input
-            try:
-                with open(username_file_path, 'w') as f:
-                    f.write(username)
-            except Exception as e:
-                logger.error(f"Could not write username file {USERNAME_FILE}: {e}")
-        else:
-            logger.warning("No username provided. Assuming local execution or anonymous access.")
-            return None, None
-
-    # Load or prompt for password only if a username was determined
-    password = _load_or_prompt_password(username)
-    return username, password
-
-def _load_or_prompt_password(username: str) -> Optional[str]:
-    """Load password from keyring or prompt user."""
-    try:
-         password = keyring.get_password(SERVICE_NAME, username)
-         if password is None:
-             logger.info(f"Password for '{username}' not found in keyring. Prompting.")
-             # Use getpass for password to hide input
-             password_input = getpass.getpass(f"Enter password for {username}: ")
-             if password_input:
-                  password = password_input
-                  try:
-                      keyring.set_password(SERVICE_NAME, username, password)
-                      logger.info(f"Password for '{username}' stored securely in keyring.")
-                  except Exception as e:
-                      logger.error(f"Could not store password in keyring: {e}")
-             else:
-                  logger.warning("No password provided.")
-                  return None
-         else:
-             logger.info(f"Loaded password for '{username}' from keyring.")
-         return password
-    except Exception as e:
-         logger.error(f"Error accessing keyring: {e}. Cannot load/store password.")
-         # Fallback to prompt without storing if keyring fails
-         password_input = getpass.getpass(f"Enter password for {username} (keyring unavailable): ")
-         return password_input if password_input else None
 ==================================================
 
 File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
@@ -14510,7 +15189,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.77.0" # Increment version appropriately
+    __version__ = "0.75.0"
 
 # Set up logging
 setup_logging()
@@ -14525,7 +15204,6 @@ from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
 from .RasMap import RasMap
 from .HdfFluvialPluvial import HdfFluvialPluvial
-from .RasRemote import RasRemote, init_remote_ras # Added imports
 
 # HDF handling
 from .HdfBase import HdfBase
@@ -14552,19 +15230,19 @@ __all__ = [
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
     'RasExamples', 'RasCmdr', 'RasMap', 'HdfFluvialPluvial',
-    'RasRemote', 'init_remote_ras', # Added new items
-
+    
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration',
-
+    
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',
-
+    
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
 ]
+
 ==================================================
 
