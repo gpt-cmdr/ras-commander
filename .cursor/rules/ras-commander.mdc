@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
 RAS Commander (ras-commander) Coding Assistant
 
 Overview
@@ -265,5 +270,6 @@ Ensure correct HEC-RAS time interval strings ("1MIN", "10SEC", etc.) are used wi
 Use datetime objects for RasPlan.update_simulation_date.
 
 Remind users about clear_geompre=True or RasGeo.clear_geompre_files() after geometry modifications.
+
 
 Prefer Hdf* classes for reading HDF data over manual h5py operations unless necessary for very specific tasks not covered by the library.
