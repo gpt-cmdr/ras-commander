@@ -1272,9 +1272,9 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
 
     Args:
         ras_project_folder (str or Path): The path to the RAS project folder.
-        ras_version (str, optional): The version of RAS to use (e.g., "6.6").
-                                    Can also be a full path to the Ras.exe file.
-                                    If None, will attempt to detect from plan files.
+        ras_version (str, optional): The version of RAS to use (e.g., "6.6") OR
+                                     a full path to the Ras.exe file (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
+                                     If None, will attempt to detect from plan files.
         ras_object (RasPrj, optional): If None, updates the global 'ras' object.
                                        If a RasPrj instance, updates that instance.
                                        If any other value, creates and returns a new RasPrj instance.
@@ -1388,13 +1388,16 @@ def get_ras_exe(ras_version=None):
     Determine the HEC-RAS executable path based on the input.
     
     This function attempts to find the HEC-RAS executable in the following order:
-    1. If ras_version is a valid file path to an .exe file, use that path
-    2. If ras_version is a known version number, use default installation path
+    1. If ras_version is a valid file path to an .exe file, use that path directly
+       (useful for non-standard installations or non-C: drive installations)
+    2. If ras_version is a known version number, use default installation path (on C: drive)
     3. If global 'ras' object has ras_exe_path, use that
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number or a full path to the HEC-RAS executable.
+        ras_version (str, optional): Either a version number (e.g., "6.6") or 
+                                     a full path to the HEC-RAS executable 
+                                     (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
     Returns:
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
@@ -1402,6 +1405,7 @@ def get_ras_exe(ras_version=None):
     Note:
         - HEC-RAS version numbers include: "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
+        - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
         - Allows the library to function even without HEC-RAS installed
     """

@@ -127,12 +127,16 @@ from ras_commander import init_ras_project, RasCmdr, RasPlan
 ```
 
 ### Initialize a project (single project)
-```
+```python
+# Basic initialization using default HEC-RAS location (on C: drive)
 init_ras_project(r"/path/to/project", "6.5")
+
+# Specifying a custom path to Ras.exe (useful if HEC-RAS is not installed on C: drive)
+init_ras_project(r"/path/to/project", r"D:/Programs/HEC/HEC-RAS/6.5/Ras.exe")
 ```
 
 ### Initialize a project (multiple projects)
-```
+```python
 your_ras_project = RasPrj()
 init_ras_project(r"/path/to/project", "6.5", ras_object=your_ras_project)
 ```

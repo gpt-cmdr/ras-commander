@@ -23,6 +23,20 @@ pip install --upgrade ras-commander
 2.  **Project Initialization**:
     *   Use `init_ras_project()` to initialize projects and set up `RasPrj` objects.
     *   Handles project file (`.prj`) discovery, HEC-RAS executable path determination, and data structure setup.
+    *   Supports multiple ways to specify the HEC-RAS executable location:
+        - **Version number**: Use a version string (e.g., `"6.5"`) to use the default installation path
+          ```python
+          init_ras_project("/path/to/project", "6.5")
+          ```
+        - **Custom executable path**: Provide the full path to Ras.exe for non-standard installations
+          ```python
+          init_ras_project("/path/to/project", r"D:/Programs/HEC/HEC-RAS/6.5/Ras.exe")
+          ```
+        - **Auto-detection**: Omit the version parameter to attempt detection from plan files
+          ```python
+          init_ras_project("/path/to/project")
+          ```
+        - This flexibility is particularly useful when HEC-RAS is installed on a drive other than C:, or in a non-standard location.
 
 3.  **File Handling**:
     *   Utilizes `pathlib.Path` for consistent, platform-independent file paths.
@@ -291,6 +305,15 @@ from ras_commander import init_ras_project, ras
 # Initializes the global 'ras' object
 init_ras_project("/path/to/project", "6.5")
 print(f"Working with project: {ras.project_name}")
+print(f"Using HEC-RAS at: {ras.ras_exe_path}")
+
+# Or use a custom path to Ras.exe (for non-C: drive installations)
+init_ras_project("/path/to/project", r"D:/Programs/HEC/HEC-RAS/6.5/Ras.exe")
+print(f"Working with project: {ras.project_name}")
+print(f"Using custom HEC-RAS path: {ras.ras_exe_path}")
+
+# Or let the library try to detect the version from plan files
+init_ras_project("/path/to/project")  # Auto-detection (if plan files exist)
 print(f"Available plans:\n{ras.plan_df}")
 ```
 
@@ -389,7 +412,6 @@ print(f"{project2.project_name} has {len(project2.plan_df)} plans.")
 results_proj1 = init_ras_project(results_folder1, "6.5", ras_object=RasPrj())
 hdf_df1 = results_proj1.get_hdf_entries()
 print(f"HDF results found for Project 1 run:\n{hdf_df1}")
-
 ```
 
 ## Advanced Usage
