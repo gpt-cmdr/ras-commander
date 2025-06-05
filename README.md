@@ -478,7 +478,6 @@ Additionally, we would like to acknowledge the following notable contributions a
 
 - Development of additional HDF functions for detailed analysis and mapping of HEC-RAS results within the RasHdf class.
 - Development of the prototype `RasCmdr` class for executing HEC-RAS simulations.
-- Optimization examples and methods from (INSERT REFERENCE) for use in the Ras-Commander library examples
 
 2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
 
