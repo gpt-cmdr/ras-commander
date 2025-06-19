@@ -69,6 +69,12 @@ class RasExamples:
     examples_dir = base_dir
     projects_dir = examples_dir / 'example_projects'
     csv_file_path = examples_dir / 'example_projects.csv'
+    
+    # Special projects that are not in the main zip file
+    SPECIAL_PROJECTS = {
+        'NewOrleansMetro': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299502039/299502111/1/1747692522764/NewOrleansMetroPipesExample.zip',
+        'BeaverLake': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299501780/299502090/1/1747692179014/BeaverLake-SWMM-Import-Solution.zip'
+    }
 
     _folder_df = None
     _zip_file_path = None
@@ -148,6 +154,17 @@ class RasExamples:
         extracted_paths = []
 
         for project_name in project_names:
+            # Check if this is a special project
+            if project_name in cls.SPECIAL_PROJECTS:
+                try:
+                    special_path = cls._extract_special_project(project_name)
+                    extracted_paths.append(special_path)
+                    continue
+                except Exception as e:
+                    logger.error(f"Failed to extract special project '{project_name}': {e}")
+                    continue
+            
+            # Regular project extraction logic
             logger.info("----- RasExamples Extracting Project -----")
             logger.info(f"Extracting project '{project_name}'")
             project_path = cls.projects_dir
@@ -319,6 +336,9 @@ class RasExamples:
     def list_projects(cls, category=None):
         """
         List all projects or projects in a specific category.
+        
+        Note: Special projects (NewOrleansMetro, BeaverLake) are also available but not listed
+        in categories as they are downloaded separately.
         """
         if cls._folder_df is None:
             logger.warning("No projects available. Make sure the zip file is properly loaded.")
@@ -328,7 +348,10 @@ class RasExamples:
             logger.info(f"Projects in category '{category}': {', '.join(projects)}")
         else:
             projects = cls._folder_df['Project'].unique()
-            logger.info(f"All available projects: {', '.join(projects)}")
+            # Add special projects to the list
+            all_projects = list(projects) + list(cls.SPECIAL_PROJECTS.keys())
+            logger.info(f"All available projects: {', '.join(all_projects)}")
+            return all_projects
         return projects.tolist()
 
     @classmethod
@@ -422,3 +445,99 @@ class RasExamples:
         
         number, unit = float(re.findall(r'[\d\.]+', size_str)[0]), re.findall(r'[BKMGT]B?', size_str)[0]
         return int(number * units[unit])
+
+    @classmethod
+    def _extract_special_project(cls, project_name: str) -> Path:
+        """
+        Download and extract special projects that are not in the main zip file.
+        
+        Args:
+            project_name: Name of the special project ('NewOrleansMetro' or 'BeaverLake')
+            
+        Returns:
+            Path: Path to the extracted project directory
+            
+        Raises:
+            ValueError: If the project is not a recognized special project
+        """
+        if project_name not in cls.SPECIAL_PROJECTS:
+            raise ValueError(f"'{project_name}' is not a recognized special project")
+        
+        logger.info(f"----- RasExamples Extracting Special Project -----")
+        logger.info(f"Extracting special project '{project_name}'")
+        
+        # Create the project directory
+        project_path = cls.projects_dir / project_name
+        
+        # Check if already exists
+        if project_path.exists():
+            logger.info(f"Special project '{project_name}' already exists. Deleting existing folder...")
+            try:
+                shutil.rmtree(project_path)
+                logger.info(f"Existing folder for project '{project_name}' has been deleted.")
+            except Exception as e:
+                logger.error(f"Failed to delete existing project folder '{project_name}': {e}")
+                raise
+        
+        # Create the project directory
+        project_path.mkdir(parents=True, exist_ok=True)
+        
+        # Download the zip file
+        url = cls.SPECIAL_PROJECTS[project_name]
+        zip_file_path = cls.projects_dir / f"{project_name}_temp.zip"
+        
+        logger.info(f"Downloading special project from: {url}")
+        logger.info("This may take a few moments...")
+        
+        try:
+            response = requests.get(url, stream=True, timeout=300)
+            response.raise_for_status()
+            
+            # Get total file size if available
+            total_size = int(response.headers.get('content-length', 0))
+            
+            # Download with progress bar
+            with open(zip_file_path, 'wb') as file:
+                if total_size > 0:
+                    with tqdm(
+                        desc=f"Downloading {project_name}",
+                        total=total_size,
+                        unit='iB',
+                        unit_scale=True,
+                        unit_divisor=1024,
+                    ) as progress_bar:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            size = file.write(chunk)
+                            progress_bar.update(size)
+                else:
+                    # No content length, download without progress bar
+                    for chunk in response.iter_content(chunk_size=8192):
+                        file.write(chunk)
+            
+            logger.info(f"Downloaded special project zip file to {zip_file_path}")
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to download special project '{project_name}': {e}")
+            if zip_file_path.exists():
+                zip_file_path.unlink()
+            raise
+        
+        # Extract the zip file directly to the project directory
+        try:
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                # Extract directly to the project directory (no internal folder structure)
+                zip_ref.extractall(project_path)
+            logger.info(f"Successfully extracted special project '{project_name}' to {project_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to extract special project '{project_name}': {e}")
+            if project_path.exists():
+                shutil.rmtree(project_path)
+            raise
+        finally:
+            # Clean up the temporary zip file
+            if zip_file_path.exists():
+                zip_file_path.unlink()
+                logger.debug(f"Removed temporary zip file: {zip_file_path}")
+        
+        return project_path

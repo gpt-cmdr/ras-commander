@@ -1295,7 +1295,8 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
         >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
     """
-    project_folder = Path(ras_project_folder)
+    # Convert to absolute path immediately to ensure consistent path handling
+    project_folder = Path(ras_project_folder).resolve()
     if not project_folder.exists():
         logger.error(f"The specified RAS project folder does not exist: {project_folder}")
         raise FileNotFoundError(f"The specified RAS project folder does not exist: {project_folder}. Please check the path and try again.")

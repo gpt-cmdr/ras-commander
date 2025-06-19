@@ -3,6 +3,7 @@ RasMap - Parses HEC-RAS mapper configuration files (.rasmap)
 
 This module provides functionality to extract and organize information from 
 HEC-RAS mapper configuration files, including paths to terrain, soil, and land cover data.
+It also includes functions to automate the post-processing of stored maps.
 
 This module is part of the ras-commander library and uses a centralized logging configuration.
 
@@ -20,9 +21,12 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 import pandas as pd
+import shutil
 from typing import Union, Optional, Dict, List, Any
 
 from .RasPrj import ras
+from .RasPlan import RasPlan
+from .RasCmdr import RasCmdr
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 
@@ -34,6 +38,7 @@ class RasMap:
     
     This class provides methods to extract paths to terrain, soil, land cover data,
     and various project settings from the .rasmap file associated with a HEC-RAS project.
+    It also includes functionality to automate the post-processing of stored maps.
     """
     
     @staticmethod
@@ -250,3 +255,213 @@ class RasMap:
             })
         
         return RasMap.parse_rasmap(rasmap_path, ras_obj)
+
+    @staticmethod
+    @log_call
+    def get_terrain_names(rasmap_path: Union[str, Path]) -> List[str]:
+        """
+        Extracts terrain layer names from a given .rasmap file.
+        
+        Args:
+            rasmap_path (Union[str, Path]): Path to the .rasmap file.
+
+        Returns:
+            List[str]: A list of terrain names.
+        
+        Raises:
+            FileNotFoundError: If the rasmap file does not exist.
+            ValueError: If the file is not a valid XML or lacks a 'Terrains' section.
+        """
+        rasmap_path = Path(rasmap_path)
+        if not rasmap_path.is_file():
+            raise FileNotFoundError(f"The file '{rasmap_path}' does not exist.")
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            raise ValueError(f"Failed to parse the RASMAP file. Ensure it is a valid XML file. Error: {e}")
+
+        terrains_element = root.find('Terrains')
+        if terrains_element is None:
+            logger.warning("The RASMAP file does not contain a 'Terrains' section.")
+            return []
+
+        terrain_names = [layer.get('Name') for layer in terrains_element.findall('Layer') if layer.get('Name')]
+        logger.info(f"Extracted terrain names: {terrain_names}")
+        return terrain_names
+
+
+    @staticmethod
+    @log_call
+    def postprocess_stored_maps(
+        plan_number: Union[str, List[str]],
+        specify_terrain: Optional[str] = None,
+        layers: Union[str, List[str]] = None,
+        ras_object: Optional[Any] = None
+    ) -> bool:
+        """
+        Automates the generation of stored floodplain map outputs (e.g., .tif files).
+
+        This function modifies the plan and .rasmap files to generate floodplain maps
+        for one or more plans, then restores the original files.
+
+        Args:
+            plan_number (Union[str, List[str]]): Plan number(s) to generate maps for.
+            specify_terrain (Optional[str]): The name of a specific terrain to use.
+            layers (Union[str, List[str]], optional): A list of map layers to generate.
+                Defaults to ['WSEL', 'Velocity', 'Depth'].
+            ras_object (Optional[Any]): The RAS project object.
+
+        Returns:
+            bool: True if the process completed successfully, False otherwise.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        if layers is None:
+            layers = ['WSEL', 'Velocity', 'Depth']
+        elif isinstance(layers, str):
+            layers = [layers]
+
+        # Convert plan_number to list if it's a string
+        plan_number_list = [plan_number] if isinstance(plan_number, str) else plan_number
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        rasmap_backup_path = rasmap_path.with_suffix(f"{rasmap_path.suffix}.storedmap.bak")
+
+        # Store plan paths and their backups
+        plan_paths = []
+        plan_backup_paths = []
+        for plan_num in plan_number_list:
+            plan_path = Path(RasPlan.get_plan_path(plan_num, ras_obj))
+            plan_backup_path = plan_path.with_suffix(f"{plan_path.suffix}.storedmap.bak")
+            plan_paths.append(plan_path)
+            plan_backup_paths.append(plan_backup_path)
+
+        def _create_map_element(name, map_type, profile_name="Max"):
+            map_params = {
+                "MapType": map_type,
+                "OutputMode": "Stored Current Terrain",
+                "ProfileIndex": "2147483647",
+                "ProfileName": profile_name
+            }
+            if specify_terrain:
+                map_params["Terrain"] = specify_terrain
+            
+            layer_elem = ET.Element('Layer', Name=name, Type="RASResultsMap", Checked="True")
+            map_params_elem = ET.SubElement(layer_elem, 'MapParameters')
+            for k, v in map_params.items():
+                map_params_elem.set(k, str(v))
+            return layer_elem
+
+        try:
+            # --- 1. Backup and Modify Plan Files ---
+            for plan_num, plan_path, plan_backup_path in zip(plan_number_list, plan_paths, plan_backup_paths):
+                logger.info(f"Backing up plan file {plan_path} to {plan_backup_path}")
+                shutil.copy2(plan_path, plan_backup_path)
+                
+                logger.info(f"Updating plan run flags for floodplain mapping for plan {plan_num}...")
+                RasPlan.update_run_flags(
+                    plan_num,
+                    geometry_preprocessor=False,
+                    unsteady_flow_simulation=False,
+                    post_processor=False,
+                    floodplain_mapping=True, # Note: True maps to 0, which means "Run"
+                    ras_object=ras_obj
+                )
+
+            # --- 2. Backup and Modify RASMAP File ---
+            logger.info(f"Backing up rasmap file {rasmap_path} to {rasmap_backup_path}")
+            shutil.copy2(rasmap_path, rasmap_backup_path)
+
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+            
+            results_section = root.find('Results')
+            if results_section is None:
+                raise ValueError(f"No <Results> section found in {rasmap_path}")
+
+            # Process each plan's results layer
+            for plan_num in plan_number_list:
+                plan_hdf_part = f".p{plan_num}.hdf"
+                results_layer = None
+                for layer in results_section.findall("Layer[@Type='RASResults']"):
+                    filename = layer.get("Filename")
+                    if filename and plan_hdf_part.lower() in filename.lower():
+                        results_layer = layer
+                        break
+
+                if results_layer is None:
+                    logger.warning(f"Could not find RASResults layer for plan ending in '{plan_hdf_part}' in {rasmap_path}")
+                    continue
+                
+                map_definitions = {"WSEL": "elevation", "Velocity": "velocity", "Depth": "depth"}
+                for layer_name in layers:
+                    if layer_name in map_definitions:
+                        map_type = map_definitions[layer_name]
+                        layername_attr = "Water Surface" if layer_name == "WSEL" else None
+                        map_elem = _create_map_element(layer_name, map_type)
+                        if layername_attr:
+                            map_elem.find("MapParameters").set("LayerName", layername_attr)
+                        results_layer.append(map_elem)
+                        logger.info(f"Added '{layer_name}' stored map to results layer for plan {plan_num}.")
+
+            if specify_terrain:
+                terrains_elem = root.find('Terrains')
+                if terrains_elem is not None:
+                    for layer in list(terrains_elem):
+                        if layer.get('Name') != specify_terrain:
+                            terrains_elem.remove(layer)
+                    logger.info(f"Filtered terrains, keeping only '{specify_terrain}'.")
+
+            tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+            
+            # --- 3. Execute HEC-RAS ---
+            logger.info("Opening HEC-RAS...")
+            ras_exe = ras_obj.ras_exe_path
+            prj_path = f'"{str(ras_obj.prj_file)}"'
+            command = f"{ras_exe} {prj_path}"
+            
+            try:
+                import sys
+                import subprocess
+                if sys.platform == "win32":
+                    hecras_process = subprocess.Popen(command)
+                else:
+                    hecras_process = subprocess.Popen([ras_exe, prj_path])
+
+                logger.info(f"HEC-RAS opened with Process ID: {hecras_process.pid}")
+                logger.info(f"Please run plan(s) {', '.join(plan_number_list)} using the 'Compute Multiple' window in HEC-RAS to generate floodplain mapping results.")
+                
+                # Wait for HEC-RAS to close
+                logger.info("Waiting for HEC-RAS to close...")
+                hecras_process.wait()
+                logger.info("HEC-RAS has closed")
+                
+                success = True
+
+            except Exception as e:
+                logger.error(f"Failed to launch HEC-RAS: {e}")
+                success = False
+
+            if not success:
+                logger.error("Floodplain mapping computation failed.")
+                return False
+
+            logger.info("Floodplain mapping computation successful.")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Error in postprocess_stored_maps: {e}")
+            return False
+
+        finally:
+            # --- 4. Restore Files ---
+            for plan_path, plan_backup_path in zip(plan_paths, plan_backup_paths):
+                if plan_backup_path.exists():
+                    logger.info(f"Restoring original plan file from {plan_backup_path}")
+                    shutil.move(plan_backup_path, plan_path)
+            if rasmap_backup_path.exists():
+                logger.info(f"Restoring original rasmap file from {rasmap_backup_path}")
+                shutil.move(rasmap_backup_path, rasmap_path)

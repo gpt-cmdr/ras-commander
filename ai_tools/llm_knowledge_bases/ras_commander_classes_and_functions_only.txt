@@ -9801,10 +9801,10 @@ class RasGeo:
         
         # Create DataFrame
         if base_table_rows:
-            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
             return df
         else:
-            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
 
 
     @staticmethod
@@ -15189,7 +15189,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.75.0"
+    __version__ = "0.77.0"
 
 # Set up logging
 setup_logging()

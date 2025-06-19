@@ -206,10 +206,10 @@ class RasGeo:
         
         # Create DataFrame
         if base_table_rows:
-            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
             return df
         else:
-            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
 
 
     @staticmethod

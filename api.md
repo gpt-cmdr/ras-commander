@@ -1775,15 +1775,15 @@ Contains static methods for extracting 1D cross-section *geometry* data from HEC
 
 ## Class: RasMap
 
-Contains static methods for parsing and accessing information from HEC-RAS mapper configuration files (.rasmap).
+Contains static methods for parsing and accessing information from HEC-RAS mapper configuration files (.rasmap) and automating post-processing tasks.
 
 ### `RasMap.parse_rasmap(rasmap_path: Union[str, Path], ras_object=None) -> pd.DataFrame`
 
-*   **Purpose:** Parse a .rasmap file and extract relevant information.
+*   **Purpose:** Parse a .rasmap file and extract relevant information, including paths to terrain, soil layers, land cover, and other spatial datasets.
 *   **Parameters:**
     *   `rasmap_path` (`Union[str, Path]`): Path to the .rasmap file.
     *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
-*   **Returns:** `pd.DataFrame`: DataFrame containing extracted information from the .rasmap file.
+*   **Returns:** `pd.DataFrame`: A single-row DataFrame containing extracted information from the .rasmap file.
 *   **Raises:** Various exceptions for file access or parsing failures.
 
 ### `RasMap.get_rasmap_path(ras_object=None) -> Optional[Path]`
@@ -1795,7 +1795,29 @@ Contains static methods for parsing and accessing information from HEC-RAS mappe
 
 ### `RasMap.initialize_rasmap_df(ras_object=None) -> pd.DataFrame`
 
-*   **Purpose:** Initialize the rasmap_df as part of project initialization.
+*   **Purpose:** Initialize the `rasmap_df` as part of project initialization. This is typically called internally by `init_ras_project`.
 *   **Parameters:**
     *   `ras_object` (`RasPrj`, optional): Specific RAS object to use. If None, uses the global ras instance.
 *   **Returns:** `pd.DataFrame`: DataFrame containing information from the .rasmap file.
+
+### `RasMap.get_terrain_names(rasmap_path: Union[str, Path]) -> List[str]`
+*   **Purpose:** Extracts all terrain layer names from a given `.rasmap` file.
+*   **Parameters:**
+    *   `rasmap_path` (`Union[str, Path]`): Path to the `.rasmap` file.
+*   **Returns:** (`List[str]`): A list of terrain names.
+*   **Raises:** `FileNotFoundError`, `ValueError`.
+
+### `RasMap.postprocess_stored_maps(plan_number: str, specify_terrain: Optional[str] = None, layers: Union[str, List[str]] = None, ras_object: Optional[Any] = None) -> bool`
+*   **Purpose:** Automates the generation of stored floodplain map outputs (e.g., `.tif` files) for a specific plan.
+*   **Parameters:**
+    *   `plan_number` (`str`): The plan to generate maps for.
+    *   `specify_terrain` (`str`, optional): The name of a specific terrain to use for mapping. If provided, other terrains are temporarily ignored.
+    *   `layers` (`Union[str, List[str]]`, optional): A list of map layers to generate. Defaults to `['WSEL', 'Velocity', 'Depth']`.
+    *   `ras_object` (`RasPrj`, optional): The RAS project object to use.
+*   **Returns:** (`bool`): `True` if the process completed successfully, `False` otherwise.
+*   **Workflow:**
+    1.  Backs up the original plan and `.rasmap` files.
+    2.  Modifies the plan file to only run floodplain mapping.
+    3.  Modifies the `.rasmap` file to include the specified stored map layers.
+    4.  Runs `RasCmdr.compute_plan` to generate the maps.
+    5.  Restores the original plan and `.rasmap` files, but keeps the newly added map layer definitions in the `.rasmap` file for future use.

@@ -258,7 +258,7 @@ This is useful for comparing different river systems, running scenario analyses 
 - `RasGeo`: Handles operations related to geometry files
 - `RasUnsteady`: Manages unsteady flow file operations
 - `RasUtils`: Contains utility functions for file operations and data management
-- `RasMap`: Parses and manages RASMapper configuration data
+- `RasMap`: Parses RASMapper configuration files and automates floodplain mapping
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
 #### HDF Data Access Classes

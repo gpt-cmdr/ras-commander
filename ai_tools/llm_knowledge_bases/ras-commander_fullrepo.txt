@@ -1,9 +1,10 @@
 Project Structure (files included):
 ├── .cursor
 │   └── rules
-│       └── ras-commander.mdc
+│       └── ras-commander.mdc.txt
 ├── .gitignore
 ├── Comprehensive_Library_Guide.md
+├── Development Roadmap 2025.md
 ├── LICENSE
 ├── README.md
 ├── STYLE_GUIDE.md
@@ -31,6 +32,7 @@ Project Structure (files included):
 │   ├── 14_fluvial_pluvial_delineation.ipynb
 │   └── README.md
 ├── pyproject.toml
+├── ras-commander.zip
 ├── ras_commander
 │   ├── Decorators.py
 │   ├── HdfBase.py
@@ -3542,6 +3544,452 @@ For further assistance, bug reports, or feature requests, please refer to the li
 
 ==================================================
 
+File: c:\GH\ras-commander\Development Roadmap 2025.md
+==================================================
+Below is a roadmap you can use as a reference “back-of-napkin” plan.  Nothing here is rigid — treat each step as a checkpoint that can be expanded or collapsed to fit your timeline.
+
+---
+
+## 0  Take Stock of What You Already Have
+
+| What                                                                                                | Why it matters for integration                                                                                              |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **RAS Commander functions**<br>✓ return `GeoDataFrame` objects                                      | ArcGIS and QGIS both understand vector layers; a GeoDataFrame is a nice lingua-franca starting point.                       |
+| **Dependencies** (`h5py`, `numpy`, `pandas`, `geopandas`, `shapely`, `pyproj`, …)                   | ArcGIS Pro ships its own conda env; QGIS bundles its own copy of GDAL/PyQt. Version mismatches are the #1 install headache. |
+| **Typical HEC-RAS artefacts you care about** (cross-section lines, water-surface profiles, rasters) | Listing these now dictates the *tools/algorithms* you expose later.                                                         |
+
+---
+
+## 1  Refactor / wrap RAS Commander for GIS callers
+
+1. **Pure-Python façade**
+
+   * Functions accept only basic types (file paths, layer names, options dict).
+   * Always return one of: `GeoDataFrame`, `DataFrame`, `xarray`, or simple scalars.
+
+2. **Lightweight CLI entry point (optional)**
+
+   * `python -m ras_commander.cli extract-crosssections --hdf <file> --out <gpkg>`
+   * Lets you test in isolation and gives power-users a headless route.
+
+3. **Add “export helpers”**
+
+   ```python
+   def to_feature_class(gdf, out_fc, overwrite=True): …
+   def to_qgis_layer(gdf, layer_name, crs="EPSG:4326"): …
+   ```
+
+   Keep GIS-specific glue *here* so your toolbox/plugin scripts stay tiny.
+
+---
+
+## 2  ESRI Toolbox (ArcGIS Pro)
+
+### 2.1  Decide format
+
+* **Python Toolbox (`.pyt`)** — easiest to version-control, one file, reads like a class.
+* **Script Tools inside a `.tbx`** — if teammates expect the classic GUI-builder.
+
+### 2.2  Workflow skeleton
+
+```text
+<YourToolbox>.pyt
+└── class ExtractCrossSections(object):
+    ├── def __init__(self):              # define parameter list
+    ├── def getParameterInfo(self): …
+    └── def execute(self, params, msgs):
+            import ras_commander as rc
+            gdf = rc.extract_crosssections(params[0].valueAsText)
+            rc.to_feature_class(gdf, params[1].valueAsText)
+```
+
+### 2.3  Environment & packaging
+
+* Clone the default *arcgispro-py3* conda env → `ras-commander-env`.
+* `conda install geopandas shapely …` (or use `pip install ras_commander---whl`).
+* Ship a `environment.yml` “one-click” installer and document the *Activate Env* step inside the toolbox metadata.
+
+### 2.4  UX polish
+
+* Parameter filters (file picker that only shows `*.hdf`).
+* Validation → warn if CRS missing, etc.
+* Optional: add a *Geoprocessing Model* that chains `ExtractCrossSections` → `GenerateRaster` → `Contour` so analysts can see “what good looks like”.
+
+---
+
+## 3  QGIS Plugin
+
+### 3.1  Plugin type
+
+* Use **Processing Provider** style so each RAS function appears as an algorithm in the *Processing Toolbox*.
+* Scaffold with *Plugin Builder 3* (`pb_tool create ras_commander_qgis`).
+
+### 3.2  Boilerplate outline
+
+```
+ras_commander_qgis/
+├── processing/
+│   ├── provider.py          # registers algorithms
+│   └── alg_extract_xs.py    # one file per geo algorithm
+├── gui/
+│   └── dock_widget.py       # optional, nice for live preview
+├── ras_commander_helpers.py
+└── metadata.txt
+```
+
+Inside `alg_extract_xs.py`:
+
+```python
+from qgis.PyQt.QtCore import QVariant
+from qgis.processing import QgsProcessingAlgorithm, QgsProcessingParameterFile…
+from ras_commander_helpers import extract_xs, to_qgis_layer
+
+class ExtractXSAlg(QgsProcessingAlgorithm):
+    …
+    def processAlgorithm(self, params, context, feedback):
+        gdf = extract_xs(params['HDF'])
+        layer = to_qgis_layer(gdf, 'XS', gdf.crs)
+        return {'OUTPUT': layer.id()}
+```
+
+### 3.3  Distribution
+
+* Zip the plugin, bump `version` in `metadata.txt`.
+* Test on the *LTR* and latest QGIS builds (Windows & Linux).
+* For optional binaries (e.g., PROJ / GDAL), rely on the QGIS-embedded stack; avoid bundling DLLs unless absolutely necessary.
+
+---
+
+## 4  Shared Concerns & Complexities
+
+| Area                         | ArcGIS Pro                                                                  | QGIS                                                                           | Notes                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Python versions**          | 3.9 (Pro 3.3) → locked to Esri’s conda build                                | 3.11 + bundled GDAL                                                            | Stick to lowest‐common-denominator syntax; pin `ras_commander` to compatible wheels.                 |
+| **CRS handling**             | Esri’s WKT2, factory codes                                                  | EPSG strings                                                                   | Normalise with `pyproj.CRS.from_user_input`.                                                         |
+| **GeoDataFrame → Layer**     | Must round-trip via FGDB or `arcpy.da` cursors; speed hit for large rasters | `QgsVectorLayer.fromWkb` directly consumes WKB; faster                         | For performance-critical pieces, allow direct `arcpy.Array`/`QgsGeometry` creation to skip disk I/O. |
+| **Licensing**                | Toolbox code inherits ArcGIS EULA; 3rd-party libs need review               | Fully GPL; mixing GPL + proprietary code OK because you call ArcGIS externally | Keep RAS Commander MIT/BSD style to avoid clashes.                                                   |
+| **Packaging**                | Users fear conda; provide “Toolbox + env YAML” bundle                       | Users expect “install from ZIP”                                                | Video / GIF walkthroughs help adoption more than docs alone.                                         |
+| **Binary deps (GDAL, HDF5)** | Already in ArcGIS; but versions can lag → segfault risk                     | Already in QGIS; also version-pinned                                           | Test early with big-endian HDF-5 rasters to catch ABI mismatches.                                    |
+| **UI/UX**                    | ArcGIS GP dialog auto-generated; limited but stable                         | Qt Designer gives full freedom                                                 | Weigh UI complexity vs. maintenance; default to *Processing* for both.                               |
+| **Testing**                  | `pytest-arcgis` or launch Pro headless via `python -m arcgispro`            | CI can run `qgis_process` headless                                             | Focus integration tests on “does a layer show up with correct CRS and feature count”.                |
+
+---
+
+## 5  Getting from “Plan” to “First Working Demo” in Two Sprints
+
+| Sprint | Goal                   | Deliverables                                                            |
+| ------ | ---------------------- | ----------------------------------------------------------------------- |
+| **1**  | Library + CLI stable   | *ras-commander v1.0* on PyPI, sample notebook, sample HDF               |
+| **2**  | Toolbox & Plugin alpha | `RASCommander.pyt`, `ras_commander_qgis.zip`, readme with install steps |
+
+---
+
+### Quick sanity checklist before release
+
+* [ ] Re-open a saved MXD/APRX and QGS project – layers still resolve?
+* [ ] Install in a virgin VM → no manual `pip install` needed?
+* [ ] CRS of output matches river model’s projection?
+* [ ] Performance acceptable on a 500 MB HDF?
+* [ ] User cancels mid-run → graceful cleanup (temp files, locks).
+* [ ] Logo/icon sized ≤ 256 × 256, transparent PNG.
+
+---
+
+**Bottom line:**
+The “hard” parts are **environment packaging** and **geometry hand-off** (GeoDataFrame → FeatureClass / QgsVectorLayer).  Keep those pain points isolated in helper utilities, and both the ArcGIS toolbox and the QGIS plugin shrink to thin wrappers that should survive API or UI churn for years.  Once that scaffolding is solid, adding new RAS Commander capabilities is just “drop-in a new Processing algorithm / Script Tool” work.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-------
+
+
+
+
+
+"""
+You said:
+Using the HECDSS Python, now that we have this stable library that can be installed by PIP to handle DSSs, we can add some additional logic to RAS Commander. First, when establishing boundary conditions, we can now extract the actual boundary condition using the DSS path and the DSS file path. This can happen upon project initialization, and can even set an optional alert if the DSS files are not found, or pass other HECDSS Python errors back up through the stack so we can see them. The other thing that can happen is that we can start making modules for linking models. By looking at the geographic location, assuming that everything is referenced in the same reference system, we can link models up directly. Where we need to create model inventories that may have different georeferenced systems, we can still do comparisons between the geographic systems to see which boundary condition lines are located near other boundary condition lines from different models, and across different plans, etc. This will assist us with linking models. This will be provided as a spreadsheet. It won't be included in the library, but some of the logic will live in the notebooks for all of the boundary condition model linkages. Thank you.
+
+
+
+
+Also, since we have a working notebook that can download real-time forecasting data and convert it to DSS, we should also be able to query DSS, TIFF, and NetCDF files. But we'll start with DSS, just because it's the biggest pain. We'll use it natively, using the HackDSS Python, to read gridded precipitation data into x-rays. So that we can also write it, and also examples of how to take those x-rays or other DSS-gridded formats and use them. Because we'll need to be able to read and write these gridded data formats to provide true automation flexibility.
+
+
+
+Of course, we need a real-time forecasting example. This will be a separate RAS commander real-time. And this will be a script that will continuously run and update forecasted model results in a specific location, which can then be displayed on a simple web map. But the point of this is to show the basics of providing the data for a ArcGIS-based web platform, which is common in the industry.
+
+
+I also need new functions for altering, creating, and setting control points and elevations for terrain mods. I do have at least one script in the other repository that would be a good place to start and implicitly describes the terrain mod layers etc and sets control points based on a terrain. New paragraph. We also need tools to deal with terrains. I need to be able to read the HDF with the VRT with these stitched HDFs with TIFFs underneath. I need to be able to take those and work with them natively, bring them into a data set in memory that I can then use seamlessly with rastro, rioxraid, etc.
+"""
+
+
+Save this for now and let me give a few more before we start working 
+ChatGPT said:
+
+Thought for a few seconds
+Great, this is a terrific roadmap. Here’s how I’m seeing it laid out so far:
+
+Boundary‑Condition Extraction
+
+On project init, read each DSS path (from config or CLI) with HECDSS Python.
+
+If a DSS file isn’t found or another HECDSS error occurs, raise a clear exception (or optionally emit a warning/alert).
+
+Expose a helper (e.g. get_boundary_conditions(dss_path)) that returns the raw time series or a nicely wrapped object.
+
+Model‑Linking Module
+
+Maintain an inventory (spreadsheet/CSV) of models with their DSS boundary lines, CRS, and plan metadata.
+
+For models in the same CRS, link directly by spatial intersection/nearest‐neighbor on the boundary line geometries.
+
+For mixed‐CRS inventories, reproject on the fly (via PyProj) and compute proximity to suggest links across models/plans.
+
+Logic will live in Jupyter notebooks (for transparency), but core functions can be in a model_linker.py module.
+
+Gridded Data I/O
+
+Start with DSS‐based grids: use HackDSS Python to read precip grids into xarray DataArrays (and write back).
+
+Provide analogous connectors for TIFF and NetCDF (e.g. via rioxarray.open_rasterio() and xarray.open_dataset())—but keep those for next phase.
+
+Expose read/write wrappers like read_precip_dss(path, time_slice=None) and write_precip_dss(da, target_path).
+
+Real‐Time Forecasting Script
+
+A separate “RAS‑Commander Real‑Time” standalone script or service.
+
+Periodically (e.g. every hour) pull the latest forecast data (e.g. via API), convert to DSS, append to your boundary DSS.
+
+Expose a tiny web‐map endpoint (GeoJSON or simple tiled layer) for ArcGIS Online or similar.
+
+Terrain Modification Tools
+
+Functions to create/alter control points, set elevations on terrain layers (leveraging your existing scripts as a starter).
+
+Routines to read complex HDF/VRT stacks (stiched HDF + underlying TIFFs) into memory (via rioxarray + GDAL VRT driver) so you can manipulate them with Rasterio/Rioxarray and pass them to RAS.
+
+Next steps & questions:
+
+Which of these would you like to tackle first?
+
+Do you already have a configuration schema (YAML/JSON) for listing DSS paths & model metadata, or should we define one from scratch?
+
+For the real‐time script, do you have a preferred source/API for the forecast data?
+
+And finally, would you like me to draft out a Python package structure (with stubs for each module) so you can see how it all fits together?
+
+Let me know, and then we can start scaffolding the code!
+
+You said:
+I also need to complete the RASRemote class, test it, use PSExec, and also come up with a secondary deployment system, more than likely a container. Also the ability to run those containers, configure the container to run and then quit, or have some flags that I can set for maximum runtime, etc., and run those containers in the cloud, likely on an S3 instance. Not S3, but an EC2 instance, a cheap one.
+
+I also need to incorporate the ability to pull in stream gauge data from USGS and directly place it as a boundary condition so we can do calibration and validation.
+ChatGPT said:
+Here’s how we can fold those requirements into our evolving RAS‑Commander ecosystem:
+
+6. RASRemote: Remote Execution & Testing
+Goals:
+
+Remotely launch & manage HEC‑RAS jobs on Windows hosts.
+
+Automate deployment, execution, and retrieval of results.
+
+Key Pieces:
+
+RASRemote class (in remote.py)
+
+Connection layer
+
+Windows: wrap PSExec or WinRM to launch .exe with parameters.
+
+Linux containers: SSH + Docker CLI (see below).
+
+Methods
+
+connect(target, creds)
+
+deploy_project(local_dir, remote_dir)
+
+run_model(plan_name, timeout=None, flags={})
+
+fetch_results(remote_dir, local_dir)
+
+close()
+
+Testing
+
+Use pytest fixtures to stand up a lightweight Windows VM (or use a Docker image running WinRM)
+
+Mock PSExec calls with unittest.mock so CI can validate command strings without a real remote.
+
+7. Container‑Based Deployment
+Goals:
+
+Package RASCommander + HEC‑RAS (if licensed) or headless runtimes in a container.
+
+Deploy “run-and-exit” jobs to the cloud (EC2).
+
+Dockerfile sketch (docker/Dockerfile):
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2019  # or ubuntu if headless
+COPY requirements.txt /app/
+RUN pip install -r /app/requirements.txt
+COPY ras_commander/ /app/ras_commander/
+WORKDIR /app
+ENTRYPOINT ["python", "-m", "ras_commander.cli"]
+CMD ["--help"]
+Container flags & behavior:
+
+--plan PLAN_NAME → run that plan then exit.
+
+--max-runtime HOURS → forcibly terminate if exceeded.
+
+--watchdog → keep container alive to poll for new boundary inputs.
+
+Cloud deployment pattern:
+
+Build & push to ECR.
+
+On EC2 (t2.micro or t3.nano), pull image, run with --plan, mount an EBS volume for DSS files.
+
+Use a systemd or cron job on the EC2 instance to re-launch containers as needed.
+
+Optionally, think about AWS Batch or ECS Fargate for more managed autoscaling.
+
+8. USGS Streamgage Integration
+Goals:
+
+Dynamically pull USGS gauge data and inject it into DSS as boundary conditions for calibration/validation.
+
+Approach:
+
+Fetch data
+
+Use the USGS NWIS API (e.g. https://waterservices.usgs.gov/nwis/iv/?format=json&sites=01463500&parameterCd=00060)
+
+Wrap in a helper:
+
+from hydrofunctions import WaterML, hydrotools
+def fetch_usgs_gage(site_id: str, start: str, end: str):
+    wml = WaterML(site_id, service="iv", startDT=start, endDT=end)
+    df = wml.df()  # pandas DataFrame with datetime + discharge
+    return df
+Convert to DSS
+
+Using HECDSS Python:
+
+from hec.dss import HecDss
+def write_gage_to_dss(df, dss_path, pathname):
+    dss = HecDss.open(dss_path)
+    dss.deletePathname(pathname)  # overwrite
+    dss.put_ts(pathname, df["value"], df.index.to_pydatetime())
+    dss.close()
+Integration in workflow
+
+Add a step in your notebook or pipeline:
+
+Fetch USGS data window (configurable).
+
+Write to a “GAGE” slot in the DSS.
+
+Run RAS calibration/validation steps.
+
+9. Next Steps & Scaffolding
+Scaffold repository structure:
+
+ras_commander/
+  cli.py
+  remote.py               # RASRemote class + tests/
+  hecdss_io.py            # boundary extraction, gage writer
+  model_linker.py         # spatial linking logic
+  gridded_io.py           # DSS/TIFF/NetCDF readers & writers
+  terrain_tools.py        # HDF/VRT + control‑point functions
+  real_time.py            # live‑forecast script
+tests/
+  test_remote.py
+  test_hecdss_io.py
+  …
+docker/
+  Dockerfile
+  entrypoint.sh
+notebooks/
+  boundary_extraction.ipynb
+  model_linking_demo.ipynb
+  real_time_workflow.ipynb
+Pick your first sprint:
+
+Flesh out remote.py with basic PSExec/WinRM calls & unit tests,
+
+Or build and push your first Docker image,
+
+Or write your USGS → DSS helper and demo notebook.
+
+
+
+-------
+
+
+
+Ras commander gui
+
+
+
+
+
+Dashboard for 6.x projects
+
+
+
+See each dataframe
+
+
+
+Run each function
+
+
+
+Run parallel on single machine 
+
+
+
+Run parallel on multiple machines
+
+
+
+Create Mannings N sets
+
+
+
+Create infiltration sets
+
+
+
+
+
+a
+
+
+
+
+==================================================
+
 File: c:\GH\ras-commander\LICENSE
 ==================================================
 MIT License
@@ -3558,6 +4006,546 @@ File: c:\GH\ras-commander\pyproject.toml
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta:__legacy__"
 
+==================================================
+
+File: c:\GH\ras-commander\ras-commander.zip
+==================================================
+PK    Z;D       ras_commander/__init__.pyuUKk1IqLnB4BEJEҦq}gV3~k)lQSMG&mF?;6TlnWp;?~ۡ#mxThld<k0ZT
+UV+fÝ9](ܶKʖCߕ&BSXaZ`e)|6!1S*SmN5W)iӕl<·
+p4 `},Rq1];'wJv*>=u˾?*p/(M)%Rvξ`bXo8:H{ZD~F+@DUo!$+h%e߾3()Y%Xv@T'@2v_/LYĿL; bo`MWo<
+K%n#a~-`*D>M{.Ph?<V\
+Spdwn8}7DNvE~eaB\G%^Ɔa<l8(7-ҼӬJ/7ghmojxaMzlY1D!ݮ-
+~sl-02{`2&`,q2NX=Xg/XM8Og:,`ܲuewiВ0T>cb2C]Ci:<DIȋqJ~	oneͮIkq0|mǮ~G PK    Z!<  9     ras_commander/Decorators.py]݀C^c7.ð06wiY9wf/QKI?vfvg*gE[eZR1e١IkQTJqKDkQm݃_*!ǏU)[xwG!*UL:T1?r^ Me쭮?b '-s_ś5o'iUkɧ~r!ްkY_t%^m7pQvρ]Q{xE-5WFb~)*v<?ZMe)ݾ(&Vǅ<D!DuV]^DNFÏ<MeôQ1B
+xӏ/d~'qbFVYThY&ϼъ#ݔɛ_Ni-EQ^5M=3	{fJNxӲЎwdKQ$`?{	T7떃KT7N߱WgXg8@~i$ۧU
+_W3`ux;`1ꊽ? K)?;+]FȮB<}%Ki@RTf0ހՌ,L{@20R4s A­9#P |S@_];}boZc S.ыCJl0R40PPȹP:X%Qū_F#!h\`!3huq |A(5GcTZwN;T^AX((-hY	oy*gN˖htdfoXPZ#|5Wv#a 4-2&!7U7|ۖiә;=YҥMIB(gnBIl=QfNڧ]\̇5QYx#?k,1ŬO9THOCmq'w{-+BM4	JwiႳA\qW
+;pAdt[QFc"$oS)O]5]سMZ<= pW@Nk磽V1a#{P@D&tx[Y5asу*3$ѱ]3\[u4E7)TBsU_ˊc<B$Qǋ!!HBG`d%6HjX7Ǚ
+N;MpiݭId@~۶EU!!P&UV;:"x:Q-
+eW#=KB7bnȄP"7*: 4<Eq0|\#5 rcI#G\4-~~t&15kVqm֝j \q/G`~IxA-e"&R#'E(0rV$e[%ތ.p+5N۝+3'TuBd3rȢ o8S6#Q{'Iab"GCb+tlJ(MEA\QGPufk\`$dxƣOe1_>S<u%I=36mG4G-9IpcLAT۵S!p=Lc%57NR!zͧ*,NT!A1@IsOyqy^LJSKgwMsÉ	:mP[O6ɲӸFVALD(4fC6`,
+Ňup}LzORE,0BYt1( $|_%!\N	-e-ARMym	[@_ѐXClV8p*0dzxND<-@3Ո JRSL-GÛ iFY2ߘLN<^E ڃδ`/._	~{8~8C	$$hL1>䢠AFD=̱%/mfS9|K%YVqo#]O!$YC8MQ,]Q 7RJrч@S]@,qNx72SֳbaHT7A&dc1l^~)nu8'ߧ7Q8hjk
+PH4 ܝa^K:*ڲ4\jQJ>#0`σ	sSթo+ Vp~v[L}j%8709Y{ T.quNL֍F6_kDG|v8*H=S`\N!]hUe$AFfzzwt< QO*i|V	>g|}yý#>iNsON!֨s2z;N?ey{Bx$<~	>ܧY3}aЇ; 7谆ų$Ix7xb|h=n
+)p9>5_/뭰	MMHO|;agscR-KG,,i5$%LIE*J][t98XNӱF:94mr-;4* 9SiS#	&#%^luב|be[>+#8EuIibN9׬?vנ*a&×%8
+{ Nƛ \ago5FsrC:\<Mw0FjNO	T;2wL`~Xt޿; H/_PK    sZnH=	  7     ras_commander/HdfBase.pyZ[oF~70`D%2db!um6;H"Cʶj9gIJ7hdr̹|6CÒOi.8{wIR~+$J6{w~zjlkU.9YgqYlūeuIVJO&Da28<x_; Db|0M1-Ұ,iIUf&̜|Ū%g",ɍņ˪*x 7As
+s$u,!{dG+kVkKJVP0Ygw4^(X4 XE4t,3PLOxui~BC0hq%)pSdTPjpEf0ɐ
+QͶnn`APTI~%TrլLV`Q*X' #¼d8Ie4+b]1;%30Lo/)C m
+lh2PKW1CC2prfEʰزV
+xٿ8h 75#ArVVٜp6qCp "#Du<ݤI2@RsGajf"H@)Wߋ F	@v \8U>]S@Y.6, A`b0p9VcǚbЏCpX4w.	<J$iP^GRfi֫beyVBEl>B4AMM&Ո] #9Gந0$'F-!* f˰&P2~I>4biZn?Cl,r(03@ !? G,
+T/UwgĈ_3Pp_`k؟fC dhQ'DNJb2\bkGusm$dQԕFn0DK)vڼqk"[>_dƥ
+4Dd,dWQG#+8*\%C[CxؒڲPr"8[8?Q[81c;Ryi%=2aUhǉXeofvD)ڿFȚH첓aLɆ->Gsv{/
+T!"0W7 Kj@:B6d>nn;`#%m5qPE[Ӈ9';$@)@:JT]Z%^#1&bvQ[="y{]͏:dwݦz}/,۲I0luא^^V
+A AP;C)!}1 }%$rYFUm9T虲Fc UU9tFx2s=\ 6݂٪4<7R|@ނZ͠r8un/Q@jB%*aSp6׽ Je[!J	%ğdp/-m	@w>SՐ
+'0Z$|Ǉ 0ֻZ4ojXFMf(r7Zo"V}@FoƠ74^M #? ˦8k]_؆ڹi|bzSA_qkyXRcIҍ	% eb}g^#鸇S!&>Ή>N_^0֙n/M?Jgd\<`bl5+`Ͻk'NPQx}GχOn@\7ˏ&LR%,'}tyDvQ:¯y1NmL`tF?4ezةv˕KTu~qa"cmF ޣ|G?7xr,qἮ$hԸ82Ci0L~xo8B`͊T}T7lO?],g<KRb1 y[kܺZfc߁'<cv^߅"	oRg@ۦE`[{MwāM^Î0dE@faWYS! !rPRs7QTaa}!	hQ:U"4xldUXH0Q{JH{ȩް5.[sf|wŵ|L?.b71VG%EobrT,Ǟ<4=[k=FF\;gC [dL(aMcgC5LW@z:S[]Y.Ʊ[ڭMN.y\>]U!;mp12K퇃{j}y"]>搫ҤnbG<|:z21纮vmWA\ۣ:F6"$I-vU5$@$)RaqkܼcC#0ۯʮcUKv-2JKSf`4M[؏*bhaz#R{	`N/@Sd2QCMrSV|{ q*\[Zr&w:rH@ot>Ţ|:y%qV)/eTKq:{&'fkKtTb@I?vj>&%:#Qz}GC76"PKsG3awB}(
+hH<>VCW] %fU>ANS̵ ΐs$r`%ƎTZn~`3ANRΧO<Z2%~xI2u1 Б_|f+y799)%=C.LCwyrC5Nˁ]^|j֌i5a"䣂k\֚DI0bBșZJ~*MNbjҾ˅	ě \p:HvY7(gjf+8=68K	MC:KwZac>*of09z >h#,y~^k<؂}"+K#M|vEg@x{IGsmg2خyd<&s@kZ"	" 2tvp ,wꞆc8;ӳ⏛cmZ?omh[D=d׍1(scC«+IOٝG$eM8IܻPM̨LڢۇFymF3DbΖC|w?Wc:kN8#>f:]ljJرUw{%uHR~||8n|{heP~p.[5υ0]%%Vj7Mx&'+pv摯PR].s1(SɇY+Zl!}P{֓Ey#.A'	+NDJn;@PG3~Ũox駦mp95ݔ=׻s<[9I1P֟}-`pS!p#p4bӎ8g40q:rU3!8*wquݧzz*br3̰BjvL~?u&cyqaN0F9P_OUН:swI21t!|<>Sًd5iR5#JXs,K9wE ^?PK    npZVC`  ?     ras_commander/HdfBndry.py]o8=@>ľumqbKfmEټʒ@Qi"f!Q%+m6-K{#v0E4˦U;<8<8%;I&ORЕ8 HV,qq@XJQp"ْW/ώߝ'/H#x&$IR0!1%cb	?z	LxŊ&t)_hJNI/3IciD$	aᙢ,
+^&-<<P#)lzrr/'d{-=CmD|)1( pysy+gL;Iy󳿒rq;*64#KbT@$!G9y8A%- q(DLl$AVK# $W
+=>,	l#pDQj<Sb n`i
+5jT:r<!(@@rSI/ݲI0g90m!T qiݸ}\WpAA&<bʢS*7`oDHrw)8+9&15EhL~ǘ,!η]
+EqiP\|	EC)v0_ރ{1yG/hFLtB1x'hF3o2gZ=;oОi|l*QE3[8AQ^hYzԟ%qgt驱|`uzXĠbլ?<{qyCx 9!2@64q$7[[*x;a)|AShZ}bRa_Mx#P>
+n"e讻[A9$v#H#pFI)Ia=(b_W6h&v'ֺQ-L;v1Ns+o	3ȥ0Y`L	.#8!e ֫t!bdD[CCCFzujҀF
+V#r#:RABqEdq1w6258ߠ=uΫ;VQ1$Оgl`JbTqe֘&O19G#t|pX%k!#سX٠5<qJ׾8K%:57<IKMVg1
+7M8ę	B
+9MaH!3G vsE9Jź|8=hL9,2ʷ_Ic~(8zz\C9 88ZLv  8sX|LhFɀRqSBsW\$z;(:ոɬi~JDcfH[D6HTZ'pSA@.ύS82aȚ+l` .[A5F,C/[fЍӊT0A*]MіӳS,kFwN/|]:yҵW	[:_L$`k=B!Jw<MY0!.{:bǪ`^ǷPL.lI(V`[+gB#f@ཷXɧn,)Hm `zQ򑜢5HS*8G*P/J)4G_jt1 v5ͺ۱ݱZʖ*[\4"	|\BLelFjVSMjDoU9xx^a+2\|N^&gӅSN=9#?7e'uk]!C,Tp2GrFWNhDyiL)@1c#-PFpeXkb)P'nN57^5Ԇ6,Hl*yھx~97n/^\Cbݨq`>q$>2y!K(J^aI Wضj:(7/fZ"?Yy3 ickhc+XxDNu0Q	Z	R_I}=(30[i(kv3{5"N˟h8a诵ɇn(OcGK~+KǸMAIg?*I<Exi5TàUGLSphBUz7q3T'{GVioAG+j0l8^^%cu@;d^_.I?!-3UQ6d"i+ghۯjFX
+LJҰ<w9m'b|뻽ZȨƆcQkz$88PlDs%>i^~3"(;r2_ծy#pb?/J@`Z22U)fն3U@-=tO|'vw<+{#l~yzyc͢xo+)}!]6F)Dgײf`'9fn.϶[ վmxv8ĠN=UsoNh4@p{U+5!U[s=6N{O+4/^ڳpxo8xXǴ/:ܯ :uIP:}F3 F:iAՋOo}MbRqjQ=Qk0&yn\ދf&݄B(ǭ~\Oepǋ˖AюJh5kϩ
+-髗J݉S24@zzzTma
+s]`i5}j&[<<pv Z^/&;6`=L^'r De8n_H?=4RU|>[}yu,cKѷ۱(F4:zYw\Lj;oܠA*c66su mSQ*yz@,dZ_W=K2MCWMfM${2YƵH krj[a}5#Ch'-5ڊET-il5v(!KTҦ>#̩wϊG54* Y#AZPPK    4OZpm»O  Me  "   ras_commander/HdfFluvialPluvial.py<koH?4Ya!:LvBb!-$ö&wIɹ`HvWW׻GGGϟeqUMo"k8"=,cŒk6^Iӊ-KΪ:^'.gM?Sh*u
+|=|HhZL?;a8[4Y\RoɓE7ߖłW|l')4ry_?;B<,w4_t-ʚK!Cvl3@mr~2F*j&|7Y |YZ[F ^Ti/$5/{&	 ڪ!l4-_yV[fw|Qq]HyoWbgUu?ȗfÊ>RV:Ko/uة xs1($㭔eQ$*
+]Z5qҳ)L׷lmg%NFށVZ@@;6T0t50-_&BDI5eV1ߣ/[J}TGrh\D\tC-&~H7͆݃j%.#Lwbu%v.lވ_LxYjҦRkhJCȩxVzʮd]Y":XLLr &=yhŭrɐ"ؿ.ϑpt%8
+Fq,F&/x T%`bX.cޤ%߀m4$U" o.2ZTAb4OHQq L(^rXc?iUe0j$ߪxCl!`d Юw0đ?G32Jsw6_'K0DG.^!mFk*YBhDC&9~:Is<xXQDWɺB2"Dͼr=D5Os`| qĢ";a8ɀAw<(%j_	˙TQi&$[dwT=MȶVD,oUeE^ѡIA*W "2@+m<Ʒ3-ۤc(L 0;mz|uS>IZde88mDu%ځ?#tr
+Ϊ QQJ]o@FZJ`"DVܧ?eYS~AaL/q
+PrsĔ`v$*45	 йH{X_WGU,gqۅQ"g%5D!P ol[d.cXnAp76+wʖq1b۵AtRDGА5O`(,4AR¾FhѝϝJze؈o?F,%J%'_n[y4e
+B!ɖdsfv Te)+ZJ:=$@FhxICSgTCT11YIOћ'	2!MQQ@clN``:lZ3v:(n3;$Kon=LxˊS	#zJAb3r 
+`9$}=M}ZuUe7_ȑ|K$x]u?i@ynt]4bT1HY9s=~/SQƉ{Z8&ʆO0toߟ}e_O~=(^vn'0py00B.mu(ϓ-@H]R	>L*(s^)Ƴ-s!lI)z]d6& ){.EҎ!C:GԘVj8rQ+ Ig=1xdC (1Ul ](a&=$rBBU\'B) 
+TBMG J!=Nף+dE
+][|v0 ~>¶!b`Wzݵ,D;ObJ@S^_S?J-X9&ESBWFYc>@lBBcvC0iTCv{8ĘX0kʞR#+v[íAO%' ^!ЄG)!\Bk@)A'pcĩɒy1=
+"E3ؐ]4$hHuX:geL_߼`閦aI
+o
+59L>qYCM:RLICf#EHheM*m,50>jNV\vCsXS9!*'A`.u4ن\[;૘~K\4a*xQx3Jϊ2b];GI*VhIN否!(<o6<|k.D傃M@QF,BK4QT2NzOhCs"+e;J,Ck:~u0#P8~KÂ.HJ	NK+k'.y!C~u=F^f$!I+XBPXLKsXE& z-~W?wUʙ^d=і"၎
+b+`Je&d?pr~a]jCXoрeC%AGC00,.KЎ;D<]ٲ"2d("mG_Xaڢuz,]YeX&'lW,}^>~u7[@?S^:Ey*iG,^O_c|\hݟtS:WolbIyU{b.Y33n~xY1E.Ah׷_.ίu~O{ֶS#(o*81<+$wṖVH 
+p+24v^؉iOiBTMfZ'jXܤ(VυɃdgdMqcSgs
+c=NWDC!Փ!(SLw0l(}! pǼA@G8&HT780̇tdl{@aP)f6Ju%ӌ	Y~{7[-ѹEK!X34AҘN7:zK/~tcy< 
+uӾzBlzRj@]#\Pp@0)4-9J N#8E>бx6i%8
+JmǮ;D)0}艈LP'fpg8w
+6܎gF1hدDd3U
+{Y-DnO&L6X~,EYQqp8Dz08{b*[:jKGg0f1~w;@N+_Fsz;~"2 $ʩ"-%2h
+wh?[YR.m̚tKl2ͲaRU |n{as`P/B98mȑd&	E.\xCGC{0&NnEQb.SH4P|	H {6h
+Z)*a6 y؋4v4Jc/т^s`w~Eh"7=mHOI'GGѿ{PQT,!nef>z"+>rcFv\Hf+$qע܆j-:Ek%Weшp	Y і(Z:ND~ j Fh#`K4̵.`C||e[H)Umt d=z~mZV*Ϟ67rU3'iUsJIaSboFVN4䄐c TX:	;9S%ÐmB%K]ˉYuJL
+JwM<(L~Du(jG fK!=O.)c*(w2kr&T qC{œ->R0wWCEj b+mrGeT S/R^X6NԵ.zf3{y:ٽl2cCVsei?|O
+18nٯ~8?=
+{"R@T"V\b/NP,D`"6<Q(E*ׇSBxCqtiZ"Oo2^]rR\hOu`UG:ys\Flj;(ɅUkWJ FyIDKD 5EbtPoCrbA̼uXX^*	KvߜN+Cxj]n0S̠tKvWuAX{FWsӖLu}[gfqG2tRx`@ؾ?Eg9Xѡ3y"L`LrtiAcL;=ং3fڵmnSu;9">oqK}*abꢔ^s%8(}EOM*ÓH8Ҥ8{:̷uVT;j?~֤=kqTR,|\|vV܇za[&[DMAr|<M!Yx]_@hjJ>|ks`V̑ j3T"ɋ@A3I!!4h2E<Iv=QIs1,LY-T{ax~GhS	<IK9p/aƄ"hŭre8-)>fcCky6I8E_f<t>M:M<PS-%&3hr=$Sq?5x-(X"Ƥ%l/zt2>7c2Bpw%y-Hb0o	i@L@'2]{OMmp/RFS@l
+h" 0	&Ă*x4C&T+F?`^eOpj|ɵC00^=AHR۽;A5?躡9}ۏeQM68Ե/@qnyBkq ߺuپk\(DK}mFxL0*vphw!wQzsL]sP-3umyr1=bixRJ"HL
+0?n\~(,..6$#ysw[ %!bV+h\{oUզr]$$";
+1X`򛢶8j!<nhx}*r(7]#lc9S 'dEgZxM8Uh@AĥFp
+,j}C&#"}?&l/mتJ!J`6F2HBXph+Nx=!$zTAr**"AYš$EF ?jcSƲ\@j
+]0hV'ʫēA;xC6ڗfU׾.|Ւ=?3ƢAٕOX-6FsZ27VwLZXеꭃk
+}Gk~-j0*QOGdt_!3]f'W`(9Sچ`~hQP}*UͩL"6pem<4;F+ӟ9*$֘8xäx12/؇bSFavWRվrWk}3Ц>݆}Ls&͍"@|Jbo?۞ǈ 
+C!U^-' uAmW"PK    ZOdw'  t     ras_commander/HdfInfiltration.py=ks8SkJ8wzgݹ\*Z,%RKRv<n ă Iv&s+n,@h膶?;Eyތ'$YTigl$o8aM6I36,NXl4,*.9:xp޼zͮx:EvǠϟM\]dM<9t,:GItvQA-=ȋx 5E9e㨈9 kˌϟc/d3`|h3^!Q> S	G˙  ]X76~12W^YA8w0Η}"kCsg+A].1I!g9aq1efl4#Nf_vs'2pBMtr)/㌏ٝϾ	Dk.s&s8쇆5ňc FY+a*C\C͊2@dT\c4>`*'(J|y1<ƅMYt0p+l\L!COKdE
+!f4ȯ;ŐL>BZ[`p%=$}b9rAE ;<	{:.-*B׻#D6r<l_Fg )^oo?wX
+iq}<RX/b:/Cěd#*RVKX=H.Ɗ?.KJ_ՈD8.%Swf4(Xr1X%Mk!2/Q$R$W%fw`@)wl'rV ٬ԴH~ɈژҌ498/_f=ChgSe aAs\ct)"'{`JgZ(49,L~Y+$E9K31p1;ܲ{9_=*=}w=fΖ"xj"E*ʯOE<ˍ]%MQԨ4EX]Tr1H!Ol`<	HpD	(_/ĴF֫	~r}_8?c ]gHy:'w'9CD=h#0 WmVx2ЍJJ0DZrĲx+i0_q1vs>%I0/B	GG.+
+IUR;OBG?|1~x0- QU)0_hchNoЬOgy"08["0^-hPvˢ)"}QHwbA^",v)lw[>G^,"_b#̓%4\`R Uq}Byc+y:Yg>a;΂u^(7)^XTީB@IJ\+|QNNRdI x ڽ֗?&iί*`!Z^G{8?) j=c>H~=Ii&OIBg+r*HncPyw_.rx`@o_oQ]MfK/Bj{Ģ+\̀%Ie
+ެ|3?cN E,%7}OǼYci78fQ90I9*uLSu%s5#(?ȃ ^%Px{Ø|н5vuOR*<՚&# :Xe`Wh}	V>>}ǌA%'e,ؐzW;.,pEwoK!Wh]%3>[%y6//ՌBf̑tsOQˉGGSE%
++|;fF5sڪyQΦvqoTf]}Y}b(kΫm\nW㓘ƤFl5n7㵐|M4bHôUROm&D5)/ĉ>|Svlz
+m?;;<1ildAÆ}p+Z,2Q[h~#R5tfY!\:oe'+Ύps_,J˜L#/10ກn8fÙÚnl$o9$ߗj\9$RSĜ)^|CyL4fOn}Y8=yTW9gP,GR*s[شMm`s)@GIV\UX5ͻ1$!?lqZdbge]md!Iޙ-|uDƓN}|B\k[9^6ةh3u!TgiuE>|'fj0v&6Qh'U?NE9qy#]7kz5!
+^j+tR#1}T/;᭄߆%#<՚Xl!Xb:TWgൈ_kй%^t+E^*Nu>8ZA.%+YZ=!cu>G\2IzVk4y'F=хRۧs i#nJ3g)˅뉒;pY<*O>os4'"<'Sc+IFT]"GgD<$%W`F 4V
+8VYctO`٬h>֚` ܍00_3Sd eN;ΰH'  ЩV( X>l(OW鑯/Sn 1᳼{{
+/J2:.)UQ9x0YʀDgߙ		p V1ggMp	lO(edA ˨-r%wy4O)\ƫi|9ruiRuʄCHq9U#0b-,xgt%<L/G>F
+=LS
+QhʾBIed~Ov0VYDY_:+$Th_"k<a0L@N.@}EcT4.QިMK, rQ![mc*	u2
+ZWl?}N*Vi1"L>XŹgn]3ޡ)x%hg܍avaa9CEhT{SĶn@_Cpl
+[cџ0ٝFsi/L~`̍)?e\px%DTJ)BT,zf;j$_yf6tFf]>$rQRgf,e:x(lQLBSQi9|ӶDE=9
+!`YnaIc4-
+C@f:,Q![I(V45o,#kqkɌXH)t5>Xzٹ8߻GYbkRcئ<9cc,>*Zaf_M'ցSU_;N|PY|,~>VJkư}a8.[,faK3	x/E
+9hLSi%b'՘Noʚ``dXѡ7i<W4sS;|k8&G-GZ虘04QE2g.Uݱ1ho2XPΙꃵ-*$Z:rjrUy/^YuX̡S;lakbYq?]P#Ag#gWY<T_6cdJe,JrlQE
+-)Ւ%I>	AaevJ=EKd |9smCx1/TXnU=2+Xq,w׺H{^^6j5QEX'~~s0E8<R'pd:Jf:J3LeK^SU0@`7w
+H5(kH'ɾrɿx,ha]8YNb.'M0Ȗr`"=\(;.Q@kvw؆pbDJAIFKc&Ѫș=IQAcUnP1B-%t~T	/gUĦ6IdSr~^dױ7Q@ø`%3p8tۣBuNwR#ʹGLPZԈ6oSeMh45S$Fc&e4R^
+kT$ʆ~ptCQ^9^mb-R	SRڲt)@Z4sʱ yvLr%˞Q7NRYTb9Yu;iny9Ygtϯq64J1)hrb],׻Q:Sw\\Z%p,FW-o!GvhIoDD+ktnyvQ7kZiY=]^M>z5x9Wۭ}g`~9barɳ}'!Ѥ5DGI[yyȭQ-yOF}FyvU^kD_to<Ԓ]is&<2Eh("rNS=Տ4osBYmpHYmI[yeҡe?ߜW<6=<[(_ny-	U`ݗ!0FŋwѢc\}n$eqjKHɉX=6}F^^fcm㶃6`cHXvOl=u*Tk[|k
+GDY3CM6shܡ`ѱ:Usk&ƋWg?,%}?&#_{.NZnpvvZ,bqH	(uCYx PD+ax"{z2oQ$7ꨒ#iA\V;GOtUDSU)OV~g"'X,,w(QXr>j	䡡RX.eJaSXOS80M,6(V	&
+K.ELn~S3b9<-$5S]xTM3װCq	}6,ͱRuYѢhsۆEpCSMH4wRE:	p^}Xdx. t-g4l݈dg>۽ۥt;,Z;*Ն~uH:ΠK5,zV}vd랸x݈5ӬRs*k5Gi09@uf5#OxCNkؗh{c	<h
+ZK;,+&;b5
+J)Qdo>PU4gs{ah<(DTEPkl"̈7-yqd|1BOsRݦXk*eXrN3 ǕFenAJ+g DJN$ra|GXͰk7lhKNu{V6[c,B1s+"i|pTF1kO@cŠkH+x=Ҙ>/Y½J܏Һv@>Z_+5!d'@U!J\cL UPc KVbe¾- ,J0T2AU-=$@7`^DA~L&~mAT!gmy/KS#<}n>B<2elikdy6)xX+exM&cqxȲxlr<Tx×TiGx4omG#[/~O79ȇ$@uZlr<69dM&Cs ۣJ"ڏq}69M&.OPe'Cp?hdMǓuQGM&c-ĒU69M+M&cM&cQM&ǃxdvF 721<*N]b=
+ć>ZdWF7`{b'qۇ X́?i3W1IZ3(M?[V@C\R,JCK
++:Lb7'rM i%
+twHۅ6Y!MNo_/n\eаk1<]mȟ{
+3'=id-d6bҸl]厸LJ11
+kOLX#T);kߡaVtI1&~ܭh1.KW)N>6x,ʃ/>O]%c&:V6:n&g
+5$͇!6D 9}`:9.Yt6<#)@,@Yl3@lc;É!(r7 Kh"	] Rg]Z5ug5%6a_%C!_}^C1NxR#4^6+[G>2GQv fR]I=Iz
+%H@OyyѴtz`hX(.tqg{832A@ܹE#Na4ɨ8TAbQܪg[ebs%CP1DO[̣:6t?#@9l0LpvKtYk85Fl18E42M1ϞS
+p>Oj;k
+ʐ(TсggX?O"@e[T3>r*PGڕhL}'mr5&X7~wߝvvC87(z¡&[fU_%F__km^BK pt(T+0puE3ve7E6U9]o&M̵>,Mо;$A8ܠo`s& 72M2Cg}(ڐN'<Um֢xطo?Y&
+aX3"GR"q[ dei0Ն-t4Y7Nv:GNyL0ERx ^L3P`2Rtޗd#GZ$7[hմCB-nDnUMLLE/ަIجПN񎨕УsՇԒ,`ehî&a_ zUe\z^Q_95u=ΘxƎ~';[T@{+*GU,oELcQZB/3:??Vpko|m85%"a9IIKNך{aHls]?G=xQ5EN"&"Rhd/֧KLcP.=35j҃Hk'ozjx\d,ή41Hs9@nc9/@u'F+j?mUK]K{Oi>G:pR#|6ejwT;At6=	5$miS|%g<IO!T99YtO,'okܹh$-{+޼=p̀UL}s{:^o葯Ğ>{͢</=k_X-]8\
+0ggX8g]|Tƥ[Rg-OsQ=My_y&(ݴ⏺}ȕ\_^\]͖˦]ɗ>LM欫
+r[09ŃTN4eX}!W774m~_׶«nh1DҐѩ"	ͫP_;5"ZW_t/nFwRe:먾HZ>A6WR7Ky/m%9L;q/Ǣ[r^J:Hmnzoj6U/hS\rIwz/[ȴ0"ܾOWp<+ުW1jKN$G[	P[ ٱyt0PB{,ӪJÒluWK'Ah(tXVI@EþE?odw,5x=OY#Uˌ/mlm|zf=܇oїogs#yМAǯ83f^sg5~+4塵1-k*j/	mi$4zt4_>SUx@6ޫT,ʟsS&)i3bC|݁%
+D7ǧó'>tGOgSv_Gͱǣӣ?7GOg>1)7G'tS <y٫v|B~x{N^GBv*%S\F9G^7`bNpr
+J\fr t4Nv;0(f+X	ko9(iXONKqF%0TG1vF_Ы	<IgcFΚ(BKwq'W4-Pt)vXYN6tQ3Ab>RE=#&%7&`bk[Sַ"ES*&oCCpC-QE8~-G'˙Yuų`s1nMw{],C(ĝ&Bo#u3L@=s	b́݁yHv=p& O+,AKÒĮQ YT.*fr?%r/ٯgjOQs
+xYwY0
+̸ebC|,?xcaHyߖz%d}nc,=4
+#W1z-r[@ύ_LEG+B\gkhh7YJ hoZ+T"2%ZV a=7 r(8P$ iU KdhuIT~$*A$WkC/\.{] `0.*I3>n"he1:7lJ
+O]a鍅a1͈
+Q/j͸/4"ymaR#-֐7,YYw'EdH#$4lP4KZ6hcEMAAU&t6Ez  WZu{E˕e6{θe7R±6׿E:J :)?@<<VChRQ:L+xdx[;|,~Ṙ~#v]LGfѤ{cH_Tid9Y<-\rh}=xۙ^Qi:b[P6q<(+/z&玥 c[#B_oDƶYGƦ+#Gǰ	,]RBA(I%Sv<Pt}w:Yh!IrTe aw*rܩ[^/47۟2}p,c>s*sU(ç#7E E)#ByrV
+#c(BS4c!l>p'Tc9*90٠sK4W"U.|B1܊A<+^wnqGY(s&LKk8f--Z[V!m!(r6;XQ^֝tEwk%Sfi<HS~:PK    
+FoZ  J     ras_commander/HdfMesh.py[o=RWVN:!Լ&Vj{Uۻ'!
+kW$n~a;^_ݙٙhw*␅IPl<H$Nl'A#开YZ,e/N;z^yr<.%.∗WYT*c*b 3'Q,
+͋lei"5.<`i n !OgzCՏqZy"H{zIv)UUWLX*I3X^*9yhG^MX2HeV|bqutbAb-&^V2>qU␂$ȹ 1P+EP
+Q<lNDq,4*Va*e^eŀɩ_z{ko+('8=;}	ҲdC0cㅶAU{.t!O@{	9fԭ'	9jWǤ@}( <o0NwBKyBoRN}\V3\QPDgiY-9lx}twYb#:O,^YQZ?eU\8@\,$?l}~1DփS9OSmq%\87v.{=?]*Nhr-]P!c?Ԉ
+1)YrA҈cq/u5}X	wPˎZsE4w qV?8)'
+ݣ&.S.^<y_͎O'"~{˂
+ov~-="ȿȷ/PՓKzEb,rxU3.sav|fJKH8[[X׏+wJ'fyWFg	KA8O?I=h.>F[J!d;3^"Ͱ@Ci
+?wMz` ^m&Qmj̓$o)5<ّY7h4Em2.ZAIlTRƗ9>q,͐f~E
+l~e@EkSq1`TP/<Mq)`j
+)8=Q^x9q@//);aKĝ2Xvje3G:jfl6zFy[Q;?-- 1%;	 ek}]8|r=jͽe[b-&]6lB0҄;DU klƉZRZӡbY{6 bLjfZM}C"tgrRh
+bTN:St<iͮ!ls2"zel\Riڵ3UD5yOϰ(%N"Z/'4:Kyk}fmd7p)<8؝cai;p04<_M{L?*< +G<y1WMONS5%Ev:௡Gn矠OE]zy/680?$aIJ?
+S/3>apeľvXJZĀu1t :YEαxTZ>?A7]?R,fwXZ//$_Ɋ3G	\g}|YHI}Z,E)|D%GBqʹ6aml$Lpv6ʲ.5EY'&_]@-&?pX<NEPӳIk1rh3쑔c
+O˥ՙtF8v5osU%iXڬa"1N!h9O#GP*6)ZeBj'g/uL"(-.uLTR#FkMEiR6LT߄zwE굸1,]c·ۓW|
+mwؠg.ѥ0 ˀl_n-UۡɞgQ*E1Гf|rUqN9 VzDj<eg(,-YALʕ()cʉh^l:b)B5cN;]%j(v(EM8ASLG*V<ň_8cuEX(EUV6ʔ6Bߊ8]%w2ve
+e-,YmYQ􌯮qr~ۉEv2.q]h{2T.0LVʞl(
+u7Ӛ{$}FTצ}d!on_29zTT`G54uD*A\}|j <n,59)TtNU~TDSۈ;[:3zpqE8[Ӹ$@~eK{;f?W T/!\%Xrm@GSd`4O#t.īEFgS/QƘ=qr5(r KI	ǇӃ_9
+M+j7HƓ&H/4/W$B !88A\S7)
+qYF_AǄƮ:q8۠gJr*ћsF1G70l݈%"mc5on4zaٍIF.ncȽO#prC}ٮG'MGwK<K>$Oު͆W{))ACZ~y<xɾ<`yGky?xJ&-WF:H1!zC)ncL֛3X~K H㖕'.'jKK
+.-ͪM/5@(,jKbQC6ZVqH5x?L [}]+S}FF~V)Mv7. cl;>!	pw袉ځQ2hkk89ljo>]軦zU vnm"[[$ I?>D+l*	>n[%N߷}CEZ lן({xvAnWӨs)xdڈ`:d0qG$e#hj%h~[D6C&Gaw
+zvRu(i5(x5 P֗$b[љqLRG+Cq"gPK    npZ^  }     ras_commander/HdfPipe.py=koF?n{.
+ES;iۦFn!-l#spbYə3g{<xppILgٖ?|<g5לmxs]5
+j,8V,)RMy]<eM.9kk>mpdP,ﳺ&^
+Rv$%cvś.WeYS'172~_-E	 ڼy_VvWfK@-K&mr弫s&v7l]V,a5Z	JVvKl=oe\SGR~/UM5GztXGp.2lYMR:p^VU{}ˠ%V@ulyuCYwbz@zj@Ti_f"嫲J * <g6i7WUu%_eU25h*vٖUîu7EXRb="f5>ܦC~xqTUB nU!lgp+ɖ+вY vՔYL <]|#$f~wj pb7e?nI>eE ޶!ؙo-oMkWOkLKU^0,Y6JrWFR+cb>Cpرt\Ɇ/, 6.1\{kS=3חOy6g/O_04W5ul0&8 j:cQ@M;U*[XOT}eꆂ(NN
+Tɀ:UѼh&~>b}~JR` `}%:?mX^둤C؃i TaQ7w??}p@>n^T .Sx%J=J!9}N8:KW^v,؅w'e	$+pk^b|W7|@efDVI
+ay=fuˠ=ǠmA6[5+gRgLJc!4f]0a524ulT&hN݂#%Gh/PIƎFv{u4II+VǠ"s,XtbvWXk(1jL1DرxވK)мD~@0Ey^LeI
+Zxa^aql.ӄaJfolͲZD+>R	Hؿ=Dبė!}mk0YR3
+61ڢ_URP<X-[|l_.ծHPQh<N 7Dّ0][;fD`E  4,E(Q@:P$,iHPdiV;9hD28X8]]ѠH'IxËt,įZq{`ڤ+ꕴL~5U,\ִ^@ I&,W^is+Md˶clt1eӯ/Ij@r-?42X2C\\\:UR\1Jɪ$ KfEA@i$ 6jé)Y挙J=\Q%۝ņіF
+xRn.;C`(łQ`qUdMx F]+p,zcMB*VQ1u#u`Vca`b pB`$5Q8QN?RчJ;a;b>iamѻl4a+x*6p#.pw@d.lY:&DӱB|!(8X#>%U nJcBIaLU=&>R#=$x@RFW:|L^9;W81VeX&nɊw2Y]h϶L^%rZ("2u'ԑPs[Dc84ʂ.D5u'=FvX10+Ə>WUYgO*̀ oP0OlYx>{v
+#?	) kfG~~oÀծ|]NTʦ79u]`\5k܌}%۱g+6ш]K5@)9YfG=P6I/y啱3C踅.Izf惀d5*|U26/^:/^>/,OʫQE@I.*znΊ_\-afxgpM̯;?KWo@-]kqJFkxYj0ۦ먼.JQykª򤯊H8MP/֔εXBqLIzB0^sfErU&ń.'CaZbpW`v⎮?^7֬Jz|iߛ0yz&!TOmʖo#3RVʃw$=4F3 \!.~ƈ8odo[xݥ/NU1lT~$o`?iK@m,PV?{A]<]Up:]ݵ2]qױ wmhpױ2r"QmLBi5qGR'ԛy߀pcE#>2J[9l%iTpB6ZYTb~t*O?22'r]'4Gw`e{SIyUPf9brEB/xan4 4aYGSG>h/JVX悯]|E+ތGq.**ۮh
+"LVʡtp6`,bOgunqeL;r55c%V:DWp:Von/ >n}^хvblJU15 )(o4{Qhmy
+S(VA`(.g*oq?k?yŕdv{le	q?ƪi\B3m]P/yŧ=Xei=52Oq]"ni;WAlՏR.P[[9}TlY}]0@$rnĐ׸ $)q>'r)˂0Bp}ŔI53ƌKVjPS2*H܂V}&kmPNn	[H|SGo[ZX^MYTm	24F';^u?y{[ץ0wn]t)a39GJ.rI5b1:<;lcf iE^Wk#<&E9F_u&;'rO^`9oD]Z6T([/ 45l%z mٚxt%*Ct."k&i4NrzFB`,{9֘bqADV;e瓩o5_MZPQ֋΃tPctu۔w×!Wꆋ y<6X*f{O"۴!*`-.^TlHx1m-Fw'8XE.B
+5D34J(9,1b-֖"'|kTi 䝭wEQ{oFGt%*uJcBHl!uKzE¶/:'xth3E灖}gjjJH6nb12=<t@,+.ۤ'|s~}۟g)}f_C~l^}a&?L>i_]HOv}馘r_we;:[]łٵ<LGH*5NY-)|O'O!>|a%Kh̜,4};LCßu;(P$,T(8 *8,
+</-(N6#T5Xo_H{B,щ ~#a!bDK)+k3Yxn)OjRG9wb䪟*,fYOY]]SoV-nwȝ=z'baz'mύ`)(શz@"a8H}E@wwg*_sVêF۷R2UULAU1MPh?ޣ*TTd[8Q!ժي?/[	(yOܾXeʐ: ڕk>tk-(PCؾ/hWk,y%T[󄇦o
+#26VgF5PCx6)3Zrq;wDW1ך}'ݪ'mU!%r5j&VWj0ߡ;$"wjmӷҙ^ʬ,4tJ킁\.zAB5#'JXb?섟GݱȠ،2h,w8P Gd,SšY۴mk0%ݪC@	A^VxV@-F	7v5L"_򬒂ۊl;يCy厡˷aFn ![yw|mj$N3vn [gU6æ?ܓ1?8/!j<&|tE)PI4tB+kffX	%Lr較(J$耹$v2_m9 ${$|3d*:9!7v8xOI;'Hl8B}>0 ~п?DόQeu&3BCg藓ouzvr̈́~!d_ 8I7c"N`cKRi 
+fS~%c8iRAb⵭f@
+;شԃ[zNB	Vu)JCv~	fy>?휽8}Տ3EJOb79ibq@Xougeb>Qfr:aH~輨(a8nł%F
+cIX[YR493v2a#&0;0؟ƛ{^ԐE
+lL݁N1Nх3>ݒ>>?-6ќX*"-hTNUgNMErcYAE8kV_?ɯ0R&]}E%6~@XRB@G.gz^`2z( #x֥<-E9ɋ|_,wDXh(?|D(L/fBsl~(t+%$$þY59V?>Cv
+\krEQ4kIA"k1|A%#
+%Xn46]Ɛz25WF!
+6>'n8U1XX#-^h{Y:yDyӢ9ܙS`ؽ|}|r-;.ޙڷՑOAZjΒ$RՖ``JbyHYxt[%H Ȍ4yُH{gI:'D݄*R3.^cbV]{Bb&\:9IV4_toiT,G7B 0:zͫ8P4XlL>8DuX8Y;%c?ЎmNS^)b@I7q<EqXmط srVUl,갷hԪsi.>(
+|dJ̬(MT0.U1M2P>$>JֻI6[ޱ܋NZz}l}
+EKىrQYDES__L>F!/49bY#m	5Tf.Gꃭ&~Ji-0lPK    ZQ
+  q/     ras_commander/HdfPlan.pyZmo8 p>-[9l.t@Dټʢ@Rn}A͌D(IbIqH`47qrމ1J\FlN.	3#KYdɄE2Ld,fHB3-Ib
+~%J.agcr==:(H.DG*ԋ8aVZO`)5(2 x{O#i,f2_+1_6ųjqIE5KpR"pXI'r" I )J,YXתGh>*HFDD/c<F{d/,,,6&V͹3ẍ%7,[fY*)"Mį8UJq[CH̓9p[=̥2l|]_`Ǖcġ(?q}zֹ֣̄O؟95[Y(@D) wkKG#R<kGRFznnXdJ|ij.sTf,-MxZblfXEtvT Rޛ+MkΕ\	pdjT{2O=JtX)9#ߝPYwcaI ``$}SS+aCpfT֯MN>ey 6QvqɧrխƯFP!E5pV,cx10ncv:*+p,!imlczԆq!2g#b^ʀTA=DkمGHMjмM0-K+17mBru=󁋷` ^LPǈ_xoá&45a/'jPhd*2[[)Fv0~_C=~lE|uH[u)NC131Gm%.8 GǑm,G %N<lP[k-]*Iy/LI.g)fvGSsHaaǏ<5'ڻfV@#,_ow?$[JӅ
+0kS@u) (j6O
+\V	jfϓG{D z}.]=f4ҀlݣB/s@.W
+(qi"r3٠??XR%OlO7V[_ޡ\	v3_b^njqUZGV(S^i\+?0e&#"7ak8aI=يCiF* Bwg1Px鴯< +MI9|;a _fBmSct"M ]5w!Y!/:ب,QcVz)T +׸_NgA[a,xdP `AG zw<!{݇-x7 Dz/厡Tk~pT~@Rْ#wDrYv !fGo?&7Di1U[!*1$,*W~Bt)<!ZrFapjVWN+H38F4J܀In3; 0cP4g
+×Dob1ଧZ;>f;ŅwpII;~,l8)4%2a@f+xb8/+OI@JMlXGX8RfntWt%inӢ!m<"N@?p桊#5O͋ bni	`d{hn	8ٳ'a$ԆrBR-* ם")oY^s'^Y.0
+U>-.U>9q}.*nNu~
+_
+}.R;LT>y6LiI6Ds GM}']w$EboI0lxxY_fͨI9e3
+&ur$X<pVE>ڰdO)ۭ
+p
+k;8UҞk_%w}G-MT^ÇφЮQ>+>i?`75MJ䓽\*nqKa?/v鳙0zjtKCw䵕2|O_[o7I*F_z_0TtϨbfBetx+75/t	vInmIӁ<ڼp`Y.rޤJ"`F*ṻ?/eu=pT@&g6)`;ѩIQeې	/z$e1.殇LKisL{o"I6ld{i{DwVECџhc'}aUOW;Uu2t`Kx7r<[pOwPK    4OZV  I     ras_commander/HdfPlot.pyVQo8~0JB$t:Ei$m*M[VC|gldp m]=f曏L&hɉsIO\h<
+!0)@1,L4RA2*"nVWC U2rC.u0MTrb, gAQ' !Ѡ "%3*Oݨ}4Fwp>+N`EcJ\fQL8c/(JBf#M(#> v,!L(w{XB	--E`>ťFR8$CR4h
+1
+ɫL
+]$`XNASЗ:9.GbԲ^qF9О۱}ZQQ
+]])S..`w/*܅WvYW@~]ovnVp^OXv3֋\qBE	b̰1O;Ri}o|}lgpQ_P5OG˪KSi'?#P]*EM;W2ja`6('x"<!v{{X&jJ1J҆bZ?r2aH^A6Ԣ˙`ESRrK|ئJsrŲRahTd@je%HF
+
+,![yR$zBa+){9Om+pY),FuQٮA.CEҩg\ajB1Nρg5gH>J/NunXS' :q%LT޹ݞěF} gGVHwk`Ox hR-S$nWVuځ"@S8yܛEn'̪ffXT]9Mx=߽_@XeuA^guᠩZM1aм{#e0ΛKAQm{ُkǃXCg}v>lqim.Ɂ5{.:U>G!dRsս׶g曻Nf>T=ԍI'8w'PK    4OZqG1	  2     ras_commander/HdfPump.pyZo@ 8
+.c]Dʒ;CR%Qr:Ù<y4;KC!!Nuqi<!rEɚU28eDHLBNd	XTeFc"s@I)Rb $y6E	?1!QeExQ	0GɒE'%qeѽhh!Q!v.3BK[9db[dzKBAVa
++ucr*~.USsG)pmML-X'E4N/3L'.h
+,պܺC(uO49ףti\DaV~ʗK,V.%hr}Dfe5],{tP6C&f]D4%kʐ(>\_ސ$a)*hm}	U@Ѝa$Ur YD&QZƠ\DiI&%gED|%i,ڒͲ[n.Tj(othlԢaׇTšoh܉YV;	-5\9kYRYE;|Ġ3Hloc8J,0}cr7L{V"xq00,՞RKaOZ4b1`5%Ϻz[ Y-Ӣ<-=bkRQ}žpIUY`}Sh 	:GhbsL9+yoY,dvw<1DP=%VBfrbQU~? Q?2ɳ"jz	Z<!kÉ>e{'OT}1trZSzs|U`RSU豪ٟ+fBc]xN
+bCN`d_eŬc\<\%Spw<vo;F()yJa\P+XjLMi$1\xj(pfQAsoiXOCM@6Sm +erW&40(M#Ƅo6TnnmN]ߠc!uXMU9Zbxn+,'@/h:cNTU~bɡMU5d`1P]TO+'.J_, Ha $-0tދCPA|˲ntq@s .`	 RL꩸c651Nc@87>FWy ^@!H/qфș@~<* &"E!@neFs))y0!vz{}?Wf20h6+Wx3\7;~*{<
+ZÝaL1xBwAoy5w]35nc	,
+m*`8TN3tG4P">npPƘZ_.>rLҠ.fۓ@8Au!PCe:8&z9Ç >d̽4 T@W\ⱻgS\SumlJʌIzw{9fHi:Tp~.xpيFEott)$B`N\>^Ox{K)i}'7ۘK+bh5*ɍbh
+ڰ-B<C#;T+'[g+FhQ\>9ɍe56찔*'RvX[e %]GPUK0ZF}fE{bSw,Lks .͸gk1{N^qGyc1Wj`1Q/?HE3蓽TnL@^z; m<x'f)
+Q=O.`H	j[MU+A\VةjoV_xxP+|B*fMKF+US;`?3WaN$vm3,Rv>,>x6.{-@Z7c'v0ww1ˍZL5 Lx
+9?;\lM=nĜ}6n 	/9}W;|kZHZ=B͡M12ujlsSjH,"ǈ@.C0|V=f'[ !zPƾCka~g 1:xu5ѹ9Z+s,Ǒ}8s?y9{TEvQ7\\{jV#!:#iPK    9VZ s  v     ras_commander/HdfResultsMesh.py=mo8?pqvqw8n-{#0Nt%Cds73|I&r%r8gC=}rbċ,/.>y,|S&Y:a؜eId*ۤ%lŜ%)+/-%|)Xm9Y||dg+eYER^nlhw<*.[&yߌ]Η<* &`x;iY0[e!ُ44	Hx]F;<e,*E_4 t1BY.يY\1ϑ|,9ɜƼH.R[f'Bn)$#؜ÈثM:gd`&fpo	{K&2 hqTF}Į<aV2?0	P'
+h	{ȆhGHXufM+,Xs\vE(Q]5%%U3|ۮ|KVAcm3+)*c&$֝]H+Iy KW D9o@IQ@y ~y8x&uK˛~鮳6x˃'?luyPBGoS9Ew	(^2{h*{upxtϬWr6iRj^HC2%
+'p{&ޣCze8~ď'oi6J8MH<۬MFc|yvz!tX'
+R.W</}l9py./":=}Nd) ֺ4R"1{'\}.fsT1gP%Iz!!׏8w>KRZtuXpMlWSެyAMǣOo;xy4GқsHLX@zs^n򔖞1NЋӓTyʯPepFMU
+XD'	B7~ypQp.wG뜿i}5 P_5 c}u]YC{>IZgyjBҵ~F*:<u.9T`1Y|/m}콛52|ql/^F5m`lK.ێAtޡvW-YoUzRIdoj"0Kf=":9/<YE֋5
+7f3ٌM *9@%Fސ`'*kq"j~ȳ$B2%w.e4V-ԻjB!VB'aЊ$ɼPV;6h#>Sb|䪆=5CUG3pFCQ;拺dLHFhN(geF_a{ϟ=[!	dk*&SX98.ͮA~Q(| 
+q3SĴx3 FMg0Ɋ$Ҭ#sTXh$Ūreh)shγl	~w<
+6)ICirq4v0QZO0Lj]U{/=/@ǞtNv(}ɪ3K}UV1QUqTD=:0,~rP	?r+)7MiWo<o49Č_j~'I֪㐡 TWm0*uɎyys}L`*,N	]oᓞ[VDVO@JD0AӰx\ip+J*0MIQZ2*[oUjHA'I(luT5ѤUmTMGkV8>$XiD6eYqL~`,-$E倐{E2kMlM^.Umb51@Tj 8!@.g wA D+SJK
+PGjLh8s>>Zi<qTb`Ǘ(ٷ,up".w~,Xf}&:Ӛ5$W/.ux~
+ͯ*jA;J3>W)Exda?R.:]_W5U,yr?|^-Ւ6FDΚ7[ljIۅ2/#FmFYfNYѮtŏ|],D_nճ3|{kv1Wf1[)*R8K/5MҘ_hlQ4O_MxʨaycaiBijV5=]uQiP|u?V2AHAL*$
+iT{+&fl7m?v㠩wߨm~ުzrO>-wk^ ^Ӕ%<mhÀP<IVHGԐ;pR"f2T=dg9pǎcEnJ퐠!]WEͣ`K_N񝉠7AկAypHFF:6[(h&p"Jk7Fhyki^G'oc"N'FGFqaW|3>fWйi%W"$WH^rG܆뿎B@@)+EcJ0]Fҭv]e{+2p![~:}IUdj>U qN'҈F*Π.a>nV Bnx̪\咧H 
+MNQX KRy)NTX|	>C:?
+sxmQVj=dy!✤ۤ =;tmSѐ_bWx{N! `h@NjۋX$EɣfW^أ)(KRr3nz[@VݤX4bw뷀ް
+ob[FVg=-CN&=oG6`3(xC{p.FK@:l4ZǌjsYAI<4D AU LcukbwQ!Mvۣٯ'NOf>XބMX/}	k%~0R<:
+d$Qj#W'Ǘ8/@
+>ubXc)Xuf=9vd{~!i֢EIPs$nXv3e?n0HT_YrN6DZUӣOI1
+SSd1;?[r.|A|@䜽Σ8ӮkBO􂋛-4aW_LҰ%-"-2DP^cD6f#a#P&YMRFZx o.Bq1ZXm{Z};:* 37fU@N<c 3w+e|4cTIAӫ5 ӣOVL?8(#0܉h[U餡@Eg;Wz1)ѫIYi4Kpb$!0sh\$s{Fʞ5	">L'#61n 5xf۴+tCw-W4|ϖ<xtYj9b`^D, 9s7w 1j{K:oէZ-h&7QeLXW	ذȠx/2adHFY0I8IܣLf vu
+= uJhёC=5N=J٠`_F##.}H2ϲ<.oE	(Gc`12(HyA?Ԡ#YT	0'H@M:tFs>0ԊDW᥾r!37gxTW^R92Z+X<сP,_a3ʤrXĮ8.AV/D(O*\c-nwui}g`fn,t{T9 !H:!v>a&#IAXcBQuA	G2o2ui+.D-ֿ	RQݼVOމ	CRL^X("8ݳaM!%_]BD%FOA5 W\vM/ge6~g$
+MA=#{g0yCB\~狾4Z*?uy\.ވj8Dw1P#ƁuO tT}}qI& .	?[\zPT'}aGF=DL	>Q52 C4"cwy {P*l<-*=#و?H}NZ=q=鬀>ZgY=5>Cg |h9Lmbbf:ϭlA2)ꓘT#E]7J.WJF0@{;F~-@VvJ|p̧6-aCE+wh(<7u,mK΂&4iƒ*I]EX6Ix]gݵXppnwy#ά򲢜Gb5	3f)N)nIQ䊧]ۇ;3ưnwui>0fOnC-FvR}(sC%Qu#($r(qx<NtF;q6$Hј.dp#uyc'Κ@w{U{8aN~t{[2B>eҩviЩ1m#V~!՝W՝9 !L',+' V5AoY61?\3(M+V܉&Oʬx)W^ήÅY7Y~<l^'ք̇IUޛ cNM&8M	!i3/CDO\xi>$}0qV-cҥe%4;JXOn:}j7bّZ-6 3	LZTmHMGP-{
+yx>1ɭJY}n1`t+ }ĕ[WBt[ AxX,_ܪs~7HiA*ڢ1&p_PME% |D`g#6iBLFj4p2q@;jG7U6ؾ`sJ]MׄsP#C"F9&FjMFpKp{:M<n%V1VE5PKj[^OvAW'dpVl6@6bJaJ"dBA=qۣl5 {!,2_El]㉲$$lTTA'[a
+{gL:  #&M(FmM)lFnþIJ_s
+NaTPq0oC?96`iKT]M*61bMhc)*Dc䛨v6.mgshӝfDoҦnJv6!~];(3BLv2h_f|FpmiAtxQݤhH	<hMU'}iF<*L/H1ޗT
+s]֮!)p%-bqS:<wO9(5	H=& ` dJɆF9nIЮ.ߵCbψ  N^>͈iծ]C;ex4H]q
+ PJĊ֝-zJ$[Oͻw[caIlPRa) U-"O ,E>^TϫO^㻈C0K@luv`6[D˗Q_5ՏA}a,*kzf*lY6ҞOE,noX)[1bl>>XW~m>Wu]b`e#hOC#rDH=kGa0?9Z l8{M¿# zdUK#( .nMMj^&'4ϥÑ%<3 7Ŀ3pd)2wCKR:Y?$ve+s'	 puO~:ZkO8F"wf	BY[9xK>TD|-k1WG.7 Lr\cZtz$$aջCجa-JOaS@v?41yvtR6C_gԔ>^!/J-zj5;Ws,vk9'M?09XhCE6'$օqΏق0/r,7j
+.!9=>=Fl<.6ErF
+6O>55lN9` VӨD`5?M@OqPe/M"-w)ݬ*c|V|*:uVRxY.?1ȷG׃q02˹8>?ƍ@)طl<:۷ZyZ6,ZX`uKUNe Cpf*`A(9L#	.8ɶnF+!Cʎ4!ƻ%QrLa2KHW_r
+SIҳ0y¶[hHʑ|PQ!pˆMyMN
+PZ D&E>k(|l!԰	:nBPT{rG[@ar8c2xb102M_A=7|Z*j-,4CBAF^kэ%-'^3΁ϨR5femCm^Vh*@x *2ĔJDTC
+lqULtǖZU:*c1: ")˞*KAÛ:K&>Ʋ娔܃wІ&X~MW\]l]UiX[^wQj٢Մ25]mk.hj6hj3uO3(>?`Z쫶	:\ze/;0xc@N10+.X3	2Nt5r: E5mΎż	$7ˌJ$)	O{ST_p}7g)st?yYI
+cu@c03u5*+=zu'C9n>;,"~دBU~NL>xS\`T,vYmeXFbr+"	q. SUiEA@Ua.XSfS&2gfFH-!A=i[ԩR=u E	zAWI^,7,QYǋ|c<
+C/*'37	$޿/En b8à;6iȣL-*L'}^m%´~R+K)_Z ewmD{.-7,aY.UulR,_qEA|`0M+P9`[U{tuVb;J6thX~GHE_sby=qIH5,[9e"XցpnF mk8nd6CYd-g|g(G+t@7Wf7($SlJڱ7,N4?boC_=Nyk|ܕl_j}-k ,fƼwhrr[prg2=\i~Ѕ*{ĵK]H=f[(pj= PK    Z<G  @     ras_commander/HdfResultsPlan.py[{oF߀Þ
+CA>#M) E.%6fR8]hڙov{AxMy*)9!4(bJz3ϣdE$7ty~zx}rC2!g$IFIhYQLbs/#/&~Pӂ4Ew4 !K7dN&(_KO7n0dy|i=hΉȋ%fđONQ3}eiXz)|:xS"9;ܥqHpXrE+1RF=^Pw^{K0E(!W"ZE锜KJ<ehʭTl<`!T)RE[IRE9PN=f -$4J86ARpWJ R,))8$-r$JT=!CME~>&?D~I`$ËqWqO}X-{02a9c{L1tϨ2/OLQcA]$NWߋ.$<\^%9+*O
+lp&ad,nEWb	ٓL𘚡?kbo!O+9,,=F |\ [LZ	ICܮ#$ےܔVSBHc
+	?oI9Z5kSC(,\fb	CCp[5i -j~
+2H$BcJ@a	Q18l0H3DaD&~傛M*]dH*R ?֓k1CYK[	w9U=*LϨAS,f!g8Kh(#rOAWt2%sҞ	j4l48(HjkjO x.Pcp,&~B 5CU>K?q*NSү+pM%Mj|xͽ(Băňe$jrC]@猥l
+ [.uƦ$8aч:@bi՘=K^H ^_aO!rd٠6P(gF4:->Jn6o) 1$D>E&D #!gi9lO>@[EqM1k[k
+#7;k#cBXEwRAhAJeaZ숃Ƽw8:x?'e&(%Q6-)^ie,ɎgGA}喜m/,'L69%u<VCS-u.A؁jU\/!}}(VHu訶فJUj#bOƮFlr#XL,ZS[)9wz_a+=	e։Ϭ6$l}@3:̹
+Yuܝ8D
+	[y3otcޘ'ڮ_] ʢtqD&|To=>[I@>Ƹ;h]x(d`I(|<`(?j0h3GU`.lAU<npHn<f?lBEDDs6|LuZ@5j8Ub /TfC&<Pu[4tyRhT?.؍h5q$o ^A$ǭʂWDce6aAy_Ri@*BmUJ4q5-+*))"TL*_.K?mB:4p"4WغmlJwlq/EuJcT;QhyQd`KuBQ%8~i7!k $o"4T`'9nLd&
+Įei|E!?lKm]ShMyb&R?З[Z<nֱᱭ*i"uv-Unqp,C.?NnBGT] ĭ^m}%\-B: 8@ &@/8EԂL_~td.`-3J)db@up;_GLYY*m6ކ!+ouuXZ.-y-4;]Ε&@6!i	>Nj(*u_ZmE^4e*Zx8MعHĂSǢU$"$t۸hO Pas<lm/xv3֍qT6-m5z?Z+)oqn gQ-Qԡ>5MtL:b)b73}[3ޓ:7PWqmYf=0[Są%E>?	'\w3<[<}"yR.m+7۹U?SmHz;_O+cdQXcȾƩǝ"f骥:CpXPD(vfWk
+h.
+T+I,>_ON,YfVx:+`" fUfjr,[|}Q#1btsS{*st۟c:7N*L/dף#nۏlz`Uذg/h1`Nm`+Nak-G
+C/l=s6-x_q)0?A.S%{W7 |9ng@OL-.^Я3Da"̭pPs~`ؼG~ƻ%l-?	׫qoL`t#W"YqRa{vyeE@?xaV{K뎝}jYC(|<i,`*Ru~ݒ老6OPm{|q.H꾥 NSc
+G{Nl:=@!&Ku宗er&9LTDvaEhi K_T3Kd'Uy~<=`"gB߂raL~+? X_uO"t Ë%ptC{[#«S	Qqf9VF-hC`6F"U2D|YPK    4OZ=ME       ras_commander/HdfResultsPlot.pyYmo6 p?H)jz.nd4 Ylh-Q6[ZTI*w(Y^-Np^8|f!=LNO.zJ^gӕ0VHszrzR."s5<%kfV2$<p]Q?bI^__ݽ'B2j(ɕ\WHӤ8rMM	6_$hZ*)===!pᐹS6_3?PBgyLڇY>K,xg\1)%/\lvq9x}
+62ZŖyfEJmNt3L;cVjMaJ4e	@g0%4UR˔	sdn{su)aT`yb4;uHE҄.dejl]JEEoVw+fiq!yS"yZ2Y !:V%+x7E	֯ @
+)Ek*hT.ſE(B7B8MG`֣tl:Ԛ  蒥<,_x0CR,Ac?P_)L; f'6ͶD/݀+!b)J7_\S*D3J}vPcP:\xeĎb5RI+#w+RI`Sj,*_V L ZdM^"Z0κw=,>f,?T'IՈ}Gʂy/qUI]*ԞjZOHd%k iXv)A]_w=s\o!u#5N&@f|HhYm(zQlj's{G $Fmah{АW}sʴvA{PB52Z)Voԡ\VirJ2FU|\2XĻ$F
+ha4PT;˘ fX]-0t-	/^_RpT>"şs:l[Lş&4s(	h%&%$yl Ph6KFmݰZƵ*tq8&
+SXw=!bfLE*'T%`jPLŋx×+3Z#|+F= U.ݨ;1e<x,\hǊfr {l[5Zs{e/y?\['h	p1=FQFSQ1gX7
+RkN!ؘKHM܁C<+5D+J&0ʯK~A0/"g!J2tP1L|Зhu[\q2{t3/Ze:}e'@#avZ2tthdyL!L r?ELius|Z=YaߺE80<I!/}{=AhMɧ&C|وYa`nEDV»`]}w|8tWg	kWȾS>Mvgr`lGhh1е M8?٣#AB:(zK;:&rM{>}2
+t+SXi޾.$;vΙvQv+wvC4.Vo7mYSCWB,v-ʩ.뎼-[==X3mRVl L%YS	 Q&nAe(nukfytɠ~όe=:ѫѠ"C(=T̭ /5~AUKjV9U˲c3ỲF(<̳F:xvFC5ۭKs'hLɲ!PA3\G#-^na0z%uVn|tT7={,Q"l#2[C;&dw3LE~.Eiek^hY|g Y|7
+"o݁z5=pt?C4 wͰϝup? PK    Z"  2     ras_commander/HdfResultsXsec.pyn=@at@Bzc	lgw (rhMK\ȶ3rfx.bcq8~A<|Aަ%\8M?e!bVpb]deM胨D▼<' i,b冼=C2SϮ׌V$6$u9䂕lC9sEMHkFkZ$䬠'U
+a'1'b7$<GNhN7<DΏgpw#VbK\Ă%2춠)%YQV 0l.QI=IR.I"TDprLgrԩtsՍҬR!>&|[gqBen.F=uT	BU Z:IL
+t|A}yK򶎫Qj рUQUUϟ}-7*^,JՊD+PQ+*XgKA`A(@w])Kl*<.sPF	.S:hIYѺ$$z!%/oo7|:ޑs@ͩЉ#X D[46Â8?):g+6UYn~ sӜ`l9KmSD7X횛bvVYX*m`P7߃}k="Xέ<?IYǢcҸN?)!D%{}Hkf7Z(*nP\RdG٫ !	| \><
+Fm$wk൚Ml!8TG8UK'B+4*Q2
+mmPhb8(Q%BJs~\+\#/sZ"-KjO^%X`Jqo?N":grMs+V5_2U&%{V*"T%NSpxv$geJe\Fō I5'ZDk>YoQ-fLT3r
+rES&2Gi+cu)05X a{re8;ӘI$W?Nbrτj+T%詈VvTTF#E,%5'*ԥ*!7$mslf{Fdk.\A@NNL2^JG]i)+GcD:M	+5êmZ6%Bnc{^27n\9u{I-\fXe7&,dROfBZz))l²`	ETf?%.e'_t8$7?{DVk$'K#C2ߜ}BdfPvaЙxjW=m̂G_OCh⦋fwtTK܄)>lEv,>UәS܉7x7B.K֠ZF	opi~
+=[J> \8KLGȲ3WFFJU@H1R e~YtvSUЩt`R
+UW[<b):zGhXjnQa߫dJCQFfԢ8(O'Gojq4U5fKPB+fw#=V:8#!kneHu@Qv94ཎfAU$GxcV-\ǱICf1ȸF^/-1^@=kkwc!޶ؿDFZ#m =擛³V=h]MWܡ+Ɛtkv/pxXo t̮B1]~}\ hQXuЦ7(AKGA?,ukݘ8XtD&j1~Uǽ?mHB_>ixiO5q@{p{3:~褛!Y3a
+}Hh%_BWԡ4LiFQli9״H:fvh_?9;#;GYR3O[v=u/tΩ9
+w)t;Dꑬ]sx҅]ީ98h2՜3laLv^lIɆ!̭e븝N)X~43D%#fEu~)ě)M/5M)#y\65g2y菘ClAcX'FjRvh%0.gl^|d2]\xz@}}{eXwI>S}3e&NԾ]΁nm0|&:̢/U;UgINKDGT=~J/q&~]p`gb찾;БcٟiFn65uW^s/ D'CpBt/Hnj+Pj.}#S)_N܄`|j|9Righm5fH:.y(#yt-9[ztIRnT;RQ(EfБ/8-ӕ AA
+BTFU
+Kv=5v=/:2,T˄$j9)7L,wvj*hH>lWPjmT#{L,PHj*g`j*5.t=4I%ZbN~=	22=_ǏY|ĀW87*-{IԥV5Cr^^XOi%p]	k7s˪Ӊj?\&N@t?vhm]n+{ZbijwrcV®B~A&,f+0'm>@"~ݫZ\yC+}?񀣵VGfim`M&[6ӣ-@M94f!r&|!%0)x[̦f!=/՟|Cצ:ɕ'Pe qsWM8=,\M'#d 	cY}ĊWTwۂi(OM\n|iΥΰLCRc=R ĴGrnzJ!KciS{1D˛SmoϬ!h^@[Y߁4,M	K@]'`G17_¾c;	6PK    sZA|8  5     ras_commander/HdfStruc.pyk6{A2j{=ƹvm/Ȧae"(%.%S kQpjFgW)rN}YTgϟ]e7UE6'DVYҬ4%t/$"!)w\ UĬgI!]Yr~q"H؞N/
+*wqBR)hqJ Qe |F,,&W"?|+I뗯&54=QI6e$ "	#T=fbCq$Mf$bʝeMz#`THǘIRxHL>*a(XU:
+e-+ʪ`2۹-{ŚW3lK>EIyTNeLS'4KsZ@v[x|<CVfy=0̬Y#״3Fh)aeqK	JKNa+2~z+x$h@]4eג5>y/"5>:o.[|oY$
+Zbi?ؚgybhM?(YkIVV:կ&J
+,p΀htP? J)5ՆԼA8=Ul#
+77WS47׷ʦY9h5k)hb h?ΤxAG MsAKwؿmP#~lQZTP?ɫkr_#%V(b#[1	*R, UtA)b] ̔5cL9+](4 7ڣT!YqfE(({-vjtݮh"EkpOl(?! 1K>ޮA͕_ .es\`4lLߵ3vBǍM5նo(jU%+d37G3gi s\3p5UN͞"i]BJ}dPl7CwDS^kl(
+zynf]:/i伽rꬽCN`ɋrN R	\Tzsr[B4<|EGue"棶Ƙ+JdI#'jqw{D,KDfԀ)RuDnrW3{,-n\7[.HS;_{Bɑ'Zdm%Zi;ʻv=椊SZx:MȯPqUha4m+ƘLg`ȪErD2i`.:XQ"LF$4<9	4exN-OBmI3,=yAv,Z 
+H` {upA~|̻-)ɟ۫rE9:޼:pM=b>]'U Vp=8	utU7g뎖չ(gNmx~8|a~]Z@lo>
+F0bj	Frt
+3KpĕJ LA05Drh2Ȃ)ʜ9,ck!zVF՝o[d1 ˪{|!=$ۑF'D)i|{c98M}\wyN\/6Ϫn.2{\,A9R) :NyZI/}:KQq2݁$KX2|ڃ?$4x#F?8Ca@8li]Lpxr@A[pZq_ VPVk &/I: X&)P"*ljF $J!۶~xqbbfğyKZ'z:ܨaÙLqGXaUq	$Qi\n%!h*,G=Ժ5c@66/09@B
+u%
+W'$4:\!+]L,Oi	6BhZO!,ݵc%cСkJ,>tX>9} 钕J*wԜx	Y-{V;3$Ro/ds5g@></h6`<U([鉑\U/g4NTBr.Oz]]R=*a*<v4~WqJ(]@w,jr+rA}ߡ).įZ^Wl lsyW=2FC@U<gY6R{D$?2YՑЌtԤpSi!4y%[Fn[5Os`Bճ(L ,Y}Xc!2N~tǏ;!4FÌe`遝sPpwMp8q!sfԅԨ$q0swIf$Xy$W&Û1U~w#Xn8tx !E;i,))"\Z;h4=ӭDjxڀ;h=D?X$\й&n2_q.GtwZ)d عY3SMհ-Y=&;2!I[j,YrBz?#x>Fqe$PF"h.[AUJRK
+Q^%:Q!n=(ZWqf^Ы(MvFƁ**U!A A~6@c3/!iTr#UwȶÀǑ&}gJ}$IHK<ђOx#KZNT76C?r.0X;N,Y[5g{1(/\IW;^boZ_|.4uϛ:Ζ˓|j3,={JSfL=/q9OH
+Nm!έ5yU [53?t=<e;3q)tJw2Sy*	S0W.7PBCmAHgOyt8yaȅ,wXaNN~Y@|}u&]rL\-c}D81N{4lJշ~q?0_ޡ0vQo^7䏹Bmq"F(
+ޱ^`4njmwG_1ʛfKj*CjFtTm%ԑxpwQ@_P:m+;Ȅ[Up{r1#8As`=mk'ַTWknWSl
+-Lgv+;.3x5t~T#?D7ܨtG7/^}E_;Ԫl	\V<;n,"/C:|Do[,_jfTSj V?PK    4OZ s  ;     ras_commander/HdfUtils.py[m۸bVv7ɡ0i6wNdsaoke%UqIԋ-y-|f83|8|`08>z(i̥<>۟'QeK<QbEdQ@0]WwQfϟ=y=ba^Q0dr|r`IMZ&KCLH 2-D}an`
+n]ܿʅL7C0̃9 dqy\ĂK )cn)ixiͣպ`r..
+g [sB$h M7i<(4Q)WhfQ0YGeWe.$f\`%؍3ֻ䅸6Ah2KĂ/пmi&rn6:O|%6")Pgs<"}}TCc{1%&U0"\"e tD Y:: 
+P yn5 *?ՁvqIXDvDˢv% vXlNQQх_Uj#
+0$|>g)DG 5rq'Em0Jyu@>Hs
+ʙ.gU9qATf:d_0z .M@I/UU\3/f/aϟOf۷6(޵MyQ;Y3(UyBۡ1ȪK8!eB;dԃ*:IeZhVyg#,y^?qZey?J4E4ǚ");DXКq^$˸` EgX3^TF6Y慄AGi)DZH58Elt &_ǪQrm~UeF,x.y\,vY{#]YO2Im2ʶ#^CJ׏0<_B!ߚ?ExK=UT?Q^->CGa	
+C^!Ḳ$+AmËV?)Qs2kz$MbS؛Ph>b&IslxiA9ǤHa,Ք]O#QzSQsl`!*uD!ڋXԒ)"ބM\RfRebOm }56O,,:4 Lndea8CF}+H؛g/̞W{r)_
+JEU(8vƏu"M8o#tЭ1)ӂJTVj<	ǹؕ$_IK~̈́d`!70u& iCrD!(TD,V{E(@E8`XW}΂P(u^AEN`F\8kD7/'P˔_O3zĹ؉	s$oul/^KMó#3`67@;0G?fG7g׶=l{G;ќ?Ĳ▋]ntC|Z5#24#MW\07Vz3=BkM/)dh:@5bar#@IŷL]'F7No',H!@A$
+=Qj7"ѴK"|؃§46Ss0B,՝8B7>Ϋ]bZjaZ+*{;Ӱb5{RSI:"}8~#]o)]ue@h6$޲O2V`[nmF{'((:4hlT :60v ZÄ́vzsZ[vk9^[/?(|Ҭxzd3>	lr=s	#&ldֵB,@&jʆPBRVϦ$-j(_Y2Bjk=$BƆn`l>̳LE]U(F]4یHcTm|Gr5IÖZ9N_==zN:ѦTb:rƁ^tsJNqTd"e\ xAlE`/)iyީ[ Lp0kg@Ǯ>]zo`rktǨQw}z77g#viߋ'D?60b:]аNxVsH@rLIn֌A6(,T${M}˨̼̠EZ&v%oEyX>]:$4`	pG61[xz+AFV7/+i,ZQЖ4V
+Ta~.8|7"nzIN e{ ]40<^Hg;GW
+|1e8!.jag;dq+|3ۇh9,j+v	FYh⼫EёU!>>'S eTQ0CKL=Ї5z@
+^]>wll1;֓EqWE)MG.Iz]OOZfph1dt8ߪ
+B^NWbkx3~0b-#0Y]W)8'5j+;&ㇰ37EК_$:ZM4tCyU n3i ITPH^ \a7r`)uêҪоH5ViEiVڽbu_;8~[4w[Ś *6p=U.`I[kQ\\_'ЖϘ;Zh2 9BHSA=#rʟP/^|S:zGUW:-(+g'^8xHu7PO*=?]4<R(ք}+<z2Wonϊ]ե H #*s[NE괣-Hks`zs6!7j@vaCb+d@{}ðʙ?}q qtlk7LT?A}:YZQ (Foo'q~0#R}_w&=sudtXR8=3|C yi
+4CK\fe=po2J[pGB{LO'=7dK1duXAY3ugnY##06Jɽ{lgͫ\Ҽgݫ:lZoܮyGh.²4B:Zٝȅ?潎u[ڡgNn:f[/K:eÞ,59]2k0>
+ص̍sоk_sk9a2N/ՙJ(وg>Ϸitkˢ~[N_ړ`7B4=u"jC롽^tIezT<UwqUe6٭i#Xb'%]
+6x=yt؞+N]iS]2߻){@: 2e(VV%7PK    npZM@  j     ras_commander/HdfXsec.py]o۸@d;Iڇv7Hڇ;X,rHIN}w]gȡ:?;!fm/ϟ=(vWDi2c݊"H(YMwI[!gQM$*F0%Y|l[(٦(21;>^Gfw;]GU؄+Gy'@X`>o<IlGMF1{upV|@[J߀-2٦a]mN^8ƶccؤ0*XYs*%ېh@E
+c%!fQT [P]b5/<bDGx(`Y0zF{R3Si6/Y<^D/3jrDyrWʷ,Sb_`]b'R{1\BA5_5Hj,"u;֥ERlV3%Mb%!i3[qSCP\|=M'wGd̴= Ėm" rJ ܑ)/LV&/PZLPÛ<K NV@]4H`8gA勌/a-q\9ێ,T3>eUeD2ޅ(imym@5=ϰ8]DS(8m4/%>n6&m=͒<ˀ/<PFCX׆Xl1"U=5(YO؇]\DGؔc/;ܥQ~A.P?tzΡ"͍} s0lWLP{eǚ慟tBZo?Q,t߿}q&HVs'g[|N"-c, A2[40>G+)lq9i8;) 9mAc ~,<]];{3R͏bK.U$kpWgLNZ-}.p-LwX20b)Kۺ_v[$jCűuL |oKZp33D90dMU%*Y`7XqհK5sUJSoCr wf(u,Hag6Mc0G3О&|̎~B2R/586euّg[><๚$5U1	K3lXWaTL *&G8\z/YzqՄbPYESs,N$8j}ءF%ri|PZ+Lc2wD̪gC'J¸۰,#, f#h=*Xf31❲SUgZw|qLNzVL!:N /]ϔ{ '[^|y'	;bGF+ AB|UIx||Q͌AAi<Y!Qa3xiP%4έץ9nafXfFqc.*/ͲH M
+6TM^)	RR 6GH=ʁKRp=_!uW|"{U14D	N߀;O0	^/XANS!8릎= U
+~͇Vc,]J,A|v^7K,ʏFc|	0Er+n
+qZ $z{@DClCk慚E!c)akʥ4
+S,?Gk/yح Y`nNټepYW=Ӭ]2bS+8"\^˃dG0XVqw&WK5yh`O*ɖZ#GUx+zFNdAj d]9̫MZ%2A&IPn*xg5SB~(ZcExQ;,!-TE6k'5.#g(Da8|?4*khk
+OeYQ%
+T>f?W-`bS<42lBS!шo.Y_OKKrl/oʩy^Zۄ,9shoQݠE_5l4ӥP*ZjS)LT
+3Uew!ľ ^C[dلLh<`
+gn.?\LG"m(VNz?}IfK	FSk3hU!x8!&ޔZZ)kX`Li(pTK)xQf!.aX*NbD\.SP.8x/YЄun] \Լ7-C_-cN_V?WvKGM`_a!fbR@%˅xc`VCGMK^j TOp+}ԥT>X7d͇rѸzW+@,5ҪZVKMbYzi_6А_ea^Zn/T~q¾o%ԋDen`nҨ_C)ɽ:yE+ƊJߵSͪm;ݛ\S!OZy&,%P{~ǹ5FGښ g:zBj*D,L^BK_5ŝvCٿܻdkA'_fט&4CjY5bQU~5j\[,GBa_oqơùrg&@96.@aTPuOѳP2? ``U9%6r귚d6F>չj
+"o1P-4$|܆\SE[afzYԆy!8fDbuygqOp\^[7-E|hښ&6֡w7^O3m *QRryb7_iU- [BA֣I4+KR9؁uASh=zahea
+UJa\Rim_^dDe~fJVж6x_L%!	QcїH?!z*(H̬Z (䧘rU0ct[m?,y/>iS6e.:Jjdp\#>Z!e-,Q͍aj)0S:ū[]fy]R6AIz/R]Y]ols%s^ˮgV2!qu:YL)~OFt}|~>Năq''$jD5ITBL]s]y>FW:=a|Z
+&j,Bsb-S!*KBy|PXV~Qd?m[@I'=]^hv^ʓ9uhP.H#tUVPmZy[z2n(keUVgD|4)Zd=WK=JQ(\F-&Gv*μ0޻L󳨩on 5jPU!~\4[iBoTgI<c3c|S1"#nK.:1Eb,pPȤQkroD(9T2}I:(z)hABOM2?eup*-^H<>zSigM4b&580]2=),
+%aCpqD"xIa׮4Sp%Fش*n~D;qJ: )aUP KQG|CY)9`6EO_4؜vI=w)	Ec^؂f+ӗfoތ%-@Y!65|G/G/CC1
+~M{
+U̃4䛸 _-bK lRKHv97Q7APgk`Z<dSEο:PumTNGchN/3˄ZV; ǂ']$\9oq#K}M`b
+hlsl7JS 93hUK;g}޻\"S]:wMߚxrO .Y۸R6z8W9%cZ8?SfoP2kĞVy׫/eȪZ:{7++L=N'a.,<+*SAϠÄ=NemSν{sO[7Sd=r.~\EZBSɋ'<
+*
+֚:+b$B!IE	0z~	`Ix$ζD@PڬLXm뗑#%rMg`d?;e A1'c]z$:z~xq˥"C, RN-4qz{!y753)/vx~HචPgEut{uĢQ?  O=&MD%'A& 5|'LP{a|$>2+I2IH"`khA;%Sm>KTpŹ~[Έ,]V֡jƖcF Tdئ2us:ιî[q稾n/\U>@#۪?3#*$!nlWkQ.Է$©!8~Pb+DicJ}=eٽk<e:tL9=lpc/ew!1<rODi}"{o~۞{$ԽN(|V}jLau]Z#aa)ZBUZmmf {J6v|׳l%vrj\6"o^aUn<پUy8SsW֎M;+awpc
+8ކ{,~`fHr=x	FģQouYYc'u55oWNhCjO3|܎}zrALi*('rכb]_C@7Rw_q؅B\%.E/whlˣ2UL>PLxur+K*]YpɖhEwO
+&>	+w4EDc`"qsmԝ|"C#`$nxӇQ$
+  z^%9>fjhɴu,e_s*[jOC[)޸t+:a؜&ʁ9םJX{<~FK]<}yQFGmyQFvF&dښLL$O^BJ@_~0
+	C?(()IIz<f=8Ĩтb5s>""~gS?&h0vd= `"x̘R*UOYRk~x4=~O<S*I"Q%|~geֺ2-1/x6Q>w,ƾU%ibGς(I\8wA&	kM`oEGH#CiJt?PK    siZA  
+     ras_commander/LoggingConfig.pyVMo6 0$[.6ĻҤpR=	DɄ%Q xE{gHQegHH)E:EܜƣWxGdRGiޕ|KZ?]u(@XkH,;<=<=)ǣn7OOu+7獧0hyx}X>z'ƣ>4I& %YR1Tg,'Vڅ?yɖO`:C)e-#irh\tbq>HI.$;F$UTT $0%n[7E)$Wrz_ӵ9Ҩ
+S9{@3>iHUy"Edִ{4x)E8AF5+ϧ|%Fv&jac%#-	A+LZV߬<ǀY_a
+ӏFzf	;\1Yr${$CHJ"o<cYGc	8a gDoȾs_X7xӸX^6-x#4I]a߾7#夙Z~xϿthVP寽z&gN|/?jWb6uhhAցb/@GZiZ9D5,9gAw̭,xSѧ,O$I IXT"; '1FS/'m6̿[DM,n&;,p<kF>Z\2˻VSil#/WhX*`#.^|= /~HyxXod:Pdl{(HNd7U@{~GT~V(2E!>wQFY^Q@
+t"3 /1'+ ])LaP.~kv@o a.plÑ-3PD|v6w<mھ af&g#i7c5Z6~$F_PK    ZG[/       ras_commander/RasCmdr.py=kF?4dFi89Ύ16}1HMXkwIQ~]~HFdwuuu=߻LfYcO:+Vny_ʊUMQd5k&Mݿf	)MM+V9qMR,ylQ%Վ/.XR^UgK8LZ캑p՗{؂׬ٲՇ8*y9[0Q$Y,`*uɒ.706!8jHXox.N'lʞxr~=||ryr..y~qcUVY]G['/Jiax"2LO|WILRH>7$#M#!2x
+EL΁ŲTF`fa[#hdOÄaNf)6\.3oS38aw5H1]ϦkV\Es=LhO>$-1xʟ05nj;:Wz) W<DHhui8&T".@8mn3uT&HF5n4$WAۦm =7	ksmE=I|rjl-QMh۪Lp^Arj^a+ȤMU&@FoO2LB͗
+fM	2j
+t9 ͔]sn ~:_ooaJuo45͕$ԝTM^moXy0e/q}4',Ik68d5j d`4ՠB rE!Cc絋gϽw^.LNi:u?atZaQOegN|^$>Ot RZ(U߼|,`@ss԰M8W)LЫWbA}DcnOnbYJM
+]u/KaZ(k~ʴ9ٱm樨H3	uζ6[y~	gHUa	@Cp*+-
+?gƙeA^zh>G^BzěW|0(x	A-a~@ p]|9$rM+hmrkno H/S KɂYėON)36_mɭ_[0 Y9=#}WlbzHEq)Fc	:̉Ty-DVαό
+d:8 E;gp<+,SpП=95#HctE`yhEYjj.ѝ?{QH.\u~-Tk#Ui+qح|~ۢhI *s˵DHly2kRyiI7LPq$`kZŗaF̧@yK,,.+
+I3x	yl	E"ejofյp膏5=t%&}dGGm+~#h
+j@K<bsnUhǂ璓$[H-5R@#AC(S^;p3)4Ô_޽jQ{i)=_!{oW2P_0,H	\O`4Q	Oz
+-]cR03!ٙ+SB#YV(PMfY0UlxǓW$_,r#U8+
+A5SFU	e#] _l(Q]RBM;%A:QTOtZלfjD@De?pʨ^6Ί)JFWJI*)<Pm@-Jn^e"xѷM
+)]咁ťPܔLS-KdEyԶ$|#<ˬ6k')&'֨t<~/B:#)غķHI;@H]V"#f"$yßTUY7c[]^pm,XhS[mY	mVT;M
+kLxɄ x@1{_̇pe 8bI:`@]`p|%kB7[,gqztQ93D[:6cWz]ht.n^1wGФ%1}ԙ2aXG`rr{gb$.HkE(7B;TX^N -TzHFxq2'dhg0vʪVH[1cOC*|Hy8e?ekԳ|/+~JkJ&^	m{t3Y;%A(E&(-cKi q֔sZ]Mwh]#ɪ{	N;Ք),Yռr;]PU9uoA_ԡ/8XqIV3 I_L}PsL,]j
+k9(ǱTn2hj"F`o674fR{HAk_OtGfgզ8߃~u~>:W1%ൡF,\{f;&!OA=Eo5\<Y7Ҏz]zyzy+cFi3S `Em_= UJ16i	C3ꌠ̪_4nm5q]z#*+iWJw{ A^ACm౥(d49
+40'6	TsuqVY&ñRr{s{AfXCI81B$`ͽrꞔ"s6:bGe:G?LmQoT.8\}wh[_<W22%m< 6bܢ1g@#̯~r)XPf $ڥ! zc>!¥,	W2,C.$ɐ 2bkhg-,7+7]Wa#OYWLȎ1,8}tkCF8eVYynt.2Se](_CCMsDSTMi~%@8?;)ƀ C;4bljzYѬ>XEY3]iuEv^2蛲݃ ܻZ#:;Y>zY,EYj  y]MzE}eCw>aK1J++<w^a*6e{KIE)ap\YbQo,F3Ӗ2#Aoz;*/o۽ލݵ!/YXSqNe;7qu
+䃪')587>.'m@Dݑʎ"9ї71 "[M_MBW#F+1Lnԭe*Kj[ ЋYzʉK_'ڎtTu&4휔Bb/U,dVRo%RDgKN5KVBDķXUWDo-\2'H(*ξ2t|7͖һbnBR2؆. SV8uRU+9J:J<'	&?jo0iiZp | +	 )rzR%^ИUު` c7TgD rH(Qf]Jl;Wr[F{/5/ut"h^*6CDKmTPHn&[6,\ idV^=.\SkɲB*vRzeUOdHUoQn\mFِfSXʺ%lBihhRbZjzSGU&'l*bPƊn|&6=0lEMڊTg.9;N	5sD-P7'ꡔ	SX!_3;n&X| /Hϸj"LSY}No?(lQ|<)(iQb莿zN?548 Zs\E(oCUoBr?>˙j4K͜ʶt0e{<u:S	"-|?	~NAh2.eݵz<8Fmm3M۹2PxWIs4h^BR&@UPOu]EB1 AB٢Th>=d@:^h^?RAݣYra>:p*ЭectMj+}е}w?}RENS?ڿmr½3г7SW)-P+zb<ͭ	DZLXAW<%Cʃˆ⬷!sD:KYYZJgQ69Evݰap5W7༏P!7)wa5Or>I|'?]	TD_ꩧIm'W0NB,R&L	7nr!#u.޻>mZ/wsƀݡ{Iy>r ]A)2Hy0	<KIICDDq[QyHA^xr	DHed}p>Η5X>卂*;TE<4Щ,k#oǻ@`J3:NY1\=1hWJy5|4{VH,oej>?$KSU4>UNǣFLj?7DiOI+Xu[iaڥ=]U?|;é3ZB?I˨z^2ߊ+Du73tcV<KqĊUh< n}NLv25wbj=
+gk&9JD"ЄA5>u2L4M'|̾Gz4qbCϝyz5A홽!xEC5a3ێFZ_ͯΰ]ƭ[w2.3ɼ]zG9\[W[pvgt|TO6g(YM#:!UkPm>A^8Օ],җhO=I=/0*h7p)DJmEWVDLECHRwѕ;/Ɋui%
+tz
+Z+bwNeV,fqxVqL:IhN}?RG`A|yʃK'n\)*j^~HWo;_oWd+p#x740#;`Hh&Fr6>;3JL~m|HtTSHfH3|E_?ܨtiSYNe )Vav)<KYջ 1ks aL!;X`'Ui.L*@C27NЊ:V
+RC3sxB?6#ύDW8~*qT݄=j{ӵǸ+o}]y"jc?˸z߫EA}t0c`qWA(l1wr>DuHjqC)F#!(Wseuwco^*CmXMER-]'&9:vC~L14%o7;3~P$)kt4m*WV:;ui?2]˙v{~ێ@ݡtv8
+`ȓ^eta!GLʞcg6wq% `$cWWEZeF+Χؽg~g	@%B!5l׶XGfܿȓVe/9RT{I$/'b$5"ӵ>ڤp
+y!6 ~IAYڕ4\EeL?tn9.YxI Nu
+?$E%fTmLWk9&#Dq {+m}~_nY1jKSAD3HCJX
+Qxjϱ?e_gώ+dʿҡ׉tj.uW2:c(dׅxf ɧ8
+KbkAmD]n4wI<la!m-Nrmp*~RagIz;v.wC&~	CX)Psssp/X<nazX\j=霨Jא
+~jZϜ4LwHI+g^s/RC_wHd$r		oxVaQȱT=mKh.e;:"H	v<nJw߱%\yqU%|Os+9b/1)s8"r>6i!A'i1 !Y1Y
+|Nmr6q/>*Šg+,O)wGV虔VN?fjxu(/CN-M~>R=ho$;6!,E
+ECE)r;FQ?'#IǑ.M1:1 ӿB NPi;;skra^9{3^;C\}|f[Y,k
+fJS4g|$PjW,bWamKѵ w->weMHO_T'oqncI>uw6wЯ.zVvkl1s$3FٹqڐPq_HnE4`|:m~{|A[9tcXtڣ ;Z`2:ӯťաm{ogO9dgOFAe=$9蒨sx.~~^,/g_uܣ*L_W?D[f<Bˉt'kBk89y׽5NPK    ZJ  'F     ras_commander/RasExamples.pyks6{f0͈JeN\gvif7SGP$$H8]<!m:w1E b`vvv>8Ora9yOOvϏ1.U#QY^0Kds+%_$%[qsi3&a%Ki7*E 3G"sD,WE(<+sb>|=p\jŒ@W7lyG_Dar@"Bx&i8ȗ 863|U( ȑpzň|s7;9+5	p]<Cl\,pe]	Y؎Ly|V%`y`XC@c ?v5/n:J>ͪ̆&#.>08N;4}#VsAMd??G7f74?c>pП- iJ 1s.^;/pɃ`lP̠ʟA	꼡m;hEQzpŒǚi vႎ`1]rmRж4()e2ଢrܚ]'00g"mR&дKJ0$PJ'JbO
+͂"KwZ$2oˤԿc<ohsjUf\JX?*P
+On>P"_+ Ԉ/HR5PܬɮpmĐfxT^1E$KGf8rxgzݏ#kT̬FFk@fb?>)yDMGDglc|>	(z3beβ$$,sT( @ {<>X*pV~i@6y[h7ί3\eWpW0{@b:%1ŗHy?៯g|xj'z3j \?|釧@= )a:|xxkpjax:GW	BHixtAS)6ÉxÄJ6Nfy
+"3&ϔV@i8@eWmM %-3ۜ|2cCbγB=eF$!<?#R3*YBԘEtsE
+9 
+8[cc
+."SCV1 ::@9NJfM!e.M-.#Z$)/駵d\-4h%cz/hB^O/HN.Z7	U,ʑ y4vAԂ,6SdPc`:&KwWY~D'm}FLQ4AZMf	2c|.ױ,<`g&gHiQE9vy_:oV
+vہꮵjyz 8'.n1/ qZ9%F;$[{{uk1q~רMH=sk Y^&dlM	)A.akHңE[~GFG:zYi!JQT@uRC9
+FDNU3ҍj3bRpEr/ ti2T'	R8]Oxz4W]mm\+IoQvd^P.=;$oMZ	|JHj5hvk2#ZPJR8ھX2AH;rĻ~z,籍VZn6rPATPu&u;)zÜ{G(My1U bv1gc=.jqiK*yAMN-vlHݠ	@H m{=gʞa	@h
+n[(AJKm\_,EUtoڡga1wQĘDPJlRFy0*9dGу	6OZer%,9^#F2ƴa:4:R?mvw"~*io޸#6(C |]Y{G P7,*!OgI;v@1?8hm
+"2"v8H݌$'7{= XmwqM7{rhSb˨i$W$UaЎom#s=ݡ1",oA?6|uH4	u]E)Ye1cu/(ۆ8#Ucpa3=~I(
+L]/t͆49x8҂jLJ#*l:\;Qb)4Xu/@=7.,(V	+4RetԪB:N<*S),w}ǚS*CϢ ۷ګU _! >|ӰNhm4Aht()d"y^]֯;4sȡ
+")[H:ZNy1<T1eym'!5T=]>{޺;p{Fh]eFN	G~K)S<ɼ6P;ޥҝBŬ.o`^!S|)u4Fy+Vn$^O$U{q糏ߐ
+d9͞TL[7`/9fK%h_R>#^@0k>9p>I'EJ7`#|Nz*=sR:ܽ+2F+pkz$VdգLƏm,̀
+1ʹdE,~漑raR=IdS-O5#uHUZGH[CڴBKH.
+RAKlS?(muQWUݮFR݌7jZW<aE\fuO[`Oe%kezbN!ԗheF͌INK[6*UxrFR'js1u8*@i-OaDj2^nB-Z(/YY}iEˣz&EU*Ybp3J_r-kdB[̀EuOqP3AY趽\;OA .L`l72ۥ{6i@]ܘi^g樦XofZSo}o/m[-Wq`\4~B"elkjhL*K 25+G棔2]M+'BZ-vi_c;yCZdX_-`viS717VekԼ7ʵO5V?RYMp_=kWUD)uv~5ow
+ɂGϺR 
+tjdVQ/Demr,*kuUU	/\t_ޯhڶ/+NU.5+}U"w'H}ϫ'6~/woZ6xt4tC n_v'$n>۟xۂKgx؊6'0/I"U#xGT_Y':k2@9aRY,+һu+vv%gSJ:2¢W
+6'85O$yta8nV`' y q(Zȯ( QZUl ?:TjF֩q4^<ǽ:`yqIbӚK@DO*07Z%B%M.,Y&00%ɰEzZ-2F[bEVW!m4:GXqH_/<f\,]=x=Y׃$Ϯx93:9aCEH.J۹2kF~YMbp[hoYPKhy`Pt݃[ҽh?,ҽX]phTWEJiCRRP&aKLЖ`ڃ\R}8v-Q~zM[icӰۋ4֣6"X_D݃YA
+ت uj$, tſ}'cEcw.%{u"a:63
+]1$ǃ5A	8hkFUR`ɳqBlk'Uv?H8r|dݭ:}?.gvn6a~B έ1Kb-2*v)3+IMa3=!ΪFԺlg!pUgԞ$؛"[cQ-l!
+\"zBǠvpϏ?/O系^@Տ {C;3p}tU,-C-01ÿ/zj5OPL}x!M,&q/N%O!axb&+pQƸ@;KK\࿓ PK    8dZ2g1  T     ras_commander/RasGeo.py\mo8_sPX:MMn4-l`m%CrA_DR^oK"3yyfv0G+=fËJd`($[%׼*n"IyɒhG>ʝd<ަMTT,_jY{|r`i2+"Wl[yVQ,͗Ksgd;;yjl\m7cU?
+jF²Cx8Gib>ρ (IQ,ViH-fxDJKO	{͘~x~vr/ߜSv*8.5˫]7j'bE^ r-΃:hVD}j]hT1r⤀ˋ[ 9Q^y6h+NwqO#hA.`$.ñzd<˘϶`4
+w7*2p[:Ь,yuJ4|:켼B(oJ`$&E۞,֊;+dz.;V/~Z8]K7^qOqF0²"+"d/Qr<]'x[bUvˤ$?WyP9))ƏM>@Oou\I,l(Ƞ>O	lIL< )x-/$yBmZLD&^
+h.ł/AM6e'sWQ)zx4"nͮ RAgU+L~Au ه6T6`LXdQs-\(/G/H1p&9
+EjKxGh{ʐѕP=P:h^'̼Nv"Y|Aܛ_U1i\8w///AԳ<cMSE>-ѓ{NWu4S mJ XX$#L!mP\$.[ΡJ`$za!<Ycx#Ec[̚pWm.4mȧ'0w5_rJ
+ Ičnh4Y'{^|s6nLpIS[7tDN*"+ Z{ٙe#En$Z%8PRθ<]4ʷc1esM&ڳ|oE91~Ƃ~6 8c-a5(G(*Ii#,7?bq
+jRXOj=Hvi~2!#sQ9MQ <MSY>9A <ZY.a!05v!Hx$hX2~=C̶{_9g}YeHm>,sX|
+Ԍ_#B".ZFiG˜D2x:%8puqulDD\TB1Q"A}MHQ$Y,G26ߗg>c0i #DΜpO$H.Ӡ+TH"$}Oa".ij"+0U2-Erˆ|Ȟ0'YPrĒk>bPrpnTu0I6l?ݐ@|-ͪJ0M-YdwYB./(fu܄<hno|D(ϼd^B3Rm	Z8(3w6ʞ!kHk;kKUb:gugG}=K9`,"G`@s'C  JO@2DeGWdn#*
+xyRp@aIcSk-|ß #G51@@a:lc;ymce.2:*!y y"]6z]2Eb]C2O6sb-dW>cyu\Old[WI8-Y	{Q>AՖ#יQ#m)/j@Bbc<N;j`g]l9jd}I0&7Cb#J1Aۃ'mR>, C!zux{nMpEQӌojrWcsX_aSČV{&Nv:B32ZWWsQ}Ѩ=\Bf];V@!.&(&bӸcD[3TM?vpT	IB;*RZ1߶1Nv¾cgBp\jJ0-3\}]fEa\izYWYCa1JNI2,(ӕEqrZĎ#HFm6hr@XƉ.;N2 P5NSD#t%wC_Ac_ؤIaecW8odm΋c")ל
+^D^-bT#h:UI.6:&ȣp8u5p S# (yb5y\^:zϦiUe K6fHG9{毠vo2Qkb)E)	5긗=/x>{1ۿQbQ*XQz(t+^h+.L_=iU<&TVt~/鄹oI-CuD	#O[ڠ~k"G'7q1gM<cAx c( Ms,/B> X?}Ah
+䩈Ӟ5ŷl %zh(Zuz biWj1s>}b:u{;jw-Gwͯ	;MWΔm\8|o$-seo(~4mL~ 7^D SN7F@z#򬩈Yo|%'{j[%{3|R%k[GY4ʥKE&8~$?[yʆ,d=pon51v;lMګ(9}:m_|{f.$ы`4oҝvmXW/y@r9FRd*(a`5LQ>)d4i<5tC 7䊐GL(Go<rz))iyRI녶8jl3x
+{1="ǢQQܘhaƐ4/AY|dͤ{-^TE>#0dX3cKjVWl-+Zۨɥbu nQ/8q?z{ҊOQ5_5m!^XVWn\UN%Έn6r>ym-
+}@ykiGKapj1γa%U75;rB]Z"
+:5)fRp^"rge^\M4.X_l plX̀ҙAKfqlfd[+NM@A-t(s?5RLdXmh.Z(̋d%P~4UJD҉ L>3d8xA|DgֺO(4)Y~MٽXe0x2I'M<yg
+,a	$Ba&Ew|?ђwEIjS߉^`1sm4e=u<߯=/%N?rŏZG-y/⯊|fcqY0\m`wR_-i沋*xӯ,VC`,?``fԚ%h.ssZƌM.,Ӭ.pt/7w8<i3|4(bN4ҍbc$kbp<_Oyլ^L\V؟5yKf^y>ᨭ5p4Ihrh]89RdkpxXH ӗp8-p8m.W-xOp!ooG6*vf8p8uZh86Az4p|Q#Ǘ7p|iChMEV#='<݆fܡ߻Ok8Ukӏk0q?]޳]vI=?igx[kczfQpx7J	V$2XD+[:]u=//
++Gǰ<U 7,/kAꢚOlb??nJm4qB41O:]ݔS'G=C>:ǾbGXšƱjS@~}c?~ PK    pZ2Χ  )     ras_commander/RasMap.pyZ[o:~@GǅqhN.m4{ JԕEx!)%_N@ ef8of8$5fDrDn(YI>^NȒ$y>Vʔ$I3 ~|xpxpd*c9"h)h$	c#2	K#Y%9<آT>(^2!hOHlz_ğAJL%|]᪠B(%pG>*VJPV$b9!A6|T͙fzxpD.$UcQ+5 N{xF4H""@	}h%9ZV(RHƞYVN_>L	n/fϳ	9]_^2Z`)QO	F,qLh*ETwp]yA\
+\,IXp%X	-r"nZ+bC.W2&*~:!i$':-iB[ cj>p[c]d2D8kʚдbaN,UEe>Zm6݇BGD'v|E->SJI@K/G<J('zHF@H_JyԢ1KYG42/(7[LB=ѿՂsݥ T.TQ!j
+1Jsiթx,^Y:x~:Y51fl&@X?y䳵w3&+9!%z_A5F t\wΎQ0`сB2չ}42meE=,4!96}^ g	d cR9
+IxSs0v#gA4Ca--iV!V8.	/C29:bM4geC>_tc3bb%DI§8FYG%]Mڅ4	)sp)vz+ޑTrT|J\PЭ\QB/@/a{	
+#@K@T1!C1G+ؓa%X$ue
+t 6	 ؝m-#`NL!ViLtuM	`H~<.qoC?}aR%"PHLfTdZ3l]{˨tt=S)Oߓ&8GTQ
+`*.6.n?M[r8
+X8뱿fYfz `@ĩ*}(yVIK<P<I$JQ-PWH[óN:ThA[_ g%}d:ׯq{w<|[7u,%ºBjpըQKYȱ/¼J]bÚ2$]u$ 8>!EKwT'	PÚNQTz|6-X`N-z	hߩB	gSЪ
+` iԔD	%T`5N7`~P}[qv/G gEݽ8(&T{!QTWƹJ`W04"wc,D* I\.ފz34~!c[^ڥ/x~;NѼ#Wvt* wonYtk`8C0
+7n4{AkV[/Maf
++U\[N1 ׀F5t x=Ӱa讴δ;CSS2rvPS굄sotv)}ǆ=Yl|JZ #. NmVTkF#s	j9cm_ͬ篕)%f}']XZw:}K*<UJ1q7쁙8S|y[K_rR0u.w}יݵ6Pz⹳ylև[XX朼}`RmSF@19m}g{OJuƮx798iG$VY~NlHc?&OcA{Ovn[cӯ-	LO7q5|`ϐ@>ɘxo^#`v8G39MГ,6'g缃X7m>u	<3e~krf}5_PK    Z
+a?)       ras_commander/RasPlan.py}}sI1ߡB<nn;Gx<3~0mvb˙Բ{u-w̬V˖0,kI]zt:?pTIWL+6)Jvi9dӴbY~{騮~/͊b24OʚV_Lb6biɦYWE6JL?1X's3^7O7[?C!2]5[̑Z8+d:etT I4PH>$49Ku10cE>T)`Mb~}|^;{zte),Ns,/UV5uCyPV|NŴe\]^u8qVBU	aH62S9do=)*-?Iy<d{p<uTPmz|8o|R8=[}Ӑ:C-@ߒ߶3i~띞,==}Lfs0GՔ	թ]/Ӯ ;`A0c9#=)X  rHT6?=+ ,/qv4M*UMFXTy}5Ŧ2/j:3mV%QPzz3;+Aêy:&Hf4_a&_dZ\W/q{Ys&\;_̠oiI~|fgPeJT@DfMOe
+sVUQTT{F"OO%L1[RlЂ)+yͺ?-_`n'
+9eS>ݼL(#I9w:-gYΥ/;-.(MA$dH!J5bRfCYNI}sKRCUnA/@#d[.khMk璂URrɹ5>$eV,*Yd'qe9434I\|QM!+fNF$ui\Xao|@)/HcX){&4 >)÷l(llǀ+;Q,_uuVOS`kH;㑟-ި 4͑ɢRykq0JY],l*WsB+՛> ˝2&HjCtP2'6@$k$xUFbJF5Y*(1W8S"s,)`r@!J\@Tmāv؈ԄaG4&
+#jP+PDB{mqqTu9@v^!F.0> g&uWBm8'Q+n@Q]u1B1*zNK"	B23CBǪ#-CHS,p)+] ]Ap2jgJ܏53EΆO@t7wSo;(jų*P+j(=hB FD@Zgdի*\Ґ=R]$1KE@]u0GTN"{LeT}?'1=6V<j&5)2Tw4T		2~.f.5K&y<.!EWEĖ% IkIQP(CW'HoXĳ2-9!D3$'N)<bεPO[]0c|Vjnkԧ[)<~PR2:/4S?]8XG?9A4Y CϩQ6P)A/(+z|ݐh:uBY!z'[Hy'tJȠI%ZecP]XK?y
+PR18(1aXh_)Se	<Lzo}kHmmN	RYVJM:3N2Yުm]ZKy\:Uŀe<DoЀ8"XDEh.%>2E{/*m1BX1A#&K|˱COAnz
+`lD'>\HԁR~Ud#7\4h'W֑2;	CE:@>"WQ> 4Xf`;j(Y:Ђ]pI9_Bh,6oYBd*Ҡ #y줺_ۀ@p (kA "pa-A2>`:(շ%`<nF?Pgŀ&Бbx}nDKD|2Rl({XSr}C8E%o$&1=4{YIZzH5JDMZP@tLYV 0sf̜j^nf!E%^<ÁQbG9m& 	0$uo;u,#Q#kimº2%ޮ,dh[F5l1~H
+o,D ә	Si)6717AwХQԉZ7F](ȩC5lje8cg@Uv:"?[qؒ%ho64i"L7֪E%FW v@9v.hTK-1B{Z^U>0MZQ	;3j_^@2=qsb_9uBL y	:lswÿ<eGW_/fsvTUQsoMY6+<of?R?%U%PF+FkGtp\6aB5o1&Ĭ@JXߍXMn4U#]-sr41GT\,P8/K&,t+\_sJ3ӒVc3;ZUM(6ZTu1Й\W+}Y;Zuw0w^PJXeY!mҖ7Z'yLo2E/;"!CF֊=fYRI'й2+}Έ_kӼ,hyFm;鼨28~{:bԯv fؾW[C/Άl:}p#Gg<S8"Nl/QYTŤfgTv'Rw/pbDhgpsto0Z#ø&Ȗ H*57."=釉YV:`>l\,4W%٪$bf>q!8
+C6V<*T! hQ\*)#哷{<$ꑥ
+IvkQ6Eض@iV:Llg8ZZͮd}J(#\/.Jj¹-nX,oUdDߧWo,Y6rs{ҸNfg5E >cѹ$ @wQ]p'_1NRkh,#3@x s}pf`BL-㛽Ē}Nxmc[l Í(
++̦TS)#p)6NGS۠ڌbHmZ4"7fUi#ּny-4"nIbI]~?ceSS鷺C5g;EchQ)@M}!QsWE'
+c|%pAO6**pZ?/"]mn:r{Os)c'&NPoߘj~PA!ꔡKmks,S'$F-#~@3)H6L)QӪZF2WMص%8}SBif8WB屰{Xuu/R6h(K<l04>Ua;`DUwF< jهٰK|Ny޸_4DJudF9\sHg)aՖ0U͛9d
+/HDWnْCKrEm&G&-6"BR5%$2R(=fz>!pѭr$=QH$6l6i-|؝6o6rOT4&mm3Nƈd13ANVd*޸_,y:tG{uo{B'NaEG*k?ѕ3wED#+itU{C"Ֆ4`d6-G܋ fm$.ީx3(gh2@K,X&BΩq?L}q:>1M?3T vF0]Xn[Y)nl˽P3_&zo:J0R-p[ľ[1E,^2M=ĐD]TSJѕS<XG(Y'=Ȫ@)ohgll\?_w:|Dylp]{+X0+4E'-d_]M%(>X^waZWo{J UWhMaV'Θ(3MwB˕Vm-,0Y*~npuH7wn}JMaʹw5_ݳȵ}ퟕdA&z/R좬]6Z!~-a[j3n#lzƑ@-d\T$Niن|e6=IOka۩7P2h3m-l#Xe2bRt:82)qT/4{
+-{F IVHv/ǬņϢeV5D@|Y%i߇B4Rwmcw#M x=eS1ϴ,Eh^m)>Ȭ[XotK'c/lF'-p}Oؑ$w##+<F꫹+ K\5le?xajjA_BA6[잜}݁
+qͮÉ=RFVOyqxDzPW5S総uN>Z]Ghi@+(⣒cY00ZA[LOuឰ\ƖMTxpzQ	XV]AI`	@)a\Ba\2ЪC^QזH
+ohqk6n(Co@qOuZ9Us܊1+>8*K>IUWM3ykr+)t CP"cH$WHtdjy
+CN&.QIKŬ_	Ȧ	8ϻ1rpƶze;E[7k5uc=%OD&@?^	\Zv۽f7UpgOw9>jG@2"a3{@ZJ(]OʂnX{M|͇Sܢ:H;O"c@/ڠҁA@Ӗ]R8 
+~CxZׇC.憛Ws`rx QTCiMK^Ӈ*/,L#UC~ixN
+0{s=5&T5Pbyhz3c4Ԋ{GW֠j3rUe-9QH&,ظ+it8\Xv. 5n|T)0mM_S$biH`Sd~H9(ǊkFQ@6|сϻ1dm4N* |Hwrǒ߲ONPC:f!Ԟi`q1}Vv/F$<*W|hjede *CjFWT@V{P5k VwAKCRqϛİBRi%)4B+SɵEH%n+`#sjjEKJ>oUj]l8k>MJ}5]qF}7 U}?Fg'p53!'&oί-B-qw_GĊv{bsWiEz? nUn_aPDŷKA]%߫E?;D&sՙ/L$@W	}!M/"ыß4T<ܵ}:=	_>龵<<::Ui->1ʵt$@U=1洼 ^
+/;Vs69iܢjOdNߙN+9;fYb󪽓%rӢK+ᇷ~^6/hN~8D9bIڊCu	DF7BRVxgº3dEg.뤪QjHT	OعNftDgp,*Vɳ+S}<oU͗RHLX+N¹
+Sw_a{tįJd]
+_T00Xo4a2Ѵ%czSӔMdZmc.L )d>f;C3B, eQA!гd6279[x@E@|(	di*MХ/0] 'tIfoxςCs 'uAy$S.+FןeQ_^+F2рY@]_5.USm_qkZlКj
+x)#4c.+Pu;P
+Ï1!|H룖DV46VM0VQ@RLxodoy8;-" $sǖ8؋xTL?@%( "L@\`jr<-1h#^>+L@&cA7՗iŵRZʌEW ^-s*cĮZ;*3Jc&rsFL+M<~ֶ;T#nk K҃Yq;0=r߹|q*)LR7|\+80[Bq l ,DZH'S f Ao*'TT֋vnڃ>/.s]"`;x2>^lg<淬)XRp#ݞ.vWIsJMnb<f)%8uhJL<Rdd$M\bMAWG%i>ӿ
+T$S4wgQ-y9ĸWQƁ:tE]38?sfxJlp@Av&n02ةO^rMZfҡJ[jr?L!=m W_e#ƛ[b6B-0ՕΩieDrV_W}Uw]ⳫrP><mޔ_S}vpз?;5*Ţ]w^p{,*Jݺ.?{7hj7,,fډ	,-娐uD~4p(ґg,=2(-bipxti: ;X谶/vSF$Ul=l<CX*W^^oIbhMt1hoF?f|iC}ts|q¾3M.AznCDkSGDBqy1=2DFA6Ana*joR7ZX?ښU\@˦uDG(:@PkdJMݫY`l]">0uj,@!p <`hܡ&ˋڲ-s}ě@|~ky_6ʛ=sɯING""+uOY?`&C7To8ݶO1
+/-UlӵpknޚWTML|>8aӳ&K238NWnuOWYܐԊ
+O[ .J}"!?7/?nzsH䇟'ÿ*ߍSą(+o8	F,Ԣpߊn_nO/ٚ
+J*eJRl.Մ{c{BZ~&HqQg2PקuѴMSNx2Z}^:m3x޻J
+1c%1Ѽ[2x!v}A'$:>}[kf\H!P
+v4Wܻfط/lO޲-_ql|7]²\@t
+:8]S)墪q&	n==l؁=Vݿp^·\9ǯK"@Ό,QF`(+U_v6-.wo^)mcjl|U㦬\qۻƩ>$\!#St%hC ӱ8Kg=u#rNhCc8_2p׫$p#+#6\/<1		4юRF~(h	#3x;4"[}KRܞMFmSL2>6NuwH+nHBIL^N.zgAEZކttEѠj 2򥿕lml4b{4mFl{FpӻӼ-DjhW\a263|l&7Ƭ*C ~;A<:tE(EG`e.d6BV`SV4ȐNe$"I\#LL741`tSye.s=^CCnTS?g	ww~}|D[t=pa,ģ֗{8 9FF~^ '!.1m^jV~.4KPIS,t"BE7Wy53pg[%x21՜ҫN{[/OqآӸyzざ#V2cͼ @K5L+:I[uzR5s}ZAڢ즓d1p/l5b
+1Mre{NT:w@l+tS4͡	j_n_M|"~.F(`vm(nX8g4ˡv j.0݉MmYSZnk[L>rKcAl.x5)jh/8ҵ|rrؤ+T
+߶se(*;L'eZ]0 !;IDGn;
+wvHiȻ[?vݓ"1}	ޏh:j@|pɝJRe&yn\e"R/0  %h1,#2&+;LX=^\UόLIa]|3?uqܶmj5Xnq*Idjl
+qbJd1F}^b֛%'8U&OlbvVR2|3jPi*p.<H/CAK	YOj4eu]Kc6Y6m
+x٠g@-fG@CR5;d1m~܄ֺ0Z=s
+\u2#m
+ln@AHbNt|`u
+p5qG(J˺usF^#6b'0_i~^М.Al=>46՗j&#do;b\l1{&nC9BC寱o9n8
+ct//RИ׽C/\$(=k1ڮy%*1M}
+/JC~Q%*hbڪ6tU5V)80
+g`|1,CkK$(͓2+א߰_$UH' j.33Z=6P*xAmH+tM&PK    7Z1c/5       ras_commander/RasPrj.py}ksƒT?J	[㞨Jud9^G֕d|\,% @ɺZy $$[H#3=3=/8Kdy'_2ᓳbYWgӶy{D6ObE~Yݗ_|uވE5[Vg )"m1j@yyO!˚/^*m^B^:;Q1"tOdL>fef"/3n>MWmz#Lkq6LT1y\ԕG~szt&N\+ȁ+VX֔Ow58jt
+*@#nbj.iXN̲y*ڱX==ٖ2- p3եmvcqW4^Yfbea`eӦ4}4eDYb/vzkrUVG,[~"FQ=@꺪%pRibN sVQQ]AU"ҩ!D\@#dX-b.a""S"Kou2Ma@lZH	ޤyA4	NWh!81פ^ 8>yf,~{qvr|?ޜתUg6+
+hT:(uB06츸EV'zdr}݉Ay3?k¡  
+'b	IKFJ(k]iDYSmlѼ޽$0Kj82?gj8 cXRQ<ʟG>/Wz#zA3v pp@bE^W`[
+$NdR6U)%e&2՗\7ĨFckZUȞ16IQ3&M{WY !N #&yfA`	
+<kժA ?̈́!q}^g3˙j7e92]dzC
+΋6|k|!ogsKsӁX" "DI7'zgeE_;h-e-5Oy:-B?>]3Sۻ%	'Ym	X |
+^@0J(TG*(e@K-a[PB/dEq'Dc	eh d^@Y9fП!}C܌~ Q]_o_yS=߿l~hŲE!Mjƴ0m)Nխ&(MİikgmOjV5Ű:Z8/	j4' MA~e.yZ}1 eZ䍰Ó|.P5v`xHC`Lad}~CRgqPlol5$fSD0blI_2Yvf(U<b]Uʒ| ӬsޠA^v^>:${&!QuR.l U\4
+`sJVw
+YzBjg26Y1vN:ҢɼJPE$^%ķ
+`Z4D[t]
+6"c-#v3K((f(-o^eOqN)>Hg37g/N.SE,(u*Yh=kRKbʵu.[O`Q$xŝ7OOzIӱ	0IP@8˪*ڽP+31W9v2XW89KsϯhIU8v ͑AK,i>i&j,ܓG5t6o(җ$cN-=JJ]?0k10h2fdWIN=
+|Iyֶ{t̋-t	`H?wHshqKI'rQPwux>	. :*IGZ_рqZd)"HeJjq֋HҼLvBYH#A(ij9R:kщBpפ[r9}"d;X>WQSlhbcy`"X7U>ӼV~$  E_|W-G'1<OWibUnӺD?gGuG)5H|PX\Jf4Aߗ%}U?բDGJ.&O"/aZۦʋIe~63,Z$_C!?V7 ;)F<vH߀S!P'Dm'5H۾O
+@;ǮVl37
+PB=,xfX[$VBbN;oU,D$-J!M148Gt痯H+kӠZ N^AE6bOIYЉ>JЛ#p`Q3GuL7RL5*Co1GCغd8OGZЬ0g#R%Mci`LfʕG"Geq	C*PBOI%FmVЯLdd10 K:\3uc%/E-> \n3F)HJ:.f*|yD\G48mfAL+ﮍB%ZS(k5s:>^$݄$}̛6
+]a*k-\KDqRkpAǲ6K()·jU wv5ESG1;>j0ۣW#BLMiTдH5qǇD؀ꕫe܁JϭyA@} HՏSea>_2_4:,OtGƛ 4 j(7WlP콊QƺMGځOY{5o|" rYri똟/]1ǀ,GIzDd%Cv E	gǢh	||,[HĆvd	늇o1a1:9o~dʇ?-#֖+nAFPy$`QChGW<CMG(!BvםK[ %Hꝕ#}j0]2\_<ڡƴ}G)pAemm/>J WnV/ߏD'cF%e~?7ü#!nV(p%Y~1˕C!,hjFˢ	-qAݐ@0F^R$bX-Ԓ1X`ֽ*ǀ3}ԧ7bzyCK<ɋ1@D`H_9y9wbVַVlaqEk`a݄s]Ϯx!f$RA:f2˖:_f..NtRR||F	)#<F)0iU݈gDKEbvqӪvldNUT*>Hk?<F03HU?pUd&_z*`ja;9q`t
+Q9&b̴&ގXK~Sh_`
+3r#	c t	ܚ*@Ձ1r7e(oW0`-cyPy"eunW2,rbC$7"7iI,Vtt?&Mm5pӫhht:_bw{{ꕝ-'4 rI
+"@?
+FwBezhm"zc6ӸY|*WԫpK}XKƤ+2lL=}f05A9x'?`>q;xf\=k$]!ѸqGNSe@scȿʩ￧@v8HRYTCp)E s*~8d%m"*7(,
+4Y9fÕMq.x9dΈQnqʻ5:PϚp]L[%(bSiJl]D\i[ܩbHSՀRp(b감ȕ%Ľ+8bje<?WQo_\&c2 	JY8[}"{TXůЅ٪?_UӞʈcy6"ߞdؗkL98p%<_
+99/oO.=qXAyjMS}:T[uv*nn58,8˚)	9}(BRH
+ˢ~ *`"Lu&A|(Rj{!A$Wuq(.'Z0Su`RF4mr&yvpvm^4?3)'އ3XN`7RPpO$rcXZ"AtTT~.Wy]Zݕzz=?fjGgǧoNutt0nT~qʧ6Z-{#`ex^Fv?2tkn8mHT'2Ұ9~X~7IkZEf0MXE`/Τ"ԏ͐He&Y7@|ҦdƩM0`Xq~> __h{bMg0 *[>WhRB(TŮ)^EnzC{?(\X@Q_U6庝berHC=!@dUʪil`3嘽R*uMs$~mvra0
+ˡ`i$R,3Nndc̩=5 ~|Vhڊ;GbL<F%>o`b~Zl,w¡ۜe3C-o)JJ.f3YӍ"/)+cֈOQu_|GWŭͯ
+Q*Ǿt1V
+ǌՙ?Ϟ*Mwݕ5׵ػo5j*uy]!pʮU7*>*>_W<D&E!Lkz
+},`_A^_jng vAcu>.|2XLUc
+5ۙ.lDYdaR>Qc"c(vq}giv"8	Z3=⣇΅g7OJ:F!%ŽM|dEd
+:xo _~^̦f  GXe:[lyEz5iArwzھU	ĈU
+{UmWR Sx0\5{Gې{T`c˷a6ɓy8P*y+t[Ȇ._ZOh(ul$;E=߹8P?nm)Vr׽:/t0:GB<CM\SGgĮ3LXΌZO?|ߑ-xq??X*t+b
+[uyx̰vt$wvW\຀kt3UKVA+|X=ZnL	xn_U.~I?~~G	˙k#(&f:VeVK_,}\)rdMYIBR	 ו5L8*d(r'Qq
+饲QLXE?a%D-yt[z1ݧ擇\3g_.˸ȡljTeLOmb]%$	WnK_,g~z1v-8{<H0 FCWc,ma(-b]@/&g$ow&e#0Ypٜ_eےC]eȃr3j*z?)̓P'"PS׭.8ݲL>!ܦV <ܝO02K>$6tZSx[:=xs31#\:6Z/cS݉="2#SuEaNbȺg[7Y3fvL+x\Z̦2WݿT3\25ͯ?8mMufqaa=g=vm!ltw4ܲ|<Vo܂E7o08ף#z]_`}-'\!8+ÓaYh6/ψU{!թ8t7A}gb{V{7POC@g'#T-2ۜ w:U_LNy;tƳ6-cbF5 &y{ln"#@~Dky$f7Co. !:u+	#7R-~{O8-"*Wn)=|au'fW(iU#VYhS /0{#;&cf)2}mTVb*ݨӶDLy=DʊScCp)
+:*wehMCWč`{g0_OucΞvu*C4j.Orqg͹kK??y2KQ瞼2v#Z$5	o=DBd]g;LDXᠼ쌫VmA^Ë%Qv7Tǿ'9UxivkJ{qz}Qd^X?Th\MFEB1]hÎX 0C
+>t"2!26tsö~,?WzgC-D:`~kL]Bd-8ժ	h+*+Ʉ{̖nI9[U@/a6HpOfWtߺ.qs?"
+IAU&ʙFn$5PVa:H鼄;lJԠDiVѝ^=>֧Br@u,q_5,+<[] ŅF[ت"9ӯ%zP#
+<ԞC=x)*+BRp	IGFce|J't(ު9᝚4A?	8X'zh֪>)e"\!{uz.e܇ζG{Jfu+S`rZh	?_&mt_CVp*,¶k۩Se@;sbpj6aĠMN񼨦`&N57r#_6RZp\\jKK=Q?oڢa->\-kZv6e-Sc3m_N_d@Wocbpn庈jKr?Bm[! F&rSvtV6cIeP3qֱc2oĚu\\L0$7V1o7	qtAπ!?˿>թv7`UfSnG-_N *q0*|GFa,	C^fGM%Lpd4FazAU:Q<?f_1ݛcjHyޫN$ÃC1c,Ӝ7)~ʜxb^:NQG蝟qƃ}[{OoŉJ: Non> kWs}G#nsuE#hVSLFzS<¼is?/In1#-ɷY(젅Ktcz~-tY1*C9um=8Jјs_aY|xk5j)	XoUjɀ	;Zzd?̡sC4!oi*ؿܙ* f ʝ=8Z`g,7	wA_mGamo߈$ZS,Y]R^xX`<ہE<.!ɤ4jIp"wQ;UX15mEJ˂yLY&rqlo-:1*ƉeQ$|ո:_]AYȨf$snoɳG3k<y4a&NgmMIlۇgM謁c6]QbiWVw7ݍtnl6F>ho8`MpOTevCD>Vrq#p|}΍<,5n6&gvcu0>2c!]&Lq~qa>Oey]YҴ5(G9*Ό%[lC\QɴҜ%ԗq#U#C]10>eOEh?h:oӫ	b/s޿Laq9ӛ	F,3)H4y&*☊ϋ?kkTWcԸwAۀp~[||v5pm&x;rJA9P{,
+c;e]/d5Cjs7E]"F7i3 4rt@6ץo%kRxǙGmCNddٿv E`e$8j#CdeJ^jl|8+bO>=[ȩx uT1GY/stk6vktR]Oo4q6 0X?tLr` {=
+ۻ(l1 d0Y)b/ߑFBL8pOx	e}<u^)! =3zVE}8~u>n:B
+NyZD$'6.|`flxﯧ8bgWWV"(Ipqxf/strUxlN#u~u싃DǮfX<akS['
+r.V`c!X(+.Q+l1Ue~:1⩍*wթDhn}$!;uIzgŌX/]@xlЀ: WgVh٪'5Mq!<ZnMQz.Yȗ`h(`E`uhڪl>Cy.8b:kNI:uPC;s }Ґ=;  ;=I53%xkKp}W/ZTAyrx,g>R,T8Nn)g"[=7HG:oFأ62D~W+R?Ϳ{tmVlX:W]_lQa) RBدobE)oU9Rt?!$8Y"_|X6SFAHKq.ԎM'!$$;Pg{CܜAݠ6N
+[K-1;"g4'ՀGcENguQf!M:I;ј`\uۍ+죶5 DPL*mø~xkQJuQ++@,+RZ Mo;#:-;6g+1tFvoOtaBjז*XlmB>ԁk}ZpسoO+#ҳK-f_QmHZ?NzBrGe㚑LpáD6=k[v8%;{"Qٿ[~:jy6S]qN\)0>2\HF!]4u9*l:Q].{fw{h.ETs.E܃q|%E{-[brW%vYj:sVKeu.w|vq۔x\Y]o`fA UIﲅPZnNW5MEard_̤ǋ23E>e!EEȽ_id$ }J]RK1c;&7*/fjCi|ܢft+V~&P(t_腪	}qGY2i*Kt{Qaz`x!=]
+[W% 9f6lj+BҝGftlh;}#kUVG7U	Fcd70\u+x4zp0bfh@VYzw'qMSg*U{nAZ Tޯȱ,~_@5rN0hg&\Z1i9&(_[g'	%QFarTTSȖQ?NۛDY1%&n=bLw.h˘GÔ>Ev\ 'ݹ?7LoX:#aJIDTwh=*HH.=>S@N)>vڟbis	 r42.z⽅uWWG^𦞊E |JHܷ |!˖˩hREU3ncJ+y4)yCKufTBAjEø 3⦙"
+ǡ5p\S7F	z,8`p:n§cLpncs`	jP`
+ݶ޷uFW/n>D-b;6˴i.-#&5#zIvoAEuIRFڏwN{9~Y[:Să,e09Yd*T5.jCNu&tSM>{8ƫ:޼_GO/ߜh_8ޞV0ׂOgOVJ|w!Mo*I/4~l
+ǡ *)=? 		H3bvn؈,}oı>-y/>}20oD9vYO\DO@U:kL{h⊡uʷo$cIf9eԗYbvNw #3LjxIm ֡vK7gq<);'_.i/)LS5O_}4ꄶ%\Kϲpb>4r$?W=F$iG_	"z̓@K}Qyx٭ߺpP/NB ogF%wR}l֥_1#!EZGgaUb۟q)GKw1\T*G.@Bkԛ^nE#꘡\ Vnf:ܫԻewFl{lNnFbۋ(%O[ B1|U[>/pc(S&:a}7fqZd)@R3ENG?.nቿ$7cB1xp_;!FLE&O-E__'3ѣڒc538աgOߚD!rsy'Ϝ.sMH_͜K"khՐUvv΁9S
+Z*濰mZ5ĎSP$4q+yaPyλ0ycbNV߳o^GsL^HsDuq޷PiU`V~N,rsNaGm!2TR>=uo g#JYwmy"tvx{ڞwϞ|̎+1N~
+x`ȳl֨OI]WLc.50{C
+
+]ΫiܮVbF5}]MRQP^S԰A{="ucS7J#Aw+%)5rJɌn<0Zòw|t'b7{oD,'m Ϟ!4#n[:w=a5;E+eC6m~!5nt 4tԕj*Kj?oz`AF8l9Aa=?׋
+|<i,I
+TCVlJD';e]2
+vnU|Bm"̖H:)#ی}]7놸jۯY 61俎NG<a_i/h泙cV,3b/[<7M1	hG'ŝ:?$Hæ^0p0+姈Õ^;>hųǬƥ7qgecXs5>ZS]v"7'2ϬHٙ^3JG 7ovd*[D;Xq⥊H+ꋤV~bC?˪|Dx.nvx!m3<W[Rݖ5AE Nv̲7fZm-5XOrEg(\Fz0A@( l2C}"l1wo62n?ERT`wpӓ@=H\ڃL [o=;V ⺏$5@v;k߿92_7󪗑:j#9#/KiaO1=UԡtDR8vTp0*ë%aɋ2RpڀԫQ܎[wb9guZABQ:rP*Tţ{DI2=JH55` `Zu^2m`uFڔaf!SM̪:ZX`,s$r	jFKpogwo??(o?}YxؓPZVo#3BLF4/A%DT-'2-ϒȿ4<)ɚy4EҖ/ŲeQ$(јQ6RԘ)&6	o /ǁ[>jwI5/JEɢ|Bع<6'QlIt7>vO*kBR!k⦖ˍǋ~}kIMYjkuq޳35#tkim9ސ
+CxESQ.|zQ==tjْܨa췖IVTr~@xul0:hTH̆LܨVÐ 4C>>y񡚠 	j!ǋ9娠cHgiFg 2lZp o|wJz`^8}d=f:MO36xr	&sj|SbtG5P]چ7Zk^jPK    ^tZ#Ob  C     ras_commander/RasUnsteady.py=ks8]rJDz˵;ǎ'Irq'%b"Z H))N h4>88{o8+y1{tl-3?`Ϟ>>g('Iｙ1[3ZyQKE^|8	K #"/gp1@؄I-SqIFY>9џ70c<abd.@guOq1/xz96@w
+['fgX(@-_G铷?5g//ۧ_|d'y~rcEF~ G
+9N>atǢ0anX9jS>֋D ׀)xTSM\cS?{+	9q2*#ta\8V)M)0Lagp:>kl. ?si~0vʯF&[a%TRaWofXpTphIyz=bgj  f> b@).Kixb&qB#pb: AH):8H|M|$RaDhz$iz	DyLd: 4J.Ac߁N˫pLA/G6XE~>y\hOA{ŀǧ4z".j.eЉ}_BTM,
+0L2d+O Ϋz"HM$z~͓K%٩bXMV,.(iZ.Xu65_ d&;xNId~l![%l`G'-Jbɴ{MA]#;gV%bTe<,Ɂ/BJ%Ȳ
+4"j˧dx(E;;]h: E[gHyenJHxcczrD> uÕh\Pr$*ԭò!'[J+@hM*0JP[&)5* X#cX8"B6@d,d*Ld
+%JߊֲvݱvM*		z8d#^g H@Äq3`u!DD_૴" 5OQ1BjjKpP+%=VnDgTWD4{<ch	W}bq@bPS. y>Q7O<!x( [-oI팫Xp~k6|.졩M
+S4$˂ 5r&s>tG[7QtA5I/,](6ֺ$L/o"_ɭ$19:Dh]|Z,D? dc6s"Aw|=81FN.>b&|3h"LYzEatd#ma{pX"U[YҏcPh[!k/@9A"5Җ!#i|O<9*dMb'DN,9v!2a|o%\LS)u7xzm\k\J8Gwg9/~TAB֚CNlsxM_N,WHl8Q
+rueP|!tX[-\х؍l%d:u`Q޾m@9/i\_%7uvsX<@M1G HNd^ u]d5V	׹N]!``&:U#v~
+]-܃.*{؀P)B46t@!j$[&"S`-A$u&nc¼9&R@7e F>F9]z-wnx^_&jB_-s3i]G	 }?bMEz:&t'*,?~$M}BE)|Pݠ0r2RTUqAתVkdٲqMmml7> jꇜa_v=V2=V4f-Ք"LYopLx{<g/[w0R݃YBg,1|ȐQAx7)!7uxQKSKrq{mT,bc9^ryȾJGpjO<`sέ*:1c6#g}S<fVt
+.@+ą0GBp
+	g5!\bǣf)ss,2iX]1t)vl6)Ogip1 NAh#;LlL><R0uҏ@3qhNbPf~בZz͍g%&M 	Dat,PLEf%Ƣ?(rERfe2Jib,r^7<b/ p&suM8~bH=bb%J0^poVλ edS
+DMd^0 1&WH\r3bT}O40{i'H鏭UX/:˅FUQŊf*$wFve{SB _QZ2RE6=Pͣ9BDGia?KmԢ@m_|%ͿS0?PR.s
+"|2LJC!H:f<,t%Tonʇ'v+峿15dEn4Itȼ{NP{PV'|R|N={7<ݞ#q*.vsAGUd\J#J˻\]8jGn_,a^Lλ0n +Y9)O$xK!HJ*\DH=C%5pT )vg0Z(\x Ou,hvjр2MbRj-o*FnG&RRU
+L
+JQi	
+q)y?e^ds0\MY꥞[]r}<-E\T6itoI}Vߤv{u^jR=WjJK912ir=*_/Zl%X/3~(鷅vb}5e4@8
+oˀ)5Q#s[2i7~lȱ(^(Fx森Ay8a;r@kۧG1CzHՇ1ciThz"<֏c$7Mp1o/>}|<b>Xi`쬩6
+!z:tT9_&tEM-1ƃe<q|7WQR#Xԣ6} V(ą J<z[F.#|Dnf%N]7uz>yn6KGx*MnarV6{փ$x
+CՁ̮'`%xģ ƐhourT0-,7\|DZ]ʼ:z,zeNϥR;NjΓ0¼1<W>6B5z*^+^UndesHs_*J!帰Dd$ߪx=5oú<\<rrkj3-?5'{+KdҜ7GIOPr&~f6ˑ)(\֥
+ldymoȃ@шvL4wڭzW {d(_!ܝm8gPۤD1٤[>2Mjڟ|₳t09'=w	֓JeJv۫&n6V%)NU'_՚yK<fϲK0ɘȎf;Mxpa80D)ɥvצ>hQw6:U-ĄKA~N'&2kR,o	zq=oZNl:=8ӻ9UueǇSvK[Tt3*sv @˲.qtHIGTKĒf5nk3L#-e9W\3IB;KoX)wpx~`VC}C|C`,K!9DWӛ?a4#~o'\)Bz*  BwG(3P戾SBd-;?5Kc(Oa*<<q$DU|D#F?1`ɀ9uIhS\oaBngeF}=9dv 9~`F|#XtǒHP"Q&/骪AiXeY0$ɂM. (4	YvAo|KLRWk6MĪJsyHti|ɍl҃F|RrNu̧Ძr؇fSUk/	KaZjC7o.SHj;HFޢi}`Ym\t/6ʀnca:EZWlno)ۘmÚZq%V6A-y&eR3.*D/0oG s<ↆibd'PO}.R=V
+xMlN1R
+B$,R
+{1~_mJUth{Ms\S;ɕ}M= 'cSؙ=7#NJG9JVj.]tӑQ_mhXP9(C8؂ʲ,$k*%>Fc9I}֝ ^=#v_1,;\@M!O
+PCng}8~<,
+(l~BўR@ihPxW|`ՄVzDni&fcȯ7q/A9 30,Ή
+q3l@l˜+5T_UK &Yw}b;FDE	]NK8aR'2KLaX<MmQܟ	H]Wаps+uU
+#dr5!%2@)i]RIdWRuc{EhXMaQc\xAx}(܋fw8xnj3mdTvy_M0\A'
+
+'|t;&+oXnMQdCRҁL6_sY+dP-Ryb~ec^pVH
+ʁ\v5t~ޤ/6}.>|N
+̒a|%?x&pr4.Sr{	iq)*hom S
+..pX+4n"M?{_ax/ZJ	Y21ʮ4S 8y@hG"Cv 4Ǫj^wkBlHK^gf-iC6*CRVO]m8rId
+t+Wׯ96+UW퉗<tP}Һ3ahK,>2C
+vVytuz:Ē$J)l[zk	ң&>	3P.X'Wo(':@un dsZ]y2yeVd(pmįR\p*܍X(	JV 0G2K쬨Ц-Q^V?ܽ6N&DOoOĽܼŋ(;"MٸW|}j"x4tZ3p`LbL.lj5I$=p	ɛ!=&e)ՠo*m""J-`ν-!dm'8]?o(W7T?Zr.S1ȟ^#ۼ"GpމqزT1˕fiE"x-O=$*iqzY}q
+z"iEvt-jurVG:+I]:yРP+{B^}-XVXՒ
+΅oG{w(Gޕܶ=Atm+{WБ:yGw
+bWɖ=ٲ'[}n ~ eD~m;_D%Q_aWBRI<Z |i+
+	q(:(彤PU@#V:u:Ӆz,֊wKmz2ĵ7AZd8rO<'HVW=fcwqխ;CQOt;R7T=pNWp ;lڷhm9F{hm9B;rv6B]5v6Ɍ;z;pGtz*^;;a@u@q>tqz= Π\wF.4l;;p5v]p`Aga38.@#=t] q#рp?t:.NOJExubeHX@BܞDtZN >̮
+h \ׁ_`s6D vz]4;N3.(Cg}5@I\ IӃ~pzNk  pL{(d.(gwpmnZ3w@!pB1t>Lq{ }0tݨ 
+sm.pɐ;E 	dhLKz@Iڴ;p}.pAj8mhka-Aa;۽.p~9aBe叨7o8[%Ǌfd9XZp;>o-WKQH`7cv[S
+dQ8)}J+vnG/`sLW\^#.(LuH9w7e@JW|D;ća~
+M60Y\f6Lq/<aB?H0MIи	Cq>W~"%xȓ^nhS~r/@cxGo1KD,>	JoǭVyҙP0~=%=~|{%p6~z$xG([n[Kf@+v|Z$~gɏ6ӚWLҪj"~$*VO&k5YM[Va/	JT۸Zۭ4AKӭf~ab﷟3tXͶR6W,lgloYfGECEل6)؅XWP0km裷 Ye%]Grzmlִg?Z6x+,'5Vji*zr!Tl6]]</MSbgdL*f>_L+'![MZ+D{sZxb*'c85Ôx9_>Y/>-	~ҟ.\^Wsb#Y3|x2c(vź_;vrSGQV=g'9MV?{7;F>!IZMhH򀛼ܦۆ6-4x1ӔW>O"\'1!{vM0$S3 wiJ)j71ܴn<PK    JYsZ{R,  .     ras_commander/RasUtils.py]s630r2k;Mw<7{'7>-B2dI*vAPܤK$X.>X h4yfy[X6+-ʚWI7/WHyN?WYVe9OUR\aްyISeV,ټ,r]'~-C>yf?9=Q톷l]僙 WЫ,1;aOg$Y%nC%t-Yn4n[X?9b_|){)WgSۗN!+A[5guֶ.
+;ߔ:(auB7d]͜ױx:ocD>"Xc_1KϡA:$} -QYFHL+pw[Gѕ	ilޜwDE<^S4+e4_S~^F	uM]S|LMd1baf"{ML/ة(~_ x,+^i%<ϓFIӒ&jW-1h4*[6Ox<#P#ѼIg0	]dE:Cjf3~Vڐtᒷlned3جV*OYWVW>Cg5oU*E~0RwW|^iv֖3,D5$@n9e$s$^߫xx4̒뺬g:7Ca%%,BsuHzC& kx@3Rlާm5wTTp[ΖWem@Qc`j|-_uKYIf4bedDo>lQ+J|gk*`k'Pw˔P5eϳy	xЎ/'ŭ桂q@דꛠ{WT^s_qD#<nO-H[F9-Η'խ$
+2\6QL2U
+MG@*\!hتf(y6}
+nB& T,?H䙣)dh[TB?^cˊ/k
+~mhkɊstak1):lnE]-%ڋӟjإYy	X^A
+ENb+7`;5K}[	ϖ׍Ռ`寋Z7eVP[r1{`өZ+$ ZouaZPqI,͡%37ߨ*!0leqGoL4wWd :h1zn!;{_;,Iryb` v`Yd'1ǳ:88@K Zz5"75o5(lkVŀdZ
+ΏdSE"cvN
+j#nC/8џ XAt}c%M!sunwEY,<BPI㸪[]8I`6$
+z^;2Gi.ENVzMzw^#EMee^^BW>;Ȧ̐:ۉƄ\Mx`	Ka	ɬ)-nhy;Ÿ|$A&dI}',d-$)!`HOgpȎ*tW8ذ1Ӵv1*$/IHz4XĄވ{ovl9QP K'UW|hte]P.G.KzȸǫwRE?6DxyQϛNj(ݣ-C1C} t#"/ӦM4`HzZUpVD98]S+ӔCRrh%r)~izkcSW`6Юu˚2		#@Eɺsa\4QHEvFk[Qή^ۂ4j{F2Ptz}tM.0!,ӜHfسjٕg@K^s<<}j꾽YQ[L
+TV| `IMa4WeKSatgv꣰1}|8Ci`+#˶oAn:T-G/hQ:B˦-[ f5r#|5] !KoaKTv@bNv:w0f~zlON|5PI.WigNٲl`lG.v#qޏP8*}]2C߃A}EXS 8yT +dd053	ykpֈe9]|| /ҀGQ1T,o{c o~O-LiJNkĭڣDHAA*bh6HƄ'q\C'F{3i/ĸZ_Ը׽]zdYq?BVJ7SEnnwef-_Ums:}b=u<=b4-"]z?besZϱzEX/>|SIEځCFA5TIqo*hd\,d}iE=EaI$	dOnBK[E5H@㥸muKY>/!"bSƦ'Զƕl_86OMY֎2"ˢ]d1'aPjִҭTK,_#rIǎCCJ}4v|&Hɑx/^/ģ08:)<:&'v0,_%b3.+F3_ً4̃.<+G9@][G`tSS	Ѻe׫%)rA)O_]/c==	]( pWH[q3)
+B'6DBn4k؎㞪=fi9" {&M".Kg޸tM{=I*yU=nK$Kt)}@rBPC40ed+MyJmi>7p_LMIk_9i[9|L&%tUohE+xƧyy=<IodUJ~grnQ[I`ЃNCxpSV ?Je'4I3-Y&]R|Ym^pc=7tL|ڛ]3
+Cx|?ߏ./@r1̊o<~o!{-e2Ɗ7T	~(G	(zjoηBO=ЦNz<l{S(κCyoKe I+Whm kxRϯ(8Bdv֊`93N컓YbC;
+p[=ZV(6x;߬ X0AMRaѐ@iK٬mlLK u
+LzN.)uxE#o`x?{Q^kAGJمи[β?4՞zu͓&Q̃	F^$zaF-FoHLʱ/PcjT%Oԟ)L6tq S\a{A	=dvIZ#q*[_3ysDfuKRlhCv%D@ݚtwKKݚtwK͵
+GVPnŮlD|F}v6!oUbB	#ejI:99%LyS'6}y)YJQozUr?_o4A,
+q<<?t܈T-tqPi)cb`ߨy\	8|G0PY6H쇿(ѢQPs;谧_I'oDDٲNvbNc|}&OW⌖<F#lՇFZqV~$>DkE}'|t$
+(iC+;"v8~5庞s!9=zcG![6v^05jG)?qDY׍ٛuzy	5,zSπ?y;qmQ%}YBͮbI7dnv|(1
+uY0)u/	RNQ X,:%&/X*P$ZN-xa,3',~͇0^J;҅_`XHڨyLʲ#7)ߟ䃯YQM *#n;Ēx{Qy u4lzSʸqhL]3[YPae-j06vX'v jةv4A)|$d-g?j<xvpJ 歫_1ް8_, v8GKqUXvqZG^nƝR0uդ'ё.P䷖c2Tܖh[4Fs]#=vfuN$i:Zh^<j!<bOr	hcc'Y/<AM$'6i^gy&Ӈ9{bzo~C1Y]5 `LfmɶL=p-~jʞL}gyᐢxECvllǨDw:9agc1{lcowJM2RC(iK43Ջx9slr+](xlzӻGZK߶%?]x)HL V{62x,9O Yy)_&fZiQT{1sb>t3EY:߼%.^+HN.7h *\iWPO\lelg/9ڌ;7T,.Jsp	o~^'f}Do`UPՌ16OE 'v,
+ES!̮P<b/_0aylS4]TtZ-YR u1fH^j3IEDuЪ:F{!DWgkJPNćP53Ke^xO_X(4?-*xErCOceIH$)\6] u/U  eKffY	y]䵠þÑZ @ $QKbcIHaAӵ3;Ǐc2h>P02c-j[19`a!%l7@L[u!?h(o}0;5yV`F^hD'K\0usSB)K0c˶Q;aH&֫2-ɰh!!\_}Qr<G;DO>}(#6}E$o:hKz7%_; &Sv`mƶ `/J!-fZS?J&u0Mey#N~
+|t<_/ؑG2nF\Bڕ^w/N"k;#pÐITd`"PzɚƐTDe57lG'Rb?&ѧ6œ핅8[/"ӵTQ}s;X%im1rANۊؗJ{x靦mxߤiTEOJrD`<D,pw79zqŃ~%9hmۆ[P]Q0xmV+sn!__i9blh;X3opIk7C3*5M~uW%i(#ߖHK?ّh%VGƝQ7kSJ[mXT$(}OhR0Mٝ?@7S<ɨ:XImV;8gYN*mVT}v*}NUTo])p~<iַ{ґͮn2tUwuα;<:94&֞tT0CƩhPbͧJCF5Mnʽn蠌`hu J.(I8ܿ9K2vGx|%}"MT]	Ľozo<4ýKti$E~劃S:<j[vU 츌W7M?UI8/GG84RN#El=G=PhvZ*W}3T&+~
+Y;E(uχAa跣Φ͆f,'/yRrX@oj׫B[6$]0+mwoO"oK7kql2er<)[M#˺7]Nݪt9hr.<]KnY=A+[382D"x0{w1bp fo{Lj%It2::G]K|FZv5_:GOMu?5kň@C}3%-Txai8|Ȭ*A#j)F6}97̻}Q@T샔ׂ]WM$I4mhN)fs.B
+(m[6d]p-BbP]UTp8,ܭ$Bosq*^~bJNOk@d1["~zRY-@"@{tI3įQ>O4>f97>Z`ZkZ>`+ŵҚc).	`Ǹ.i]A=Sz}ZS$%,9u;_6/Szv3c[E6bsiuxijb3njӹ7	>ͣ"mЌ! k@$2Fg%a(ًh]3p8S6.`O\"CCroD|lyZ󵌘'UǂAܜ٣s>q]~ mB3`\ S]{$2E37$qz(>L&~mWjۃY&[,9B-fJƁ_ Tf9DH"AQEEUp`' گ-Pa7d4z˺\W0S^~0j}(ۙg>>FlRJMLrw۩U*Y,.ů	9oSWƸ8UA.oيuܺ*R(^7ܨy?ŻN>lsuCmiۈΔ3!@tf[.q	zR,:h)BLE=r,uCYK^=*Y
+&^;4.NLqb'9n MXO{? Ys@^s?L`Ҧ88ϔCyog耉\0J_±OP֖@yLvsZwOGY5y+`.t6LNJ_RSl?V|l6
+QZq~L\.#Ms*{5t5BHFbYMj!Esv[r(}^fKv,Mtsy^qZo3>C8D%2t;2كQxCyE %Wp3 e]1ZbG<ļʏ	p6f=Wc#]kȧM<񌒨oC^"Rs!!Nz'ǖuU/0B4-eYnfvp4gvZ
+Z3ǌ`K%f5؝OϔE pxC@aАg{~foHf<Dy2F._VDrW/c<IILlPK     Z;D                    ras_commander/__init__.pyPK     Z!<  9                 ras_commander/Decorators.pyPK     sZnH=	  7              u  ras_commander/HdfBase.pyPK     npZVC`  ?                ras_commander/HdfBndry.pyPK     4OZpm»O  Me  "            *  ras_commander/HdfFluvialPluvial.pyPK     ZOdw'  t              C  ras_commander/HdfInfiltration.pyPK     
+FoZ  J              j  ras_commander/HdfMesh.pyPK     npZ^  }              x  ras_commander/HdfPipe.pyPK     ZQ
+  q/              L  ras_commander/HdfPlan.pyPK     4OZV  I                ras_commander/HdfPlot.pyPK     4OZqG1	  2                ras_commander/HdfPump.pyPK     9VZ s  v                ras_commander/HdfResultsMesh.pyPK     Z<G  @                ras_commander/HdfResultsPlan.pyPK     4OZ=ME                S  ras_commander/HdfResultsPlot.pyPK     Z"  2                ras_commander/HdfResultsXsec.pyPK     sZA|8  5                ras_commander/HdfStruc.pyPK     4OZ s  ;                ras_commander/HdfUtils.pyPK     npZM@  j               ras_commander/HdfXsec.pyPK     siZA  
+               ras_commander/LoggingConfig.pyPK     ZG[/                L" ras_commander/RasCmdr.pyPK     ZJ  'F              ? ras_commander/RasExamples.pyPK     8dZ2g1  T              Q ras_commander/RasGeo.pyPK     pZ2Χ  )              Lc ras_commander/RasMap.pyPK     Z
+a?)                (l ras_commander/RasPlan.pyPK     7Z1c/5                 ras_commander/RasPrj.pyPK     ^tZ#Ob  C               ras_commander/RasUnsteady.pyPK     JYsZ{R,  .               ras_commander/RasUtils.pyPK        
+   
 ==================================================
 
 File: c:\GH\ras-commander\README.md
@@ -3584,7 +4572,7 @@ This repository has several methods of interaction with Large Language Models an
 
 2. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursor/rules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
 
-3. [RAS-Commander library as indexed by Deepwiki](https://deepwiki.com/gpt-cmdr/ras-commander) which includes lots of LLM-generated diagrams and analysis of the library. 
+3. **[RAS-Commander library as indexed by Deepwiki](https://deepwiki.com/gpt-cmdr/ras-commander)** An LLM-generated summary of the repostiory with diagrams and analysis of the library, as well as an integrated chat assistant with deep research. 
 
 4. **[RAS-Commander Library Assistant](https://github.com/gpt-cmdr/ras-commander/blob/main/ai_tools/library_assistant/REAME.md)**:
 
@@ -4137,7 +5125,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.76.0",
+    version="0.77.0",
     packages=find_packages(),
     include_package_data=True,
     python_requires='>=3.10',
@@ -16053,9 +17041,9 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "# Manning's Bulk Sensitivity Analysis\n",
+        "# Mannings Bulk Sensitivity Analysis\n",
         "\n",
-        "This notebook provides tools for efficiently analyzing the sensitivity of HEC-RAS models to changing Manning's roughness coefficient values. The main function `autoras_mannings_bulk_sensitivity` automates the creation, execution, and comparison of model runs with different Manning's n values based on recommended ranges from literature."
+        "This notebook provides tools for efficiently analyzing the sensitivity of HEC-RAS models to changing Mannings roughness coefficient values. The main function `autoras_mannings_bulk_sensitivity` automates the creation, execution, and comparison of model runs with different Mannings n values based on recommended ranges from literature."
       ]
     },
     {
@@ -16074,21 +17062,21 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stdout",
           "output_type": "stream",
           "text": [
-            "Requirement already satisfied: seaborn in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (0.13.2)\n",
-            "Requirement already satisfied: numpy!=1.24.0,>=1.20 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from seaborn) (2.2.4)\n",
-            "Requirement already satisfied: pandas>=1.2 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from seaborn) (2.2.3)\n",
-            "Requirement already satisfied: matplotlib!=3.6.1,>=3.4 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from seaborn) (3.10.1)\n",
-            "Requirement already satisfied: contourpy>=1.0.1 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (1.3.1)\n",
-            "Requirement already satisfied: cycler>=0.10 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (0.12.1)\n",
-            "Requirement already satisfied: fonttools>=4.22.0 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (4.56.0)\n",
-            "Requirement already satisfied: kiwisolver>=1.3.1 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (1.4.8)\n",
-            "Requirement already satisfied: packaging>=20.0 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (24.2)\n",
-            "Requirement already satisfied: pillow>=8 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (11.1.0)\n",
-            "Requirement already satisfied: pyparsing>=2.3.1 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (3.2.1)\n",
-            "Requirement already satisfied: python-dateutil>=2.7 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (2.9.0.post0)\n",
-            "Requirement already satisfied: pytz>=2020.1 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from pandas>=1.2->seaborn) (2025.1)\n",
-            "Requirement already satisfied: tzdata>=2022.7 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from pandas>=1.2->seaborn) (2025.1)\n",
-            "Requirement already satisfied: six>=1.5 in c:\\users\\bill\\anaconda3\\envs\\rascmdr\\lib\\site-packages (from python-dateutil>=2.7->matplotlib!=3.6.1,>=3.4->seaborn) (1.17.0)\n"
+            "Requirement already satisfied: seaborn in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (0.13.2)\n",
+            "Requirement already satisfied: numpy!=1.24.0,>=1.20 in c:\\users\\billk\\appdata\\roaming\\python\\python312\\site-packages (from seaborn) (1.26.4)\n",
+            "Requirement already satisfied: pandas>=1.2 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from seaborn) (2.3.0)\n",
+            "Requirement already satisfied: matplotlib!=3.6.1,>=3.4 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from seaborn) (3.10.3)\n",
+            "Requirement already satisfied: contourpy>=1.0.1 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (1.3.2)\n",
+            "Requirement already satisfied: cycler>=0.10 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (0.12.1)\n",
+            "Requirement already satisfied: fonttools>=4.22.0 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (4.58.2)\n",
+            "Requirement already satisfied: kiwisolver>=1.3.1 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (1.4.8)\n",
+            "Requirement already satisfied: packaging>=20.0 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (25.0)\n",
+            "Requirement already satisfied: pillow>=8 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (11.2.1)\n",
+            "Requirement already satisfied: pyparsing>=2.3.1 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (3.2.3)\n",
+            "Requirement already satisfied: python-dateutil>=2.7 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from matplotlib!=3.6.1,>=3.4->seaborn) (2.9.0.post0)\n",
+            "Requirement already satisfied: pytz>=2020.1 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from pandas>=1.2->seaborn) (2025.2)\n",
+            "Requirement already satisfied: tzdata>=2022.7 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from pandas>=1.2->seaborn) (2025.2)\n",
+            "Requirement already satisfied: six>=1.5 in c:\\users\\billk\\anaconda3\\envs\\rascmdr_local_2025-06\\lib\\site-packages (from python-dateutil>=2.7->matplotlib!=3.6.1,>=3.4->seaborn) (1.17.0)\n"
           ]
         }
       ],
@@ -16105,6 +17093,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stdout",
           "output_type": "stream",
           "text": [
+            "Loading ras-commander from local dev copy\n",
             "ras_commander imported successfully\n"
           ]
         }
@@ -16144,7 +17133,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## Define Manning's n Value Ranges"
+        "## Define Mannings n Value Ranges"
       ]
     },
     {
@@ -16156,7 +17145,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stdout",
           "output_type": "stream",
           "text": [
-            "Manning's n value ranges for 16 land cover types:\n",
+            "Mannings n value ranges for 16 land cover types:\n",
             "                 Land Cover Name  min_n  max_n   mid_n\n",
             "0     Barren Land Rock/Sand/Clay  0.023   0.10  0.0615\n",
             "1               Cultivated Crops  0.020   0.10  0.0600\n",
@@ -16180,7 +17169,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "source": [
         "def create_manning_minmax_df():\n",
         "    \"\"\"\n",
-        "    Create a dataframe containing minimum and maximum Manning's n values\n",
+        "    Create a dataframe containing minimum and maximum Mannings n values\n",
         "    based on recommended ranges from literature.\n",
         "    \n",
         "    Returns:\n",
@@ -16216,12 +17205,12 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "    df = df.sort_values('Land Cover Name').reset_index(drop=True)\n",
         "    \n",
         "    # Print summary information\n",
-        "    print(f\"Manning's n value ranges for {len(df)} land cover types:\")\n",
+        "    print(f\"Mannings n value ranges for {len(df)} land cover types:\")\n",
         "    print(df)\n",
         "    \n",
         "    return df\n",
         "\n",
-        "# Create the Manning's n ranges dataframe\n",
+        "# Create the Mannings n ranges dataframe\n",
         "manning_minmax_df = create_manning_minmax_df()"
       ]
     },
@@ -16229,7 +17218,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## Manning's Bulk Sensitivity Analysis Function"
+        "## Mannings Bulk Sensitivity Analysis Function"
       ]
     },
     {
@@ -16251,17 +17240,17 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "    num_cores=2\n",
         "):\n",
         "    \"\"\"\n",
-        "    Perform Manning's n bulk sensitivity analysis by running model with minimum,\n",
-        "    maximum, and current Manning's n values.\n",
+        "    Perform Mannings n bulk sensitivity analysis by running model with minimum,\n",
+        "    maximum, and current Mannings n values.\n",
         "    \n",
         "    Args:\n",
         "        project_folder (str): Path to HEC-RAS project folder\n",
         "        template_plan (str): Plan number to use as template (e.g., \"01\")\n",
         "        manning_minmax_df (pd.DataFrame, optional): DataFrame with min/max n values\n",
         "        include_regional_overrides (bool, optional): Whether to adjust regional\n",
-        "            Manning's values. Default is True.\n",
+        "            Mannings values. Default is True.\n",
         "        include_base_overrides (bool, optional): Whether to adjust base \n",
-        "            Manning's values. Default is True.\n",
+        "            Mannings values. Default is True.\n",
         "        point_of_interest (tuple or Point, optional): Coordinates for extracting results\n",
         "        output_folder (str, optional): Name of output folder for results\n",
         "        run_parallel (bool, optional): Whether to run plans in parallel\n",
@@ -16313,7 +17302,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "    # Get the geometry file path\n",
         "    geom_path = ras.geom_df.loc[ras.geom_df['geom_number'] == template_geom, 'full_path'].values[0]\n",
         "    \n",
-        "    # Get the original Manning's values\n",
+        "    # Get the original Mannings values\n",
         "    original_baseoverrides = RasGeo.get_mannings_baseoverrides(geom_path)\n",
         "    original_regionoverrides = RasGeo.get_mannings_regionoverrides(geom_path)\n",
         "    \n",
@@ -16329,10 +17318,10 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "        'plan_number': template_plan,\n",
         "        'geom_number': template_geom,\n",
         "        'shortid': f\"Current\",\n",
-        "        'description': \"Current Manning's n Values\"\n",
+        "        'description': \"Current Mannings n Values\"\n",
         "    }]\n",
         "    \n",
-        "    # Function to create a modified plan with adjusted Manning's values\n",
+        "    # Function to create a modified plan with adjusted Mannings values\n",
         "    def create_modified_plan(name, shortid, description, min_values=False, max_values=False):\n",
         "        print(f\"\\nCreating plan: {name} (ShortID: {shortid})\")\n",
         "        print(f\"Description: {description}\")\n",
@@ -16349,7 +17338,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "        # Get the new geometry file path\n",
         "        new_geom_path = ras.geom_df.loc[ras.geom_df['geom_number'] == new_geom_number, 'full_path'].values[0]\n",
         "        \n",
-        "        # Adjust base Manning's values if enabled\n",
+        "        # Adjust base Mannings values if enabled\n",
         "        if include_base_overrides:\n",
         "            modified_baseoverrides = original_baseoverrides.copy()\n",
         "            \n",
@@ -16361,7 +17350,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "                match = manning_minmax_df[manning_minmax_df['Land Cover Name'] == land_cover]\n",
         "                \n",
         "                if not match.empty:\n",
-        "                    current_value = row[\"Base Manning's n Value\"]\n",
+        "                    current_value = row[\"Base Mannings n Value\"]\n",
         "                    \n",
         "                    if min_values:\n",
         "                        new_value = match['min_n'].values[0]\n",
@@ -16370,16 +17359,16 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "                    else:\n",
         "                        new_value = current_value  # No change\n",
         "                    \n",
-        "                    modified_baseoverrides.loc[idx, \"Base Manning's n Value\"] = new_value\n",
+        "                    modified_baseoverrides.loc[idx, \"Base Mannings n Value\"] = new_value\n",
         "                    print(f\"  Adjusted base override for '{land_cover}': {current_value:.4f} \u2192 {new_value:.4f}\")\n",
         "            \n",
-        "            # Apply modified base Manning's values\n",
+        "            # Apply modified base Mannings values\n",
         "            RasGeo.set_mannings_baseoverrides(new_geom_path, modified_baseoverrides)\n",
         "        else:\n",
         "            # Just copy the original base overrides\n",
         "            RasGeo.set_mannings_baseoverrides(new_geom_path, original_baseoverrides)\n",
         "        \n",
-        "        # Adjust regional Manning's values if enabled and they exist\n",
+        "        # Adjust regional Mannings values if enabled and they exist\n",
         "        if include_regional_overrides and has_regional_overrides:\n",
         "            modified_regionoverrides = original_regionoverrides.copy()\n",
         "            \n",
@@ -16404,7 +17393,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "                    modified_regionoverrides.loc[idx, \"MainChannel\"] = new_value\n",
         "                    print(f\"  Adjusted region override for '{land_cover}' in '{region_name}': {current_value:.4f} \u2192 {new_value:.4f}\")\n",
         "            \n",
-        "            # Apply modified regional Manning's values\n",
+        "            # Apply modified regional Mannings values\n",
         "            RasGeo.set_mannings_regionoverrides(new_geom_path, modified_regionoverrides)\n",
         "        elif has_regional_overrides:\n",
         "            # Just copy the original region overrides\n",
@@ -16423,7 +17412,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "    min_scenario = create_modified_plan(\n",
         "        name=\"Minimum\",\n",
         "        shortid=\"Min_n\",\n",
-        "        description=\"Minimum Recommended Manning's n Values\",\n",
+        "        description=\"Minimum Recommended Mannings n Values\",\n",
         "        min_values=True\n",
         "    )\n",
         "\n",
@@ -16432,7 +17421,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "    max_scenario = create_modified_plan(\n",
         "        name=\"Maximum\",\n",
         "        shortid=\"Max_n\",\n",
-        "        description=\"Maximum Recommended Manning's n Values\",\n",
+        "        description=\"Maximum Recommended Mannings n Values\",\n",
         "        max_values=True\n",
         "    )\n",
         "    \n",
@@ -16699,14 +17688,14 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - Found zip file: d:\\GitHub\\ras-commander\\examples\\Example_Projects_6_6.zip\n",
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - Loading project data from CSV...\n",
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.\n",
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----\n",
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - Extracting project 'BaldEagleCrkMulti2D'\n",
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - Project 'BaldEagleCrkMulti2D' already exists. Deleting existing folder...\n",
-            "2025-04-15 16:27:51 - ras_commander.RasExamples - INFO - Existing folder for project 'BaldEagleCrkMulti2D' has been deleted.\n",
-            "2025-04-15 16:27:54 - ras_commander.RasExamples - INFO - Successfully extracted project 'BaldEagleCrkMulti2D' to d:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\n"
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - Found zip file: c:\\GH\\ras-commander\\examples\\Example_Projects_6_6.zip\n",
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - Loading project data from CSV...\n",
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - Loaded 1 projects from CSV.\n",
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----\n",
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - Extracting project 'BaldEagleCrkMulti2D'\n",
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - Project 'BaldEagleCrkMulti2D' already exists. Deleting existing folder...\n",
+            "2025-06-09 08:55:49 - ras_commander.RasExamples - INFO - Existing folder for project 'BaldEagleCrkMulti2D' has been deleted.\n",
+            "2025-06-09 08:55:52 - ras_commander.RasExamples - INFO - Successfully extracted project 'BaldEagleCrkMulti2D' to c:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\n"
           ]
         }
       ],
@@ -16749,7 +17738,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stdout",
           "output_type": "stream",
           "text": [
-            "Manning's n value ranges for 16 land cover types:\n",
+            "Mannings n value ranges for 16 land cover types:\n",
             "                 Land Cover Name  min_n  max_n   mid_n\n",
             "0     Barren Land Rock/Sand/Clay  0.023   0.10  0.0615\n",
             "1               Cultivated Crops  0.020   0.10  0.0600\n",
@@ -16774,7 +17763,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         "# Define a point of interest for result extraction\n",
         "\n",
         "\n",
-        "# Create the Manning's n ranges dataframe (or use the default)\n",
+        "# Create the Mannings n ranges dataframe (or use the default)\n",
         "manning_ranges = create_manning_minmax_df()"
       ]
     },
@@ -16784,19 +17773,31 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "metadata": {},
       "outputs": [
         {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "Initializing HEC-RAS project: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\n"
+          ]
+        },
+        {
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:27:54 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - File cloned from D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p03 to D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p07\n"
+            "2025-06-09 08:55:52 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:52 - ras_commander.RasUtils - INFO - File cloned from C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p03 to C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p07\n",
+            "2025-06-09 08:55:52 - ras_commander.RasUtils - INFO - Successfully updated file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p07\n",
+            "2025-06-09 08:55:52 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 07\n",
+            "2025-06-09 08:55:52 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:52 - ras_commander.RasUtils - INFO - File cloned from C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09 to C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g04\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - File cloned from C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09.hdf to C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g04.hdf\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 04\n"
           ]
         },
         {
           "name": "stdout",
           "output_type": "stream",
           "text": [
-            "Initializing HEC-RAS project: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\n",
-            "Results will be saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\n",
+            "Results will be saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\n",
             "\n",
             "Available plans:\n",
             "   plan_number                               Plan Title  \\\n",
@@ -16828,24 +17829,18 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
             "Template plan: 03 (Geometry: 09)\n",
             "\n",
             "Creating plan: Minimum (ShortID: Min_n)\n",
-            "Description: Minimum Recommended Manning's n Values\n"
+            "Description: Minimum Recommended Mannings n Values\n"
           ]
         },
         {
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - Successfully updated file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p07\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 07\n",
-            "2025-04-15 16:27:54 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - File cloned from D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09 to D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g04\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - File cloned from D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09.hdf to D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g04.hdf\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 04\n",
-            "2025-04-15 16:27:54 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g04 for plan 07\n",
-            "2025-04-15 16:27:54 - ras_commander.RasPlan - INFO - Geometry for plan 07 set to 04\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - File cloned from D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p03 to D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p08\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - Successfully updated file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p08\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08\n"
+            "2025-06-09 08:55:53 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g04 for plan 07\n",
+            "2025-06-09 08:55:53 - ras_commander.RasPlan - INFO - Geometry for plan 07 set to 04\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - File cloned from C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p03 to C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p08\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - Successfully updated file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.p08\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08\n"
           ]
         },
         {
@@ -16884,24 +17879,24 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
             "  Adjusted region override for 'Pasture/Hay' in 'Main Channel': 0.0400 \u2192 0.0250\n",
             "  Adjusted region override for 'Shrub/Scrub' in 'Main Channel': 0.0400 \u2192 0.0700\n",
             "  Adjusted region override for 'Woody Wetlands' in 'Main Channel': 0.0400 \u2192 0.0450\n",
-            "Minimum Scenario Plan Number: {'name': 'Minimum', 'plan_number': '07', 'geom_number': '04', 'shortid': 'Min_n', 'description': \"Minimum Recommended Manning's n Values\"}\n",
+            "Minimum Scenario Plan Number: {'name': 'Minimum', 'plan_number': '07', 'geom_number': '04', 'shortid': 'Min_n', 'description': 'Minimum Recommended Mannings n Values'}\n",
             "\n",
             "Creating plan: Maximum (ShortID: Max_n)\n",
-            "Description: Maximum Recommended Manning's n Values\n"
+            "Description: Maximum Recommended Mannings n Values\n"
           ]
         },
         {
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:27:54 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - File cloned from D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09 to D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g05\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - File cloned from D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09.hdf to D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g05.hdf\n",
-            "2025-04-15 16:27:54 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 05\n",
-            "2025-04-15 16:27:54 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g05 for plan 08\n",
-            "2025-04-15 16:27:54 - ras_commander.RasPlan - INFO - Geometry for plan 08 set to 05\n",
-            "2025-04-15 16:27:54 - ras_commander.RasCmdr - INFO - Filtered plans to execute: ['03', '07', '08']\n",
-            "2025-04-15 16:27:54 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans: 3\n"
+            "2025-06-09 08:55:53 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - File cloned from C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09 to C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g05\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - File cloned from C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g09.hdf to C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\BaldEagleDamBrk.g05.hdf\n",
+            "2025-06-09 08:55:53 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 05\n",
+            "2025-06-09 08:55:53 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g05 for plan 08\n",
+            "2025-06-09 08:55:53 - ras_commander.RasPlan - INFO - Geometry for plan 08 set to 05\n",
+            "2025-06-09 08:55:53 - ras_commander.RasCmdr - INFO - Filtered plans to execute: ['03', '07', '08']\n",
+            "2025-06-09 08:55:53 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans: 3\n"
           ]
         },
         {
@@ -16940,13 +17935,13 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
             "  Adjusted region override for 'Pasture/Hay' in 'Main Channel': 0.0400 \u2192 0.0900\n",
             "  Adjusted region override for 'Shrub/Scrub' in 'Main Channel': 0.0400 \u2192 0.1600\n",
             "  Adjusted region override for 'Woody Wetlands' in 'Main Channel': 0.0400 \u2192 0.1500\n",
-            "Maximum Scenario Plan Number: {'name': 'Maximum', 'plan_number': '08', 'geom_number': '05', 'shortid': 'Max_n', 'description': \"Maximum Recommended Manning's n Values\"}\n",
+            "Maximum Scenario Plan Number: {'name': 'Maximum', 'plan_number': '08', 'geom_number': '05', 'shortid': 'Max_n', 'description': 'Maximum Recommended Mannings n Values'}\n",
             "Scenarios: \n",
-            "[{'name': 'Current', 'plan_number': '03', 'geom_number': '09', 'shortid': 'Current', 'description': \"Current Manning's n Values\"}, {'name': 'Minimum', 'plan_number': '07', 'geom_number': '04', 'shortid': 'Min_n', 'description': \"Minimum Recommended Manning's n Values\"}, {'name': 'Maximum', 'plan_number': '08', 'geom_number': '05', 'shortid': 'Max_n', 'description': \"Maximum Recommended Manning's n Values\"}]\n",
+            "[{'name': 'Current', 'plan_number': '03', 'geom_number': '09', 'shortid': 'Current', 'description': 'Current Mannings n Values'}, {'name': 'Minimum', 'plan_number': '07', 'geom_number': '04', 'shortid': 'Min_n', 'description': 'Minimum Recommended Mannings n Values'}, {'name': 'Maximum', 'plan_number': '08', 'geom_number': '05', 'shortid': 'Max_n', 'description': 'Maximum Recommended Mannings n Values'}]\n",
             "Plan Numbers: \n",
             "['03', '07', '08']\n",
             "\n",
-            "Scenario information saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\scenarios.csv\n",
+            "Scenario information saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\scenarios.csv\n",
             "\n",
             "Running 3 plans in parallel...\n"
           ]
@@ -16955,62 +17950,62 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:27:55 - ras_commander.RasCmdr - INFO - Created worker folder: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\n",
-            "2025-04-15 16:27:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Created worker folder: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\n",
-            "2025-04-15 16:27:59 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:59 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\n",
-            "2025-04-15 16:27:59 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
-            "2025-04-15 16:27:59 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
-            "2025-04-15 16:27:59 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
-            "2025-04-15 16:27:59 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
-            "2025-04-15 16:27:59 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.\n",
-            "2025-04-15 16:27:59 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 07\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03\n",
-            "2025-04-15 16:27:59 - ras_commander.RasUtils - INFO - Using provided plan file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
-            "2025-04-15 16:27:59 - ras_commander.RasUtils - INFO - Using provided plan file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
-            "2025-04-15 16:27:59 - ras_commander.RasUtils - INFO - Successfully updated file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
-            "2025-04-15 16:27:59 - ras_commander.RasUtils - INFO - Successfully updated file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 07\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.prj\" \"D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\"\n",
-            "2025-04-15 16:27:59 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.prj\" \"D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\"\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 392.92 seconds\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 1: Successful\n",
-            "2025-04-15 16:34:32 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
-            "2025-04-15 16:34:32 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
-            "2025-04-15 16:34:32 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 08\n",
-            "2025-04-15 16:34:32 - ras_commander.RasUtils - INFO - Using provided plan file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
-            "2025-04-15 16:34:32 - ras_commander.RasUtils - INFO - Successfully updated file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 08\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
-            "2025-04-15 16:34:32 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.prj\" \"D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\"\n",
-            "2025-04-15 16:36:06 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 07\n",
-            "2025-04-15 16:36:06 - ras_commander.RasCmdr - INFO - Total run time for plan 07: 486.68 seconds\n",
-            "2025-04-15 16:36:06 - ras_commander.RasCmdr - INFO - Plan 07 executed in worker 2: Successful\n",
-            "2025-04-15 16:39:00 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 08\n",
-            "2025-04-15 16:39:00 - ras_commander.RasCmdr - INFO - Total run time for plan 08: 268.15 seconds\n",
-            "2025-04-15 16:39:00 - ras_commander.RasCmdr - INFO - Plan 08 executed in worker 1: Successful\n",
-            "2025-04-15 16:39:00 - ras_commander.RasCmdr - INFO - Final destination for computed results: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\n",
-            "2025-04-15 16:39:15 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:39:15 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.rasmap\n",
-            "2025-04-15 16:39:15 - ras_commander.RasCmdr - INFO - \n",
+            "2025-06-09 08:55:53 - ras_commander.RasCmdr - INFO - Created worker folder: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\n",
+            "2025-06-09 08:55:54 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:54 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:54 - ras_commander.RasCmdr - INFO - Created worker folder: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\n",
+            "2025-06-09 08:55:55 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:55 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\n",
+            "2025-06-09 08:55:55 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
+            "2025-06-09 08:55:55 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
+            "2025-06-09 08:55:55 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.\n",
+            "2025-06-09 08:55:55 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 07\n",
+            "2025-06-09 08:55:55 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
+            "2025-06-09 08:55:55 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
+            "2025-06-09 08:55:55 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03\n",
+            "2025-06-09 08:55:55 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
+            "2025-06-09 08:55:55 - ras_commander.RasUtils - INFO - Successfully updated file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\n",
+            "2025-06-09 08:55:55 - ras_commander.RasUtils - INFO - Successfully updated file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 07\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.prj\" \"C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 2]\\BaldEagleDamBrk.p07\"\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
+            "2025-06-09 08:55:55 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.prj\" \"C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p03\"\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 527.68 seconds\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 1: Successful\n",
+            "2025-06-09 09:04:43 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
+            "2025-06-09 09:04:43 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
+            "2025-06-09 09:04:43 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 08\n",
+            "2025-06-09 09:04:43 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
+            "2025-06-09 09:04:43 - ras_commander.RasUtils - INFO - Successfully updated file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 08\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:\n",
+            "2025-06-09 09:04:43 - ras_commander.RasCmdr - INFO - Running command: \"C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe\" -c \"C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.prj\" \"C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Worker 1]\\BaldEagleDamBrk.p08\"\n",
+            "2025-06-09 09:06:40 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 07\n",
+            "2025-06-09 09:06:40 - ras_commander.RasCmdr - INFO - Total run time for plan 07: 645.12 seconds\n",
+            "2025-06-09 09:06:40 - ras_commander.RasCmdr - INFO - Plan 07 executed in worker 2: Successful\n",
+            "2025-06-09 09:10:48 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 08\n",
+            "2025-06-09 09:10:48 - ras_commander.RasCmdr - INFO - Total run time for plan 08: 364.65 seconds\n",
+            "2025-06-09 09:10:48 - ras_commander.RasCmdr - INFO - Plan 08 executed in worker 1: Successful\n",
+            "2025-06-09 09:10:48 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\n",
+            "2025-06-09 09:10:53 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 09:10:53 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.rasmap\n",
+            "2025-06-09 09:10:53 - ras_commander.RasCmdr - INFO - \n",
             "Execution Results:\n",
-            "2025-04-15 16:39:15 - ras_commander.RasCmdr - INFO - Plan 03: Successful\n",
-            "2025-04-15 16:39:15 - ras_commander.RasCmdr - INFO - Plan 07: Successful\n",
-            "2025-04-15 16:39:15 - ras_commander.RasCmdr - INFO - Plan 08: Successful\n",
-            "2025-04-15 16:39:15 - ras_commander.HdfMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:15 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:15 - ras_commander.HdfMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n"
+            "2025-06-09 09:10:53 - ras_commander.RasCmdr - INFO - Plan 03: Successful\n",
+            "2025-06-09 09:10:53 - ras_commander.RasCmdr - INFO - Plan 07: Successful\n",
+            "2025-06-09 09:10:53 - ras_commander.RasCmdr - INFO - Plan 08: Successful\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfMesh - INFO - Using existing Path object HDF file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n"
           ]
         },
         {
@@ -17028,12 +18023,12 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:39:15 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:15 - ras_commander.HdfBase - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:15 - ras_commander.HdfBase - INFO - Found projection in HDF file: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfMesh - INFO - Using HDF file from h5py.File object: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n"
+            "2025-06-09 09:10:54 - ras_commander.HdfBase - INFO - Using HDF file from h5py.File object: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfBase - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfBase - INFO - Found projection in HDF file: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfResultsMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfMesh - INFO - Using HDF file from h5py.File object: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n",
+            "2025-06-09 09:10:54 - ras_commander.HdfMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p03.hdf\n"
           ]
         },
         {
@@ -17050,37 +18045,37 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Froude Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Courant Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Bed Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Precipitation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Infiltration Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Evaporation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Percolation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Water Surface' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Courant' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Cumulative Volume' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Eddy Viscosity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow Period Average' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Friction Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Pressure Gradient Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Tangential Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p07.hdf\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfMesh - INFO - Using HDF file from h5py.File object: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p07.hdf\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p07.hdf\n"
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Froude Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Courant Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Bed Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Precipitation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Infiltration Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Evaporation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Percolation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Water Surface' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Courant' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Cumulative Volume' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Eddy Viscosity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow Period Average' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Friction Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Pressure Gradient Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Tangential Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p07.hdf\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfMesh - INFO - Using HDF file from h5py.File object: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p07.hdf\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p07.hdf\n"
           ]
         },
         {
@@ -17088,44 +18083,44 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "output_type": "stream",
           "text": [
             "Scenario: Current (Current): Max Water Surface = 560.73\n",
-            "  Time series saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\timeseries_Current.csv\n"
+            "  Time series saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\timeseries_Current.csv\n"
           ]
         },
         {
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Froude Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Courant Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Bed Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Precipitation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Infiltration Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Evaporation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Percolation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:16 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Water Surface' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Courant' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Cumulative Volume' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Eddy Viscosity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow Period Average' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Friction Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Pressure Gradient Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Tangential Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p08.hdf\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfMesh - INFO - Using HDF file from h5py.File object: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p08.hdf\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfMesh - INFO - Final validated HDF file path: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p08.hdf\n"
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Froude Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Courant Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Bed Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Precipitation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Infiltration Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Evaporation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Percolation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:55 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Water Surface' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Courant' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Cumulative Volume' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Eddy Viscosity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow Period Average' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Friction Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Pressure Gradient Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Tangential Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p08.hdf\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfMesh - INFO - Using HDF file from h5py.File object: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p08.hdf\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfMesh - INFO - Final validated HDF file path: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D [Computed]\\BaldEagleDamBrk.p08.hdf\n"
           ]
         },
         {
@@ -17133,41 +18128,41 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "output_type": "stream",
           "text": [
             "Scenario: Minimum (Min_n): Max Water Surface = 560.11\n",
-            "  Time series saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\timeseries_Min_n.csv\n"
+            "  Time series saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\timeseries_Min_n.csv\n"
           ]
         },
         {
           "name": "stderr",
           "output_type": "stream",
           "text": [
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Froude Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Courant Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Bed Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Precipitation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Infiltration Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Evaporation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Percolation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Water Surface' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Courant' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Cumulative Volume' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Eddy Viscosity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow Period Average' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Friction Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Pressure Gradient Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
-            "2025-04-15 16:39:17 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Tangential Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n"
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Froude Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Courant Number' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Bed Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Precipitation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Infiltration Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Evaporation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Percolation Rate' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Elevation' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Depth' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity X' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Groundwater Velocity Y' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Water Surface' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Courant' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Cumulative Volume' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Eddy Viscosity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Flow Period Average' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Friction Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Pressure Gradient Term' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Shear Stress' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n",
+            "2025-06-09 09:10:56 - ras_commander.HdfResultsMesh - WARNING - Variable 'Face Tangential Velocity' not found in the HDF file for mesh 'BaldEagleCr'. Skipping.\n"
           ]
         },
         {
@@ -17175,11 +18170,11 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "output_type": "stream",
           "text": [
             "Scenario: Maximum (Max_n): Max Water Surface = 559.45\n",
-            "  Time series saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\timeseries_Max_n.csv\n",
+            "  Time series saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\timeseries_Max_n.csv\n",
             "\n",
-            "Summary of maximum water surface elevations saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\max_water_surface_summary.csv\n",
-            "Time series plot saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\water_surface_timeseries.png\n",
-            "Bar chart saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\max_water_surface_comparison.png\n"
+            "Summary of maximum water surface elevations saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\max_water_surface_summary.csv\n",
+            "Time series plot saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\water_surface_timeseries.png\n",
+            "Bar chart saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\\max_water_surface_comparison.png\n"
           ]
         },
         {
@@ -17217,7 +18212,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
         }
       ],
       "source": [
-        "# Example usage of the Manning's Bulk Sensitivity Analysis function\n",
+        "# Example usage of the Mannings Bulk Sensitivity Analysis function\n",
         "\n",
         "\n",
         "\n",
@@ -17251,7 +18246,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
           "output_type": "stream",
           "text": [
             "\n",
-            "Results saved to: D:\\GitHub\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\n"
+            "Results saved to: C:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D\\Mannings_Bulk_Sensitivity\n"
           ]
         }
       ],
@@ -17268,20 +18263,20 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "This notebook provides a comprehensive framework for Manning's n sensitivity analysis in HEC-RAS models. It allows you to:\n",
+        "This notebook provides a comprehensive framework for Mannings n sensitivity analysis in HEC-RAS models. It allows you to:\n",
         "\n",
-        "1. Create models with minimum and maximum recommended Manning's n values\n",
+        "1. Create models with minimum and maximum recommended Mannings n values\n",
         "2. Run simulations and extract results at locations of interest\n",
         "3. Visualize and compare water surface elevations across scenarios\n",
         "4. Understand the sensitivity of your model to roughness parameters\n",
         "\n",
-        "The function gives you flexibility to include or exclude regional and base Manning's overrides, and to customize the analysis based on your specific project needs."
+        "The function gives you flexibility to include or exclude regional and base Mannings overrides, and to customize the analysis based on your specific project needs."
       ]
     }
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "rascmdr",
+      "display_name": "rascmdr_local_2025-06",
       "language": "python",
       "name": "python3"
     },
@@ -17295,7 +18290,7 @@ File: c:\GH\ras-commander\examples\104_mannings_sensitivity_bulk_analysis.ipynb
       "name": "python",
       "nbconvert_exporter": "python",
       "pygments_lexer": "ipython3",
-      "version": "3.12.9"
+      "version": "3.12.11"
     }
   },
   "nbformat": 4,
@@ -20391,7 +21386,7 @@ File: c:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "rascmdr",
+      "display_name": "rascmdr_pip312",
       "language": "python",
       "name": "python3"
     },
@@ -21060,9 +22055,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
       "metadata": {},
       "outputs": [],
       "source": [
-        "# Extract Cell Polygons\n",
-        "print(\"\\nExample 6: Extracting Cell Polygons\")\n",
-        "cell_polygons_df = HdfMesh.get_mesh_cell_polygons(geom_hdf_path)"
+        "geom_hdf_path    "
       ]
     },
     {
@@ -21071,7 +22064,18 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
       "metadata": {},
       "outputs": [],
       "source": [
-        "cell_polygons_df"
+        "# Extract Cell Polygons\n",
+        "print(\"\\nExample 6: Extracting Cell Polygons\")\n",
+        "cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(geom_hdf_path)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "cell_polygons_gdf"
       ]
     },
     {
@@ -21086,7 +22090,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
         "    fig, ax = plt.subplots(figsize=(12, 8))\n",
         "\n",
         "    # Plot cell polygons\n",
-        "    cell_polygons_df.plot(ax=ax, edgecolor='blue', facecolor='none')\n",
+        "    cell_polygons_gdf.plot(ax=ax, edgecolor='blue', facecolor='none')\n",
         "\n",
         "    # Set labels and title\n",
         "    ax.set_xlabel('X Coordinate')\n",
@@ -22766,7 +23770,7 @@ File: c:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "rascmdr",
+      "display_name": "rascmdr_pip312",
       "language": "python",
       "name": "python3"
     },
@@ -23637,7 +24641,7 @@ File: c:\GH\ras-commander\examples\12_2d_hdf_data_extraction pipes and pumps.ipy
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "rascmdr",
+      "display_name": "rascmdr_pip312",
       "language": "python",
       "name": "python3"
     },
@@ -25046,7 +26050,7 @@ File: c:\GH\ras-commander\examples\13_2d_detail_face_data_extraction.ipynb
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "rascmdr",
+      "display_name": "rascmdr_pip312",
       "language": "python",
       "name": "python3"
     },
@@ -25886,7 +26890,7 @@ File: c:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "rascmdr",
+      "display_name": "rascmdr_pip312",
       "language": "python",
       "name": "python3"
     },
@@ -35989,10 +36993,10 @@ class RasGeo:
         
         # Create DataFrame
         if base_table_rows:
-            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
             return df
         else:
-            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Manning\'s n Value'])
+            return pd.DataFrame(columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
 
 
     @staticmethod
@@ -41377,7 +42381,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.75.0"
+    __version__ = "0.77.0"
 
 # Set up logging
 setup_logging()
@@ -41434,7 +42438,7 @@ __all__ = [
 
 ==================================================
 
-File: c:\GH\ras-commander\.cursor\rules\ras-commander.mdc
+File: c:\GH\ras-commander\.cursor\rules\ras-commander.mdc.txt
 ==================================================
 ---
 description: 

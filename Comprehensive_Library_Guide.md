@@ -104,7 +104,7 @@ pip install --upgrade ras-commander
 5.  **RasUnsteady**: Handles unsteady flow file (`.u*`) operations (updating title, restart settings, extracting boundary tables).
 6.  **RasUtils**: Offers general utility functions (file handling, path finding, data conversion, error metrics, spatial queries).
 7.  **RasExamples**: Manages downloading and extracting official HEC-RAS example projects.
-8.  **RasMap**: Parses HEC-RAS mapper configuration files (.rasmap) to extract paths to terrain, soil layer, land cover data, and other spatial datasets. Provides access to projection information and RASMapper settings.
+8.  **RasMap**: Parses HEC-RAS mapper configuration files (.rasmap) to extract paths to terrain, soil layer, land cover data, and other spatial datasets. Provides functions to automate post-processing of stored floodplain maps.
 9.  **HdfBase**: Provides base functionality for HDF file operations (time parsing, attribute access, projection).
 10. **HdfBndry**: Handles boundary *geometry* features (BC lines, breaklines, etc.) from geometry HDF files.
 11. **HdfMesh**: Manages mesh *geometry* data (cell polygons, points, faces, attributes) from HDF files.
@@ -1226,6 +1226,70 @@ The `rasmap_df` contains paths to:
 - Project settings and current visualization state
 
 This allows programmatic access to the same spatial data being used in RASMapper visualizations.
+
+### Working with RASMapper Data and Post-Processing
+
+The `RasMap` class provides tools to interact with `.rasmap` files, enabling automation of tasks typically done in the RASMapper interface, such as generating stored floodplain maps.
+
+#### 1. Getting Available Terrains
+
+Before generating maps, you might need to know which terrain layers are available in the project.
+
+```python
+from ras_commander import init_ras_project, RasMap, ras
+
+# Initialize the project
+init_ras_project(r"/path/to/your/project", "6.6")
+
+# Get the path to the .rasmap file
+rasmap_file = RasMap.get_rasmap_path()
+
+if rasmap_file:
+    # Get a list of terrain names
+    terrains = RasMap.get_terrain_names(rasmap_file)
+    print(f"Available terrains: {terrains}")
+else:
+    print("No .rasmap file found.")
+```
+
+#### 2. Automating Stored Map Generation (`postprocess_stored_maps`)
+
+This powerful function automates the creation of stored map `.tif` files (e.g., for Depth, WSEL, Velocity) after a primary simulation has been run. It temporarily modifies plan and mapper files to run HEC-RAS in a mapping-only mode, then restores them.
+
+**Workflow:**
+
+1.  **Run a primary simulation** to generate the main HDF results (e.g., using `RasCmdr.compute_plan`).
+2.  **Call `postprocess_stored_maps`** on the computed plan to generate the `.tif` files.
+
+```python
+from ras_commander import init_ras_project, RasCmdr, RasMap, RasPlan, ras
+
+# Initialize the project
+init_ras_project(r"/path/to/project", "6.6")
+plan_to_map = "01"
+
+# Step 1: Ensure the primary simulation has been run
+hdf_path = RasPlan.get_results_path(plan_to_map)
+if not hdf_path:
+    print(f"Running initial simulation for plan {plan_to_map}...")
+    RasCmdr.compute_plan(plan_to_map)
+
+# Step 2: Post-process to generate stored maps
+print(f"Generating stored maps for plan {plan_to_map}...")
+success = RasMap.postprocess_stored_maps(
+    plan_number=plan_to_map,
+    specify_terrain="Terrain50",  # Optional: specify a terrain
+    layers=["Depth", "WSEL"]      # Optional: specify which maps to generate
+)
+
+if success:
+    print("Stored maps generated successfully.")
+    # You can now find the .tif files in a subfolder named after the plan's Short ID
+else:
+    print("Failed to generate stored maps.")
+```
+
+This function is ideal for batch-processing workflows where you need to generate floodplain maps for multiple scenarios without manual intervention in RASMapper.
 
 ### Modifying Manning's n Values
 
