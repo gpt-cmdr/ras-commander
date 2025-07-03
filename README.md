@@ -8,9 +8,11 @@ RAS Commander is a Python library for automating HEC-RAS operations, providing a
 
 *[Check out the ASFPM Presentation on RAS-Commander Here](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)*
 
-## Repository Author:
-[William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)
------  
+## Repository Author
+
+**[William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)**  
+Owner & Vice President, [CLB Engineering Corporation](https://clbengineering.com/)  
+
 
 ## Don't Ask Me, Ask a GPT!
 
