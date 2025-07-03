@@ -42,22 +42,6 @@ HdfUtils for common operations. Methods use @log_call decorator for logging and
 
 
 
-REVISIONS MADE:
-
-Use get_ prefix for functions that return data.  
-BUT, we will never set results data, so we should use get_ for results data.
-
-Renamed functions:
-- mesh_summary_output() to get_mesh_summary()
-- mesh_timeseries_output() to get_mesh_timeseries()
-- mesh_faces_timeseries_output() to get_mesh_faces_timeseries()
-- mesh_cells_timeseries_output() to get_mesh_cells_timeseries()
-- mesh_last_iter() to get_mesh_last_iter()
-- mesh_max_ws() to get_mesh_max_ws()
-
-
-
-
 
 
 
