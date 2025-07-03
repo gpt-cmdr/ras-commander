@@ -5950,7 +5950,7 @@ class RasUnsteady:
         formatted_values = []
         for i in range(0, len(df), 10):
             row = df['Value'].iloc[i:i+10]
-            formatted_row = ''.join(f'{value:8.0f}' for value in row)
+            formatted_row = ''.join(f'{value:8.2f}' for value in row)
             formatted_values.append(formatted_row + '\n')
         
         # Replace old table with new formatted values

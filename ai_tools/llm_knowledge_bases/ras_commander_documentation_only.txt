@@ -2130,9 +2130,11 @@ RAS Commander is a Python library for automating HEC-RAS operations, providing a
 
 *[Check out the ASFPM Presentation on RAS-Commander Here](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)*
 
-## Repository Author:
-[William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)
------  
+## Repository Author
+
+**[William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)**  
+Owner & Vice President, [CLB Engineering Corporation](https://clbengineering.com/)  
+
 
 ## Don't Ask Me, Ask a GPT!
 
@@ -16865,7 +16867,7 @@ class RasUnsteady:
         formatted_values = []
         for i in range(0, len(df), 10):
             row = df['Value'].iloc[i:i+10]
-            formatted_row = ''.join(f'{value:8.0f}' for value in row)
+            formatted_row = ''.join(f'{value:8.2f}' for value in row)
             formatted_values.append(formatted_row + '\n')
         
         # Replace old table with new formatted values
@@ -17986,7 +17988,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.79.0"
+    __version__ = "0.79.1"
 
 # Set up logging
 setup_logging()
