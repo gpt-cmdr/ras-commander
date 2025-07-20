@@ -33,6 +33,13 @@ Many functions within the `ras_commander` library utilize decorators to provide 
 
 Manages HEC-RAS project data and state. Provides access to project files, plans, geometries, flows, and boundary conditions. Can be used as a global `ras` object or instantiated for multi-project workflows.
 
+### `RasPrj.__init__()`
+
+*   **Purpose:** Constructor for RasPrj class. Creates an uninitialized instance.
+*   **Parameters:** None.
+*   **Returns:** `None`. Creates a new RasPrj instance with `initialized=False`.
+*   **Note:** Call `initialize()` or use `init_ras_project()` to fully initialize the instance with project data.
+
 ### `RasPrj.initialize(project_folder, ras_exe_path, suppress_logging=True)`
 
 *   **Purpose:** Initializes a `RasPrj` instance. **Note:** Users should typically call `init_ras_project()` instead.
@@ -143,6 +150,7 @@ Manages HEC-RAS project data and state. Provides access to project files, plans,
 *   `geom_df` (`pd.DataFrame`): DataFrame containing geometry file information.
 *   `boundaries_df` (`pd.DataFrame`): DataFrame containing boundary condition information.
 *   `rasmap_df` (`pd.DataFrame`): DataFrame containing RASMapper configuration data including paths to terrain, soil layer, infiltration, and land cover data.
+*   `is_initialized` (`bool`): Read-only property indicating whether the RasPrj instance has been properly initialized with project data.
 
 ---
 
@@ -979,14 +987,30 @@ Contains static methods for extracting boundary-related *geometry* features (BC 
 
 Contains static methods for analyzing fluvial-pluvial boundaries based on simulation results.
 
-### `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf_path, delta_t=12)`
+### `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf_path, delta_t=12, min_line_length=None)`
 
 *   **Purpose:** Calculates the boundary line between areas dominated by fluvial (riverine) vs. pluvial (rainfall/local) flooding, based on the timing difference of maximum water surface elevation between adjacent 2D cells. Attempts to join adjacent boundary segments.
 *   **Parameters:**
     *   `hdf_path` (Input handled by `@standardize_input`, `file_type='plan_hdf'`): Path identifier for the plan results HDF file.
     *   `delta_t` (`float`, optional): Time difference threshold in hours. Adjacent cells with max WSE time differences greater than this are considered part of the boundary. Default is 12.
+    *   `min_line_length` (`float`, optional): Minimum length (in CRS units) for boundary lines to be included. Lines shorter than this will be dropped. Default is None (no filtering).
 *   **Returns:** `gpd.GeoDataFrame`: GeoDataFrame containing LineString geometries representing the calculated boundary. CRS matches the input HDF.
 *   **Raises:** `ValueError` if required mesh or results data is missing.
+
+### `HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf_path, delta_t=12, temporal_tolerance_hours=1.0, min_polygon_area_acres=None)`
+
+*   **Purpose:** Generates dissolved polygons representing fluvial, pluvial, and ambiguous flood zones. Classifies each wetted cell using iterative region growth based on maximum water surface elevation timing, then merges cells into three distinct regions: 'fluvial', 'pluvial', and 'ambiguous'.
+*   **Parameters:**
+    *   `hdf_path` (Input handled by `@standardize_input`, `file_type='plan_hdf'`): Path identifier for the plan results HDF file.
+    *   `delta_t` (`float`, optional): The time difference (in hours) between adjacent cells that defines the initial boundary between fluvial and pluvial zones. Default is 12.
+    *   `temporal_tolerance_hours` (`float`, optional): The maximum time difference (in hours) for a cell to be considered part of an expanding region during iterative growth. Default is 1.0.
+    *   `min_polygon_area_acres` (`float`, optional): Minimum polygon area (in acres). For fluvial or pluvial polygons smaller than this threshold, they are reclassified to the opposite type and merged with adjacent polygons. Ambiguous polygons are not affected. Default is None (no filtering).
+*   **Returns:** `gpd.GeoDataFrame`: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial', and 'ambiguous' zones. CRS matches the input HDF.
+*   **Raises:** `ValueError` if required mesh or results data is missing.
+*   **Notes:** 
+    - Uses iterative region growth algorithm to expand from initial boundary seeds
+    - Handles conflicts by marking cells as 'ambiguous' when both fluvial and pluvial regions compete for the same cell
+    - Area-based filtering requires projected CRS; geographic CRS will skip this step with a warning
 
 ---
 
@@ -1455,6 +1479,14 @@ Contains static methods for extracting and analyzing 2D mesh *results* data from
     *   `round_to` (`str`, optional): Time rounding precision. Default "100ms".
 *   **Returns:** `gpd.GeoDataFrame`: GeoDataFrame containing max iteration count and time for each cell (via `get_mesh_summary`).
 
+### `HdfResultsMesh.get_boundary_conditions_timeseries(hdf_path)`
+
+*   **Purpose:** Extracts timeseries data for all boundary conditions as a single combined xarray Dataset with stage, flow, and per-face data.
+*   **Parameters:**
+    *   `hdf_path` (Input handled by `@standardize_input`, `file_type='plan_hdf'`): Path identifier for the plan results HDF.
+*   **Returns:** `xr.Dataset`: Dataset containing boundary condition data with dimensions (time, bc_name, face_id) and variables (stage, flow, flow_per_face, stage_per_face).
+*   **Raises:** `ValueError`.
+
 ---
 
 ## Class: HdfResultsPlan
@@ -1682,29 +1714,6 @@ Contains general static utility methods used for HDF processing, data conversion
     *   `window` (`str`): Time window string.
 *   **Returns:** `Tuple[datetime, datetime]`: Tuple containing (start_datetime, end_datetime).
 
-### `HdfUtils.decode_byte_strings(dataframe)`
-
-*   **Purpose:** Decodes all byte string (`b'...'`) columns in a DataFrame to UTF-8 strings. (See `RasUtils` for identical function).
-*   **Parameters:** See `RasUtils.decode_byte_strings`.
-*   **Returns:** `pd.DataFrame`.
-
-### `HdfUtils.consolidate_dataframe(...)`
-
-*   **Purpose:** Aggregates rows in a DataFrame based on grouping criteria. (See `RasUtils` for identical function).
-*   **Parameters:** See `RasUtils.consolidate_dataframe`.
-*   **Returns:** `pd.DataFrame`.
-
-### `HdfUtils.find_nearest_value(...)`
-
-*   **Purpose:** Finds the element in an array numerically closest to a target value. (See `RasUtils` for identical function).
-*   **Parameters:** See `RasUtils.find_nearest_value`.
-*   **Returns:** (`int` or `float`).
-
-### `HdfUtils.horizontal_distance(...)`
-
-*   **Purpose:** Calculates the 2D Euclidean distance between two points. (See `RasUtils` for identical function).
-*   **Parameters:** See `RasUtils.horizontal_distance`.
-*   **Returns:** (`float`).
 
 ---
 
@@ -1807,11 +1816,11 @@ Contains static methods for parsing and accessing information from HEC-RAS mappe
 *   **Returns:** (`List[str]`): A list of terrain names.
 *   **Raises:** `FileNotFoundError`, `ValueError`.
 
-### `RasMap.postprocess_stored_maps(plan_number: str, specify_terrain: Optional[str] = None, layers: Union[str, List[str]] = None, ras_object: Optional[Any] = None) -> bool`
+### `RasMap.postprocess_stored_maps(plan_number: Union[str, List[str]], specify_terrain: Optional[str] = None, layers: Union[str, List[str]] = None, ras_object: Optional[Any] = None) -> bool`
 *   **Purpose:** Automates the generation of stored floodplain map outputs (e.g., `.tif` files) for a specific plan.
 *   **Parameters:**
-    *   `plan_number` (`str`): The plan to generate maps for.
-    *   `specify_terrain` (`str`, optional): The name of a specific terrain to use for mapping. If provided, other terrains are temporarily ignored.
+    *   `plan_number` (`Union[str, List[str]]`): Plan number(s) to generate maps for. Can be a single plan number as a string or a list of plan numbers for batch processing.
+    *   `specify_terrain` (`Optional[str]`): The name of a specific terrain to use for mapping. If provided, other terrains are temporarily ignored.
     *   `layers` (`Union[str, List[str]]`, optional): A list of map layers to generate. Defaults to `['WSEL', 'Velocity', 'Depth']`.
     *   `ras_object` (`RasPrj`, optional): The RAS project object to use.
 *   **Returns:** (`bool`): `True` if the process completed successfully, `False` otherwise.
@@ -1819,5 +1828,5 @@ Contains static methods for parsing and accessing information from HEC-RAS mappe
     1.  Backs up the original plan and `.rasmap` files.
     2.  Modifies the plan file to only run floodplain mapping.
     3.  Modifies the `.rasmap` file to include the specified stored map layers.
-    4.  Runs `RasCmdr.compute_plan` to generate the maps.
-    5.  Restores the original plan and `.rasmap` files, but keeps the newly added map layer definitions in the `.rasmap` file for future use.
+    4.  Opens HEC-RAS GUI and waits for the user to manually execute the plan(s) using the 'Compute Multiple' window.
+    5.  Completely restores the original plan and `.rasmap` files to their previous state after HEC-RAS closes.
