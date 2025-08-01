@@ -114,9 +114,13 @@ class HdfXsec:
                 mann_info = hdf["/Geometry/Cross Sections/Manning's n Info"][:]
                 mann_values = hdf["/Geometry/Cross Sections/Manning's n Values"][:]
                 
-                # Get ineffective blocks data
-                ineff_blocks = hdf['/Geometry/Cross Sections/Ineffective Blocks'][:]
-                ineff_info = hdf['/Geometry/Cross Sections/Ineffective Info'][:]
+                # Get ineffective blocks data if they exist
+                if '/Geometry/Cross Sections/Ineffective Blocks' in hdf:
+                    ineff_blocks = hdf['/Geometry/Cross Sections/Ineffective Blocks'][:]
+                    ineff_info = hdf['/Geometry/Cross Sections/Ineffective Info'][:]
+                else:
+                    ineff_blocks = None
+                    ineff_info = None
                 
                 # Initialize lists to store data
                 geometries = []
@@ -165,20 +169,23 @@ class HdfXsec:
                         mannings_n.append(mann_n_dict)
                         
                         # Extract ineffective blocks data
-                        ineff_start_idx = ineff_info[i][0]
-                        ineff_count = ineff_info[i][1]
-                        if ineff_count > 0:
-                            blocks = ineff_blocks[ineff_start_idx:ineff_start_idx + ineff_count]
-                            blocks_list = []
-                            for block in blocks:
-                                block_dict = {
-                                    'Left Sta': float(block['Left Sta']),
-                                    'Right Sta': float(block['Right Sta']), 
-                                    'Elevation': float(block['Elevation']),
-                                    'Permanent': bool(block['Permanent'])
-                                }
-                                blocks_list.append(block_dict)
-                            ineffective_blocks.append(blocks_list)
+                        if ineff_info is not None and ineff_blocks is not None:
+                            ineff_start_idx = ineff_info[i][0]
+                            ineff_count = ineff_info[i][1]
+                            if ineff_count > 0:
+                                blocks = ineff_blocks[ineff_start_idx:ineff_start_idx + ineff_count]
+                                blocks_list = []
+                                for block in blocks:
+                                    block_dict = {
+                                        'Left Sta': float(block['Left Sta']),
+                                        'Right Sta': float(block['Right Sta']), 
+                                        'Elevation': float(block['Elevation']),
+                                        'Permanent': bool(block['Permanent'])
+                                    }
+                                    blocks_list.append(block_dict)
+                                ineffective_blocks.append(blocks_list)
+                            else:
+                                ineffective_blocks.append([])
                         else:
                             ineffective_blocks.append([])
                 
