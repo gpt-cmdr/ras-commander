@@ -128,11 +128,14 @@ class RasExamples:
         self._save_to_csv()
 
     @classmethod
-    def extract_project(cls, project_names: Union[str, List[str]]) -> Union[Path, List[Path]]:
+    def extract_project(cls, project_names: Union[str, List[str]], output_path: Union[str, Path] = None) -> Union[Path, List[Path]]:
         """Extract one or more specific HEC-RAS projects from the zip file.
         
         Args:
             project_names: Single project name as string or list of project names
+            output_path: Optional path where the project folder will be placed.
+                        Can be a relative path (creates subfolder in current directory)
+                        or an absolute path. If None, uses default 'example_projects' folder.
             
         Returns:
             Path: Single Path object if one project extracted
@@ -151,13 +154,26 @@ class RasExamples:
         if isinstance(project_names, str):
             project_names = [project_names]
 
+        # Determine the output directory
+        if output_path is None:
+            # Use default 'example_projects' folder
+            base_output_path = cls.projects_dir
+        else:
+            # Convert to Path object
+            base_output_path = Path(output_path)
+            # If relative path, make it relative to current working directory
+            if not base_output_path.is_absolute():
+                base_output_path = Path.cwd() / base_output_path
+            # Create the directory if it doesn't exist
+            base_output_path.mkdir(parents=True, exist_ok=True)
+
         extracted_paths = []
 
         for project_name in project_names:
             # Check if this is a special project
             if project_name in cls.SPECIAL_PROJECTS:
                 try:
-                    special_path = cls._extract_special_project(project_name)
+                    special_path = cls._extract_special_project(project_name, base_output_path)
                     extracted_paths.append(special_path)
                     continue
                 except Exception as e:
@@ -167,7 +183,7 @@ class RasExamples:
             # Regular project extraction logic
             logger.info("----- RasExamples Extracting Project -----")
             logger.info(f"Extracting project '{project_name}'")
-            project_path = cls.projects_dir
+            project_path = base_output_path
 
             if (project_path / project_name).exists():
                 logger.info(f"Project '{project_name}' already exists. Deleting existing folder...")
@@ -447,12 +463,13 @@ class RasExamples:
         return int(number * units[unit])
 
     @classmethod
-    def _extract_special_project(cls, project_name: str) -> Path:
+    def _extract_special_project(cls, project_name: str, output_path: Path = None) -> Path:
         """
         Download and extract special projects that are not in the main zip file.
         
         Args:
             project_name: Name of the special project ('NewOrleansMetro' or 'BeaverLake')
+            output_path: Base output directory path. If None, uses cls.projects_dir
             
         Returns:
             Path: Path to the extracted project directory
@@ -466,8 +483,11 @@ class RasExamples:
         logger.info(f"----- RasExamples Extracting Special Project -----")
         logger.info(f"Extracting special project '{project_name}'")
         
+        # Use provided output_path or default
+        base_path = output_path if output_path else cls.projects_dir
+        
         # Create the project directory
-        project_path = cls.projects_dir / project_name
+        project_path = base_path / project_name
         
         # Check if already exists
         if project_path.exists():
@@ -484,7 +504,7 @@ class RasExamples:
         
         # Download the zip file
         url = cls.SPECIAL_PROJECTS[project_name]
-        zip_file_path = cls.projects_dir / f"{project_name}_temp.zip"
+        zip_file_path = base_path / f"{project_name}_temp.zip"
         
         logger.info(f"Downloading special project from: {url}")
         logger.info("This may take a few moments...")
