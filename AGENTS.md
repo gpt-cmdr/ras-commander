@@ -1,0 +1,67 @@
+**Purpose**
+- Orient AI agents to use Ras Commander effectively without relying on external knowledge bases or executing heavyweight notebooks in-place. This file governs the entire repository. Subfolder files add context-specific guidance.
+
+**Do This First**
+- Ignore `ai_tools/` and any generated knowledge bases. These are for maintainers; agents should not read, build, or depend on them.
+- Prefer “cleaned” notebooks (no images, truncated outputs). If a cleaned copy is not present, treat notebooks as reference only and disable plotting-heavy cells.
+- Work in local, ignored folders such as `working/`, `scripts/`, or `ras_agent/` at the repo root. Create them if missing. It is safe to add these to `.gitignore` locally.
+
+**Environment (uv-managed)**
+- Python 3.10+ is required.
+- Create a single virtual environment at the repo root and install the package in editable mode:
+  - `uv venv .venv`
+  - `uv pip install -e .`
+  - Quick check: `uv run python -c "import ras_commander as ras; print(ras.__version__)"`
+- Build artifacts when needed only: `python setup.py sdist bdist_wheel` (invokes a maintainer script in `ai_tools/`; agents should not rely on it).
+
+**HEC-RAS Requirement**
+- HEC-RAS 6.x must be installed to execute plans. Pass an explicit `Ras.exe` path when needed, for example:
+  - `from ras_commander import init_ras_project`
+  - `init_ras_project(<project_folder>, r"D:/Programs/HEC/HEC-RAS/6.6/Ras.exe")`
+
+**Repository Layout**
+- `ras_commander/` — core library (e.g., `RasCmdr`, `RasPrj`, `RasPlan`, `RasMap`, `Hdf*`, `Ras*`). One class per module is typical (e.g., `HdfMesh.py`). See `ras_commander/AGENTS.md` for coding-level details.
+- `examples/` — Jupyter notebooks and sample data for scenario validation. See `examples/AGENTS.md` for a detailed, agent-friendly index.
+- Top-level docs: `README.md`, `STYLE_GUIDE.md`, `Comprehensive_Library_Guide.md`, `api.md`.
+- Packaging: `setup.py`, `pyproject.toml`.
+
+**Coding Style**
+- Follow `STYLE_GUIDE.md` (PEP 8, 4-space indents, ≤79-char lines, imports: stdlib → third-party → local).
+- Names: `snake_case` for functions/variables; `PascalCase` for classes; `UPPER_CASE` for constants.
+- Logging pattern:
+  - `from ras_commander import get_logger, log_call`
+  - `logger = get_logger(__name__)`
+  - Decorate public methods with `@log_call`.
+- Many classes act as static “namespaces” (`Hdf*`, `Ras*`). Keep new modules consistent with this pattern.
+
+**Notebooks: Agent Workflow**
+- Purpose: Notebooks illustrate usage for humans; agents should extract logic into scripts.
+- Agent steps when using notebooks:
+  1) Read and analyze relevant code cells (skip long outputs, images).
+  2) Understand the goal and dependencies of the sequence.
+  3) Extract and adapt to a standalone Python script or CLI tool.
+     - Replace `!pip install` or ad‑hoc installs with `uv pip install ...`.
+     - Replace environment-specific paths with parameters.
+  4) Execute the script via `uv run ...` with inputs and output folders in `working/`.
+- The examples index at `examples/AGENTS.md` highlights unique logic that lives only in notebooks (e.g., nearest-cell/face search, Atlas 14 workflows).
+
+**Core Execution Examples**
+- Initialize a project and run a plan to a clean folder:
+  - `from ras_commander import init_ras_project, RasCmdr`
+  - `init_ras_project(<project_folder>, <path_to_Ras.exe>)`
+  - `RasCmdr.compute_plan("01", dest_folder=r"C:\\temp\\ras_out", overwrite_dest=True)`
+- Parallel execution across plans: `RasCmdr.compute_parallel([...])` (see `RasCmdr` for details and CPU core advice).
+
+**Testing & Data Hygiene**
+- Scenario validation is performed with official HEC-RAS example projects (see `examples/`).
+- Do not commit large datasets or generated outputs. Use writable temp folders (e.g., `C:\\temp\\ras_out` or `working/`).
+- If adding unit tests, prefer `pytest` with `tests/test_*.py`; run with `pytest`.
+
+**PR & Commit Guidance**
+- Commits: imperative mood, concise subject, optional scope. Example: `HdfXsec: fix ineffective-flow handling`.
+- PRs: include summary, motivation, linked issues, reproduction steps, and before/after notes.
+- Update documentation when APIs change; keep diffs focused and consistent.
+
+**HEC Commander (companion repo)**
+- Apply this `AGENTS.md` standard there as well. Remove outdated custom GPT files. Republishing as standardized CLB agents can follow separately. This repo’s `AGENTS.md` is self-sufficient for Ras Commander.
+
