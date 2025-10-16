@@ -204,10 +204,19 @@ class RasPrj:
             
             # Set paths for geometry and flow files
             self._set_file_paths()
-            
+
             # Make sure all plan paths are properly set
             self._set_plan_paths()
-            
+
+            # Add flow_type column for deterministic steady/unsteady identification
+            if not self.plan_df.empty and 'unsteady_number' in self.plan_df.columns:
+                self.plan_df['flow_type'] = self.plan_df['unsteady_number'].apply(
+                    lambda x: 'Unsteady' if pd.notna(x) else 'Steady'
+                )
+            else:
+                if not self.plan_df.empty:
+                    self.plan_df['flow_type'] = 'Unknown'
+
         except Exception as e:
             logger.error(f"Error loading project data: {e}")
             raise
