@@ -116,7 +116,7 @@ class RasPrj:
         self.suppress_logging = False  # Add suppress_logging as instance variable
 
     @log_call
-    def initialize(self, project_folder, ras_exe_path, suppress_logging=True):
+    def initialize(self, project_folder, ras_exe_path, suppress_logging=True, prj_file=None):
         """
         Initialize a RasPrj instance with project folder and RAS executable path.
 
@@ -127,13 +127,16 @@ class RasPrj:
             project_folder (str or Path): Path to the HEC-RAS project folder.
             ras_exe_path (str or Path): Path to the HEC-RAS executable.
             suppress_logging (bool, default=True): If True, suppresses initialization logging messages.
+            prj_file (str or Path, optional): If provided, use this specific .prj file instead of searching.
+                                              This is used when user specifies a .prj file directly.
 
         Raises:
-            ValueError: If no HEC-RAS project file is found in the specified folder.
+            ValueError: If no HEC-RAS project file is found in the specified folder,
+                        or if the specified prj_file doesn't exist or is invalid.
 
         Note:
             This method sets up the RasPrj instance by:
-            1. Finding the project file (.prj)
+            1. Finding the project file (.prj) or using the provided prj_file
             2. Loading project data (plans, geometries, flows)
             3. Extracting boundary conditions
             4. Setting the initialization flag
@@ -141,10 +144,21 @@ class RasPrj:
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
-        self.prj_file = self.find_ras_prj(self.project_folder)
-        if self.prj_file is None:
-            logger.error(f"No HEC-RAS project file found in {self.project_folder}")
-            raise ValueError(f"No HEC-RAS project file found in {self.project_folder}. Please check the path and try again.")
+
+        # If user specified a .prj file directly, use it (Phase 2 optimization)
+        if prj_file is not None:
+            self.prj_file = Path(prj_file).resolve()
+            if not self.prj_file.exists():
+                logger.error(f"Specified .prj file does not exist: {self.prj_file}")
+                raise ValueError(f"Specified .prj file does not exist: {self.prj_file}. Please check the path and try again.")
+            logger.debug(f"Using specified .prj file: {self.prj_file}")
+        else:
+            # Search for .prj file (existing behavior)
+            self.prj_file = self.find_ras_prj(self.project_folder)
+            if self.prj_file is None:
+                logger.error(f"No HEC-RAS project file found in {self.project_folder}")
+                raise ValueError(f"No HEC-RAS project file found in {self.project_folder}. Please check the path and try again.")
+
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
         
@@ -1274,13 +1288,18 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     Initialize a RAS project for use with the ras-commander library.
 
     This is the primary function for setting up a HEC-RAS project. It:
-    1. Finds the project file (.prj) in the specified folder
-    2. Identifies the appropriate HEC-RAS executable
-    3. Loads project data (plans, geometries, flows)
-    4. Creates dataframes containing project components
+    1. Finds the project file (.prj) in the specified folder OR uses the provided .prj file
+    2. Validates .prj files by checking for "Proj Title=" marker
+    3. Identifies the appropriate HEC-RAS executable
+    4. Loads project data (plans, geometries, flows)
+    5. Creates dataframes containing project components
 
     Args:
-        ras_project_folder (str or Path): The path to the RAS project folder.
+        ras_project_folder (str or Path): Path to the RAS project folder OR direct path to a .prj file.
+                                          If a .prj file is provided:
+                                          - File is validated to have .prj extension
+                                          - File content is checked for "Proj Title=" marker
+                                          - Parent folder is used as the project folder
         ras_version (str, optional): The version of RAS to use (e.g., "6.6") OR
                                      a full path to the Ras.exe file (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
                                      If None, will attempt to detect from plan files.
@@ -1290,25 +1309,71 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
 
     Returns:
         RasPrj: An initialized RasPrj instance.
-        
+
     Raises:
-        FileNotFoundError: If the specified project folder doesn't exist.
-        ValueError: If no HEC-RAS project file is found in the folder.
-        
+        FileNotFoundError: If the specified project folder or .prj file doesn't exist.
+        ValueError: If the provided file is not a .prj file, does not contain "Proj Title=",
+                    or if no HEC-RAS project file is found in the folder.
+
     Example:
-        >>> # Initialize using the global 'ras' object (most common)
+        >>> # Initialize using project folder (existing behavior)
         >>> init_ras_project("/path/to/project", "6.6")
         >>> print(f"Initialized project: {ras.project_name}")
         >>>
-        >>> # Create a new RasPrj instance
-        >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
+        >>> # Initialize using direct .prj file path (new feature)
+        >>> init_ras_project("/path/to/project/MyModel.prj", "6.6")
+        >>> print(f"Initialized project: {ras.project_name}")
+        >>>
+        >>> # Create a new RasPrj instance with .prj file
+        >>> my_project = init_ras_project("/path/to/project/MyModel.prj", "6.6", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
     """
-    # Convert to absolute path immediately to ensure consistent path handling
-    project_folder = Path(ras_project_folder).resolve()
-    if not project_folder.exists():
-        logger.error(f"The specified RAS project folder does not exist: {project_folder}")
-        raise FileNotFoundError(f"The specified RAS project folder does not exist: {project_folder}. Please check the path and try again.")
+    # Convert to Path object for consistent handling
+    input_path = Path(ras_project_folder).resolve()
+
+    # Detect if input is a file or folder
+    if input_path.is_file():
+        # User provided a .prj file path
+        if input_path.suffix.lower() != '.prj':
+            error_msg = f"The provided file is not a HEC-RAS project file (.prj): {input_path}"
+            logger.error(error_msg)
+            raise ValueError(f"{error_msg}. Please provide either a project folder or a .prj file.")
+
+        # Enhanced validation: Check if file contains "Proj Title=" to verify it's a HEC-RAS project file
+        try:
+            content, encoding = read_file_with_fallback_encoding(input_path)
+            if content is None or "Proj Title=" not in content:
+                error_msg = f"The file does not appear to be a valid HEC-RAS project file (missing 'Proj Title='): {input_path}"
+                logger.error(error_msg)
+                raise ValueError(f"{error_msg}. Please provide a valid HEC-RAS .prj file.")
+            logger.debug(f"Validated .prj file contains 'Proj Title=' marker")
+        except Exception as e:
+            error_msg = f"Error validating .prj file: {e}"
+            logger.error(error_msg)
+            raise ValueError(f"{error_msg}. Please ensure the file is a valid HEC-RAS project file.")
+
+        # Extract the parent folder to use as project_folder
+        project_folder = input_path.parent
+        specified_prj_file = input_path  # Store for optimization
+        logger.debug(f"User provided .prj file: {input_path}")
+        logger.debug(f"Using parent folder as project_folder: {project_folder}")
+
+    elif input_path.is_dir():
+        # User provided a folder path (existing behavior)
+        project_folder = input_path
+        specified_prj_file = None
+        logger.debug(f"User provided folder path: {project_folder}")
+
+    else:
+        # Path doesn't exist
+        if input_path.suffix.lower() == '.prj':
+            error_msg = f"The specified .prj file does not exist: {input_path}"
+            logger.error(error_msg)
+            raise FileNotFoundError(f"{error_msg}. Please check the path and try again.")
+        else:
+            error_msg = f"The specified RAS project folder does not exist: {input_path}"
+            logger.error(error_msg)
+            raise FileNotFoundError(f"{error_msg}. Please check the path and try again.")
 
     # Determine which RasPrj instance to use
     if ras_object is None:
@@ -1381,13 +1446,20 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
             logger.warning("No valid HEC-RAS version was detected. Running HEC-RAS will fail.")
     
     # Initialize or re-initialize with the determined executable path
-    ras_object.initialize(project_folder, ras_exe_path)
-    
+    # Pass specified_prj_file to avoid re-searching when user provided .prj file directly
+    if specified_prj_file is not None:
+        ras_object.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file)
+    else:
+        ras_object.initialize(project_folder, ras_exe_path)
+
     # Always update the global ras object as well
     if ras_object is not ras:
-        ras.initialize(project_folder, ras_exe_path)
+        if specified_prj_file is not None:
+            ras.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file)
+        else:
+            ras.initialize(project_folder, ras_exe_path)
         logger.debug("Global 'ras' object also updated to match the new project.")
-    
+
     logger.debug(f"Project initialized. Project folder: {ras_object.project_folder}")
     logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")
     return ras_object

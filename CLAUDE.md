@@ -79,9 +79,16 @@ Important highlights from AGENTS.md:
 
 **HDF Data Processing Classes**:
 - `HdfBase`, `HdfPlan`, `HdfMesh` - Core HDF file operations
-- `HdfResults*` classes - Results processing and analysis
+- `HdfResults*` classes - Results processing and analysis (unsteady and **steady state**)
 - `HdfStruc`, `HdfPipe`, `HdfPump` - Infrastructure analysis
 - `HdfPlot`, `HdfResultsPlot` - Visualization utilities
+
+**New Steady State Support** (as of v0.80.3+):
+- `HdfResultsPlan.is_steady_plan()` - Check if HDF contains steady state results
+- `HdfResultsPlan.get_steady_profile_names()` - Extract steady state profile names
+- `HdfResultsPlan.get_steady_wse()` - Extract water surface elevations for profiles
+- `HdfResultsPlan.get_steady_info()` - Extract steady flow metadata
+- See `examples/04_steady_flow_analysis.ipynb` for complete usage examples
 
 ### Execution Modes
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control

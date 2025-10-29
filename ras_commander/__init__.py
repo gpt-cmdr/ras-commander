@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.80.3"
+    __version__ = "0.81.0"
 
 # Set up logging
 setup_logging()
