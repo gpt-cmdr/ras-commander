@@ -1,5 +1,6 @@
 Project Structure (files included):
 ├── RasCmdr.py
+├── RasControl.py
 ├── RasExamples.py
 ├── RasGeo.py
 ├── RasMap.py
@@ -8,7 +9,7 @@ Project Structure (files included):
 ├── RasUnsteady.py
 └── RasUtils.py
 
-File: c:\GH\ras-commander\ras_commander\RasCmdr.py
+File: C:\GH\ras-commander\ras_commander\RasCmdr.py
 ==================================================
 """
 RasCmdr - Execution operations for running HEC-RAS simulations
@@ -710,7 +711,786 @@ class RasCmdr:
             return {}
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasExamples.py
+File: C:\GH\ras-commander\ras_commander\RasControl.py
+==================================================
+"""
+RasControl - HECRASController API Wrapper (ras-commander style)
+
+Provides ras-commander style API for legacy HEC-RAS versions (3.x-4.x)
+that use HECRASController COM interface instead of HDF files.
+
+Public functions:
+- RasControl.run_plan(plan: Union[str, Path], ras_object: Optional[Any] = None) -> Tuple[bool, List[str]]
+- RasControl.get_steady_results(plan: Union[str, Path], ras_object: Optional[Any] = None) -> pandas.DataFrame
+- RasControl.get_unsteady_results(plan: Union[str, Path], max_times: Optional[int] = None, ras_object: Optional[Any] = None) -> pandas.DataFrame
+- RasControl.get_output_times(plan: Union[str, Path], ras_object: Optional[Any] = None) -> List[str]
+- RasControl.get_plans(plan: Union[str, Path], ras_object: Optional[Any] = None) -> List[dict]
+- RasControl.set_current_plan(plan: Union[str, Path], ras_object: Optional[Any] = None) -> bool
+
+Private functions:
+- _terminate_ras_process() -> None
+- _is_ras_running() -> bool
+- RasControl._normalize_version(version: str) -> str
+- RasControl._get_project_info(plan: Union[str, Path], ras_object: Optional[Any] = None) -> Tuple[Path, str, Optional[str], Optional[str]]
+- RasControl._com_open_close(project_path: Path, version: str, operation_func: Callable[[Any], Any]) -> Any
+
+"""
+
+import win32com.client
+import psutil
+import pandas as pd
+from pathlib import Path
+from typing import Optional, List, Tuple, Callable, Any, Union
+import logging
+import time
+
+logger = logging.getLogger(__name__)
+
+# Import ras-commander components
+from .RasPrj import ras
+
+
+def _terminate_ras_process() -> None:
+    """Force terminate any running ras.exe processes."""
+    for proc in psutil.process_iter(['name']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() == 'ras.exe':
+                proc.terminate()
+                proc.wait(timeout=3)
+                logger.info("Terminated ras.exe process")
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+            pass
+
+
+def _is_ras_running() -> bool:
+    """Check if HEC-RAS is currently running"""
+    for proc in psutil.process_iter(['name']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() == 'ras.exe':
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return False
+
+
+class RasControl:
+    """
+    HECRASController API wrapper with ras-commander style interface.
+
+    Works with legacy HEC-RAS versions (3.x-4.x) that use COM interface
+    instead of HDF files. Integrates with ras-commander project management.
+
+    Usage (ras-commander style):
+        >>> from ras_commander import init_ras_project, RasControl
+        >>>
+        >>> # Initialize with version (with or without periods)
+        >>> init_ras_project(path, "4.1")  # or "41"
+        >>>
+        >>> # Use plan numbers like HDF methods
+        >>> RasControl.run_plan("02")
+        >>> df = RasControl.get_steady_results("02")
+
+    Supported Versions:
+        All installed versions: 3.x, 4.x, 5.0.x, 6.0-6.7+
+        Accepts formats: "4.1", "41", "5.0.6", "506", "6.6", "66", etc.
+    """
+
+    # Version mapping based on ACTUAL COM interfaces registered on system
+    # Only these COM interfaces exist: RAS41, RAS503, RAS505, RAS506, RAS507,
+    # RAS60, RAS631, RAS641, RAS65, RAS66, RAS67
+    # Other versions use nearest available fallback
+    VERSION_MAP = {
+        # HEC-RAS 3.x → Use 4.1 (3.x COM not registered)
+        '3.0': 'RAS41.HECRASController',
+        '30': 'RAS41.HECRASController',
+        '3.1': 'RAS41.HECRASController',
+        '31': 'RAS41.HECRASController',
+        '3.1.1': 'RAS41.HECRASController',
+        '311': 'RAS41.HECRASController',
+        '3.1.2': 'RAS41.HECRASController',
+        '312': 'RAS41.HECRASController',
+        '3.1.3': 'RAS41.HECRASController',
+        '313': 'RAS41.HECRASController',
+
+        # HEC-RAS 4.x
+        '4.0': 'RAS41.HECRASController',    # Use 4.1 (4.0 COM not registered)
+        '40': 'RAS41.HECRASController',
+        '4.1': 'RAS41.HECRASController',    # ✓ EXISTS
+        '41': 'RAS41.HECRASController',
+        '4.1.0': 'RAS41.HECRASController',
+        '410': 'RAS41.HECRASController',
+
+        # HEC-RAS 5.0.x
+        '5.0': 'RAS503.HECRASController',   # Use 5.0.3 (RAS50 COM not registered)
+        '50': 'RAS503.HECRASController',
+        '5.0.1': 'RAS501.HECRASController', # ✓ EXISTS
+        '501': 'RAS501.HECRASController',
+        '5.0.3': 'RAS503.HECRASController', # ✓ EXISTS
+        '503': 'RAS503.HECRASController',
+        '5.0.4': 'RAS504.HECRASController', # ✓ EXISTS (newly installed)
+        '504': 'RAS504.HECRASController',
+        '5.0.5': 'RAS505.HECRASController', # ✓ EXISTS
+        '505': 'RAS505.HECRASController',
+        '5.0.6': 'RAS506.HECRASController', # ✓ EXISTS
+        '506': 'RAS506.HECRASController',
+        '5.0.7': 'RAS507.HECRASController', # ✓ EXISTS
+        '507': 'RAS507.HECRASController',
+
+        # HEC-RAS 6.x
+        '6.0': 'RAS60.HECRASController',    # ✓ EXISTS
+        '60': 'RAS60.HECRASController',
+        '6.1': 'RAS60.HECRASController',    # Use 6.0 (6.1 COM not registered)
+        '61': 'RAS60.HECRASController',
+        '6.2': 'RAS60.HECRASController',    # Use 6.0 (6.2 COM not registered)
+        '62': 'RAS60.HECRASController',
+        '6.3': 'RAS631.HECRASController',   # Use 6.3.1 (6.3 COM not registered)
+        '63': 'RAS631.HECRASController',
+        '6.3.1': 'RAS631.HECRASController', # ✓ EXISTS
+        '631': 'RAS631.HECRASController',
+        '6.4': 'RAS641.HECRASController',   # Use 6.4.1 (6.4 COM not registered)
+        '64': 'RAS641.HECRASController',
+        '6.4.1': 'RAS641.HECRASController', # ✓ EXISTS
+        '641': 'RAS641.HECRASController',
+        '6.5': 'RAS65.HECRASController',    # ✓ EXISTS
+        '65': 'RAS65.HECRASController',
+        '6.6': 'RAS66.HECRASController',    # ✓ EXISTS
+        '66': 'RAS66.HECRASController',
+        '6.7': 'RAS67.HECRASController',    # ✓ EXISTS
+        '67': 'RAS67.HECRASController',
+        '6.7 Beta 4': 'RAS67.HECRASController',
+    }
+
+    # Legacy reference (kept for backwards compatibility)
+    SUPPORTED_VERSIONS = VERSION_MAP
+
+    # Output variable codes
+    WSEL = 2
+    ENERGY = 3
+    MAX_CHL_DPTH = 4
+    MIN_CH_EL = 5
+    ENERGY_SLOPE = 6
+    FLOW_TOTAL = 24
+    VEL_TOTAL = 25
+    STA_WS_LFT = 36
+    STA_WS_RGT = 37
+    FROUDE_CHL = 48
+    FROUDE_XS = 49
+    Q_WEIR = 94
+    Q_CULVERT_TOT = 242
+
+    # ========== PRIVATE METHODS (HECRASController COM API) ==========
+
+    @staticmethod
+    def _normalize_version(version: str) -> str:
+        """
+        Normalize version string to match VERSION_MAP keys.
+
+        Handles formats like:
+            "6.6", "66" → "6.6"
+            "4.1", "41" → "4.1"
+            "5.0.6", "506" → "5.0.6"
+            "6.7 Beta 4" → "6.7 Beta 4"
+
+        Returns:
+            Normalized version string that exists in VERSION_MAP
+
+        Raises:
+            ValueError: If version cannot be normalized or is not supported
+        """
+        version_str = str(version).strip()
+
+        # Direct match
+        if version_str in RasControl.VERSION_MAP:
+            return version_str
+
+        # Try common normalizations
+        normalized_candidates = [
+            version_str,
+            version_str.replace('.', ''),  # "6.6" → "66"
+        ]
+
+        # Try adding periods for compact formats
+        if len(version_str) == 2:  # "66" → "6.6"
+            normalized_candidates.append(f"{version_str[0]}.{version_str[1]}")
+        elif len(version_str) == 3 and version_str.startswith('5'):  # "506" → "5.0.6"
+            normalized_candidates.append(f"5.0.{version_str[2]}")
+        elif len(version_str) == 3:  # "631" → "6.3.1"
+            normalized_candidates.append(f"{version_str[0]}.{version_str[1]}.{version_str[2]}")
+
+        # Check all candidates
+        for candidate in normalized_candidates:
+            if candidate in RasControl.VERSION_MAP:
+                logger.debug(f"Normalized version '{version}' → '{candidate}'")
+                return candidate
+
+        # Not found
+        raise ValueError(
+            f"Version '{version}' not supported. Supported versions:\n"
+            f"  3.x: 3.0, 3.1 (3.1.1, 3.1.2, 3.1.3)\n"
+            f"  4.x: 4.0, 4.1\n"
+            f"  5.0.x: 5.0, 5.0.1, 5.0.3, 5.0.4, 5.0.5, 5.0.6, 5.0.7\n"
+            f"  6.x: 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.4, 6.4.1, 6.5, 6.6, 6.7\n"
+            f"  Formats: Can use '6.6' or '66', '5.0.6' or '506', etc."
+        )
+
+    @staticmethod
+    def _get_project_info(plan: Union[str, Path], ras_object=None):
+        """
+        Resolve plan number/path to project path, version, and plan details.
+
+        Returns:
+            Tuple[Path, str, str, str]: (project_path, version, plan_number, plan_name)
+            plan_number and plan_name are None if using direct .prj path
+        """
+        if ras_object is None:
+            ras_object = ras
+
+        # If it's a path to .prj file
+        plan_path = Path(plan) if isinstance(plan, str) else plan
+        if plan_path.exists() and plan_path.suffix == '.prj':
+            # Direct path - need version from ras_object
+            if not hasattr(ras_object, 'ras_version') or not ras_object.ras_version:
+                raise ValueError(
+                    "When using direct .prj paths, project must be initialized with version.\n"
+                    "Use: init_ras_project(path, '4.1') or similar"
+                )
+            return plan_path, ras_object.ras_version, None, None
+
+        # Otherwise treat as plan number
+        plan_num = str(plan).zfill(2)
+
+        # Get project path from ras_object
+        if not hasattr(ras_object, 'prj_file') or not ras_object.prj_file:
+            raise ValueError(
+                "No project initialized. Use init_ras_project() first.\n"
+                "Example: init_ras_project(path, '4.1')"
+            )
+
+        project_path = Path(ras_object.prj_file)
+
+        # Get version
+        if not hasattr(ras_object, 'ras_version') or not ras_object.ras_version:
+            raise ValueError(
+                "Project initialized without version. Re-initialize with:\n"
+                "init_ras_project(path, '4.1')  # or '41', '501', etc."
+            )
+
+        version = ras_object.ras_version
+
+        # Get plan name from plan_df
+        plan_row = ras_object.plan_df[ras_object.plan_df['plan_number'] == plan_num]
+        if plan_row.empty:
+            raise ValueError(f"Plan '{plan_num}' not found in project")
+
+        plan_name = plan_row['Plan Title'].iloc[0]
+
+        return project_path, version, plan_num, plan_name
+
+    @staticmethod
+    def _com_open_close(project_path: Path, version: str, operation_func: Callable[[Any], Any]) -> Any:
+        """
+        PRIVATE: Open HEC-RAS via COM, run operation, close HEC-RAS.
+
+        This is the core COM interface handler. All public methods use this.
+        """
+        # Normalize version (handles "6.6" → "6.6", "66" → "6.6", etc.)
+        normalized_version = RasControl._normalize_version(version)
+
+        if not project_path.exists():
+            raise FileNotFoundError(f"Project file not found: {project_path}")
+
+        com_rc = None
+        result = None
+
+        try:
+            # Open HEC-RAS COM interface
+            com_string = RasControl.VERSION_MAP[normalized_version]
+            logger.info(f"Opening HEC-RAS: {com_string} (version: {version})")
+            com_rc = win32com.client.Dispatch(com_string)
+
+            # Open project
+            logger.info(f"Opening project: {project_path}")
+            com_rc.Project_Open(str(project_path))
+
+            # Perform operation
+            logger.info("Executing operation...")
+            result = operation_func(com_rc)
+            logger.info("Operation completed successfully")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Operation failed: {e}")
+            raise
+
+        finally:
+            # ALWAYS close
+            logger.info("Closing HEC-RAS...")
+
+            if com_rc is not None:
+                try:
+                    com_rc.QuitRas()
+                    logger.info("HEC-RAS closed via QuitRas()")
+                except Exception as e:
+                    logger.warning(f"QuitRas() failed: {e}")
+
+            _terminate_ras_process()
+
+            if _is_ras_running():
+                logger.warning("HEC-RAS may still be running!")
+            else:
+                logger.info("HEC-RAS fully closed")
+
+    # ========== PUBLIC API (ras-commander style) ==========
+
+    @staticmethod
+    def run_plan(plan: Union[str, Path], ras_object=None) -> Tuple[bool, List[str]]:
+        """
+        Run a plan (steady or unsteady) and wait for completion.
+
+        This method starts the computation and polls Compute_Complete()
+        until the run finishes. It will block until completion.
+
+        Args:
+            plan: Plan number ("01", "02") or path to .prj file
+            ras_object: Optional RasPrj instance (uses global ras if None)
+
+        Returns:
+            Tuple of (success: bool, messages: List[str])
+
+        Example:
+            >>> from ras_commander import init_ras_project, RasControl
+            >>> init_ras_project(path, "4.1")
+            >>> success, msgs = RasControl.run_plan("02")
+            >>> # Blocks until plan finishes running
+
+        Note:
+            Can take several minutes for large models or unsteady runs.
+            Progress is logged every 30 seconds.
+        """
+        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+
+        def _run_operation(com_rc):
+            # Set current plan if we have plan_name (using plan number)
+            if plan_name:
+                logger.info(f"Setting current plan to: {plan_name}")
+                com_rc.Plan_SetCurrent(plan_name)
+
+            # Version-specific behavior (normalize for checking)
+            norm_version = RasControl._normalize_version(version)
+
+            # Start computation (returns immediately - ASYNCHRONOUS!)
+            logger.info("Starting computation...")
+            if norm_version.startswith('4') or norm_version.startswith('3'):
+                status, _, messages = com_rc.Compute_CurrentPlan(None, None)
+            else:
+                status, _, messages, _ = com_rc.Compute_CurrentPlan(None, None)
+
+            # CRITICAL: Wait for computation to complete
+            # Compute_CurrentPlan is ASYNCHRONOUS - it returns before computation finishes
+            logger.info("Waiting for computation to complete...")
+            poll_count = 0
+            while True:
+                try:
+                    # Check if computation is complete
+                    is_complete = com_rc.Compute_Complete()
+
+                    if is_complete:
+                        logger.info(f"Computation completed (polled {poll_count} times)")
+                        break
+
+                    # Still computing - wait and poll again
+                    time.sleep(1)  # Poll every second
+                    poll_count += 1
+
+                    # Log progress every 30 seconds
+                    if poll_count % 30 == 0:
+                        logger.info(f"Still computing... ({poll_count} seconds elapsed)")
+
+                except Exception as e:
+                    logger.error(f"Error checking completion status: {e}")
+                    # If we can't check status, break and hope for the best
+                    break
+
+            return status, list(messages) if messages else []
+
+        return RasControl._com_open_close(project_path, version, _run_operation)
+
+    @staticmethod
+    def get_steady_results(plan: Union[str, Path], ras_object=None) -> pd.DataFrame:
+        """
+        Extract steady state profile results.
+
+        Args:
+            plan: Plan number ("01", "02") or path to .prj file
+            ras_object: Optional RasPrj instance (uses global ras if None)
+
+        Returns:
+            DataFrame with columns: river, reach, node_id, profile, wsel,
+            velocity, flow, froude, energy, max_depth, min_ch_el
+
+        Example:
+            >>> from ras_commander import init_ras_project, RasControl
+            >>> init_ras_project(path, "4.1")
+            >>> df = RasControl.get_steady_results("02")
+            >>> df.to_csv('results.csv', index=False)
+        """
+        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+
+        def _extract_operation(com_rc):
+            # Set current plan if we have plan_name (using plan number)
+            if plan_name:
+                logger.info(f"Setting current plan to: {plan_name}")
+                com_rc.Plan_SetCurrent(plan_name)
+
+            results = []
+
+            # Get profiles
+            _, profile_names = com_rc.Output_GetProfiles(2, None)
+
+            if profile_names is None:
+                raise RuntimeError(
+                    "No steady state results found. Please ensure:\n"
+                    "  1. The model has been run (use RasControl.run_plan() first)\n"
+                    "  2. The current plan is a steady state plan\n"
+                    "  3. Results were successfully computed"
+                )
+
+            profiles = [{'name': name, 'code': i+1} for i, name in enumerate(profile_names)]
+            logger.info(f"Found {len(profiles)} profiles")
+
+            # Get rivers
+            _, river_names = com_rc.Output_GetRivers(0, None)
+
+            if river_names is None:
+                raise RuntimeError("No river geometry found in model.")
+
+            logger.info(f"Found {len(river_names)} rivers")
+
+            # Extract data
+            for riv_code, riv_name in enumerate(river_names, start=1):
+                _, _, reach_names = com_rc.Geometry_GetReaches(riv_code, None, None)
+
+                for rch_code, rch_name in enumerate(reach_names, start=1):
+                    _, _, _, node_ids, node_types = com_rc.Geometry_GetNodes(
+                        riv_code, rch_code, None, None, None
+                    )
+
+                    for node_code, (node_id, node_type) in enumerate(
+                        zip(node_ids, node_types), start=1
+                    ):
+                        if node_type == '':  # Cross sections only
+                            for profile in profiles:
+                                try:
+                                    row = {
+                                        'river': riv_name.strip(),
+                                        'reach': rch_name.strip(),
+                                        'node_id': node_id.strip(),
+                                        'profile': profile['name'].strip(),
+                                    }
+
+                                    # Extract output variables
+                                    row['wsel'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.WSEL
+                                    )[0]
+
+                                    row['min_ch_el'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.MIN_CH_EL
+                                    )[0]
+
+                                    row['velocity'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.VEL_TOTAL
+                                    )[0]
+
+                                    row['flow'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.FLOW_TOTAL
+                                    )[0]
+
+                                    row['froude'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.FROUDE_CHL
+                                    )[0]
+
+                                    row['energy'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.ENERGY
+                                    )[0]
+
+                                    row['max_depth'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        profile['code'], RasControl.MAX_CHL_DPTH
+                                    )[0]
+
+                                    results.append(row)
+
+                                except Exception as e:
+                                    logger.warning(
+                                        f"Failed to extract {riv_name}/{rch_name}/"
+                                        f"{node_id} profile {profile['name']}: {e}"
+                                    )
+
+            logger.info(f"Extracted {len(results)} result rows")
+            return pd.DataFrame(results)
+
+        return RasControl._com_open_close(project_path, version, _extract_operation)
+
+    @staticmethod
+    def get_unsteady_results(plan: Union[str, Path], max_times: int = None,
+                            ras_object=None) -> pd.DataFrame:
+        """
+        Extract unsteady flow time series results.
+
+        Args:
+            plan: Plan number ("01", "02") or path to .prj file
+            max_times: Optional limit on timesteps (for testing/large datasets)
+            ras_object: Optional RasPrj instance (uses global ras if None)
+
+        Returns:
+            DataFrame with columns: river, reach, node_id, time_index, time_string,
+            wsel, velocity, flow, froude, energy, max_depth, min_ch_el
+
+        Important - Understanding "Max WS":
+            The first row (time_index=1, time_string="Max WS") contains the MAXIMUM
+            values that occurred at ANY computational timestep during the simulation,
+            not just at output intervals. This is critical data for identifying peaks.
+
+            For time series plotting, filter to actual timesteps:
+                df_timeseries = df[df['time_string'] != 'Max WS']
+
+            For showing maximum as reference line:
+                max_wse = df[df['time_string'] == 'Max WS']['wsel'].iloc[0]
+                plt.axhline(max_wse, color='r', linestyle='--', label='Max WS')
+
+        Example:
+            >>> from ras_commander import init_ras_project, RasControl
+            >>> init_ras_project(path, "4.1")
+            >>> df = RasControl.get_unsteady_results("01", max_times=10)
+            >>> # Includes "Max WS" as first row
+        """
+        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+
+        def _extract_operation(com_rc):
+            # Set current plan if we have plan_name (using plan number)
+            if plan_name:
+                logger.info(f"Setting current plan to: {plan_name}")
+                com_rc.Plan_SetCurrent(plan_name)
+
+            results = []
+
+            # Get output times
+            _, time_strings = com_rc.Output_GetProfiles(0, None)
+
+            if time_strings is None:
+                raise RuntimeError(
+                    "No unsteady results found. Please ensure:\n"
+                    "  1. The model has been run (use RasControl.run_plan() first)\n"
+                    "  2. The current plan is an unsteady flow plan\n"
+                    "  3. Results were successfully computed"
+                )
+
+            times = list(time_strings)
+            if max_times:
+                times = times[:max_times]
+
+            logger.info(f"Extracting {len(times)} time steps")
+
+            # Get rivers
+            _, river_names = com_rc.Output_GetRivers(0, None)
+
+            if river_names is None:
+                raise RuntimeError("No river geometry found in model.")
+
+            logger.info(f"Found {len(river_names)} rivers")
+
+            # Extract data
+            for riv_code, riv_name in enumerate(river_names, start=1):
+                _, _, reach_names = com_rc.Geometry_GetReaches(riv_code, None, None)
+
+                for rch_code, rch_name in enumerate(reach_names, start=1):
+                    _, _, _, node_ids, node_types = com_rc.Geometry_GetNodes(
+                        riv_code, rch_code, None, None, None
+                    )
+
+                    for node_code, (node_id, node_type) in enumerate(
+                        zip(node_ids, node_types), start=1
+                    ):
+                        if node_type == '':  # Cross sections only
+                            for time_idx, time_str in enumerate(times, start=1):
+                                try:
+                                    row = {
+                                        'river': riv_name.strip(),
+                                        'reach': rch_name.strip(),
+                                        'node_id': node_id.strip(),
+                                        'time_index': time_idx,
+                                        'time_string': time_str.strip(),
+                                    }
+
+                                    # Extract output variables (time_idx is profile code for unsteady)
+                                    row['wsel'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.WSEL
+                                    )[0]
+
+                                    row['min_ch_el'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.MIN_CH_EL
+                                    )[0]
+
+                                    row['velocity'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.VEL_TOTAL
+                                    )[0]
+
+                                    row['flow'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.FLOW_TOTAL
+                                    )[0]
+
+                                    row['froude'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.FROUDE_CHL
+                                    )[0]
+
+                                    row['energy'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.ENERGY
+                                    )[0]
+
+                                    row['max_depth'] = com_rc.Output_NodeOutput(
+                                        riv_code, rch_code, node_code, 0,
+                                        time_idx, RasControl.MAX_CHL_DPTH
+                                    )[0]
+
+                                    results.append(row)
+
+                                except Exception as e:
+                                    logger.warning(
+                                        f"Failed to extract {riv_name}/{rch_name}/"
+                                        f"{node_id} time {time_str}: {e}"
+                                    )
+
+            logger.info(f"Extracted {len(results)} result rows")
+            return pd.DataFrame(results)
+
+        return RasControl._com_open_close(project_path, version, _extract_operation)
+
+    @staticmethod
+    def get_output_times(plan: Union[str, Path], ras_object=None) -> List[str]:
+        """
+        Get list of output times for unsteady run.
+
+        Args:
+            plan: Plan number ("01", "02") or path to .prj file
+            ras_object: Optional RasPrj instance (uses global ras if None)
+
+        Returns:
+            List of time strings (e.g., ["01JAN2000 0000", ...])
+
+        Example:
+            >>> times = RasControl.get_output_times("01")
+            >>> print(f"Found {len(times)} output times")
+        """
+        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+
+        def _get_times(com_rc):
+            # Set current plan if we have plan_name (using plan number)
+            if plan_name:
+                logger.info(f"Setting current plan to: {plan_name}")
+                com_rc.Plan_SetCurrent(plan_name)
+
+            _, time_strings = com_rc.Output_GetProfiles(0, None)
+
+            if time_strings is None:
+                raise RuntimeError(
+                    "No unsteady output times found. Ensure plan has been run."
+                )
+
+            times = list(time_strings)
+            logger.info(f"Found {len(times)} output times")
+            return times
+
+        return RasControl._com_open_close(project_path, version, _get_times)
+
+    @staticmethod
+    def get_plans(plan: Union[str, Path], ras_object=None) -> List[dict]:
+        """
+        Get list of plans in project.
+
+        Args:
+            plan: Plan number or path to .prj file
+            ras_object: Optional RasPrj instance
+
+        Returns:
+            List of dicts with 'name' and 'filename' keys
+        """
+        project_path, version, _, _ = RasControl._get_project_info(plan, ras_object)
+
+        def _get_plans(com_rc):
+            # Don't set current plan - just getting list
+            _, plan_names, _ = com_rc.Plan_Names(None, None, None)
+
+            plans = []
+            for name in plan_names:
+                filename, _ = com_rc.Plan_GetFilename(name)
+                plans.append({'name': name, 'filename': filename})
+
+            logger.info(f"Found {len(plans)} plans")
+            return plans
+
+        return RasControl._com_open_close(project_path, version, _get_plans)
+
+    @staticmethod
+    def set_current_plan(plan: Union[str, Path], ras_object=None) -> bool:
+        """
+        Set the current/active plan by plan number.
+
+        Note: This is rarely needed - run_plan() and get_*_results()
+        automatically set the correct plan. This is provided for
+        advanced use cases.
+
+        Args:
+            plan: Plan number ("01", "02") or path to .prj file
+            ras_object: Optional RasPrj instance
+
+        Returns:
+            True if successful
+
+        Example:
+            >>> RasControl.set_current_plan("02")  # Set to Plan 02
+        """
+        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+
+        if not plan_name:
+            raise ValueError("Cannot set current plan - plan name could not be determined")
+
+        def _set_plan(com_rc):
+            com_rc.Plan_SetCurrent(plan_name)
+            logger.info(f"Set current plan to Plan {plan_num}: {plan_name}")
+            return True
+
+        return RasControl._com_open_close(project_path, version, _set_plan)
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+    print("RasControl (ras-commander API) loaded successfully")
+    print(f"Supported versions: {list(RasControl.SUPPORTED_VERSIONS.keys())}")
+    print("\nUsage example:")
+    print("  from ras_commander import init_ras_project, RasControl")
+    print("  init_ras_project(path, '4.1')")
+    print("  df = RasControl.get_steady_results('02')")
+
+==================================================
+
+File: C:\GH\ras-commander\ras_commander\RasExamples.py
 ==================================================
 """
 RasExamples - Manage and load HEC-RAS example projects for testing and development
@@ -842,11 +1622,14 @@ class RasExamples:
         self._save_to_csv()
 
     @classmethod
-    def extract_project(cls, project_names: Union[str, List[str]]) -> Union[Path, List[Path]]:
+    def extract_project(cls, project_names: Union[str, List[str]], output_path: Union[str, Path] = None) -> Union[Path, List[Path]]:
         """Extract one or more specific HEC-RAS projects from the zip file.
         
         Args:
             project_names: Single project name as string or list of project names
+            output_path: Optional path where the project folder will be placed.
+                        Can be a relative path (creates subfolder in current directory)
+                        or an absolute path. If None, uses default 'example_projects' folder.
             
         Returns:
             Path: Single Path object if one project extracted
@@ -865,13 +1648,26 @@ class RasExamples:
         if isinstance(project_names, str):
             project_names = [project_names]
 
+        # Determine the output directory
+        if output_path is None:
+            # Use default 'example_projects' folder
+            base_output_path = cls.projects_dir
+        else:
+            # Convert to Path object
+            base_output_path = Path(output_path)
+            # If relative path, make it relative to current working directory
+            if not base_output_path.is_absolute():
+                base_output_path = Path.cwd() / base_output_path
+            # Create the directory if it doesn't exist
+            base_output_path.mkdir(parents=True, exist_ok=True)
+
         extracted_paths = []
 
         for project_name in project_names:
             # Check if this is a special project
             if project_name in cls.SPECIAL_PROJECTS:
                 try:
-                    special_path = cls._extract_special_project(project_name)
+                    special_path = cls._extract_special_project(project_name, base_output_path)
                     extracted_paths.append(special_path)
                     continue
                 except Exception as e:
@@ -881,7 +1677,7 @@ class RasExamples:
             # Regular project extraction logic
             logger.info("----- RasExamples Extracting Project -----")
             logger.info(f"Extracting project '{project_name}'")
-            project_path = cls.projects_dir
+            project_path = base_output_path
 
             if (project_path / project_name).exists():
                 logger.info(f"Project '{project_name}' already exists. Deleting existing folder...")
@@ -1161,12 +1957,13 @@ class RasExamples:
         return int(number * units[unit])
 
     @classmethod
-    def _extract_special_project(cls, project_name: str) -> Path:
+    def _extract_special_project(cls, project_name: str, output_path: Path = None) -> Path:
         """
         Download and extract special projects that are not in the main zip file.
         
         Args:
             project_name: Name of the special project ('NewOrleansMetro' or 'BeaverLake')
+            output_path: Base output directory path. If None, uses cls.projects_dir
             
         Returns:
             Path: Path to the extracted project directory
@@ -1180,8 +1977,11 @@ class RasExamples:
         logger.info(f"----- RasExamples Extracting Special Project -----")
         logger.info(f"Extracting special project '{project_name}'")
         
+        # Use provided output_path or default
+        base_path = output_path if output_path else cls.projects_dir
+        
         # Create the project directory
-        project_path = cls.projects_dir / project_name
+        project_path = base_path / project_name
         
         # Check if already exists
         if project_path.exists():
@@ -1198,7 +1998,7 @@ class RasExamples:
         
         # Download the zip file
         url = cls.SPECIAL_PROJECTS[project_name]
-        zip_file_path = cls.projects_dir / f"{project_name}_temp.zip"
+        zip_file_path = base_path / f"{project_name}_temp.zip"
         
         logger.info(f"Downloading special project from: {url}")
         logger.info("This may take a few moments...")
@@ -1257,7 +2057,7 @@ class RasExamples:
         return project_path
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasGeo.py
+File: C:\GH\ras-commander\ras_commander\RasGeo.py
 ==================================================
 """
 RasGeo - Operations for handling geometry files in HEC-RAS projects
@@ -1799,7 +2599,7 @@ class RasGeo:
         return True
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasMap.py
+File: C:\GH\ras-commander\ras_commander\RasMap.py
 ==================================================
 """
 RasMap - Parses HEC-RAS mapper configuration files (.rasmap)
@@ -2270,7 +3070,7 @@ class RasMap:
                 shutil.move(rasmap_backup_path, rasmap_path)
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPlan.py
+File: C:\GH\ras-commander\ras_commander\RasPlan.py
 ==================================================
 """
 RasPlan - Operations for handling plan files in HEC-RAS projects
@@ -2926,28 +3726,43 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_plan(template_plan, new_plan_shortid=None, ras_object=None):
+    def clone_plan(template_plan, new_shortid=None, new_title=None, ras_object=None):
         """
         Create a new plan file based on a template and update the project file.
-        
+
         Parameters:
         template_plan (str): Plan number to use as template (e.g., '01')
-        new_plan_shortid (str, optional): New short identifier for the plan file
+        new_shortid (str, optional): New short identifier for the plan file (max 24 chars).
+                                     If not provided, appends '_copy' to original.
+        new_title (str, optional): New plan title (max 32 chars, updates "Plan Title=" line).
+                                   If not provided, keeps original title.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+
         Returns:
         str: New plan number
-        
+
         Example:
-        >>> ras_plan = RasPlan()
-        >>> new_plan_number = ras_plan.clone_plan('01', new_plan_shortid='New Plan')
-        >>> print(f"New plan created with number: {new_plan_number}")
+        >>> # Clone with default shortid and title
+        >>> new_plan = RasPlan.clone_plan('01')
+        >>>
+        >>> # Clone with custom shortid and title
+        >>> new_plan = RasPlan.clone_plan('01',
+        ...                               new_shortid='Steady_v41',
+        ...                               new_title='Steady Flow - HEC-RAS 4.1')
 
         Note:
+            Both new_shortid and new_title are optional.
             This function updates the ras object's dataframes after modifying the project structure.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"Plan title must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
 
         # Update plan entries without reinitializing the entire project
         ras_obj.plan_df = ras_obj.get_prj_entries('Plan')
@@ -2956,22 +3771,32 @@ class RasPlan:
         template_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{template_plan}"
         new_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_plan_num}"
 
-        def update_shortid(lines):
+        def update_plan_metadata(lines):
+            """Update both Plan Title and Short Identifier"""
+            title_pattern = re.compile(r'^Plan Title=(.*)$', re.IGNORECASE)
             shortid_pattern = re.compile(r'^Short Identifier=(.*)$', re.IGNORECASE)
+
             for i, line in enumerate(lines):
-                match = shortid_pattern.match(line.strip())
-                if match:
-                    current_shortid = match.group(1)
-                    if new_plan_shortid is None:
-                        new_shortid = (current_shortid + "_copy")[:24]
+                # Update Plan Title if new_title provided
+                title_match = title_pattern.match(line.strip())
+                if title_match and new_title is not None:
+                    lines[i] = f"Plan Title={new_title[:32]}\n"
+                    continue
+
+                # Update Short Identifier
+                shortid_match = shortid_pattern.match(line.strip())
+                if shortid_match:
+                    current_shortid = shortid_match.group(1)
+                    if new_shortid is None:
+                        new_shortid_value = (current_shortid + "_copy")[:24]
                     else:
-                        new_shortid = new_plan_shortid[:24]
-                    lines[i] = f"Short Identifier={new_shortid}\n"
-                    break
+                        new_shortid_value = new_shortid[:24]
+                    lines[i] = f"Short Identifier={new_shortid_value}\n"
+
             return lines
 
-        # Use RasUtils to clone the file and update the short identifier
-        RasUtils.clone_file(template_plan_path, new_plan_path, update_shortid)
+        # Use RasUtils to clone the file and update metadata
+        RasUtils.clone_file(template_plan_path, new_plan_path, update_plan_metadata)
 
         # Use RasUtils to update the project file
         RasUtils.update_project_file(ras_obj.prj_file, 'Plan', new_plan_num, ras_object=ras_obj)
@@ -2988,21 +3813,22 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_unsteady(template_unsteady, ras_object=None):
+    def clone_unsteady(template_unsteady, new_title=None, ras_object=None):
         """
         Copy unsteady flow files from a template, find the next unsteady number,
         and update the project file accordingly.
 
         Parameters:
         template_unsteady (str): Unsteady flow number to be used as a template (e.g., '01')
+        new_title (str, optional): New flow title (max 32 chars, updates "Flow Title=" line)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
         str: New unsteady flow number (e.g., '03')
 
         Example:
-        >>> ras_plan = RasPlan()
-        >>> new_unsteady_num = ras_plan.clone_unsteady('01')
+        >>> new_unsteady_num = RasPlan.clone_unsteady('01',
+        ...                                           new_title='Unsteady - HEC-RAS 4.1')
         >>> print(f"New unsteady flow file created: u{new_unsteady_num}")
 
         Note:
@@ -3011,6 +3837,13 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"Flow title must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
+
         # Update unsteady entries without reinitializing the entire project
         ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
 
@@ -3018,8 +3851,21 @@ class RasPlan:
         template_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}"
         new_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}"
 
-        # Use RasUtils to clone the file
-        RasUtils.clone_file(template_unsteady_path, new_unsteady_path)
+        def update_flow_title(lines):
+            """Update Flow Title if new_title provided"""
+            if new_title is None:
+                return lines
+
+            title_pattern = re.compile(r'^Flow Title=(.*)$', re.IGNORECASE)
+            for i, line in enumerate(lines):
+                title_match = title_pattern.match(line.strip())
+                if title_match:
+                    lines[i] = f"Flow Title={new_title[:32]}\n"
+                    break
+            return lines
+
+        # Use RasUtils to clone the file and update flow title
+        RasUtils.clone_file(template_unsteady_path, new_unsteady_path, update_flow_title)
 
         # Copy the corresponding .hdf file if it exists
         template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}.hdf"
@@ -3043,21 +3889,22 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_steady(template_flow, ras_object=None):
+    def clone_steady(template_flow, new_title=None, ras_object=None):
         """
         Copy steady flow files from a template, find the next flow number,
         and update the project file accordingly.
-        
+
         Parameters:
         template_flow (str): Flow number to be used as a template (e.g., '01')
+        new_title (str, optional): New flow title (max 32 chars, updates "Flow Title=" line)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+
         Returns:
         str: New flow number (e.g., '03')
 
         Example:
-        >>> ras_plan = RasPlan()
-        >>> new_flow_num = ras_plan.clone_steady('01')
+        >>> new_flow_num = RasPlan.clone_steady('01',
+        ...                                      new_title='Steady Flow - HEC-RAS 4.1')
         >>> print(f"New steady flow file created: f{new_flow_num}")
 
         Note:
@@ -3066,6 +3913,13 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"Flow title must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
+
         # Update flow entries without reinitializing the entire project
         ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
 
@@ -3073,8 +3927,21 @@ class RasPlan:
         template_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{template_flow}"
         new_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_flow_num}"
 
-        # Use RasUtils to clone the file
-        RasUtils.clone_file(template_flow_path, new_flow_path)
+        def update_flow_title(lines):
+            """Update Flow Title if new_title provided"""
+            if new_title is None:
+                return lines
+
+            title_pattern = re.compile(r'^Flow Title=(.*)$', re.IGNORECASE)
+            for i, line in enumerate(lines):
+                title_match = title_pattern.match(line.strip())
+                if title_match:
+                    lines[i] = f"Flow Title={new_title[:32]}\n"
+                    break
+            return lines
+
+        # Use RasUtils to clone the file and update flow title
+        RasUtils.clone_file(template_flow_path, new_flow_path, update_flow_title)
 
         # Use RasUtils to update the project file
         RasUtils.update_project_file(ras_obj.prj_file, 'Flow', new_flow_num, ras_object=ras_obj)
@@ -3811,7 +4678,7 @@ class RasPlan:
             ras_object.plan_df = ras_object.get_plan_entries()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasPrj.py
+File: C:\GH\ras-commander\ras_commander\RasPrj.py
 ==================================================
 """
 RasPrj.py - Manages HEC-RAS projects within the ras-commander library
@@ -3931,7 +4798,7 @@ class RasPrj:
         self.suppress_logging = False  # Add suppress_logging as instance variable
 
     @log_call
-    def initialize(self, project_folder, ras_exe_path, suppress_logging=True):
+    def initialize(self, project_folder, ras_exe_path, suppress_logging=True, prj_file=None):
         """
         Initialize a RasPrj instance with project folder and RAS executable path.
 
@@ -3942,13 +4809,16 @@ class RasPrj:
             project_folder (str or Path): Path to the HEC-RAS project folder.
             ras_exe_path (str or Path): Path to the HEC-RAS executable.
             suppress_logging (bool, default=True): If True, suppresses initialization logging messages.
+            prj_file (str or Path, optional): If provided, use this specific .prj file instead of searching.
+                                              This is used when user specifies a .prj file directly.
 
         Raises:
-            ValueError: If no HEC-RAS project file is found in the specified folder.
+            ValueError: If no HEC-RAS project file is found in the specified folder,
+                        or if the specified prj_file doesn't exist or is invalid.
 
         Note:
             This method sets up the RasPrj instance by:
-            1. Finding the project file (.prj)
+            1. Finding the project file (.prj) or using the provided prj_file
             2. Loading project data (plans, geometries, flows)
             3. Extracting boundary conditions
             4. Setting the initialization flag
@@ -3956,10 +4826,21 @@ class RasPrj:
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
-        self.prj_file = self.find_ras_prj(self.project_folder)
-        if self.prj_file is None:
-            logger.error(f"No HEC-RAS project file found in {self.project_folder}")
-            raise ValueError(f"No HEC-RAS project file found in {self.project_folder}. Please check the path and try again.")
+
+        # If user specified a .prj file directly, use it (Phase 2 optimization)
+        if prj_file is not None:
+            self.prj_file = Path(prj_file).resolve()
+            if not self.prj_file.exists():
+                logger.error(f"Specified .prj file does not exist: {self.prj_file}")
+                raise ValueError(f"Specified .prj file does not exist: {self.prj_file}. Please check the path and try again.")
+            logger.debug(f"Using specified .prj file: {self.prj_file}")
+        else:
+            # Search for .prj file (existing behavior)
+            self.prj_file = self.find_ras_prj(self.project_folder)
+            if self.prj_file is None:
+                logger.error(f"No HEC-RAS project file found in {self.project_folder}")
+                raise ValueError(f"No HEC-RAS project file found in {self.project_folder}. Please check the path and try again.")
+
         self.project_name = Path(self.prj_file).stem
         self.ras_exe_path = ras_exe_path
         
@@ -4019,10 +4900,19 @@ class RasPrj:
             
             # Set paths for geometry and flow files
             self._set_file_paths()
-            
+
             # Make sure all plan paths are properly set
             self._set_plan_paths()
-            
+
+            # Add flow_type column for deterministic steady/unsteady identification
+            if not self.plan_df.empty and 'unsteady_number' in self.plan_df.columns:
+                self.plan_df['flow_type'] = self.plan_df['unsteady_number'].apply(
+                    lambda x: 'Unsteady' if pd.notna(x) else 'Steady'
+                )
+            else:
+                if not self.plan_df.empty:
+                    self.plan_df['flow_type'] = 'Unknown'
+
         except Exception as e:
             logger.error(f"Error loading project data: {e}")
             raise
@@ -5080,13 +5970,18 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     Initialize a RAS project for use with the ras-commander library.
 
     This is the primary function for setting up a HEC-RAS project. It:
-    1. Finds the project file (.prj) in the specified folder
-    2. Identifies the appropriate HEC-RAS executable
-    3. Loads project data (plans, geometries, flows)
-    4. Creates dataframes containing project components
+    1. Finds the project file (.prj) in the specified folder OR uses the provided .prj file
+    2. Validates .prj files by checking for "Proj Title=" marker
+    3. Identifies the appropriate HEC-RAS executable
+    4. Loads project data (plans, geometries, flows)
+    5. Creates dataframes containing project components
 
     Args:
-        ras_project_folder (str or Path): The path to the RAS project folder.
+        ras_project_folder (str or Path): Path to the RAS project folder OR direct path to a .prj file.
+                                          If a .prj file is provided:
+                                          - File is validated to have .prj extension
+                                          - File content is checked for "Proj Title=" marker
+                                          - Parent folder is used as the project folder
         ras_version (str, optional): The version of RAS to use (e.g., "6.6") OR
                                      a full path to the Ras.exe file (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
                                      If None, will attempt to detect from plan files.
@@ -5096,25 +5991,71 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
 
     Returns:
         RasPrj: An initialized RasPrj instance.
-        
+
     Raises:
-        FileNotFoundError: If the specified project folder doesn't exist.
-        ValueError: If no HEC-RAS project file is found in the folder.
-        
+        FileNotFoundError: If the specified project folder or .prj file doesn't exist.
+        ValueError: If the provided file is not a .prj file, does not contain "Proj Title=",
+                    or if no HEC-RAS project file is found in the folder.
+
     Example:
-        >>> # Initialize using the global 'ras' object (most common)
+        >>> # Initialize using project folder (existing behavior)
         >>> init_ras_project("/path/to/project", "6.6")
         >>> print(f"Initialized project: {ras.project_name}")
         >>>
-        >>> # Create a new RasPrj instance
-        >>> my_project = init_ras_project("/path/to/project", "6.6", "new")
+        >>> # Initialize using direct .prj file path (new feature)
+        >>> init_ras_project("/path/to/project/MyModel.prj", "6.6")
+        >>> print(f"Initialized project: {ras.project_name}")
+        >>>
+        >>> # Create a new RasPrj instance with .prj file
+        >>> my_project = init_ras_project("/path/to/project/MyModel.prj", "6.6", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
     """
-    # Convert to absolute path immediately to ensure consistent path handling
-    project_folder = Path(ras_project_folder).resolve()
-    if not project_folder.exists():
-        logger.error(f"The specified RAS project folder does not exist: {project_folder}")
-        raise FileNotFoundError(f"The specified RAS project folder does not exist: {project_folder}. Please check the path and try again.")
+    # Convert to Path object for consistent handling
+    input_path = Path(ras_project_folder).resolve()
+
+    # Detect if input is a file or folder
+    if input_path.is_file():
+        # User provided a .prj file path
+        if input_path.suffix.lower() != '.prj':
+            error_msg = f"The provided file is not a HEC-RAS project file (.prj): {input_path}"
+            logger.error(error_msg)
+            raise ValueError(f"{error_msg}. Please provide either a project folder or a .prj file.")
+
+        # Enhanced validation: Check if file contains "Proj Title=" to verify it's a HEC-RAS project file
+        try:
+            content, encoding = read_file_with_fallback_encoding(input_path)
+            if content is None or "Proj Title=" not in content:
+                error_msg = f"The file does not appear to be a valid HEC-RAS project file (missing 'Proj Title='): {input_path}"
+                logger.error(error_msg)
+                raise ValueError(f"{error_msg}. Please provide a valid HEC-RAS .prj file.")
+            logger.debug(f"Validated .prj file contains 'Proj Title=' marker")
+        except Exception as e:
+            error_msg = f"Error validating .prj file: {e}"
+            logger.error(error_msg)
+            raise ValueError(f"{error_msg}. Please ensure the file is a valid HEC-RAS project file.")
+
+        # Extract the parent folder to use as project_folder
+        project_folder = input_path.parent
+        specified_prj_file = input_path  # Store for optimization
+        logger.debug(f"User provided .prj file: {input_path}")
+        logger.debug(f"Using parent folder as project_folder: {project_folder}")
+
+    elif input_path.is_dir():
+        # User provided a folder path (existing behavior)
+        project_folder = input_path
+        specified_prj_file = None
+        logger.debug(f"User provided folder path: {project_folder}")
+
+    else:
+        # Path doesn't exist
+        if input_path.suffix.lower() == '.prj':
+            error_msg = f"The specified .prj file does not exist: {input_path}"
+            logger.error(error_msg)
+            raise FileNotFoundError(f"{error_msg}. Please check the path and try again.")
+        else:
+            error_msg = f"The specified RAS project folder does not exist: {input_path}"
+            logger.error(error_msg)
+            raise FileNotFoundError(f"{error_msg}. Please check the path and try again.")
 
     # Determine which RasPrj instance to use
     if ras_object is None:
@@ -5187,13 +6128,25 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
             logger.warning("No valid HEC-RAS version was detected. Running HEC-RAS will fail.")
     
     # Initialize or re-initialize with the determined executable path
-    ras_object.initialize(project_folder, ras_exe_path)
-    
+    # Pass specified_prj_file to avoid re-searching when user provided .prj file directly
+    if specified_prj_file is not None:
+        ras_object.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file)
+    else:
+        ras_object.initialize(project_folder, ras_exe_path)
+
+    # Store version for RasControl (legacy COM interface support)
+    ras_object.ras_version = ras_version if ras_version else detected_version
+
     # Always update the global ras object as well
     if ras_object is not ras:
-        ras.initialize(project_folder, ras_exe_path)
+        if specified_prj_file is not None:
+            ras.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file)
+        else:
+            ras.initialize(project_folder, ras_exe_path)
+        # Also store version in global ras object
+        ras.ras_version = ras_version if ras_version else detected_version
         logger.debug("Global 'ras' object also updated to match the new project.")
-    
+
     logger.debug(f"Project initialized. Project folder: {ras_object.project_folder}")
     logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")
     return ras_object
@@ -5235,67 +6188,99 @@ def get_ras_exe(ras_version=None):
             logger.warning(f"HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
             return default_path
     
-    ras_version_numbers = [
-        "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+    # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
+    # This list matches the exact folder names on disk (verified 2025-10-30)
+    ras_version_folders = [
+        "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
-        "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
+        "4.1.0", "4.0"
     ]
-    
+
+    # User-friendly aliases (user_input → actual_folder_name)
+    # Allows users to pass "4.1" and find "4.1.0" folder, or "66" to find "6.6"
+    version_aliases = {
+        # 4.x aliases
+        "4.1": "4.1.0",      # User passes "4.1" → finds "4.1.0" folder
+        "41": "4.1.0",       # Compact format
+        "410": "4.1.0",      # Full compact
+        "40": "4.0",         # Compact format for 4.0
+
+        # 5.0.x aliases
+        "50": "5.0",         # Compact format
+        "501": "5.0.1",      # Compact format for 5.0.1
+        "503": "5.0.3",      # Compact format
+        "504": "5.0.4",      # Compact format for 5.0.4
+        "505": "5.0.5",
+        "506": "5.0.6",
+        "507": "5.0.7",
+
+        # 6.x aliases
+        "60": "6.0",
+        "61": "6.1",
+        "62": "6.2",
+        "63": "6.3",
+        "631": "6.3.1",
+        "6.4": "6.4.1",      # No 6.4 folder, use 6.4.1
+        "64": "6.4.1",
+        "641": "6.4.1",
+        "65": "6.5",
+        "66": "6.6",
+        "6.7": "6.7 Beta 4", # User passes "6.7" → finds "6.7 Beta 4"
+        "67": "6.7 Beta 4",
+    }
+
     # Check if input is a direct path to an executable
     hecras_path = Path(ras_version)
     if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
         logger.debug(f"HEC-RAS executable found at specified path: {hecras_path}")
         return str(hecras_path)
-    
-    # Check known version numbers
-    if str(ras_version) in ras_version_numbers:
-        default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/Ras.exe")
+
+    version_str = str(ras_version)
+
+    # Check if there's an alias for this version
+    if version_str in version_aliases:
+        actual_folder = version_aliases[version_str]
+        logger.debug(f"Mapped version '{version_str}' to folder '{actual_folder}'")
+        version_str = actual_folder
+
+    # Check if this is a known folder name
+    if version_str in ras_version_folders:
+        default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
         if default_path.is_file():
             logger.debug(f"HEC-RAS executable found at default path: {default_path}")
             return str(default_path)
         else:
-            error_msg = f"HEC-RAS Version {ras_version} is not found at expected path. Running HEC-RAS will fail unless a valid installed version is specified."
+            error_msg = f"HEC-RAS Version {version_str} folder exists but Ras.exe not found at expected path. Running HEC-RAS will fail."
             logger.error(error_msg)
             return "Ras.exe"
     
-    # Try to handle other version formats (e.g., just the number without dots)
+    # Final fallback: Try to find a matching version from folder list
     try:
-        # First check if it's a direct version number
-        version_str = str(ras_version)
-        
-        # Check for paths like "C:/Path/To/Ras.exe"
-        if os.path.sep in version_str and version_str.lower().endswith('.exe'):
-            exe_path = Path(version_str)
-            if exe_path.is_file():
-                logger.debug(f"HEC-RAS executable found at specified path: {exe_path}")
-                return str(exe_path)
-        
         # Try to find a matching version from our list
-        for known_version in ras_version_numbers:
-            if version_str in known_version or known_version.replace('.', '') == version_str:
-                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{known_version}/Ras.exe")
+        for known_folder in ras_version_folders:
+            # Check for partial matches or compact formats
+            if version_str in known_folder or known_folder.replace('.', '') == version_str:
+                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{known_folder}/Ras.exe")
                 if default_path.is_file():
-                    logger.debug(f"HEC-RAS executable found at default path: {default_path}")
+                    logger.debug(f"HEC-RAS executable found via fuzzy match: {default_path}")
                     return str(default_path)
-        
-        # Check if it's a newer version
+
+        # Try direct path construction for newer versions
         if '.' in version_str:
-            major_version = int(version_str.split('.')[0])
-            if major_version >= 6:
-                default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
-                if default_path.is_file():
-                    logger.debug(f"HEC-RAS executable found at path for newer version: {default_path}")
-                    return str(default_path)
+            default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
+            if default_path.is_file():
+                logger.debug(f"HEC-RAS executable found at path: {default_path}")
+                return str(default_path)
     except Exception as e:
         logger.error(f"Error parsing version or finding path: {e}")
-    
+
     error_msg = f"HEC-RAS Version {ras_version} is not recognized or installed. Running HEC-RAS will fail unless a valid installed version is specified."
     logger.error(error_msg)
     return "Ras.exe"
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUnsteady.py
+File: C:\GH\ras-commander\ras_commander\RasUnsteady.py
 ==================================================
 """
 RasUnsteady - Operations for handling unsteady flow files in HEC-RAS projects.
@@ -6138,7 +7123,7 @@ Lava Param=,2500,
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\RasUtils.py
+File: C:\GH\ras-commander\ras_commander\RasUtils.py
 ==================================================
 """
 RasUtils - Utility functions for the ras-commander library

@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.81.0"
+    __version__ = "0.82.0"
 
 # Set up logging
 setup_logging()
@@ -23,6 +23,7 @@ from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
+from .RasControl import RasControl
 from .RasMap import RasMap
 from .HdfFluvialPluvial import HdfFluvialPluvial
 
@@ -50,7 +51,7 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'RasCmdr', 'RasMap', 'HdfFluvialPluvial',
+    'RasExamples', 'RasCmdr', 'RasControl', 'RasMap', 'HdfFluvialPluvial',
     
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',

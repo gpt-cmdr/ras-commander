@@ -1,49 +1,73 @@
 """
-This script generates summary knowledge bases for the ras-commander library.
-It processes the project files and creates the following output files:
+Knowledge Base Generation Script for ras-commander
+===================================================
 
-1. ras-commander_fullrepo.txt:
-   A comprehensive summary of all relevant project files, including their content
-   and structure. This file provides an overview of the entire codebase, including
-   all files and folders except those specified in OMIT_FOLDERS and OMIT_FILES.
+This script generates knowledge base files optimized for LLM consumption (Claude, GPT, Cursor, etc.).
+All outputs are saved to the 'llm_knowledge_bases' directory.
 
-2. ras_commander_classes_and_functions_only.txt:
-   Contains the complete code from the ras_commander folder, including all classes,
-   functions, and their implementations. This file focuses on the core library code
-   and includes all implementation details.
+GENERATED KNOWLEDGE BASES:
+==========================
 
-3. ras-commander_all_without_code.txt:
-   Similar to ras_commander_classes_and_functions_only.txt but with function
-   implementations stripped out. Only the function signatures and their docstrings
-   are retained, omitting the actual code inside functions to provide a more concise
-   overview of the library's structure and documentation.
+1. ras-commander_fullrepo.txt (~2-5 MB)
+   Purpose: Complete codebase view for comprehensive RAG (Retrieval-Augmented Generation)
+   Contents: All source files, examples, and documentation
+   Excludes: Virtual environments, build artifacts, test data, ai_tools, library_assistant
+   Use cases: RAG knowledge base, complete repository understanding, comprehensive searches
 
-4. ras_commander_documentation_only.txt:
-   Contains only the docstrings extracted from the project files, specifically
-   from the ras_commander folder. This file is useful for quickly reviewing the
-   documentation and purpose of various components without any implementation details
-   or examples.
-   
-   Notable Files:
-   - All markdown files: Comprehensive_Library_Guide.md, STYLE_GUIDE.md, README.md, etc.    
-   - logging_config.py
+2. ras-commander_gpt.txt (~2-5 MB)
+   Purpose: Similar to fullrepo but explicitly excludes ai_tools and library_assistant
+   Contents: All source files, examples, and documentation (minus maintainer-only folders)
+   Use cases: LLM context windows, general-purpose knowledge base
 
-5. examples.txt:
-   Includes the content of all files in the examples folder. This file helps in
-   understanding the usage and implementation of the ras-commander library through
-   practical examples.
+3. examples.txt (~2-3 MB)
+   Purpose: Demonstrate library usage through practical examples
+   Contents: All Jupyter notebooks from examples/ folder with outputs removed
+   Use cases: Learning API patterns, understanding workflows, generating new examples
 
-6. ras-commander_gpt.txt:
-   A summary of the project files, excluding certain files and folders that are
-   not relevant for GPT processing (e.g., ai_tools, library_assistant).
+4. ras_commander_classes_and_functions_only.txt (~700 KB)
+   Purpose: Core library implementation with full code
+   Contents: Complete ras_commander/ folder source code
+   Use cases: Understanding implementation details, debugging, extending library
 
-7. library_assistant.txt:
-   Contains all files and content from the library_assistant subfolder, providing
-   a focused view of the library assistant functionality.
+5. ras_commander_documentation_only.txt (~800 KB)
+   Purpose: Quick API reference and documentation review
+   Contents: Docstrings + key markdown files (README.md, STYLE_GUIDE.md, etc.)
+   Use cases: API documentation, quick reference, understanding function signatures
 
-These output files are generated in the 'llm_knowledge_bases' directory and
-serve different purposes for AI assistants or developers who need various levels
-of detail about the project structure, documentation, and examples.
+6. ras_commander_hdf_functions_only.txt (~350 KB)
+   Purpose: Focus on HDF data processing subsystem
+   Contents: All Hdf*.py files from ras_commander/ (HdfBase, HdfPlan, HdfResults, etc.)
+   Use cases: Understanding HDF operations, data extraction workflows
+
+7. ras_commander_ras_functions_only.txt (~350 KB)
+   Purpose: Focus on HEC-RAS automation subsystem
+   Contents: All Ras*.py files from ras_commander/ (RasPrj, RasPlan, RasGeo, etc.)
+   Use cases: Understanding HEC-RAS file operations, plan execution workflows
+
+NOTEBOOK PREPROCESSING:
+=======================
+- Images (PNG, JPEG, SVG) are removed from outputs
+- DataFrame outputs truncated to headers + first 5 rows
+- xarray outputs simplified to dimension info only
+- Long text outputs truncated (>2000 chars)
+- Stream outputs limited to 20 lines
+- If cleaned notebook >100KB, all outputs removed
+
+EXCLUDED CONTENT:
+=================
+See OMIT_FOLDERS and OMIT_FILES configuration below. Key exclusions:
+- Virtual environments (.venv, venv, conda-env)
+- Build artifacts (build/, dist/, *.egg-info)
+- IDE folders (.vscode, .idea, .claude, .cursor)
+- Test data and example projects
+- Deprecated/maintainer-only tools (ai_tools/, library_assistant/)
+
+USAGE:
+======
+Run this script from the ai_tools directory:
+    python generate_llm_knowledge_bases.py
+
+All knowledge bases will be regenerated in ai_tools/llm_knowledge_bases/
 """
 
 import os
@@ -52,10 +76,33 @@ import re
 import json
 
 # Configuration
+# Folders to exclude from knowledge base generation
 OMIT_FOLDERS = [
-    "Bald Eagle Creek", "__pycache__", ".git", ".github", "tests", "docs", "library_assistant", "__pycache__", ".conda", "workspace"
-    "build", "dist", "ras_commander.egg-info", "venv", "ras_commander.egg-info", "log_folder", "logs",
-    "example_projects", "llm_knowledge_bases", "misc", "ai_tools", "FEMA_BLE_Models", "hdf_example_data", "ras_example_categories", "html", "data", "apidocs", "build", "dist", "ras_commander.egg-info", "venv", "log_folder", "logs",
+    # Version control and CI/CD
+    ".git", ".github",
+    # Python artifacts
+    "__pycache__", ".pytest_cache", ".conda",
+    # Build outputs
+    "build", "dist", "ras_commander.egg-info",
+    # Virtual environments (all variants)
+    "venv", ".venv", "env", ".env", "conda-env",
+    # IDE and editor folders
+    ".vscode", ".idea", ".claude", ".cursor",
+    # Logs and temporary files
+    "logs", "log_folder", "temp", "tmp",
+    # Deprecated/internal tooling
+    "ai_tools", "library_assistant",
+    # Generated outputs
+    "llm_knowledge_bases",
+    # Test and documentation build
+    "tests", "docs", "html", "apidocs", "_build", "_static",
+    # Project data folders
+    "example_projects", "data", "FEMA_BLE_Models",
+    "hdf_example_data", "ras_example_categories",
+    # User workspace folders
+    "workspace", "projects", "my_projects", "test_projects",
+    # Specific project folders to exclude
+    "Bald Eagle Creek", "misc",
 ]
 OMIT_FILES = [
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",
@@ -615,21 +662,6 @@ def generate_split_summary(summarize_subfolder, output_dir):
             write_project_tree_and_content(outfile, filepaths, target_folder, cleaned_notebooks_dir)
         print(f"Split summary '{output_file}' created at '{output_file_path}'")
 
-def generate_full_docsonly_summary(summarize_subfolder, output_dir):
-    ras_commander_folder = summarize_subfolder / "ras_commander"
-    output_file_name = "ras-commander_all_without_code.txt"
-    output_file_path = output_dir / output_file_name
-    print(f"Generating Full Documentation-Only Summary (code omitted): {output_file_path}")
-    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
-    filepaths = []
-    for filepath in ras_commander_folder.rglob('*'):
-        if should_omit(filepath):
-            continue
-        if filepath.is_file():
-            filepaths.append(filepath)
-    with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        write_project_tree_and_content(outfile, filepaths, ras_commander_folder, cleaned_notebooks_dir)
-    print(f"All_without_code summary created at '{output_file_path}'")
 
 def generate_gpt_summary(summarize_subfolder, output_dir):
     output_file_name = "ras-commander_gpt.txt"
@@ -657,24 +689,6 @@ def generate_gpt_summary(summarize_subfolder, output_dir):
         write_project_tree_and_content(outfile, filepaths, summarize_subfolder, cleaned_notebooks_dir)
     print(f"GPT summary created at '{output_file_path}'")
 
-def generate_library_assistant_summary(summarize_subfolder, output_dir):
-    output_file_name = "library_assistant.txt"
-    output_file_path = output_dir / output_file_name
-    print(f"Generating Library Assistant Summary: {output_file_path}")
-    library_assistant_folder = summarize_subfolder / "ai_tools" / "library_assistant"
-    if not library_assistant_folder.exists():
-        print(f"Warning: library_assistant folder not found at {library_assistant_folder}")
-        return
-    cleaned_notebooks_dir = output_dir / "example_notebooks_cleaned"
-    filepaths = []
-    for filepath in library_assistant_folder.rglob('*'):
-        if filepath.suffix.lower() in ['.exe', '.dll', '.so']:
-            continue
-        if filepath.is_file():
-            filepaths.append(filepath)
-    with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        write_project_tree_and_content(outfile, filepaths, library_assistant_folder, cleaned_notebooks_dir)
-    print(f"Library assistant summary created at '{output_file_path}'")
 
 def main():
     # Get the name of this script
@@ -700,11 +714,9 @@ def main():
     generate_full_summary(summarize_subfolder, output_dir)
     generate_split_summary(summarize_subfolder, output_dir)
     generate_documentation_only_summary(summarize_subfolder, output_dir)
-    generate_full_docsonly_summary(summarize_subfolder, output_dir)
     generate_gpt_summary(summarize_subfolder, output_dir)
-    generate_library_assistant_summary(summarize_subfolder, output_dir)
 
-    print(f"All summaries, including GPT summary, have been generated in '{output_dir}'")
+    print(f"All knowledge bases have been generated in '{output_dir}'")
 
 if __name__ == "__main__":
     main()

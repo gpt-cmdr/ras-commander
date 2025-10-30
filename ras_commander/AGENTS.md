@@ -5,6 +5,7 @@
 - `RasPrj` (`RasPrj.py`): Initialize and manage a RAS project. Exposes dataframes: `plan_df`, `geom_df`, `flow_df`, `unsteady_df`, `boundaries_df`. Helpers: `init_ras_project()`, `get_ras_exe()`.
 - `RasPlan` (`RasPlan.py`): Clone/retarget plans, update intervals, cores, run flags, titles/descriptions, geometry/unsteady bindings.
 - `RasCmdr` (`RasCmdr.py`): Execute plans (single/sequential/parallel). `compute_plan()`, `compute_parallel()`, `compute_test_mode()`.
+- `RasControl` (`RasControl.py`): Legacy HEC-RAS support (3.x-4.x) via COM interface. ras-commander style API with plan numbers. `run_plan()`, `get_steady_results()`, `get_unsteady_results()`, `get_output_times()`, `set_current_plan()`.
 - `RasMap` (`RasMap.py`): Parse `.rasmap`, post-process stored maps.
 - `Hdf*` modules: Geometry and results accessors.
   - `HdfBase`, `HdfUtils`: shared helpers.
@@ -44,6 +45,13 @@
   - `from ras_commander import HdfPipe, HdfPump`
   - `pipes = HdfPipe.get_pipe_conduits("02")`
   - `pumps = HdfPump.get_pump_stations("02")`
+- Legacy version extraction (HEC-RAS 3.x-4.x):
+  - `from ras_commander import init_ras_project, RasControl`
+  - `init_ras_project(path, "4.1")  # Specify version`
+  - `RasControl.run_plan("02")  # Use plan numbers`
+  - `df_steady = RasControl.get_steady_results("02")`
+  - `df_unsteady = RasControl.get_unsteady_results("01", max_times=10)`
+  - Note: Uses plan numbers like HDF methods; automatically closes HEC-RAS to prevent conflicts
 
 **Face/Cell Utilities (from examples, not library)**
 - The examples include a notebook-only helper `find_nearest_cell_face(point, cell_faces_df)` that computes nearest faces to a point and plots selections. It is not part of the library API; port into scripts as needed.

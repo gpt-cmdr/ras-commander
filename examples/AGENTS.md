@@ -96,6 +96,14 @@ How agents should use notebooks
 - Functions: [RasMap.parse_rasmap](../ras_commander/RasMap.py); external `subprocess` to `Ras.exe`.
 - Notable cells: manual steps to update mapper, then resume automation.
 
+17_extracting_profiles_with_hecrascontroller.ipynb
+- Focus: Extract steady AND unsteady results from legacy HEC-RAS versions (3.x-4.x) using RasControl.
+- Functions: [RasControl.run_plan](../ras_commander/RasControl.py), [RasControl.get_steady_results](../ras_commander/RasControl.py), [RasControl.get_unsteady_results](../ras_commander/RasControl.py), [RasControl.get_output_times](../ras_commander/RasControl.py), [RasControl.set_current_plan](../ras_commander/RasControl.py).
+- Pattern: ras-commander style API - use plan numbers ("02") not file paths. Open-operate-close pattern. Integrates with init_ras_project().
+- Notable cells: Steady workflow (Plan 02), unsteady workflow (Plan 01), time series visualization, DataFrame exports.
+- Supported versions: 3.1, 4.1, 5.0.x (501, 503, 505, 506), 6.0, 6.3, 6.6.
+- Key: Must specify version in init_ras_project(path, "4.1") for RasControl to work.
+
 101_Core_Sensitivity(.ipynb, _aircooled)
 - Focus: Runtime vs core count experiments.
 - Functions: [RasCmdr.compute_plan](../ras_commander/RasCmdr.py); [RasPlan.set_num_cores](../ras_commander/RasPlan.py).

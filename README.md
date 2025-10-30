@@ -48,6 +48,15 @@ HEC-RAS Project Management & Execution
 - Progress tracking and logging
 - Execution error handling and recovery
 
+Legacy Version Support (NEW in v0.81.0)
+- RasControl class for HEC-RAS 3.x-4.x via COM interface
+- ras-commander style API - use plan numbers, not file paths
+- Extract steady state profiles AND unsteady time series
+- Supports versions: 3.1, 4.1, 5.0.x, 6.0, 6.3, 6.6
+- Version migration validation and comparison
+- Open-operate-close pattern prevents conflicts with modern workflows
+- Seamless integration with ras-commander project management
+
 HDF Data Access & Analysis
 - 2D mesh results processing (depths, velocities, WSE)
 - Cross-section data extraction
@@ -82,7 +91,9 @@ RAS ASCII File Operations
 - Unsteady flow file management
 - Project file updates and validation  
 
-Note about support for Pipe Networks:  As a relatively new feature, only read access to Pipe Network geometry and results data has been included.  Users will need to code their own methods to modify/add pipe network data, and pull requests are always welcome to incorporate this capability.  Please note that the library has not been tested with versions prior to HEC-RAS 6.2.
+Note about support for Pipe Networks:  As a relatively new feature, only read access to Pipe Network geometry and results data has been included.  Users will need to code their own methods to modify/add pipe network data, and pull requests are always welcome to incorporate this capability.
+
+Note about version support: The modern HDF-based features target HEC-RAS 6.2+ for optimal compatibility. For legacy versions (3.1, 4.1, 5.0.x), use the RasControl class which provides COM-based access to steady state profile extraction and plan execution (see example notebook 17).
 
 ## Installation
 

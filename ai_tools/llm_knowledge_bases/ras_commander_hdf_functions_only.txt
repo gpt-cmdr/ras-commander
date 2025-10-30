@@ -16,7 +16,7 @@ Project Structure (files included):
 ├── HdfUtils.py
 └── HdfXsec.py
 
-File: c:\GH\ras-commander\ras_commander\HdfBase.py
+File: C:\GH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -380,7 +380,7 @@ class HdfBase:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBndry.py
+File: C:\GH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -781,7 +781,7 @@ class HdfBndry:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -1202,7 +1202,7 @@ class HdfFluvialPluvial:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -2736,7 +2736,7 @@ WHEN RAS LOADS THE HDF, IT IGNORES THE DATA IN THE TABLE AND REPLACES IT WITH NU
 '''
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -3202,7 +3202,7 @@ class HdfMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPipe.py
+File: C:\GH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -3930,7 +3930,7 @@ class HdfPipe:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -4251,7 +4251,7 @@ class HdfPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -4359,7 +4359,7 @@ class HdfPlot:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPump.py
+File: C:\GH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -4680,7 +4680,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -5665,7 +5665,7 @@ class HdfResultsMesh:
             return xr.Dataset()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -5675,14 +5675,23 @@ Attribution:
     Copyright (c) 2024 fema-ffrd, MIT license
 
 Description:
-    Provides static methods for extracting unsteady flow results, volume accounting,
-    and reference data from HEC-RAS plan HDF files.
+    Provides static methods for extracting both unsteady and steady flow results,
+    volume accounting, and reference data from HEC-RAS plan HDF files.
 
 Available Functions:
-    - get_unsteady_info: Extract unsteady attributes
-    - get_unsteady_summary: Extract unsteady summary data
-    - get_volume_accounting: Extract volume accounting data
-    - get_runtime_data: Extract runtime and compute time data
+    Unsteady Flow:
+        - get_unsteady_info: Extract unsteady attributes
+        - get_unsteady_summary: Extract unsteady summary data
+        - get_volume_accounting: Extract volume accounting data
+        - get_runtime_data: Extract runtime and compute time data
+        - get_reference_timeseries: Extract reference line/point timeseries
+        - get_reference_summary: Extract reference line/point summary
+
+    Steady Flow:
+        - is_steady_plan: Check if HDF contains steady state results
+        - get_steady_profile_names: Extract steady state profile names
+        - get_steady_wse: Extract WSE data for steady state profiles
+        - get_steady_info: Extract steady flow attributes and metadata
 
 Note:
     All methods are static and designed to be used without class instantiation.
@@ -6048,9 +6057,331 @@ class HdfResultsPlan:
         except Exception as e:
             logger.error(f"Error reading reference {reftype} summary: {str(e)}")
             return pd.DataFrame()
+
+    # ==================== STEADY STATE METHODS ====================
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def is_steady_plan(hdf_path: Path) -> bool:
+        """
+        Check if HDF file contains steady state results.
+
+        Args:
+            hdf_path (Path): Path to HEC-RAS plan HDF file
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+            bool: True if the HDF contains steady state results, False otherwise
+
+        Notes:
+            - Checks for existence of Results/Steady group
+            - Does not guarantee results are complete or valid
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                return "Results/Steady" in hdf_file
+        except Exception as e:
+            logger.error(f"Error checking if plan is steady: {str(e)}")
+            return False
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_steady_profile_names(hdf_path: Path) -> List[str]:
+        """
+        Extract profile names from steady state results.
+
+        Args:
+            hdf_path (Path): Path to HEC-RAS plan HDF file
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+            List[str]: List of profile names (e.g., ['50Pct', '10Pct', '1Pct'])
+
+        Raises:
+            FileNotFoundError: If the specified HDF file is not found
+            KeyError: If steady state results or profile names are not found
+            ValueError: If the plan is not a steady state plan
+
+        Example:
+            >>> from ras_commander import HdfResultsPlan, init_ras_project
+            >>> init_ras_project(Path('/path/to/project'), '6.6')
+            >>> profiles = HdfResultsPlan.get_steady_profile_names('01')
+            >>> print(profiles)
+            ['50Pct', '20Pct', '10Pct', '4Pct', '2Pct', '1Pct', '0.2Pct']
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Check if this is a steady state plan
+                if "Results/Steady" not in hdf_file:
+                    raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
+
+                # Path to profile names
+                profile_names_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names"
+
+                if profile_names_path not in hdf_file:
+                    raise KeyError(f"Profile names not found at: {profile_names_path}")
+
+                # Read profile names dataset
+                profile_names_ds = hdf_file[profile_names_path]
+                profile_names_raw = profile_names_ds[()]
+
+                # Decode byte strings to regular strings
+                profile_names = []
+                for name in profile_names_raw:
+                    if isinstance(name, bytes):
+                        profile_names.append(name.decode('utf-8').strip())
+                    else:
+                        profile_names.append(str(name).strip())
+
+                logger.info(f"Found {len(profile_names)} steady state profiles: {profile_names}")
+                return profile_names
+
+        except FileNotFoundError:
+            raise FileNotFoundError(f"HDF file not found: {hdf_path}")
+        except KeyError as e:
+            raise KeyError(f"Error accessing steady state profile names: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Error reading steady state profile names: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_steady_wse(
+        hdf_path: Path,
+        profile_index: Optional[int] = None,
+        profile_name: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Extract water surface elevation (WSE) data for steady state profiles.
+
+        Args:
+            hdf_path (Path): Path to HEC-RAS plan HDF file
+            profile_index (int, optional): Index of profile to extract (0-based). If None, extracts all profiles.
+            profile_name (str, optional): Name of profile to extract (e.g., '1Pct'). If specified, overrides profile_index.
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+            pd.DataFrame: DataFrame containing WSE data with columns:
+                - River: River name
+                - Reach: Reach name
+                - Station: Cross section river station
+                - Profile: Profile name (if multiple profiles)
+                - WSE: Water surface elevation (ft)
+
+        Raises:
+            FileNotFoundError: If the specified HDF file is not found
+            KeyError: If steady state results or WSE data are not found
+            ValueError: If profile_index or profile_name is invalid
+
+        Example:
+            >>> # Extract single profile by index
+            >>> wse_df = HdfResultsPlan.get_steady_wse('01', profile_index=5)  # 100-year profile
+
+            >>> # Extract single profile by name
+            >>> wse_df = HdfResultsPlan.get_steady_wse('01', profile_name='1Pct')
+
+            >>> # Extract all profiles
+            >>> wse_df = HdfResultsPlan.get_steady_wse('01')
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Check if this is a steady state plan
+                if "Results/Steady" not in hdf_file:
+                    raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
+
+                # Paths to data
+                wse_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections/Water Surface"
+                xs_attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
+                profile_names_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names"
+
+                # Check required paths exist
+                if wse_path not in hdf_file:
+                    raise KeyError(f"WSE data not found at: {wse_path}")
+                if xs_attrs_path not in hdf_file:
+                    raise KeyError(f"Cross section attributes not found at: {xs_attrs_path}")
+
+                # Get WSE dataset (shape: num_profiles × num_cross_sections)
+                wse_ds = hdf_file[wse_path]
+                wse_data = wse_ds[()]
+                num_profiles, num_xs = wse_data.shape
+
+                # Get profile names
+                if profile_names_path in hdf_file:
+                    profile_names_raw = hdf_file[profile_names_path][()]
+                    profile_names = [
+                        name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
+                        for name in profile_names_raw
+                    ]
+                else:
+                    # Fallback to numbered profiles
+                    profile_names = [f"Profile_{i+1}" for i in range(num_profiles)]
+
+                # Get cross section attributes
+                xs_attrs = hdf_file[xs_attrs_path][()]
+
+                # Determine which profiles to extract
+                if profile_name is not None:
+                    # Find profile by name
+                    try:
+                        profile_idx = profile_names.index(profile_name)
+                    except ValueError:
+                        raise ValueError(
+                            f"Profile name '{profile_name}' not found. "
+                            f"Available profiles: {profile_names}"
+                        )
+                    profiles_to_extract = [(profile_idx, profile_name)]
+
+                elif profile_index is not None:
+                    # Validate profile index
+                    if profile_index < 0 or profile_index >= num_profiles:
+                        raise ValueError(
+                            f"Profile index {profile_index} out of range. "
+                            f"Valid range: 0 to {num_profiles-1}"
+                        )
+                    profiles_to_extract = [(profile_index, profile_names[profile_index])]
+
+                else:
+                    # Extract all profiles
+                    profiles_to_extract = list(enumerate(profile_names))
+
+                # Build DataFrame
+                rows = []
+                for prof_idx, prof_name in profiles_to_extract:
+                    wse_values = wse_data[prof_idx, :]
+
+                    for xs_idx in range(num_xs):
+                        river = xs_attrs[xs_idx]['River']
+                        reach = xs_attrs[xs_idx]['Reach']
+                        station = xs_attrs[xs_idx]['Station']
+
+                        # Decode byte strings
+                        river = river.decode('utf-8') if isinstance(river, bytes) else str(river)
+                        reach = reach.decode('utf-8') if isinstance(reach, bytes) else str(reach)
+                        station = station.decode('utf-8') if isinstance(station, bytes) else str(station)
+
+                        row = {
+                            'River': river.strip(),
+                            'Reach': reach.strip(),
+                            'Station': station.strip(),
+                            'WSE': float(wse_values[xs_idx])
+                        }
+
+                        # Only add Profile column if extracting multiple profiles
+                        if len(profiles_to_extract) > 1:
+                            row['Profile'] = prof_name
+
+                        rows.append(row)
+
+                df = pd.DataFrame(rows)
+
+                # Reorder columns
+                if 'Profile' in df.columns:
+                    df = df[['River', 'Reach', 'Station', 'Profile', 'WSE']]
+                else:
+                    df = df[['River', 'Reach', 'Station', 'WSE']]
+
+                logger.info(
+                    f"Extracted WSE data for {len(profiles_to_extract)} profile(s), "
+                    f"{num_xs} cross sections"
+                )
+
+                return df
+
+        except FileNotFoundError:
+            raise FileNotFoundError(f"HDF file not found: {hdf_path}")
+        except KeyError as e:
+            raise KeyError(f"Error accessing steady state WSE data: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Error reading steady state WSE data: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_steady_info(hdf_path: Path) -> pd.DataFrame:
+        """
+        Get steady flow attributes and metadata from HEC-RAS HDF plan file.
+
+        Args:
+            hdf_path (Path): Path to HEC-RAS plan HDF file
+            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Returns:
+            pd.DataFrame: DataFrame containing steady flow attributes including:
+                - Program Name
+                - Program Version
+                - Type of Run
+                - Run Time Window
+                - Solution status
+                - And other metadata attributes
+
+        Raises:
+            FileNotFoundError: If the specified HDF file is not found
+            KeyError: If steady state results are not found
+            ValueError: If the plan is not a steady state plan
+
+        Example:
+            >>> info_df = HdfResultsPlan.get_steady_info('01')
+            >>> print(info_df['Solution'].values[0])
+            'Steady Finished Successfully'
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Check if this is a steady state plan
+                if "Results/Steady" not in hdf_file:
+                    raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
+
+                attrs_dict = {}
+
+                # Get attributes from Results/Steady/Output
+                output_path = "Results/Steady/Output"
+                if output_path in hdf_file:
+                    output_group = hdf_file[output_path]
+                    for key, value in output_group.attrs.items():
+                        if isinstance(value, bytes):
+                            attrs_dict[key] = value.decode('utf-8')
+                        else:
+                            attrs_dict[key] = value
+
+                # Get attributes from Results/Steady/Summary
+                summary_path = "Results/Steady/Summary"
+                if summary_path in hdf_file:
+                    summary_group = hdf_file[summary_path]
+                    for key, value in summary_group.attrs.items():
+                        if isinstance(value, bytes):
+                            attrs_dict[key] = value.decode('utf-8')
+                        else:
+                            attrs_dict[key] = value
+
+                # Add flow file information from Plan Data
+                plan_info_path = "Plan Data/Plan Information"
+                if plan_info_path in hdf_file:
+                    plan_info = hdf_file[plan_info_path]
+                    for key in ['Flow Filename', 'Flow Title']:
+                        if key in plan_info.attrs:
+                            value = plan_info.attrs[key]
+                            if isinstance(value, bytes):
+                                attrs_dict[key] = value.decode('utf-8')
+                            else:
+                                attrs_dict[key] = value
+
+                if not attrs_dict:
+                    logger.warning("No steady state attributes found in HDF file")
+                    return pd.DataFrame()
+
+                logger.info(f"Extracted {len(attrs_dict)} steady state attributes")
+                return pd.DataFrame(attrs_dict, index=[0])
+
+        except FileNotFoundError:
+            raise FileNotFoundError(f"HDF file not found: {hdf_path}")
+        except KeyError as e:
+            raise KeyError(f"Error accessing steady state info: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Error reading steady state info: {str(e)}")
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -6237,7 +6568,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -6554,7 +6885,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfStruc.py
+File: C:\GH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -6856,7 +7187,7 @@ class HdfStruc:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfUtils.py
+File: C:\GH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -7295,7 +7626,7 @@ class HdfUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfXsec.py
+File: C:\GH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -7413,9 +7744,13 @@ class HdfXsec:
                 mann_info = hdf["/Geometry/Cross Sections/Manning's n Info"][:]
                 mann_values = hdf["/Geometry/Cross Sections/Manning's n Values"][:]
                 
-                # Get ineffective blocks data
-                ineff_blocks = hdf['/Geometry/Cross Sections/Ineffective Blocks'][:]
-                ineff_info = hdf['/Geometry/Cross Sections/Ineffective Info'][:]
+                # Get ineffective blocks data if they exist
+                if '/Geometry/Cross Sections/Ineffective Blocks' in hdf:
+                    ineff_blocks = hdf['/Geometry/Cross Sections/Ineffective Blocks'][:]
+                    ineff_info = hdf['/Geometry/Cross Sections/Ineffective Info'][:]
+                else:
+                    ineff_blocks = None
+                    ineff_info = None
                 
                 # Initialize lists to store data
                 geometries = []
@@ -7464,20 +7799,23 @@ class HdfXsec:
                         mannings_n.append(mann_n_dict)
                         
                         # Extract ineffective blocks data
-                        ineff_start_idx = ineff_info[i][0]
-                        ineff_count = ineff_info[i][1]
-                        if ineff_count > 0:
-                            blocks = ineff_blocks[ineff_start_idx:ineff_start_idx + ineff_count]
-                            blocks_list = []
-                            for block in blocks:
-                                block_dict = {
-                                    'Left Sta': float(block['Left Sta']),
-                                    'Right Sta': float(block['Right Sta']), 
-                                    'Elevation': float(block['Elevation']),
-                                    'Permanent': bool(block['Permanent'])
-                                }
-                                blocks_list.append(block_dict)
-                            ineffective_blocks.append(blocks_list)
+                        if ineff_info is not None and ineff_blocks is not None:
+                            ineff_start_idx = ineff_info[i][0]
+                            ineff_count = ineff_info[i][1]
+                            if ineff_count > 0:
+                                blocks = ineff_blocks[ineff_start_idx:ineff_start_idx + ineff_count]
+                                blocks_list = []
+                                for block in blocks:
+                                    block_dict = {
+                                        'Left Sta': float(block['Left Sta']),
+                                        'Right Sta': float(block['Right Sta']), 
+                                        'Elevation': float(block['Elevation']),
+                                        'Permanent': bool(block['Permanent'])
+                                    }
+                                    blocks_list.append(block_dict)
+                                ineffective_blocks.append(blocks_list)
+                            else:
+                                ineffective_blocks.append([])
                         else:
                             ineffective_blocks.append([])
                 

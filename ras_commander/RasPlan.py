@@ -652,28 +652,43 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_plan(template_plan, new_plan_shortid=None, ras_object=None):
+    def clone_plan(template_plan, new_shortid=None, new_title=None, ras_object=None):
         """
         Create a new plan file based on a template and update the project file.
-        
+
         Parameters:
         template_plan (str): Plan number to use as template (e.g., '01')
-        new_plan_shortid (str, optional): New short identifier for the plan file
+        new_shortid (str, optional): New short identifier for the plan file (max 24 chars).
+                                     If not provided, appends '_copy' to original.
+        new_title (str, optional): New plan title (max 32 chars, updates "Plan Title=" line).
+                                   If not provided, keeps original title.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+
         Returns:
         str: New plan number
-        
+
         Example:
-        >>> ras_plan = RasPlan()
-        >>> new_plan_number = ras_plan.clone_plan('01', new_plan_shortid='New Plan')
-        >>> print(f"New plan created with number: {new_plan_number}")
+        >>> # Clone with default shortid and title
+        >>> new_plan = RasPlan.clone_plan('01')
+        >>>
+        >>> # Clone with custom shortid and title
+        >>> new_plan = RasPlan.clone_plan('01',
+        ...                               new_shortid='Steady_v41',
+        ...                               new_title='Steady Flow - HEC-RAS 4.1')
 
         Note:
+            Both new_shortid and new_title are optional.
             This function updates the ras object's dataframes after modifying the project structure.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"Plan title must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
 
         # Update plan entries without reinitializing the entire project
         ras_obj.plan_df = ras_obj.get_prj_entries('Plan')
@@ -682,22 +697,32 @@ class RasPlan:
         template_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{template_plan}"
         new_plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_plan_num}"
 
-        def update_shortid(lines):
+        def update_plan_metadata(lines):
+            """Update both Plan Title and Short Identifier"""
+            title_pattern = re.compile(r'^Plan Title=(.*)$', re.IGNORECASE)
             shortid_pattern = re.compile(r'^Short Identifier=(.*)$', re.IGNORECASE)
+
             for i, line in enumerate(lines):
-                match = shortid_pattern.match(line.strip())
-                if match:
-                    current_shortid = match.group(1)
-                    if new_plan_shortid is None:
-                        new_shortid = (current_shortid + "_copy")[:24]
+                # Update Plan Title if new_title provided
+                title_match = title_pattern.match(line.strip())
+                if title_match and new_title is not None:
+                    lines[i] = f"Plan Title={new_title[:32]}\n"
+                    continue
+
+                # Update Short Identifier
+                shortid_match = shortid_pattern.match(line.strip())
+                if shortid_match:
+                    current_shortid = shortid_match.group(1)
+                    if new_shortid is None:
+                        new_shortid_value = (current_shortid + "_copy")[:24]
                     else:
-                        new_shortid = new_plan_shortid[:24]
-                    lines[i] = f"Short Identifier={new_shortid}\n"
-                    break
+                        new_shortid_value = new_shortid[:24]
+                    lines[i] = f"Short Identifier={new_shortid_value}\n"
+
             return lines
 
-        # Use RasUtils to clone the file and update the short identifier
-        RasUtils.clone_file(template_plan_path, new_plan_path, update_shortid)
+        # Use RasUtils to clone the file and update metadata
+        RasUtils.clone_file(template_plan_path, new_plan_path, update_plan_metadata)
 
         # Use RasUtils to update the project file
         RasUtils.update_project_file(ras_obj.prj_file, 'Plan', new_plan_num, ras_object=ras_obj)
@@ -714,21 +739,22 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_unsteady(template_unsteady, ras_object=None):
+    def clone_unsteady(template_unsteady, new_title=None, ras_object=None):
         """
         Copy unsteady flow files from a template, find the next unsteady number,
         and update the project file accordingly.
 
         Parameters:
         template_unsteady (str): Unsteady flow number to be used as a template (e.g., '01')
+        new_title (str, optional): New flow title (max 32 chars, updates "Flow Title=" line)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
         str: New unsteady flow number (e.g., '03')
 
         Example:
-        >>> ras_plan = RasPlan()
-        >>> new_unsteady_num = ras_plan.clone_unsteady('01')
+        >>> new_unsteady_num = RasPlan.clone_unsteady('01',
+        ...                                           new_title='Unsteady - HEC-RAS 4.1')
         >>> print(f"New unsteady flow file created: u{new_unsteady_num}")
 
         Note:
@@ -737,6 +763,13 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"Flow title must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
+
         # Update unsteady entries without reinitializing the entire project
         ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
 
@@ -744,8 +777,21 @@ class RasPlan:
         template_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}"
         new_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}"
 
-        # Use RasUtils to clone the file
-        RasUtils.clone_file(template_unsteady_path, new_unsteady_path)
+        def update_flow_title(lines):
+            """Update Flow Title if new_title provided"""
+            if new_title is None:
+                return lines
+
+            title_pattern = re.compile(r'^Flow Title=(.*)$', re.IGNORECASE)
+            for i, line in enumerate(lines):
+                title_match = title_pattern.match(line.strip())
+                if title_match:
+                    lines[i] = f"Flow Title={new_title[:32]}\n"
+                    break
+            return lines
+
+        # Use RasUtils to clone the file and update flow title
+        RasUtils.clone_file(template_unsteady_path, new_unsteady_path, update_flow_title)
 
         # Copy the corresponding .hdf file if it exists
         template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}.hdf"
@@ -769,21 +815,22 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_steady(template_flow, ras_object=None):
+    def clone_steady(template_flow, new_title=None, ras_object=None):
         """
         Copy steady flow files from a template, find the next flow number,
         and update the project file accordingly.
-        
+
         Parameters:
         template_flow (str): Flow number to be used as a template (e.g., '01')
+        new_title (str, optional): New flow title (max 32 chars, updates "Flow Title=" line)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+
         Returns:
         str: New flow number (e.g., '03')
 
         Example:
-        >>> ras_plan = RasPlan()
-        >>> new_flow_num = ras_plan.clone_steady('01')
+        >>> new_flow_num = RasPlan.clone_steady('01',
+        ...                                      new_title='Steady Flow - HEC-RAS 4.1')
         >>> print(f"New steady flow file created: f{new_flow_num}")
 
         Note:
@@ -792,6 +839,13 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"Flow title must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
+
         # Update flow entries without reinitializing the entire project
         ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
 
@@ -799,8 +853,21 @@ class RasPlan:
         template_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{template_flow}"
         new_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_flow_num}"
 
-        # Use RasUtils to clone the file
-        RasUtils.clone_file(template_flow_path, new_flow_path)
+        def update_flow_title(lines):
+            """Update Flow Title if new_title provided"""
+            if new_title is None:
+                return lines
+
+            title_pattern = re.compile(r'^Flow Title=(.*)$', re.IGNORECASE)
+            for i, line in enumerate(lines):
+                title_match = title_pattern.match(line.strip())
+                if title_match:
+                    lines[i] = f"Flow Title={new_title[:32]}\n"
+                    break
+            return lines
+
+        # Use RasUtils to clone the file and update flow title
+        RasUtils.clone_file(template_flow_path, new_flow_path, update_flow_title)
 
         # Use RasUtils to update the project file
         RasUtils.update_project_file(ras_obj.prj_file, 'Flow', new_flow_num, ras_object=ras_obj)
