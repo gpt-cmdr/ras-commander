@@ -47,8 +47,9 @@ Important highlights from AGENTS.md:
 ### Dependencies
 - **Python**: Requires 3.10+
 - **Core packages**: h5py, numpy, pandas, geopandas, matplotlib, shapely, scipy, xarray, tqdm, requests, rasterstats, rtree
+- **Legacy support**: pywin32>=227 (COM interface), psutil>=5.6.6 (process management)
 - **Optional**: tkinterdnd2 (for GUI applications with drag-and-drop)
-- Install dependencies: `pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely pathlib rasterstats rtree`
+- Install dependencies: `pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely pathlib rasterstats rtree pywin32 psutil`
 
 ### Environment Management
 - Supports both pip and uv for package management
@@ -63,6 +64,21 @@ Important highlights from AGENTS.md:
 - `RasCmdr.compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=False, num_cores=None, overwrite_dest=False)`
 - `RasCmdr.compute_parallel()` - Parallel execution across multiple worker processes
 - `RasCmdr.compute_test_mode()` - Sequential execution in test environment
+
+**Legacy Version Support**: `RasControl` - COM interface for HEC-RAS 3.x-4.x
+- Uses ras-commander style API (plan numbers, not file paths)
+- Integrates with `init_ras_project()` and `ras` object
+- Open-operate-close pattern prevents conflicts with modern workflows
+- Supported versions: 3.1, 4.1, 5.0.x (501, 503, 505, 506), 6.0, 6.3, 6.6
+- Public methods (ras-commander style):
+  - `init_ras_project(path, "4.1")` - Initialize with version
+  - `RasControl.run_plan("02")` - Run plan by number
+  - `RasControl.get_steady_results("02")` - Extract steady profiles
+  - `RasControl.get_unsteady_results("01", max_times=10)` - Extract time series
+  - `RasControl.get_output_times("01")` - List unsteady timesteps
+  - `RasControl.set_current_plan("Steady Flow Run")` - Switch active plan
+- Private methods handle all COM interface details
+- See `examples/17_extracting_profiles_with_hecrascontroller.ipynb` for complete usage
 
 **Project Management**: `RasPrj` class and global `ras` object
 - Initialize projects: `init_ras_project(path, ras_version, ras_object=None)`

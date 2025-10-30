@@ -297,6 +297,23 @@ This notebook demonstrates an end-to-end workflow for generating and analyzing m
 - Creating a complete workflow from data to flood analysis
 - Comparing results across different return period events
 
+### [17_extracting_profiles_with_hecrascontroller and RasControl.ipynb](17_extracting_profiles_with_hecrascontroller%20and%20RasControl.ipynb)
+
+This notebook demonstrates the **RasControl** class for working with legacy HEC-RAS versions (3.x-4.x) using the HECRASController COM interface.
+
+**Key contents:**
+- Introduction to RasControl wrapper for HECRASController
+- Using ras-commander style API with plan numbers instead of file paths
+- Running steady state plans and extracting profile results
+- Running unsteady plans and extracting time series results
+- Understanding output times and the "Max WS" special timestep
+- Extracting and plotting steady state profiles across multiple profiles
+- Visualizing unsteady time series at cross sections
+- Supported versions: 3.1, 4.1, 5.0.x (501-507), 6.0, 6.3, 6.6
+- Multi-version comparison for migration validation
+- Integration with `init_ras_project()` and the global `ras` object
+- Open-operate-close pattern to prevent conflicts with modern workflows
+
 
 ## Contributing
 

@@ -49,13 +49,15 @@ HEC-RAS Project Management & Execution
 - Execution error handling and recovery
 
 Legacy Version Support (NEW in v0.81.0)
-- RasControl class for HEC-RAS 3.x-4.x via COM interface
+- **RasControl class** for HEC-RAS 3.x-4.x via COM interface (HECRASController)
 - ras-commander style API - use plan numbers, not file paths
 - Extract steady state profiles AND unsteady time series
-- Supports versions: 3.1, 4.1, 5.0.x, 6.0, 6.3, 6.6
+- Run plans with automatic current plan setting
+- Supports versions: 3.1, 4.1, 5.0.x (501-507), 6.0, 6.3, 6.6
 - Version migration validation and comparison
 - Open-operate-close pattern prevents conflicts with modern workflows
 - Seamless integration with ras-commander project management
+- See `examples/17_extracting_profiles_with_hecrascontroller.ipynb` for complete usage
 
 HDF Data Access & Analysis
 - 2D mesh results processing (depths, velocities, WSE)
@@ -206,16 +208,18 @@ RasPlan.set_geom("01", "02")
 
 ### Execution Modes
 
-RAS Commander provides three methods for executing HEC-RAS plans:
+RAS Commander provides multiple methods for executing HEC-RAS plans:
 
-#### Single Plan Execution
+#### Modern Command-Line Execution (HEC-RAS 6.0+)
+
+**Single Plan Execution:**
 ```python
 # Execute a single plan
 success = RasCmdr.compute_plan("01", dest_folder=r"/path/to/results")
 print(f"Plan execution {'successful' if success else 'failed'}")
 ```
 
-#### Sequential Execution of Multiple Plans
+**Sequential Execution of Multiple Plans:**
 ```python
 # Execute multiple plans in sequence in a test folder
 results = RasCmdr.compute_test_mode(
@@ -226,7 +230,7 @@ for plan, success in results.items():
     print(f"Plan {plan}: {'Successful' if success else 'Failed'}")
 ```
 
-#### Parallel Execution of Multiple Plans
+**Parallel Execution of Multiple Plans:**
 ```python
 # Execute multiple plans concurrently
 results = RasCmdr.compute_parallel(
@@ -237,6 +241,34 @@ results = RasCmdr.compute_parallel(
 for plan, success in results.items():
     print(f"Plan {plan}: {'Successful' if success else 'Failed'}")
 ```
+
+#### Legacy COM Interface Execution (HEC-RAS 3.x-6.x)
+
+**For older HEC-RAS versions**, use the RasControl class:
+
+```python
+# Initialize with version
+init_ras_project(project_path, "4.1")  # or "41", "5.0.6", "506", "6.6", etc.
+
+# Run a plan (auto-sets as current, blocks until complete)
+success, messages = RasControl.run_plan("02")
+
+# Extract steady state results
+df_steady = RasControl.get_steady_results("02")
+print(f"Extracted {len(df_steady)} rows with {df_steady['profile'].nunique()} profiles")
+
+# Extract unsteady time series (includes "Max WS" special timestep)
+df_unsteady = RasControl.get_unsteady_results("01", max_times=20)
+times = RasControl.get_output_times("01")
+```
+
+**Key RasControl Features:**
+- Uses plan numbers, not file paths (ras-commander style)
+- Automatically sets current plan before operations
+- Supports steady AND unsteady extraction
+- Works with versions 3.1, 4.1, 5.0.x, 6.0, 6.3, 6.6
+- Open-operate-close pattern (no HEC-RAS window left open)
+- Perfect for version migration validation
 
 ### Working with Multiple Projects
 
@@ -266,7 +298,8 @@ This is useful for comparing different river systems, running scenario analyses 
 #### Core HEC-RAS Automation Classes
 
 - `RasPrj`: Manages HEC-RAS projects, handling initialization and data loading
-- `RasCmdr`: Handles execution of HEC-RAS simulations
+- `RasCmdr`: Handles execution of HEC-RAS simulations via command line
+- `RasControl`: Legacy version support via COM interface for HEC-RAS 3.x-6.x
 - `RasPlan`: Provides functions for modifying and updating plan files
 - `RasGeo`: Handles operations related to geometry files
 - `RasUnsteady`: Manages unsteady flow file operations
@@ -453,6 +486,9 @@ Check out the examples in the repository to learn how to use RAS Commander:
 - `06_executing_plan_sets.ipynb`: Different ways to specify and execute plan sets
 - `07_sequential_plan_execution.ipynb`: Run multiple plans in sequence
 - `08_parallel_execution.ipynb`: Run multiple plans in parallel
+
+### Legacy Version Support
+- `17_extracting_profiles_with_hecrascontroller.ipynb`: Using RasControl for HEC-RAS 3.x-6.x via COM interface
 
 ### Advanced Operations
 - `04_multiple_project_operations.ipynb`: Work with multiple HEC-RAS projects simultaneously

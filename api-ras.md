@@ -824,9 +824,131 @@ Provides methods to download, manage, and access HEC-RAS example projects includ
 
 ---
 
+## Class: RasControl
+
+Provides legacy HEC-RAS version support via the HECRASController COM interface. Wraps the COM API with ras-commander style conventions (plan numbers instead of file paths). Supports HEC-RAS versions 3.1, 4.1, 5.0.x (501-507), 6.0, 6.3, 6.6. **Requires version specification when initializing project with `init_ras_project()`.**
+
+### Key Features
+
+*   **Plan Number Interface**: Use plan numbers (e.g., "02") instead of file paths
+*   **Auto-sets Current Plan**: Automatically sets the current plan before operations
+*   **Steady & Unsteady Support**: Extract both steady state profiles and unsteady time series
+*   **Open-Operate-Close Pattern**: Opens HEC-RAS, performs operation, closes completely (no GUI left open)
+*   **Blocking Execution**: `run_plan()` waits for computation to complete before returning
+*   **Version Migration**: Perfect for validating model migration across HEC-RAS versions
+
+### `RasControl.run_plan(plan_number, ras_object=None)`
+
+*   **Purpose:** Runs a HEC-RAS plan using the COM interface. Automatically sets the plan as current, starts computation, waits for completion, and closes HEC-RAS.
+*   **Parameters:**
+    *   `plan_number` (`str`): Plan number to run (e.g., "01", "02").
+    *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`. **Must be initialized with a version string** (e.g., `init_ras_project(path, "4.1")`).
+*   **Returns:** `Tuple[bool, List[str]]`: `(success, messages)` where `success` is `True` if computation completed, `messages` is a list of computation messages from HEC-RAS.
+*   **Raises:** `RuntimeError` if RAS not initialized with version, `ValueError` if plan not found, `Exception` from COM interface errors.
+*   **Note:** Blocks until computation completes. Terminates any remaining ras.exe processes after closing.
+
+### `RasControl.get_steady_results(plan_number, ras_object=None)`
+
+*   **Purpose:** Extracts steady state profile results (WSE, velocity, flow, etc.) from a completed HEC-RAS plan using the COM interface.
+*   **Parameters:**
+    *   `plan_number` (`str`): Plan number to extract results from (e.g., "02").
+    *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`.
+*   **Returns:** `pd.DataFrame`: DataFrame with columns: `river`, `reach`, `node_id`, `profile`, `wsel`, `min_ch_el`, `velocity`, `flow`, `froude`, `energy`, `max_depth`. One row per cross-section per profile.
+*   **Raises:** `RuntimeError` if RAS not initialized with version, `ValueError` if plan not found or is not steady, `Exception` from COM interface errors.
+*   **Note:** Automatically sets the plan as current before extraction. Closes HEC-RAS after extraction.
+
+### `RasControl.get_unsteady_results(plan_number, max_times=None, ras_object=None)`
+
+*   **Purpose:** Extracts unsteady time series results from a completed HEC-RAS plan using the COM interface. Includes special "Max WS" timestep containing maximum values from any computational timestep.
+*   **Parameters:**
+    *   `plan_number` (`str`): Plan number to extract results from (e.g., "01").
+    *   `max_times` (`int`, optional): Maximum number of timesteps to extract. If `None`, extracts all output times. **Note:** This limits extracted timesteps, not computational timesteps.
+    *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`.
+*   **Returns:** `pd.DataFrame`: DataFrame with columns: `river`, `reach`, `node_id`, `time_index`, `time_string`, `wsel`, `min_ch_el`, `velocity`, `flow`, `froude`, `energy`, `max_depth`. First row (time_index=1) is always "Max WS" containing peak values from entire simulation.
+*   **Raises:** `RuntimeError` if RAS not initialized with version, `ValueError` if plan not found or is not unsteady, `Exception` from COM interface errors.
+*   **Note:** Automatically sets the plan as current before extraction. Closes HEC-RAS after extraction. Filter `time_string != 'Max WS'` for time series plotting.
+
+### `RasControl.get_output_times(plan_number, ras_object=None)`
+
+*   **Purpose:** Retrieves the list of output times available for an unsteady plan.
+*   **Parameters:**
+    *   `plan_number` (`str`): Plan number to query (e.g., "01").
+    *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`.
+*   **Returns:** `List[str]`: List of time strings (e.g., `["Max WS", "18FEB1999 0000", "18FEB1999 0200", ...]`). First entry is always "Max WS".
+*   **Raises:** `RuntimeError` if RAS not initialized with version, `ValueError` if plan not found, `Exception` from COM interface errors.
+*   **Note:** Automatically sets the plan as current. Closes HEC-RAS after query.
+
+### `RasControl.set_current_plan(plan_title, ras_object=None)`
+
+*   **Purpose:** Sets the current plan in HEC-RAS by plan title (as shown in the GUI).
+*   **Parameters:**
+    *   `plan_title` (`str`): The "Plan Title" from the plan file (not the plan number or short ID).
+    *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`.
+*   **Returns:** `None`.
+*   **Raises:** `RuntimeError` if RAS not initialized with version, `ValueError` if plan title not found, `Exception` from COM interface errors.
+*   **Note:** This is a low-level method. Most users should rely on automatic plan setting in `run_plan()`, `get_steady_results()`, and `get_unsteady_results()`.
+
+### Version Support and Initialization
+
+RasControl requires the HEC-RAS version to be specified when initializing a project:
+
+```python
+# Initialize with version string
+init_ras_project(project_path, "4.1")     # HEC-RAS 4.1
+init_ras_project(project_path, "5.0.6")   # HEC-RAS 5.0.6
+init_ras_project(project_path, "6.6")     # HEC-RAS 6.6
+
+# Flexible version formats accepted
+init_ras_project(project_path, "41")      # Same as "4.1"
+init_ras_project(project_path, "506")     # Same as "5.0.6"
+init_ras_project(project_path, "66")      # Same as "6.6"
+```
+
+**Supported Versions:** 3.1, 4.1, 5.0.1-5.0.7, 6.0, 6.3, 6.6
+
+### Understanding "Max WS" in Unsteady Results
+
+When extracting unsteady results, the first row always contains `time_string="Max WS"` and `time_index=1`. This special timestep contains the **maximum values that occurred at ANY computational timestep** during the simulation, not just at output intervals.
+
+**Why this matters:**
+- Output intervals (e.g., every 1 hour) may miss the peak
+- Computational timesteps (e.g., every 30 seconds) capture the true maximum
+- "Max WS" provides the absolute peak values for the entire simulation
+
+**Usage pattern:**
+```python
+# Extract unsteady results
+df_unsteady = RasControl.get_unsteady_results("01", max_times=20)
+
+# Separate Max WS from time series
+max_ws = df_unsteady[df_unsteady['time_string'] == 'Max WS']
+timeseries = df_unsteady[df_unsteady['time_string'] != 'Max WS']
+
+# Plot time series with Max WS as reference
+import matplotlib.pyplot as plt
+xs_data = timeseries[timeseries['node_id'] == '12345']
+plt.plot(xs_data['time_index'], xs_data['wsel'], label='WSE')
+plt.axhline(max_ws[max_ws['node_id'] == '12345']['wsel'].iloc[0],
+            color='r', linestyle='--', label='Max WS')
+```
+
+### When to Use RasControl vs RasCmdr
+
+| Use RasControl | Use RasCmdr |
+|----------------|-------------|
+| HEC-RAS 3.x - 4.x | HEC-RAS 6.0+ |
+| No HDF file support needed | Need HDF data access |
+| Version migration validation | Modern workflows |
+| Legacy model support | Better performance |
+| Steady profile extraction | 2D mesh analysis |
+
+For HEC-RAS 6.0+, prefer using HDF-based methods (`HdfResultsPlan`, `HdfResultsXsec`) for better performance and more detailed data access.
+
+---
+
 ## Class: RasCmdr
 
-Contains static methods for executing HEC-RAS simulations. Assumes a `RasPrj` object (defaulting to global `ras`) is initialized.
+Contains static methods for executing HEC-RAS simulations via command line interface. Assumes a `RasPrj` object (defaulting to global `ras`) is initialized.
 
 ### `RasCmdr.compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=False, num_cores=None, overwrite_dest=False)`
 
