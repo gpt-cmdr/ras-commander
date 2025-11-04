@@ -1223,119 +1223,193 @@ class RasPlan:
             logger = logging.getLogger(__name__)
             logger.error(f"Error updating intervals in plan file {plan_file_path}: {e}")
             raise
+     
+     
 
 
-    @log_call
-    def update_plan_description(plan_number_or_path: Union[str, Path], description: str, ras_object: Optional['RasPrj'] = None) -> None:
-        """
-        Update the description block in a HEC-RAS plan file.
 
-        Args:
-            plan_number_or_path (Union[str, Path]): The plan number or full path to the plan file
-            description (str): The new description text to set
-            ras_object (Optional[RasPrj]): Specific RAS object to use. If None, uses the global ras instance.
-
-        Raises:
-            ValueError: If the plan file is not found
-            IOError: If there's an error reading or writing the plan file
-        """
-        logger = get_logger(__name__)
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
-            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_object)
-            if not plan_file_path.exists():
-                logger.error(f"Plan file not found: {plan_file_path}")
-                raise ValueError(f"Plan file not found: {plan_file_path}")
-
-        try:
-            with open(plan_file_path, 'r') as file:
-                content = file.read()
-
-            # Find the description block
-            desc_pattern = r'Begin DESCRIPTION.*?END DESCRIPTION'
-            new_desc_block = f'Begin DESCRIPTION\n{description}\nEND DESCRIPTION'
-
-            if re.search(desc_pattern, content, re.DOTALL):
-                # Replace existing description block
-                new_content = re.sub(desc_pattern, new_desc_block, content, flags=re.DOTALL)
-            else:
-                # Add new description block at the start of the file
-                new_content = new_desc_block + '\n' + content
-
-            # Write the updated content back to the file
-            with open(plan_file_path, 'w') as file:
-                file.write(new_content)
-
-            logger.info(f"Updated description in plan file: {plan_file_path}")
-
-            # Update the dataframes in the RAS object to reflect changes
-            if ras_object:
-                ras_object.plan_df = ras_object.get_plan_entries()
-                ras_object.geom_df = ras_object.get_geom_entries()
-                ras_object.flow_df = ras_object.get_flow_entries()
-                ras_object.unsteady_df = ras_object.get_unsteady_entries()
-
-        except IOError as e:
-            logger.error(f"Error updating plan description in {plan_file_path}: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error updating plan description: {e}")
-            raise
 
     @staticmethod
-    @log_call
-    def read_plan_description(plan_number_or_path: Union[str, Path], ras_object: Optional['RasPrj'] = None) -> str:
+    def update_plan_description(plan_number, description_text, ras_object=None):
         """
-        Read the description from the plan file.
-
-        Args:
-            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
-            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
-
+        Update or insert plan description in the correct location within a plan file.
+        
+        The description block will be placed after initial plan parameters 
+        (Plan Title, Program Version, Short Identifier, Simulation Date, Geom File, 
+        Flow File, and flow type) but before the Computation Interval line.
+        
+        Parameters:
+        -----------
+        plan_number : str
+            Plan number to update (e.g., '01', '02', etc.)
+        description_text : str
+            Description text to insert. Will be automatically wrapped in 
+            BEGIN DESCRIPTION/END DESCRIPTION blocks.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses global 'ras' object.
+        
         Returns:
-            str: The description from the plan file.
-
-        Raises:
-            ValueError: If the plan file is not found.
-            IOError: If there's an error reading from the plan file.
+        --------
+        bool : True if successful, False otherwise
+        
+        Examples:
+        ---------
+        >>> RasPlan.update_plan_description('02', 
+        ...     'Atlas 14 Uncertainty Analysis\\n' +
+        ...     'AEP: 100 years\\n' +
+        ...     'Duration: 24 hours\\n' +
+        ...     'Confidence Level: upper')
+        True
         """
-        logger = logging.getLogger(__name__)
-
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
-            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
-            if plan_file_path is None or not Path(plan_file_path).exists():
-                raise ValueError(f"Plan file not found: {plan_file_path}")
-
         try:
-            with open(plan_file_path, 'r') as file:
-                lines = file.readlines()
+            # Get the RAS object
+            if ras_object is None:
+                ras_obj = ras
+            else:
+                ras_obj = ras_object
+            
+            # Get plan path
+            plan_path = RasPlan.get_plan_path(plan_number, ras_object=ras_obj)
+            
+            # Read the plan file
+            with open(plan_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Find existing description block if it exists
+            desc_start_idx = None
+            desc_end_idx = None
+            
+            for i, line in enumerate(lines):
+                if line.strip().upper().startswith('BEGIN DESCRIPTION'):
+                    desc_start_idx = i
+                elif line.strip().upper().startswith('END DESCRIPTION'):
+                    desc_end_idx = i
+                    break
+            
+            # Find the correct insertion point (before Computation Interval)
+            insertion_idx = None
+            
+            # Primary method: Find Computation Interval line
+            for i, line in enumerate(lines):
+                if line.strip().startswith('Computation Interval='):
+                    insertion_idx = i
+                    break
+            
+            # Fallback method 1: Look for common parameter lines that come after description
+            if insertion_idx is None:
+                fallback_markers = [
+                    'K Sum by GR=',
+                    'Std Step Tol=',
+                    'Critical Tol=',
+                    'Num of Std Step Trials=',
+                    'Max Error Tol=',
+                    'Flow Tol Ratio=',
+                    'Split Flow NTrial=',
+                    'Split Flow Tol=',
+                    'Split Flow Ratio=',
+                    'Log Output Level=',
+                    'Friction Slope Method=',
+                    'Unsteady Friction Slope Method='
+                ]
+                
+                for i, line in enumerate(lines):
+                    for marker in fallback_markers:
+                        if line.strip().startswith(marker):
+                            insertion_idx = i
+                            break
+                    if insertion_idx is not None:
+                        break
+            
+            # Fallback method 2: Insert after initial parameters and flow type
+            if insertion_idx is None:
+                # Find the last of the initial parameters
+                initial_params = [
+                    'Plan Title=',
+                    'Program Version=',
+                    'Short Identifier=',
+                    'Simulation Date=',
+                    'Geom File=',
+                    'Flow File='
+                ]
+                
+                last_param_idx = 0
+                for i, line in enumerate(lines):
+                    for param in initial_params:
+                        if line.strip().startswith(param):
+                            last_param_idx = max(last_param_idx, i)
+                
+                # Check for flow type lines after Flow File
+                flow_types = ['Subcritical Flow', 'Mixed Flow', 'Supercritical Flow']
+                for i in range(last_param_idx + 1, min(last_param_idx + 5, len(lines))):
+                    if i < len(lines) and lines[i].strip() in flow_types:
+                        last_param_idx = i
+                
+                insertion_idx = last_param_idx + 1
+            
+            # Prepare the new description block
+            # Ensure description_text doesn't have trailing newline for proper formatting
+            description_text = description_text.rstrip()
+            
+            description_block = [
+                'Begin DESCRIPTION\n',
+                description_text + '\n',
+                'END DESCRIPTION\n'
+            ]
+            
+            # Build the new file content
+            if desc_start_idx is not None and desc_end_idx is not None:
+                # Replace existing description block
+                # Keep it in its current location if it's already in the right place
+                # Otherwise move it to the correct location
+                if desc_start_idx < insertion_idx:
+                    # Description is already before insertion point, replace in place
+                    new_lines = lines[:desc_start_idx] + description_block + lines[desc_end_idx + 1:]
+                else:
+                    # Description is after insertion point, need to move it
+                    # Remove old description
+                    lines_without_desc = lines[:desc_start_idx] + lines[desc_end_idx + 1:]
+                    # Insert at correct location
+                    new_lines = lines_without_desc[:insertion_idx] + description_block + lines_without_desc[insertion_idx:]
+            else:
+                # No existing description, insert new one
+                new_lines = lines[:insertion_idx] + description_block + lines[insertion_idx:]
+            
+            # Write the modified content back to the file
+            with open(plan_path, 'w') as f:
+                f.writelines(new_lines)
+            
+            # Validate the result (optional debug check)
+            if __debug__:  # Only in debug mode
+                with open(plan_path, 'r') as f:
+                    content = f.read()
+                
+                # Check that description comes before Computation Interval
+                if 'Begin DESCRIPTION' in content and 'Computation Interval=' in content:
+                    desc_pos = content.find('Begin DESCRIPTION')
+                    comp_pos = content.find('Computation Interval=')
+                    if desc_pos > comp_pos:
+                        print(f"Warning: Description block may be in wrong position in plan {plan_number}")
+            
+            return True
+            
+        except FileNotFoundError:
+            print(f"Error: Plan file not found for plan {plan_number}")
+            return False
         except IOError as e:
-            logger.error(f"Error reading plan file {plan_file_path}: {e}")
-            raise
+            print(f"Error: IO error updating plan {plan_number}: {e}")
+            return False
+        except Exception as e:
+            print(f"Error: Unexpected error updating plan {plan_number}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
-        description_lines = []
-        in_description = False
-        description_found = False
-        for line in lines:
-            if line.strip() == "BEGIN DESCRIPTION:":
-                in_description = True
-                description_found = True
-            elif line.strip() == "END DESCRIPTION:":
-                break
-            elif in_description:
-                description_lines.append(line.strip())
 
-        if not description_found:
-            logger.warning(f"No description found in plan file: {plan_file_path}")
-            return ""
 
-        description = '\n'.join(description_lines)
-        logger.info(f"Read description from plan file: {plan_file_path}")
-        return description
+
+
+
+    
 
 
 
