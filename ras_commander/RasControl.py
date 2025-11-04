@@ -11,6 +11,7 @@ Public functions:
 - RasControl.get_output_times(plan: Union[str, Path], ras_object: Optional[Any] = None) -> List[str]
 - RasControl.get_plans(plan: Union[str, Path], ras_object: Optional[Any] = None) -> List[dict]
 - RasControl.set_current_plan(plan: Union[str, Path], ras_object: Optional[Any] = None) -> bool
+- RasControl.get_comp_msgs(plan: Union[str, Path], ras_object: Optional[Any] = None) -> str
 
 Private functions:
 - _terminate_ras_process() -> None
@@ -329,16 +330,22 @@ class RasControl:
     # ========== PUBLIC API (ras-commander style) ==========
 
     @staticmethod
-    def run_plan(plan: Union[str, Path], ras_object=None) -> Tuple[bool, List[str]]:
+    def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False) -> Tuple[bool, List[str]]:
         """
         Run a plan (steady or unsteady) and wait for completion.
 
-        This method starts the computation and polls Compute_Complete()
-        until the run finishes. It will block until completion.
+        This method checks if results are current before running. If results
+        are up-to-date, it skips computation (unless force_recompute=True).
+        When computation is needed, it starts the computation and polls
+        Compute_Complete() until the run finishes. It will block until completion.
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
             ras_object: Optional RasPrj instance (uses global ras if None)
+            force_recompute: If False (default), checks if results are current
+                before running. If results are up-to-date, skips computation.
+                If True, always runs the plan regardless of current status.
+                Defaults to False.
 
         Returns:
             Tuple of (success: bool, messages: List[str])
@@ -346,12 +353,16 @@ class RasControl:
         Example:
             >>> from ras_commander import init_ras_project, RasControl
             >>> init_ras_project(path, "4.1")
+            >>> # Default: skips computation if results are current
             >>> success, msgs = RasControl.run_plan("02")
-            >>> # Blocks until plan finishes running
+            >>> # Force recomputation even if results are current
+            >>> success, msgs = RasControl.run_plan("02", force_recompute=True)
 
         Note:
             Can take several minutes for large models or unsteady runs.
             Progress is logged every 30 seconds.
+            If PlanOutput_IsCurrent() check fails (e.g., older HEC-RAS versions),
+            the plan will be run as a safe fallback.
         """
         project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
 
@@ -360,6 +371,18 @@ class RasControl:
             if plan_name:
                 logger.info(f"Setting current plan to: {plan_name}")
                 com_rc.Plan_SetCurrent(plan_name)
+
+            # Check if results are current (unless force_recompute=True)
+            if not force_recompute:
+                try:
+                    is_current = com_rc.PlanOutput_IsCurrent()
+                    if is_current:
+                        logger.info(f"Plan {plan_num} results are current. Skipping computation.")
+                        logger.info("Use force_recompute=True to recompute anyway.")
+                        return True, ["Results are current - computation skipped"]
+                except Exception as e:
+                    logger.warning(f"Could not check PlanOutput_IsCurrent(): {e}")
+                    logger.warning("Proceeding with computation...")
 
             # Version-specific behavior (normalize for checking)
             norm_version = RasControl._normalize_version(version)
@@ -429,6 +452,7 @@ class RasControl:
                 com_rc.Plan_SetCurrent(plan_name)
 
             results = []
+            error_logged = False  # Track if we've already logged comp_msgs
 
             # Get profiles
             _, profile_names = com_rc.Output_GetProfiles(2, None)
@@ -513,10 +537,40 @@ class RasControl:
                                     results.append(row)
 
                                 except Exception as e:
-                                    logger.warning(
-                                        f"Failed to extract {riv_name}/{rch_name}/"
-                                        f"{node_id} profile {profile['name']}: {e}"
-                                    )
+                                    if not error_logged:
+                                        # First error - read and log comp_msgs to diagnose issue
+                                        logger.error(
+                                            f"Failed to extract results at {riv_name}/{rch_name}/{node_id} "
+                                            f"profile {profile['name']}: {e}"
+                                        )
+                                        logger.error(
+                                            "This usually indicates the model run was not successful or "
+                                            "results are invalid. Reading computation messages..."
+                                        )
+
+                                        # Read comp_msgs file
+                                        try:
+                                            project_base = project_path.stem
+                                            plan_file = project_path.parent / f"{project_base}.p{plan_num}"
+                                            comp_msgs_file = Path(str(plan_file) + ".comp_msgs.txt")
+
+                                            if comp_msgs_file.exists():
+                                                with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
+                                                    comp_msgs = f.read()
+                                                logger.error(f"\n{'='*80}\nCOMPUTATION MESSAGES:\n{'='*80}\n{comp_msgs}\n{'='*80}")
+                                            else:
+                                                logger.error(f"Computation messages file not found: {comp_msgs_file}")
+                                        except Exception as msg_error:
+                                            logger.error(f"Could not read computation messages: {msg_error}")
+
+                                        error_logged = True
+                                        logger.info("Suppressing further extraction warnings...")
+
+            if error_logged and len(results) == 0:
+                raise RuntimeError(
+                    "Failed to extract any results. The model run likely failed or produced invalid results. "
+                    "Check the computation messages above for details."
+                )
 
             logger.info(f"Extracted {len(results)} result rows")
             return pd.DataFrame(results)
@@ -565,6 +619,7 @@ class RasControl:
                 com_rc.Plan_SetCurrent(plan_name)
 
             results = []
+            error_logged = False  # Track if we've already logged comp_msgs
 
             # Get output times
             _, time_strings = com_rc.Output_GetProfiles(0, None)
@@ -653,10 +708,40 @@ class RasControl:
                                     results.append(row)
 
                                 except Exception as e:
-                                    logger.warning(
-                                        f"Failed to extract {riv_name}/{rch_name}/"
-                                        f"{node_id} time {time_str}: {e}"
-                                    )
+                                    if not error_logged:
+                                        # First error - read and log comp_msgs to diagnose issue
+                                        logger.error(
+                                            f"Failed to extract results at {riv_name}/{rch_name}/{node_id} "
+                                            f"time {time_str}: {e}"
+                                        )
+                                        logger.error(
+                                            "This usually indicates the model run was not successful or "
+                                            "results are invalid. Reading computation messages..."
+                                        )
+
+                                        # Read comp_msgs file
+                                        try:
+                                            project_base = project_path.stem
+                                            plan_file = project_path.parent / f"{project_base}.p{plan_num}"
+                                            comp_msgs_file = Path(str(plan_file) + ".comp_msgs.txt")
+
+                                            if comp_msgs_file.exists():
+                                                with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
+                                                    comp_msgs = f.read()
+                                                logger.error(f"\n{'='*80}\nCOMPUTATION MESSAGES:\n{'='*80}\n{comp_msgs}\n{'='*80}")
+                                            else:
+                                                logger.error(f"Computation messages file not found: {comp_msgs_file}")
+                                        except Exception as msg_error:
+                                            logger.error(f"Could not read computation messages: {msg_error}")
+
+                                        error_logged = True
+                                        logger.info("Suppressing further extraction warnings...")
+
+            if error_logged and len(results) == 0:
+                raise RuntimeError(
+                    "Failed to extract any results. The model run likely failed or produced invalid results. "
+                    "Check the computation messages above for details."
+                )
 
             logger.info(f"Extracted {len(results)} result rows")
             return pd.DataFrame(results)
@@ -758,6 +843,62 @@ class RasControl:
             return True
 
         return RasControl._com_open_close(project_path, version, _set_plan)
+
+    @staticmethod
+    def get_comp_msgs(plan: Union[str, Path], ras_object=None) -> str:
+        """
+        Read computation messages from the .comp_msgs.txt file.
+
+        The comp_msgs file is created by HEC-RAS during plan computation
+        and contains detailed messages about the computation process,
+        including warnings, errors, and convergence information.
+
+        Args:
+            plan: Plan number ("01", "02") or path to .prj file
+            ras_object: Optional RasPrj instance (uses global ras if None)
+
+        Returns:
+            String containing computation messages
+
+        Raises:
+            FileNotFoundError: If comp_msgs file doesn't exist
+
+        Example:
+            >>> from ras_commander import init_ras_project, RasControl
+            >>> init_ras_project(path, "4.1")
+            >>> msgs = RasControl.get_comp_msgs("08")
+            >>> print(msgs)
+
+        Note:
+            The file naming convention is: {plan_file}.comp_msgs.txt
+            For example, if plan file is A100_00_00.p08, the comp_msgs
+            file will be A100_00_00.p08.comp_msgs.txt
+        """
+        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+
+        # Construct plan file path
+        # e.g., "A100_00_00.prj" -> "A100_00_00"
+        project_base = project_path.stem
+        plan_file = project_path.parent / f"{project_base}.p{plan_num}"
+
+        # Construct comp_msgs file path
+        comp_msgs_file = Path(str(plan_file) + ".comp_msgs.txt")
+
+        if not comp_msgs_file.exists():
+            raise FileNotFoundError(
+                f"Computation messages file not found: {comp_msgs_file}\n"
+                f"This file is created when HEC-RAS runs a plan.\n"
+                f"Ensure the plan has been computed before reading messages."
+            )
+
+        logger.info(f"Reading computation messages from: {comp_msgs_file}")
+
+        # Read and return contents
+        with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
+            contents = f.read()
+
+        logger.info(f"Read {len(contents)} characters from comp_msgs file")
+        return contents
 
 
 if __name__ == '__main__':
