@@ -5,6 +5,7 @@ import logging
 import h5py
 import inspect
 import pandas as pd
+from numbers import Number
 
 
 def log_call(func):
@@ -109,13 +110,20 @@ def standardize_input(file_type: str = 'plan_hdf'):
                         ras_obj.check_initialized()
                     except Exception as e:
                         raise ValueError(f"RAS object is not initialized: {str(e)}")
-                        
+
                     # Extract the number part and strip leading zeros
                     number_str = hdf_input if hdf_input.isdigit() else hdf_input[1:]
                     stripped_number = number_str.lstrip('0')
                     if stripped_number == '':  # Handle case where input was '0' or '00'
                         stripped_number = '0'
-                    number_int = int(stripped_number)
+
+                    # Convert to integer and validate range
+                    try:
+                        number_int = int(stripped_number)
+                        if not (1 <= number_int <= 99):
+                            raise ValueError(f"Plan/geometry number must be between 1 and 99, got {number_int}")
+                    except (ValueError, TypeError) as e:
+                        raise ValueError(f"Cannot convert plan/geometry number '{hdf_input}' to integer") from e
                     
                     if file_type == 'plan_hdf':
                         try:
@@ -168,16 +176,22 @@ def standardize_input(file_type: str = 'plan_hdf'):
                     
 
 
-                
-                # Handle integer inputs (assuming they're plan or geom numbers)
-                elif isinstance(hdf_input, int):
+
+                # Handle numeric inputs (int, float, numpy types, etc. - assuming they're plan or geom numbers)
+                elif isinstance(hdf_input, Number):
                     try:
                         ras_obj.check_initialized()
                     except Exception as e:
                         raise ValueError(f"RAS object is not initialized: {str(e)}")
-                        
-                    number_int = hdf_input
-                    
+
+                    # Convert to integer and validate range
+                    try:
+                        number_int = int(hdf_input)
+                        if not (1 <= number_int <= 99):
+                            raise ValueError(f"Plan/geometry number must be between 1 and 99, got {number_int}")
+                    except (ValueError, TypeError) as e:
+                        raise ValueError(f"Cannot convert plan/geometry number to integer: {hdf_input}") from e
+
                     if file_type == 'plan_hdf':
                         try:
                             # Convert plan_number column to integers for comparison after stripping zeros
@@ -189,7 +203,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                     hdf_path = Path(str(hdf_path_str))
                         except Exception as e:
                             logger.warning(f"Error retrieving plan HDF path: {str(e)}")
-                            
+
                     elif file_type == 'geom_hdf':
                         try:
                             # First try finding plan info to get geometry number
@@ -203,7 +217,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                         # Get the geometry path using RasPlan
                                         from ras_commander import RasPlan
                                         geom_path = RasPlan.get_geom_path(str(geom_number), ras_obj)
-                                        
+
                                         if geom_path is not None:
                                             # Create the HDF path by adding .hdf to the geometry path
                                             hdf_path = Path(str(geom_path) + ".hdf")

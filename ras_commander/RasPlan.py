@@ -64,6 +64,7 @@ import logging
 from pathlib import Path
 import shutil
 from typing import Union, Optional
+from numbers import Number
 import pandas as pd
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
@@ -85,13 +86,13 @@ class RasPlan:
     
     @staticmethod
     @log_call
-    def set_geom(plan_number: Union[str, int], new_geom: Union[str, int], ras_object=None) -> pd.DataFrame:
+    def set_geom(plan_number: Union[str, Number], new_geom: Union[str, Number], ras_object=None) -> pd.DataFrame:
         """
         Set the geometry for the specified plan by updating only the plan file.
 
         Parameters:
-            plan_number (Union[str, int]): The plan number to update.
-            new_geom (Union[str, int]): The new geometry number to set.
+            plan_number (Union[str, Number]): The plan number to update (accepts int, float, numpy types, etc.).
+            new_geom (Union[str, Number]): The new geometry number to set (accepts int, float, numpy types, etc.).
             ras_object: An optional RAS object instance.
 
         Returns:
@@ -107,8 +108,8 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        plan_number = str(plan_number).zfill(2)
-        new_geom = str(new_geom).zfill(2)
+        plan_number = str(int(plan_number)).zfill(2)
+        new_geom = str(int(new_geom)).zfill(2)
 
         # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -156,13 +157,13 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def set_steady(plan_number: str, new_steady_flow_number: str, ras_object=None):
+    def set_steady(plan_number: Union[str, Number], new_steady_flow_number: Union[str, Number], ras_object=None):
         """
         Apply a steady flow file to a plan file.
-        
+
         Parameters:
-        plan_number (str): Plan number (e.g., '02')
-        new_steady_flow_number (str): Steady flow number to apply (e.g., '01')
+        plan_number (Union[str, Number]): Plan number (e.g., '02', 2, or 2.0)
+        new_steady_flow_number (Union[str, Number]): Steady flow number to apply (e.g., '01', 1, or 1.0)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
         
         Returns:
@@ -217,13 +218,13 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def set_unsteady(plan_number: str, new_unsteady_flow_number: str, ras_object=None):
+    def set_unsteady(plan_number: Union[str, Number], new_unsteady_flow_number: Union[str, Number], ras_object=None):
         """
         Apply an unsteady flow file to a plan file.
-        
+
         Parameters:
-        plan_number (str): Plan number (e.g., '04')
-        new_unsteady_flow_number (str): Unsteady flow number to apply (e.g., '01')
+        plan_number (Union[str, Number]): Plan number (e.g., '04', 4, or 4.0)
+        new_unsteady_flow_number (Union[str, Number]): Unsteady flow number to apply (e.g., '01', 1, or 1.0)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
         
         Returns:
@@ -420,12 +421,12 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_results_path(plan_number: str, ras_object=None) -> Optional[str]:
+    def get_results_path(plan_number: Union[str, Number], ras_object=None) -> Optional[str]:
         """
         Retrieve the results file path for a given HEC-RAS plan number.
 
         Args:
-            plan_number (str): The HEC-RAS plan number for which to find the results path.
+            plan_number (Union[str, Number]): The HEC-RAS plan number for which to find the results path (e.g., '02', 2, or 2.0).
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
@@ -447,9 +448,9 @@ class RasPlan:
         
         # Update the plan dataframe in the ras instance to ensure it is current
         ras_obj.plan_df = ras_obj.get_plan_entries()
-        
-        # Ensure plan_number is a string
-        plan_number = str(plan_number).zfill(2)
+
+        # Ensure plan_number is a string with leading zero
+        plan_number = str(int(plan_number)).zfill(2)
         
         plan_entry = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_number]
         if not plan_entry.empty:

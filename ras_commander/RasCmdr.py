@@ -60,6 +60,7 @@ from threading import Lock, Thread, current_thread
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
 from typing import Union, List, Optional, Dict
+from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 
@@ -91,8 +92,8 @@ class RasCmdr:
     @staticmethod
     @log_call
     def compute_plan(
-        plan_number,
-        dest_folder=None, 
+        plan_number: Union[str, Number, Path],
+        dest_folder=None,
         ras_object=None,
         clear_geompre=False,
         num_cores=None,
@@ -101,11 +102,11 @@ class RasCmdr:
         """
         Execute a single HEC-RAS plan in a specified location.
 
-        This function runs a HEC-RAS plan by launching the HEC-RAS executable through command line, 
+        This function runs a HEC-RAS plan by launching the HEC-RAS executable through command line,
         allowing for destination folder specification, core count control, and geometry preprocessor management.
 
         Args:
-            plan_number (str, Path): The plan number to execute (e.g., "01", "02") or the full path to the plan file.
+            plan_number (Union[str, Number, Path]): The plan number to execute (e.g., "01", 1, 1.0) or the full path to the plan file.
                 Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
             dest_folder (str, Path, optional): Name of the folder or full path for computation.
                 If a string is provided, it will be created in the same parent directory as the project folder.
@@ -248,7 +249,7 @@ class RasCmdr:
     @staticmethod
     @log_call
     def compute_parallel(
-        plan_number: Union[str, List[str], None] = None,
+        plan_number: Union[str, Number, List[Union[str, Number]], None] = None,
         max_workers: int = 2,
         num_cores: int = 2,
         clear_geompre: bool = False,
@@ -358,9 +359,9 @@ class RasCmdr:
 
             # Store filtered plan numbers separately to ensure only these are executed
             filtered_plan_numbers = []
-            
+
             if plan_number:
-                if isinstance(plan_number, str):
+                if isinstance(plan_number, (str, Number)):
                     plan_number = [plan_number]
                 ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
                 filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
@@ -501,10 +502,10 @@ class RasCmdr:
     @staticmethod
     @log_call
     def compute_test_mode(
-        plan_number=None, 
-        dest_folder_suffix="[Test]", 
-        clear_geompre=False, 
-        num_cores=None, 
+        plan_number: Union[str, Number, List[Union[str, Number]], None] = None,
+        dest_folder_suffix="[Test]",
+        clear_geompre=False,
+        num_cores=None,
         ras_object=None,
         overwrite_dest=False
     ):
@@ -516,7 +517,7 @@ class RasCmdr:
         need to be run in a specific order or when you want to ensure consistent resource usage.
 
         Args:
-            plan_number (str, list[str], optional): Plan number or list of plan numbers to execute. 
+            plan_number (Union[str, Number, List[Union[str, Number]], None], optional): Plan number or list of plan numbers to execute (e.g., "01", 1, 1.0, or ["01", 2]). 
                 If None, all plans will be executed. Default is None.
                 Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
             dest_folder_suffix (str, optional): Suffix to append to the test folder name. 
@@ -646,7 +647,7 @@ class RasCmdr:
                 return {}
 
             if plan_number:
-                if isinstance(plan_number, str):
+                if isinstance(plan_number, (str, Number)):
                     plan_number = [plan_number]
                 ras_compute_plan_entries = ras_compute_plan_entries[
                     ras_compute_plan_entries['plan_number'].isin(plan_number)
