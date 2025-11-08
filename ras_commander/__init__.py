@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.82.0"
+    __version__ = "0.82.1"
 
 # Set up logging
 setup_logging()
@@ -41,6 +41,7 @@ from .HdfXsec import HdfXsec
 from .HdfPump import HdfPump
 from .HdfPipe import HdfPipe
 from .HdfInfiltration import HdfInfiltration
+from .RasBreach import RasBreach
 
 # Plotting functionality
 from .HdfPlot import HdfPlot
@@ -57,7 +58,7 @@ __all__ = [
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
-    'HdfPipe', 'HdfInfiltration',
+    'HdfPipe', 'HdfInfiltration', 'RasBreach',
     
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',
