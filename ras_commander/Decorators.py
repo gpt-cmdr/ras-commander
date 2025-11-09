@@ -66,7 +66,8 @@ def standardize_input(file_type: str = 'plan_hdf'):
             
             # Import ras here to ensure we get the most current instance
             from .RasPrj import ras as ras
-            ras_object = kwargs.pop('ras_object', None) or (args[1] if len(args) > 1 else None)
+            # ras_object is always keyword-only, never in args
+            ras_object = kwargs.pop('ras_object', None)
             ras_obj = ras_object or ras
 
             # If no hdf_input provided, return the function unmodified

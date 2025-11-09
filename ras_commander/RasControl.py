@@ -4,21 +4,36 @@ RasControl - HECRASController API Wrapper (ras-commander style)
 Provides ras-commander style API for legacy HEC-RAS versions (3.x-4.x)
 that use HECRASController COM interface instead of HDF files.
 
-Public functions:
-- RasControl.run_plan(plan: Union[str, Path], ras_object: Optional[Any] = None) -> Tuple[bool, List[str]]
-- RasControl.get_steady_results(plan: Union[str, Path], ras_object: Optional[Any] = None) -> pandas.DataFrame
-- RasControl.get_unsteady_results(plan: Union[str, Path], max_times: Optional[int] = None, ras_object: Optional[Any] = None) -> pandas.DataFrame
-- RasControl.get_output_times(plan: Union[str, Path], ras_object: Optional[Any] = None) -> List[str]
-- RasControl.get_plans(plan: Union[str, Path], ras_object: Optional[Any] = None) -> List[dict]
-- RasControl.set_current_plan(plan: Union[str, Path], ras_object: Optional[Any] = None) -> bool
-- RasControl.get_comp_msgs(plan: Union[str, Path], ras_object: Optional[Any] = None) -> str
+Includes robust process management with session tracking, orphan detection,
+and optional watchdog protection for Jupyter kernel restarts.
+
+Public functions (HEC-RAS Operations):
+- RasControl.run_plan(plan, ras_object=None, force_recompute=False, use_watchdog=True, max_runtime=3600) -> Tuple[bool, List[str]]
+- RasControl.get_steady_results(plan, ras_object=None) -> pandas.DataFrame
+- RasControl.get_unsteady_results(plan, max_times=None, ras_object=None) -> pandas.DataFrame
+- RasControl.get_output_times(plan, ras_object=None) -> List[str]
+- RasControl.get_plans(plan, ras_object=None) -> List[dict]
+- RasControl.set_current_plan(plan, ras_object=None) -> bool
+- RasControl.get_comp_msgs(plan, ras_object=None) -> str
+
+Public functions (Process Management):
+- RasControl.list_processes(show_all=False) -> pandas.DataFrame
+- RasControl.scan_orphans() -> List[SessionLock]
+- RasControl.cleanup_orphans(interactive=True, dry_run=False) -> int
+- RasControl.force_cleanup_all() -> int
 
 Private functions:
 - _terminate_ras_process() -> None
 - _is_ras_running() -> bool
 - RasControl._normalize_version(version: str) -> str
-- RasControl._get_project_info(plan: Union[str, Path], ras_object: Optional[Any] = None) -> Tuple[Path, str, Optional[str], Optional[str]]
+- RasControl._get_project_info(plan, ras_object=None) -> Tuple[Path, str, Optional[str], Optional[str]]
 - RasControl._com_open_close(project_path: Path, version: str, operation_func: Callable[[Any], Any]) -> Any
+
+Session tracking infrastructure:
+- SessionLock dataclass - Tracks active COM sessions with lock files
+- Module-level _active_sessions dict - Tracks all active sessions
+- atexit handler - Emergency cleanup on Python exit
+- Watchdog support - Optional independent process for kernel restart protection
 
 """
 
@@ -26,15 +41,369 @@ import win32com.client
 import psutil
 import pandas as pd
 from pathlib import Path
-from typing import Optional, List, Tuple, Callable, Any, Union
+from typing import Optional, List, Tuple, Callable, Any, Union, Dict
 import logging
 import time
+import json
+import socket
+import tempfile
+import uuid
+import atexit
+import sys
+import subprocess
+import os
+from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
 # Import ras-commander components
 from .RasPrj import ras
 
+
+# ============================================================================
+# SESSION TRACKING INFRASTRUCTURE
+# ============================================================================
+
+@dataclass
+class SessionLock:
+    """
+    Represents a tracked RasControl session for process cleanup.
+
+    Stored as JSON in temp directory to track active COM sessions and enable
+    orphan detection after crashes/kernel restarts.
+    """
+    python_pid: int              # Python process PID
+    ras_pid: Optional[int]       # ras.exe PID (None if couldn't detect)
+    project_path: str            # Absolute path to .prj file
+    ras_version: str             # HEC-RAS version (e.g., "6.5")
+    session_id: str              # Unique session UUID
+    start_time: float            # time.time() when session started
+    python_exe: str              # sys.executable
+    hostname: str                # socket.gethostname()
+    detection_confidence: int    # 0-100 score from PID detection
+
+    def to_json(self) -> str:
+        """Serialize to JSON string."""
+        return json.dumps(asdict(self), indent=2)
+
+    @classmethod
+    def from_json(cls, data: str) -> 'SessionLock':
+        """Deserialize from JSON string."""
+        return cls(**json.loads(data))
+
+    @classmethod
+    def from_file(cls, path: Path) -> 'SessionLock':
+        """Load from lock file."""
+        return cls.from_json(path.read_text(encoding='utf-8'))
+
+
+# Module-level session tracking
+_active_sessions: Dict[str, SessionLock] = {}  # {session_id: SessionLock}
+
+# Lock file directory
+LOCK_DIR = Path(tempfile.gettempdir()) / "rascontrol_sessions"
+LOCK_DIR.mkdir(exist_ok=True)
+
+
+def _get_lock_file_path(session_id: str) -> Path:
+    """Generate lock file path for a session."""
+    filename = f"rasctl_{os.getpid()}_{session_id}.lock"
+    return LOCK_DIR / filename
+
+
+def _find_our_ras_process(project_path: Path, before_snapshot: Dict[int, Any]) -> Tuple[Optional[int], int]:
+    """
+    Multi-strategy detection to find the ras.exe process we just launched.
+
+    Args:
+        project_path: Path to .prj file being opened
+        before_snapshot: Dict of {pid: proc_info} before COM launch
+
+    Returns:
+        Tuple of (pid, confidence_score). PID is None if detection failed.
+        Confidence score is 0-100.
+    """
+    time.sleep(0.3)  # Give process time to appear
+
+    candidates = {}  # {pid: confidence_score}
+
+    try:
+        after = {
+            p.pid: p.info
+            for p in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time'])
+            if p.info['name'] and p.info['name'].lower() == 'ras.exe'
+        }
+    except Exception as e:
+        logger.warning(f"Error scanning for ras.exe processes: {e}")
+        return None, 0
+
+    new_pids = set(after.keys()) - set(before_snapshot.keys())
+
+    for pid in after.keys():
+        proc_info = after[pid]
+        score = 0
+
+        # Criteria 1: Newly appeared (50 points)
+        if pid in new_pids:
+            score += 50
+
+        # Criteria 2: Project path in cmdline (40 points)
+        try:
+            cmdline = ' '.join(proc_info['cmdline'] or [])
+            if str(project_path) in cmdline or project_path.name in cmdline:
+                score += 40
+        except (TypeError, AttributeError):
+            pass
+
+        # Criteria 3: Very recent creation time (30 points)
+        try:
+            age = time.time() - proc_info['create_time']
+            if age < 2.0:  # Created within 2 seconds
+                score += 30
+        except (TypeError, KeyError):
+            pass
+
+        # Criteria 4: Only one new process (20 points)
+        if len(new_pids) == 1 and pid in new_pids:
+            score += 20
+
+        if score > 0:
+            candidates[pid] = score
+
+    if not candidates:
+        logger.warning(f"Could not reliably identify ras.exe PID for {project_path.name}")
+        return None, 0
+
+    # Return highest confidence PID
+    best_pid = max(candidates, key=candidates.get)
+    confidence = candidates[best_pid]
+
+    if confidence < 50:
+        logger.warning(f"Low confidence ({confidence}/100) for PID {best_pid}")
+    else:
+        logger.info(f"Detected ras.exe PID {best_pid} (confidence: {confidence}/100)")
+
+    return best_pid, confidence
+
+
+def _classify_lock_file(lock: SessionLock) -> str:
+    """
+    Classify lock file state.
+
+    Returns:
+        'active' - Python still running, session active
+        'stale_orphan' - Python dead, ras.exe still running
+        'stale_clean' - Both dead, safe to delete
+        'foreign_machine' - From different machine, don't touch
+    """
+    # Check 1: Different machine?
+    if lock.hostname != socket.gethostname():
+        return 'foreign_machine'
+
+    # Check 2: Is Python process still running?
+    python_alive = False
+    try:
+        python_proc = psutil.Process(lock.python_pid)
+        if python_proc.is_running():
+            # Verify it's actually Python (not PID reuse)
+            if 'python' in python_proc.name().lower():
+                python_alive = True
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        pass
+
+    if python_alive:
+        return 'active'
+
+    # Check 3: Is ras.exe still running?
+    if lock.ras_pid is not None:
+        try:
+            ras_proc = psutil.Process(lock.ras_pid)
+            if ras_proc.is_running() and ras_proc.name().lower() == 'ras.exe':
+                # Verify it's working on our project (if cmdline available)
+                try:
+                    cmdline = ' '.join(ras_proc.cmdline() or [])
+                    if lock.project_path in cmdline or Path(lock.project_path).name in cmdline:
+                        return 'stale_orphan'  # Orphaned process!
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
+                    pass
+                # Couldn't verify project, but ras.exe exists - assume orphan if Python dead
+                return 'stale_orphan'
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    return 'stale_clean'
+
+
+def _create_session_lock(session_id: str, lock_data: SessionLock) -> Path:
+    """Create a lock file for the session."""
+    lock_path = _get_lock_file_path(session_id)
+    try:
+        lock_path.write_text(lock_data.to_json(), encoding='utf-8')
+        logger.debug(f"Created session lock: {lock_path.name}")
+        return lock_path
+    except Exception as e:
+        logger.warning(f"Failed to create session lock file: {e}")
+        return lock_path
+
+
+def _remove_session_lock(session_id: str) -> None:
+    """Remove a session lock file."""
+    lock_path = _get_lock_file_path(session_id)
+    try:
+        lock_path.unlink(missing_ok=True)
+        logger.debug(f"Removed session lock: {lock_path.name}")
+    except Exception as e:
+        logger.warning(f"Failed to remove session lock file: {e}")
+
+
+def _cleanup_session(session_id: str) -> None:
+    """Clean up a specific session."""
+    if session_id in _active_sessions:
+        lock = _active_sessions[session_id]
+
+        # Try to terminate the ras.exe process gracefully
+        if lock.ras_pid:
+            try:
+                proc = psutil.Process(lock.ras_pid)
+                if proc.is_running() and proc.name().lower() == 'ras.exe':
+                    logger.info(f"Terminating tracked ras.exe PID {lock.ras_pid}")
+                    proc.terminate()
+                    proc.wait(timeout=5)
+            except (psutil.NoSuchProcess, psutil.TimeoutExpired, psutil.AccessDenied) as e:
+                logger.debug(f"Could not terminate PID {lock.ras_pid}: {e}")
+
+        # Remove from tracking
+        del _active_sessions[session_id]
+
+        # Remove lock file
+        _remove_session_lock(session_id)
+
+
+def _emergency_cleanup_all() -> None:
+    """
+    Emergency cleanup of all tracked sessions.
+    Called by atexit handler.
+    """
+    if not _active_sessions:
+        return
+
+    logger.info(f"Emergency cleanup: {len(_active_sessions)} active session(s)")
+
+    for session_id in list(_active_sessions.keys()):
+        _cleanup_session(session_id)
+
+
+def _spawn_watchdog(parent_pid: int, ras_pid: int, max_runtime: int,
+                    lock_file_path: Path) -> int:
+    """
+    Spawn independent watchdog process for long-running operations.
+
+    The watchdog monitors for:
+    1. Parent Python process death (orphan detection)
+    2. Runtime timeout
+    3. Manual cancellation via lock file deletion
+
+    Returns:
+        Watchdog process PID
+    """
+    watchdog_script = f"""
+import psutil
+import time
+import sys
+from pathlib import Path
+
+PARENT_PID = {parent_pid}
+RAS_PID = {ras_pid}
+MAX_RUNTIME = {max_runtime}
+LOCK_FILE = Path({str(lock_file_path)!r})
+CHECK_INTERVAL = 5  # seconds
+
+start_time = time.time()
+
+while True:
+    time.sleep(CHECK_INTERVAL)
+
+    # Check 1: Parent Python still alive?
+    try:
+        parent = psutil.Process(PARENT_PID)
+        if not parent.is_running():
+            # Parent died, orphan detected
+            print(f"[Watchdog] Parent {{PARENT_PID}} died, terminating ras.exe {{RAS_PID}}", flush=True)
+            try:
+                ras = psutil.Process(RAS_PID)
+                ras.terminate()
+                ras.wait(timeout=10)
+            except:
+                pass
+            LOCK_FILE.unlink(missing_ok=True)
+            sys.exit(0)
+    except psutil.NoSuchProcess:
+        # Parent already gone
+        try:
+            ras = psutil.Process(RAS_PID)
+            ras.terminate()
+            ras.wait(timeout=10)
+        except:
+            pass
+        LOCK_FILE.unlink(missing_ok=True)
+        sys.exit(0)
+
+    # Check 2: Timeout exceeded?
+    if time.time() - start_time > MAX_RUNTIME:
+        print(f"[Watchdog] Timeout exceeded, terminating ras.exe {{RAS_PID}}", flush=True)
+        try:
+            ras = psutil.Process(RAS_PID)
+            ras.terminate()
+            ras.wait(timeout=10)
+        except:
+            pass
+        LOCK_FILE.unlink(missing_ok=True)
+        sys.exit(0)
+
+    # Check 3: Lock file deleted? (manual cancel signal)
+    if not LOCK_FILE.exists():
+        print(f"[Watchdog] Lock file deleted, assuming manual cleanup", flush=True)
+        sys.exit(0)
+"""
+
+    try:
+        # Launch watchdog as completely independent process
+        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        proc = subprocess.Popen(
+            [sys.executable, '-c', watchdog_script],
+            creationflags=creationflags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        logger.info(f"Spawned watchdog process PID {proc.pid} (monitoring PID {ras_pid})")
+        return proc.pid
+    except Exception as e:
+        logger.error(f"Failed to spawn watchdog process: {e}")
+        return 0
+
+
+def _terminate_watchdog(watchdog_pid: int) -> None:
+    """Terminate a watchdog process."""
+    if watchdog_pid == 0:
+        return
+
+    try:
+        proc = psutil.Process(watchdog_pid)
+        proc.terminate()
+        proc.wait(timeout=3)
+        logger.debug(f"Terminated watchdog process PID {watchdog_pid}")
+    except (psutil.NoSuchProcess, psutil.TimeoutExpired, psutil.AccessDenied):
+        pass
+
+
+# Register atexit cleanup handler
+atexit.register(_emergency_cleanup_all)
+
+
+# ============================================================================
+# LEGACY PROCESS TERMINATION FUNCTIONS (kept for compatibility)
+# ============================================================================
 
 def _terminate_ras_process() -> None:
     """Force terminate any running ras.exe processes."""
@@ -278,6 +647,7 @@ class RasControl:
         PRIVATE: Open HEC-RAS via COM, run operation, close HEC-RAS.
 
         This is the core COM interface handler. All public methods use this.
+        Includes session tracking for robust cleanup on crashes/kernel restarts.
         """
         # Normalize version (handles "6.6" → "6.6", "66" → "6.6", etc.)
         normalized_version = RasControl._normalize_version(version)
@@ -287,6 +657,19 @@ class RasControl:
 
         com_rc = None
         result = None
+        session_id = str(uuid.uuid4())
+        lock_path = None
+
+        # Take snapshot of ras.exe processes before COM launch
+        before_snapshot = {}
+        try:
+            before_snapshot = {
+                p.pid: p.info
+                for p in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time'])
+                if p.info['name'] and p.info['name'].lower() == 'ras.exe'
+            }
+        except Exception as e:
+            logger.debug(f"Could not snapshot processes: {e}")
 
         try:
             # Open HEC-RAS COM interface
@@ -297,6 +680,28 @@ class RasControl:
             # Open project
             logger.info(f"Opening project: {project_path}")
             com_rc.Project_Open(str(project_path))
+
+            # Detect ras.exe PID after COM launch
+            ras_pid, confidence = _find_our_ras_process(project_path, before_snapshot)
+
+            # Create session lock
+            lock_data = SessionLock(
+                python_pid=os.getpid(),
+                ras_pid=ras_pid,
+                project_path=str(project_path),
+                ras_version=version,
+                session_id=session_id,
+                start_time=time.time(),
+                python_exe=sys.executable,
+                hostname=socket.gethostname(),
+                detection_confidence=confidence
+            )
+
+            # Track session globally
+            _active_sessions[session_id] = lock_data
+
+            # Create lock file
+            lock_path = _create_session_lock(session_id, lock_data)
 
             # Perform operation
             logger.info("Executing operation...")
@@ -320,17 +725,20 @@ class RasControl:
                 except Exception as e:
                     logger.warning(f"QuitRas() failed: {e}")
 
-            _terminate_ras_process()
+            # Clean up session tracking (terminates only our tracked PID)
+            _cleanup_session(session_id)
 
-            if _is_ras_running():
-                logger.warning("HEC-RAS may still be running!")
+            # Check if our specific process is still running
+            if session_id in _active_sessions:
+                logger.warning("Session cleanup may have failed - session still tracked")
             else:
-                logger.info("HEC-RAS fully closed")
+                logger.debug("Session cleanup completed successfully")
 
     # ========== PUBLIC API (ras-commander style) ==========
 
     @staticmethod
-    def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False) -> Tuple[bool, List[str]]:
+    def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False,
+                 use_watchdog: bool = True, max_runtime: int = 3600) -> Tuple[bool, List[str]]:
         """
         Run a plan (steady or unsteady) and wait for completion.
 
@@ -346,6 +754,12 @@ class RasControl:
                 before running. If results are up-to-date, skips computation.
                 If True, always runs the plan regardless of current status.
                 Defaults to False.
+            use_watchdog: If True, spawns independent watchdog process that will
+                terminate ras.exe if Python crashes/kernel restarts. Provides
+                protection against orphaned processes in Jupyter notebooks.
+                Defaults to True (recommended). Set to False to disable.
+            max_runtime: Maximum runtime in seconds before watchdog terminates the
+                process. Only used if use_watchdog=True. Defaults to 3600 (1 hour).
 
         Returns:
             Tuple of (success: bool, messages: List[str])
@@ -353,20 +767,32 @@ class RasControl:
         Example:
             >>> from ras_commander import init_ras_project, RasControl
             >>> init_ras_project(path, "4.1")
-            >>> # Default: skips computation if results are current
+            >>> # Default: with watchdog protection (recommended)
             >>> success, msgs = RasControl.run_plan("02")
             >>> # Force recomputation even if results are current
             >>> success, msgs = RasControl.run_plan("02", force_recompute=True)
+            >>> # Disable watchdog (not recommended in Jupyter)
+            >>> success, msgs = RasControl.run_plan("01", use_watchdog=False)
+            >>> # Long-running with extended timeout
+            >>> success, msgs = RasControl.run_plan("01", max_runtime=7200)
 
         Note:
             Can take several minutes for large models or unsteady runs.
             Progress is logged every 30 seconds.
             If PlanOutput_IsCurrent() check fails (e.g., older HEC-RAS versions),
             the plan will be run as a safe fallback.
+
+            Watchdog protection (use_watchdog=True):
+            - Spawns independent Python process monitoring parent death
+            - Survives kernel restarts and crashes
+            - Automatically terminates orphaned ras.exe processes
+            - Enforces max_runtime timeout
         """
         project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
 
         def _run_operation(com_rc):
+            watchdog_pid = 0
+
             # Set current plan if we have plan_name (using plan number)
             if plan_name:
                 logger.info(f"Setting current plan to: {plan_name}")
@@ -394,33 +820,59 @@ class RasControl:
             else:
                 status, _, messages, _ = com_rc.Compute_CurrentPlan(None, None)
 
-            # CRITICAL: Wait for computation to complete
-            # Compute_CurrentPlan is ASYNCHRONOUS - it returns before computation finishes
-            logger.info("Waiting for computation to complete...")
-            poll_count = 0
-            while True:
-                try:
-                    # Check if computation is complete
-                    is_complete = com_rc.Compute_Complete()
-
-                    if is_complete:
-                        logger.info(f"Computation completed (polled {poll_count} times)")
+            # Spawn watchdog if requested
+            if use_watchdog:
+                # Find our session to get ras_pid and lock file
+                current_session = None
+                for session in _active_sessions.values():
+                    if session.project_path == str(project_path):
+                        current_session = session
                         break
 
-                    # Still computing - wait and poll again
-                    time.sleep(1)  # Poll every second
-                    poll_count += 1
+                if current_session and current_session.ras_pid:
+                    lock_file = _get_lock_file_path(current_session.session_id)
+                    watchdog_pid = _spawn_watchdog(
+                        parent_pid=os.getpid(),
+                        ras_pid=current_session.ras_pid,
+                        max_runtime=max_runtime,
+                        lock_file_path=lock_file
+                    )
+                else:
+                    logger.warning("Could not spawn watchdog - ras.exe PID not detected")
 
-                    # Log progress every 30 seconds
-                    if poll_count % 30 == 0:
-                        logger.info(f"Still computing... ({poll_count} seconds elapsed)")
+            try:
+                # CRITICAL: Wait for computation to complete
+                # Compute_CurrentPlan is ASYNCHRONOUS - it returns before computation finishes
+                logger.info("Waiting for computation to complete...")
+                poll_count = 0
+                while True:
+                    try:
+                        # Check if computation is complete
+                        is_complete = com_rc.Compute_Complete()
 
-                except Exception as e:
-                    logger.error(f"Error checking completion status: {e}")
-                    # If we can't check status, break and hope for the best
-                    break
+                        if is_complete:
+                            logger.info(f"Computation completed (polled {poll_count} times)")
+                            break
 
-            return status, list(messages) if messages else []
+                        # Still computing - wait and poll again
+                        time.sleep(1)  # Poll every second
+                        poll_count += 1
+
+                        # Log progress every 30 seconds
+                        if poll_count % 30 == 0:
+                            logger.info(f"Still computing... ({poll_count} seconds elapsed)")
+
+                    except Exception as e:
+                        logger.error(f"Error checking completion status: {e}")
+                        # If we can't check status, break and hope for the best
+                        break
+
+                return status, list(messages) if messages else []
+
+            finally:
+                # Always terminate watchdog on completion (even if error)
+                if watchdog_pid:
+                    _terminate_watchdog(watchdog_pid)
 
         return RasControl._com_open_close(project_path, version, _run_operation)
 
@@ -899,6 +1351,270 @@ class RasControl:
 
         logger.info(f"Read {len(contents)} characters from comp_msgs file")
         return contents
+
+    # ========== PROCESS MANAGEMENT API ==========
+
+    @staticmethod
+    def list_processes(show_all: bool = False) -> pd.DataFrame:
+        """
+        List ras.exe processes with tracking status.
+
+        Args:
+            show_all: If True, show all ras.exe processes. If False (default),
+                     only show processes tracked by this Python session.
+
+        Returns:
+            DataFrame with columns: pid, tracked, project, age_sec, status
+
+        Example:
+            >>> # Show only tracked processes
+            >>> df = RasControl.list_processes()
+            >>> print(df)
+
+            >>> # Show all ras.exe on system
+            >>> df_all = RasControl.list_processes(show_all=True)
+            >>> print(df_all)
+        """
+        tracked_pids = {lock.ras_pid for lock in _active_sessions.values() if lock.ras_pid}
+
+        rows = []
+        for proc in psutil.process_iter(['pid', 'name', 'create_time', 'cmdline']):
+            try:
+                if proc.info['name'] and proc.info['name'].lower() != 'ras.exe':
+                    continue
+
+                is_tracked = proc.info['pid'] in tracked_pids
+
+                if not show_all and not is_tracked:
+                    continue
+
+                age = time.time() - proc.info['create_time']
+
+                # Try to extract project from cmdline
+                project = "Unknown"
+                try:
+                    cmdline = ' '.join(proc.info['cmdline'] or [])
+                    for token in cmdline.split():
+                        if token.endswith('.prj'):
+                            project = Path(token).name
+                            break
+                except (TypeError, AttributeError):
+                    pass
+
+                rows.append({
+                    'pid': proc.info['pid'],
+                    'tracked': is_tracked,
+                    'project': project,
+                    'age_sec': round(age, 1),
+                    'status': 'TRACKED' if is_tracked else 'UNTRACKED'
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        if not rows:
+            logger.info("No ras.exe processes found")
+            return pd.DataFrame(columns=['pid', 'tracked', 'project', 'age_sec', 'status'])
+
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    def scan_orphans() -> List[SessionLock]:
+        """
+        Scan lock files for orphaned sessions from crashed Python processes.
+
+        Returns:
+            List of SessionLock objects for orphaned processes (Python dead,
+            ras.exe still running).
+
+        Example:
+            >>> orphans = RasControl.scan_orphans()
+            >>> if orphans:
+            >>>     print(f"Found {len(orphans)} orphaned processes")
+            >>>     for orphan in orphans:
+            >>>         print(f"  PID {orphan.ras_pid}: {Path(orphan.project_path).name}")
+        """
+        orphans = []
+
+        if not LOCK_DIR.exists():
+            return orphans
+
+        for lock_file in LOCK_DIR.glob("rasctl_*.lock"):
+            try:
+                lock = SessionLock.from_file(lock_file)
+                status = _classify_lock_file(lock)
+
+                if status == 'stale_orphan':
+                    orphans.append(lock)
+                elif status == 'stale_clean':
+                    # Clean up stale lock files
+                    try:
+                        lock_file.unlink()
+                        logger.debug(f"Cleaned stale lock file: {lock_file.name}")
+                    except Exception as e:
+                        logger.debug(f"Could not clean stale lock: {e}")
+            except Exception as e:
+                logger.warning(f"Error reading lock file {lock_file.name}: {e}")
+
+        return orphans
+
+    @staticmethod
+    def cleanup_orphans(interactive: bool = True, dry_run: bool = False) -> int:
+        """
+        Clean up orphaned ras.exe processes from crashed Python sessions.
+
+        This method ONLY terminates processes that:
+        1. Were started by RasControl (have session lock files)
+        2. Have a dead parent Python process
+        3. Are still running
+
+        Args:
+            interactive: If True, prompts user for confirmation before cleanup
+            dry_run: If True, only reports what would be cleaned (no action)
+
+        Returns:
+            Number of processes cleaned up
+
+        Example:
+            >>> # Interactive cleanup (prompts for confirmation)
+            >>> RasControl.cleanup_orphans()
+
+            >>> # Automatic cleanup (no prompts)
+            >>> count = RasControl.cleanup_orphans(interactive=False)
+            >>> print(f"Cleaned {count} orphans")
+
+            >>> # Dry run (see what would be cleaned)
+            >>> RasControl.cleanup_orphans(dry_run=True)
+        """
+        orphans = RasControl.scan_orphans()
+
+        if not orphans:
+            print("✅ No orphaned processes found")
+            logger.info("No orphaned processes found")
+            return 0
+
+        print(f"Found {len(orphans)} orphaned RAS process(es):")
+        for orphan in orphans:
+            age_min = (time.time() - orphan.start_time) / 60
+            print(f"  • PID {orphan.ras_pid}: {Path(orphan.project_path).name} "
+                  f"(running {age_min:.1f} min, Python {orphan.python_pid} crashed)")
+
+        if dry_run:
+            print("\n[Dry run - no action taken]")
+            logger.info("Dry run - no orphans terminated")
+            return 0
+
+        if interactive:
+            response = input("\nClean up these processes? (y/n): ")
+            if response.lower() != 'y':
+                print("Cancelled")
+                logger.info("Cleanup cancelled by user")
+                return 0
+
+        cleaned = 0
+        for orphan in orphans:
+            try:
+                proc = psutil.Process(orphan.ras_pid)
+                proc.terminate()
+                proc.wait(timeout=10)
+                print(f"✅ Terminated PID {orphan.ras_pid}")
+                logger.info(f"Terminated orphaned PID {orphan.ras_pid}")
+                cleaned += 1
+
+                # Remove lock file
+                lock_file = _get_lock_file_path(orphan.session_id)
+                lock_file.unlink(missing_ok=True)
+            except psutil.TimeoutExpired:
+                # Force kill if graceful termination fails
+                try:
+                    proc.kill()
+                    print(f"⚠️  Force killed PID {orphan.ras_pid}")
+                    logger.warning(f"Force killed orphaned PID {orphan.ras_pid}")
+                    cleaned += 1
+                except Exception as e:
+                    print(f"❌ Failed to kill PID {orphan.ras_pid}: {e}")
+                    logger.error(f"Failed to kill orphaned PID {orphan.ras_pid}: {e}")
+            except Exception as e:
+                print(f"❌ Failed to terminate PID {orphan.ras_pid}: {e}")
+                logger.error(f"Failed to terminate orphaned PID {orphan.ras_pid}: {e}")
+
+        print(f"\n✅ Cleaned up {cleaned}/{len(orphans)} processes")
+        logger.info(f"Cleaned up {cleaned}/{len(orphans)} orphaned processes")
+        return cleaned
+
+    @staticmethod
+    def force_cleanup_all() -> int:
+        """
+        NUCLEAR OPTION: Terminate ALL ras.exe processes on the system.
+
+        ⚠️  WARNING: This will kill:
+        - Your tracked processes
+        - Other users' processes
+        - Manual HEC-RAS GUI sessions
+        - Other Python scripts' processes
+
+        Requires explicit "YES" confirmation to prevent accidental use.
+
+        Returns:
+            Number of processes terminated
+
+        Example:
+            >>> # Prompts for "YES" confirmation
+            >>> RasControl.force_cleanup_all()
+        """
+        all_ras = [p for p in psutil.process_iter(['pid', 'name'])
+                   if p.info['name'] and p.info['name'].lower() == 'ras.exe']
+
+        if not all_ras:
+            print("No ras.exe processes found")
+            logger.info("No ras.exe processes to clean up")
+            return 0
+
+        print(f"⚠️  WARNING: This will terminate ALL {len(all_ras)} ras.exe process(es)")
+        print("This includes:")
+        print("  • Your tracked processes")
+        print("  • Other users' processes")
+        print("  • Manual HEC-RAS GUI sessions")
+        print("  • Other Python scripts' processes")
+
+        response = input("\n⚠️  Type 'YES' in all caps to confirm: ")
+        if response != 'YES':
+            print("Cancelled")
+            logger.info("Force cleanup cancelled by user")
+            return 0
+
+        terminated = 0
+        for proc in all_ras:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+                print(f"✅ Terminated PID {proc.pid}")
+                logger.info(f"Force terminated PID {proc.pid}")
+                terminated += 1
+            except psutil.TimeoutExpired:
+                try:
+                    proc.kill()
+                    print(f"⚠️  Force killed PID {proc.pid}")
+                    logger.warning(f"Force killed PID {proc.pid}")
+                    terminated += 1
+                except Exception as e:
+                    print(f"❌ Failed to kill PID {proc.pid}: {e}")
+                    logger.error(f"Failed to kill PID {proc.pid}: {e}")
+            except Exception as e:
+                print(f"❌ Failed to terminate PID {proc.pid}: {e}")
+                logger.error(f"Failed to terminate PID {proc.pid}: {e}")
+
+        print(f"\n✅ Terminated {terminated}/{len(all_ras)} processes")
+        logger.info(f"Force cleanup terminated {terminated}/{len(all_ras)} processes")
+
+        # Clean up all lock files
+        if LOCK_DIR.exists():
+            for lock_file in LOCK_DIR.glob("rasctl_*.lock"):
+                try:
+                    lock_file.unlink()
+                except Exception:
+                    pass
+
+        return terminated
 
 
 if __name__ == '__main__':

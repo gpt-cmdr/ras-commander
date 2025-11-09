@@ -75,7 +75,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def list_breach_structures_hdf(hdf_path: Path, ras_object=None) -> List[str]:
+    def list_breach_structures_hdf(hdf_path: Path, *, ras_object=None) -> List[str]:
         """
         List all SA/2D Area Connection structures with breach results in HDF file.
 
@@ -127,7 +127,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_breach_info(hdf_path: Path, ras_object=None) -> pd.DataFrame:
+    def get_breach_info(hdf_path: Path, *, ras_object=None) -> pd.DataFrame:
         """
         Get information about which structures have breach capability.
 
@@ -207,7 +207,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_structure_variables(hdf_path: Path, structure_name: str = None,
+    def get_structure_variables(hdf_path: Path, structure_name: str = None, *,
                                 ras_object=None) -> pd.DataFrame:
         """
         Extract structure-level flow variables (Total Flow, Weir Flow, HW, TW).
@@ -319,7 +319,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_breaching_variables(hdf_path: Path, structure_name: str = None,
+    def get_breaching_variables(hdf_path: Path, structure_name: str = None, *,
                                ras_object=None) -> pd.DataFrame:
         """
         Extract breach-specific geometry progression and flow data.
@@ -453,7 +453,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_breach_timeseries(hdf_path: Path, structure_name: str = None,
+    def get_breach_timeseries(hdf_path: Path, structure_name: str = None, *,
                              ras_object=None) -> pd.DataFrame:
         """
         Extract combined breach and structure time series (primary user function).
@@ -579,7 +579,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_breach_summary(hdf_path: Path, structure_name: str = None,
+    def get_breach_summary(hdf_path: Path, structure_name: str = None, *,
                           ras_object=None) -> pd.DataFrame:
         """
         Extract breach summary statistics (peak values, timing, final geometry).
@@ -798,7 +798,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan')
-    def list_breach_structures_plan(plan_path: Path, ras_object=None) -> List[Dict]:
+    def list_breach_structures_plan(plan_path: Path, *, ras_object=None) -> List[Dict]:
         """
         List all breach structures defined in plan file.
 
@@ -851,7 +851,7 @@ class RasBreach:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan')
-    def read_breach_block(plan_path: Path, structure_name: str, ras_object=None) -> Dict:
+    def read_breach_block(plan_path: Path, structure_name: str, *, ras_object=None) -> Dict:
         """
         Read breach parameters for specified structure from plan file.
 
