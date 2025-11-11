@@ -877,23 +877,163 @@ class RasControl:
         return RasControl._com_open_close(project_path, version, _run_operation)
 
     @staticmethod
-    def get_steady_results(plan: Union[str, Path], ras_object=None) -> pd.DataFrame:
+    def _parse_ras_datetime(time_string: str) -> pd.Timestamp:
         """
-        Extract steady state profile results.
+        Parse HEC-RAS COM datetime string to pandas Timestamp.
 
         Args:
-            plan: Plan number ("01", "02") or path to .prj file
-            ras_object: Optional RasPrj instance (uses global ras if None)
+            time_string: RAS format (e.g., "18FEB1999 0000" or "01JAN2000 0000")
 
         Returns:
-            DataFrame with columns: river, reach, node_id, profile, wsel,
-            velocity, flow, froude, energy, max_depth, min_ch_el
+            pandas Timestamp, or pd.NaT if string is "Max WS" or parsing fails
 
-        Example:
-            >>> from ras_commander import init_ras_project, RasControl
-            >>> init_ras_project(path, "4.1")
-            >>> df = RasControl.get_steady_results("02")
-            >>> df.to_csv('results.csv', index=False)
+        Note:
+            This is a private helper method for converting RAS datetime strings
+            from the COM interface into proper datetime64[ns] objects. The "Max WS"
+            special value is converted to pd.NaT to allow clean filtering.
+
+            Special handling for "2400" hours: HEC-RAS uses 2400 to represent
+            midnight at the end of a day (equivalent to 0000 of the next day).
+        """
+        time_str = time_string.strip()
+
+        # Special case: Max WS row contains computational maximums, not a timestamp
+        if time_str == 'Max WS':
+            return pd.NaT
+
+        # Special case: 2400 hours (midnight at end of day)
+        # HEC-RAS uses 2400 to mean 24:00 (midnight at end of day)
+        # Convert to 0000 of next day
+        if ' 2400' in time_str:
+            # Replace 2400 with 0000 and parse, then add 1 day
+            temp_str = time_str.replace(' 2400', ' 0000')
+            try:
+                dt = pd.to_datetime(temp_str, format='%d%b%Y %H%M')
+                # Add 1 day to get correct midnight
+                return dt + pd.Timedelta(days=1)
+            except (ValueError, TypeError):
+                logger.warning(f"Could not parse RAS datetime with 2400: '{time_str}'")
+                return pd.NaT
+
+        try:
+            # Primary format: "01JAN2000 0000" (%d%b%Y %H%M)
+            return pd.to_datetime(time_str, format='%d%b%Y %H%M')
+        except (ValueError, TypeError):
+            try:
+                # Alternate format with seconds: "01JAN2000 0000:00"
+                return pd.to_datetime(time_str, format='%d%b%Y %H%M:%S')
+            except (ValueError, TypeError):
+                logger.warning(f"Could not parse RAS datetime: '{time_str}'")
+                return pd.NaT
+
+    @staticmethod
+    def get_steady_results(plan: Union[str, Path], ras_object=None) -> pd.DataFrame:
+        """
+        Extract steady state profile results from HEC-RAS via COM interface.
+
+        Opens HEC-RAS, loads the specified plan, extracts water surface elevations
+        and hydraulic parameters for all profiles at all cross sections, then closes
+        HEC-RAS.
+
+        Parameters
+        ----------
+        plan : str or Path
+            Plan number (e.g., "01", "02") or full path to .prj file
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses global `ras` object.
+
+        Returns
+        -------
+        pd.DataFrame
+            Steady state results with one row per cross-section per profile
+
+            **Schema:**
+
+            +----------------+----------+---------------------------------------+
+            | Column         | Type     | Description                           |
+            +================+==========+=======================================+
+            | river          | str      | River name                            |
+            +----------------+----------+---------------------------------------+
+            | reach          | str      | Reach name                            |
+            +----------------+----------+---------------------------------------+
+            | node_id        | str      | Cross section river station           |
+            +----------------+----------+---------------------------------------+
+            | profile        | str      | Profile name (e.g., "PF 1", "50Pct")  |
+            +----------------+----------+---------------------------------------+
+            | wsel           | float    | Water surface elevation (ft or m)     |
+            +----------------+----------+---------------------------------------+
+            | velocity       | float    | Total velocity (ft/s or m/s)          |
+            +----------------+----------+---------------------------------------+
+            | flow           | float    | Total flow (cfs or cms)               |
+            +----------------+----------+---------------------------------------+
+            | froude         | float    | Channel Froude number (dimensionless) |
+            +----------------+----------+---------------------------------------+
+            | energy         | float    | Energy grade elevation (ft or m)      |
+            +----------------+----------+---------------------------------------+
+            | max_depth      | float    | Maximum channel depth (ft or m)       |
+            +----------------+----------+---------------------------------------+
+            | min_ch_el      | float    | Minimum channel elevation (ft or m)   |
+            +----------------+----------+---------------------------------------+
+
+            **Note on data types:**
+
+            - String columns (`river`, `reach`, `node_id`, `profile`) are decoded
+              from COM byte strings and stripped of whitespace
+            - Numeric columns are float64
+            - Units depend on project settings (US customary or SI)
+
+        Raises
+        ------
+        ValueError
+            - If project not initialized with version
+            - If plan number not found in project
+        RuntimeError
+            - If no steady state results found
+            - If model run was not successful
+
+        Notes
+        -----
+        **Comparison with HDF Methods:**
+
+        This COM-based method returns MORE data than the HDF-based
+        `HdfResultsPlan.get_steady_wse()`, which only returns WSE.
+        RasControl includes velocity, flow, Froude, energy, and depths.
+
+        **Performance Notes:**
+
+        - HEC-RAS is opened and closed for each call (not persistent)
+        - For HEC-RAS 6.0+, HDF methods may offer better performance
+        - COM interface is single-threaded
+
+        Examples
+        --------
+        Extract steady results for Plan 02:
+
+        >>> from ras_commander import init_ras_project, RasControl
+        >>> init_ras_project(path, "4.1")
+        >>> df = RasControl.get_steady_results("02")
+        >>> df.to_csv('steady_results.csv', index=False)
+
+        Plot water surface profile:
+
+        >>> import matplotlib.pyplot as plt
+        >>> profile_data = df[df['profile'] == 'PF 1']
+        >>> plt.plot(profile_data['node_id'].astype(float),
+        ...          profile_data['wsel'])
+        >>> plt.xlabel('Station')
+        >>> plt.ylabel('Water Surface Elevation (ft)')
+        >>> plt.show()
+
+        See Also
+        --------
+        get_unsteady_results : Extract unsteady time series
+        run_plan : Run a plan before extracting results
+        HdfResultsPlan.get_steady_wse : Modern HDF-based steady extraction
+
+        References
+        ----------
+        For comparison with HDF-based methods, see:
+        ``feature_dev_notes/rascontrol_vs_hdf_comparison.md``
         """
         project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
 
@@ -1030,37 +1170,147 @@ class RasControl:
         return RasControl._com_open_close(project_path, version, _extract_operation)
 
     @staticmethod
-    def get_unsteady_results(plan: Union[str, Path], max_times: int = None,
+    def get_unsteady_results(plan: Union[str, Path], max_times: Optional[int] = None,
                             ras_object=None) -> pd.DataFrame:
         """
-        Extract unsteady flow time series results.
+        Extract unsteady flow time series results from HEC-RAS via COM interface.
 
-        Args:
-            plan: Plan number ("01", "02") or path to .prj file
-            max_times: Optional limit on timesteps (for testing/large datasets)
-            ras_object: Optional RasPrj instance (uses global ras if None)
+        Opens HEC-RAS, loads the specified plan, extracts all computed time series
+        data including the critical "Max WS" row, then closes HEC-RAS.
 
-        Returns:
-            DataFrame with columns: river, reach, node_id, time_index, time_string,
-            wsel, velocity, flow, froude, energy, max_depth, min_ch_el
+        Parameters
+        ----------
+        plan : str or Path
+            Plan number (e.g., "01", "02") or full path to .prj file.
+        max_times : int, optional
+            Maximum number of timesteps to extract. If None, extracts all timesteps.
+            Note: "Max WS" row is always included and doesn't count toward this limit.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses global `ras` object.
 
-        Important - Understanding "Max WS":
-            The first row (time_index=1, time_string="Max WS") contains the MAXIMUM
-            values that occurred at ANY computational timestep during the simulation,
-            not just at output intervals. This is critical data for identifying peaks.
+        Returns
+        -------
+        pd.DataFrame
+            Unsteady flow time series with one row per cross-section per timestep,
+            plus one "Max WS" row per cross-section containing computational maximums.
 
-            For time series plotting, filter to actual timesteps:
-                df_timeseries = df[df['time_string'] != 'Max WS']
+            **Schema:**
 
-            For showing maximum as reference line:
-                max_wse = df[df['time_string'] == 'Max WS']['wsel'].iloc[0]
-                plt.axhline(max_wse, color='r', linestyle='--', label='Max WS')
+            +-----------------+----------------+-------------------------------------------+
+            | Column          | Type           | Description                               |
+            +=================+================+===========================================+
+            | river           | str            | River name                                |
+            +-----------------+----------------+-------------------------------------------+
+            | reach           | str            | Reach name                                |
+            +-----------------+----------------+-------------------------------------------+
+            | node_id         | str            | Cross section river station               |
+            +-----------------+----------------+-------------------------------------------+
+            | time_index      | int            | 1-based timestep index                    |
+            |                 |                | 1 = "Max WS", 2+ = actual timesteps       |
+            +-----------------+----------------+-------------------------------------------+
+            | time_string     | str            | RAS datetime format "01JAN2000 0000"      |
+            |                 |                | or "Max WS" for maximum value row         |
+            +-----------------+----------------+-------------------------------------------+
+            | datetime        | datetime64[ns] | Parsed timestamp                          |
+            |                 |                | pd.NaT for "Max WS" rows                  |
+            +-----------------+----------------+-------------------------------------------+
+            | wsel            | float          | Water surface elevation (ft or m)         |
+            +-----------------+----------------+-------------------------------------------+
+            | velocity        | float          | Total velocity (ft/s or m/s)              |
+            +-----------------+----------------+-------------------------------------------+
+            | flow            | float          | Total flow (cfs or cms)                   |
+            +-----------------+----------------+-------------------------------------------+
+            | froude          | float          | Channel Froude number (dimensionless)     |
+            +-----------------+----------------+-------------------------------------------+
+            | energy          | float          | Energy grade elevation (ft or m)          |
+            +-----------------+----------------+-------------------------------------------+
+            | max_depth       | float          | Maximum channel depth (ft or m)           |
+            +-----------------+----------------+-------------------------------------------+
+            | min_ch_el       | float          | Minimum channel elevation (ft or m)       |
+            +-----------------+----------------+-------------------------------------------+
 
-        Example:
-            >>> from ras_commander import init_ras_project, RasControl
-            >>> init_ras_project(path, "4.1")
-            >>> df = RasControl.get_unsteady_results("01", max_times=10)
-            >>> # Includes "Max WS" as first row
+            **Units depend on project settings (US Customary or SI).**
+
+        Raises
+        ------
+        ValueError
+            - If project not initialized with version
+            - If plan not found in project
+        RuntimeError
+            - If no unsteady results found
+            - If HEC-RAS computation was not successful
+
+        Notes
+        -----
+        **Understanding "Max WS" Rows:**
+
+        The "Max WS" row (time_index=1, time_string="Max WS") contains the maximum
+        value at ANY computational timestep, not just the output intervals. This is
+        critical for design applications because:
+
+        - HEC-RAS computes at finer intervals than it outputs
+        - Peak values often occur between output timesteps
+        - "Max WS" captures the true computational maximum
+
+        To separate "Max WS" from time series data:
+
+        >>> df_max = df[df['time_string'] == 'Max WS']
+        >>> df_timeseries = df[df['datetime'].notna()]  # Excludes Max WS (has NaT)
+
+        **New in v0.81.0:**
+
+        The `datetime` column is now included automatically as datetime64[ns] objects.
+        Users no longer need to manually parse `time_string`. For backward compatibility,
+        `time_string` is still included.
+
+        **Performance Notes:**
+
+        - HEC-RAS is opened and closed for each call (not persistent)
+        - For large time series, consider using HDF-based methods for better performance
+        - COM interface is single-threaded
+
+        Examples
+        --------
+        Extract and plot time series at a cross section:
+
+        >>> from ras_commander import init_ras_project, RasControl
+        >>> import matplotlib.pyplot as plt
+        >>>
+        >>> init_ras_project(path, "4.1")
+        >>> df = RasControl.get_unsteady_results("01")
+        >>>
+        >>> # Separate max WS from time series
+        >>> df_max = df[df['time_string'] == 'Max WS']
+        >>> df_ts = df[df['datetime'].notna()]
+        >>>
+        >>> # Plot time series for specific cross section
+        >>> xs_data = df_ts[df_ts['node_id'] == '10000'].sort_values('datetime')
+        >>> plt.plot(xs_data['datetime'], xs_data['wsel'])
+        >>> plt.axhline(df_max[df_max['node_id'] == '10000']['wsel'].iloc[0],
+        ...             color='r', linestyle='--', label='Max WS')
+        >>> plt.xlabel('Date/Time')
+        >>> plt.ylabel('WSE (ft)')
+        >>> plt.legend()
+        >>> plt.show()
+
+        Filter to specific time range using datetime column:
+
+        >>> import pandas as pd
+        >>> start = pd.Timestamp('1999-02-18')
+        >>> end = pd.Timestamp('1999-02-20')
+        >>> filtered = df_ts[(df_ts['datetime'] >= start) & (df_ts['datetime'] <= end)]
+
+        See Also
+        --------
+        get_steady_results : Extract steady state profile results
+        get_output_times : List available timesteps before extracting
+        run_plan : Run a plan before extracting results
+        HdfResultsXsec.get_xsec_timeseries : Modern HDF-based extraction (returns xarray)
+
+        References
+        ----------
+        For comparison with HDF-based methods, see:
+        ``feature_dev_notes/rascontrol_vs_hdf_comparison.md``
         """
         project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
 
@@ -1119,6 +1369,7 @@ class RasControl:
                                         'node_id': node_id.strip(),
                                         'time_index': time_idx,
                                         'time_string': time_str.strip(),
+                                        'datetime': RasControl._parse_ras_datetime(time_str),
                                     }
 
                                     # Extract output variables (time_idx is profile code for unsteady)

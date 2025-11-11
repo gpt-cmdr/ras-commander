@@ -108,8 +108,9 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        plan_number = str(int(plan_number)).zfill(2)
-        new_geom = str(int(new_geom)).zfill(2)
+        # Normalize plan and geometry numbers to two-digit format
+        plan_number = RasUtils.normalize_ras_number(plan_number)
+        new_geom = RasUtils.normalize_ras_number(new_geom)
 
         # Update all dataframes
         ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -181,9 +182,13 @@ class RasPlan:
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-                        
+
+        # Normalize plan and flow numbers to two-digit format
+        plan_number = RasUtils.normalize_ras_number(plan_number)
+        new_steady_flow_number = RasUtils.normalize_ras_number(new_steady_flow_number)
+
         ras_obj.flow_df = ras_obj.get_flow_entries()
-        
+
         if new_steady_flow_number not in ras_obj.flow_df['flow_number'].values:
             raise ValueError(f"Steady flow number {new_steady_flow_number} not found in project file.")
         
@@ -242,9 +247,13 @@ class RasPlan:
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        
+
+        # Normalize plan and unsteady flow numbers to two-digit format
+        plan_number = RasUtils.normalize_ras_number(plan_number)
+        new_unsteady_flow_number = RasUtils.normalize_ras_number(new_unsteady_flow_number)
+
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-        
+
         if new_unsteady_flow_number not in ras_obj.unsteady_df['unsteady_number'].values:
             raise ValueError(f"Unsteady number {new_unsteady_flow_number} not found in project file.")
         
@@ -291,12 +300,12 @@ class RasPlan:
     
     @staticmethod
     @log_call
-    def set_num_cores(plan_number, num_cores, ras_object=None):
+    def set_num_cores(plan_number: Union[str, Number], num_cores: int, ras_object=None):
         """
         Update the maximum number of cores to use in the HEC-RAS plan file.
-        
+
         Parameters:
-        plan_number (str): Plan number (e.g., '02') or full path to the plan file
+        plan_number (Union[str, Number]): Plan number (e.g., '02', 2, or 2.0) or full path to the plan file
         num_cores (int): Maximum number of cores to use
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
         
@@ -449,8 +458,8 @@ class RasPlan:
         # Update the plan dataframe in the ras instance to ensure it is current
         ras_obj.plan_df = ras_obj.get_plan_entries()
 
-        # Ensure plan_number is a string with leading zero
-        plan_number = str(int(plan_number)).zfill(2)
+        # Normalize plan number to two-digit format
+        plan_number = RasUtils.normalize_ras_number(plan_number)
         
         plan_entry = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_number]
         if not plan_entry.empty:
@@ -464,20 +473,20 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_plan_path(plan_number: str, ras_object=None) -> Optional[str]:
+    def get_plan_path(plan_number: Union[str, Number], ras_object=None) -> Optional[str]:
         """
         Return the full path for a given plan number.
-        
+
         This method ensures that the latest plan entries are included by refreshing
         the plan dataframe before searching for the requested plan number.
-        
+
         Args:
-        plan_number (str): The plan number to search for.
+        plan_number (Union[str, Number]): The plan number to search for (e.g., '01', 1, or 1.0).
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+
         Returns:
         Optional[str]: The full path of the plan file if found, None otherwise.
-        
+
         Raises:
         RuntimeError: If the project is not initialized.
 
@@ -488,9 +497,14 @@ class RasPlan:
         ...     print(f"Plan file found at: {plan_path}")
         ... else:
         ...     print("Plan file not found.")
+        >>> # Integer input also works
+        >>> plan_path = ras_plan.get_plan_path(1)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize plan number to two-digit format
+        plan_number = RasUtils.normalize_ras_number(plan_number)
         
         plan_df = ras_obj.get_plan_entries()
         
@@ -506,12 +520,12 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_flow_path(flow_number: str, ras_object=None) -> Optional[str]:
+    def get_flow_path(flow_number: Union[str, Number], ras_object=None) -> Optional[str]:
         """
         Return the full path for a given flow number.
 
         Args:
-        flow_number (str): The flow number to search for.
+        flow_number (Union[str, Number]): The flow number to search for (e.g., '01', 1, or 1.0).
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
@@ -527,9 +541,14 @@ class RasPlan:
         ...     print(f"Flow file found at: {flow_path}")
         ... else:
         ...     print("Flow file not found.")
+        >>> # Integer input also works
+        >>> flow_path = ras_plan.get_flow_path(1)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize flow number to two-digit format
+        flow_number = RasUtils.normalize_ras_number(flow_number)
         
         # Use updated flow dataframe
         ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
@@ -543,12 +562,12 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_unsteady_path(unsteady_number: str, ras_object=None) -> Optional[str]:
+    def get_unsteady_path(unsteady_number: Union[str, Number], ras_object=None) -> Optional[str]:
         """
         Return the full path for a given unsteady number.
 
         Args:
-        unsteady_number (str): The unsteady number to search for.
+        unsteady_number (Union[str, Number]): The unsteady number to search for (e.g., '01', 1, or 1.0).
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
@@ -564,9 +583,14 @@ class RasPlan:
         ...     print(f"Unsteady file found at: {unsteady_path}")
         ... else:
         ...     print("Unsteady file not found.")
+        >>> # Integer input also works
+        >>> unsteady_path = ras_plan.get_unsteady_path(1)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize unsteady number to two-digit format
+        unsteady_number = RasUtils.normalize_ras_number(unsteady_number)
         
         # Use updated unsteady dataframe
         ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
@@ -580,12 +604,12 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_geom_path(geom_number: Union[str, int], ras_object=None) -> Optional[str]:
+    def get_geom_path(geom_number: Union[str, Number], ras_object=None) -> Optional[str]:
         """
         Return the full path for a given geometry number.
 
         Args:
-        geom_number (Union[str, int]): The geometry number to search for.
+        geom_number (Union[str, Number]): The geometry number to search for (e.g., '01', 1, or 1.0).
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
@@ -601,31 +625,21 @@ class RasPlan:
         ...     print(f"Geometry file found at: {geom_path}")
         ... else:
         ...     print("Geometry file not found.")
+        >>> # Integer input also works
+        >>> geom_path = ras_plan.get_geom_path(1)
         """
         logger = get_logger(__name__)
-        
+
         if geom_number is None:
             logger.warning("Provided geometry number is None")
             return None
-            
+
         try:
             ras_obj = ras_object or ras
             ras_obj.check_initialized()
-            
-            # Ensure geom_number is a string with proper formatting
-            if isinstance(geom_number, int):
-                geom_number = f"{geom_number:02d}"
-            elif isinstance(geom_number, str):
-                # Strip any leading zeros and reformat
-                stripped = geom_number.lstrip('0')
-                if not stripped:  # Handle case where input was '0' or '00'
-                    geom_number = '00'
-                else:
-                    geom_number = f"{int(stripped):02d}"
-            else:
-                # Handle unexpected types
-                logger.warning(f"Unexpected type for geom_number: {type(geom_number)}")
-                return None
+
+            # Normalize geometry number to two-digit format
+            geom_number = RasUtils.normalize_ras_number(geom_number)
             
             # Use updated geom dataframe
             ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
@@ -653,14 +667,17 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_plan(template_plan, new_shortid=None, new_title=None, ras_object=None):
+    def clone_plan(template_plan: Union[str, Number], new_shortid=None, new_plan_shortid=None, new_title=None, ras_object=None):
         """
         Create a new plan file based on a template and update the project file.
 
         Parameters:
-        template_plan (str): Plan number to use as template (e.g., '01')
+        template_plan (Union[str, Number]): Plan number to use as template (e.g., '01', 1, or 1.0)
         new_shortid (str, optional): New short identifier for the plan file (max 24 chars).
                                      If not provided, appends '_copy' to original.
+                                     Alias: new_plan_shortid (for improved clarity)
+        new_plan_shortid (str, optional): Alias for new_shortid. If both are provided,
+                                          new_plan_shortid takes precedence.
         new_title (str, optional): New plan title (max 32 chars, updates "Plan Title=" line).
                                    If not provided, keeps original title.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
@@ -669,20 +686,32 @@ class RasPlan:
         str: New plan number
 
         Example:
-        >>> # Clone with default shortid and title
+        >>> # Clone with default shortid and title (string input)
         >>> new_plan = RasPlan.clone_plan('01')
         >>>
-        >>> # Clone with custom shortid and title
-        >>> new_plan = RasPlan.clone_plan('01',
-        ...                               new_shortid='Steady_v41',
+        >>> # Clone with integer input
+        >>> new_plan = RasPlan.clone_plan(1)
+        >>>
+        >>> # Clone with custom shortid and title (either parameter name works)
+        >>> new_plan = RasPlan.clone_plan('01', new_shortid='Steady_v41',
+        ...                               new_title='Steady Flow - HEC-RAS 4.1')
+        >>> new_plan = RasPlan.clone_plan('01', new_plan_shortid='Steady_v41',
         ...                               new_title='Steady Flow - HEC-RAS 4.1')
 
         Note:
             Both new_shortid and new_title are optional.
+            new_plan_shortid is an alias for new_shortid for improved clarity.
             This function updates the ras object's dataframes after modifying the project structure.
         """
+        # Handle parameter aliasing: new_plan_shortid takes precedence if both provided
+        if new_plan_shortid is not None:
+            new_shortid = new_plan_shortid
+
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize plan number to two-digit format
+        template_plan = RasUtils.normalize_ras_number(template_plan)
 
         # Validate new_title length if provided
         if new_title is not None and len(new_title) > 32:
@@ -740,13 +769,13 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_unsteady(template_unsteady, new_title=None, ras_object=None):
+    def clone_unsteady(template_unsteady: Union[str, Number], new_title=None, ras_object=None):
         """
         Copy unsteady flow files from a template, find the next unsteady number,
         and update the project file accordingly.
 
         Parameters:
-        template_unsteady (str): Unsteady flow number to be used as a template (e.g., '01')
+        template_unsteady (Union[str, Number]): Unsteady flow number to use as template (e.g., '01', 1, or 1.0)
         new_title (str, optional): New flow title (max 32 chars, updates "Flow Title=" line)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
@@ -754,15 +783,21 @@ class RasPlan:
         str: New unsteady flow number (e.g., '03')
 
         Example:
+        >>> # String input
         >>> new_unsteady_num = RasPlan.clone_unsteady('01',
         ...                                           new_title='Unsteady - HEC-RAS 4.1')
         >>> print(f"New unsteady flow file created: u{new_unsteady_num}")
+        >>> # Integer input also works
+        >>> new_unsteady_num = RasPlan.clone_unsteady(1)
 
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize unsteady number to two-digit format
+        template_unsteady = RasUtils.normalize_ras_number(template_unsteady)
 
         # Validate new_title length if provided
         if new_title is not None and len(new_title) > 32:
@@ -816,13 +851,13 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_steady(template_flow, new_title=None, ras_object=None):
+    def clone_steady(template_flow: Union[str, Number], new_title=None, ras_object=None):
         """
         Copy steady flow files from a template, find the next flow number,
         and update the project file accordingly.
 
         Parameters:
-        template_flow (str): Flow number to be used as a template (e.g., '01')
+        template_flow (Union[str, Number]): Flow number to use as template (e.g., '01', 1, or 1.0)
         new_title (str, optional): New flow title (max 32 chars, updates "Flow Title=" line)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
@@ -830,15 +865,21 @@ class RasPlan:
         str: New flow number (e.g., '03')
 
         Example:
+        >>> # String input
         >>> new_flow_num = RasPlan.clone_steady('01',
         ...                                      new_title='Steady Flow - HEC-RAS 4.1')
         >>> print(f"New steady flow file created: f{new_flow_num}")
+        >>> # Integer input also works
+        >>> new_flow_num = RasPlan.clone_steady(1)
 
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize flow number to two-digit format
+        template_flow = RasUtils.normalize_ras_number(template_flow)
 
         # Validate new_title length if provided
         if new_title is not None and len(new_title) > 32:
@@ -885,23 +926,32 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_geom(template_geom, ras_object=None):
+    def clone_geom(template_geom: Union[str, Number], ras_object=None):
         """
         Copy geometry files from a template, find the next geometry number,
         and update the project file accordingly.
-        
+
         Parameters:
-        template_geom (str): Geometry number to be used as a template (e.g., '01')
+        template_geom (Union[str, Number]): Geometry number to use as template (e.g., '01', 1, or 1.0)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
-        
+
         Returns:
         str: New geometry number (e.g., '03')
+
+        Example:
+        >>> # String input
+        >>> new_geom_num = RasPlan.clone_geom('01')
+        >>> # Integer input also works
+        >>> new_geom_num = RasPlan.clone_geom(1)
 
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Normalize geometry number to two-digit format
+        template_geom = RasUtils.normalize_ras_number(template_geom)
 
         # Update geometry entries without reinitializing the entire project
         ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
@@ -1231,20 +1281,74 @@ class RasPlan:
 
 
     @staticmethod
-    def update_plan_description(plan_number, description_text, ras_object=None):
+    @log_call
+    def read_plan_description(plan_number_or_path: Union[str, Path], ras_object: Optional['RasPrj'] = None) -> str:
+        """
+        Read the description from the plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            str: The description from the plan file.
+
+        Raises:
+            ValueError: If the plan file is not found.
+            IOError: If there's an error reading from the plan file.
+        """
+        logger = logging.getLogger(__name__)
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+        except IOError as e:
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
+            raise
+
+        description_lines = []
+        in_description = False
+        description_found = False
+        for line in lines:
+            if line.strip() == "BEGIN DESCRIPTION:":
+                in_description = True
+                description_found = True
+            elif line.strip() == "END DESCRIPTION:":
+                break
+            elif in_description:
+                description_lines.append(line.strip())
+
+        if not description_found:
+            logger.warning(f"No description found in plan file: {plan_file_path}")
+            return ""
+
+        description = '\n'.join(description_lines)
+        logger.info(f"Read description from plan file: {plan_file_path}")
+        return description
+
+
+    @staticmethod
+    @log_call
+    def update_plan_description(plan_number: Union[str, Number], description: str, ras_object=None):
         """
         Update or insert plan description in the correct location within a plan file.
-        
-        The description block will be placed after initial plan parameters 
-        (Plan Title, Program Version, Short Identifier, Simulation Date, Geom File, 
+
+        The description block will be placed after initial plan parameters
+        (Plan Title, Program Version, Short Identifier, Simulation Date, Geom File,
         Flow File, and flow type) but before the Computation Interval line.
-        
+
         Parameters:
         -----------
-        plan_number : str
-            Plan number to update (e.g., '01', '02', etc.)
-        description_text : str
-            Description text to insert. Will be automatically wrapped in 
+        plan_number : Union[str, Number]
+            Plan number to update (e.g., '01', 1, or 1.0)
+        description : str
+            Description text to insert. Will be automatically wrapped in
             BEGIN DESCRIPTION/END DESCRIPTION blocks.
         ras_object : RasPrj, optional
             RAS project object. If None, uses global 'ras' object.
@@ -1348,12 +1452,12 @@ class RasPlan:
                 insertion_idx = last_param_idx + 1
             
             # Prepare the new description block
-            # Ensure description_text doesn't have trailing newline for proper formatting
-            description_text = description_text.rstrip()
-            
+            # Ensure description doesn't have trailing newline for proper formatting
+            description_clean = description.rstrip()
+
             description_block = [
                 'Begin DESCRIPTION\n',
-                description_text + '\n',
+                description_clean + '\n',
                 'END DESCRIPTION\n'
             ]
             
@@ -1417,7 +1521,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def update_simulation_date(plan_number_or_path: Union[str, Path], start_date: datetime, end_date: datetime, ras_object: Optional['RasPrj'] = None) -> None:
+    def update_simulation_date(plan_number_or_path: Union[str, Number, Path], start_date: datetime, end_date: datetime, ras_object: Optional['RasPrj'] = None) -> None:
         """
         Update the simulation date for a given plan.
 
@@ -1475,7 +1579,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_shortid(plan_number_or_path: Union[str, Path], ras_object=None) -> str:
+    def get_shortid(plan_number_or_path: Union[str, Number, Path], ras_object=None) -> str:
         """
         Get the Short Identifier from a HEC-RAS plan file.
 
@@ -1510,7 +1614,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def set_shortid(plan_number_or_path: Union[str, Path], new_shortid: str, ras_object=None) -> None:
+    def set_shortid(plan_number_or_path: Union[str, Number, Path], new_shortid: str, ras_object=None) -> None:
         """
         Set the Short Identifier in a HEC-RAS plan file.
 
@@ -1584,7 +1688,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_plan_title(plan_number_or_path: Union[str, Path], ras_object=None) -> str:
+    def get_plan_title(plan_number_or_path: Union[str, Number, Path], ras_object=None) -> str:
         """
         Get the Plan Title from a HEC-RAS plan file.
 
@@ -1619,7 +1723,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def set_plan_title(plan_number_or_path: Union[str, Path], new_title: str, ras_object=None) -> None:
+    def set_plan_title(plan_number_or_path: Union[str, Number, Path], new_title: str, ras_object=None) -> None:
         """
         Set the Plan Title in a HEC-RAS plan file.
 

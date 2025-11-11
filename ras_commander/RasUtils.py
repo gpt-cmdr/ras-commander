@@ -30,6 +30,7 @@ List of Functions in RasUtils:
 - find_files_by_extension()
 - get_file_size()
 - get_file_modification_time()
+- normalize_ras_number()
 - get_plan_path()
 - remove_with_retry()
 - update_plan_file()
@@ -65,6 +66,7 @@ import datetime
 import time
 import h5py
 from datetime import timedelta
+from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 
@@ -205,12 +207,116 @@ class RasUtils:
 
     @staticmethod
     @log_call
-    def get_plan_path(current_plan_number_or_path: Union[str, Path], ras_object=None) -> Path:
+    def normalize_ras_number(ras_number: Union[str, int, float, Path, Number]) -> str:
+        """
+        Normalize RAS file numbers to two-digit string format.
+
+        HEC-RAS uses two-digit file extensions for plans (.p01), geometries (.g02),
+        flows (.f03), etc. This function standardizes various input formats to ensure
+        consistent file path construction.
+
+        Parameters:
+        ras_number (Union[str, int, float, Path, Number]): Input number in various formats:
+            - int: 1, 2, 3, etc.
+            - str: "1", "01", "001", etc.
+            - float: 1.0, 2.0 (must be whole numbers)
+            - Path: Path("project.p05") - extracts number from extension
+            - Number: numpy.int64(1), etc.
+
+        Returns:
+        str: Normalized two-digit format ("01", "02", ..., "99")
+
+        Raises:
+        ValueError: If the number is not between 1 and 99, or cannot be converted
+        TypeError: If the input type is invalid
+
+        Examples:
+        >>> RasUtils.normalize_ras_number(1)
+        '01'
+        >>> RasUtils.normalize_ras_number("1")
+        '01'
+        >>> RasUtils.normalize_ras_number("01")
+        '01'
+        >>> RasUtils.normalize_ras_number("001")
+        '01'
+        >>> RasUtils.normalize_ras_number(np.int64(5))
+        '05'
+        >>> RasUtils.normalize_ras_number(Path("project.p02"))
+        '02'
+
+        Notes:
+        - Used for plan numbers, geometry numbers, flow file numbers, etc.
+        - Ensures consistent handling across all RAS file types
+        - Prevents file path construction errors from unnormalized inputs
+        """
+        # Handle Path objects - extract number from file extension
+        if isinstance(ras_number, Path):
+            # Extract from extensions like .p01, .g02, .f03, etc.
+            suffix = ras_number.suffix  # e.g., ".p01"
+            if len(suffix) >= 2 and suffix[0] == '.':
+                # Try to extract number after the letter (e.g., "01" from ".p01")
+                number_part = suffix[2:]  # Skip "." and letter
+                if number_part.isdigit():
+                    ras_number = number_part
+                else:
+                    raise ValueError(
+                        f"Cannot extract RAS number from Path extension: {ras_number}. "
+                        f"Expected format like 'project.p01' or 'geom.g02'"
+                    )
+            else:
+                raise ValueError(
+                    f"Cannot extract RAS number from Path: {ras_number}. "
+                    f"Expected file with RAS extension like .p01, .g02, etc."
+                )
+
+        # Convert to integer for validation
+        try:
+            # Handle string inputs - strip leading zeros before conversion
+            if isinstance(ras_number, str):
+                stripped = ras_number.lstrip('0')
+                if not stripped or not stripped.isdigit():
+                    # Handle edge cases like "0", "00", or non-numeric strings
+                    if not stripped:  # Was all zeros
+                        ras_int = 0
+                    else:
+                        raise ValueError(f"Cannot convert '{ras_number}' to integer")
+                else:
+                    ras_int = int(stripped)
+            else:
+                # Handle numeric types (int, float, numpy types, etc.)
+                ras_int = int(ras_number)
+
+                # Check if float had decimal component
+                if isinstance(ras_number, (float, np.floating)) and ras_number != ras_int:
+                    raise ValueError(
+                        f"RAS numbers must be integers, got float with decimals: {ras_number}"
+                    )
+
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Cannot convert RAS number '{ras_number}' (type: {type(ras_number).__name__}) "
+                f"to integer: {e}"
+            ) from e
+
+        # Validate range (1-99 for HEC-RAS files)
+        if not 1 <= ras_int <= 99:
+            raise ValueError(
+                f"RAS file number must be between 1 and 99, got: {ras_int}"
+            )
+
+        # Return normalized two-digit format
+        normalized = f"{ras_int:02d}"
+        logger.debug(f"Normalized RAS number '{ras_number}' to '{normalized}'")
+        return normalized
+
+    @staticmethod
+    @log_call
+    def get_plan_path(current_plan_number_or_path: Union[str, Number, Path], ras_object=None) -> Path:
         """
         Get the path for a plan file with a given plan number or path.
 
         Parameters:
-        current_plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
+        current_plan_number_or_path (Union[str, Number, Path]): The plan number (e.g., '01', 1, or 1.0) or full path to the plan file
         ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
 
         Returns:
@@ -224,32 +330,28 @@ class RasUtils:
         Example:
         >>> plan_path = RasUtils.get_plan_path(1)
         >>> print(f"Plan file path: {plan_path}")
+        >>> plan_path = RasUtils.get_plan_path("01")
+        >>> print(f"Plan file path: {plan_path}")
         >>> plan_path = RasUtils.get_plan_path("path/to/plan.p01")
         >>> print(f"Plan file path: {plan_path}")
         """
         # Validate RAS object
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        
+
         # Handle direct file path input
         plan_path = Path(current_plan_number_or_path)
         if plan_path.is_file():
             logger.info(f"Using provided plan file path: {plan_path}")
             return plan_path
-        
-        # Handle plan number input
+
+        # Handle plan number input - use centralized normalization
         try:
-            plan_num = int(current_plan_number_or_path)
-            if not 1 <= plan_num <= 99:
-                raise ValueError(f"Plan number must be between 1 and 99, got: {plan_num}")
-            current_plan_number = f"{plan_num:02d}"  # Ensure two-digit format
-            logger.debug(f"Converted plan number to two-digit format: {current_plan_number}")
+            current_plan_number = RasUtils.normalize_ras_number(current_plan_number_or_path)
+            logger.debug(f"Normalized plan number to: {current_plan_number}")
         except (ValueError, TypeError) as e:
-            if isinstance(e, TypeError):
-                logger.error(f"Invalid input type: {type(current_plan_number_or_path)}. Expected string, number, or Path.")
-                raise TypeError(f"Invalid input type: {type(current_plan_number_or_path)}. Expected string, number, or Path.")
-            logger.error(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
-            raise ValueError(f"Invalid plan number: {current_plan_number_or_path}. Expected a number from 1 to 99.")
+            logger.error(f"Invalid plan number: {current_plan_number_or_path}. {e}")
+            raise
         
         # Construct and validate plan path
         plan_name = f"{ras_obj.project_name}.p{current_plan_number}"
