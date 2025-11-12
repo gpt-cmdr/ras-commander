@@ -738,7 +738,7 @@ class RasControl:
 
     @staticmethod
     def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False,
-                 use_watchdog: bool = True, max_runtime: int = 3600) -> Tuple[bool, List[str]]:
+                 use_watchdog: bool = True, max_runtime: int = 86400) -> Tuple[bool, List[str]]:
         """
         Run a plan (steady or unsteady) and wait for completion.
 
@@ -860,7 +860,7 @@ class RasControl:
 
                         # Log progress every 30 seconds
                         if poll_count % 30 == 0:
-                            logger.info(f"Still computing... ({poll_count} seconds elapsed)")
+                            logger.info(f"Still computing... ({poll_count} seconds elapsed.  Simulation will timeout after {max_runtime} seconds.  Set max_runtime to override.)")
 
                     except Exception as e:
                         logger.error(f"Error checking completion status: {e}")
@@ -1550,21 +1550,24 @@ class RasControl:
     @staticmethod
     def get_comp_msgs(plan: Union[str, Path], ras_object=None) -> str:
         """
-        Read computation messages from the .comp_msgs.txt file.
+        Read computation messages from .txt file with fallback to HDF.
 
         The comp_msgs file is created by HEC-RAS during plan computation
         and contains detailed messages about the computation process,
         including warnings, errors, and convergence information.
+
+        This method checks for two .txt naming patterns (version-dependent):
+        - .comp_msgs.txt (HEC-RAS 3.x-5.x)
+        - .computeMsgs.txt (HEC-RAS 6.x+)
+
+        If neither .txt file exists, falls back to HDF extraction.
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
             ras_object: Optional RasPrj instance (uses global ras if None)
 
         Returns:
-            String containing computation messages
-
-        Raises:
-            FileNotFoundError: If comp_msgs file doesn't exist
+            String containing computation messages, or empty string if unavailable
 
         Example:
             >>> from ras_commander import init_ras_project, RasControl
@@ -1573,9 +1576,10 @@ class RasControl:
             >>> print(msgs)
 
         Note:
-            The file naming convention is: {plan_file}.comp_msgs.txt
-            For example, if plan file is A100_00_00.p08, the comp_msgs
-            file will be A100_00_00.p08.comp_msgs.txt
+            File naming conventions vary by HEC-RAS version:
+            - Older: {plan_file}.comp_msgs.txt
+            - Newer: {plan_file}.computeMsgs.txt
+            Falls back to HDF: /Results/Summary/Compute Messages (text)
         """
         project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
 
@@ -1584,24 +1588,54 @@ class RasControl:
         project_base = project_path.stem
         plan_file = project_path.parent / f"{project_base}.p{plan_num}"
 
-        # Construct comp_msgs file path
-        comp_msgs_file = Path(str(plan_file) + ".comp_msgs.txt")
+        # Try both .txt file naming patterns (version-dependent)
+        comp_msgs_file_old = Path(str(plan_file) + ".comp_msgs.txt")
+        comp_msgs_file_new = Path(str(plan_file) + ".computeMsgs.txt")
 
-        if not comp_msgs_file.exists():
-            raise FileNotFoundError(
-                f"Computation messages file not found: {comp_msgs_file}\n"
-                f"This file is created when HEC-RAS runs a plan.\n"
-                f"Ensure the plan has been computed before reading messages."
-            )
+        comp_msgs_file = None
+        if comp_msgs_file_old.exists():
+            comp_msgs_file = comp_msgs_file_old
+        elif comp_msgs_file_new.exists():
+            comp_msgs_file = comp_msgs_file_new
 
-        logger.info(f"Reading computation messages from: {comp_msgs_file}")
+        # If .txt file found, read and return
+        if comp_msgs_file is not None:
+            logger.info(f"Reading computation messages from: {comp_msgs_file}")
 
-        # Read and return contents
-        with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
-            contents = f.read()
+            try:
+                with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    contents = f.read()
 
-        logger.info(f"Read {len(contents)} characters from comp_msgs file")
-        return contents
+                logger.info(f"Read {len(contents)} characters from comp_msgs file")
+                return contents
+            except Exception as e:
+                logger.error(f"Error reading .txt file: {e}, attempting HDF fallback")
+
+        # If no .txt file found, try HDF fallback
+        logger.warning(
+            f"Computation messages .txt file not found (tried .comp_msgs.txt and .computeMsgs.txt), "
+            f"falling back to HDF extraction"
+        )
+
+        try:
+            # Late import to avoid circular dependency
+            from .HdfResultsPlan import HdfResultsPlan
+
+            # Construct HDF path
+            hdf_file = Path(str(plan_file) + ".hdf")
+            if hdf_file.exists():
+                hdf_contents = HdfResultsPlan.get_compute_messages(hdf_file)
+                if hdf_contents:
+                    logger.info(f"Successfully retrieved {len(hdf_contents)} characters from HDF")
+                    return hdf_contents
+        except Exception as e:
+            logger.debug(f"HDF fallback failed: {e}")
+
+        # Both methods failed
+        logger.debug(
+            f"No computation messages found in .txt or HDF sources for plan {plan_num}"
+        )
+        return ""
 
     # ========== PROCESS MANAGEMENT API ==========
 

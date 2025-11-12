@@ -24,6 +24,9 @@ Available Functions:
         - get_steady_wse: Extract WSE data for steady state profiles
         - get_steady_info: Extract steady flow attributes and metadata
 
+    Computation Messages:
+        - get_compute_messages: Extract computation messages from HDF (with .txt fallback)
+
 Note:
     All methods are static and designed to be used without class instantiation.
 """
@@ -710,3 +713,127 @@ class HdfResultsPlan:
             raise KeyError(f"Error accessing steady state info: {str(e)}")
         except Exception as e:
             raise RuntimeError(f"Error reading steady state info: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_compute_messages(hdf_path: Path) -> str:
+        """
+        Read computation messages from HDF file with fallback to .txt file.
+
+        Extracts computation messages from the HDF Results/Summary structure.
+        This includes detailed information about the computation process,
+        warnings, errors, convergence information, and performance metrics.
+
+        If HDF path not found, falls back to .txt file extraction using RasControl.
+
+        Args:
+            hdf_path: Path to plan HDF file (or plan number string if using
+                     standardize_input decorator, which resolves to HDF path)
+
+        Returns:
+            String containing computation messages, or empty string if unavailable
+
+        Example:
+            >>> from ras_commander import init_ras_project, HdfResultsPlan
+            >>> init_ras_project(r"/path/to/project", "6.5")
+            >>> msgs = HdfResultsPlan.get_compute_messages("01")
+            >>> print(msgs)
+
+        Note:
+            Modern HEC-RAS versions (6.x+) store computation messages in HDF:
+            /Results/Summary/Compute Messages (text)
+
+            Older versions (pre-6.x) use .txt files which are accessed via
+            fallback to RasControl.get_comp_msgs()
+
+            Function naming follows HDF structure conventions (get_compute_messages)
+            vs RasControl legacy naming (get_comp_msgs) to reflect technological lineage.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Define HDF path for compute messages
+                compute_msgs_path = "Results/Summary/Compute Messages (text)"
+
+                # Check if path exists in HDF
+                if compute_msgs_path not in hdf_file:
+                    logger.warning(
+                        f"Compute Messages not found in HDF at '{compute_msgs_path}', "
+                        f"falling back to .txt file extraction"
+                    )
+
+                    # Fallback to .txt file using RasControl
+                    try:
+                        # Late import to avoid circular dependency
+                        from .RasControl import RasControl
+
+                        # Extract plan info from HDF path
+                        # e.g., "C:/path/BaldEagle.p10.hdf" -> use path for RasControl
+                        txt_contents = RasControl.get_comp_msgs(hdf_path)
+                        if txt_contents:
+                            logger.info(f"Successfully retrieved {len(txt_contents)} characters from .txt file")
+                            return txt_contents
+                    except Exception as e:
+                        logger.debug(f".txt file fallback failed: {e}")
+
+                    # Both methods failed
+                    logger.debug(
+                        f"No computation messages found in HDF or .txt sources for {hdf_path.name}"
+                    )
+                    return ""
+
+                # Read dataset from HDF
+                logger.info(f"Reading computation messages from HDF: {hdf_path.name}")
+                dataset = hdf_file[compute_msgs_path]
+                data = dataset[()]
+
+                # Decode byte string to UTF-8
+                if isinstance(data, bytes):
+                    contents = data.decode('utf-8', errors='ignore')
+                elif isinstance(data, np.ndarray) and len(data) > 0:
+                    # Handle array of byte strings
+                    if isinstance(data[0], bytes):
+                        contents = data[0].decode('utf-8', errors='ignore')
+                    else:
+                        contents = str(data[0])
+                else:
+                    contents = str(data)
+
+                logger.info(f"Successfully extracted {len(contents)} characters from HDF")
+                return contents
+
+        except FileNotFoundError:
+            logger.debug(f"HDF file not found: {hdf_path}")
+
+            # Try .txt fallback
+            try:
+                from .RasControl import RasControl
+                txt_contents = RasControl.get_comp_msgs(hdf_path)
+                if txt_contents:
+                    logger.warning(
+                        f"HDF file not found, successfully retrieved computation messages from .txt file"
+                    )
+                    return txt_contents
+            except Exception as e:
+                logger.debug(f".txt file fallback failed: {e}")
+
+            logger.debug(f"No computation messages found for {hdf_path.name}")
+            return ""
+
+        except Exception as e:
+            logger.debug(f"Error reading computation messages from HDF: {str(e)}")
+
+            # Try .txt fallback on any HDF error
+            try:
+                from .RasControl import RasControl
+                txt_contents = RasControl.get_comp_msgs(hdf_path)
+                if txt_contents:
+                    logger.warning(
+                        f"HDF extraction failed, successfully retrieved computation messages from .txt file"
+                    )
+                    return txt_contents
+            except Exception as fallback_error:
+                logger.debug(f".txt file fallback failed: {fallback_error}")
+
+            logger.debug(f"No computation messages found for {hdf_path.name}")
+            return ""
