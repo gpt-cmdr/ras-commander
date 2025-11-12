@@ -104,7 +104,7 @@ Important highlights from AGENTS.md:
 - `HdfResultsPlan.get_steady_profile_names()` - Extract steady state profile names
 - `HdfResultsPlan.get_steady_wse()` - Extract water surface elevations for profiles
 - `HdfResultsPlan.get_steady_info()` - Extract steady flow metadata
-- See `examples/04_steady_flow_analysis.ipynb` for complete usage examples
+- See `examples/19_steady_flow_analysis.ipynb` for complete usage examples
 
 ### Execution Modes
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control
@@ -146,6 +146,36 @@ except ImportError:
 - **Classes**: PascalCase (`RasCmdr`, `HdfBase`)
 - **Constants**: UPPER_CASE
 - **Abbreviations**: ras, prj, geom, geompre, num, init, BC, IC, TW
+
+### Function Naming: Technological Lineage
+
+Function names in ras-commander reflect the conventions of their underlying technology source. This creates consistency with the data structures and APIs they interact with.
+
+#### RasControl Class - Legacy HEC-RAS Conventions
+- **Naming Style**: Abbreviated, matching HECRASController COM interface
+- **Example**: `get_comp_msgs()` uses "comp_msgs" to match legacy .txt filename convention
+- **Rationale**: Maintains consistency with pre-5.x HEC-RAS terminology and file naming
+- **Versions**: Targets HEC-RAS 3.x-4.x (with 5.x/6.x fallback support)
+
+#### HdfResultsPlan Class - Modern HDF Structure Conventions
+- **Naming Style**: Descriptive, matching HDF dataset/group names
+- **Example**: `get_compute_messages()` uses "compute_messages" to match HDF path naming
+- **Rationale**: Function names mirror the actual HDF structure: `Results/Summary/Compute Messages (text)`
+- **Pattern**: Read HDF file structure and derive Python method names from group/dataset names
+- **Versions**: Targets HEC-RAS 6.x+ HDF-based results
+
+#### Why Names Differ Between Classes
+The naming differences are **intentional and contextually appropriate**:
+- `RasControl.get_comp_msgs()` - reflects `.comp_msgs.txt` and `.computeMsgs.txt` file conventions
+- `HdfResultsPlan.get_compute_messages()` - reflects `Compute Messages (text)` HDF dataset naming
+
+This is not inconsistency, but **technological lineage** - each reflects its underlying data source conventions. Users benefit from predictable mapping between Python methods and the data structures they access.
+
+#### Guideline for New Functions
+When adding new functions:
+1. **For RasControl**: Match legacy HEC-RAS/HECRASController naming conventions
+2. **For HdfResultsPlan**: Inspect HDF structure and mirror group/dataset names
+3. **For other classes**: Follow snake_case with descriptive, unabbreviated names
 
 ### Documentation Standards
 - Comprehensive docstrings with Args, Returns, Raises, Examples sections

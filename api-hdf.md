@@ -668,6 +668,41 @@ Contains static methods for extracting general plan-level *results* and summary 
     *   `hdf_path` (Input handled by `@standardize_input`, `file_type='plan_hdf'`): Path identifier for the plan results HDF.
 *   **Returns:** (`pd.DataFrame` or `None`): Single-row DataFrame containing runtime statistics, or `None` if data is missing or parsing fails.
 
+### `HdfResultsPlan.get_compute_messages(hdf_path)`
+
+*   **Purpose:** Extracts computation messages from HDF file with automatic fallback to .txt file extraction. Computation messages contain detailed information about the computation process, including warnings, errors, convergence information, and performance metrics.
+*   **Parameters:**
+    *   `hdf_path` (Input handled by `@standardize_input`, `file_type='plan_hdf'`): Path identifier for the plan results HDF. Can be a plan number (e.g., "01"), which the decorator resolves to the HDF file path.
+*   **Returns:** `str`: String containing computation messages, or empty string if unavailable.
+*   **Raises:** No exceptions raised. Returns empty string gracefully if messages unavailable.
+*   **HDF Path:** Reads from `/Results/Summary/Compute Messages (text)` dataset in the HDF file structure.
+*   **Fallback Behavior:** If HDF path not found, automatically falls back to extracting from .txt files via `RasControl.get_comp_msgs()`. Logging messages (WARNING level) indicate when fallback occurs.
+*   **Note:** Function naming follows modern HDF structure conventions (`compute_messages` matching the HDF dataset name), as opposed to `RasControl.get_comp_msgs()` which follows legacy naming.
+
+**Example:**
+```python
+from ras_commander import init_ras_project
+from ras_commander.HdfResultsPlan import HdfResultsPlan
+
+# Initialize project with modern HEC-RAS version
+init_ras_project(r"C:/models/BaldEagle/BaldEagle.prj", "6.5")
+
+# Extract computation messages using plan number
+msgs = HdfResultsPlan.get_compute_messages("01")
+
+if msgs:
+    print("Computation Messages:")
+    print(msgs)
+
+    # Can also parse specific information
+    lines = msgs.split('\r\n')
+    for line in lines:
+        if 'error' in line.lower() or 'warning' in line.lower():
+            print(f"⚠ {line}")
+else:
+    print("No computation messages available")
+```
+
 ### `HdfResultsPlan.get_reference_timeseries(hdf_path, reftype)`
 
 *   **Purpose:** Extracts time series results for all Reference Lines or Reference Points from the plan HDF file.

@@ -888,6 +888,37 @@ Provides legacy HEC-RAS version support via the HECRASController COM interface. 
 *   **Raises:** `RuntimeError` if RAS not initialized with version, `ValueError` if plan title not found, `Exception` from COM interface errors.
 *   **Note:** This is a low-level method. Most users should rely on automatic plan setting in `run_plan()`, `get_steady_results()`, and `get_unsteady_results()`.
 
+### `RasControl.get_comp_msgs(plan, ras_object=None)`
+
+*   **Purpose:** Extracts computation messages from .txt file with automatic fallback to HDF extraction. Computation messages contain detailed information about the computation process, including warnings, errors, convergence information, and performance metrics.
+*   **Parameters:**
+    *   `plan` (`str` or `Path`): Plan number (e.g., "01", "02") or path to .prj file.
+    *   `ras_object` (`RasPrj`, optional): Instance for context. Defaults to global `ras`.
+*   **Returns:** `str`: String containing computation messages, or empty string if unavailable.
+*   **Raises:** No exceptions raised. Returns empty string gracefully if messages unavailable.
+*   **Version Support:**
+    *   HEC-RAS 3.x-5.x: Reads from `.comp_msgs.txt` file
+    *   HEC-RAS 6.x+: Reads from `.computeMsgs.txt` file
+    *   Falls back to HDF extraction if .txt files not found
+*   **Note:** This method checks for both .txt naming patterns and automatically falls back to HDF if neither exists. Logging messages (WARNING level) indicate when fallback occurs. Function naming follows legacy HECRASController conventions (`comp_msgs` abbreviation).
+
+**Example:**
+```python
+from ras_commander import init_ras_project, RasControl
+
+# Initialize project with legacy version
+init_ras_project(r"C:/models/BaldEagle/BaldEagle.prj", "4.1")
+
+# Extract computation messages
+msgs = RasControl.get_comp_msgs("01")
+
+if msgs:
+    print("Computation Messages:")
+    print(msgs)
+else:
+    print("No computation messages available")
+```
+
 ### Version Support and Initialization
 
 RasControl requires the HEC-RAS version to be specified when initializing a project:
