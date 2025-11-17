@@ -14,6 +14,19 @@ Logging Configuration:
 
 Classes:
     RasMap: Class for parsing and accessing HEC-RAS mapper configuration.
+
+-----
+
+All of the methods in this class are static and are designed to be used without instantiation.
+
+List of Functions in RasMap:
+- parse_rasmap(): Parse a .rasmap file and extract relevant information
+- get_rasmap_path(): Get the path to the .rasmap file based on the current project
+- initialize_rasmap_df(): Initialize the rasmap_df as part of project initialization
+- get_terrain_names(): Extracts terrain layer names from a given .rasmap file
+- postprocess_stored_maps(): Automates the generation of stored floodplain map outputs (e.g., .tif files)
+- get_results_folder(): Get the folder path containing raster results for a specified plan
+- get_results_raster(): Get the .vrt file path for a specified plan and variable name
 """
 
 import os
@@ -27,6 +40,8 @@ from typing import Union, Optional, Dict, List, Any
 from .RasPrj import ras
 from .RasPlan import RasPlan
 from .RasCmdr import RasCmdr
+from .RasUtils import RasUtils
+from .RasGuiAutomation import RasGuiAutomation
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 
@@ -298,7 +313,8 @@ class RasMap:
         plan_number: Union[str, List[str]],
         specify_terrain: Optional[str] = None,
         layers: Union[str, List[str]] = None,
-        ras_object: Optional[Any] = None
+        ras_object: Optional[Any] = None,
+        auto_click_compute: bool = True
     ) -> bool:
         """
         Automates the generation of stored floodplain map outputs (e.g., .tif files).
@@ -312,9 +328,16 @@ class RasMap:
             layers (Union[str, List[str]], optional): A list of map layers to generate.
                 Defaults to ['WSEL', 'Velocity', 'Depth'].
             ras_object (Optional[Any]): The RAS project object.
+            auto_click_compute (bool, optional): If True, uses GUI automation to automatically
+                click "Run > Unsteady Flow Analysis" and "Compute" button. If False, just
+                opens HEC-RAS and waits for manual execution. Defaults to True.
 
         Returns:
             bool: True if the process completed successfully, False otherwise.
+
+        Notes:
+            - auto_click_compute=True: Automated GUI workflow (clicks menu and Compute button)
+            - auto_click_compute=False: Manual workflow (user must click Compute)
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -333,23 +356,51 @@ class RasMap:
         # Store plan paths and their backups
         plan_paths = []
         plan_backup_paths = []
+        plan_results_folders = {}  # Map plan_num to results folder name
+
         for plan_num in plan_number_list:
             plan_path = Path(RasPlan.get_plan_path(plan_num, ras_obj))
             plan_backup_path = plan_path.with_suffix(f"{plan_path.suffix}.storedmap.bak")
             plan_paths.append(plan_path)
             plan_backup_paths.append(plan_backup_path)
 
-        def _create_map_element(name, map_type, profile_name="Max"):
+            # Get the Short Identifier for this plan to determine results folder
+            plan_df = ras_obj.plan_df
+            plan_info = plan_df[plan_df['plan_number'] == plan_num]
+            if not plan_info.empty:
+                short_id = plan_info.iloc[0]['Short Identifier']
+                if pd.notna(short_id) and short_id:
+                    plan_results_folders[plan_num] = short_id
+                else:
+                    # Fallback: use plan number if no Short Identifier
+                    plan_results_folders[plan_num] = f"Plan_{plan_num}"
+                    logger.warning(f"Plan {plan_num} has no Short Identifier, using 'Plan_{plan_num}' as folder name")
+            else:
+                plan_results_folders[plan_num] = f"Plan_{plan_num}"
+                logger.warning(f"Could not find plan {plan_num} in plan_df, using 'Plan_{plan_num}' as folder name")
+
+        def _create_map_element(name, map_type, results_folder, profile_name="Max"):
+            # Generate filename: "WSE (Max).vrt", "Depth (Max).vrt", etc.
+            filename = f"{name} ({profile_name}).vrt"
+            relative_path = f".\\{results_folder}\\{filename}"
+
             map_params = {
                 "MapType": map_type,
                 "OutputMode": "Stored Current Terrain",
+                "StoredFilename": relative_path,  # Required for stored maps
                 "ProfileIndex": "2147483647",
                 "ProfileName": profile_name
             }
-            if specify_terrain:
-                map_params["Terrain"] = specify_terrain
-            
-            layer_elem = ET.Element('Layer', Name=name, Type="RASResultsMap", Checked="True")
+
+            # Create Layer element with Filename attribute
+            layer_elem = ET.Element(
+                'Layer',
+                Name=name,
+                Type="RASResultsMap",
+                Checked="True",
+                Filename=relative_path  # Required for stored maps
+            )
+
             map_params_elem = ET.SubElement(layer_elem, 'MapParameters')
             for k, v in map_params.items():
                 map_params_elem.set(k, str(v))
@@ -396,16 +447,28 @@ class RasMap:
                     logger.warning(f"Could not find RASResults layer for plan ending in '{plan_hdf_part}' in {rasmap_path}")
                     continue
                 
-                map_definitions = {"WSEL": "elevation", "Velocity": "velocity", "Depth": "depth"}
+                # Map user-provided layer names to HEC-RAS variable names and map types
+                # Note: "WSE" is the correct HEC-RAS convention (not "WSEL")
+                map_definitions = {
+                    "WSE": "elevation",
+                    "WSEL": "elevation",  # Accept both for backward compatibility, but use "WSE" in output
+                    "Velocity": "velocity",
+                    "Depth": "depth"
+                }
+
+                # Get the results folder for this plan
+                results_folder = plan_results_folders.get(plan_num, f"Plan_{plan_num}")
+
                 for layer_name in layers:
                     if layer_name in map_definitions:
                         map_type = map_definitions[layer_name]
-                        layername_attr = "Water Surface" if layer_name == "WSEL" else None
-                        map_elem = _create_map_element(layer_name, map_type)
-                        if layername_attr:
-                            map_elem.find("MapParameters").set("LayerName", layername_attr)
+
+                        # Convert WSEL to WSE for output (HEC-RAS convention)
+                        output_name = "WSE" if layer_name == "WSEL" else layer_name
+
+                        map_elem = _create_map_element(output_name, map_type, results_folder)
                         results_layer.append(map_elem)
-                        logger.info(f"Added '{layer_name}' stored map to results layer for plan {plan_num}.")
+                        logger.info(f"Added '{output_name}' stored map to results layer for plan {plan_num}.")
 
             if specify_terrain:
                 terrains_elem = root.find('Terrains')
@@ -418,36 +481,61 @@ class RasMap:
             tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
             
             # --- 3. Execute HEC-RAS ---
-            logger.info("Opening HEC-RAS...")
-            ras_exe = ras_obj.ras_exe_path
-            prj_path = f'"{str(ras_obj.prj_file)}"'
-            command = f"{ras_exe} {prj_path}"
-            
-            try:
-                import sys
-                import subprocess
-                if sys.platform == "win32":
-                    hecras_process = subprocess.Popen(command)
-                else:
-                    hecras_process = subprocess.Popen([ras_exe, prj_path])
+            if auto_click_compute:
+                # Use GUI automation to automatically click menu and Compute button
+                logger.info("Using GUI automation to run floodplain mapping...")
 
-                logger.info(f"HEC-RAS opened with Process ID: {hecras_process.pid}")
-                logger.info(f"Please run plan(s) {', '.join(plan_number_list)} using the 'Compute Multiple' window in HEC-RAS to generate floodplain mapping results.")
-                
-                # Wait for HEC-RAS to close
-                logger.info("Waiting for HEC-RAS to close...")
-                hecras_process.wait()
-                logger.info("HEC-RAS has closed")
-                
-                success = True
+                # Note: For multiple plans, we run the first plan's automation
+                # The user can manually run additional plans if needed
+                first_plan = plan_number_list[0]
 
-            except Exception as e:
-                logger.error(f"Failed to launch HEC-RAS: {e}")
-                success = False
+                success = RasGuiAutomation.open_and_compute(
+                    plan_number=first_plan,
+                    ras_object=ras_obj,
+                    auto_click_compute=True,
+                    wait_for_user=True
+                )
 
-            if not success:
-                logger.error("Floodplain mapping computation failed.")
-                return False
+                if len(plan_number_list) > 1:
+                    logger.info(f"Note: GUI automation ran plan {first_plan}. "
+                               f"Please manually run remaining plans: {', '.join(plan_number_list[1:])}")
+
+                if not success:
+                    logger.error("Floodplain mapping computation failed.")
+                    return False
+
+            else:
+                # Manual mode: Just open HEC-RAS and wait for user to execute
+                logger.info("Opening HEC-RAS...")
+                ras_exe = ras_obj.ras_exe_path
+                prj_path = f'"{str(ras_obj.prj_file)}"'
+                command = f"{ras_exe} {prj_path}"
+
+                try:
+                    import sys
+                    import subprocess
+                    if sys.platform == "win32":
+                        hecras_process = subprocess.Popen(command)
+                    else:
+                        hecras_process = subprocess.Popen([ras_exe, prj_path])
+
+                    logger.info(f"HEC-RAS opened with Process ID: {hecras_process.pid}")
+                    logger.info(f"Please run plan(s) {', '.join(plan_number_list)} using the 'Compute Multiple' window in HEC-RAS to generate floodplain mapping results.")
+
+                    # Wait for HEC-RAS to close
+                    logger.info("Waiting for HEC-RAS to close...")
+                    hecras_process.wait()
+                    logger.info("HEC-RAS has closed")
+
+                    success = True
+
+                except Exception as e:
+                    logger.error(f"Failed to launch HEC-RAS: {e}")
+                    success = False
+
+                if not success:
+                    logger.error("Floodplain mapping computation failed.")
+                    return False
 
             logger.info("Floodplain mapping computation successful.")
             return True
@@ -465,3 +553,188 @@ class RasMap:
             if rasmap_backup_path.exists():
                 logger.info(f"Restoring original rasmap file from {rasmap_backup_path}")
                 shutil.move(rasmap_backup_path, rasmap_path)
+
+    @staticmethod
+    @log_call
+    def get_results_folder(plan_number: Union[str, int, float], ras_object=None) -> Path:
+        """
+        Get the folder path containing raster results for a specified plan.
+
+        HEC-RAS creates output folders based on the plan's Short Identifier.
+        Windows folder naming replaces special characters with underscores.
+
+        Args:
+            plan_number (Union[str, int, float]): Plan number (accepts flexible formats like 1, "01", "001").
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            Path: Path to the mapping output folder.
+
+        Raises:
+            ValueError: If the plan number is not found or output folder doesn't exist.
+
+        Examples:
+            >>> folder = RasMap.get_results_folder("01")
+            >>> folder = RasMap.get_results_folder(1)
+            >>> folder = RasMap.get_results_folder("08", ras_object=my_project)
+
+        Notes:
+            - Normalizes plan number to two-digit format ("01", "02", etc.)
+            - Retrieves Short Identifier from plan_df
+            - Normalizes Short ID for Windows folder naming (special chars -> underscores)
+            - Searches project folder for matching output directory
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Normalize plan number to two-digit format
+        plan_number = RasUtils.normalize_ras_number(plan_number)
+
+        # Get plan metadata from plan_df
+        plan_df = ras_obj.plan_df
+        plan_info = plan_df[plan_df['plan_number'] == plan_number]
+
+        if plan_info.empty:
+            raise ValueError(
+                f"Plan {plan_number} not found in project. "
+                f"Available plans: {list(plan_df['plan_number'])}"
+            )
+
+        short_id = plan_info.iloc[0]['Short Identifier']
+
+        if pd.isna(short_id) or not short_id:
+            raise ValueError(
+                f"Plan {plan_number} does not have a Short Identifier. "
+                "Check the plan file for missing metadata."
+            )
+
+        # Normalize Short ID to match Windows folder naming
+        # RASMapper replaces special characters for Windows compatibility
+        replacements = {
+            '/': '_', '\\': '_', ':': '_', '*': '_',
+            '?': '_', '"': '_', '<': '_', '>': '_',
+            '|': '_', '+': '_', ' ': '_'
+        }
+
+        normalized = short_id
+        for old, new in replacements.items():
+            normalized = normalized.replace(old, new)
+
+        # Remove trailing underscores
+        normalized = normalized.rstrip('_')
+
+        # Search for output folder in project directory
+        project_folder = ras_obj.project_folder
+
+        # Try exact match with Short ID
+        exact_match = project_folder / short_id
+        if exact_match.exists() and exact_match.is_dir():
+            logger.info(f"Found output folder (exact match): {exact_match}")
+            return exact_match
+
+        # Try normalized name
+        normalized_match = project_folder / normalized
+        if normalized_match.exists() and normalized_match.is_dir():
+            logger.info(f"Found output folder (normalized): {normalized_match}")
+            return normalized_match
+
+        # Try partial match (contains)
+        for item in project_folder.iterdir():
+            if not item.is_dir():
+                continue
+            folder_name = item.name
+            # Check if short_id is contained in folder name or vice versa
+            if short_id in folder_name or folder_name in short_id:
+                logger.info(f"Found output folder (partial match): {item}")
+                return item
+            # Check normalized version
+            if normalized in folder_name or folder_name in normalized:
+                logger.info(f"Found output folder (normalized partial match): {item}")
+                return item
+
+        # No folder found
+        raise ValueError(
+            f"Output folder not found for plan {plan_number} (Short ID: '{short_id}'). "
+            f"Expected folder name: '{normalized}' in {project_folder}. "
+            "Ensure the plan has been run and RASMapper has exported results."
+        )
+
+    @staticmethod
+    @log_call
+    def get_results_raster(
+        plan_number: Union[str, int, float],
+        variable_name: str,
+        ras_object=None
+    ) -> Path:
+        """
+        Get the .vrt file path for a specified plan and variable name.
+
+        This function locates VRT (Virtual Raster) files exported by RASMapper
+        for a specific hydraulic variable (e.g., WSE, Depth, Velocity).
+
+        Args:
+            plan_number (Union[str, int, float]): Plan number (accepts flexible formats).
+            variable_name (str): Variable name to search for in VRT filenames (e.g., "WSE", "Depth", "Velocity").
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            Path: Path to the matching .vrt file.
+
+        Raises:
+            ValueError: If no matching files or multiple matching files are found.
+
+        Examples:
+            >>> vrt = RasMap.get_results_raster("01", "WSE")
+            >>> vrt = RasMap.get_results_raster(1, "Depth")
+            >>> vrt = RasMap.get_results_raster("08", "WSE (Max)", ras_object=my_project)
+
+        Notes:
+            - Uses get_results_folder() to locate the output directory
+            - Searches for .vrt files containing the variable_name (case-insensitive)
+            - If multiple files match, lists all matches and raises an error
+            - User should make variable_name more specific to narrow results
+            - VRT files are lightweight virtual rasters that reference underlying .tif tiles
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the mapping folder for this plan
+        mapping_folder = RasMap.get_results_folder(plan_number, ras_obj)
+
+        # List all .vrt files in the folder
+        vrt_files = list(mapping_folder.glob("*.vrt"))
+
+        if not vrt_files:
+            raise ValueError(
+                f"No .vrt files found in mapping folder: {mapping_folder}. "
+                "Ensure RASMapper has exported raster results for this plan."
+            )
+
+        # Filter files containing variable_name (case-insensitive)
+        matching_files = [
+            f for f in vrt_files
+            if variable_name.lower() in f.name.lower()
+        ]
+
+        # Handle results
+        if len(matching_files) == 0:
+            available_files = [f.name for f in vrt_files]
+            raise ValueError(
+                f"No .vrt files found matching variable name '{variable_name}' in {mapping_folder}. "
+                f"Available files: {available_files}. "
+                "Try making variable_name more specific or check for typos."
+            )
+        elif len(matching_files) == 1:
+            logger.info(f"Found matching VRT file: {matching_files[0]}")
+            return matching_files[0]
+        else:
+            # Multiple matches - print list and raise error
+            logger.error(f"Multiple .vrt files match '{variable_name}':")
+            for i, f in enumerate(matching_files, 1):
+                logger.error(f"  {i}. {f.name}")
+
+            raise ValueError(
+                f"Multiple .vrt files ({len(matching_files)}) match variable name '{variable_name}'. "
+                f"Matching files: {[f.name for f in matching_files]}. "
+                "Please make variable_name more specific (e.g., 'WSE (Max)' instead of 'WSE')."
+            )
