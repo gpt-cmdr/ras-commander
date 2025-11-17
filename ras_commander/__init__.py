@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.82.1"
+    __version__ = "0.83.0"
 
 # Set up logging
 setup_logging()
@@ -19,12 +19,15 @@ setup_logging()
 from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras
 from .RasPlan import RasPlan
 from .RasGeo import RasGeo
+from .RasGeometry import RasGeometry
+from .RasGeometryUtils import RasGeometryUtils
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .RasCmdr import RasCmdr
 from .RasControl import RasControl
 from .RasMap import RasMap
+from .RasGuiAutomation import RasGuiAutomation
 from .HdfFluvialPluvial import HdfFluvialPluvial
 
 # HDF handling
@@ -41,6 +44,8 @@ from .HdfXsec import HdfXsec
 from .HdfPump import HdfPump
 from .HdfPipe import HdfPipe
 from .HdfInfiltration import HdfInfiltration
+from .HdfHydraulicTables import HdfHydraulicTables
+from .HdfResultsBreach import HdfResultsBreach
 from .RasBreach import RasBreach
 
 # Plotting functionality
@@ -51,14 +56,14 @@ from .HdfResultsPlot import HdfResultsPlot
 __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
-    'RasPlan', 'RasGeo', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'RasCmdr', 'RasControl', 'RasMap', 'HdfFluvialPluvial',
+    'RasPlan', 'RasGeo', 'RasGeometry', 'RasGeometryUtils', 'RasUnsteady', 'RasUtils',
+    'RasExamples', 'RasCmdr', 'RasControl', 'RasMap', 'RasGuiAutomation', 'HdfFluvialPluvial',
     
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
-    'HdfPipe', 'HdfInfiltration', 'RasBreach',
+    'HdfPipe', 'HdfInfiltration', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',
