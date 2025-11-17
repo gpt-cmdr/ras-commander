@@ -21,19 +21,19 @@ def log_call(func):
 def standardize_input(file_type: str = 'plan_hdf'):
     """
     Decorator to standardize input for HDF file operations.
-    
+
     This decorator processes various input types and converts them to a Path object
     pointing to the correct HDF file. It handles the following input types:
     - h5py.File objects
     - pathlib.Path objects
     - Strings (file paths or plan/geom numbers)
     - Integers (interpreted as plan/geom numbers)
-    
+
     The decorator also manages RAS object references and logging.
-    
+
     Args:
         file_type (str): Specifies whether to look for 'plan_hdf' or 'geom_hdf' files.
-    
+
     Returns:
         A decorator that wraps the function to standardize its input to a Path object.
     """
@@ -138,6 +138,16 @@ def standardize_input(file_type: str = 'plan_hdf'):
                         except Exception as e:
                             logger.warning(f"Error retrieving plan HDF path: {str(e)}")
 
+                    elif file_type == 'plan':
+                        try:
+                            # Get plan file path (.p##)
+                            from .RasUtils import RasUtils
+                            plan_number_str = RasUtils.normalize_ras_number(number_int)
+                            hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number_str}"
+                            if not hdf_path.exists():
+                                raise FileNotFoundError(f"Plan file not found: {hdf_path}")
+                        except Exception as e:
+                            logger.warning(f"Error retrieving plan file path: {str(e)}")
 
                     elif file_type == 'geom_hdf':
                         try:
@@ -152,7 +162,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                     try:
                                         # Get the geometry path using RasPlan
                                         geom_path = RasPlan.get_geom_path(str(geom_number), ras_obj)
-                                        
+
                                         if geom_path is not None:
                                             # Create the HDF path by adding .hdf to the geometry path
                                             hdf_path = Path(str(geom_path) + ".hdf")
@@ -205,6 +215,17 @@ def standardize_input(file_type: str = 'plan_hdf'):
                         except Exception as e:
                             logger.warning(f"Error retrieving plan HDF path: {str(e)}")
 
+                    elif file_type == 'plan':
+                        try:
+                            # Get plan file path (.p##)
+                            from .RasUtils import RasUtils
+                            plan_number_str = RasUtils.normalize_ras_number(number_int)
+                            hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number_str}"
+                            if not hdf_path.exists():
+                                raise FileNotFoundError(f"Plan file not found: {hdf_path}")
+                        except Exception as e:
+                            logger.warning(f"Error retrieving plan file path: {str(e)}")
+
                     elif file_type == 'geom_hdf':
                         try:
                             # First try finding plan info to get geometry number
@@ -243,20 +264,22 @@ def standardize_input(file_type: str = 'plan_hdf'):
 
             # Final verification that the path exists
             if hdf_path is None or not hdf_path.exists():
-                error_msg = f"HDF file not found: {hdf_input}"
+                file_type_name = "HDF file" if 'hdf' in file_type else "file"
+                error_msg = f"{file_type_name} not found: {hdf_input}"
                 logger.error(error_msg)
                 raise FileNotFoundError(error_msg)
-                
-            logger.info(f"Final validated HDF file path: {hdf_path}")
-            
-            # Now try to validate the HDF file structure (but don't fail if validation fails)
-            try:
-                with h5py.File(hdf_path, 'r') as test_file:
-                    # Just open to verify it's a valid HDF5 file
-                    logger.debug(f"Successfully opened HDF file for validation: {hdf_path}")
-            except Exception as e:
-                logger.warning(f"Warning: Could not validate HDF file: {str(e)}")
-                # Continue anyway, let the function handle detailed validation
+
+            logger.info(f"Final validated file path: {hdf_path}")
+
+            # Validate HDF file structure (only for HDF types)
+            if 'hdf' in file_type:
+                try:
+                    with h5py.File(hdf_path, 'r') as test_file:
+                        # Just open to verify it's a valid HDF5 file
+                        logger.debug(f"Successfully opened HDF file for validation: {hdf_path}")
+                except Exception as e:
+                    logger.warning(f"Warning: Could not validate HDF file: {str(e)}")
+                    # Continue anyway, let the function handle detailed validation
             
             # Pass all original arguments and keywords, replacing hdf_input with standardized hdf_path
             # If the original input was positional, replace the first argument
