@@ -95,7 +95,7 @@ OMIT_FOLDERS = [
     # Generated outputs
     "llm_knowledge_bases",
     # Test and documentation build
-    "tests", "docs", "html", "apidocs", "_build", "_static",
+    "tests", "tools", "docs", "html", "apidocs", "_build", "_static",
     # Project data folders
     "example_projects", "data", "FEMA_BLE_Models",
     "hdf_example_data", "ras_example_categories",
@@ -103,6 +103,8 @@ OMIT_FOLDERS = [
     "workspace", "projects", "my_projects", "test_projects",
     # Specific project folders to exclude
     "Bald Eagle Creek", "misc",
+    # Development and research folders (exclude from knowledge bases)
+    "feature_dev_notes", "research",
 ]
 OMIT_FILES = [
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",
