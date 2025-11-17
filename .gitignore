@@ -5,6 +5,11 @@ examples/example_projects/
 workspace/
 projects/
 my_projects/
+test_projects/
+custom_extraction_folder/
+multi_test/
+unsteady_examples/
+special_projects/
 
 # Ignore FEMA BLE Models
 examples/FEMA_BLE_Models/
@@ -52,3 +57,25 @@ venv/
 # Ignore OS-specific files
 .DS_Store
 Thumbs.db
+Example_Projects_6_6.zip
+/tests/example_projects
+/example_projects
+
+# Research folder - ignore outputs but keep source code
+# Keep: Python scripts, notebooks, README, AGENTS.md, pyproject.toml
+# Ignore: CSV, log files, temp folders, generated markdown findings
+research/**/findings/*.csv
+research/**/findings/*.log
+research/**/outputs/
+research/**/temp/
+research/**/.ipynb_checkpoints/
+research/**/*.pyc
+research/**/__pycache__/
+/feature_dev_notes
+/research
+/tools
+/examples/working
+/examples/hyetographs
+examples/flood_polygons.geojson
+ras-commander_logo.png
+/tests
