@@ -1143,16 +1143,25 @@ class RasPlan:
 
         Parameters:
         plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
-        geometry_preprocessor (bool, optional): Flag for Geometry Preprocessor
-        unsteady_flow_simulation (bool, optional): Flag for Unsteady Flow Simulation
-        run_sediment (bool, optional): Flag for run_sediment
-        post_processor (bool, optional): Flag for Post Processor
-        floodplain_mapping (bool, optional): Flag for Floodplain Mapping
+        geometry_preprocessor (bool, optional): Set Geometry Preprocessor (Run HTab, -1 = ON, 0 = OFF)
+        unsteady_flow_simulation (bool, optional): Set Unsteady Flow (Run UNet, -1 = ON, 0 = OFF)
+        run_sediment (bool, optional): Set Run Sediment (Run Sediment, -1 = ON, 0 = OFF)
+        post_processor (bool, optional): Set Post Processor (Run PostProcess, -1 = ON, 0 = OFF)
+        floodplain_mapping (bool, optional): Set Floodplain Mapping (Run RASMapper, -1 = ON, 0 = OFF)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Raises:
         ValueError: If the plan file is not found
         IOError: If there's an error reading or writing the plan file
+
+        Notes:
+        - -1 is ON, 0 is OFF
+        - Lines affected in plan file:
+            Run HTab= -1           # geometry_preprocessor
+            Run UNet= -1           # unsteady_flow_simulation
+            Run Sediment= 0        # run_sediment
+            Run PostProcess= -1    # post_processor
+            Run RASMapper= 0       # floodplain_mapping
 
         Example:
         >>> RasPlan.update_run_flags("01", geometry_preprocessor=True, unsteady_flow_simulation=True, run_sediment=False, post_processor=True, floodplain_mapping=False)
@@ -1166,34 +1175,50 @@ class RasPlan:
             if plan_file_path is None or not Path(plan_file_path).exists():
                 raise ValueError(f"Plan file not found: {plan_file_path}")
 
-        flag_mapping = {
-            'geometry_preprocessor': ('Run HTab', geometry_preprocessor),
-            'unsteady_flow_simulation': ('Run UNet', unsteady_flow_simulation),
-            'run_sediment': ('Run run_sediment', run_sediment),
-            'post_processor': ('Run PostProcess', post_processor),
-            'floodplain_mapping': ('Run RASMapper', floodplain_mapping)
-        }
+        # Map arguments to plan keys (string in file : argument, ON=-1, OFF=0)
+        flag_map = [
+            ("Run HTab", geometry_preprocessor),
+            ("Run UNet", unsteady_flow_simulation),
+            ("Run Sediment", run_sediment),
+            ("Run PostProcess", post_processor),
+            ("Run RASMapper", floodplain_mapping)
+        ]
 
         try:
-            with open(plan_file_path, 'r') as file:
-                lines = file.readlines()
+            with open(plan_file_path, 'r') as f:
+                lines = f.readlines()
 
-            for i, line in enumerate(lines):
-                for key, (file_key, value) in flag_mapping.items():
-                    if value is not None and line.strip().startswith(file_key):
-                        lines[i] = f"{file_key}= {1 if value else 0}\n"
+            # Annotate which flags got edited for logger
+            updated_lines = 0
 
-            with open(plan_file_path, 'w') as file:
-                file.writelines(lines)
+            for flag, value in flag_map:
+                if value is not None:
+                    # Find and update the line
+                    found = False
+                    for idx, line in enumerate(lines):
+                        if line.strip().startswith(f"{flag}="):
+                            lines[idx] = f"{flag}= {-1 if value else 0}\n"
+                            updated_lines += 1
+                            found = True
+                            break
+                    if not found:
+                        # If not present, add the line at end (optional; original HEC-RAS behavior retains missing as OFF)
+                        lines.append(f"{flag}= {-1 if value else 0}\n")
+                        updated_lines += 1
 
-            logger = logging.getLogger(__name__)
-            logger.info(f"Successfully updated run flags in plan file: {plan_file_path}")
+            with open(plan_file_path, 'w') as f:
+                f.writelines(lines)
+
+            logger = get_logger(__name__)
+            logger.info(
+                f"Successfully updated run flags in plan file: {plan_file_path} "
+                f"(flags modified: {updated_lines})"
+            )
 
         except IOError as e:
-            logger = logging.getLogger(__name__)
+            logger = get_logger(__name__)
             logger.error(f"Error updating run flags in plan file {plan_file_path}: {e}")
             raise
-
 
 
     @staticmethod
