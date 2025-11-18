@@ -753,13 +753,80 @@ class RasPrj:
 
         Raises:
             RuntimeError: If the project has not been initialized.
-        
+
         Example:
             >>> project_name = ras.get_project_name()
             >>> print(f"Working with project: {project_name}")
         """
         self.check_initialized()
         return self.project_name
+
+    @log_call
+    def set_current_plan(self, plan_number: Union[str, int]):
+        """
+        Set the current plan in the HEC-RAS project file (.prj).
+
+        This ensures that when HEC-RAS opens, it opens with the specified plan active.
+
+        Args:
+            plan_number (Union[str, int]): The plan number to set as current (e.g., "01" or 1)
+
+        Raises:
+            RuntimeError: If the project has not been initialized
+            ValueError: If the plan number is invalid or not found
+            IOError: If there's an error reading or writing the project file
+
+        Example:
+            >>> ras.set_current_plan("01")
+            >>> # HEC-RAS will now open with plan 01 active
+        """
+        self.check_initialized()
+
+        # Normalize plan number to 2-digit string with leading zero
+        from .RasUtils import RasUtils
+        plan_number_str = RasUtils.normalize_ras_number(plan_number)
+
+        # Verify plan exists in plan_df
+        if plan_number_str not in self.plan_df['plan_number'].values:
+            available_plans = ', '.join(self.plan_df['plan_number'].values)
+            raise ValueError(
+                f"Plan {plan_number_str} not found in project. "
+                f"Available plans: {available_plans}"
+            )
+
+        try:
+            # Read the project file
+            with open(self.prj_file, 'r') as f:
+                lines = f.readlines()
+
+            # Find and update the Current Plan line
+            updated = False
+            for i, line in enumerate(lines):
+                if line.strip().startswith('Current Plan='):
+                    lines[i] = f"Current Plan=p{plan_number_str}\n"
+                    updated = True
+                    break
+
+            # If Current Plan line doesn't exist, add it after Proj Title
+            if not updated:
+                for i, line in enumerate(lines):
+                    if line.strip().startswith('Proj Title='):
+                        lines.insert(i + 1, f"Current Plan=p{plan_number_str}\n")
+                        updated = True
+                        break
+
+            if not updated:
+                raise ValueError("Could not find 'Proj Title=' or 'Current Plan=' in project file")
+
+            # Write back to file
+            with open(self.prj_file, 'w') as f:
+                f.writelines(lines)
+
+            logger.info(f"Set current plan to p{plan_number_str} in {self.prj_file}")
+
+        except IOError as e:
+            logger.error(f"Error updating current plan in {self.prj_file}: {e}")
+            raise
 
     @log_call
     def get_prj_entries(self, entry_type):
