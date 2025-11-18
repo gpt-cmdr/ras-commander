@@ -6,17 +6,20 @@ COM automation and win32gui. It enables programmatic control of menu items, dial
 and buttons for workflows that don't have API support.
 
 Public functions:
-    get_windows_by_pid(pid)              - Return all windows for a given process ID as (hwnd, title) tuples.
-    find_main_hecras_window(windows)     - Identify the main HEC-RAS window from a window list.
-    enumerate_all_menus(hwnd)            - Return all top-level menus and items for the given window handle.
-    click_menu_item(hwnd, menu_id)       - Trigger a menu item by sending WM_COMMAND to the main window.
-    find_dialog_by_title(pattern, exact) - Locate a visible dialog window by title substring or exact match.
-    find_button_by_text(hwnd, text)      - Find a button control in a dialog window by its text.
-    click_button(button_hwnd)            - Simulate a click on a button control.
-    wait_for_window(find_window_func, ...) - Wait for a window using a polling function and timeout.
-    open_and_compute(...)                - Open HEC-RAS, navigate via menu, optionally click Compute, and return.
-    close_window(hwnd)                   - Close the given window handle via WM_CLOSE.
-    run_multiple_plans(...)              - Automate GUI workflow for "Run Multiple Plans" in HEC-RAS.
+    get_windows_by_pid(pid)                    - Return all windows for a given process ID as (hwnd, title) tuples.
+    find_main_hecras_window(windows)           - Identify the main HEC-RAS window from a window list.
+    enumerate_all_menus(hwnd)                  - Return all top-level menus and items for the given window handle.
+    click_menu_item(hwnd, menu_id)             - Trigger a menu item by sending WM_COMMAND to the main window.
+    find_dialog_by_title(pattern, exact)       - Locate a visible dialog window by title substring or exact match.
+    find_button_by_text(hwnd, text)            - Find a button control in a dialog window by its text.
+    click_button(button_hwnd)                  - Simulate a click on a button control.
+    find_combobox_by_neighbor(hwnd, text)      - Find a combo box control near a label with specific text.
+    select_combobox_item_by_text(combo, text)  - Select an item in a combo box by its text.
+    set_current_plan(hwnd, plan_number, ...)   - Set the current plan in HEC-RAS by selecting from the plan dropdown.
+    wait_for_window(find_window_func, ...)     - Wait for a window using a polling function and timeout.
+    open_and_compute(...)                      - Open HEC-RAS, set plan, navigate via menu, optionally click Compute.
+    close_window(hwnd)                         - Close the given window handle via WM_CLOSE.
+    run_multiple_plans(...)                    - Automate GUI workflow for "Run Multiple Plans" in HEC-RAS.
 
 Private functions (scoped within above):
     Various local callback functions for window and child window enumeration.
@@ -323,6 +326,166 @@ class RasGuiAutomation:
 
     @staticmethod
     @log_call
+    def find_combobox_by_neighbor(hwnd: int, neighbor_text: str) -> Optional[int]:
+        """
+        Find a combo box control near a label with specific text.
+
+        Args:
+            hwnd (int): Handle to the parent window.
+            neighbor_text (str): Text of a nearby label (case-insensitive).
+
+        Returns:
+            Optional[int]: Combo box handle if found, None otherwise.
+
+        Examples:
+            >>> combo = RasGuiAutomation.find_combobox_by_neighbor(hwnd, "Plan:")
+        """
+        def callback(child_hwnd, combos):
+            try:
+                class_name = win32gui.GetClassName(child_hwnd)
+                if "ComboBox" in class_name:
+                    combos.append(child_hwnd)
+            except:
+                pass
+            return True
+
+        combos = []
+        win32gui.EnumChildWindows(hwnd, callback, combos)
+
+        if combos:
+            logger.debug(f"Found {len(combos)} combo box(es)")
+            # For now, return the first combo box found
+            # In a more sophisticated implementation, we could check proximity to the label
+            return combos[0]
+
+        logger.debug(f"No combo box found near '{neighbor_text}'")
+        return None
+
+    @staticmethod
+    @log_call
+    def select_combobox_item_by_text(combo_hwnd: int, item_text: str) -> bool:
+        """
+        Select an item in a combo box by its text.
+
+        Args:
+            combo_hwnd (int): Handle to the combo box.
+            item_text (str): Text of the item to select (partial match, case-insensitive).
+
+        Returns:
+            bool: True if item was found and selected.
+
+        Examples:
+            >>> RasGuiAutomation.select_combobox_item_by_text(combo_hwnd, "p01")
+        """
+        try:
+            # CB_GETCOUNT = 0x0146
+            CB_GETCOUNT = 0x0146
+            # CB_GETLBTEXTLEN = 0x0149
+            CB_GETLBTEXTLEN = 0x0149
+            # CB_GETLBTEXT = 0x0148
+            CB_GETLBTEXT = 0x0148
+            # CB_SETCURSEL = 0x014E
+            CB_SETCURSEL = 0x014E
+
+            # Get number of items in combo box
+            count = win32api.SendMessage(combo_hwnd, CB_GETCOUNT, 0, 0)
+            logger.debug(f"Combo box has {count} items")
+
+            # Search for matching item
+            for i in range(count):
+                # Get length of text for this item
+                text_len = win32api.SendMessage(combo_hwnd, CB_GETLBTEXTLEN, i, 0)
+                if text_len > 0:
+                    # Get the text
+                    buffer = ctypes.create_unicode_buffer(text_len + 1)
+                    win32api.SendMessage(combo_hwnd, CB_GETLBTEXT, i, buffer)
+                    item = buffer.value
+
+                    logger.debug(f"Combo box item {i}: '{item}'")
+
+                    # Check for match (case-insensitive, partial match)
+                    if item_text.lower() in item.lower():
+                        # Select this item
+                        win32api.SendMessage(combo_hwnd, CB_SETCURSEL, i, 0)
+                        logger.info(f"Selected combo box item {i}: '{item}'")
+                        return True
+
+            logger.warning(f"Could not find item containing '{item_text}' in combo box")
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to select combo box item: {e}")
+            return False
+
+## CHANGE THIS (START)
+
+    @staticmethod
+    @log_call
+    def set_current_plan(hwnd: int, plan_number: str, ras_object=None) -> bool:
+        """
+        Set the current plan in HEC-RAS by finding and selecting from the plan dropdown.
+
+        Args:
+            hwnd (int): Handle to the main HEC-RAS window.
+            plan_number (str): Plan number to select (e.g., "01", "02").
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            bool: True if plan was successfully selected.
+
+        Examples:
+            >>> RasGuiAutomation.set_current_plan(hwnd, "01")
+        """
+        ras_obj = ras_object or ras
+        
+        # Try to find the plan combo box
+        # In HEC-RAS, the plan selector is typically a combo box near a "Plan:" label
+        plan_combo = RasGuiAutomation.find_combobox_by_neighbor(hwnd, "Plan:")
+        
+        if not plan_combo:
+            logger.warning("Could not find plan combo box")
+            return False
+
+        # Get plan details to construct the full plan text
+        # Plans are typically shown as "p01 - Plan Title" or similar
+        try:
+            from .RasPlan import RasPlan
+            plan_title = RasPlan.get_plan_title(plan_number, ras_object=ras_obj)
+            plan_shortid = RasPlan.get_shortid(plan_number, ras_object=ras_obj)
+            
+            # Try different formats that HEC-RAS might use
+            search_terms = [
+                f"p{plan_number}",  # Just the plan number
+                f"{plan_shortid}",  # Short ID
+                f"p{plan_number} - {plan_title}",  # Full format with title
+                f"p{plan_number} - {plan_shortid}",  # Format with short ID
+            ]
+            
+            for term in search_terms:
+                if RasGuiAutomation.select_combobox_item_by_text(plan_combo, term):
+                    logger.info(f"Successfully set current plan to p{plan_number}")
+                    return True
+            
+            # If none of the specific formats worked, just try the plan number
+            if RasGuiAutomation.select_combobox_item_by_text(plan_combo, plan_number):
+                logger.info(f"Successfully set current plan to p{plan_number}")
+                return True
+                
+        except Exception as e:
+            logger.warning(f"Could not get plan details, trying simple search: {e}")
+            # Fallback to simple plan number search
+            if RasGuiAutomation.select_combobox_item_by_text(plan_combo, f"p{plan_number}"):
+                logger.info(f"Successfully set current plan to p{plan_number}")
+                return True
+
+        logger.error(f"Failed to set current plan to p{plan_number}")
+        return False
+
+## CHANGE THIS (START)
+
+
+    @staticmethod
+    @log_call
     def wait_for_window(
         find_window_func: Callable,
         timeout: int = 60,
@@ -368,17 +531,18 @@ class RasGuiAutomation:
         wait_for_user: bool = True
     ) -> bool:
         """
-        Open HEC-RAS, navigate to Unsteady Flow Analysis, and optionally click Compute.
+        Open HEC-RAS, set the current plan, navigate to Unsteady Flow Analysis, and optionally click Compute.
 
         This function automates the workflow:
         1. Open HEC-RAS with the project
         2. Wait for main window to appear
-        3. Click "Run > Unsteady Flow Analysis" menu (ID 47)
-        4. Optionally click "Compute" button in dialog
-        5. Wait for user to close HEC-RAS (or return immediately)
+        3. Set the current plan to the specified plan_number
+        4. Click "Run > Unsteady Flow Analysis" menu (ID 47)
+        5. Optionally click "Compute" button in dialog
+        6. Wait for user to close HEC-RAS (or return immediately)
 
         Args:
-            plan_number (str): Plan number to run (currently informational only).
+            plan_number (str): Plan number to run (e.g., "01", "02").
             ras_object: Optional RAS object instance.
             auto_click_compute (bool): If True, automatically click Compute button. Default True.
             wait_for_user (bool): If True, wait for user to close HEC-RAS. Default True.
@@ -387,21 +551,32 @@ class RasGuiAutomation:
             bool: True if successful, False otherwise.
 
         Examples:
-            >>> # Full automation
+            >>> # Full automation - runs plan "01"
             >>> RasGuiAutomation.open_and_compute("01", auto_click_compute=True)
 
-            >>> # Just open dialog, let user click Compute
-            >>> RasGuiAutomation.open_and_compute("01", auto_click_compute=False)
+            >>> # Just open dialog for plan "02", let user click Compute
+            >>> RasGuiAutomation.open_and_compute("02", auto_click_compute=False)
 
         Notes:
             - This is designed for floodplain mapping workflows that require GUI execution
+            - The function will attempt to set the current plan before running
             - Menu ID 47 is "Run > Unsteady Flow Analysis" in HEC-RAS 6.x
-            - If auto_click_compute fails, user can manually click Compute button
+            - If plan selection or auto_click_compute fails, user can manually complete the workflow
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Step 1: Open HEC-RAS
+        # Step 1: Set current plan in .prj file BEFORE opening HEC-RAS
+        # This ensures HEC-RAS opens with the correct plan active
+        logger.info(f"Setting current plan to {plan_number} in project file...")
+        try:
+            ras_obj.set_current_plan(plan_number)
+            logger.info(f"Current plan set to {plan_number} in {ras_obj.prj_file}")
+        except Exception as e:
+            logger.error(f"Failed to set current plan: {e}")
+            return False
+
+        # Step 2: Open HEC-RAS
         logger.info("Opening HEC-RAS...")
         ras_exe = ras_obj.ras_exe_path
         prj_path = f'"{str(ras_obj.prj_file)}"'
@@ -418,7 +593,7 @@ class RasGuiAutomation:
             logger.error(f"Failed to open HEC-RAS: {e}")
             return False
 
-        # Step 2: Wait for main window
+        # Step 3: Wait for main window
         logger.info("Waiting for HEC-RAS main window...")
         time.sleep(3)  # Initial wait for process to start
 
@@ -435,16 +610,20 @@ class RasGuiAutomation:
 
         logger.info(f"Found HEC-RAS main window: {win32gui.GetWindowText(hec_ras_hwnd)}")
 
-        # Step 3: Click "Run > Unsteady Flow Analysis" (menu ID 47)
-        logger.info("Clicking 'Run > Unsteady Flow Analysis' menu...")
+        # Note: Current plan was already set in .prj file before opening HEC-RAS (Step 1)
+        # HEC-RAS should now have the correct plan active
         time.sleep(1)  # Let window fully load
+
+        # Step 4: Click "Run > Unsteady Flow Analysis" (menu ID 47)
+        logger.info("Clicking 'Run > Unsteady Flow Analysis' menu...")
+        time.sleep(0.5)
 
         if not RasGuiAutomation.click_menu_item(hec_ras_hwnd, 47):
             logger.warning("Failed to click menu item, but continuing...")
 
         time.sleep(2)  # Wait for dialog to open
 
-        # Step 4: Find and click Compute button (if auto_click_compute)
+        # Step 5: Find and click Compute button (if auto_click_compute)
         if auto_click_compute:
             logger.info("Looking for Unsteady Flow Analysis dialog...")
 
@@ -477,7 +656,7 @@ class RasGuiAutomation:
                 logger.warning("Could not find Unsteady Flow Analysis dialog")
                 logger.info("User must manually click 'Run > Unsteady Flow Analysis' and Compute")
 
-        # Step 5: Wait for user to close HEC-RAS (or return immediately)
+        # Step 6: Wait for user to close HEC-RAS (or return immediately)
         if wait_for_user:
             logger.info("Waiting for user to close HEC-RAS...")
             logger.info(f"Please monitor plan {plan_number} execution and close HEC-RAS when complete")
