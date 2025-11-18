@@ -127,6 +127,132 @@ Notebook‑only utilities and unique logic
 - Hyetograph generation for Atlas 14 AEP events (103_*): end‑to‑end pattern from CSV → plan clones → batch compute.
 - Profile‑based face aggregation (13_*): discharge‑weighted velocity and flow‑direction normalization.
 
+---
+
+## Notebook Import Cell Management
+
+All example notebooks follow a standardized 2-cell import pattern:
+
+**Cell 0 (Code - ACTIVE by default):**
+```python
+# Uncomment to install/upgrade ras-commander from pip
+#!pip install --upgrade ras-commander
+
+#Import the ras-commander package
+from ras_commander import *
+```
+
+**Cell 1 (Markdown - INACTIVE by default):**
+Contains development mode instructions with code block for local copy usage.
+
+**Cell 2 (Code - When needed):**
+Notebook-specific imports (numpy, pandas, matplotlib, etc.)
+
+### Toggling Between Pip and Dev Modes
+
+**For pip-installed package testing (default state):**
+- Cell 0 remains as code (active)
+- Cell 1 remains as markdown (inactive)
+- Run notebooks as-is
+
+**For local development copy testing:**
+1. Convert Cell 1 from markdown to code
+2. Convert Cell 0 from code to markdown
+3. Run the modified notebooks
+4. **IMPORTANT:** Restore to default state before committing
+
+**Warning:** Never have both Cell 0 and Cell 1 as code cells simultaneously. This will cause import conflicts.
+
+---
+
+## Running Notebook Tests
+
+### Prerequisites
+- Install test dependencies: `uv pip install notebook jupyter ipykernel`
+- Ensure HEC-RAS is installed and in PATH
+- Verify sufficient disk space for example projects (~5 GB)
+
+### Testing All Notebooks with Subagents
+
+**For pip-installed package:**
+```python
+# Launch subagent to run all notebooks and review results
+# Default state (Cell 0=code, Cell 1=markdown) is correct
+task_prompt = """
+Run all example notebooks in C:\\GH\\ras-commander\\examples\\ and verify:
+1. No import errors
+2. No unhandled exceptions
+3. Warnings are reviewed and acceptable
+4. Long-running cells complete successfully
+5. Results match expected patterns
+
+Report any failures, unexpected warnings, or behavioral changes.
+"""
+```
+
+**For local development copy:**
+```python
+# First toggle cells, then test
+task_prompt = """
+1. For each notebook in C:\\GH\\ras-commander\\examples\\:
+   - Convert Cell 0 (pip mode) from code to markdown
+   - Convert Cell 1 (dev mode) from markdown to code
+2. Run all notebooks and verify functionality
+3. After testing, restore default state:
+   - Convert Cell 0 back to code
+   - Convert Cell 1 back to markdown
+4. Report results and any issues
+"""
+```
+
+### Expected Execution Times
+- **Quick notebooks** (<30 seconds): 00, 01, 02, 03, 09
+- **Medium notebooks** (1-5 minutes): 10, 11, 13, 14
+- **Long-running notebooks** (5-30 minutes): 04, 05, 06, 07, 08, 12, 15, 101, 102, 103
+- **Manual intervention required:** 16 (GUI automation)
+
+### Reviewing Results
+
+Check for:
+- **Import errors:** Indicates missing dependencies or broken imports
+- **HEC-RAS errors:** Check HDF files exist and compute messages are clean
+- **Warnings:** Review pandas/numpy/geopandas deprecation warnings
+- **Data quality:** Spot-check DataFrames, plots, and extracted values
+- **Performance:** Note if runtimes significantly increase/decrease
+
+---
+
+## Pre-Commit Checklist for Notebooks
+
+Before committing modified notebooks:
+
+1. **Verify Import Cell State:**
+   - [ ] Cell 0 is code (pip mode active)
+   - [ ] Cell 1 is markdown (dev mode inactive)
+   - [ ] Notebook-specific imports in Cell 2 (if applicable)
+
+2. **Clear All Outputs:**
+   ```python
+   # Run this to clear outputs from all notebooks
+   python -c "import json; from pathlib import Path; import glob;
+   notebooks = glob.glob(r'C:\GH\ras-commander\examples\*.ipynb');
+   [json.dump((lambda nb: (nb.update({'cells': [dict(cell, outputs=[], execution_count=None)
+   if cell['cell_type'] == 'code' else cell for cell in nb['cells']]}) or nb))
+   (json.load(open(nb, encoding='utf-8'))), open(nb, 'w', encoding='utf-8'),
+   indent=1, ensure_ascii=False) for nb in notebooks]"
+   ```
+
+3. **Verify Notebook-Specific Imports Preserved:**
+   - Check notebooks 03, 04-09, 12, 16, 101, 102, 105 retain their special imports
+   - Ensure imports are consolidated in Cell 2, not scattered
+
+4. **Git Diff Review:**
+   - Verify only intended cells were modified
+   - Check no accidental deletions of content cells
+   - Ensure no large binary outputs were committed
+
+---
+
 General Tips
 - Use two-digit plan numbers (e.g., "01").
 - Keep original projects immutable; use `dest_folder`/suffixes.

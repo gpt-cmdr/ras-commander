@@ -79,7 +79,7 @@ import json
 # Folders to exclude from knowledge base generation
 OMIT_FOLDERS = [
     # Version control and CI/CD
-    ".git", ".github",
+    ".git", ".github", "working",".claude",
     # Python artifacts
     "__pycache__", ".pytest_cache", ".conda",
     # Build outputs

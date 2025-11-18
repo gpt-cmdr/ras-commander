@@ -2,12 +2,14 @@ Project Structure (files included):
 ├── HdfBase.py
 ├── HdfBndry.py
 ├── HdfFluvialPluvial.py
+├── HdfHydraulicTables.py
 ├── HdfInfiltration.py
 ├── HdfMesh.py
 ├── HdfPipe.py
 ├── HdfPlan.py
 ├── HdfPlot.py
 ├── HdfPump.py
+├── HdfResultsBreach.py
 ├── HdfResultsMesh.py
 ├── HdfResultsPlan.py
 ├── HdfResultsPlot.py
@@ -16,7 +18,7 @@ Project Structure (files included):
 ├── HdfUtils.py
 └── HdfXsec.py
 
-File: C:\GH\ras-commander\ras_commander\HdfBase.py
+File: c:\GH\ras-commander\ras_commander\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -380,7 +382,7 @@ class HdfBase:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfBndry.py
+File: c:\GH\ras-commander\ras_commander\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -781,7 +783,7 @@ class HdfBndry:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -1202,7 +1204,460 @@ class HdfFluvialPluvial:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: c:\GH\ras-commander\ras_commander\HdfHydraulicTables.py
+==================================================
+"""
+HdfHydraulicTables - Extract hydraulic property tables (HTAB) from HEC-RAS geometry HDF files
+
+All methods are static and designed to be used without instantiation.
+
+Hydraulic property tables contain preprocessed hydraulic properties computed during
+geometry preprocessing. These tables enable hydraulic analysis without re-running HEC-RAS,
+including:
+- Area vs elevation curves
+- Conveyance vs elevation
+- Wetted perimeter vs elevation
+- Top width vs elevation
+- Rating curves and stage-discharge relationships
+
+Available Functions:
+- get_xs_htab() - Extract property table for a single cross section
+- get_all_xs_htabs() - Extract property tables for all cross sections
+
+Technical Notes:
+    Property tables are stored in geometry HDF files (.g##.hdf), NOT plan HDF files.
+    Path: /Geometry/Cross Sections/Property Tables/
+
+    Data Structure:
+        - XSEC Info: Index array mapping XS to property table rows [start_index, count, ds_cell]
+        - XSEC Value: Property table data (N rows × 23 columns)
+        - Variables attribute: Column names and units
+
+    23 Hydraulic Properties Available:
+        1. Elevation
+        2-4. Area (LOB, Channel, ROB)
+        5-7. Area Ineffective (LOB, Channel, ROB)
+        8-10. Conveyance (LOB, Channel, ROB)
+        11-13. Wetted Perimeter (LOB, Channel, ROB)
+        14-16. Manning's n (LOB, Channel, ROB)
+        17-20. Top Width (Total, LOB, Channel, ROB)
+        21. Alpha (velocity distribution coefficient)
+        22. Storage Area
+        23. Beta (momentum coefficient)
+
+Example Usage:
+    >>> from ras_commander import HdfHydraulicTables
+    >>> from pathlib import Path
+    >>>
+    >>> # Get property table for specific cross section
+    >>> hdf_file = Path("BaldEagle.g01.hdf")
+    >>> htab = HdfHydraulicTables.get_xs_htab(hdf_file, "Bald Eagle", "Loc Hav", "1")
+    >>>
+    >>> # Plot area-elevation curve
+    >>> import matplotlib.pyplot as plt
+    >>> plt.plot(htab['Elevation'], htab['Area_Total'])
+    >>> plt.xlabel('Elevation (ft)')
+    >>> plt.ylabel('Area (sq ft)')
+    >>> plt.title('Cross Section Area-Elevation Curve')
+    >>> plt.show()
+    >>>
+    >>> # Calculate flow at specific stage
+    >>> target_elev = 665.0
+    >>> idx = (htab['Elevation'] - target_elev).abs().idxmin()
+    >>> flow_area = htab.loc[idx, 'Area_Total']
+    >>> conveyance = htab.loc[idx, 'Conveyance_Total']
+    >>> print(f"At elevation {target_elev} ft:")
+    >>> print(f"  Flow area: {flow_area:.1f} sq ft")
+    >>> print(f"  Conveyance: {conveyance:.1f} cfs")
+
+References:
+    - See HdfXsec for cross section geometry extraction
+    - See RasGeometry for plain text geometry operations
+    - Property tables computed during geometry preprocessing in HEC-RAS
+"""
+
+from pathlib import Path
+from typing import Union, Optional, Dict, Tuple
+import h5py
+import pandas as pd
+import numpy as np
+
+from .LoggingConfig import get_logger
+from .Decorators import log_call, standardize_input
+
+logger = get_logger(__name__)
+
+
+class HdfHydraulicTables:
+    """
+    Extract hydraulic property tables (HTAB) from HEC-RAS geometry HDF files.
+
+    All methods are static and designed to be used without instantiation.
+
+    Property tables provide preprocessed hydraulic properties (area, conveyance,
+    wetted perimeter, etc.) as functions of elevation for cross sections and structures.
+    """
+
+    @staticmethod
+    def _get_xs_index(hdf_file: h5py.File, river: str, reach: str, rs: str) -> Optional[int]:
+        """
+        Find cross section index from river/reach/RS identifiers.
+
+        Parameters:
+            hdf_file (h5py.File): Open HDF file handle
+            river (str): River name
+            reach (str): Reach name
+            rs (str): River station
+
+        Returns:
+            Optional[int]: Cross section index, or None if not found
+
+        Notes:
+            - Uses /Geometry/Cross Sections/Attributes to map names to indices
+            - Case-sensitive matching
+        """
+        try:
+            attrs_path = '/Geometry/Cross Sections/Attributes'
+            if attrs_path not in hdf_file:
+                logger.error(f"Attributes path not found: {attrs_path}")
+                return None
+
+            attrs = hdf_file[attrs_path][:]
+
+            # Check if required fields exist
+            required_fields = ['River', 'Reach', 'RS']
+            for field in required_fields:
+                if field not in attrs.dtype.names:
+                    logger.error(f"Required field '{field}' not found in Attributes")
+                    return None
+
+            # Search for matching cross section
+            for i, attr in enumerate(attrs):
+                attr_river = attr['River'].decode('utf-8').strip()
+                attr_reach = attr['Reach'].decode('utf-8').strip()
+                attr_rs = attr['RS'].decode('utf-8').strip()
+
+                if attr_river == river and attr_reach == reach and attr_rs == rs:
+                    logger.debug(f"Found XS at index {i}: {river}/{reach}/RS {rs}")
+                    return i
+
+            logger.warning(f"Cross section not found: {river}/{reach}/RS {rs}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error finding XS index: {str(e)}")
+            return None
+
+    @staticmethod
+    def _extract_property_table(hdf_file: h5py.File, xs_index: int) -> Optional[pd.DataFrame]:
+        """
+        Extract property table for a cross section index.
+
+        Parameters:
+            hdf_file (h5py.File): Open HDF file handle
+            xs_index (int): Cross section index
+
+        Returns:
+            Optional[pd.DataFrame]: Property table with all 23 hydraulic properties
+
+        Notes:
+            - Reads from /Geometry/Cross Sections/Property Tables/
+            - Returns DataFrame with elevation + 22 other properties
+        """
+        try:
+            prop_path = '/Geometry/Cross Sections/Property Tables'
+            if prop_path not in hdf_file:
+                logger.error(f"Property Tables path not found: {prop_path}")
+                return None
+
+            prop_tables = hdf_file[prop_path]
+
+            # Read index info
+            if 'XSEC Info' not in prop_tables:
+                logger.error("XSEC Info not found in Property Tables")
+                return None
+
+            xsec_info = prop_tables['XSEC Info'][:]
+
+            if xs_index >= len(xsec_info):
+                logger.error(f"XS index {xs_index} out of range (max: {len(xsec_info)-1})")
+                return None
+
+            # Get start index and count for this XS
+            start_idx = xsec_info[xs_index][0]
+            count = xsec_info[xs_index][1]
+
+            logger.debug(f"XS {xs_index}: start={start_idx}, count={count}")
+
+            # Read property table values
+            if 'XSEC Value' not in prop_tables:
+                logger.error("XSEC Value not found in Property Tables")
+                return None
+
+            xsec_value = prop_tables['XSEC Value']
+
+            # Extract data for this XS
+            data = xsec_value[start_idx:start_idx + count, :]
+
+            # Get column names from Variables attribute
+            if 'Variables' in xsec_value.attrs:
+                variables = xsec_value.attrs['Variables']
+                # Variables is Nx2 array: [name, units]
+                col_names = [var[0].decode('utf-8').strip() for var in variables]
+
+                # Create friendly column names
+                friendly_names = []
+                for name in col_names:
+                    # Convert names like "Area LOB" to "Area_LOB"
+                    friendly = name.replace(' ', '_')
+                    # Special handling for total values
+                    if friendly == 'Area_Chan' and 'Area_LOB' in friendly_names:
+                        # Calculate total area
+                        pass  # Will compute after DataFrame creation
+                    friendly_names.append(friendly)
+
+            else:
+                # Fallback column names
+                col_names = [f'Property_{i}' for i in range(data.shape[1])]
+                friendly_names = col_names
+
+            # Create DataFrame
+            df = pd.DataFrame(data, columns=friendly_names)
+
+            # Calculate total values from LOB + Chan + ROB
+            if 'Area_LOB' in df.columns and 'Area_Chan' in df.columns and 'Area_ROB' in df.columns:
+                df['Area_Total'] = df['Area_LOB'] + df['Area_Chan'] + df['Area_ROB']
+
+            if 'Conv_LOB' in df.columns and 'Conv_Chan' in df.columns and 'Conv_ROB' in df.columns:
+                df['Conveyance_Total'] = df['Conv_LOB'] + df['Conv_Chan'] + df['Conv_ROB']
+
+            if 'WP_LOB' in df.columns and 'WP_Chan' in df.columns and 'WP_ROB' in df.columns:
+                df['Wetted_Perimeter_Total'] = df['WP_LOB'] + df['WP_Chan'] + df['WP_ROB']
+
+            logger.info(f"Extracted property table: {len(df)} elevations × {len(df.columns)} properties")
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error extracting property table: {str(e)}")
+            return None
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_xs_htab(hdf_path: Union[str, Path],
+                    river: str,
+                    reach: str,
+                    rs: str) -> pd.DataFrame:
+        """
+        Extract hydraulic property table (HTAB) for a cross section.
+
+        Reads preprocessed hydraulic properties from geometry HDF file, including
+        area, conveyance, wetted perimeter, top width, and other properties as
+        functions of elevation.
+
+        Parameters:
+            hdf_path (Union[str, Path]): Path to geometry HDF file (.g##.hdf)
+            river (str): River name (case-sensitive)
+            reach (str): Reach name (case-sensitive)
+            rs (str): River station (as string, e.g., "1")
+
+        Returns:
+            pd.DataFrame: Property table with columns:
+                - Elevation: Water surface elevation (ft or m)
+                - Area_LOB: Left overbank area (sq ft or sq m)
+                - Area_Chan: Channel area
+                - Area_ROB: Right overbank area
+                - Area_Total: Total flow area (computed)
+                - Area_Ineff_LOB: Ineffective area left overbank
+                - Area_Ineff_Chan: Ineffective area channel
+                - Area_Ineff_ROB: Ineffective area right overbank
+                - Conv_LOB: Conveyance left overbank (cfs or cms)
+                - Conv_Chan: Conveyance channel
+                - Conv_ROB: Conveyance right overbank
+                - Conveyance_Total: Total conveyance (computed)
+                - WP_LOB: Wetted perimeter left overbank (ft or m)
+                - WP_Chan: Wetted perimeter channel
+                - WP_ROB: Wetted perimeter right overbank
+                - Wetted_Perimeter_Total: Total wetted perimeter (computed)
+                - Mann_N_LOB: Manning's n left overbank
+                - Mann_N_Chan: Manning's n channel
+                - Mann_N_ROB: Manning's n right overbank
+                - Top_Width: Total top width (ft or m)
+                - Top_Width_LOB: Top width left overbank
+                - Top_Width_Chan: Top width channel
+                - Top_Width_ROB: Top width right overbank
+                - Alpha: Velocity distribution coefficient
+                - Storage_Area: Storage area (sq ft or sq m)
+                - Beta: Momentum coefficient
+
+        Raises:
+            FileNotFoundError: If HDF file doesn't exist
+            ValueError: If cross section not found
+            IOError: If HDF read fails
+
+        Example:
+            >>> from ras_commander import HdfHydraulicTables
+            >>> from pathlib import Path
+            >>> import matplotlib.pyplot as plt
+            >>>
+            >>> # Extract property table
+            >>> hdf_file = Path("BaldEagle.g01.hdf")
+            >>> htab = HdfHydraulicTables.get_xs_htab(hdf_file, "Bald Eagle", "Loc Hav", "1")
+            >>>
+            >>> print(f"Property table: {len(htab)} elevations")
+            >>> print(f"Elevation range: {htab['Elevation'].min():.2f} to {htab['Elevation'].max():.2f}")
+            >>>
+            >>> # Plot area-elevation curve
+            >>> plt.figure(figsize=(10, 6))
+            >>> plt.plot(htab['Area_Total'], htab['Elevation'], 'b-', linewidth=2)
+            >>> plt.xlabel('Flow Area (sq ft)')
+            >>> plt.ylabel('Elevation (ft)')
+            >>> plt.title('Cross Section Area-Elevation Curve')
+            >>> plt.grid(True, alpha=0.3)
+            >>> plt.show()
+            >>>
+            >>> # Calculate hydraulic radius
+            >>> htab['Hydraulic_Radius'] = htab['Area_Total'] / htab['Wetted_Perimeter_Total']
+            >>> print(f"Max hydraulic radius: {htab['Hydraulic_Radius'].max():.2f} ft")
+
+        Notes:
+            - Property tables are in GEOMETRY HDF (.g##.hdf), not plan HDF
+            - Tables computed during geometry preprocessing in HEC-RAS
+            - Use for rating curves, stage-discharge, hydraulic analysis
+            - Total values (area, conveyance, WP) computed from LOB + Chan + ROB
+            - See HdfXsec.get_cross_sections() for XS geometry
+        """
+        hdf_path = Path(hdf_path)
+
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF file not found: {hdf_path}")
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Find cross section index
+                xs_index = HdfHydraulicTables._get_xs_index(hdf, river, reach, rs)
+
+                if xs_index is None:
+                    raise ValueError(
+                        f"Cross section not found in HDF: {river}/{reach}/RS {rs}\n"
+                        f"Check that river, reach, and RS names match exactly (case-sensitive)"
+                    )
+
+                # Extract property table
+                df = HdfHydraulicTables._extract_property_table(hdf, xs_index)
+
+                if df is None:
+                    raise IOError(f"Failed to extract property table for {river}/{reach}/RS {rs}")
+
+                logger.info(
+                    f"Extracted HTAB for {river}/{reach}/RS {rs}: "
+                    f"{len(df)} elevations, {len(df.columns)} properties"
+                )
+
+                return df
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading property table from HDF: {str(e)}")
+            raise IOError(f"Failed to read property table: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_all_xs_htabs(hdf_path: Union[str, Path]) -> Dict[Tuple[str, str, str], pd.DataFrame]:
+        """
+        Extract hydraulic property tables for ALL cross sections in geometry.
+
+        Batch extraction of property tables for all cross sections, returned as
+        a dictionary keyed by (river, reach, rs) tuples.
+
+        Parameters:
+            hdf_path (Union[str, Path]): Path to geometry HDF file (.g##.hdf)
+
+        Returns:
+            Dict[Tuple[str, str, str], pd.DataFrame]: Dictionary mapping
+                (river, reach, rs) tuples to property table DataFrames
+
+        Raises:
+            FileNotFoundError: If HDF file doesn't exist
+            IOError: If HDF read fails
+
+        Example:
+            >>> from ras_commander import HdfHydraulicTables
+            >>> from pathlib import Path
+            >>>
+            >>> # Extract all property tables
+            >>> hdf_file = Path("BaldEagle.g01.hdf")
+            >>> all_htabs = HdfHydraulicTables.get_all_xs_htabs(hdf_file)
+            >>>
+            >>> print(f"Extracted {len(all_htabs)} property tables")
+            >>>
+            >>> # Access specific cross section
+            >>> htab = all_htabs[("Bald Eagle", "Loc Hav", "1")]
+            >>>
+            >>> # Calculate statistics across all cross sections
+            >>> max_areas = {}
+            >>> for (river, reach, rs), htab in all_htabs.items():
+            ...     max_area = htab['Area_Total'].max()
+            ...     max_areas[rs] = max_area
+            >>>
+            >>> # Find cross section with largest area
+            >>> largest_rs = max(max_areas, key=max_areas.get)
+            >>> print(f"Largest XS: RS {largest_rs} with area {max_areas[largest_rs]:.1f} sq ft")
+
+        Notes:
+            - More efficient than calling get_xs_htab() repeatedly
+            - Returns all cross sections in single HDF file read
+            - Dictionary keys are (river, reach, rs) tuples for easy lookup
+        """
+        hdf_path = Path(hdf_path)
+
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF file not found: {hdf_path}")
+
+        try:
+            all_htabs = {}
+
+            with h5py.File(hdf_path, 'r') as hdf:
+                # Read attributes to get all river/reach/RS combinations
+                attrs_path = '/Geometry/Cross Sections/Attributes'
+                if attrs_path not in hdf:
+                    logger.error(f"Attributes path not found: {attrs_path}")
+                    return all_htabs
+
+                attrs = hdf[attrs_path][:]
+
+                # Extract property table for each cross section
+                for i, attr in enumerate(attrs):
+                    river = attr['River'].decode('utf-8').strip()
+                    reach = attr['Reach'].decode('utf-8').strip()
+                    rs = attr['RS'].decode('utf-8').strip()
+
+                    # Extract property table
+                    df = HdfHydraulicTables._extract_property_table(hdf, i)
+
+                    if df is not None:
+                        all_htabs[(river, reach, rs)] = df
+                    else:
+                        logger.warning(f"Failed to extract HTAB for {river}/{reach}/RS {rs}")
+
+            logger.info(f"Extracted {len(all_htabs)} property tables from {hdf_path.name}")
+
+            return all_htabs
+
+        except FileNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading property tables from HDF: {str(e)}")
+            raise IOError(f"Failed to read property tables: {str(e)}")
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -2736,7 +3191,7 @@ WHEN RAS LOADS THE HDF, IT IGNORES THE DATA IN THE TABLE AND REPLACES IT WITH NU
 '''
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfMesh.py
+File: c:\GH\ras-commander\ras_commander\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -3202,7 +3657,7 @@ class HdfMesh:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPipe.py
+File: c:\GH\ras-commander\ras_commander\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -3930,7 +4385,7 @@ class HdfPipe:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPlan.py
+File: c:\GH\ras-commander\ras_commander\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -4251,7 +4706,7 @@ class HdfPlan:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPlot.py
+File: c:\GH\ras-commander\ras_commander\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
@@ -4359,7 +4814,7 @@ class HdfPlot:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfPump.py
+File: c:\GH\ras-commander\ras_commander\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -4680,7 +5135,588 @@ class HdfPump:
             raise
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: c:\GH\ras-commander\ras_commander\HdfResultsBreach.py
+==================================================
+"""
+HdfResultsBreach: Dam breach results extraction from HEC-RAS HDF files.
+
+This module provides methods for extracting breach results from HDF output files,
+including time series data, summary statistics, and breach geometry evolution.
+
+Architectural Note:
+    - HdfResultsBreach: Breach RESULTS from HDF files (.p##.hdf)
+    - RasBreach: Breach PARAMETERS from plan files (.p##)
+    - HdfStruc: Structure data from HDF files (non-breach specific)
+
+This class focuses exclusively on HDF results extraction. For reading/writing breach
+parameters in plan files, use RasBreach class.
+
+Classes:
+    HdfResultsBreach: Static methods for breach results extraction
+
+Key Methods:
+    - get_structure_variables(): Extract structure flow variables (Total Flow, HW, TW)
+    - get_breaching_variables(): Extract breach geometry progression
+    - get_breach_timeseries(): Combined breach + structure time series (primary method)
+    - get_breach_summary(): Summary statistics (peaks, timing, final geometry)
+
+Examples:
+    >>> from ras_commander import HdfResultsBreach
+    >>>
+    >>> # Extract complete breach time series
+    >>> df = HdfResultsBreach.get_breach_timeseries("02", "Laxton_Dam")
+    >>>
+    >>> # Get summary statistics
+    >>> summary = HdfResultsBreach.get_breach_summary("02")
+    >>>
+    >>> # Plot breach evolution
+    >>> import matplotlib.pyplot as plt
+    >>> plt.plot(df['datetime'], df['bottom_width'])
+    >>> plt.ylabel('Breach Width (ft)')
+
+Author: ras-commander development team
+Date: 2025
+"""
+
+from typing import Union, Optional
+from pathlib import Path
+import h5py
+import pandas as pd
+import numpy as np
+
+from .Decorators import standardize_input, log_call
+from .HdfBase import HdfBase
+from .LoggingConfig import get_logger
+from .RasPrj import ras
+
+logger = get_logger(__name__)
+
+
+class HdfResultsBreach:
+    """
+    Handles dam breach results extraction from HEC-RAS HDF files.
+
+    This class provides comprehensive breach results extraction including:
+    - Time series data (flow, water levels, breach geometry)
+    - Summary statistics (peak values, timing)
+    - Structure-level flow variables
+
+    All methods are static and designed for plan-number-based access
+    via the @standardize_input decorator.
+
+    Architectural Note:
+        - Use HdfResultsBreach for extracting breach RESULTS from HDF files
+        - Use RasBreach for reading/writing breach PARAMETERS in plan files
+        - Use HdfStruc for structure listings and metadata
+    """
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_structure_variables(hdf_path: Path, structure_name: str = None, *,
+                                ras_object=None) -> pd.DataFrame:
+        """
+        Extract structure-level flow variables (Total Flow, Weir Flow, HW, TW).
+
+        This is the primary time series for overall structure performance.
+        Available for all SA/2D connections (with or without breach).
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file or plan number
+        structure_name : str, optional
+            Specific structure name. If None, returns all structures.
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        pd.DataFrame
+            Time series data with columns:
+            - datetime: Timestamp
+            - structure: Structure name (if multiple structures)
+            - total_flow: Total flow through structure (cfs or m³/s)
+            - weir_flow: Flow over weir (cfs or m³/s)
+            - hw: Headwater elevation at representative station (ft or m)
+            - tw: Tailwater elevation at representative station (ft or m)
+
+        Examples
+        --------
+        >>> # Get all structures
+        >>> df = HdfResultsBreach.get_structure_variables("02")
+
+        >>> # Get specific structure
+        >>> df = HdfResultsBreach.get_structure_variables("02", "Laxton_Dam")
+
+        >>> # Plot flow hydrograph
+        >>> import matplotlib.pyplot as plt
+        >>> plt.plot(df['datetime'], df['total_flow'])
+        >>> plt.ylabel('Flow (cfs)')
+
+        Notes
+        -----
+        - HW and TW are at representative stations defined in structure attributes
+        - For breach structures, use get_breaching_variables() for breach-specific data
+        - Units depend on project unit system (US Customary or SI)
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+                sa_conn_path = f"{base_path}/SA 2D Area Conn"
+
+                if sa_conn_path not in hdf_file:
+                    logger.warning(f"No SA 2D Area Conn data in {hdf_path.name}")
+                    return pd.DataFrame()
+
+                # Get timestamps
+                time_stamps = HdfBase.get_unsteady_timestamps(hdf_file)
+
+                # Get structure names
+                if structure_name:
+                    structures = [structure_name]
+                else:
+                    from .HdfStruc import HdfStruc
+                    structures = HdfStruc.list_sa2d_connections(hdf_path, ras_object=ras_object)
+
+                # Extract data for each structure
+                data_list = []
+                for struct in structures:
+                    struct_path = f"{sa_conn_path}/{struct}"
+                    var_path = f"{struct_path}/Structure Variables"
+
+                    if var_path not in hdf_file:
+                        logger.warning(f"Structure Variables not found for {struct}")
+                        continue
+
+                    # Extract dataset
+                    dataset = hdf_file[var_path][:]  # shape: (n_timesteps, 4)
+
+                    # Get variable names and units from attributes
+                    if 'Variable_Unit' in hdf_file[var_path].attrs:
+                        var_unit = hdf_file[var_path].attrs['Variable_Unit']
+                        # var_unit is array of [name, unit] pairs
+
+                    # Create DataFrame for this structure
+                    struct_data = pd.DataFrame({
+                        'datetime': time_stamps,
+                        'total_flow': dataset[:, 0],
+                        'weir_flow': dataset[:, 1],
+                        'hw': dataset[:, 2],
+                        'tw': dataset[:, 3]
+                    })
+
+                    if len(structures) > 1:
+                        struct_data.insert(1, 'structure', struct)
+
+                    data_list.append(struct_data)
+
+                # Combine all structures
+                if data_list:
+                    result_df = pd.concat(data_list, ignore_index=True)
+                    logger.info(f"Extracted {len(time_stamps)} timesteps for {len(structures)} structure(s)")
+                    return result_df
+                else:
+                    return pd.DataFrame()
+
+        except Exception as e:
+            logger.error(f"Error extracting structure variables: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_breaching_variables(hdf_path: Path, structure_name: str = None, *,
+                               ras_object=None) -> pd.DataFrame:
+        """
+        Extract breach-specific geometry progression and flow data.
+
+        Only available for structures with breach capability. This dataset shows
+        how the breach evolves over time (width, depth, flow, etc.).
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file or plan number
+        structure_name : str, optional
+            Specific structure name. If None, returns all breach structures.
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        pd.DataFrame
+            Breach progression data with columns:
+            - datetime: Timestamp
+            - structure: Structure name (if multiple structures)
+            - hw: Headwater stage at breach (ft or m)
+            - tw: Tailwater stage at breach (ft or m)
+            - bottom_width: Current breach bottom width (ft or m)
+            - bottom_elevation: Current breach bottom elevation (ft or m)
+            - left_slope: Left side slope (feet/feet or m/m)
+            - right_slope: Right side slope (feet/feet or m/m)
+            - breach_flow: Flow through breach opening (cfs or m³/s)
+            - breach_velocity: Average velocity through breach (ft/s or m/s)
+            - breach_flow_area: Flow area of breach (ft² or m²)
+
+        Examples
+        --------
+        >>> # Get breach progression for specific dam
+        >>> df = HdfResultsBreach.get_breaching_variables("02", "Laxton_Dam")
+
+        >>> # Plot breach width evolution
+        >>> import matplotlib.pyplot as plt
+        >>> plt.plot(df['datetime'], df['bottom_width'])
+        >>> plt.ylabel('Breach Width (ft)')
+
+        >>> # Get all breach structures
+        >>> df = HdfResultsBreach.get_breaching_variables("02")
+
+        Notes
+        -----
+        - Returns empty DataFrame if structure has no breach capability
+        - NaN values indicate breach not yet formed at that timestep
+        - Units depend on project unit system
+        - For total structure flow, use get_structure_variables()
+
+        Raises
+        ------
+        ValueError
+            If specified structure_name doesn't exist in HDF
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+                sa_conn_path = f"{base_path}/SA 2D Area Conn"
+
+                if sa_conn_path not in hdf_file:
+                    logger.warning(f"No SA 2D Area Conn data in {hdf_path.name}")
+                    return pd.DataFrame()
+
+                # Get timestamps
+                time_stamps = HdfBase.get_unsteady_timestamps(hdf_file)
+
+                # Get structure names with breach capability
+                from .HdfStruc import HdfStruc
+                breach_info = HdfStruc.get_sa2d_breach_info(hdf_path, ras_object=ras_object)
+                available_breach_structures = breach_info[breach_info['has_breach']]['structure'].tolist()
+
+                if not available_breach_structures:
+                    logger.warning("No breach structures found in HDF file")
+                    return pd.DataFrame()
+
+                # Determine structures to extract
+                if structure_name:
+                    if structure_name not in available_breach_structures:
+                        raise ValueError(f"Structure '{structure_name}' does not have breach capability. "
+                                       f"Available breach structures: {available_breach_structures}")
+                    structures = [structure_name]
+                else:
+                    structures = available_breach_structures
+
+                # Extract data for each structure
+                data_list = []
+                for struct in structures:
+                    breach_var_path = f"{sa_conn_path}/{struct}/Breaching Variables"
+
+                    # Extract dataset
+                    dataset = hdf_file[breach_var_path][:]  # shape: (n_timesteps, 9)
+
+                    # Get variable names and units from attributes
+                    var_unit = hdf_file[breach_var_path].attrs['Variable_Unit']
+                    # var_unit[0] = [b'Stage HW', b'ft'], etc.
+
+                    # Create DataFrame for this structure
+                    struct_data = pd.DataFrame({
+                        'datetime': time_stamps,
+                        'hw': dataset[:, 0],
+                        'tw': dataset[:, 1],
+                        'bottom_width': dataset[:, 2],
+                        'bottom_elevation': dataset[:, 3],
+                        'left_slope': dataset[:, 4],
+                        'right_slope': dataset[:, 5],
+                        'breach_flow': dataset[:, 6],
+                        'breach_velocity': dataset[:, 7],
+                        'breach_flow_area': dataset[:, 8]
+                    })
+
+                    if len(structures) > 1:
+                        struct_data.insert(1, 'structure', struct)
+
+                    data_list.append(struct_data)
+
+                # Combine all structures
+                if data_list:
+                    result_df = pd.concat(data_list, ignore_index=True)
+                    logger.info(f"Extracted breach variables for {len(structures)} structure(s), "
+                              f"{len(time_stamps)} timesteps")
+                    return result_df
+                else:
+                    return pd.DataFrame()
+
+        except Exception as e:
+            logger.error(f"Error extracting breaching variables: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_breach_timeseries(hdf_path: Path, structure_name: str = None, *,
+                             ras_object=None) -> pd.DataFrame:
+        """
+        Extract combined breach and structure time series (primary user function).
+
+        This is a convenience function that combines data from both:
+        - Structure Variables (total flow, weir flow)
+        - Breaching Variables (breach geometry and breach-specific flow)
+
+        Provides a complete picture of dam breach behavior over time.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file or plan number
+        structure_name : str, optional
+            Specific structure name. If None, returns all breach structures.
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        pd.DataFrame
+            Combined time series with columns:
+            - datetime: Timestamp
+            - structure: Structure name (if multiple structures)
+            - total_flow: Total flow through structure (cfs)
+            - weir_flow: Flow over remaining weir (cfs)
+            - breach_flow: Flow through breach opening (cfs)
+            - hw: Headwater elevation (ft)
+            - tw: Tailwater elevation (ft)
+            - bottom_width: Breach width (ft)
+            - bottom_elevation: Breach bottom elevation (ft)
+            - left_slope: Left side slope
+            - right_slope: Right side slope
+            - breach_velocity: Breach velocity (ft/s)
+            - breach_flow_area: Breach flow area (ft²)
+
+        Examples
+        --------
+        >>> # Extract all breach data for plan 02
+        >>> df = HdfResultsBreach.get_breach_timeseries("02")
+
+        >>> # Get specific dam
+        >>> df = HdfResultsBreach.get_breach_timeseries("02", "Laxton_Dam")
+
+        >>> # Visualize
+        >>> import matplotlib.pyplot as plt
+        >>> fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        >>>
+        >>> # Flow hydrograph
+        >>> ax1.plot(df['datetime'], df['total_flow'], label='Total Flow')
+        >>> ax1.plot(df['datetime'], df['breach_flow'], label='Breach Flow')
+        >>> ax1.set_ylabel('Flow (cfs)')
+        >>> ax1.legend()
+        >>>
+        >>> # Breach width evolution
+        >>> ax2.plot(df['datetime'], df['bottom_width'])
+        >>> ax2.set_ylabel('Breach Width (ft)')
+        >>> ax2.set_xlabel('Time')
+        >>> plt.tight_layout()
+
+        Notes
+        -----
+        - Only returns structures with breach capability
+        - For non-breach SA/2D connections, use get_structure_variables()
+        - NaN values in breach columns indicate breach not yet formed
+
+        See Also
+        --------
+        get_structure_variables : Structure-level data only
+        get_breaching_variables : Breach-specific data only
+        """
+        try:
+            # Get structure variables (total flow, weir flow, hw, tw)
+            struct_df = HdfResultsBreach.get_structure_variables(hdf_path, structure_name, ras_object=ras_object)
+
+            # Get breaching variables (breach geometry and breach flow)
+            breach_df = HdfResultsBreach.get_breaching_variables(hdf_path, structure_name, ras_object=ras_object)
+
+            if struct_df.empty:
+                logger.warning("No structure data available")
+                return pd.DataFrame()
+
+            if breach_df.empty:
+                logger.warning("No breach data available, returning structure data only")
+                return struct_df
+
+            # Determine merge columns
+            merge_cols = ['datetime']
+            if 'structure' in struct_df.columns and 'structure' in breach_df.columns:
+                merge_cols.append('structure')
+
+            # Merge the two dataframes
+            combined_df = pd.merge(
+                struct_df,
+                breach_df[['datetime', 'structure', 'bottom_width', 'bottom_elevation',
+                          'left_slope', 'right_slope', 'breach_flow', 'breach_velocity',
+                          'breach_flow_area']] if 'structure' in breach_df.columns
+                        else breach_df[['datetime', 'bottom_width', 'bottom_elevation',
+                                       'left_slope', 'right_slope', 'breach_flow',
+                                       'breach_velocity', 'breach_flow_area']],
+                on=merge_cols,
+                how='left'  # Keep all structure timesteps, even if no breach data
+            )
+
+            # Reorder columns for better user experience
+            col_order = ['datetime']
+            if 'structure' in combined_df.columns:
+                col_order.append('structure')
+            col_order.extend(['total_flow', 'weir_flow', 'breach_flow', 'hw', 'tw',
+                            'bottom_width', 'bottom_elevation', 'left_slope', 'right_slope',
+                            'breach_velocity', 'breach_flow_area'])
+
+            combined_df = combined_df[col_order]
+
+            logger.info(f"Created combined breach timeseries with {len(combined_df)} rows")
+            return combined_df
+
+        except Exception as e:
+            logger.error(f"Error creating combined breach timeseries: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_breach_summary(hdf_path: Path, structure_name: str = None, *,
+                          ras_object=None) -> pd.DataFrame:
+        """
+        Extract breach summary statistics (peak values, timing, final geometry).
+
+        Provides quick overview of breach performance without full time series.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file or plan number
+        structure_name : str, optional
+            Specific structure. If None, returns all breach structures.
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary statistics with columns:
+            - structure: Structure name
+            - breach_initiated: Boolean, True if breach formed
+            - breach_at_time: Time of breach initiation (days)
+            - breach_at_date: Date/time of breach
+            - max_total_flow: Maximum total flow (cfs)
+            - max_total_flow_time: Time of max total flow
+            - max_breach_flow: Maximum breach flow (cfs)
+            - max_breach_flow_time: Time of max breach flow
+            - final_breach_width: Final breach width (ft)
+            - final_breach_depth: Final breach depth (ft)
+            - max_hw: Maximum headwater elevation (ft)
+            - max_tw: Maximum tailwater elevation (ft)
+
+        Examples
+        --------
+        >>> summary = HdfResultsBreach.get_breach_summary("02")
+        >>> print(summary[['structure', 'max_total_flow', 'final_breach_width']])
+
+        Notes
+        -----
+        - Returns summary even if breach didn't fully form (NaN for incomplete data)
+        - Times are pandas datetime objects
+        - If only 1 timestep available, "max" values are that single value
+        """
+        try:
+            # Get full timeseries
+            ts_df = HdfResultsBreach.get_breach_timeseries(hdf_path, structure_name, ras_object=ras_object)
+
+            if ts_df.empty:
+                return pd.DataFrame()
+
+            # Get breach info
+            from .HdfStruc import HdfStruc
+            info_df = HdfStruc.get_sa2d_breach_info(hdf_path, ras_object=ras_object)
+
+            # Determine grouping
+            if 'structure' in ts_df.columns:
+                structures = ts_df['structure'].unique()
+            else:
+                # Single structure, create pseudo-structure column
+                structures = [structure_name] if structure_name else ['Unknown']
+                ts_df['structure'] = structures[0]
+
+            summary_list = []
+            for struct in structures:
+                struct_ts = ts_df[ts_df['structure'] == struct].copy()
+                struct_info = info_df[info_df['structure'] == struct].iloc[0] if len(info_df) > 0 else {}
+
+                # Calculate summary stats
+                summary = {
+                    'structure': struct,
+                    'breach_initiated': struct_info.get('has_breach', False),
+                    'breach_at_time': struct_info.get('breach_at_time', None),
+                    'breach_at_date': struct_info.get('breach_at_date', None),
+                }
+
+                # Max flows and timing
+                if 'total_flow' in struct_ts.columns:
+                    max_total_idx = struct_ts['total_flow'].idxmax()
+                    summary['max_total_flow'] = struct_ts.loc[max_total_idx, 'total_flow']
+                    summary['max_total_flow_time'] = struct_ts.loc[max_total_idx, 'datetime']
+
+                if 'breach_flow' in struct_ts.columns:
+                    # Filter out NaN values
+                    valid_breach = struct_ts[struct_ts['breach_flow'].notna()]
+                    if len(valid_breach) > 0:
+                        max_breach_idx = valid_breach['breach_flow'].idxmax()
+                        summary['max_breach_flow'] = valid_breach.loc[max_breach_idx, 'breach_flow']
+                        summary['max_breach_flow_time'] = valid_breach.loc[max_breach_idx, 'datetime']
+                    else:
+                        summary['max_breach_flow'] = np.nan
+                        summary['max_breach_flow_time'] = None
+
+                # Final breach geometry (last non-NaN value)
+                if 'bottom_width' in struct_ts.columns:
+                    valid_width = struct_ts[struct_ts['bottom_width'].notna()]
+                    summary['final_breach_width'] = valid_width['bottom_width'].iloc[-1] if len(valid_width) > 0 else np.nan
+
+                if 'bottom_elevation' in struct_ts.columns:
+                    valid_elev = struct_ts[struct_ts['bottom_elevation'].notna()]
+                    if len(valid_elev) > 0:
+                        final_bottom = valid_elev['bottom_elevation'].iloc[-1]
+                        # Calculate depth if we have HW
+                        if 'hw' in struct_ts.columns:
+                            final_hw = struct_ts['hw'].iloc[-1]
+                            summary['final_breach_depth'] = final_hw - final_bottom
+                        else:
+                            summary['final_breach_depth'] = np.nan
+                    else:
+                        summary['final_breach_depth'] = np.nan
+
+                # Max water levels
+                if 'hw' in struct_ts.columns:
+                    summary['max_hw'] = struct_ts['hw'].max()
+                if 'tw' in struct_ts.columns:
+                    summary['max_tw'] = struct_ts['tw'].max()
+
+                summary_list.append(summary)
+
+            result_df = pd.DataFrame(summary_list)
+            logger.info(f"Generated breach summary for {len(structures)} structure(s)")
+            return result_df
+
+        except Exception as e:
+            logger.error(f"Error generating breach summary: {e}")
+            raise
+
+==================================================
+
+File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -5665,7 +6701,7 @@ class HdfResultsMesh:
             return xr.Dataset()
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: c:\GH\ras-commander\ras_commander\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -5692,6 +6728,9 @@ Available Functions:
         - get_steady_profile_names: Extract steady state profile names
         - get_steady_wse: Extract WSE data for steady state profiles
         - get_steady_info: Extract steady flow attributes and metadata
+
+    Computation Messages:
+        - get_compute_messages: Extract computation messages from HDF (with .txt fallback)
 
 Note:
     All methods are static and designed to be used without class instantiation.
@@ -6379,9 +7418,133 @@ class HdfResultsPlan:
             raise KeyError(f"Error accessing steady state info: {str(e)}")
         except Exception as e:
             raise RuntimeError(f"Error reading steady state info: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_compute_messages(hdf_path: Path) -> str:
+        """
+        Read computation messages from HDF file with fallback to .txt file.
+
+        Extracts computation messages from the HDF Results/Summary structure.
+        This includes detailed information about the computation process,
+        warnings, errors, convergence information, and performance metrics.
+
+        If HDF path not found, falls back to .txt file extraction using RasControl.
+
+        Args:
+            hdf_path: Path to plan HDF file (or plan number string if using
+                     standardize_input decorator, which resolves to HDF path)
+
+        Returns:
+            String containing computation messages, or empty string if unavailable
+
+        Example:
+            >>> from ras_commander import init_ras_project, HdfResultsPlan
+            >>> init_ras_project(r"/path/to/project", "6.5")
+            >>> msgs = HdfResultsPlan.get_compute_messages("01")
+            >>> print(msgs)
+
+        Note:
+            Modern HEC-RAS versions (6.x+) store computation messages in HDF:
+            /Results/Summary/Compute Messages (text)
+
+            Older versions (pre-6.x) use .txt files which are accessed via
+            fallback to RasControl.get_comp_msgs()
+
+            Function naming follows HDF structure conventions (get_compute_messages)
+            vs RasControl legacy naming (get_comp_msgs) to reflect technological lineage.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Define HDF path for compute messages
+                compute_msgs_path = "Results/Summary/Compute Messages (text)"
+
+                # Check if path exists in HDF
+                if compute_msgs_path not in hdf_file:
+                    logger.warning(
+                        f"Compute Messages not found in HDF at '{compute_msgs_path}', "
+                        f"falling back to .txt file extraction"
+                    )
+
+                    # Fallback to .txt file using RasControl
+                    try:
+                        # Late import to avoid circular dependency
+                        from .RasControl import RasControl
+
+                        # Extract plan info from HDF path
+                        # e.g., "C:/path/BaldEagle.p10.hdf" -> use path for RasControl
+                        txt_contents = RasControl.get_comp_msgs(hdf_path)
+                        if txt_contents:
+                            logger.info(f"Successfully retrieved {len(txt_contents)} characters from .txt file")
+                            return txt_contents
+                    except Exception as e:
+                        logger.debug(f".txt file fallback failed: {e}")
+
+                    # Both methods failed
+                    logger.debug(
+                        f"No computation messages found in HDF or .txt sources for {hdf_path.name}"
+                    )
+                    return ""
+
+                # Read dataset from HDF
+                logger.info(f"Reading computation messages from HDF: {hdf_path.name}")
+                dataset = hdf_file[compute_msgs_path]
+                data = dataset[()]
+
+                # Decode byte string to UTF-8
+                if isinstance(data, bytes):
+                    contents = data.decode('utf-8', errors='ignore')
+                elif isinstance(data, np.ndarray) and len(data) > 0:
+                    # Handle array of byte strings
+                    if isinstance(data[0], bytes):
+                        contents = data[0].decode('utf-8', errors='ignore')
+                    else:
+                        contents = str(data[0])
+                else:
+                    contents = str(data)
+
+                logger.info(f"Successfully extracted {len(contents)} characters from HDF")
+                return contents
+
+        except FileNotFoundError:
+            logger.debug(f"HDF file not found: {hdf_path}")
+
+            # Try .txt fallback
+            try:
+                from .RasControl import RasControl
+                txt_contents = RasControl.get_comp_msgs(hdf_path)
+                if txt_contents:
+                    logger.warning(
+                        f"HDF file not found, successfully retrieved computation messages from .txt file"
+                    )
+                    return txt_contents
+            except Exception as e:
+                logger.debug(f".txt file fallback failed: {e}")
+
+            logger.debug(f"No computation messages found for {hdf_path.name}")
+            return ""
+
+        except Exception as e:
+            logger.debug(f"Error reading computation messages from HDF: {str(e)}")
+
+            # Try .txt fallback on any HDF error
+            try:
+                from .RasControl import RasControl
+                txt_contents = RasControl.get_comp_msgs(hdf_path)
+                if txt_contents:
+                    logger.warning(
+                        f"HDF extraction failed, successfully retrieved computation messages from .txt file"
+                    )
+                    return txt_contents
+            except Exception as fallback_error:
+                logger.debug(f".txt file fallback failed: {fallback_error}")
+
+            logger.debug(f"No computation messages found for {hdf_path.name}")
+            return ""
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: c:\GH\ras-commander\ras_commander\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -6568,7 +7731,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -6885,7 +8048,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfStruc.py
+File: c:\GH\ras-commander\ras_commander\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -7180,14 +8343,153 @@ class HdfStruc:
                 
                 # Create DataFrame with a single row index
                 return pd.DataFrame(attrs_dict, index=[0])
-                
+
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
             return pd.DataFrame()
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def list_sa2d_connections(hdf_path: Path, *, ras_object=None) -> List[str]:
+        """
+        List all SA/2D Area Connection structures in HDF results file.
+
+        This includes both breach structures and regular SA/2D connections with
+        time series results.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file or plan number
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        List[str]
+            Names of all SA/2D Area Connection structures with time series results.
+            Returns empty list if no SA/2D connections found.
+
+        Examples
+        --------
+        >>> structures = HdfStruc.list_sa2d_connections("02")
+        >>> print(structures)
+        ['Laxton_Dam', 'PineCreek#1_Dam', 'US_2DArea_Res2']
+
+        Notes
+        -----
+        - Not all structures returned have breach capability
+        - Use get_sa2d_breach_info() to determine which have "Breaching Variables"
+        - Empty list returned if no SA/2D connections in results
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/SA 2D Area Conn"
+
+                if base_path not in hdf_file:
+                    logger.warning(f"No SA 2D Area Conn data found in {hdf_path.name}")
+                    return []
+
+                # List all groups (structure names) under SA 2D Area Conn
+                structures = list(hdf_file[base_path].keys())
+                logger.info(f"Found {len(structures)} SA/2D connection structures: {structures}")
+                return structures
+
+        except Exception as e:
+            logger.error(f"Error listing SA/2D connection structures: {e}")
+            return []
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_sa2d_breach_info(hdf_path: Path, *, ras_object=None) -> pd.DataFrame:
+        """
+        Get information about which SA/2D connection structures have breach capability.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file or plan number
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns:
+            - structure: Structure name
+            - has_breach: Boolean, True if "Breaching Variables" dataset exists
+            - breach_at_time: Time of breach initiation (if available)
+            - breach_at_date: Date/time of breach (if available)
+            - centerline_breach: Centerline station for breach (if available)
+
+        Examples
+        --------
+        >>> info = HdfStruc.get_sa2d_breach_info("02")
+        >>> breach_dams = info[info['has_breach']]['structure'].tolist()
+        >>> print(f"Breach structures: {breach_dams}")
+
+        Notes
+        -----
+        - Returns empty DataFrame if no SA/2D connections found
+        - Only structures with "Breaching Variables" have has_breach=True
+        - Use in conjunction with RasBreach for reading/modifying breach parameters
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                structures = HdfStruc.list_sa2d_connections(hdf_path, ras_object=ras_object)
+
+                if not structures:
+                    return pd.DataFrame()
+
+                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/SA 2D Area Conn"
+
+                info_list = []
+                for struct_name in structures:
+                    struct_path = f"{base_path}/{struct_name}"
+                    breach_var_path = f"{struct_path}/Breaching Variables"
+
+                    info = {'structure': struct_name}
+
+                    # Check if breach variables exist
+                    if breach_var_path in hdf_file:
+                        info['has_breach'] = True
+
+                        # Extract breach metadata from attributes
+                        breach_dataset = hdf_file[breach_var_path]
+                        if 'Breach at' in breach_dataset.attrs:
+                            breach_at = breach_dataset.attrs['Breach at']
+                            info['breach_at_date'] = breach_at.decode('utf-8') if isinstance(breach_at, bytes) else breach_at
+                        else:
+                            info['breach_at_date'] = None
+
+                        if 'Breach at Time (Days)' in breach_dataset.attrs:
+                            info['breach_at_time'] = float(breach_dataset.attrs['Breach at Time (Days)'])
+                        else:
+                            info['breach_at_time'] = None
+
+                        if 'Centerline Breach' in breach_dataset.attrs:
+                            info['centerline_breach'] = float(breach_dataset.attrs['Centerline Breach'])
+                        else:
+                            info['centerline_breach'] = None
+                    else:
+                        info['has_breach'] = False
+                        info['breach_at_date'] = None
+                        info['breach_at_time'] = None
+                        info['centerline_breach'] = None
+
+                    info_list.append(info)
+
+                return pd.DataFrame(info_list)
+
+        except Exception as e:
+            logger.error(f"Error getting SA/2D breach info: {e}")
+            raise
+
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfUtils.py
+File: c:\GH\ras-commander\ras_commander\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -7626,7 +8928,7 @@ class HdfUtils:
     
 ==================================================
 
-File: C:\GH\ras-commander\ras_commander\HdfXsec.py
+File: c:\GH\ras-commander\ras_commander\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec

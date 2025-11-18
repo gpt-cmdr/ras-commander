@@ -75,7 +75,12 @@ research/**/__pycache__/
 /research
 /tools
 /examples/working
+/working/
+/ras_agent/
 /examples/hyetographs
 examples/flood_polygons.geojson
 ras-commander_logo.png
 /tests
+/.claude
+nul
+examples/example_projects.csv

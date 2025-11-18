@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/GH/ras-commander/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

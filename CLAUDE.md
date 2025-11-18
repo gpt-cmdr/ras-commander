@@ -86,8 +86,11 @@ Important highlights from AGENTS.md:
 - Multiple project support via separate `RasPrj` instances
 
 **File Operations Classes**:
-- `RasPlan` - Plan file operations and modifications  
-- `RasGeo` - Geometry file operations
+- `RasPlan` - Plan file operations and modifications
+- `RasGeo` - Geometry file operations (2D Manning's n land cover)
+- `RasGeometry` - Geometry parsing (1D cross sections, storage, connections) **NEW**
+- `RasGeometryUtils` - Geometry parsing utilities (fixed-width, count interpretation) **NEW**
+- `RasBreach` - Breach parameter modification in plan files
 - `RasUnsteady` - Unsteady flow file management
 - `RasUtils` - Utility functions for file operations
 - `RasMap` - RASMapper configuration parsing
@@ -96,7 +99,10 @@ Important highlights from AGENTS.md:
 **HDF Data Processing Classes**:
 - `HdfBase`, `HdfPlan`, `HdfMesh` - Core HDF file operations
 - `HdfResults*` classes - Results processing and analysis (unsteady and **steady state**)
-- `HdfStruc`, `HdfPipe`, `HdfPump` - Infrastructure analysis
+- `HdfStruc` - Structure data and SA/2D connection listings
+- `HdfResultsBreach` - Dam breach results extraction from HDF files **NEW**
+- `HdfHydraulicTables` - Cross section property tables (HTAB) **NEW**
+- `HdfPipe`, `HdfPump` - Infrastructure analysis
 - `HdfPlot`, `HdfResultsPlot` - Visualization utilities
 
 **New Steady State Support** (as of v0.80.3+):
@@ -105,6 +111,48 @@ Important highlights from AGENTS.md:
 - `HdfResultsPlan.get_steady_wse()` - Extract water surface elevations for profiles
 - `HdfResultsPlan.get_steady_info()` - Extract steady flow metadata
 - See `examples/19_steady_flow_analysis.ipynb` for complete usage examples
+
+**New Geometry Parsing Support** (as of v0.81.0+):
+- `RasGeometry` - Comprehensive geometry parsing and modification
+  - Cross sections: `get_cross_sections()`, `get_station_elevation()`, `set_station_elevation()`
+  - Manning's n: `get_mannings_n()`, bank stations, expansion/contraction coefficients
+  - Storage areas: `get_storage_areas()`, `get_storage_elevation_volume()`
+  - Lateral structures: `get_lateral_structures()`, `get_lateral_weir_profile()`
+  - SA/2D connections: `get_connections()`, `get_connection_weir_profile()`, `get_connection_gates()`
+- `HdfHydraulicTables` - Extract property tables (HTAB) from preprocessed geometry HDF
+  - `get_xs_htab()` - Area, conveyance, wetted perimeter vs elevation
+  - Enables rating curves without re-running HEC-RAS
+- **Critical Features**: Automatic bank station interpolation, 450 point limit enforcement
+- See `research/geometry file parsing/api-geom.md` for complete API reference
+- See `research/geometry file parsing/example_notebooks/02_complete_geometry_operations.ipynb`
+
+**Dam Breach Operations** (as of v0.81.0+):
+- **Architectural Pattern**: Plain text (Ras*) vs HDF (Hdf*) separation
+- `RasBreach` - Breach PARAMETERS in plan files (.p##)
+  - `list_breach_structures_plan()` - List structures from plan file
+  - `read_breach_block()` - Read breach parameters
+  - `update_breach_block()` - Modify breach parameters
+- `HdfResultsBreach` - Breach RESULTS from HDF files (.p##.hdf)
+  - `get_breach_timeseries()` - Complete time series (flow, stage, geometry)
+  - `get_breach_summary()` - Summary statistics (peaks, timing)
+  - `get_breaching_variables()` - Breach geometry evolution
+  - `get_structure_variables()` - Structure flow variables
+- **Important**: Use plan file names for parameters, HDF may have different naming
+- See `examples/18_breach_results_extraction.ipynb` for workflow examples
+
+**DSS File Operations** (as of v0.82.0+):
+- `RasDss` - Read HEC-DSS files (V6 and V7) for boundary conditions **NEW**
+  - `get_catalog(dss_file)` - List all paths in DSS file
+  - `read_timeseries(dss_file, pathname)` - Read time series as DataFrame
+  - `read_multiple_timeseries(dss_file, pathnames)` - Batch read multiple paths
+  - `extract_boundary_timeseries(boundaries_df, ras_object)` - Auto-extract all DSS boundary data
+  - `get_info(dss_file)` - File summary and statistics
+- **Technology**: HEC Monolith libraries (auto-downloaded on first use, ~17 MB)
+- **Java Bridge**: pyjnius (pip installable, lazy loaded)
+- **Dependencies**: Requires `pip install pyjnius` and Java 8+ (JRE or JDK)
+- **Lazy Loading**: No overhead unless DSS methods are called
+- **Tested**: 84 DSS files (6.64 GB), 88% success rate, handles files up to 1.3 GB
+- See `examples/22_dss_boundary_extraction.ipynb` for complete workflow
 
 ### Execution Modes
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control
