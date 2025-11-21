@@ -148,7 +148,7 @@ class RasGeo:
         Returns:
         --------
         pandas.DataFrame
-            DataFrame with Table Number, Land Cover Name, and Base Manning's n Value
+            DataFrame with Table Number, Land Cover Name, and Base Mannings n Value
             
         Example:
         --------
@@ -205,6 +205,8 @@ class RasGeo:
                     continue
         
         # Create DataFrame
+        # Note: Column uses "Mannings" (no apostrophe) for simplicity in DataFrame operations,
+        # though HEC-RAS HDF files use "Manning's n" (with apostrophe) as the proper technical term.
         if base_table_rows:
             df = pd.DataFrame(base_table_rows, columns=['Table Number', 'Land Cover Name', 'Base Mannings n Value'])
             return df
@@ -307,7 +309,7 @@ class RasGeo:
         geom_file_path : str or Path
             Path to the geometry file (.g##)
         mannings_data : DataFrame
-            DataFrame with columns 'Table Number', 'Land Cover Name', and 'Base Manning\'s n Value'
+            DataFrame with columns 'Table Number', 'Land Cover Name', and 'Base Mannings n Value'
         
         Returns:
         --------
@@ -381,7 +383,7 @@ class RasGeo:
         
         # Add base table entries
         for _, row in mannings_data.iterrows():
-            new_content.append(f"{row['Land Cover Name']},{row['Base Manning''s n Value']}\n")
+            new_content.append(f"{row['Land Cover Name']},{row['Base Mannings n Value']}\n")
         
         # Replace the section in the original file
         updated_lines = lines[:start_idx] + new_content + lines[end_idx:]
