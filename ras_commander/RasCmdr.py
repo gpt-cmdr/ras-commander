@@ -68,23 +68,6 @@ logger = get_logger(__name__)
 
 # Module code starts here
 
-# TODO: Future Enhancements
-# 1. Alternate Run Mode for compute_plan and compute_parallel:
-#    - Use Powershell to execute HEC-RAS command
-#    - Hide RAS window and all child windows
-#    - Note: This mode may prevent execution if the plan has a popup
-#    - Intended for background runs or popup-free scenarios
-#    - Limit to non-commercial use
-#
-# 2. Implement compute_plan_remote:
-#    - Execute compute_plan on a remote machine via psexec
-#    - Use keyring package for secure credential storage
-#    - Implement psexec command for remote HEC-RAS execution
-#    - Create remote_worker objects to store machine details:
-#      (machine name, username, password, ras_exe_path, local folder path, etc.)
-#    - Develop RasRemote class for remote_worker management and abstractions
-#    - Implement compute_plan_remote in RasCmdr as a thin wrapper around RasRemote
-#      (similar to existing compute_plan functions but for remote execution)
 
 
 class RasCmdr:
