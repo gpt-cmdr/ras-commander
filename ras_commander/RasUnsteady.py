@@ -246,11 +246,13 @@ class RasUnsteady:
         
         unsteady_path = Path(unsteady_file)
         table_types = [
-            'Flow Hydrograph=', 
-            'Gate Openings=', 
+            'Flow Hydrograph=',
+            'Gate Openings=',
             'Stage Hydrograph=',
-            'Uniform Lateral Inflow=', 
-            'Lateral Inflow Hydrograph='
+            'Uniform Lateral Inflow=',
+            'Lateral Inflow Hydrograph=',
+            'Precipitation Hydrograph=',
+            'Rating Curve='
         ]
         
         try:
@@ -454,15 +456,17 @@ class RasUnsteady:
             print(f"Identified {len(tables)} tables in the unsteady flow file.")
         """
         table_types = [
-            'Flow Hydrograph=', 
-            'Gate Openings=', 
+            'Flow Hydrograph=',
+            'Gate Openings=',
             'Stage Hydrograph=',
-            'Uniform Lateral Inflow=', 
-            'Lateral Inflow Hydrograph='
+            'Uniform Lateral Inflow=',
+            'Lateral Inflow Hydrograph=',
+            'Precipitation Hydrograph=',
+            'Rating Curve='
         ]
         tables = []
         current_table = None
-        
+
         for i, line in enumerate(lines):
             if any(table_type in line for table_type in table_types):
                 if current_table:

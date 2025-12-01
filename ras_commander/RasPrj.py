@@ -578,8 +578,7 @@ class RasPrj:
     def _process_default_entry(self) -> dict:
         """Process default entry data."""
         return {
-            'unsteady_number': None,
-            'geometry_number': None
+            'unsteady_number': None
         }
 
     def _process_plan_entry(self, entry_number: str, full_path: str) -> dict:
@@ -1062,6 +1061,8 @@ class RasPrj:
         Supported boundary condition types include:
         - Flow Hydrograph
         - Stage Hydrograph
+        - Precipitation Hydrograph
+        - Rating Curve
         - Normal Depth
         - Lateral Inflow Hydrograph
         - Uniform Lateral Inflow Hydrograph
@@ -1149,6 +1150,8 @@ class RasPrj:
             'Lateral Inflow Hydrograph=': 'Lateral Inflow Hydrograph',
             'Uniform Lateral Inflow Hydrograph=': 'Uniform Lateral Inflow Hydrograph',
             'Stage Hydrograph=': 'Stage Hydrograph',
+            'Precipitation Hydrograph=': 'Precipitation Hydrograph',
+            'Rating Curve=': 'Rating Curve',
             'Friction Slope=': 'Normal Depth',
             'Gate Name=': 'Gate Opening'
         }
@@ -1271,72 +1274,6 @@ class RasPrj:
             return df[cols_to_return]
         
         return df
-
-    @log_call
-    def _get_prj_entries(self, entry_type):
-        """
-        Extract entries of a specific type from the HEC-RAS project file.
-        """
-        entries = []
-        pattern = re.compile(rf"{entry_type} File=(\w+)")
-
-        try:
-            with open(self.prj_file, 'r') as file:
-                for line in file:
-                    match = pattern.match(line.strip())
-                    if match:
-                        file_name = match.group(1)
-                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
-                        entry = self._create_entry(entry_type, file_name, full_path)
-                        entries.append(entry)
-        
-            return self._format_dataframe(pd.DataFrame(entries), entry_type)
-        
-        except Exception as e:
-            logger.error(f"Error in _get_prj_entries for {entry_type}: {e}")
-            raise
-
-    def _create_entry(self, entry_type, file_name, full_path):
-        """Helper method to create entry dictionary."""
-        entry_number = file_name[1:]
-        entry = {
-            f'{entry_type.lower()}_number': entry_number,
-            'full_path': full_path,
-            'unsteady_number': None,
-            'geometry_number': None
-        }
-        
-        if entry_type == 'Unsteady':
-            entry['unsteady_number'] = entry_number
-            entry.update(self._parse_unsteady_file(Path(full_path)))
-        elif entry_type == 'Plan':
-            self._update_plan_entry(entry, entry_number, full_path)
-        
-        return entry
-
-    def _update_plan_entry(self, entry, entry_number, full_path):
-        """Helper method to update plan entry with additional information."""
-        plan_info = self._parse_plan_file(Path(full_path))
-        if plan_info:
-            # Handle Flow File
-            flow_file = plan_info.get('Flow File')
-            if flow_file:
-                if flow_file.startswith('u'):
-                    entry.update({'unsteady_number': flow_file[1:], 'Flow File': flow_file[1:]})
-                else:
-                    entry['Flow File'] = flow_file[1:] if flow_file.startswith('f') else None
-            
-            # Handle Geom File
-            geom_file = plan_info.get('Geom File')
-            if geom_file and geom_file.startswith('g'):
-                entry.update({'geometry_number': geom_file[1:], 'Geom File': geom_file[1:]})
-            
-            # Add remaining plan info
-            entry.update({k: v for k, v in plan_info.items() if k not in ['Flow File', 'Geom File']})
-            
-            # Add HDF results path
-            hdf_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
-            entry['HDF_Results_Path'] = str(hdf_path) if hdf_path.exists() else None
 
 
 # Create a global instance named 'ras'
