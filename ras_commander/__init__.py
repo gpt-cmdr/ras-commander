@@ -21,12 +21,18 @@ from .RasPlan import RasPlan
 from .RasGeo import RasGeo
 from .RasGeometry import RasGeometry
 from .RasGeometryUtils import RasGeometryUtils
+from .RasStruct import RasStruct
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .M3Model import M3Model
 from .RasCmdr import RasCmdr
 from .RasControl import RasControl
+from .RasRemote import (
+    RasWorker, PsexecWorker, LocalWorker, SshWorker, WinrmWorker,
+    DockerWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker,
+    init_ras_worker, compute_parallel_remote
+)
 from .RasMap import RasMap
 from .RasGuiAutomation import RasGuiAutomation
 from .HdfFluvialPluvial import HdfFluvialPluvial
@@ -57,18 +63,23 @@ from .HdfResultsPlot import HdfResultsPlot
 __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
-    'RasPlan', 'RasGeo', 'RasGeometry', 'RasGeometryUtils', 'RasUnsteady', 'RasUtils',
+    'RasPlan', 'RasGeo', 'RasGeometry', 'RasGeometryUtils', 'RasStruct', 'RasUnsteady', 'RasUtils',
     'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasGuiAutomation', 'HdfFluvialPluvial',
-    
+
+    # Remote execution
+    'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
+    'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
+    'init_ras_worker', 'compute_parallel_remote',
+
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
-    
+
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',
-    
+
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
 ]
