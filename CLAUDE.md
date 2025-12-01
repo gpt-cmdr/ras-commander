@@ -88,8 +88,9 @@ Important highlights from AGENTS.md:
 **File Operations Classes**:
 - `RasPlan` - Plan file operations and modifications
 - `RasGeo` - Geometry file operations (2D Manning's n land cover)
-- `RasGeometry` - Geometry parsing (1D cross sections, storage, connections) **NEW**
-- `RasGeometryUtils` - Geometry parsing utilities (fixed-width, count interpretation) **NEW**
+- `RasGeometry` - Geometry parsing (1D cross sections, storage, connections)
+- `RasGeometryUtils` - Geometry parsing utilities (fixed-width, count interpretation)
+- `RasStruct` - Inline structure parsing (bridges, culverts, inline weirs) **NEW**
 - `RasBreach` - Breach parameter modification in plan files
 - `RasUnsteady` - Unsteady flow file management
 - `RasUtils` - Utility functions for file operations
@@ -154,10 +155,39 @@ Important highlights from AGENTS.md:
 - **Tested**: 84 DSS files (6.64 GB), 88% success rate, handles files up to 1.3 GB
 - See `examples/22_dss_boundary_extraction.ipynb` for complete workflow
 
+**Inline Structure Parsing** (as of v0.84.0+):
+- `RasStruct` - Parse inline structures from geometry files (.g##) **NEW**
+  - Inline Weirs: `get_inline_weirs()`, `get_inline_weir_profile()`, `get_inline_weir_gates()`
+  - Bridges: `get_bridges()`, `get_bridge_deck()`, `get_bridge_piers()`, `get_bridge_abutment()`
+  - Bridge Details: `get_bridge_approach_sections()`, `get_bridge_coefficients()`, `get_bridge_htab()`
+  - Culverts: `get_culverts()`, `get_all_culverts()`
+- **Culvert Shape Codes**: 1=Circular, 2=Box, 3=Pipe Arch, 4=Ellipse, 5=Arch, 6=Semi-Circle, 7=Low Profile Arch, 8=High Profile Arch, 9=Con Span
+- **Parsing**: Uses 8-character fixed-width and comma-separated formats
+- See `research/geometry file parsing/api-geom.md` for complete API reference
+
 ### Execution Modes
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control
-2. **Parallel**: `RasCmdr.compute_parallel()` - Run multiple plans simultaneously using worker folders  
+2. **Parallel**: `RasCmdr.compute_parallel()` - Run multiple plans simultaneously using worker folders
 3. **Sequential**: `RasCmdr.compute_test_mode()` - Run multiple plans in order in test folder
+4. **Distributed**: `compute_distributed()` - Execute plans across remote machines via PsExec/SSH/cloud **NEW**
+
+**Remote Execution**: `RasRemote` module and worker abstraction **NEW** (as of v0.84.0+)
+- `init_ras_worker()` - Factory function to create and validate remote workers
+- `compute_distributed()` - Execute plans across distributed worker pool
+- **PsexecWorker** - Windows remote execution via PsExec over network shares (✓ implemented)
+- **Future workers**: SshWorker, LocalWorker, WinrmWorker, DockerWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
+- Worker abstraction enables heterogeneous execution (local + remote + cloud simultaneously)
+- Naive round-robin scheduling across all worker types
+- See `examples/23_remote_execution_psexec.ipynb` for complete usage
+- See `feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md` for setup instructions
+
+**Critical for HEC-RAS Remote Execution:**
+- HEC-RAS is a GUI application and requires session-based execution
+- Use `session_id=2` (typical for workstations), NOT `system_account=True`
+- Remote machine requires Group Policy configuration (network access, local logon, batch job rights)
+- Registry key `LocalAccountTokenFilterPolicy=1` required
+- Remote Registry service must be running
+- User must be in Administrators group
 
 ## Key Development Patterns
 

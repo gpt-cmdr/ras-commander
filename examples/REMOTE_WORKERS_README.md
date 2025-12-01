@@ -189,7 +189,7 @@ copy RemoteWorkers.json.template RemoteWorkers.json
 ```python
 REMOTE_CONFIG = {
     "hostname": "192.168.3.8",
-    "password": "Katzen84!!",  # Credentials in notebook!
+    "password": "your_password_here",  # Credentials in notebook!
     # ...
 }
 ```

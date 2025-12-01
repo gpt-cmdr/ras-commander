@@ -1448,6 +1448,66 @@ def _execute_plan_on_worker(
 # PSEXEC EXECUTION IMPLEMENTATION
 # =============================================================================
 
+def _authenticate_network_share(share_path: str, username: str, password: str) -> bool:
+    """
+    Authenticate to a network share using net use command.
+
+    This establishes a connection to the remote share using the provided credentials,
+    allowing subsequent file operations (copy, mkdir) to succeed.
+
+    Args:
+        share_path: UNC path to share (e.g., \\\\hostname\\ShareName)
+        username: Username for authentication (e.g., .\\user or DOMAIN\\user)
+        password: Password for authentication
+
+    Returns:
+        bool: True if authentication succeeded or share already accessible
+    """
+    # Extract base share path (\\hostname\ShareName) from full path
+    share_parts = share_path.strip('\\').split('\\')
+    if len(share_parts) >= 2:
+        base_share = f"\\\\{share_parts[0]}\\{share_parts[1]}"
+    else:
+        base_share = share_path
+
+    # First, try to disconnect any existing connection (ignore errors)
+    try:
+        subprocess.run(
+            ["net", "use", base_share, "/delete", "/y"],
+            capture_output=True,
+            timeout=30
+        )
+    except Exception:
+        pass
+
+    # Establish new connection with credentials
+    try:
+        result = subprocess.run(
+            ["net", "use", base_share, f"/user:{username}", password],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            logger.debug(f"Successfully authenticated to {base_share}")
+            return True
+        else:
+            # Check if already connected (error 1219 = multiple connections not allowed)
+            if "1219" in result.stderr or "already" in result.stderr.lower():
+                logger.debug(f"Share {base_share} already connected")
+                return True
+            logger.error(f"Failed to authenticate to {base_share}: {result.stderr}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"Timeout authenticating to {base_share}")
+        return False
+    except Exception as e:
+        logger.error(f"Error authenticating to {base_share}: {e}")
+        return False
+
+
 def _execute_psexec_plan(
     worker: PsexecWorker,
     plan_number: str,
@@ -1460,13 +1520,14 @@ def _execute_psexec_plan(
     Execute a plan on a PsExec worker.
 
     Execution flow:
-    1. Create temporary worker folder in network share
-    2. Copy project to worker folder
-    3. Generate batch file for HEC-RAS execution
-    4. Execute batch file via PsExec
-    5. Monitor execution (poll for .hdf file)
-    6. Copy results back
-    7. Cleanup temporary folder
+    1. Authenticate to network share (if credentials provided)
+    2. Create temporary worker folder in network share
+    3. Copy project to worker folder
+    4. Generate batch file for HEC-RAS execution
+    5. Execute batch file via PsExec
+    6. Monitor execution (poll for .hdf file)
+    7. Copy results back
+    8. Cleanup temporary folder
 
     Args:
         worker: PsexecWorker instance
@@ -1483,6 +1544,18 @@ def _execute_psexec_plan(
 
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
+
+    # Step 0: Authenticate to network share using provided credentials
+    # This allows subsequent file operations (mkdir, copy) to work
+    if worker.credentials:
+        auth_success = _authenticate_network_share(
+            worker.share_path,
+            worker.credentials["username"],
+            worker.credentials["password"]
+        )
+        if not auth_success:
+            logger.error(f"Failed to authenticate to share {worker.share_path}")
+            return False
 
     # Step 1: Create temporary worker folder with sub-worker ID
     import uuid
