@@ -1,11 +1,26 @@
 """
 RasDss - DSS File Operations for ras-commander
 
-Read HEC-DSS files (V6 and V7) using HEC Monolith libraries via pyjnius.
-Lazy loading - no imports until methods are called.
+Summary:
+    Provides static methods for interacting with HEC-DSS files (versions 6 and 7), enabling reading of time series, extracting catalogs, extracting boundary time series, and fetching file metadata, all using HEC Monolith libraries accessed via pyjnius. JVM setup and dependency downloads are handled automatically at runtime.
 
-Based on dssrip2 approach: https://github.com/mkoohafkan/dssrip2
-Java bridge: pyjnius (https://pyjnius.readthedocs.io/)
+Functions:
+    _ensure_monolith():
+        Ensures HEC Monolith Java libraries are installed (downloads if needed).
+    _configure_jvm():
+        Configures the JVM and sets classpath/library paths for pyjnius.
+    get_catalog(dss_file):
+        Returns a list of all data pathnames in a DSS file.
+    read_timeseries(dss_file, pathname, start_date=None, end_date=None):
+        Reads a DSS time series by pathname and returns it as a pandas DataFrame.
+    read_multiple_timeseries(dss_file, pathnames):
+        Reads multiple DSS time series, returning a dict of pathname to DataFrame (or None on failure).
+    get_info(dss_file):
+        Returns summary information and statistics for a DSS file, including partial catalog.
+    extract_boundary_timeseries(boundaries_df, project_dir=None, ras_object=None):
+        Extracts DSS time series for DSS-defined boundary conditions in a DataFrame and appends results as a new column.
+    shutdown_jvm():
+        Placeholder for JVM lifecycle management (not typically required with pyjnius).
 """
 
 import sys
