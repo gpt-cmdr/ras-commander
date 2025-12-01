@@ -1,0 +1,46 @@
+{
+  "workers": [
+    {
+      "name": "Local Compute",
+      "hostname": "localhost",
+      "share_path": "C:\\Temp\\RasRemote",
+      "username": "local_user",
+      "password": "local_password",
+      "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\RAS.exe",
+      "session_id": 2,
+      "process_priority": "low",
+      "queue_priority": 0,
+      "cores_total": 4,
+      "cores_per_plan": 2,
+      "enabled": true
+    },
+    {
+      "name": "Primary Workstation",
+      "hostname": "192.168.1.100",
+      "share_path": "\\\\192.168.1.100\\RasRemote",
+      "username": "your_username",
+      "password": "your_password",
+      "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\RAS.exe",
+      "session_id": 2,
+      "process_priority": "low",
+      "queue_priority": 1,
+      "cores_total": 16,
+      "cores_per_plan": 4,
+      "enabled": true
+    },
+    {
+      "name": "Secondary Workstation",
+      "hostname": "192.168.1.101",
+      "share_path": "\\\\192.168.1.101\\RasRemote",
+      "username": "your_username",
+      "password": "your_password",
+      "ras_exe_path": "C:\\Program Files\\HEC\\HEC-RAS\\6.3\\RAS.exe",
+      "session_id": 2,
+      "process_priority": "low",
+      "queue_priority": 1,
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "enabled": false
+    }
+  ]
+}
