@@ -2,7 +2,11 @@
 RasDss - DSS File Operations for ras-commander
 
 Summary:
-    Provides static methods for interacting with HEC-DSS files (versions 6 and 7), enabling reading of time series, extracting catalogs, extracting boundary time series, and fetching file metadata, all using HEC Monolith libraries accessed via pyjnius. JVM setup and dependency downloads are handled automatically at runtime.
+    Provides static methods for interacting with HEC-DSS files (versions 6 and 7),
+    enabling reading of time series, extracting catalogs, extracting boundary time
+    series, and fetching file metadata, all using HEC Monolith libraries accessed
+    via pyjnius. JVM setup and dependency downloads are handled automatically at
+    runtime.
 
 Functions:
     _ensure_monolith():
@@ -14,24 +18,41 @@ Functions:
     read_timeseries(dss_file, pathname, start_date=None, end_date=None):
         Reads a DSS time series by pathname and returns it as a pandas DataFrame.
     read_multiple_timeseries(dss_file, pathnames):
-        Reads multiple DSS time series, returning a dict of pathname to DataFrame (or None on failure).
+        Reads multiple DSS time series, returning a dict of pathname to DataFrame
+        (or None on failure).
     get_info(dss_file):
-        Returns summary information and statistics for a DSS file, including partial catalog.
+        Returns summary information and statistics for a DSS file, including
+        partial catalog.
     extract_boundary_timeseries(boundaries_df, project_dir=None, ras_object=None):
-        Extracts DSS time series for DSS-defined boundary conditions in a DataFrame and appends results as a new column.
+        Extracts DSS time series for DSS-defined boundary conditions in a
+        DataFrame and appends results as a new column.
     shutdown_jvm():
-        Placeholder for JVM lifecycle management (not typically required with pyjnius).
+        Placeholder for JVM lifecycle management (not typically required with
+        pyjnius).
+
+Lazy Loading:
+    This module implements lazy loading for all heavy dependencies:
+    - pyjnius: Only imported when DSS methods are actually called
+    - jnius_config: Only imported during JVM configuration
+    - HecMonolithDownloader: Only imported when ensuring monolith installation
+    - Java classes: Only loaded after JVM is configured
+
+    This ensures that importing RasDss has minimal overhead and users who don't
+    use DSS functionality don't pay the cost of loading Java/pyjnius.
 """
 
 import sys
 import os
 from pathlib import Path
 from typing import List, Dict, Optional, Union
-import pandas as pd
-import numpy as np
 import logging
 
-from .Decorators import log_call
+# Lazy imports - these are always needed for type hints and basic operations
+import pandas as pd
+import numpy as np
+
+# Import decorator from parent package
+from ..Decorators import log_call
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +64,10 @@ class RasDss:
     Uses HEC Monolith libraries (auto-downloaded on first use).
     Supports both DSS V6 and V7 formats.
 
+    All heavy dependencies (pyjnius, Java) are lazy-loaded on first use.
+
     Usage:
-        from RasDss import RasDss
+        from ras_commander import RasDss
 
         # Read time series
         df = RasDss.read_timeseries("file.dss", "/BASIN/LOC/FLOW//1HOUR/OBS/")
@@ -62,7 +85,7 @@ class RasDss:
         if RasDss._monolith is not None:
             return RasDss._monolith
 
-        # Lazy import
+        # Lazy import from same subpackage
         from ._hec_monolith import HecMonolithDownloader
 
         RasDss._monolith = HecMonolithDownloader()
@@ -85,7 +108,7 @@ class RasDss:
         # Ensure monolith is installed
         monolith = RasDss._ensure_monolith()
 
-        # Lazy import pyjnius
+        # Lazy import pyjnius config
         try:
             import jnius_config
         except ImportError:
@@ -125,7 +148,8 @@ class RasDss:
                     break
             else:
                 raise RuntimeError(
-                    "Java not found. Please set JAVA_HOME environment variable or install Java JDK/JRE.\n"
+                    "Java not found. Please set JAVA_HOME environment variable "
+                    "or install Java JDK/JRE.\n"
                     "Download from: https://www.oracle.com/java/technologies/downloads/"
                 )
 
@@ -134,13 +158,17 @@ class RasDss:
 
         # Set library path for native libraries
         if 'LD_LIBRARY_PATH' in os.environ:
-            os.environ['LD_LIBRARY_PATH'] = library_path + ':' + os.environ['LD_LIBRARY_PATH']
+            os.environ['LD_LIBRARY_PATH'] = (
+                library_path + ':' + os.environ['LD_LIBRARY_PATH']
+            )
         else:
             os.environ['LD_LIBRARY_PATH'] = library_path
 
         # Windows: Add to PATH for native DLLs
         if os.name == 'nt':
-            os.environ['PATH'] = library_path + os.pathsep + os.environ.get('PATH', '')
+            os.environ['PATH'] = (
+                library_path + os.pathsep + os.environ.get('PATH', '')
+            )
 
         RasDss._jvm_configured = True
         print("[OK] Java VM configured")
@@ -165,7 +193,7 @@ class RasDss:
         # Configure JVM (must be before first jnius import)
         RasDss._configure_jvm()
 
-        # Import Java classes via pyjnius
+        # Import Java classes via pyjnius (lazy)
         from jnius import autoclass
 
         HecDss = autoclass('hec.heclib.dss.HecDss')
@@ -216,7 +244,7 @@ class RasDss:
         # Configure JVM (must be before first jnius import)
         RasDss._configure_jvm()
 
-        # Import Java classes via pyjnius
+        # Import Java classes via pyjnius (lazy)
         from jnius import autoclass, cast
 
         HecDss = autoclass('hec.heclib.dss.HecDss')
@@ -240,8 +268,8 @@ class RasDss:
 
             # Extract values and times from Java container
             # pyjnius automatically converts Java arrays to Python lists
-            values = np.array(tsc.values)  # Java double[] → Python list → numpy array
-            times = np.array(tsc.times)    # Java int[] → Python list → numpy array (minutes since 1899-12-31)
+            values = np.array(tsc.values)  # Java double[] -> numpy array
+            times = np.array(tsc.times)    # Java int[] -> numpy array (minutes since 1899-12-31)
 
             # Convert HEC time to numpy datetime64
             # HEC epoch: December 31, 1899 00:00
@@ -257,7 +285,9 @@ class RasDss:
             df.attrs['pathname'] = pathname
             df.attrs['units'] = str(tsc.units) if tsc.units else ""
             df.attrs['type'] = str(tsc.type) if tsc.type else ""
-            df.attrs['interval'] = int(tsc.interval) if hasattr(tsc, 'interval') else None
+            df.attrs['interval'] = (
+                int(tsc.interval) if hasattr(tsc, 'interval') else None
+            )
             df.attrs['dss_file'] = dss_file
 
             return df
@@ -348,13 +378,14 @@ class RasDss:
             Enhanced DataFrame with 'dss_timeseries' column containing extracted data
 
         Example:
-            from ras_commander import init_ras_project
-            from ras_commander.RasDss import RasDss
+            from ras_commander import init_ras_project, RasDss
 
             ras = init_ras_project("project_path", "6.6")
 
             # Extract all DSS boundary data
-            enhanced_boundaries = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras_object=ras)
+            enhanced_boundaries = RasDss.extract_boundary_timeseries(
+                ras.boundaries_df, ras_object=ras
+            )
 
             # Now enhanced_boundaries has a 'dss_timeseries' column with DataFrames
             for idx, row in enhanced_boundaries.iterrows():
@@ -417,13 +448,18 @@ class RasDss:
                 result_df.at[idx, 'dss_timeseries'] = df_ts
 
                 success_count += 1
-                logger.info(f"Row {idx}: Extracted {len(df_ts)} points from {dss_file_path.name}")
+                logger.info(
+                    f"Row {idx}: Extracted {len(df_ts)} points from "
+                    f"{dss_file_path.name}"
+                )
 
             except Exception as e:
                 logger.warning(f"Row {idx}: Failed to read DSS data: {e}")
                 fail_count += 1
 
-        logger.info(f"Extraction complete: {success_count} success, {fail_count} failed")
+        logger.info(
+            f"Extraction complete: {success_count} success, {fail_count} failed"
+        )
 
         return result_df
 
@@ -448,7 +484,7 @@ if __name__ == "__main__":
     print("="*80)
 
     # Test file (from TestData)
-    test_data_dir = Path(__file__).parent.parent / "TestData"
+    test_data_dir = Path(__file__).parent.parent.parent / "TestData"
 
     # Find a DSS file to test with
     dss_files = list(test_data_dir.glob("*.dss"))

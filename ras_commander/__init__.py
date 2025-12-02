@@ -63,11 +63,18 @@ _REMOTE_EXPORTS = {
     'ExecutionResult', 'get_worker_status'
 }
 
+# DSS operations - lazy loaded to avoid importing pyjnius/Java until needed
+# This keeps the Java dependency truly optional for users who don't need DSS
+_DSS_EXPORTS = {'RasDss'}
+
 def __getattr__(name):
-    """Lazy load remote execution components on first access."""
+    """Lazy load remote execution and DSS components on first access."""
     if name in _REMOTE_EXPORTS:
         from . import remote
         return getattr(remote, name)
+    if name in _DSS_EXPORTS:
+        from . import dss
+        return getattr(dss, name)
     raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
 
 
@@ -83,6 +90,9 @@ __all__ = [
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status',
+
+    # DSS operations (lazy loaded)
+    'RasDss',
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
