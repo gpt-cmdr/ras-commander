@@ -76,7 +76,6 @@ research/**/__pycache__/
 /tools
 /examples/working
 /working/
-/ras_agent/
 /examples/hyetographs
 examples/flood_polygons.geojson
 ras-commander_logo.png
@@ -84,3 +83,8 @@ ras-commander_logo.png
 /.claude
 nul
 examples/example_projects.csv
+
+# Ignore remote worker credentials
+examples/RemoteWorkers.json
+RemoteWorkers.json
+/troubleshooting
