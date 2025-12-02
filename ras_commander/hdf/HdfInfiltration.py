@@ -55,8 +55,8 @@ from typing import Optional, Dict, Any, List, Tuple
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
         
@@ -65,7 +65,7 @@ import pandas as pd
 import geopandas as gpd
 import h5py
 
-from .Decorators import log_call, standardize_input
+from ..Decorators import log_call, standardize_input
 
 class HdfInfiltration:
         
@@ -363,7 +363,7 @@ class HdfInfiltration:
         # Get the soil HDF path
         if soil_hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             
             # Try to get soil_layer_path from rasmap_df
@@ -534,7 +534,7 @@ class HdfInfiltration:
         
         # Get RAS object
         if ras_object is None:
-            from .RasPrj import ras
+            from ..RasPrj import ras
             ras_object = ras
         
         # Get the landcover HDF path
@@ -787,7 +787,7 @@ class HdfInfiltration:
         
         # Get RAS object
         if ras_object is None:
-            from .RasPrj import ras
+            from ..RasPrj import ras
             ras_object = ras
         
         # Get the landcover HDF path
@@ -1006,7 +1006,7 @@ class HdfInfiltration:
         """
         if hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
             
@@ -1121,7 +1121,7 @@ class HdfInfiltration:
         """
         if hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
             
@@ -1258,7 +1258,7 @@ class HdfInfiltration:
         # Get the landcover HDF path
         if landcover_hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             
             # Try to get landcover_hdf_path from rasmap_df

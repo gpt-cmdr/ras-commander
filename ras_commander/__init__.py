@@ -30,29 +30,17 @@ from .RasCmdr import RasCmdr
 from .RasControl import RasControl
 from .RasMap import RasMap
 from .RasGuiAutomation import RasGuiAutomation
-from .HdfFluvialPluvial import HdfFluvialPluvial
-
-# HDF handling
-from .HdfBase import HdfBase
-from .HdfBndry import HdfBndry
-from .HdfMesh import HdfMesh
-from .HdfPlan import HdfPlan
-from .HdfResultsMesh import HdfResultsMesh
-from .HdfResultsPlan import HdfResultsPlan
-from .HdfResultsXsec import HdfResultsXsec
-from .HdfStruc import HdfStruc
-from .HdfUtils import HdfUtils
-from .HdfXsec import HdfXsec
-from .HdfPump import HdfPump
-from .HdfPipe import HdfPipe
-from .HdfInfiltration import HdfInfiltration
-from .HdfHydraulicTables import HdfHydraulicTables
-from .HdfResultsBreach import HdfResultsBreach
 from .RasBreach import RasBreach
 
-# Plotting functionality
-from .HdfPlot import HdfPlot
-from .HdfResultsPlot import HdfResultsPlot
+# HDF handling - imported from hdf subpackage
+from .hdf import (
+    HdfBase, HdfUtils, HdfPlan,
+    HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfHydraulicTables,
+    HdfResultsPlan, HdfResultsMesh, HdfResultsXsec, HdfResultsBreach,
+    HdfPipe, HdfPump, HdfInfiltration,
+    HdfPlot, HdfResultsPlot,
+    HdfFluvialPluvial,
+)
 
 # Remote execution - lazy loaded to avoid importing until needed
 # This reduces import time and allows optional dependencies to be truly optional

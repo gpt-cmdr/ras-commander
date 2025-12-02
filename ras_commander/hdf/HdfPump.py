@@ -24,8 +24,8 @@ from shapely.geometry import Point
 from typing import List, Dict, Any, Optional, Union
 from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
 

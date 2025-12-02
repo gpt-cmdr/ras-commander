@@ -52,7 +52,6 @@ setup(
         'geopandas',
         'matplotlib',
         'shapely',
-        'pathlib',
         'rasterstats',
         'rtree',
         'pywin32>=227',    # Required for RasControl COM interface

@@ -34,8 +34,8 @@ from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon,
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .HdfMesh import HdfMesh
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 

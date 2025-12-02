@@ -30,8 +30,8 @@ from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiP
 from typing import List, Dict, Any, Optional, Union, Tuple
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import get_logger
 from .HdfResultsMesh import HdfResultsMesh
 import logging  
 
