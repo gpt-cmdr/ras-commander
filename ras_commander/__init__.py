@@ -18,10 +18,9 @@ setup_logging()
 # Core functionality
 from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras
 from .RasPlan import RasPlan
-from .RasGeo import RasGeo
-from .RasGeometry import RasGeometry
-from .RasGeometryUtils import RasGeometryUtils
-from .RasStruct import RasStruct
+from .RasGeo import RasGeo  # DEPRECATED - use geom subpackage
+from .RasGeometry import RasGeometry  # DEPRECATED - use geom subpackage
+from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpackage
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
@@ -31,6 +30,13 @@ from .RasControl import RasControl
 from .RasMap import RasMap
 from .RasGuiAutomation import RasGuiAutomation
 from .RasBreach import RasBreach
+
+# Geometry handling - imported from geom subpackage
+from .geom import (
+    GeomParser, GeomPreprocessor, GeomLandCover,
+    GeomCrossSection, GeomStorage, GeomLateral,
+    GeomInlineWeir, GeomBridge, GeomCulvert,
+)
 
 # HDF handling - imported from hdf subpackage
 from .hdf import (
@@ -70,8 +76,16 @@ def __getattr__(name):
 __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
-    'RasPlan', 'RasGeo', 'RasGeometry', 'RasGeometryUtils', 'RasStruct', 'RasUnsteady', 'RasUtils',
+    'RasPlan', 'RasUnsteady', 'RasUtils',
     'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasGuiAutomation', 'HdfFluvialPluvial',
+
+    # Geometry handling (new in v0.86.0)
+    'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
+    'GeomCrossSection', 'GeomStorage', 'GeomLateral',
+    'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
+
+    # Deprecated geometry classes (will be removed before v1.0)
+    'RasGeo', 'RasGeometry', 'RasGeometryUtils',
 
     # Remote execution (lazy loaded)
     'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
