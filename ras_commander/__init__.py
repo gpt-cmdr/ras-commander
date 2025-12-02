@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.83.2"
+    __version__ = "0.85.0"
 
 # Set up logging
 setup_logging()
@@ -28,11 +28,6 @@ from .RasExamples import RasExamples
 from .M3Model import M3Model
 from .RasCmdr import RasCmdr
 from .RasControl import RasControl
-from .RasRemote import (
-    RasWorker, PsexecWorker, LocalWorker, SshWorker, WinrmWorker,
-    DockerWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker,
-    init_ras_worker, compute_parallel_remote
-)
 from .RasMap import RasMap
 from .RasGuiAutomation import RasGuiAutomation
 from .HdfFluvialPluvial import HdfFluvialPluvial
@@ -59,6 +54,23 @@ from .RasBreach import RasBreach
 from .HdfPlot import HdfPlot
 from .HdfResultsPlot import HdfResultsPlot
 
+# Remote execution - lazy loaded to avoid importing until needed
+# This reduces import time and allows optional dependencies to be truly optional
+_REMOTE_EXPORTS = {
+    'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
+    'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
+    'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
+    'ExecutionResult', 'get_worker_status'
+}
+
+def __getattr__(name):
+    """Lazy load remote execution components on first access."""
+    if name in _REMOTE_EXPORTS:
+        from . import remote
+        return getattr(remote, name)
+    raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
+
+
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
     # Core functionality
@@ -66,10 +78,11 @@ __all__ = [
     'RasPlan', 'RasGeo', 'RasGeometry', 'RasGeometryUtils', 'RasStruct', 'RasUnsteady', 'RasUtils',
     'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasGuiAutomation', 'HdfFluvialPluvial',
 
-    # Remote execution
+    # Remote execution (lazy loaded)
     'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
-    'init_ras_worker', 'compute_parallel_remote',
+    'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
+    'ExecutionResult', 'get_worker_status',
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',

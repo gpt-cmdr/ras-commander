@@ -1,0 +1,42 @@
+{
+    "description": "Worker configuration template for ras-commander remote execution. Copy to RemoteWorkers.json and configure your workers.",
+    "workers": [
+        {
+            "name": "Local Compute",
+            "worker_type": "local",
+            "worker_folder": "C:\\RasRemote",
+            "process_priority": "low",
+            "queue_priority": 0,
+            "cores_total": 4,
+            "cores_per_plan": 2,
+            "enabled": true
+        },
+        {
+            "name": "Remote-PC-01",
+            "worker_type": "psexec",
+            "hostname": "192.168.1.100",
+            "share_path": "\\\\192.168.1.100\\RasRemote",
+            "worker_folder": "C:\\RasRemote",
+            "username": ".\\username",
+            "password": "your_password_here",
+            "ras_exe_path": "C:\\Program Files\\HEC\\HEC-RAS\\6.6\\RAS.exe",
+            "session_id": 2,
+            "process_priority": "low",
+            "queue_priority": 1,
+            "cores_total": 8,
+            "cores_per_plan": 4,
+            "enabled": false
+        }
+    ],
+    "_comments": {
+        "worker_types": "Available: local, psexec. Planned: ssh, winrm, docker, slurm, aws_ec2, azure_fr",
+        "worker_folder": "Local path where temporary worker folders are created during execution",
+        "share_path": "(psexec only) UNC path to network share that maps to worker_folder",
+        "process_priority": "OS process priority: 'low', 'below normal', or 'normal'. 'low' recommended.",
+        "queue_priority": "Execution priority 0-9. Lower values execute first. Use 0 for local, 1+ for remote.",
+        "cores_total": "Total CPU cores available on this worker",
+        "cores_per_plan": "Cores to allocate per HEC-RAS plan. max_parallel_plans = cores_total / cores_per_plan",
+        "session_id": "(psexec only) Desktop session ID on remote machine. Use 'query user' to find.",
+        "enabled": "Set to false to skip this worker during execution"
+    }
+}

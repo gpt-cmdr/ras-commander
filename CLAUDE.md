@@ -15,6 +15,7 @@ This repository now uses the AGENTS.md standard alongside CLAUDE.md.
 - Key locations with scoped guidance:
   - `/AGENTS.md` (root)
   - `/ras_commander/AGENTS.md` (library API and coding conventions)
+  - `/ras_commander/remote/AGENTS.md` (remote execution subpackage)
   - `/examples/AGENTS.md` (notebook index and extraction workflow)
   - `/examples/data/AGENTS.md` (small reference datasets; read-only)
   - `/examples/example_projects/AGENTS.md` (large HEC‑RAS examples; do not commit extractions)
@@ -169,17 +170,21 @@ Important highlights from AGENTS.md:
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control
 2. **Parallel**: `RasCmdr.compute_parallel()` - Run multiple plans simultaneously using worker folders
 3. **Sequential**: `RasCmdr.compute_test_mode()` - Run multiple plans in order in test folder
-4. **Distributed**: `compute_distributed()` - Execute plans across remote machines via PsExec/SSH/cloud **NEW**
+4. **Distributed**: `compute_parallel_remote()` - Execute plans across remote machines via PsExec/SSH/cloud
 
-**Remote Execution**: `RasRemote` module and worker abstraction **NEW** (as of v0.84.0+)
+**Remote Execution Subpackage**: `ras_commander.remote` (as of v0.85.0+)
+- Refactored from single module to subpackage with lazy loading
 - `init_ras_worker()` - Factory function to create and validate remote workers
-- `compute_distributed()` - Execute plans across distributed worker pool
+- `compute_parallel_remote()` - Execute plans across distributed worker pool
 - **PsexecWorker** - Windows remote execution via PsExec over network shares (✓ implemented)
 - **Future workers**: SshWorker, LocalWorker, WinrmWorker, DockerWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
 - Worker abstraction enables heterogeneous execution (local + remote + cloud simultaneously)
-- Naive round-robin scheduling across all worker types
+- Queue-aware wave scheduling across all worker types
+- **Lazy loading**: Remote module only loaded when `init_ras_worker` or workers are accessed
+- **Optional dependencies**: `pip install ras-commander[remote-ssh]`, `[remote-aws]`, `[remote-all]`
 - See `examples/23_remote_execution_psexec.ipynb` for complete usage
 - See `feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md` for setup instructions
+- See `ras_commander/remote/AGENTS.md` for subpackage-specific guidance
 
 **Critical for HEC-RAS Remote Execution:**
 - HEC-RAS is a GUI application and requires session-based execution

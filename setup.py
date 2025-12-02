@@ -28,7 +28,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.83.2",
+    version="0.85.0",
     packages=find_packages(),
     include_package_data=True,
     python_requires='>=3.10',
@@ -57,7 +57,24 @@ setup(
         'rtree',
         'pywin32>=227',    # Required for RasControl COM interface
         'psutil>=5.6.6',   # Required for RasControl process management
-    ])
+    ],
+    extras_require={
+        # Remote execution backends (PsExec worker has no extra deps)
+        'remote': [],  # Base remote - PsExec only, no additional deps
+        'remote-ssh': ['paramiko>=3.0'],
+        'remote-winrm': ['pywinrm>=0.4.3'],
+        'remote-docker': ['docker>=6.0'],
+        'remote-aws': ['boto3>=1.28'],
+        'remote-azure': ['azure-identity>=1.14', 'azure-mgmt-compute>=30.0'],
+        'remote-all': [
+            'paramiko>=3.0',
+            'pywinrm>=0.4.3',
+            'docker>=6.0',
+            'boto3>=1.28',
+            'azure-identity>=1.14',
+            'azure-mgmt-compute>=30.0',
+        ],
+    })
 
 """
 ras-commander setup.py
