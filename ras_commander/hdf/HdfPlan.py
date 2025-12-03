@@ -37,8 +37,8 @@ import numpy as np
 
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -174,6 +174,7 @@ class HdfPlan:
                 - Parameter: Name of the parameter
                 - Value: Value of the parameter (decoded if byte string)
                 - Plan: Plan number (01-99) extracted from the filename (ProjectName.pXX.hdf)
+            Returns empty DataFrame if Plan Parameters not found (e.g., steady flow results).
 
         Raises:
             ValueError: If there's an error retrieving the plan parameter attributes.
@@ -182,7 +183,8 @@ class HdfPlan:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 plan_params_path = "Plan Data/Plan Parameters"
                 if plan_params_path not in hdf_file:
-                    raise ValueError(f"Plan Parameters not found in {hdf_path}")
+                    logger.warning(f"Plan Parameters not found in {hdf_path} - may be a steady flow or minimal HDF file")
+                    return pd.DataFrame(columns=['Plan', 'Parameter', 'Value'])
                 
                 # Extract parameters
                 params_dict = {}

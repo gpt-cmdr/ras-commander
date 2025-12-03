@@ -20,9 +20,9 @@ from shapely.geometry import LineString, MultiLineString
 from tqdm import tqdm
 from .HdfMesh import HdfMesh
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input
+from ..Decorators import standardize_input
 from .HdfResultsMesh import HdfResultsMesh
-from .LoggingConfig import get_logger
+from ..LoggingConfig import get_logger
 from pathlib import Path
 
 logger = get_logger(__name__)

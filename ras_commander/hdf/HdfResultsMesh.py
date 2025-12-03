@@ -56,8 +56,8 @@ from typing import Union, List, Optional, Dict, Any, Tuple
 from .HdfMesh import HdfMesh
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import log_call, standardize_input
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import setup_logging, get_logger
 import geopandas as gpd
 
 logger = get_logger(__name__)

@@ -103,10 +103,50 @@ pip install --upgrade ras-commander
 ```
 If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
 
-Dependencies can also be manually installed: 
+### Library Dependencies
+
+These are the core dependencies required for ras-commander library functionality:
+
+```bash
+# Core library dependencies
+pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely rasterstats rtree
+
+# Windows-specific (for RasControl COM interface and GUI automation)
+pip install pywin32 psutil
 ```
-pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely pathlib rasterstats rtree
+
+### Notebook Dependencies
+
+Additional packages needed to run the example notebooks in the `examples/` folder:
+
+```bash
+# For raster visualization (notebooks 15, 21)
+pip install rasterio
+
+# For coordinate system operations (notebook 14)
+pip install pyproj
 ```
+
+### Optional Dependencies
+
+For specific features that aren't required for core functionality:
+
+```bash
+# DSS file operations (requires Java JRE/JDK 8+)
+pip install pyjnius
+
+# Remote execution backends
+pip install paramiko      # SSH remote execution
+pip install pywinrm       # WinRM remote execution
+pip install docker        # Docker container execution
+pip install boto3         # AWS EC2 execution
+pip install azure-identity azure-mgmt-compute  # Azure execution
+
+# Or install all remote backends at once:
+pip install ras-commander[remote-all]
+```
+
+Note: `pathlib` is built into Python 3.4+ and does not need to be installed separately.
 
 
 #### Work in a Local Copy

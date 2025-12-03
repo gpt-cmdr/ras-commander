@@ -281,7 +281,28 @@ def _execute_single_plan(
             result.error_message = "WinRM worker not yet implemented"
 
         elif worker.worker_type == "docker":
-            result.error_message = "Docker worker not yet implemented"
+            from .DockerWorker import execute_docker_plan
+            success = execute_docker_plan(
+                worker=worker,
+                plan_number=plan_number,
+                ras_obj=ras_object,
+                num_cores=num_cores,
+                clear_geompre=clear_geompre,
+                sub_worker_id=sub_worker_id,
+                autoclean=autoclean
+            )
+            result.success = success
+
+            if success:
+                project_name = ras_object.project_name
+                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                if hdf_file.exists():
+                    result.hdf_path = str(hdf_file)
+                else:
+                    # Check for .tmp.hdf (Linux container output)
+                    tmp_hdf = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.tmp.hdf"
+                    if tmp_hdf.exists():
+                        result.hdf_path = str(tmp_hdf)
 
         elif worker.worker_type == "slurm":
             result.error_message = "Slurm worker not yet implemented"

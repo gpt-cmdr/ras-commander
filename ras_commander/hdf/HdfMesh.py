@@ -36,15 +36,16 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-from geopandas import GeoDataFrame
-from shapely.geometry import Polygon, Point, LineString, MultiLineString, MultiPolygon
-from shapely.ops import polygonize  # Importing polygonize to resolve the undefined name error
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, TYPE_CHECKING
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
+
+# Type hints only - not imported at runtime
+if TYPE_CHECKING:
+    from geopandas import GeoDataFrame
 
 logger = get_logger(__name__)
 
@@ -100,7 +101,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_areas(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow area perimeter polygons.
 
@@ -114,6 +115,10 @@ class HdfMesh:
         GeoDataFrame
             A GeoDataFrame containing the 2D flow area perimeter polygons if 2D areas exist.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Polygon
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -134,7 +139,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_cell_polygons(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_polygons(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell polygons.
 
@@ -152,6 +157,11 @@ class HdfMesh:
             - geometry: polygon geometry of the cell
             Returns an empty GeoDataFrame if no 2D areas exist or if there's an error.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Polygon
+        from shapely.ops import polygonize
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -160,7 +170,7 @@ class HdfMesh:
 
                 # Get face geometries once
                 face_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
-                
+
                 # Pre-allocate lists for better memory efficiency
                 all_mesh_names = []
                 all_cell_ids = []
@@ -170,7 +180,7 @@ class HdfMesh:
                     # Get cell face info in one read
                     cell_face_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Info"][()]
                     cell_face_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Values"][()][:, 0]
-                    
+
                     # Create face lookup dictionary for this mesh
                     mesh_faces_dict = dict(face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]].values)
 
@@ -178,7 +188,7 @@ class HdfMesh:
                     for cell_id, (start, length) in enumerate(cell_face_info[:, :2]):
                         face_ids = cell_face_values[start:start + length]
                         face_geoms = [mesh_faces_dict[face_id] for face_id in face_ids]
-                        
+
                         # Create polygon
                         polygons = list(polygonize(face_geoms))
                         if polygons:
@@ -203,7 +213,7 @@ class HdfMesh:
         
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_cell_points(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_points(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell center points.
 
@@ -217,12 +227,16 @@ class HdfMesh:
         GeoDataFrame
             A GeoDataFrame containing the 2D flow mesh cell center points.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Point
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
-                
+
                 # Pre-allocate lists
                 all_mesh_names = []
                 all_cell_ids = []
@@ -232,7 +246,7 @@ class HdfMesh:
                     # Get all cell centers in one read
                     cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
                     cell_count = len(cell_centers)
-                    
+
                     # Extend lists efficiently
                     all_mesh_names.extend([mesh_name] * cell_count)
                     all_cell_ids.extend(range(cell_count))
@@ -255,7 +269,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_cell_faces(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_faces(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell faces.
 
@@ -269,6 +283,10 @@ class HdfMesh:
         GeoDataFrame
             A GeoDataFrame containing the 2D flow mesh cell faces.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import LineString
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -290,12 +308,12 @@ class HdfMesh:
                     # Process each face
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
                         coords = [facepoints_coords[pnt_a_idx]]
-                        
+
                         if count > 0:
                             coords.extend(faces_perim_values[start_row:start_row + count])
-                            
+
                         coords.append(facepoints_coords[pnt_b_idx])
-                        
+
                         all_mesh_names.append(mesh_name)
                         all_face_ids.append(face_id)
                         all_geometries.append(LineString(coords))

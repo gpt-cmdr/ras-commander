@@ -13,10 +13,10 @@ ras_commander/remote/
 ├── __init__.py         # Exports all public classes and functions
 ├── RasWorker.py        # RasWorker base dataclass + init_ras_worker()
 ├── PsexecWorker.py     # PsexecWorker (IMPLEMENTED)
-├── LocalWorker.py      # LocalWorker (stub)
+├── LocalWorker.py      # LocalWorker (IMPLEMENTED)
 ├── SshWorker.py        # SshWorker (stub, requires paramiko)
 ├── WinrmWorker.py      # WinrmWorker (stub, requires pywinrm)
-├── DockerWorker.py     # DockerWorker (stub, requires docker)
+├── DockerWorker.py     # DockerWorker (IMPLEMENTED, requires docker+paramiko)
 ├── SlurmWorker.py      # SlurmWorker (stub)
 ├── AwsEc2Worker.py     # AwsEc2Worker (stub, requires boto3)
 ├── AzureFrWorker.py    # AzureFrWorker (stub, requires azure-*)
@@ -93,11 +93,18 @@ def init_ras_worker(worker_type: str, **kwargs) -> RasWorker:
 
 ## Critical Implementation Notes
 
-### PsExec Worker (The Only Implemented Worker)
+### PsExec Worker
 - **HEC-RAS requires a desktop session**: Use `system_account=False, session_id=2`
 - **Never use `system_account=True`**: HEC-RAS will hang without a desktop
 - **UNC to local path conversion**: PsExec runs on remote filesystem, not UNC
 - **Credentials are optional**: Windows auth preferred for GUI access
+
+### Docker Worker
+- **Requires docker and paramiko packages**: `pip install docker paramiko`
+- **Preprocesses locally first**: Windows preprocessing runs locally, then copies to remote
+- **Supports Docker over SSH**: Use `docker_host: "ssh://user@host"` for remote Docker daemons
+- **Path conversion**: Automatically converts `/mnt/c/` paths to `C:/` for Docker Desktop
+- **SSH key authentication required**: For remote Docker hosts, SSH keys must be configured
 
 ### Adding New Workers
 1. Create `NewWorker.py` following PascalCase naming (module name = class name)

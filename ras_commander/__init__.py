@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.85.0"
+    __version__ = "0.86.0"
 
 # Set up logging
 setup_logging()
@@ -18,10 +18,9 @@ setup_logging()
 # Core functionality
 from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras
 from .RasPlan import RasPlan
-from .RasGeo import RasGeo
-from .RasGeometry import RasGeometry
-from .RasGeometryUtils import RasGeometryUtils
-from .RasStruct import RasStruct
+from .RasGeo import RasGeo  # DEPRECATED - use geom subpackage
+from .RasGeometry import RasGeometry  # DEPRECATED - use geom subpackage
+from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpackage
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
@@ -30,29 +29,24 @@ from .RasCmdr import RasCmdr
 from .RasControl import RasControl
 from .RasMap import RasMap
 from .RasGuiAutomation import RasGuiAutomation
-from .HdfFluvialPluvial import HdfFluvialPluvial
-
-# HDF handling
-from .HdfBase import HdfBase
-from .HdfBndry import HdfBndry
-from .HdfMesh import HdfMesh
-from .HdfPlan import HdfPlan
-from .HdfResultsMesh import HdfResultsMesh
-from .HdfResultsPlan import HdfResultsPlan
-from .HdfResultsXsec import HdfResultsXsec
-from .HdfStruc import HdfStruc
-from .HdfUtils import HdfUtils
-from .HdfXsec import HdfXsec
-from .HdfPump import HdfPump
-from .HdfPipe import HdfPipe
-from .HdfInfiltration import HdfInfiltration
-from .HdfHydraulicTables import HdfHydraulicTables
-from .HdfResultsBreach import HdfResultsBreach
 from .RasBreach import RasBreach
 
-# Plotting functionality
-from .HdfPlot import HdfPlot
-from .HdfResultsPlot import HdfResultsPlot
+# Geometry handling - imported from geom subpackage
+from .geom import (
+    GeomParser, GeomPreprocessor, GeomLandCover,
+    GeomCrossSection, GeomStorage, GeomLateral,
+    GeomInlineWeir, GeomBridge, GeomCulvert,
+)
+
+# HDF handling - imported from hdf subpackage
+from .hdf import (
+    HdfBase, HdfUtils, HdfPlan,
+    HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfHydraulicTables,
+    HdfResultsPlan, HdfResultsMesh, HdfResultsXsec, HdfResultsBreach,
+    HdfPipe, HdfPump, HdfInfiltration,
+    HdfPlot, HdfResultsPlot,
+    HdfFluvialPluvial,
+)
 
 # Remote execution - lazy loaded to avoid importing until needed
 # This reduces import time and allows optional dependencies to be truly optional
@@ -82,8 +76,16 @@ def __getattr__(name):
 __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
-    'RasPlan', 'RasGeo', 'RasGeometry', 'RasGeometryUtils', 'RasStruct', 'RasUnsteady', 'RasUtils',
+    'RasPlan', 'RasUnsteady', 'RasUtils',
     'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasGuiAutomation', 'HdfFluvialPluvial',
+
+    # Geometry handling (new in v0.86.0)
+    'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
+    'GeomCrossSection', 'GeomStorage', 'GeomLateral',
+    'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
+
+    # Deprecated geometry classes (will be removed before v1.0)
+    'RasGeo', 'RasGeometry', 'RasGeometryUtils',
 
     # Remote execution (lazy loaded)
     'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
