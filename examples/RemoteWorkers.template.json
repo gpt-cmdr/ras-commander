@@ -1,0 +1,81 @@
+{
+  "workers": [
+    {
+      "name": "Local Compute",
+      "worker_type": "local",
+      "worker_folder": "C:\\RasRemote",
+      "process_priority": "low",
+      "queue_priority": 0,
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "enabled": true
+    },
+    {
+      "name": "Remote Windows PC",
+      "worker_type": "psexec",
+      "hostname": "192.168.1.100",
+      "share_path": "\\\\192.168.1.100\\RasRemote",
+      "worker_folder": "C:\\RasRemote",
+      "username": ".\\username",
+      "password": "YOUR_PASSWORD_HERE",
+      "session_id": 2,
+      "process_priority": "low",
+      "queue_priority": 1,
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "enabled": false
+    },
+    {
+      "name": "Remote Docker 6.7 (SSH)",
+      "worker_type": "docker",
+      "docker_image": "hecras:6.7",
+      "docker_host": "ssh://username@192.168.1.100",
+      "share_path": "\\\\192.168.1.100\\RasRemote",
+      "remote_staging_path": "/mnt/c/RasRemote",
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "preprocess_on_host": true,
+      "max_runtime_minutes": 120,
+      "queue_priority": 2,
+      "enabled": false,
+      "_comment": "SSH recommended: requires SSH key auth setup on remote host"
+    },
+    {
+      "name": "Remote Docker 6.6 (SSH)",
+      "worker_type": "docker",
+      "docker_image": "hecras:6.6",
+      "docker_host": "ssh://username@192.168.1.100",
+      "share_path": "\\\\192.168.1.100\\RasRemote",
+      "remote_staging_path": "/mnt/c/RasRemote",
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "preprocess_on_host": true,
+      "max_runtime_minutes": 120,
+      "queue_priority": 3,
+      "enabled": false,
+      "_comment": "SSH recommended: requires SSH key auth setup on remote host"
+    },
+    {
+      "name": "Local Docker 6.7",
+      "worker_type": "docker",
+      "docker_image": "hecras:6.7",
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "preprocess_on_host": true,
+      "max_runtime_minutes": 60,
+      "queue_priority": 10,
+      "enabled": false
+    },
+    {
+      "name": "Local Docker 6.6",
+      "worker_type": "docker",
+      "docker_image": "hecras:6.6",
+      "cores_total": 8,
+      "cores_per_plan": 4,
+      "preprocess_on_host": true,
+      "max_runtime_minutes": 60,
+      "queue_priority": 11,
+      "enabled": false
+    }
+  ]
+}
