@@ -1,24 +1,25 @@
 Project Structure (files included):
-├── HdfBase.py
-├── HdfBndry.py
-├── HdfFluvialPluvial.py
-├── HdfHydraulicTables.py
-├── HdfInfiltration.py
-├── HdfMesh.py
-├── HdfPipe.py
-├── HdfPlan.py
-├── HdfPlot.py
-├── HdfPump.py
-├── HdfResultsBreach.py
-├── HdfResultsMesh.py
-├── HdfResultsPlan.py
-├── HdfResultsPlot.py
-├── HdfResultsXsec.py
-├── HdfStruc.py
-├── HdfUtils.py
-└── HdfXsec.py
+└── hdf
+    ├── HdfBase.py
+    ├── HdfBndry.py
+    ├── HdfFluvialPluvial.py
+    ├── HdfHydraulicTables.py
+    ├── HdfInfiltration.py
+    ├── HdfMesh.py
+    ├── HdfPipe.py
+    ├── HdfPlan.py
+    ├── HdfPlot.py
+    ├── HdfPump.py
+    ├── HdfResultsBreach.py
+    ├── HdfResultsMesh.py
+    ├── HdfResultsPlan.py
+    ├── HdfResultsPlot.py
+    ├── HdfResultsXsec.py
+    ├── HdfStruc.py
+    ├── HdfUtils.py
+    └── HdfXsec.py
 
-File: c:\GH\ras-commander\ras_commander\HdfBase.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfBase.py
 ==================================================
 """
 HdfBase: Core HDF File Operations for HEC-RAS
@@ -73,8 +74,8 @@ import logging
 from shapely.geometry import LineString, MultiLineString
 
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -382,7 +383,7 @@ class HdfBase:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfBndry.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfBndry.py
 ==================================================
 """
 Class: HdfBndry
@@ -420,8 +421,8 @@ from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon,
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from .HdfMesh import HdfMesh
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -783,7 +784,7 @@ class HdfBndry:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfFluvialPluvial.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfFluvialPluvial.py
 ==================================================
 """
 Class: HdfFluvialPluvial
@@ -807,9 +808,9 @@ from shapely.geometry import LineString, MultiLineString
 from tqdm import tqdm
 from .HdfMesh import HdfMesh
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input
+from ..Decorators import standardize_input
 from .HdfResultsMesh import HdfResultsMesh
-from .LoggingConfig import get_logger
+from ..LoggingConfig import get_logger
 from pathlib import Path
 
 logger = get_logger(__name__)
@@ -1204,7 +1205,7 @@ class HdfFluvialPluvial:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfHydraulicTables.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfHydraulicTables.py
 ==================================================
 """
 HdfHydraulicTables - Extract hydraulic property tables (HTAB) from HEC-RAS geometry HDF files
@@ -1282,8 +1283,8 @@ import h5py
 import pandas as pd
 import numpy as np
 
-from .LoggingConfig import get_logger
-from .Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
+from ..Decorators import log_call, standardize_input
 
 logger = get_logger(__name__)
 
@@ -1657,7 +1658,7 @@ class HdfHydraulicTables:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfInfiltration.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfInfiltration.py
 ==================================================
 """
 Class: HdfInfiltration
@@ -1716,8 +1717,8 @@ from typing import Optional, Dict, Any, List, Tuple
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
         
@@ -1726,7 +1727,7 @@ import pandas as pd
 import geopandas as gpd
 import h5py
 
-from .Decorators import log_call, standardize_input
+from ..Decorators import log_call, standardize_input
 
 class HdfInfiltration:
         
@@ -2024,7 +2025,7 @@ class HdfInfiltration:
         # Get the soil HDF path
         if soil_hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             
             # Try to get soil_layer_path from rasmap_df
@@ -2195,7 +2196,7 @@ class HdfInfiltration:
         
         # Get RAS object
         if ras_object is None:
-            from .RasPrj import ras
+            from ..RasPrj import ras
             ras_object = ras
         
         # Get the landcover HDF path
@@ -2448,7 +2449,7 @@ class HdfInfiltration:
         
         # Get RAS object
         if ras_object is None:
-            from .RasPrj import ras
+            from ..RasPrj import ras
             ras_object = ras
         
         # Get the landcover HDF path
@@ -2667,7 +2668,7 @@ class HdfInfiltration:
         """
         if hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
             
@@ -2782,7 +2783,7 @@ class HdfInfiltration:
         """
         if hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
             
@@ -2919,7 +2920,7 @@ class HdfInfiltration:
         # Get the landcover HDF path
         if landcover_hdf_path is None:
             if ras_object is None:
-                from .RasPrj import ras
+                from ..RasPrj import ras
                 ras_object = ras
             
             # Try to get landcover_hdf_path from rasmap_df
@@ -3191,7 +3192,7 @@ WHEN RAS LOADS THE HDF, IT IGNORES THE DATA IN THE TABLE AND REPLACES IT WITH NU
 '''
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfMesh.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfMesh.py
 ==================================================
 """
 A static class for handling mesh-related operations on HEC-RAS HDF files.
@@ -3231,15 +3232,16 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-from geopandas import GeoDataFrame
-from shapely.geometry import Polygon, Point, LineString, MultiLineString, MultiPolygon
-from shapely.ops import polygonize  # Importing polygonize to resolve the undefined name error
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, TYPE_CHECKING
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
+
+# Type hints only - not imported at runtime
+if TYPE_CHECKING:
+    from geopandas import GeoDataFrame
 
 logger = get_logger(__name__)
 
@@ -3295,7 +3297,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_areas(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow area perimeter polygons.
 
@@ -3309,6 +3311,10 @@ class HdfMesh:
         GeoDataFrame
             A GeoDataFrame containing the 2D flow area perimeter polygons if 2D areas exist.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Polygon
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -3329,7 +3335,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_cell_polygons(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_polygons(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell polygons.
 
@@ -3347,6 +3353,11 @@ class HdfMesh:
             - geometry: polygon geometry of the cell
             Returns an empty GeoDataFrame if no 2D areas exist or if there's an error.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Polygon
+        from shapely.ops import polygonize
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -3355,7 +3366,7 @@ class HdfMesh:
 
                 # Get face geometries once
                 face_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
-                
+
                 # Pre-allocate lists for better memory efficiency
                 all_mesh_names = []
                 all_cell_ids = []
@@ -3365,7 +3376,7 @@ class HdfMesh:
                     # Get cell face info in one read
                     cell_face_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Info"][()]
                     cell_face_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Values"][()][:, 0]
-                    
+
                     # Create face lookup dictionary for this mesh
                     mesh_faces_dict = dict(face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]].values)
 
@@ -3373,7 +3384,7 @@ class HdfMesh:
                     for cell_id, (start, length) in enumerate(cell_face_info[:, :2]):
                         face_ids = cell_face_values[start:start + length]
                         face_geoms = [mesh_faces_dict[face_id] for face_id in face_ids]
-                        
+
                         # Create polygon
                         polygons = list(polygonize(face_geoms))
                         if polygons:
@@ -3398,7 +3409,7 @@ class HdfMesh:
         
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_cell_points(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_points(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell center points.
 
@@ -3412,12 +3423,16 @@ class HdfMesh:
         GeoDataFrame
             A GeoDataFrame containing the 2D flow mesh cell center points.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Point
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
-                
+
                 # Pre-allocate lists
                 all_mesh_names = []
                 all_cell_ids = []
@@ -3427,7 +3442,7 @@ class HdfMesh:
                     # Get all cell centers in one read
                     cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
                     cell_count = len(cell_centers)
-                    
+
                     # Extend lists efficiently
                     all_mesh_names.extend([mesh_name] * cell_count)
                     all_cell_ids.extend(range(cell_count))
@@ -3450,7 +3465,7 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_cell_faces(hdf_path: Path) -> GeoDataFrame:
+    def get_mesh_cell_faces(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell faces.
 
@@ -3464,6 +3479,10 @@ class HdfMesh:
         GeoDataFrame
             A GeoDataFrame containing the 2D flow mesh cell faces.
         """
+        # Lazy imports for heavy dependencies
+        from geopandas import GeoDataFrame
+        from shapely.geometry import LineString
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -3485,12 +3504,12 @@ class HdfMesh:
                     # Process each face
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
                         coords = [facepoints_coords[pnt_a_idx]]
-                        
+
                         if count > 0:
                             coords.extend(faces_perim_values[start_row:start_row + count])
-                            
+
                         coords.append(facepoints_coords[pnt_b_idx])
-                        
+
                         all_mesh_names.append(mesh_name)
                         all_face_ids.append(face_id)
                         all_geometries.append(LineString(coords))
@@ -3657,7 +3676,7 @@ class HdfMesh:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPipe.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfPipe.py
 ==================================================
 """
 Class: HdfPipe
@@ -3691,8 +3710,8 @@ from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiP
 from typing import List, Dict, Any, Optional, Union, Tuple
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import get_logger
 from .HdfResultsMesh import HdfResultsMesh
 import logging  
 
@@ -4385,7 +4404,7 @@ class HdfPipe:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlan.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfPlan.py
 ==================================================
 """
 Class: HdfPlan
@@ -4426,8 +4445,8 @@ import numpy as np
 
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -4563,6 +4582,7 @@ class HdfPlan:
                 - Parameter: Name of the parameter
                 - Value: Value of the parameter (decoded if byte string)
                 - Plan: Plan number (01-99) extracted from the filename (ProjectName.pXX.hdf)
+            Returns empty DataFrame if Plan Parameters not found (e.g., steady flow results).
 
         Raises:
             ValueError: If there's an error retrieving the plan parameter attributes.
@@ -4571,7 +4591,8 @@ class HdfPlan:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 plan_params_path = "Plan Data/Plan Parameters"
                 if plan_params_path not in hdf_file:
-                    raise ValueError(f"Plan Parameters not found in {hdf_path}")
+                    logger.warning(f"Plan Parameters not found in {hdf_path} - may be a steady flow or minimal HDF file")
+                    return pd.DataFrame(columns=['Plan', 'Parameter', 'Value'])
                 
                 # Extract parameters
                 params_dict = {}
@@ -4706,37 +4727,48 @@ class HdfPlan:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPlot.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfPlot.py
 ==================================================
 """
 Class: HdfPlot
 
 A collection of static methods for plotting general HDF data from HEC-RAS models.
+
+Lazy Loading:
+    matplotlib and geopandas are imported inside methods that use them,
+    not at module level. This reduces import overhead for users who
+    don't use plotting functionality.
 """
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import geopandas as gpd
-from typing import Optional, Union, Tuple
-from .Decorators import log_call, standardize_input
+from typing import Optional, Union, Tuple, TYPE_CHECKING
+from ..Decorators import log_call, standardize_input
 from .HdfUtils import HdfUtils
+
+# Type hints only - not imported at runtime
+if TYPE_CHECKING:
+    import geopandas as gpd
+
 
 class HdfPlot:
     """
     A class containing static methods for plotting general HDF data from HEC-RAS models.
-    
+
     This class provides plotting functionality for HDF data, focusing on
     geometric elements like cell polygons and time series data.
+
+    Note:
+        matplotlib and geopandas are lazy-loaded when plotting methods are called.
     """
 
     @staticmethod
     @log_call
     def plot_mesh_cells(
-        cell_polygons_df: pd.DataFrame, ## THIS IS A GEODATAFRAME - NEED TO EDIT BOTH ARGUMENT AND USAGE
+        cell_polygons_df: pd.DataFrame,
         projection: str,
         title: str = '2D Flow Area Mesh Cells',
         figsize: Tuple[int, int] = (12, 8)
-    ) -> Optional[gpd.GeoDataFrame]:
+    ) -> Optional['gpd.GeoDataFrame']:
         """
         Plots the mesh cells from the provided DataFrame and returns the GeoDataFrame.
 
@@ -4749,17 +4781,25 @@ class HdfPlot:
         Returns:
             Optional[gpd.GeoDataFrame]: GeoDataFrame containing the mesh cells, or None if no cells found.
         """
+        # Lazy imports for heavy dependencies
+        import matplotlib.pyplot as plt
+        import geopandas as gpd
+
         if cell_polygons_df.empty:
             print("No Cell Polygons found.")
             return None
 
         # Convert any datetime columns to strings using HdfUtils
         cell_polygons_df = HdfUtils.convert_df_datetimes_to_str(cell_polygons_df)
-        
+
         cell_polygons_gdf = gpd.GeoDataFrame(cell_polygons_df, crs=projection)
 
         print("Cell Polygons CRS:", cell_polygons_gdf.crs)
-        display(cell_polygons_gdf.head())
+        try:
+            display(cell_polygons_gdf.head())
+        except NameError:
+            # display() not available outside Jupyter
+            print(cell_polygons_gdf.head())
 
         fig, ax = plt.subplots(figsize=figsize)
         cell_polygons_gdf.plot(ax=ax, edgecolor='blue', facecolor='none')
@@ -4791,30 +4831,24 @@ class HdfPlot:
             title (str, optional): Plot title. Defaults to None.
             figsize (Tuple[int, int], optional): Figure size. Defaults to (12, 6).
         """
+        # Lazy import for heavy dependency
+        import matplotlib.pyplot as plt
+
         # Convert any datetime columns to strings
         df = HdfUtils.convert_df_datetimes_to_str(df)
-        
+
         fig, ax = plt.subplots(figsize=figsize)
         df.plot(x=x_col, y=y_col, ax=ax)
-        
+
         if title:
             ax.set_title(title)
         ax.grid(True)
         plt.tight_layout()
         plt.show()
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfPump.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfPump.py
 ==================================================
 """
 Class: HdfPump
@@ -4842,8 +4876,8 @@ from shapely.geometry import Point
 from typing import List, Dict, Any, Optional, Union
 from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
 
@@ -5135,7 +5169,7 @@ class HdfPump:
             raise
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsBreach.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfResultsBreach.py
 ==================================================
 """
 HdfResultsBreach: Dam breach results extraction from HEC-RAS HDF files.
@@ -5184,10 +5218,10 @@ import h5py
 import pandas as pd
 import numpy as np
 
-from .Decorators import standardize_input, log_call
+from ..Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
-from .LoggingConfig import get_logger
-from .RasPrj import ras
+from ..LoggingConfig import get_logger
+from ..RasPrj import ras
 
 logger = get_logger(__name__)
 
@@ -5716,7 +5750,7 @@ class HdfResultsBreach:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsMesh.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfResultsMesh.py
 ==================================================
 """
 Class: HdfResultsMesh
@@ -5776,8 +5810,8 @@ from typing import Union, List, Optional, Dict, Any, Tuple
 from .HdfMesh import HdfMesh
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import log_call, standardize_input
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import setup_logging, get_logger
 import geopandas as gpd
 
 logger = get_logger(__name__)
@@ -6701,7 +6735,7 @@ class HdfResultsMesh:
             return xr.Dataset()
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlan.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfResultsPlan.py
 ==================================================
 """
 HdfResultsPlan: A module for extracting and analyzing HEC-RAS plan HDF file results.
@@ -6741,13 +6775,13 @@ from pathlib import Path
 import h5py
 import pandas as pd
 import xarray as xr
-from .Decorators import standardize_input, log_call
+from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
 from .HdfResultsXsec import HdfResultsXsec
-from .LoggingConfig import get_logger
+from ..LoggingConfig import get_logger
 import numpy as np
 from datetime import datetime
-from .RasPrj import ras
+from ..RasPrj import ras
 
 logger = get_logger(__name__)
 
@@ -7470,7 +7504,7 @@ class HdfResultsPlan:
                     # Fallback to .txt file using RasControl
                     try:
                         # Late import to avoid circular dependency
-                        from .RasControl import RasControl
+                        from ..RasControl import RasControl
 
                         # Extract plan info from HDF path
                         # e.g., "C:/path/BaldEagle.p10.hdf" -> use path for RasControl
@@ -7512,7 +7546,7 @@ class HdfResultsPlan:
 
             # Try .txt fallback
             try:
-                from .RasControl import RasControl
+                from ..RasControl import RasControl
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
                     logger.warning(
@@ -7530,7 +7564,7 @@ class HdfResultsPlan:
 
             # Try .txt fallback on any HDF error
             try:
-                from .RasControl import RasControl
+                from ..RasControl import RasControl
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
                     logger.warning(
@@ -7544,7 +7578,7 @@ class HdfResultsPlan:
             return ""
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsPlot.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfResultsPlot.py
 ==================================================
 """
 Class: HdfResultsPlot
@@ -7575,7 +7609,7 @@ Input DataFrames must contain:
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Dict
-from .Decorators import log_call
+from ..Decorators import log_call
 from .HdfMesh import HdfMesh
 
 class HdfResultsPlot:
@@ -7731,7 +7765,7 @@ class HdfResultsPlot:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfResultsXsec.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfResultsXsec.py
 ==================================================
 """
 Class: HdfResultsXsec
@@ -7772,8 +7806,8 @@ import xarray as xr
 
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
 
@@ -8048,7 +8082,7 @@ class HdfResultsXsec:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfStruc.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfStruc.py
 ==================================================
 """
 Class: HdfStruc
@@ -8077,8 +8111,8 @@ from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon,
 from .HdfUtils import HdfUtils
 from .HdfXsec import HdfXsec
 from .HdfBase import HdfBase
-from .Decorators import standardize_input, log_call
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -8489,7 +8523,7 @@ class HdfStruc:
 
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfUtils.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfUtils.py
 ==================================================
 """
 HdfUtils Class
@@ -8546,8 +8580,8 @@ from scipy.spatial import KDTree
 import re
 from shapely.geometry import LineString  # Import LineString to avoid NameError
 
-from .Decorators import standardize_input, log_call 
-from .LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input, log_call 
+from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -8928,7 +8962,7 @@ class HdfUtils:
     
 ==================================================
 
-File: c:\GH\ras-commander\ras_commander\HdfXsec.py
+File: C:\GH\ras-commander\ras_commander\hdf\HdfXsec.py
 ==================================================
 """
 Class: HdfXsec
@@ -8968,10 +9002,10 @@ from geopandas import GeoDataFrame
 import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString
 from typing import List  # Import List to avoid NameError
-from .Decorators import standardize_input, log_call
+from ..Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .LoggingConfig import get_logger
+from ..LoggingConfig import get_logger
 import logging
 
 

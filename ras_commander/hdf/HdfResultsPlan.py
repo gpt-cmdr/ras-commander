@@ -36,13 +36,13 @@ from pathlib import Path
 import h5py
 import pandas as pd
 import xarray as xr
-from .Decorators import standardize_input, log_call
+from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
 from .HdfResultsXsec import HdfResultsXsec
-from .LoggingConfig import get_logger
+from ..LoggingConfig import get_logger
 import numpy as np
 from datetime import datetime
-from .RasPrj import ras
+from ..RasPrj import ras
 
 logger = get_logger(__name__)
 
@@ -765,7 +765,7 @@ class HdfResultsPlan:
                     # Fallback to .txt file using RasControl
                     try:
                         # Late import to avoid circular dependency
-                        from .RasControl import RasControl
+                        from ..RasControl import RasControl
 
                         # Extract plan info from HDF path
                         # e.g., "C:/path/BaldEagle.p10.hdf" -> use path for RasControl
@@ -807,7 +807,7 @@ class HdfResultsPlan:
 
             # Try .txt fallback
             try:
-                from .RasControl import RasControl
+                from ..RasControl import RasControl
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
                     logger.warning(
@@ -825,7 +825,7 @@ class HdfResultsPlan:
 
             # Try .txt fallback on any HDF error
             try:
-                from .RasControl import RasControl
+                from ..RasControl import RasControl
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
                     logger.warning(

@@ -177,7 +177,9 @@ Important highlights from AGENTS.md:
 - `init_ras_worker()` - Factory function to create and validate remote workers
 - `compute_parallel_remote()` - Execute plans across distributed worker pool
 - **PsexecWorker** - Windows remote execution via PsExec over network shares (✓ implemented)
-- **Future workers**: SshWorker, LocalWorker, WinrmWorker, DockerWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
+- **LocalWorker** - Local parallel execution (✓ implemented)
+- **DockerWorker** - Container execution via Docker over SSH (✓ implemented, requires: docker, paramiko)
+- **Future workers**: SshWorker, WinrmWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
 - Worker abstraction enables heterogeneous execution (local + remote + cloud simultaneously)
 - Queue-aware wave scheduling across all worker types
 - **Lazy loading**: Remote module only loaded when `init_ras_worker` or workers are accessed

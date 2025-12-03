@@ -28,7 +28,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.85.0",
+    version="0.86.0",
     packages=find_packages(),
     include_package_data=True,
     python_requires='>=3.10',
@@ -52,7 +52,6 @@ setup(
         'geopandas',
         'matplotlib',
         'shapely',
-        'pathlib',
         'rasterstats',
         'rtree',
         'pywin32>=227',    # Required for RasControl COM interface

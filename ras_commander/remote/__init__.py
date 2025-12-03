@@ -7,9 +7,9 @@ across local, remote, and cloud compute resources.
 Available Workers:
     - PsexecWorker: Windows remote execution via PsExec (IMPLEMENTED)
     - LocalWorker: Local parallel execution using RasCmdr.compute_plan() (IMPLEMENTED)
+    - DockerWorker: Linux container execution using HEC-RAS 6.6 (IMPLEMENTED, requires: docker)
     - SshWorker: SSH-based remote execution (stub, requires: paramiko)
     - WinrmWorker: WinRM-based remote execution (stub, requires: pywinrm)
-    - DockerWorker: Container execution (stub, requires: docker)
     - SlurmWorker: HPC cluster execution (stub)
     - AwsEc2Worker: AWS EC2 cloud execution (stub, requires: boto3)
     - AzureFrWorker: Azure cloud execution (stub, requires: azure-*)
