@@ -206,15 +206,22 @@ class RasGeometry:
         Extract list of storage area names from geometry file.
 
         DEPRECATED: Use GeomStorage.get_storage_areas() instead.
+        Note: The new method returns a DataFrame with more information.
+        This wrapper converts it to List[str] for backward compatibility.
         """
         warnings.warn(
             "RasGeometry.get_storage_areas() is deprecated. "
-            "Use GeomStorage.get_storage_areas() instead.",
+            "Use GeomStorage.get_storage_areas() instead. "
+            "Note: New method returns DataFrame, not List[str].",
             DeprecationWarning,
             stacklevel=2
         )
         from .geom import GeomStorage
-        return GeomStorage.get_storage_areas(geom_file, exclude_2d)
+        df = GeomStorage.get_storage_areas(geom_file, exclude_2d)
+        # Convert DataFrame to List[str] for backward compatibility
+        if df.empty:
+            return []
+        return df['Name'].tolist()
 
     @staticmethod
     @log_call

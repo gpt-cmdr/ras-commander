@@ -63,7 +63,7 @@ import re
 import logging
 from pathlib import Path
 import shutil
-from typing import Union, Optional
+from typing import Union, Optional, List
 from numbers import Number
 import pandas as pd
 from .RasPrj import RasPrj, ras
@@ -1806,3 +1806,208 @@ class RasPlan:
         # Refresh RasPrj dataframes if ras_object provided
         if ras_object:
             ras_object.plan_df = ras_object.get_plan_entries()
+
+    @staticmethod
+    @log_call
+    def add_hdf_output_variable(
+        plan_number_or_path: Union[str, Number, Path],
+        variable: str,
+        ras_object=None
+    ) -> bool:
+        """
+        Add an HDF output variable to a HEC-RAS plan file.
+
+        This enables additional output variables in the HDF results file, such as
+        Face Flow, which is needed for discharge-weighted velocity calculations.
+
+        Args:
+            plan_number_or_path (Union[str, Number, Path]): The plan number or path to the plan file.
+            variable (str): The variable name to add (e.g., "Face Flow", "Face Shear Stress").
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            bool: True if variable was added or already exists, False on error.
+
+        Supported Variables:
+            - "Face Flow" - Flow rate across each face (needed for discharge-weighted velocity)
+            - "Face Shear Stress" - Shear stress at each face
+            - "Face Cumulative Volume" - Cumulative volume through each face
+            - "Cell Cumulative Precipitation" - Cumulative precipitation per cell
+            - "Cell Courant" - Courant number per cell
+
+        Example:
+            >>> # Enable Face Flow output before running a plan
+            >>> RasPlan.add_hdf_output_variable('02', 'Face Flow')
+            >>> RasCmdr.compute_plan('02')
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path or not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_number_or_path}")
+                return False
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Check if this variable already exists
+            target_line = f"HDF Additional Output Variable={variable}"
+            for line in lines:
+                if line.strip() == target_line:
+                    logger.info(f"HDF output variable '{variable}' already exists in plan")
+                    return True
+
+            # Find the best location to insert (near other HDF settings)
+            insert_index = None
+            for i, line in enumerate(lines):
+                if line.startswith("HDF Compression="):
+                    # Insert before HDF Compression
+                    insert_index = i
+                    break
+                elif line.startswith("HDF "):
+                    # Track last HDF line as fallback
+                    insert_index = i + 1
+
+            # If no HDF settings found, find Write HDF5 File or end of UNET settings
+            if insert_index is None:
+                for i, line in enumerate(lines):
+                    if line.startswith("Write HDF5 File="):
+                        insert_index = i
+                        break
+                    elif line.startswith("UNET "):
+                        insert_index = i + 1
+
+            # Fallback to end of file
+            if insert_index is None:
+                insert_index = len(lines)
+
+            # Insert the new variable
+            lines.insert(insert_index, f"{target_line}\n")
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Added HDF output variable '{variable}' to plan file: {plan_file_path.name}")
+            return True
+
+        except IOError as e:
+            logger.error(f"Error adding HDF output variable to plan file {plan_file_path}: {e}")
+            return False
+
+    @staticmethod
+    @log_call
+    def get_hdf_output_variables(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> List[str]:
+        """
+        Get list of additional HDF output variables configured in a plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Number, Path]): The plan number or path to the plan file.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            List[str]: List of variable names configured for HDF output.
+
+        Example:
+            >>> vars = RasPlan.get_hdf_output_variables('02')
+            >>> print(vars)  # ['Face Flow', 'Face Shear Stress']
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path or not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_number_or_path}")
+                return []
+
+        variables = []
+        try:
+            with open(plan_file_path, 'r') as file:
+                for line in file:
+                    if line.startswith("HDF Additional Output Variable="):
+                        var_name = line.split("=", 1)[1].strip()
+                        variables.append(var_name)
+
+            logger.info(f"Found {len(variables)} HDF output variables in plan")
+            return variables
+
+        except IOError as e:
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
+            return []
+
+    @staticmethod
+    @log_call
+    def remove_hdf_output_variable(
+        plan_number_or_path: Union[str, Number, Path],
+        variable: str,
+        ras_object=None
+    ) -> bool:
+        """
+        Remove an HDF output variable from a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path (Union[str, Number, Path]): The plan number or path to the plan file.
+            variable (str): The variable name to remove.
+            ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+
+        Returns:
+            bool: True if variable was removed, False if not found or on error.
+
+        Example:
+            >>> RasPlan.remove_hdf_output_variable('02', 'Face Flow')
+        """
+        logger = get_logger(__name__)
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get the plan file path
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
+            if not plan_file_path or not plan_file_path.exists():
+                logger.error(f"Plan file not found: {plan_number_or_path}")
+                return False
+
+        try:
+            # Read the file
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+
+            # Find and remove the variable line
+            target_line = f"HDF Additional Output Variable={variable}"
+            new_lines = []
+            removed = False
+            for line in lines:
+                if line.strip() == target_line:
+                    removed = True
+                else:
+                    new_lines.append(line)
+
+            if not removed:
+                logger.info(f"HDF output variable '{variable}' not found in plan")
+                return False
+
+            # Write the updated content back to the file
+            with open(plan_file_path, 'w') as file:
+                file.writelines(new_lines)
+
+            logger.info(f"Removed HDF output variable '{variable}' from plan file")
+            return True
+
+        except IOError as e:
+            logger.error(f"Error removing HDF output variable from plan file {plan_file_path}: {e}")
+            return False

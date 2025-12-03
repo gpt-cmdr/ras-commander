@@ -48,12 +48,15 @@ class GeomStorage:
 
     @staticmethod
     @log_call
-    def get_storage_areas(geom_file: Union[str, Path]) -> pd.DataFrame:
+    def get_storage_areas(geom_file: Union[str, Path],
+                         exclude_2d: bool = True) -> pd.DataFrame:
         """
         Extract storage area metadata from geometry file.
 
         Parameters:
             geom_file (Union[str, Path]): Path to geometry file
+            exclude_2d (bool): If True, exclude 2D flow areas (default True).
+                2D flow areas are identified by having "Storage Area Is2D=" set to -1.
 
         Returns:
             pd.DataFrame: DataFrame with columns:
@@ -61,15 +64,18 @@ class GeomStorage:
                 - NumPoints (int): Number of elevation-volume points
                 - MinElev (float): Minimum elevation in storage curve (if available)
                 - MaxElev (float): Maximum elevation in storage curve (if available)
+                - Is2D (bool): Whether this is a 2D flow area
 
         Raises:
             FileNotFoundError: If geometry file doesn't exist
 
         Example:
-            >>> storage_df = GeomStorage.get_storage_areas("model.g01")
+            >>> # Get only traditional storage areas (exclude 2D)
+            >>> storage_df = GeomStorage.get_storage_areas("model.g01", exclude_2d=True)
             >>> print(f"Found {len(storage_df)} storage areas")
-            >>> for _, row in storage_df.iterrows():
-            ...     print(f"  {row['Name']}: {row['NumPoints']} points")
+            >>>
+            >>> # Get all storage areas including 2D flow areas
+            >>> all_storage = GeomStorage.get_storage_areas("model.g01", exclude_2d=False)
         """
         geom_file = Path(geom_file)
 
@@ -88,14 +94,26 @@ class GeomStorage:
 
                 # Find Storage Area definition
                 if line.startswith("Storage Area="):
-                    sa_name = GeomParser.extract_keyword_value(line, "Storage Area")
+                    value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+                    # Storage Area format: Name,X,Y - extract just the name
+                    parts = [p.strip() for p in value_str.split(',')]
+                    sa_name = parts[0] if parts else value_str
 
-                    # Look for elevation-volume count
+                    # Look for elevation-volume count and 2D flag
                     num_points = 0
                     min_elev = None
                     max_elev = None
+                    is_2d = False
 
                     for j in range(i+1, min(i+50, len(lines))):
+                        # Check if this is a 2D flow area
+                        if lines[j].startswith("Storage Area Is2D="):
+                            is2d_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Is2D")
+                            try:
+                                is_2d = int(is2d_str.strip()) == -1
+                            except ValueError:
+                                pass
+
                         if lines[j].startswith("Storage Area Elev Volume="):
                             count_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Elev Volume")
                             try:
@@ -131,12 +149,21 @@ class GeomStorage:
                         'Name': sa_name,
                         'NumPoints': num_points,
                         'MinElev': min_elev,
-                        'MaxElev': max_elev
+                        'MaxElev': max_elev,
+                        'Is2D': is_2d
                     })
 
                 i += 1
 
             df = pd.DataFrame(storage_areas)
+
+            # Filter out 2D flow areas if requested
+            if exclude_2d and not df.empty and 'Is2D' in df.columns:
+                original_count = len(df)
+                df = df[~df['Is2D']].reset_index(drop=True)
+                if original_count != len(df):
+                    logger.debug(f"Excluded {original_count - len(df)} 2D flow areas")
+
             logger.info(f"Found {len(df)} storage areas in {geom_file.name}")
             return df
 
@@ -185,7 +212,10 @@ class GeomStorage:
             sa_idx = None
             for i, line in enumerate(lines):
                 if line.startswith("Storage Area="):
-                    sa_name = GeomParser.extract_keyword_value(line, "Storage Area")
+                    value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+                    # Storage Area format: Name,X,Y - extract just the name
+                    parts = [p.strip() for p in value_str.split(',')]
+                    sa_name = parts[0] if parts else value_str
                     if sa_name == storage_name:
                         sa_idx = i
                         break
