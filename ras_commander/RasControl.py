@@ -37,7 +37,6 @@ Session tracking infrastructure:
 
 """
 
-import win32com.client
 import psutil
 import pandas as pd
 from pathlib import Path
@@ -53,6 +52,14 @@ import sys
 import subprocess
 import os
 from dataclasses import dataclass, asdict
+
+# Win32 COM interface - Windows only
+try:
+    import win32com.client
+    WIN32_AVAILABLE = True
+except ImportError:
+    win32com = None
+    WIN32_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 

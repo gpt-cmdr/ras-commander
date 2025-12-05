@@ -36,18 +36,17 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Tuple, Callable, Any
 
-# Win32 imports
+# Win32 imports - Windows only
 try:
     import win32gui
     import win32con
     import win32api
     import win32com.client
     import win32process
+    WIN32_AVAILABLE = True
 except ImportError:
-    raise ImportError(
-        "win32 libraries are required for GUI automation. "
-        "Install with: pip install pywin32"
-    )
+    win32gui = win32con = win32api = win32com = win32process = None
+    WIN32_AVAILABLE = False
 
 from .RasPrj import ras
 from .LoggingConfig import get_logger

@@ -19,3 +19,19 @@ mkdocs-git-revision-date-localized-plugin>=1.2.0
 # For Jupyter notebook execution (optional)
 # nbconvert>=7.0.0
 # jupyter>=1.0.0
+
+# Package dependencies for mkdocstrings to import modules
+# (excludes pywin32 which is Windows-only)
+h5py
+numpy
+pandas
+requests
+tqdm
+scipy
+xarray
+geopandas
+matplotlib
+shapely
+rasterstats
+rtree
+psutil>=5.6.6
