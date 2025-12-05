@@ -4,9 +4,11 @@
   <img src="ras-commander_logo.svg" width=70%>
 </p>
 
-RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library was initially conceptualized in the Australian Water School course "AI Tools for Modelling Innovation", and subsequently expanded to cover much of the basic functionality of the HECRASController COM32 interface using open-source python libraries.  This library uses a Test Driven Development strategy, leveraging the publicly-available HEC-RAS Example projects to create repeatable demonstration examples.  The "Commmander" moniker is inspired by the "Command Line is All You Need" approach to HEC-RAS automation that was first implemented in the HEC-Commander Tools repository. 
+RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library was initially conceptualized in the Australian Water School course "AI Tools for Modelling Innovation", and subsequently expanded to cover much of the basic functionality of the HECRASController COM32 interface using open-source python libraries.  This library uses a Test Driven Development strategy, leveraging the publicly-available HEC-RAS Example projects to create repeatable demonstration examples.  The "Commmander" moniker is inspired by the "Command Line is All You Need" approach to HEC-RAS automation that was first implemented in the HEC-Commander Tools repository.
 
-*[Check out the ASFPM Presentation on RAS-Commander Here](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)*
+[![Documentation Status](https://readthedocs.org/projects/ras-commander/badge/?version=latest)](https://ras-commander.readthedocs.io/en/latest/?badge=latest)
+
+**[📖 Full Documentation](https://ras-commander.readthedocs.io/)** | *[ASFPM Presentation](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)*
 
 ## Repository Author
 
@@ -393,11 +395,11 @@ ras_commander
 │   ├── HdfFluvialPluvial.py
 │   ├── HdfPlot.py
 │   └── HdfResultsPlot.py
+├── docs/                   # Documentation source (MkDocs)
 ├── .gitignore
 ├── LICENSE
 ├── README.md
-├── STYLE_GUIDE.md
-├── Comprehensive_Library_Guide.md
+├── mkdocs.yml
 ├── pyproject.toml
 ├── setup.py
 ```
@@ -535,7 +537,12 @@ These examples demonstrate practical applications of RAS Commander for automatin
 
 ## Documentation
 
-For detailed usage instructions and API documentation, please refer to the [Comprehensive Library Guide](Comprehensive_Library_Guide.md).
+For detailed usage instructions and API documentation, visit the **[RAS Commander Documentation](https://ras-commander.readthedocs.io/)**:
+
+- [Installation Guide](https://ras-commander.readthedocs.io/en/latest/getting-started/installation/)
+- [Quick Start](https://ras-commander.readthedocs.io/en/latest/getting-started/quickstart/)
+- [User Guide](https://ras-commander.readthedocs.io/en/latest/user-guide/overview/)
+- [API Reference](https://ras-commander.readthedocs.io/en/latest/api/)
 
 ## Future Development
 
@@ -553,7 +560,7 @@ The ras-commander library is an ongoing project. Future plans include:
 
 ## Style Guide
 
-This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Style Guide](STYLE_GUIDE.md) for details on coding conventions, documentation standards, and best practices.
+This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Contributing Guide](https://ras-commander.readthedocs.io/en/latest/development/contributing/) for details on coding conventions, documentation standards, and best practices.
 
 ## Acknowledgments
 
