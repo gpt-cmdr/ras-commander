@@ -2,12 +2,8 @@
   "workers": [
     {
       "name": "Local Compute",
-      "hostname": "localhost",
-      "share_path": "C:\\Temp\\RasRemote",
-      "username": "local_user",
-      "password": "local_password",
-      "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\RAS.exe",
-      "session_id": 2,
+      "worker_type": "local",
+      "worker_folder": "C:\\RasRemote",
       "process_priority": "low",
       "queue_priority": 0,
       "cores_total": 4,
@@ -15,32 +11,47 @@
       "enabled": true
     },
     {
-      "name": "Primary Workstation",
+      "name": "Remote Workstation (PsExec)",
+      "worker_type": "psexec",
       "hostname": "192.168.1.100",
       "share_path": "\\\\192.168.1.100\\RasRemote",
-      "username": "your_username",
+      "worker_folder": "C:\\RasRemote",
+      "username": ".\\your_username",
       "password": "your_password",
-      "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\RAS.exe",
       "session_id": 2,
       "process_priority": "low",
       "queue_priority": 1,
       "cores_total": 16,
       "cores_per_plan": 4,
-      "enabled": true
+      "enabled": false
     },
     {
-      "name": "Secondary Workstation",
-      "hostname": "192.168.1.101",
-      "share_path": "\\\\192.168.1.101\\RasRemote",
-      "username": "your_username",
-      "password": "your_password",
-      "ras_exe_path": "C:\\Program Files\\HEC\\HEC-RAS\\6.3\\RAS.exe",
-      "session_id": 2,
-      "process_priority": "low",
-      "queue_priority": 1,
+      "name": "Remote Docker (SSH)",
+      "worker_type": "docker",
+      "docker_image": "hecras:6.6",
+      "docker_host": "ssh://user@192.168.1.100",
+      "share_path": "\\\\192.168.1.100\\RasRemote",
+      "remote_staging_path": "/mnt/c/RasRemote",
+      "use_ssh_client": true,
       "cores_total": 8,
       "cores_per_plan": 4,
-      "enabled": false
+      "preprocess_on_host": true,
+      "max_runtime_minutes": 60,
+      "queue_priority": 2,
+      "enabled": false,
+      "_comment": "SSH requires key-based auth. Setup: ssh-keygen && ssh-copy-id user@host"
+    },
+    {
+      "name": "Local Docker",
+      "worker_type": "docker",
+      "docker_image": "hecras:6.6",
+      "cores_total": 4,
+      "cores_per_plan": 4,
+      "preprocess_on_host": true,
+      "max_runtime_minutes": 60,
+      "queue_priority": 3,
+      "enabled": false,
+      "_comment": "Requires Docker Desktop with Linux containers and hecras:6.6 image built"
     }
   ]
 }

@@ -1459,15 +1459,17 @@ def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
     # Store version for RasControl (legacy COM interface support)
     ras_object.ras_version = ras_version if ras_version else detected_version
 
-    # Always update the global ras object as well
-    if ras_object is not ras:
-        if specified_prj_file is not None:
-            ras.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file)
-        else:
-            ras.initialize(project_folder, ras_exe_path)
-        # Also store version in global ras object
-        ras.ras_version = ras_version if ras_version else detected_version
-        logger.debug("Global 'ras' object also updated to match the new project.")
+    # NOTE: Removed automatic global ras update for thread-safety
+    # When ras_object is explicitly passed, we should NOT modify the global ras object
+    # This allows multiple threads to use separate RasPrj instances without conflicts
+    #
+    # Previous behavior (removed):
+    #   if ras_object is not ras:
+    #       ras.initialize(project_folder, ras_exe_path, ...)  # This was NOT thread-safe
+    #
+    # If you need to update the global ras object, call init_ras_project without ras_object:
+    #   init_ras_project(path, version)  # Updates global ras
+    # Or explicitly pass ras_object=None (default behavior)
 
     logger.debug(f"Project initialized. Project folder: {ras_object.project_folder}")
     logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")

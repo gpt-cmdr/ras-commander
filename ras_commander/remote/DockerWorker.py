@@ -28,7 +28,19 @@ Prerequisites:
 
 Python Requirements:
     pip install ras-commander[remote-docker]
-    # or: pip install docker
+    # or: pip install docker paramiko
+
+SSH Remote Docker Host Setup:
+    For ssh:// URLs (e.g., docker_host="ssh://user@host"), you need:
+
+    1. SSH key-based authentication (password auth NOT supported by Docker SDK)
+       - Generate key: ssh-keygen -t ed25519
+       - Copy to remote: ssh-copy-id user@host
+       - Test: ssh user@host "docker info" (should work without password prompt)
+
+    2. Alternative: use_ssh_client=True to use system's ssh command
+       - Requires ssh client installed and configured
+       - Supports more authentication options (agent, config file)
 
 Technical Details:
     - Base image: Rocky Linux 8
@@ -115,6 +127,9 @@ class DockerWorker(RasWorker):
     max_runtime_minutes: int = 480
     preprocess_on_host: bool = True
 
+    # SSH connection options (for ssh:// docker_host URLs)
+    use_ssh_client: bool = False  # If True, use system ssh command instead of paramiko
+
     # Resource limits
     cpu_limit: Optional[str] = None  # e.g., "4" for 4 cores
     memory_limit: Optional[str] = None  # e.g., "8g" for 8GB
@@ -177,16 +192,19 @@ def init_docker_worker(**kwargs) -> DockerWorker:
     Args:
         docker_image: Docker image with HEC-RAS Linux (required, e.g., "hecras:6.6")
         docker_host: Docker daemon URL (optional, default: local)
-            For remote: "tcp://192.168.3.8:2375"
+            For remote TCP: "tcp://192.168.3.8:2375"
+            For remote SSH: "ssh://user@192.168.3.8" (requires key-based auth)
         share_path: UNC path for file transfer to remote Docker host (required for remote)
             Example: "\\\\\\\\192.168.3.8\\\\RasRemote"
         remote_staging_path: Path on Docker host for volume mounts (required for remote)
-            Example: "C:\\\\RasRemote"
+            Example: "C:\\\\RasRemote" or "/mnt/c/RasRemote" (WSL paths)
         worker_id: Custom worker ID (auto-generated if not provided)
         cores_total: Total CPU cores available for this worker
         cores_per_plan: CPU cores to allocate per plan
         max_runtime_minutes: Simulation timeout (default: 480)
         preprocess_on_host: Run Windows preprocessing first (default: True)
+        use_ssh_client: Use system ssh command instead of paramiko (default: False)
+            Set True if you want to use SSH agent or ~/.ssh/config settings
         cpu_limit: Container CPU limit (e.g., "4" for 4 cores)
         memory_limit: Container memory limit (e.g., "8g")
         **kwargs: Additional DockerWorker parameters
@@ -206,12 +224,13 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         ...     cores_per_plan=4
         ... )
 
-    Example (remote Docker):
+    Example (remote Docker via SSH):
         >>> worker = init_docker_worker(
         ...     docker_image="hecras:6.6",
-        ...     docker_host="tcp://192.168.3.8:2375",
+        ...     docker_host="ssh://user@192.168.3.8",
         ...     share_path="\\\\\\\\192.168.3.8\\\\RasRemote",
-        ...     remote_staging_path="C:\\\\RasRemote",
+        ...     remote_staging_path="/mnt/c/RasRemote",
+        ...     use_ssh_client=True,  # Use system ssh command
         ...     cores_total=8,
         ...     cores_per_plan=4
         ... )
@@ -226,10 +245,34 @@ def init_docker_worker(**kwargs) -> DockerWorker:
 
     worker = DockerWorker(**kwargs)
 
+    # Check if SSH-based connection and paramiko availability
+    is_ssh_host = worker.docker_host and worker.docker_host.startswith("ssh://")
+
+    if is_ssh_host and not worker.use_ssh_client:
+        # Check if paramiko is available for native SSH transport
+        try:
+            import paramiko
+            logger.debug("paramiko available for SSH transport")
+        except ImportError:
+            raise ImportError(
+                "SSH Docker connections require paramiko.\n"
+                "Install with: pip install paramiko\n"
+                "Or use use_ssh_client=True to use system ssh command instead.\n"
+                "\n"
+                "IMPORTANT: SSH key-based authentication is required.\n"
+                "Password authentication is NOT supported by Docker SDK.\n"
+                "Setup: ssh-keygen && ssh-copy-id user@host\n"
+                "Test: ssh user@host 'docker info' (must work without password)"
+            )
+
     # Verify Docker daemon connectivity
     try:
         if worker.docker_host:
-            client = docker.DockerClient(base_url=worker.docker_host)
+            client_kwargs = {"base_url": worker.docker_host}
+            if worker.use_ssh_client:
+                client_kwargs["use_ssh_client"] = True
+                logger.info("Using system ssh client for Docker connection")
+            client = docker.DockerClient(**client_kwargs)
         else:
             client = docker.from_env()
 
@@ -247,6 +290,30 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         client.close()
 
     except docker.errors.DockerException as e:
+        error_msg = str(e)
+
+        # Provide helpful error messages for common SSH issues
+        if is_ssh_host:
+            if "paramiko" in error_msg.lower():
+                raise ImportError(
+                    f"SSH connection failed - paramiko issue: {e}\n"
+                    "Install paramiko: pip install paramiko\n"
+                    "Or set use_ssh_client=True in your worker config"
+                )
+            elif "authentication" in error_msg.lower() or "permission" in error_msg.lower():
+                raise ConnectionError(
+                    f"SSH authentication failed: {e}\n"
+                    "Docker SDK requires SSH key-based authentication.\n"
+                    "Password auth is NOT supported.\n"
+                    "\n"
+                    "Setup SSH keys:\n"
+                    "  1. ssh-keygen -t ed25519\n"
+                    "  2. ssh-copy-id user@host\n"
+                    "  3. Test: ssh user@host 'docker info'\n"
+                    "\n"
+                    "Or try use_ssh_client=True to use system ssh command"
+                )
+
         logger.error(f"Cannot connect to Docker daemon: {e}")
         raise
 
@@ -256,6 +323,8 @@ def init_docker_worker(**kwargs) -> DockerWorker:
     logger.info(f"  Preprocess on host: {worker.preprocess_on_host}")
     logger.info(f"  Max parallel plans: {worker.max_parallel_plans}")
     logger.info(f"  Timeout: {worker.max_runtime_minutes} minutes")
+    if is_ssh_host:
+        logger.info(f"  SSH client: {'system' if worker.use_ssh_client else 'paramiko'}")
 
     return worker
 
@@ -296,7 +365,6 @@ def _preprocess_plan_for_linux(
     ras_obj,
     plan_number: str,
     project_staging: Path,
-    stability_timeout: int = 10,
     max_wait: int = 300
 ) -> bool:
     """
@@ -307,15 +375,18 @@ def _preprocess_plan_for_linux(
     - .b file (binary geometry)
     - .x file (execution file)
 
-    The process is killed after .tmp.hdf is created and stabilizes, preserving
-    the intermediate file for Linux execution.
+    Detection Method:
+    The process is killed when the .bcoXX file (detailed log) contains
+    "Starting Unsteady Flow Computations", indicating preprocessing is complete
+    and the actual simulation is about to begin.
+
+    To enable .bco file creation, "Write Detailed= 1" is set in the plan file.
 
     Args:
         ras_obj: RasPrj object
         plan_number: Plan number to preprocess
         project_staging: Path to staged project copy
-        stability_timeout: Seconds to wait for file stability after creation
-        max_wait: Maximum seconds to wait for .tmp.hdf to appear
+        max_wait: Maximum seconds to wait for preprocessing to complete
 
     Returns:
         bool: True if preprocessing succeeded
@@ -325,12 +396,15 @@ def _preprocess_plan_for_linux(
 
     try:
         # Import here to avoid circular imports
-        from ..RasPrj import init_ras_project
+        from ..RasPrj import init_ras_project, RasPrj
         from ..RasGeo import RasGeo
         from ..RasPlan import RasPlan
 
-        # Initialize the staged project
-        temp_ras = init_ras_project(str(project_staging), ras_obj.ras_version)
+        # Initialize the staged project with a NEW RasPrj instance
+        # CRITICAL: Pass ras_object to avoid modifying the global ras object
+        # This is required for thread-safety when running multiple plans in parallel
+        temp_ras = RasPrj()
+        init_ras_project(str(project_staging), ras_obj.ras_version, ras_object=temp_ras)
         project_name = temp_ras.project_name
 
         logger.info(f"Preprocessing plan {plan_number} for Linux execution...")
@@ -347,9 +421,9 @@ def _preprocess_plan_for_linux(
 
         logger.info(f"Plan {plan_number} uses geometry {geometry_number}")
 
-        # Clear existing HDF/binary files to force regeneration
+        # Clear existing HDF/binary/log files to force regeneration
         for pattern in [f"*.p{plan_number}.hdf", f"*.p{plan_number}.tmp.hdf",
-                       f"*.b{plan_number}", f"*.x{geometry_number}"]:
+                       f"*.b{plan_number}", f"*.x{geometry_number}", f"*.bco{plan_number}"]:
             for f in project_staging.glob(pattern):
                 try:
                     f.unlink()
@@ -357,7 +431,7 @@ def _preprocess_plan_for_linux(
                 except:
                     pass
 
-        # Set plan flags for preprocessing
+        # Set plan flags for preprocessing AND enable detailed logging
         plan_file_path = project_staging / f"{project_name}.p{plan_number}"
         if plan_file_path.exists():
             RasPlan.update_run_flags(
@@ -367,6 +441,9 @@ def _preprocess_plan_for_linux(
                 post_processor=True,
                 ras_object=temp_ras
             )
+
+            # Enable detailed logging (Write Detailed= 1) to create .bco file
+            _enable_detailed_logging(plan_file_path)
 
         # Get HEC-RAS executable path from temp_ras
         ras_exe = temp_ras.ras_exe_path
@@ -392,6 +469,9 @@ def _preprocess_plan_for_linux(
         logger.info(f"Starting HEC-RAS preprocessing with early termination...")
         logger.debug(f"Command: {cmd}")
 
+        # Record start time for .bco file detection
+        execution_start_time = time.time()
+
         # Start HEC-RAS as subprocess
         process = subprocess.Popen(
             cmd,
@@ -403,14 +483,12 @@ def _preprocess_plan_for_linux(
 
         tmp_hdf = project_staging / f"{project_name}.p{plan_number}.tmp.hdf"
         hdf = project_staging / f"{project_name}.p{plan_number}.hdf"
+        bco_file = project_staging / f"{project_name}.bco{plan_number}"
 
-        # Monitor for .tmp.hdf creation
-        start_time = time.time()
-        last_size = 0
-        stable_count = 0
         check_interval = 0.5
+        start_time = time.time()
 
-        logger.info(f"Waiting for {tmp_hdf.name} to be created (max {max_wait}s)...")
+        logger.info(f"Monitoring {bco_file.name} for 'Starting Unsteady Flow Computations' signal...")
 
         while time.time() - start_time < max_wait:
             # Check if process died
@@ -418,21 +496,24 @@ def _preprocess_plan_for_linux(
                 logger.info(f"HEC-RAS process exited with code {process.returncode}")
                 break
 
-            # Check for .tmp.hdf
-            if tmp_hdf.exists():
-                current_size = tmp_hdf.stat().st_size
-
-                if current_size > 0:
-                    if current_size == last_size:
-                        stable_count += 1
-                        if stable_count >= (stability_timeout / check_interval):
-                            logger.info(f"File stable at {current_size / 1024 / 1024:.1f} MB for {stability_timeout}s")
+            # Check for .bco file with the signal that preprocessing is complete
+            if bco_file.exists():
+                # Verify file was modified after we started execution
+                file_mtime = bco_file.stat().st_mtime
+                if file_mtime >= execution_start_time:
+                    try:
+                        # Read the .bco file and check for the signal
+                        content = bco_file.read_text(encoding='utf-8', errors='ignore')
+                        if "Starting Unsteady Flow Computations" in content:
+                            logger.info(f"Detected 'Starting Unsteady Flow Computations' in {bco_file.name}")
+                            logger.info("Preprocessing complete - terminating HEC-RAS before computation starts")
                             break
-                    else:
-                        stable_count = 0
-                        logger.debug(f"File growing: {current_size / 1024 / 1024:.1f} MB")
+                    except Exception as e:
+                        logger.debug(f"Could not read .bco file: {e}")
 
-                    last_size = current_size
+            # Also check if .tmp.hdf exists and is being written (fallback)
+            if tmp_hdf.exists() and tmp_hdf.stat().st_size > 0:
+                logger.debug(f".tmp.hdf growing: {tmp_hdf.stat().st_size / 1024 / 1024:.1f} MB")
 
             time.sleep(check_interval)
 
@@ -483,6 +564,52 @@ def _preprocess_plan_for_linux(
         return False
 
 
+def _enable_detailed_logging(plan_file_path: Path) -> bool:
+    """
+    Enable detailed logging in a plan file by setting 'Write Detailed= 1'.
+
+    This creates a .bcoXX file during HEC-RAS execution that can be monitored
+    for the "Starting Unsteady Flow Computations" signal.
+
+    Args:
+        plan_file_path: Path to the plan file (.pXX)
+
+    Returns:
+        bool: True if successful
+    """
+    try:
+        content = plan_file_path.read_text(encoding='utf-8', errors='ignore')
+
+        # Check if Write Detailed line exists
+        if "Write Detailed=" in content:
+            # Replace existing setting
+            import re
+            new_content = re.sub(
+                r'Write Detailed=\s*\d+',
+                'Write Detailed= 1',
+                content
+            )
+            if new_content != content:
+                plan_file_path.write_text(new_content, encoding='utf-8')
+                logger.debug(f"Enabled detailed logging in {plan_file_path.name}")
+        else:
+            # Add the setting after Run HTab line or at the end
+            if "Run HTab=" in content:
+                new_content = content.replace(
+                    "Run HTab=",
+                    "Write Detailed= 1\nRun HTab="
+                )
+            else:
+                new_content = content + "\nWrite Detailed= 1\n"
+            plan_file_path.write_text(new_content, encoding='utf-8')
+            logger.debug(f"Added detailed logging setting to {plan_file_path.name}")
+
+        return True
+    except Exception as e:
+        logger.warning(f"Could not enable detailed logging: {e}")
+        return False
+
+
 @log_call
 def execute_docker_plan(
     worker: DockerWorker,
@@ -514,8 +641,18 @@ def execute_docker_plan(
     """
     docker = check_docker_dependencies()
 
+    # CRITICAL: Capture project info at the START of execution
+    # This prevents issues if another thread modifies ras_obj during execution
+    # (e.g., via init_ras_project calls in preprocessing)
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
+    ras_version = ras_obj.ras_version
+
+    # Validate project folder exists before proceeding
+    if not project_folder.exists():
+        logger.error(f"Project folder does not exist: {project_folder}")
+        logger.error("This may indicate a thread-safety issue with ras_obj modification")
+        return False
 
     logger.info(f"Starting Docker execution: plan {plan_number}, sub-worker {sub_worker_id}")
 
@@ -612,7 +749,10 @@ def execute_docker_plan(
 
         # Step 2: Run in Docker container
         if worker.docker_host:
-            client = docker.DockerClient(base_url=worker.docker_host)
+            client_kwargs = {"base_url": worker.docker_host}
+            if worker.use_ssh_client:
+                client_kwargs["use_ssh_client"] = True
+            client = docker.DockerClient(**client_kwargs)
         else:
             client = docker.from_env()
 

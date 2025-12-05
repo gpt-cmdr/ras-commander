@@ -73,6 +73,7 @@ research/**/*.pyc
 research/**/__pycache__/
 /feature_dev_notes
 /research
+/docs_old
 /tools
 /examples/working
 /working/

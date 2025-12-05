@@ -1,0 +1,21 @@
+# Documentation build dependencies
+# Install with: pip install -r docs/requirements-docs.txt
+
+# MkDocs core
+mkdocs>=1.5.0
+
+# Material theme
+mkdocs-material>=9.5.0
+
+# API documentation from docstrings
+mkdocstrings[python]>=0.24.0
+
+# Jupyter notebook rendering
+mkdocs-jupyter>=0.24.0
+
+# Git revision dates
+mkdocs-git-revision-date-localized-plugin>=1.2.0
+
+# For Jupyter notebook execution (optional)
+# nbconvert>=7.0.0
+# jupyter>=1.0.0

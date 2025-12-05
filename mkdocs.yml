@@ -1,0 +1,144 @@
+site_name: RAS Commander Documentation
+site_description: Python library for automating HEC-RAS operations
+site_author: William Katzenmeyer, P.E., C.F.M.
+site_url: https://gpt-cmdr.github.io/ras-commander/
+
+repo_name: gpt-cmdr/ras-commander
+repo_url: https://github.com/gpt-cmdr/ras-commander
+
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+  logo: assets/ras-commander_logo.svg
+  favicon: assets/ras-commander_logo.svg
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            heading_level: 2
+            separate_signature: true
+            show_signature_annotations: true
+  - mkdocs-jupyter:
+      include_source: true
+      execute: false
+      include: ["../examples/*.ipynb"]
+      ignore: ["../examples/example_projects/**"]
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/gpt-cmdr/ras-commander
+    - icon: fontawesome/brands/youtube
+      link: https://www.youtube.com/@GPT_Commander
+  generator: false
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Project Initialization: getting-started/project-initialization.md
+  - User Guide:
+    - Overview: user-guide/overview.md
+    - Plan Execution: user-guide/plan-execution.md
+    - Workflows & Patterns: user-guide/workflows-and-patterns.md
+    - Boundary Conditions: user-guide/boundary-conditions.md
+    - Spatial Data & RASMapper: user-guide/spatial-data.md
+    - HDF Data Extraction: user-guide/hdf-data-extraction.md
+    - Geometry Operations: user-guide/geometry-operations.md
+    - Steady Flow Analysis: user-guide/steady-flow-analysis.md
+    - Dam Breach Analysis: user-guide/dam-breach-analysis.md
+    - DSS Operations: user-guide/dss-operations.md
+    - Legacy COM Interface: user-guide/legacy-com-interface.md
+    - Remote Execution: user-guide/remote-execution.md
+  - Parallel Compute:
+    - Overview: parallel-compute/index.md
+    - Local Parallel: parallel-compute/local-parallel.md
+    - Remote Parallel: parallel-compute/remote-parallel.md
+    - Scaling Strategies: parallel-compute/scaling-strategies.md
+    - Worker Types: parallel-compute/worker-types.md
+  - Examples: examples/index.md
+  - API Reference:
+    - Overview: api/index.md
+    - Core Classes: api/core.md
+    - HDF Modules: api/hdf.md
+    - Geometry Modules: api/geometry.md
+    - DSS Modules: api/dss.md
+    - Remote Modules: api/remote.md
+  - Reference:
+    - HEC-RAS File Formats: reference/file-formats.md
+    - Geometry Parsing: reference/geometry-parsing.md
+    - HDF Structure: reference/hdf-structure.md
+    - Quick Reference: reference/quick-reference.md
+  - Development:
+    - Contributing: development/contributing.md
+    - Architecture: development/architecture.md
+    - Release Notes: development/release-notes.md

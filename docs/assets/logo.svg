@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 300">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#05386B" />
+      <stop offset="100%" stop-color="#0B93C7" />
+    </linearGradient>
+    
+    <!-- Digital circuit pattern -->
+    <pattern id="circuit-pattern" patternUnits="userSpaceOnUse" width="50" height="50" patternTransform="rotate(45)">
+      <path d="M10,0 L10,50 M0,10 L50,10 M20,20 L30,20 L30,30 M40,10 L40,40 L30,40" fill="none" stroke="#5CDB95" stroke-width="0.5" stroke-opacity="0.3" />
+    </pattern>
+  </defs>
+  
+  <!-- Main background -->
+  <rect width="450" height="300" fill="url(#bg-gradient)" />
+  
+  <!-- Circuit pattern overlay -->
+  <rect width="450" height="300" fill="url(#circuit-pattern)" opacity="0.2" />
+  
+  <!-- Central circular emblem with horizontal rectangle overlay -->
+  <circle cx="225" cy="150" r="100" fill="#05386B" stroke="#5CDB95" stroke-width="2" />
+  <rect x="55" y="185" width="340" height="50" fill="#05386B" stroke="#5CDB95" stroke-width="2" rx="2" ry="2" />
+  
+  <!-- Command line prompt at top of circle -->
+  <rect x="160" y="75" width="130" height="55" rx="5" ry="5" fill="#000" fill-opacity="0.85" />
+  <text x="170" y="95" font-family="Consolas, monospace" font-size="16" fill="#5CDB95">$ pip install</text>
+  <text x="170" y="120" font-family="Consolas, monospace" font-size="16" fill="#5CDB95">ras-commander</text>
+  <rect x="170" y="125" width="8" height="2" fill="#5CDB95">
+    <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite" />
+  </rect>
+  
+  <!-- Dynamic water wave bands - centered in circle -->
+  <g opacity="0.7">
+    <path d="M125,130 C145,120 165,140 185,130 C205,120 225,140 245,130 C265,120 285,140 325,130" fill="none" stroke="#5CDB95" stroke-width="4" />
+    <path d="M125,150 C145,140 165,160 185,150 C205,140 225,160 245,150 C265,140 285,160 325,150" fill="none" stroke="#5CDB95" stroke-width="4" />
+    <path d="M125,170 C145,160 165,180 185,170 C205,160 225,180 245,170 C265,160 285,180 325,170" fill="none" stroke="#5CDB95" stroke-width="4" />
+  </g>
+  
+  <!-- Text elements - moved RAS-COMMANDER up, tagline below the circle -->
+  <text x="225" y="222" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
+  <text x="225" y="265" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#8EE4AF">Automate • Analyze • Visualize</text>
+</svg>
