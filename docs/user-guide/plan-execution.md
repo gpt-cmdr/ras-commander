@@ -162,26 +162,159 @@ success = RasCmdr.compute_plan(new_plan)
 
 ## Checking Results
 
-After execution, verify results:
+After execution, verify results were generated and the run completed without errors. This is critical for determining if the simulation succeeded.
+
+### Quick Verification
 
 ```python
-from ras_commander import ras, HdfResultsPlan
+from ras_commander import init_ras_project, ras, HdfResultsPlan
 
-# Refresh project data
+# Refresh project data to see new results
 init_ras_project(ras.project_folder, "6.5")
 
 # Check for HDF results
 hdf_entries = ras.get_hdf_entries()
-print(hdf_entries)
-
-# Get computation messages
-plan_path = ras.plan_df.loc[
-    ras.plan_df['plan_number'] == '01', 'hdf_path'
-].iloc[0]
-
-messages = HdfResultsPlan.get_compute_messages(plan_path)
-print(messages)
+print(f"Found {len(hdf_entries)} HDF result files")
 ```
+
+### Check Compute Messages for Errors
+
+The compute messages contain the HEC-RAS log output. Always check for errors:
+
+```python
+from ras_commander import HdfResultsPlan
+
+# Get computation messages (accepts plan number or HDF path)
+msgs = HdfResultsPlan.get_compute_messages("01")
+
+if msgs:
+    # Check for error keywords
+    if 'ERROR' in msgs.upper() or 'FAILED' in msgs.upper():
+        print("ERRORS DETECTED in computation!")
+        # Print error lines
+        for line in msgs.split('\n'):
+            if 'ERROR' in line.upper() or 'FAILED' in line.upper():
+                print(f"  {line}")
+    else:
+        print("Computation completed without errors")
+else:
+    print("No compute messages - run may not have completed")
+```
+
+### Check Volume Accounting
+
+Volume accounting verifies mass conservation. A large imbalance indicates problems:
+
+```python
+from ras_commander import HdfResultsPlan
+
+volume_df = HdfResultsPlan.get_volume_accounting("01")
+
+if volume_df is not None:
+    print("Volume Accounting Data:")
+    # Display as transposed for readability
+    print(volume_df.T)
+else:
+    print("No volume accounting - run may have failed")
+```
+
+### Check Unsteady Results Exist
+
+Verify unsteady results were written to the HDF:
+
+```python
+from ras_commander import HdfResultsPlan
+
+# Basic unsteady info
+try:
+    info = HdfResultsPlan.get_unsteady_info("01")
+    print("Unsteady results present")
+    print(info.T)
+except KeyError:
+    print("No unsteady results found")
+
+# Detailed unsteady summary
+try:
+    summary = HdfResultsPlan.get_unsteady_summary("01")
+    print("\nUnsteady Summary:")
+    print(summary.T)
+except KeyError:
+    print("No unsteady summary - check if run completed")
+```
+
+### Check Runtime Performance
+
+Review computation timing and performance:
+
+```python
+from ras_commander import HdfResultsPlan
+
+runtime = HdfResultsPlan.get_runtime_data("01")
+
+if runtime is not None:
+    print(f"Plan: {runtime['Plan Name'].iloc[0]}")
+    print(f"Simulation: {runtime['Simulation Time (hr)'].iloc[0]:.1f} hr")
+    print(f"Compute Time: {runtime['Complete Process (hr)'].iloc[0]:.3f} hr")
+    print(f"Speed: {runtime['Complete Process Speed (hr/hr)'].iloc[0]:.0f}x realtime")
+```
+
+### Complete Verification Example
+
+```python
+from ras_commander import init_ras_project, HdfResultsPlan
+
+init_ras_project("/path/to/project", "6.5")
+
+def check_run_success(plan_number):
+    """Check if a plan run was successful."""
+    print(f"\n{'='*50}")
+    print(f"Verifying Plan {plan_number}")
+    print('='*50)
+
+    success = True
+
+    # 1. Check compute messages
+    msgs = HdfResultsPlan.get_compute_messages(plan_number)
+    if msgs:
+        has_errors = any(kw in msgs.upper()
+                        for kw in ['ERROR', 'FAILED', 'UNSTABLE'])
+        if has_errors:
+            print("[FAIL] Errors found in compute messages")
+            success = False
+        else:
+            print("[OK] No errors in compute messages")
+    else:
+        print("[FAIL] No compute messages found")
+        success = False
+
+    # 2. Check volume accounting
+    volume = HdfResultsPlan.get_volume_accounting(plan_number)
+    if volume is not None:
+        print("[OK] Volume accounting data present")
+    else:
+        print("[WARN] No volume accounting data")
+
+    # 3. Check unsteady results
+    try:
+        HdfResultsPlan.get_unsteady_summary(plan_number)
+        print("[OK] Unsteady results present")
+    except:
+        print("[WARN] No unsteady summary")
+
+    # 4. Runtime data
+    runtime = HdfResultsPlan.get_runtime_data(plan_number)
+    if runtime is not None:
+        speed = runtime['Complete Process Speed (hr/hr)'].iloc[0]
+        print(f"[INFO] Compute speed: {speed:.0f}x realtime")
+
+    print(f"\nOverall: {'SUCCESS' if success else 'NEEDS REVIEW'}")
+    return success
+
+# Usage
+check_run_success("01")
+```
+
+See [Workflows and Patterns](workflows-and-patterns.md#verifying-run-success) for more detailed verification patterns including batch verification.
 
 ## Error Handling
 
