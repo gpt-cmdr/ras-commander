@@ -54,7 +54,7 @@ setup(
         'shapely',
         'rasterstats',
         'rtree',
-        'pywin32>=227',    # Required for RasControl COM interface
+        'pywin32>=227; sys_platform == "win32"',  # Required for RasControl COM interface (Windows only)
         'psutil>=5.6.6',   # Required for RasControl process management
     ],
     extras_require={
