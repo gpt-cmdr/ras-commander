@@ -1,14 +1,15 @@
 """
 GeomStorage - Storage area operations for HEC-RAS geometry files
 
-This module provides functionality for reading storage area data from
-HEC-RAS plain text geometry files (.g##).
+This module provides functionality for reading and writing storage area data
+in HEC-RAS plain text geometry files (.g##).
 
 All methods are static and designed to be used without instantiation.
 
 List of Functions:
 - get_storage_areas() - List all storage areas with metadata
 - get_elevation_volume() - Read elevation-volume curve for a storage area
+- set_elevation_volume() - Write elevation-volume curve to a storage area
 
 Example Usage:
     >>> from ras_commander import GeomStorage
@@ -22,6 +23,13 @@ Example Usage:
     >>> # Get elevation-volume curve
     >>> elev_vol = GeomStorage.get_elevation_volume(geom_file, "Reservoir Pool 1")
     >>> print(elev_vol)
+    >>>
+    >>> # Write modified curve back to file
+    >>> GeomStorage.set_elevation_volume(
+    ...     geom_file, "Reservoir Pool 1",
+    ...     elevations=[1200.0, 1210.0, 1220.0],
+    ...     volumes=[0.0, 500.0, 1500.0]
+    ... )
 """
 
 from pathlib import Path
@@ -105,7 +113,12 @@ class GeomStorage:
                     max_elev = None
                     is_2d = False
 
-                    for j in range(i+1, min(i+50, len(lines))):
+                    # Search until next storage area (surface line data can span many lines)
+                    for j in range(i+1, len(lines)):
+                        # Stop at next storage area or section
+                        if lines[j].startswith("Storage Area=") or lines[j].startswith("River Reach="):
+                            break
+
                         # Check if this is a 2D flow area
                         if lines[j].startswith("Storage Area Is2D="):
                             is2d_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Is2D")
@@ -114,8 +127,15 @@ class GeomStorage:
                             except ValueError:
                                 pass
 
+                        # Check for elevation-volume data (two keyword variants exist)
+                        elev_vol_keyword = None
                         if lines[j].startswith("Storage Area Elev Volume="):
-                            count_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Elev Volume")
+                            elev_vol_keyword = "Storage Area Elev Volume"
+                        elif lines[j].startswith("Storage Area Vol Elev="):
+                            elev_vol_keyword = "Storage Area Vol Elev"
+
+                        if elev_vol_keyword:
+                            count_str = GeomParser.extract_keyword_value(lines[j], elev_vol_keyword)
                             try:
                                 num_points = int(count_str.strip())
                             except ValueError:
@@ -139,10 +159,6 @@ class GeomStorage:
                                     if elevations:
                                         min_elev = elevations[0]
                                         max_elev = elevations[-1] if len(elevations) > 1 else elevations[0]
-                            break
-
-                        # Stop at next storage area or section
-                        if lines[j].startswith("Storage Area=") or lines[j].startswith("River Reach="):
                             break
 
                     storage_areas.append({
@@ -223,10 +239,21 @@ class GeomStorage:
             if sa_idx is None:
                 raise ValueError(f"Storage area not found: {storage_name}")
 
-            # Find elevation-volume data
-            for j in range(sa_idx+1, min(sa_idx+50, len(lines))):
+            # Find elevation-volume data (two keyword variants exist)
+            # Search until next storage area (surface line data can span many lines)
+            for j in range(sa_idx+1, len(lines)):
+                # Stop at next storage area
+                if lines[j].startswith("Storage Area="):
+                    break
+
+                elev_vol_keyword = None
                 if lines[j].startswith("Storage Area Elev Volume="):
-                    count_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Elev Volume")
+                    elev_vol_keyword = "Storage Area Elev Volume"
+                elif lines[j].startswith("Storage Area Vol Elev="):
+                    elev_vol_keyword = "Storage Area Vol Elev"
+
+                if elev_vol_keyword:
+                    count_str = GeomParser.extract_keyword_value(lines[j], elev_vol_keyword)
                     count = int(count_str.strip())
 
                     # Parse elevation-volume pairs
@@ -252,10 +279,6 @@ class GeomStorage:
                     logger.info(f"Extracted {len(df)} elevation-volume points for {storage_name}")
                     return df
 
-                # Stop at next storage area
-                if lines[j].startswith("Storage Area="):
-                    break
-
             raise ValueError(f"Elevation-volume data not found for {storage_name}")
 
         except FileNotFoundError:
@@ -265,3 +288,178 @@ class GeomStorage:
         except Exception as e:
             logger.error(f"Error reading elevation-volume: {str(e)}")
             raise IOError(f"Failed to read elevation-volume: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_elevation_volume(geom_file: Union[str, Path],
+                            storage_name: str,
+                            elevations: List[float],
+                            volumes: List[float],
+                            create_backup: bool = True) -> Path:
+        """
+        Write elevation-volume curve for a storage area to geometry file.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file
+            storage_name (str): Storage area name (case-sensitive, must exist)
+            elevations (List[float]): List of elevation values (must be ascending)
+            volumes (List[float]): List of volume values (same length as elevations)
+            create_backup (bool): If True, create .bak backup before modification (default True)
+
+        Returns:
+            Path: Path to backup file if created, or geometry file path if no backup
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If storage area not found, or if elevations/volumes invalid
+
+        Example:
+            >>> # Modify an existing storage curve
+            >>> backup = GeomStorage.set_elevation_volume(
+            ...     "model.g01", "Reservoir Pool 1",
+            ...     elevations=[1200.0, 1210.0, 1220.0, 1230.0],
+            ...     volumes=[0.0, 500.0, 1500.0, 3500.0]
+            ... )
+            >>> print(f"Backup created: {backup}")
+
+            >>> # Modify without backup (not recommended)
+            >>> GeomStorage.set_elevation_volume(
+            ...     "model.g01", "Reservoir Pool 1",
+            ...     elevations=[1200.0, 1220.0],
+            ...     volumes=[0.0, 1000.0],
+            ...     create_backup=False
+            ... )
+
+        Notes:
+            - Elevations must be in ascending order
+            - Lengths of elevations and volumes must match
+            - Creates .bak backup by default (strongly recommended)
+            - Supports both "Storage Area Elev Volume=" and "Storage Area Vol Elev=" keywords
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        # Validate inputs
+        if len(elevations) != len(volumes):
+            raise ValueError(
+                f"Elevations and volumes must have same length: "
+                f"{len(elevations)} != {len(volumes)}"
+            )
+
+        if len(elevations) < 2:
+            raise ValueError("At least 2 elevation-volume points are required")
+
+        # Check elevations are ascending
+        for i in range(1, len(elevations)):
+            if elevations[i] <= elevations[i-1]:
+                raise ValueError(
+                    f"Elevations must be strictly ascending: "
+                    f"{elevations[i-1]} >= {elevations[i]} at index {i}"
+                )
+
+        # Create backup if requested
+        backup_path = None
+        if create_backup:
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
+
+        try:
+            with open(geom_file, 'r') as f:
+                lines = f.readlines()
+
+            # Find the storage area
+            sa_idx = None
+            for i, line in enumerate(lines):
+                if line.startswith("Storage Area="):
+                    value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+                    # Storage Area format: Name,X,Y - extract just the name
+                    parts = [p.strip() for p in value_str.split(',')]
+                    sa_name = parts[0] if parts else value_str
+                    if sa_name == storage_name:
+                        sa_idx = i
+                        break
+
+            if sa_idx is None:
+                raise ValueError(f"Storage area not found: {storage_name}")
+
+            # Find the elevation-volume data line and data extent
+            elev_vol_line_idx = None
+            data_start_idx = None
+            data_end_idx = None
+            elev_vol_keyword = None
+
+            # Search until next storage area (surface line data can span many lines)
+            for j in range(sa_idx + 1, len(lines)):
+                # Stop at next storage area
+                if lines[j].startswith("Storage Area="):
+                    break
+
+                # Check for elevation-volume keyword line
+                if lines[j].startswith("Storage Area Elev Volume="):
+                    elev_vol_keyword = "Storage Area Elev Volume"
+                    elev_vol_line_idx = j
+                    data_start_idx = j + 1
+                elif lines[j].startswith("Storage Area Vol Elev="):
+                    elev_vol_keyword = "Storage Area Vol Elev"
+                    elev_vol_line_idx = j
+                    data_start_idx = j + 1
+
+                if elev_vol_line_idx is not None and data_start_idx is not None:
+                    # Find end of data (next keyword line or next storage area)
+                    for k in range(data_start_idx, len(lines)):
+                        if '=' in lines[k]:
+                            data_end_idx = k
+                            break
+                    if data_end_idx is None:
+                        data_end_idx = len(lines)
+                    break
+
+            if elev_vol_line_idx is None:
+                raise ValueError(f"Elevation-volume data not found for {storage_name}")
+
+            # Format new data
+            # Interleave elevations and volumes: elev1, vol1, elev2, vol2, ...
+            interleaved = []
+            for elev, vol in zip(elevations, volumes):
+                interleaved.append(elev)
+                interleaved.append(vol)
+
+            # Format as fixed-width lines
+            new_data_lines = GeomParser.format_fixed_width(
+                interleaved,
+                column_width=GeomStorage.FIXED_WIDTH_COLUMN,
+                values_per_line=GeomStorage.VALUES_PER_LINE,
+                precision=2
+            )
+
+            # Create new keyword line with updated count
+            new_keyword_line = f"{elev_vol_keyword}= {len(elevations)} \n"
+
+            # Build modified file content
+            new_lines = (
+                lines[:elev_vol_line_idx] +
+                [new_keyword_line] +
+                new_data_lines +
+                lines[data_end_idx:]
+            )
+
+            # Write modified file
+            with open(geom_file, 'w') as f:
+                f.writelines(new_lines)
+
+            logger.info(
+                f"Updated elevation-volume curve for {storage_name}: "
+                f"{len(elevations)} points"
+            )
+
+            return backup_path if backup_path else geom_file
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing elevation-volume: {str(e)}")
+            raise IOError(f"Failed to write elevation-volume: {str(e)}")

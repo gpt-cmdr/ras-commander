@@ -46,6 +46,7 @@ from .hdf import (
     HdfPipe, HdfPump, HdfInfiltration,
     HdfPlot, HdfResultsPlot,
     HdfFluvialPluvial,
+    HdfProject,
 )
 
 # Remote execution - lazy loaded to avoid importing until needed
@@ -97,7 +98,7 @@ __all__ = [
     'RasDss',
 
     # HDF handling
-    'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan',
+    'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',

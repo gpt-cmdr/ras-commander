@@ -81,6 +81,9 @@ from .HdfResultsPlot import HdfResultsPlot
 # Analysis classes
 from .HdfFluvialPluvial import HdfFluvialPluvial
 
+# Project-level classes
+from .HdfProject import HdfProject
+
 __all__ = [
     # Core
     'HdfBase', 'HdfUtils', 'HdfPlan',
@@ -94,4 +97,6 @@ __all__ = [
     'HdfPlot', 'HdfResultsPlot',
     # Analysis
     'HdfFluvialPluvial',
+    # Project-level
+    'HdfProject',
 ]
