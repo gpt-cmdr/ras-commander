@@ -592,6 +592,7 @@ This agentic approach transforms documentation from a manual, error-prone proces
 - [Geometry Parsing DataFrames](#geometry-parsing-dataframes) - Geometry file data
 - [DSS Operations DataFrames](#dss-operations-dataframes) - Boundary condition data
 - [Infrastructure DataFrames](#infrastructure-dataframes) - Pipes, pumps, structures
+- [Time Series Results (xarray)](#time-series-results-xarray) - Multi-dimensional simulation results
 
 ---
 
@@ -1425,6 +1426,416 @@ Structure attributes from HDF geometry.
 | `station` | float | River station (if 1D) |
 | `us_area` | str | Upstream 2D area (if 2D) |
 | `ds_area` | str | Downstream 2D area (if 2D) |
+
+---
+
+## Time Series Results (xarray)
+
+For multi-dimensional time series data, ras-commander uses **xarray** instead of pandas DataFrames. xarray provides labeled multi-dimensional arrays that efficiently handle the `(time × location × variable)` structure of HEC-RAS simulation results.
+
+### Why xarray for Time Series?
+
+| Data Type | Best Format | Reason |
+|-----------|-------------|--------|
+| Metadata (plans, files) | DataFrame | Tabular, one row per entity |
+| Summary statistics | DataFrame | Tabular aggregations |
+| Time series (1D cross sections) | xarray.Dataset | `(time × cross_section)` with coordinates |
+| Time series (2D mesh) | xarray.Dataset | `(time × cell_id)` with spatial coordinates |
+| Time series (boundaries) | xarray.Dataset | `(time × bc_name × face_id)` |
+
+xarray advantages for time series:
+- **Named dimensions** - Access data by label, not position
+- **Coordinate metadata** - River, reach, station attached to each cross section
+- **Efficient slicing** - Select by time range, location, or variable
+- **NetCDF compatible** - Easy export for GIS and other tools
+- **Lazy loading** - Handle large datasets that don't fit in memory
+
+---
+
+### Cross Section Time Series
+
+**Source**: `HdfResultsXsec.get_xsec_timeseries(plan_hdf)`
+**Example notebook**: `examples/10_hdf_results_extraction.ipynb`
+
+Complete time series for all 1D cross sections in a model.
+
+**Dimensions**:
+
+| Dimension | Description |
+|-----------|-------------|
+| `time` | Simulation timestamps (datetime64) |
+| `cross_section` | Cross section identifier string |
+
+**Data Variables**:
+
+| Variable | Shape | Units | Description |
+|----------|-------|-------|-------------|
+| `Water_Surface` | (time, cross_section) | ft or m | Water surface elevation |
+| `Velocity_Total` | (time, cross_section) | ft/s or m/s | Total velocity |
+| `Velocity_Channel` | (time, cross_section) | ft/s or m/s | Channel velocity |
+| `Flow_Lateral` | (time, cross_section) | cfs or m³/s | Lateral inflow |
+| `Flow` | (time, cross_section) | cfs or m³/s | Total flow |
+
+**Coordinates** (attached to `cross_section` dimension):
+
+| Coordinate | Type | Description |
+|------------|------|-------------|
+| `River` | str | River name |
+| `Reach` | str | Reach name |
+| `Station` | str | River station |
+| `Name` | str | Cross section name |
+| `Maximum_Water_Surface` | float | Max WSE over simulation |
+| `Maximum_Flow` | float | Max flow over simulation |
+| `Maximum_Channel_Velocity` | float | Max channel velocity |
+| `Maximum_Velocity_Total` | float | Max total velocity |
+| `Maximum_Flow_Lateral` | float | Max lateral flow |
+
+**Usage Example**:
+
+```python
+from ras_commander import HdfResultsXsec
+
+# Get all cross section time series
+ds = HdfResultsXsec.get_xsec_timeseries("01")
+
+# Access water surface for all cross sections
+wse = ds['Water_Surface']  # xarray.DataArray (time × cross_section)
+
+# Select specific cross section by name
+xs_data = ds.sel(cross_section="River Mile 10.5")
+
+# Select by river/reach using coordinate
+bald_eagle = ds.where(ds.coords['River'] == 'Bald Eagle', drop=True)
+
+# Get time series for specific location
+wse_timeseries = ds['Water_Surface'].sel(cross_section="River Mile 10.5")
+print(wse_timeseries.values)  # numpy array of WSE values
+
+# Get maximum values (pre-computed as coordinates)
+max_wse = ds.coords['Maximum_Water_Surface']
+
+# Slice by time range
+subset = ds.sel(time=slice('2020-01-01', '2020-01-03'))
+
+# Convert to DataFrame for analysis
+df = ds['Water_Surface'].to_dataframe().reset_index()
+```
+
+---
+
+### 2D Mesh Cell Time Series
+
+**Source**: `HdfResultsMesh.get_mesh_cells_timeseries(plan_hdf, mesh_names=None, var=None)`
+**Example notebook**: `examples/11_mesh_results_extraction.ipynb`
+
+Time series for 2D mesh cell-based variables.
+
+**Returns**: `Dict[str, xr.Dataset]` - Dictionary mapping mesh names to Datasets
+
+**Dimensions**:
+
+| Dimension | Description |
+|-----------|-------------|
+| `time` | Simulation timestamps |
+| `cell_id` | Cell index (0-based) |
+
+**Data Variables** (when `var=None`, all available):
+
+| Variable | Shape | Description |
+|----------|-------|-------------|
+| `Water Surface` | (time, cell_id) | Water surface elevation |
+| `Depth` | (time, cell_id) | Water depth |
+| `Cell Cumulative Precipitation` | (time, cell_id) | Accumulated precipitation |
+
+**Usage Example**:
+
+```python
+from ras_commander import HdfResultsMesh
+
+# Get all mesh cell time series
+mesh_data = HdfResultsMesh.get_mesh_cells_timeseries("01")
+
+# Access specific mesh
+floodplain_ds = mesh_data['Floodplain']
+
+# Get water surface for all cells
+wse = floodplain_ds['Water Surface']  # (time × cell_id)
+
+# Get depth at specific cell
+cell_100_depth = floodplain_ds['Depth'].sel(cell_id=100)
+
+# Find cells that exceeded depth threshold
+max_depth = floodplain_ds['Depth'].max(dim='time')
+flooded_cells = max_depth.where(max_depth > 2.0, drop=True)
+
+# Get specific variable only (more efficient)
+depth_only = HdfResultsMesh.get_mesh_cells_timeseries("01", var="Depth")
+```
+
+---
+
+### 2D Mesh Face Time Series
+
+**Source**: `HdfResultsMesh.get_mesh_faces_timeseries(plan_hdf, mesh_name)`
+**Example notebook**: `examples/11_mesh_results_extraction.ipynb`
+
+Time series for face-based variables (velocity, flow between cells).
+
+**Dimensions**:
+
+| Dimension | Description |
+|-----------|-------------|
+| `time` | Simulation timestamps |
+| `face_id` | Face index (0-based) |
+
+**Data Variables**:
+
+| Variable | Shape | Description |
+|----------|-------|-------------|
+| `Face Velocity` | (time, face_id) | Velocity at cell faces |
+| `Face Flow` | (time, face_id) | Flow through cell faces |
+
+**Usage Example**:
+
+```python
+from ras_commander import HdfResultsMesh
+
+# Get face time series for a mesh
+ds = HdfResultsMesh.get_mesh_faces_timeseries("01", mesh_name="Floodplain")
+
+# Get maximum velocity across all faces
+max_velocity = ds['Face Velocity'].max(dim='time')
+
+# Find faces with high velocity
+high_velocity_faces = max_velocity.where(max_velocity > 5.0, drop=True)
+```
+
+---
+
+### Boundary Condition Time Series
+
+**Source**: `HdfResultsMesh.get_boundary_conditions_timeseries(plan_hdf)`
+**Example notebook**: See API reference
+
+Time series for all boundary conditions in the model.
+
+**Dimensions**:
+
+| Dimension | Description |
+|-----------|-------------|
+| `time` | Simulation timestamps |
+| `bc_name` | Boundary condition name |
+| `face_id` | Face index (for per-face variables) |
+
+**Data Variables**:
+
+| Variable | Shape | Description |
+|----------|-------|-------------|
+| `stage` | (time, bc_name) | Water surface at BC |
+| `flow` | (time, bc_name) | Total flow at BC |
+| `flow_per_face` | (time, bc_name, face_id) | Flow distributed per face |
+| `stage_per_face` | (time, bc_name, face_id) | Stage per face |
+
+**Usage Example**:
+
+```python
+from ras_commander import HdfResultsMesh
+
+# Get all boundary condition time series
+ds = HdfResultsMesh.get_boundary_conditions_timeseries("01")
+
+# Get inflow hydrograph for specific BC
+upstream_flow = ds['flow'].sel(bc_name='Upstream Inflow')
+
+# Calculate total inflow volume
+import numpy as np
+dt_hours = 1.0  # Assuming hourly output
+total_volume = upstream_flow.sum() * dt_hours * 3600  # acre-ft or m³
+
+# Compare multiple BCs
+inflows = ds['flow'].sel(bc_name=['BC1', 'BC2', 'BC3'])
+```
+
+---
+
+### Reference Lines Time Series
+
+**Source**: `HdfResultsXsec.get_ref_lines_timeseries(plan_hdf)`
+**Example notebook**: See API reference
+
+Time series for reference lines defined in RASMapper.
+
+**Dimensions**:
+
+| Dimension | Description |
+|-----------|-------------|
+| `time` | Simulation timestamps |
+| `ref_line` | Reference line name |
+
+**Data Variables**:
+
+| Variable | Description |
+|----------|-------------|
+| `Flow` | Flow across reference line |
+| `Velocity` | Average velocity |
+| `Water_Surface` | Water surface elevation |
+
+---
+
+### Reference Points Time Series
+
+**Source**: `HdfResultsXsec.get_ref_points_timeseries(plan_hdf)`
+**Example notebook**: See API reference
+
+Time series for reference points defined in RASMapper.
+
+**Dimensions**:
+
+| Dimension | Description |
+|-----------|-------------|
+| `time` | Simulation timestamps |
+| `ref_point` | Reference point name |
+
+**Data Variables**:
+
+| Variable | Units | Description |
+|----------|-------|-------------|
+| `Flow` | cfs or m³/s | Flow at point |
+| `Velocity` | ft/s or m/s | Velocity at point |
+| `Water_Surface` | ft or m | Water surface elevation |
+| `Depth` | ft or m | Water depth |
+
+---
+
+### Pipe Network Time Series
+
+**Source**: `HdfPipe.get_pipe_network_timeseries(plan_hdf, variable)`
+**Example notebook**: `examples/12_pipe_pump_analysis.ipynb`
+
+Time series for pipe network variables.
+
+**Parameters**:
+- `variable`: One of `"Depth"`, `"Flow"`, `"Velocity"`, etc.
+
+**Returns**: `xr.DataArray` with dimensions `(time, location)`
+
+**Node Variables** (via `extract_timeseries_for_node`):
+
+| Variable | Description |
+|----------|-------------|
+| `Depth` | Water depth at node |
+| `Drop Inlet Flow` | Flow into drop inlets |
+| `Flooded Volume` | Flood volume at node |
+| `Lateral Inflow` | Lateral inflow |
+| `Outfall Flow` | Flow out of system |
+| `Overflow` | Overflow volume |
+| `Ponded Area` | Surface ponding area |
+| `Ponded Depth` | Surface pond depth |
+| `Ponded Volume` | Ponded water volume |
+
+**Conduit Variables** (via `extract_timeseries_for_conduit`):
+
+| Variable | Description |
+|----------|-------------|
+| `Pipe Flow (US)` | Upstream pipe flow |
+| `Pipe Flow (DS)` | Downstream pipe flow |
+| `Velocity (US)` | Upstream velocity |
+| `Velocity (DS)` | Downstream velocity |
+| `Depth (US)` | Upstream depth |
+| `Depth (DS)` | Downstream depth |
+
+---
+
+### Pump Station Time Series
+
+**Source**: `HdfPump.get_pump_station_timeseries(plan_hdf, pump_station)`
+**Example notebook**: `examples/12_pipe_pump_analysis.ipynb`
+
+Time series for a specific pump station.
+
+**Returns**: `xr.DataArray` with dimensions `(time, variable)`
+
+**Variables**:
+
+| Variable | Description |
+|----------|-------------|
+| `Flow` | Pump flow rate |
+| `Stage HW` | Headwater stage |
+| `Stage TW` | Tailwater stage |
+| `Pump 1` | Pump 1 status/flow |
+| `Pump 2` | Pump 2 status/flow |
+| ... | Additional pumps |
+
+**Usage Example**:
+
+```python
+from ras_commander import HdfPump
+
+# Get pump station time series
+da = HdfPump.get_pump_station_timeseries("01", pump_station="Main Pump Station")
+
+# Get total pumped flow
+total_flow = da.sel(variable='Flow')
+
+# Check pump on/off cycles
+pump1_status = da.sel(variable='Pump 1')
+```
+
+---
+
+### Common xarray Operations
+
+**Selecting Data**:
+
+```python
+# Select by coordinate value
+xs_data = ds.sel(cross_section="River Mile 10.5")
+
+# Select by index
+first_10_xs = ds.isel(cross_section=slice(0, 10))
+
+# Select time range
+jan_data = ds.sel(time=slice('2020-01-01', '2020-01-31'))
+
+# Boolean selection with coordinates
+bald_eagle = ds.where(ds.coords['River'] == 'Bald Eagle', drop=True)
+```
+
+**Aggregations**:
+
+```python
+# Maximum over time
+max_wse = ds['Water_Surface'].max(dim='time')
+
+# Mean over cross sections
+mean_flow = ds['Flow'].mean(dim='cross_section')
+
+# Percentiles
+p95_depth = ds['Depth'].quantile(0.95, dim='time')
+```
+
+**Converting to DataFrame**:
+
+```python
+# Single variable to DataFrame
+df = ds['Water_Surface'].to_dataframe().reset_index()
+
+# Full dataset to DataFrame (can be large!)
+df_full = ds.to_dataframe().reset_index()
+
+# Specific cross section to DataFrame
+xs_df = ds.sel(cross_section="XS 100").to_dataframe()
+```
+
+**Exporting**:
+
+```python
+# Save to NetCDF (preserves all metadata)
+ds.to_netcdf("results.nc")
+
+# Save to CSV (loses dimensions, use for single variables)
+ds['Water_Surface'].to_dataframe().to_csv("wse.csv")
+```
 
 ---
 
