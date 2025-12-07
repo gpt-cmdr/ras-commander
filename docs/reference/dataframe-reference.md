@@ -388,6 +388,202 @@ def update_section_in_file(
 
 ---
 
+## Future: Agentic Documentation Improvement
+
+The DataFrame approach enables a powerful future capability: **automated discovery and documentation of valid parameter values** through systematic exploration of HEC-RAS projects and GUI automation.
+
+### The Vision
+
+Currently, documenting valid options for HEC-RAS parameters requires:
+- Manual inspection of files from many projects
+- Trial-and-error testing in the GUI
+- Cross-referencing with sparse official documentation
+- Community knowledge sharing
+
+**Agentic automation can systematically build this knowledge base.**
+
+### Phase 1: Multi-Project Parameter Discovery
+
+Parse a corpus of valid HEC-RAS projects to discover the full range of parameter values:
+
+```python
+# Conceptual workflow for parameter discovery
+from ras_commander import RasExamples, init_ras_project
+import pandas as pd
+
+# Collect parameter values across many projects
+all_computation_intervals = set()
+all_friction_methods = set()
+all_bc_types = set()
+
+# Parse HEC-RAS example projects
+for project_name in RasExamples.list_projects():
+    path = RasExamples.extract_project(project_name)
+    init_ras_project(path, "6.5")
+
+    # Collect unique values from DataFrames
+    all_computation_intervals.update(ras.plan_df['Computation Interval'].dropna())
+    all_friction_methods.update(ras.plan_df['Friction Slope Method'].dropna())
+    all_bc_types.update(ras.boundaries_df['bc_type'].dropna())
+
+# Parse publicly available models (FEMA, USACE, state agencies)
+for public_model in discover_public_models():
+    # Same collection process...
+    pass
+
+# Generate documented valid values
+print("Valid Computation Intervals:", sorted(all_computation_intervals))
+# ['1SEC', '2SEC', '5SEC', '10SEC', '15SEC', '30SEC', '1MIN', '2MIN', '5MIN', ...]
+```
+
+**Data sources for corpus building:**
+- HEC-RAS Example Projects (bundled with software)
+- FEMA flood study models (publicly available)
+- USACE project archives
+- State agency hydraulic models
+- Academic research repositories
+- Community-contributed test projects
+
+### Phase 2: GUI-Driven Parameter Verification
+
+Combine with win32com automation (see `examples/17_extracting_profiles_with_hecrascontroller.ipynb`) to verify parameter values through the GUI:
+
+```python
+# Conceptual workflow for GUI verification
+from ras_commander import RasControl
+
+def discover_dropdown_options(dialog_path: str) -> list:
+    """
+    Use COM automation to enumerate dropdown options in HEC-RAS GUI.
+
+    Args:
+        dialog_path: Path to GUI element (e.g., "Plan Options > Computation Interval")
+
+    Returns:
+        List of valid dropdown values
+    """
+    # Open dialog, enumerate dropdown contents, close dialog
+    # This captures the exact valid values HEC-RAS accepts
+    pass
+
+def verify_parameter_creates_valid_file(param_name: str, value: any) -> bool:
+    """
+    Set a parameter via GUI and verify the resulting file is valid.
+    """
+    # 1. Set parameter in GUI
+    # 2. Save project
+    # 3. Parse resulting file
+    # 4. Run compute to verify HEC-RAS accepts it
+    pass
+```
+
+### Phase 3: Change Detection Through GUI Toggling
+
+Systematically toggle GUI options to discover what changes in plain text and HDF files:
+
+```python
+# Conceptual workflow for change detection
+def discover_file_changes(gui_option: str, before_value: any, after_value: any) -> dict:
+    """
+    Toggle a GUI option and detect all resulting file changes.
+
+    Returns:
+        Dictionary mapping file types to changed content
+    """
+    # 1. Capture baseline files (plan, geometry, unsteady, HDF)
+    baseline_plan = read_plan_file()
+    baseline_hdf = read_hdf_structure()
+
+    # 2. Toggle GUI option
+    set_gui_option(gui_option, after_value)
+    save_project()
+
+    # 3. Capture changed files
+    changed_plan = read_plan_file()
+    changed_hdf = read_hdf_structure()
+
+    # 4. Diff and report
+    return {
+        'plan_file': diff(baseline_plan, changed_plan),
+        'hdf_file': diff(baseline_hdf, changed_hdf),
+        'keyword_added': extract_new_keywords(baseline_plan, changed_plan),
+        'hdf_paths_added': extract_new_hdf_paths(baseline_hdf, changed_hdf),
+    }
+
+# Example: What happens when enabling sediment transport?
+changes = discover_file_changes(
+    gui_option="Sediment Transport",
+    before_value=False,
+    after_value=True
+)
+print(changes)
+# {
+#     'plan_file': ['Run Sediment= -1', 'Sed File=s01'],
+#     'keyword_added': ['Run Sediment', 'Sed File'],
+#     'hdf_paths_added': ['/Results/Sediment/...']
+# }
+```
+
+### Phase 4: Auto-Generated Documentation
+
+Use discovered information to automatically enhance docstrings and documentation:
+
+```python
+# Example: Auto-generated docstring enhancement
+def set_computation_interval(plan_path: Path, interval: str) -> None:
+    """
+    Set the computation interval for a plan.
+
+    Args:
+        plan_path: Path to plan file
+        interval: Computation interval string
+
+    Valid intervals (auto-discovered from 847 projects):
+            '1SEC', '2SEC', '5SEC', '10SEC', '15SEC', '30SEC',
+            '1MIN', '2MIN', '5MIN', '10MIN', '15MIN', '20MIN', '30MIN',
+            '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR', '24HOUR'
+
+    File changes (auto-discovered via GUI toggling):
+        - Plan file: Updates 'Computation Interval=' line
+        - HDF file: No direct change (affects computation only)
+
+    GUI location: Plan > Options > Computation Settings > Computation Interval
+
+    Discovered in versions: 5.0.7, 6.0, 6.1, 6.3, 6.4, 6.5, 6.6
+    """
+    pass
+```
+
+### Implementation Roadmap
+
+| Phase | Capability | Status |
+|-------|------------|--------|
+| **Phase 1** | Multi-project parsing for parameter discovery | Framework ready via `RasExamples` |
+| **Phase 2** | GUI automation for dropdown enumeration | Foundation in `RasControl` |
+| **Phase 3** | Change detection through GUI toggling | Requires development |
+| **Phase 4** | Auto-generated docstrings and docs | Requires development |
+
+### Benefits of Agentic Documentation
+
+1. **Completeness** - Discover parameters that exist in real projects but aren't documented
+2. **Version awareness** - Track which parameters appear in which HEC-RAS versions
+3. **Validation** - Verify that documented values actually work
+4. **Maintenance** - Automatically update docs when new HEC-RAS versions add options
+5. **Community contribution** - Anyone can add projects to the corpus
+
+### Contributing to Parameter Discovery
+
+To help build the corpus of valid parameter values:
+
+1. **Share anonymized project statistics** - Run the parameter collector on your projects
+2. **Report undocumented parameters** - File issues when you find valid values not in docs
+3. **Contribute public models** - Link to publicly available HEC-RAS projects
+4. **Test edge cases** - Verify unusual parameter combinations work
+
+This agentic approach transforms documentation from a manual, error-prone process into a systematic, verifiable, and continuously improving knowledge base.
+
+---
+
 ## Quick Navigation
 
 - [Project-Level DataFrames](#project-level-dataframes) - Core project data structures
