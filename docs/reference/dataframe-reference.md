@@ -584,6 +584,75 @@ This agentic approach transforms documentation from a manual, error-prone proces
 
 ---
 
+## HEC-RAS Version Support and 2025 Roadmap
+
+### Current Version Landscape
+
+The HEC-RAS ecosystem spans multiple decades of development, with regulatory models still in active use across a wide version range:
+
+| Version Range | Status | Regulatory Use |
+|---------------|--------|----------------|
+| **3.x** | Legacy | Significant number of regulatory models still in production |
+| **4.x** | Legacy | Many active regulatory models |
+| **5.x** | Stable | Widespread regulatory adoption |
+| **6.x** | Current | Version 6.7 still in active development (as of Dec 2025) |
+| **2025** | **Alpha** | Not yet suitable for regulatory work |
+
+**Key point:** A significant portion of funded H&H (Hydrology & Hydraulics) work still involves regulatory models in versions 3.x through 5.x. Version 6.x regulatory models are only recently being published.
+
+### HEC-RAS 2025: Current State
+
+HEC-RAS 2025 represents a significant architectural shift:
+
+1. **Alpha status** - The 2025 version is still in Alpha, not even Beta
+2. **HDF-native architecture** - Entire program uses HDF (`.h5` extension) with no plain text files
+3. **C# API planned** - USACE will release an official C# API for programmatic access
+4. **Similar HDF structure** - The HDF file structure is very similar to version 6.x
+
+### ras-commander Position on HEC-RAS 2025
+
+**ras-commander will not develop features for HEC-RAS 2025 until:**
+
+1. The official C# API is released
+2. The program moves to Beta status
+3. Funded regulatory work with this version begins
+
+**Rationale:**
+
+The intent of ras-commander is to **supplement USACE documentation and workflows**, not to front-run their development efforts. Building features against an Alpha product with an unreleased API would:
+
+- Create maintenance burden as the API changes
+- Potentially conflict with official tooling
+- Distract from serving existing regulatory-model-based H&H needs
+
+### Future 2025 Support Plan
+
+When HEC-RAS 2025 reaches maturity:
+
+| Milestone | ras-commander Action |
+|-----------|---------------------|
+| C# API released | Evaluate API design and compatibility |
+| Beta release | Begin testing existing HDF logic against 2025 files |
+| Full release | Develop Python bindings if no official Python API exists |
+| Regulatory adoption begins | Prioritize 2025 features based on community needs |
+
+**Good news:** Most of ras-commander's HDF logic should be portable to 2025. The HDF structure is very similar, and the library is already well-positioned to support this version once it reaches full release.
+
+**If no Python API is released:** ras-commander will provide Python bindings for the C# API. A separate package may be created to maintain clean separation between version-specific functionality.
+
+### Recommendation for Users
+
+If you're interested in HEC-RAS 2025:
+
+1. **Test independently** - Try ras-commander's HDF parsing logic against 2025 files and report compatibility
+2. **Build your own frameworks** - Use ras-commander patterns as a foundation for 2025-specific tools
+3. **Focus on production needs** - For regulatory work, version 6.x remains the appropriate target
+4. **Contribute findings** - Share what works and what doesn't in GitHub issues
+
+**It will take years for active H&H development to migrate to RAS 2025.** In its current Alpha state, it serves primarily as a preview of future capabilities rather than a production-ready platform. The most valuable contribution to the water resources community today is building robust tooling for the versions that power actual regulatory work.
+
+---
+
 ## Quick Navigation
 
 - [Project-Level DataFrames](#project-level-dataframes) - Core project data structures
