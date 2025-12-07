@@ -2,6 +2,392 @@
 
 Complete reference for all DataFrames returned by ras-commander functions. Use this guide to understand DataFrame structures before writing data processing logic.
 
+---
+
+## Why DataFrames? The HEC-RAS Documentation Problem
+
+HEC-RAS stores project data in a combination of plain text files (`.prj`, `.p##`, `.g##`, `.u##`, `.f##`) and HDF5 binary files (`.p##.hdf`, `.g##.hdf`). While these files are human-readable or viewable with standard tools, **they are completely undocumented in any official HEC-RAS documentation**.
+
+The file formats use:
+- Inconsistent delimiters (fixed-width columns, commas, equals signs)
+- Cryptic keywords with no official reference
+- Implicit relationships between files
+- Version-specific variations across HEC-RAS releases
+- Nested data structures with non-obvious hierarchies
+
+Resources like [Breaking the HEC-RAS Code](https://hecrasmodel.blogspot.com/) by Krey Price represent the most complete third-party documentation available, but even comprehensive community efforts cannot cover every edge case or version change.
+
+**This lack of documentation has historically hindered the development of robust automation toolsets.** Most HEC-RAS automation has been:
+- Closed-source proprietary solutions
+- Ad-hoc scripts solving narrow problems
+- Brittle parsers that break with version updates
+- Inaccessible to the broader water resources community
+
+### The ras-commander Solution
+
+**ras-commander provides Pythonic DataFrame access to all HEC-RAS file data**, transforming cryptic file formats into structured, queryable, and modifiable data structures.
+
+The philosophy is simple:
+1. **Parse once, use everywhere** - File parsing logic is centralized and tested
+2. **DataFrames as the universal interface** - All data becomes pandas DataFrames with documented columns
+3. **Read-modify-write patterns** - DataFrames enable intuitive data manipulation before writing back
+4. **Open source transparency** - Every parsing decision is visible and improvable
+
+---
+
+## How Plain Text Becomes DataFrames
+
+### Example: Parsing a Plan File
+
+A HEC-RAS plan file (`.p01`) contains cryptic key-value pairs:
+
+```
+Plan Title=Unsteady Flow Simulation
+Program Version=6.30
+Short Identifier=p01
+Simulation Date=01Jan2020,0000,07Jan2020,2400
+Geom File=g01
+Flow File=u01
+Run HTab= -1
+Run UNet= -1
+Run PostProcess= 0
+Computation Interval=2MIN
+UNET D1 Cores= 1
+UNET D2 Cores= 4
+```
+
+The `RasPrj` class parses this into a DataFrame row:
+
+```python
+from ras_commander import init_ras_project, ras
+
+init_ras_project("/path/to/project", "6.5")
+
+# The plan file is now a DataFrame row
+print(ras.plan_df[['plan_number', 'Plan Title', 'Computation Interval', 'UNET D2 Cores']])
+```
+
+Output:
+```
+  plan_number                   Plan Title Computation Interval  UNET D2 Cores
+0          01  Unsteady Flow Simulation                    2MIN              4
+```
+
+**What happened internally:**
+1. The parser reads each line and splits on `=`
+2. Keywords become column names, values become cell values
+3. Type conversion handles integers, floats, and strings appropriately
+4. Related files are cross-referenced (geometry, flow files)
+5. The result is a queryable, filterable DataFrame
+
+### Example: Parsing Geometry Data
+
+Cross-section data in geometry files uses fixed-width formatting:
+
+```
+Type RM Length L Ch R = 1 ,1000.   ,500.   ,500.   ,500.
+#Sta/Elev= 40
+       0  660.41      25  660.55      50  660.74      75  660.89     100  661.01
+     125  661.12     150  661.23     175  661.34     200  661.45     225  661.56
+...
+#Mann= 3 , 0 , 0
+       0     .06       0     620     .035       0    1470      .06       0
+Bank Sta=620,1470
+```
+
+The `RasGeometry` class transforms this into structured DataFrames:
+
+```python
+from ras_commander import RasGeometry
+
+# Get cross-section inventory
+xs_df = RasGeometry.get_cross_sections("/path/to/project.g01")
+print(xs_df[['river', 'reach', 'river_station', 'left_bank', 'right_bank']])
+```
+
+Output:
+```
+        river    reach  river_station  left_bank  right_bank
+0  Bald Eagle  Loc Hav        1000.0      620.0      1470.0
+1  Bald Eagle  Loc Hav         800.0      615.0      1455.0
+```
+
+```python
+# Get station-elevation pairs for a specific cross-section
+sta_elev = RasGeometry.get_station_elevation(
+    "/path/to/project.g01",
+    river="Bald Eagle",
+    reach="Loc Hav",
+    station=1000.0
+)
+print(sta_elev.head())
+```
+
+Output:
+```
+   station  elevation
+0      0.0     660.41
+1     25.0     660.55
+2     50.0     660.74
+3     75.0     660.89
+4    100.0     661.01
+```
+
+---
+
+## The Read-Modify-Write Pattern
+
+DataFrames don't just provide read access—they enable a consistent pattern for modifying HEC-RAS data:
+
+### Pattern Overview
+
+```python
+# 1. READ: Parse file data into DataFrame
+data_df = SomeClass.get_data(file_path)
+
+# 2. MODIFY: Use pandas operations to change values
+data_df.loc[condition, 'column'] = new_value
+
+# 3. WRITE: Update the file with modified data
+SomeClass.set_data(file_path, data_df)
+```
+
+### Example: Modifying Manning's n Values
+
+```python
+from ras_commander import RasGeometry
+
+geom_path = "/path/to/project.g01"
+
+# 1. READ: Get current Manning's n for a cross-section
+mannings = RasGeometry.get_mannings_n(
+    geom_path,
+    river="Bald Eagle",
+    reach="Loc Hav",
+    station=1000.0
+)
+print("Before:", mannings)
+```
+
+Output:
+```
+   station  n_value  change_rate
+0      0.0    0.060          0.0
+1    620.0    0.035          0.0
+2   1470.0    0.060          0.0
+```
+
+```python
+# 2. MODIFY: Increase channel roughness by 20%
+mannings.loc[mannings['n_value'] == 0.035, 'n_value'] *= 1.2
+print("After:", mannings)
+```
+
+Output:
+```
+   station  n_value  change_rate
+0      0.0    0.060          0.0
+1    620.0    0.042          0.0
+2   1470.0    0.060          0.0
+```
+
+```python
+# 3. WRITE: Save modified values back to geometry file
+RasGeometry.set_mannings_n(
+    geom_path,
+    river="Bald Eagle",
+    reach="Loc Hav",
+    station=1000.0,
+    mannings_df=mannings
+)
+```
+
+### Example: Modifying Breach Parameters
+
+```python
+from ras_commander import RasBreach
+
+plan_path = "/path/to/project.p01"
+
+# 1. READ: Get current breach parameters
+breach_params = RasBreach.read_breach_block(plan_path, "Dam")
+print(breach_params)
+```
+
+Output:
+```
+{'Final Bottom Width': 200.0,
+ 'Final Bottom Elev': 605.0,
+ 'Left Slope': 0.5,
+ 'Right Slope': 0.5,
+ 'Breach Weir Coef': 2.6,
+ 'Formation Time': 1.0,
+ 'Trigger': 'Water Surface',
+ 'Trigger Elevation': 630.0}
+```
+
+```python
+# 2. MODIFY: Change breach parameters for sensitivity analysis
+breach_params['Final Bottom Width'] = 300.0  # Wider breach
+breach_params['Formation Time'] = 0.5        # Faster formation
+
+# 3. WRITE: Update the plan file
+RasBreach.update_breach_block(plan_path, "Dam", breach_params)
+```
+
+### Example: Batch Modification Across Plans
+
+The DataFrame approach enables batch operations across multiple files:
+
+```python
+from ras_commander import init_ras_project, ras, RasPlan
+
+init_ras_project("/path/to/project", "6.5")
+
+# Modify computation interval for all unsteady plans
+for _, plan in ras.plan_df[ras.plan_df['flow_type'] == 'Unsteady'].iterrows():
+    RasPlan.set_computation_interval(
+        plan['full_path'],
+        interval="1MIN"  # Finer time step
+    )
+    print(f"Updated plan {plan['plan_number']}")
+```
+
+---
+
+## Writing Your Own Parsing Functions
+
+When ras-commander doesn't cover a specific data type you need, you can follow the established patterns to write your own parsing functions.
+
+### Pattern: Fixed-Width Data
+
+Many HEC-RAS files use 8 or 16-character fixed-width columns:
+
+```python
+def parse_fixed_width_data(lines: list, width: int = 8) -> pd.DataFrame:
+    """
+    Parse fixed-width formatted data from HEC-RAS files.
+
+    Args:
+        lines: List of text lines containing the data
+        width: Character width of each column (typically 8 or 16)
+
+    Returns:
+        DataFrame with parsed numeric values
+    """
+    values = []
+    for line in lines:
+        # Split line into fixed-width chunks
+        chunks = [line[i:i+width] for i in range(0, len(line), width)]
+        # Convert to floats, handling empty/whitespace
+        row_values = []
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if chunk:
+                try:
+                    row_values.append(float(chunk))
+                except ValueError:
+                    row_values.append(chunk)
+        if row_values:
+            values.append(row_values)
+
+    return pd.DataFrame(values)
+```
+
+### Pattern: Key-Value Parsing
+
+For keyword-based sections:
+
+```python
+def parse_key_value_section(lines: list) -> dict:
+    """
+    Parse key=value pairs from HEC-RAS files.
+
+    Args:
+        lines: List of text lines
+
+    Returns:
+        Dictionary of keyword -> value mappings
+    """
+    result = {}
+    for line in lines:
+        if '=' in line:
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+
+            # Attempt type conversion
+            try:
+                if '.' in value:
+                    value = float(value)
+                else:
+                    value = int(value)
+            except ValueError:
+                pass  # Keep as string
+
+            result[key] = value
+
+    return result
+```
+
+### Pattern: Writing Back to Files
+
+When writing data back, preserve file structure:
+
+```python
+def update_section_in_file(
+    file_path: Path,
+    section_start: str,
+    section_end: str,
+    new_content: str
+) -> None:
+    """
+    Replace a section in a HEC-RAS file while preserving surrounding content.
+
+    Args:
+        file_path: Path to the file
+        section_start: Keyword marking section start
+        section_end: Keyword marking section end (or next section)
+        new_content: New content to insert
+    """
+    with open(file_path, 'r') as f:
+        content = f.read()
+
+    # Find section boundaries
+    start_idx = content.find(section_start)
+    end_idx = content.find(section_end, start_idx + len(section_start))
+
+    if start_idx == -1:
+        raise ValueError(f"Section '{section_start}' not found")
+
+    # Reconstruct file with new section
+    new_file = (
+        content[:start_idx] +
+        new_content +
+        content[end_idx:]
+    )
+
+    with open(file_path, 'w') as f:
+        f.write(new_file)
+```
+
+---
+
+## DataFrame Benefits Summary
+
+| Traditional Approach | ras-commander Approach |
+|---------------------|------------------------|
+| Write custom regex for each file type | Use tested, version-aware parsers |
+| Debug parsing errors in production | DataFrames expose data for inspection |
+| Manually track file relationships | Cross-referenced DataFrames handle linking |
+| Brittle string manipulation for edits | Pandas operations with type safety |
+| Undocumented internal data structures | Documented columns and types |
+| Closed-source, siloed solutions | Open source, community-improvable |
+
+**The goal is simple:** Any HEC-RAS automation task should start with `init_ras_project()` and proceed with DataFrame operations—not string parsing.
+
+---
+
 ## Quick Navigation
 
 - [Project-Level DataFrames](#project-level-dataframes) - Core project data structures
