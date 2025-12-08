@@ -119,13 +119,13 @@ nav:
     - DSS Operations: user-guide/dss-operations.md
     - Legacy COM Interface: user-guide/legacy-com-interface.md
     - Remote Execution: user-guide/remote-execution.md
+  - Example Notebooks: examples/index.md
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md
     - Remote Parallel: parallel-compute/remote-parallel.md
     - Scaling Strategies: parallel-compute/scaling-strategies.md
     - Worker Types: parallel-compute/worker-types.md
-  - Examples: examples/index.md
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
@@ -133,12 +133,18 @@ nav:
     - Geometry Modules: api/geometry.md
     - DSS Modules: api/dss.md
     - Remote Modules: api/remote.md
-  - Reference:
-    - HEC-RAS File Formats: reference/file-formats.md
+    - DataFrame Reference: reference/dataframe-reference.md
+  - RAS Data Formats:
+    - Overview: reference/file-formats.md
+    - PRJ File Parsing: reference/prj-parsing.md
     - Geometry Parsing: reference/geometry-parsing.md
+    - Unsteady File Parsing: reference/unsteady-parsing.md
+    - Steady File Parsing: reference/steady-parsing.md
     - HDF Structure: reference/hdf-structure.md
+    - HDF Writing Guide: reference/hdf-writing-guide.md
     - Quick Reference: reference/quick-reference.md
-  - Development:
+  - LLM-Driven Development:
+    - Overview: development/llm-development.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
     - Release Notes: development/release-notes.md

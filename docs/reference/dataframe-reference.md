@@ -2,6 +2,9 @@
 
 Complete reference for all DataFrames returned by ras-commander functions. Use this guide to understand DataFrame structures before writing data processing logic.
 
+!!! tip "Related Documentation"
+    DataFrames are derived directly from HEC-RAS plain text and HDF files. See [HEC-RAS File Formats](file-formats.md) for details on the underlying file structures that these DataFrames parse.
+
 ---
 
 ## Why DataFrames? The HEC-RAS Documentation Problem

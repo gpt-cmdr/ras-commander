@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to RAS Commander!
 
+RAS Commander was built using LLM-driven development and welcomes contributions created with AI assistance. See the [LLM-Driven Development Overview](llm-development.md) for guidance on using coding agents effectively with this repository.
+
 ## Development Setup
 
 ### Clone and Install
@@ -204,6 +206,31 @@ def my_function(param: str) -> bool:
 
     return True
 ```
+
+## LLM-Assisted Contributions
+
+RAS Commander encourages contributions developed with AI coding assistants. When submitting LLM-assisted code:
+
+1. **Test thoroughly** - LLMs can miss edge cases; verify with real HEC-RAS projects
+2. **Follow existing patterns** - Match the static class structure and naming conventions
+3. **Review generated code** - Ensure it follows the style guide and doesn't introduce security issues
+4. **Document your work** - Include docstrings with Args, Returns, and Examples sections
+
+Recommended workflow:
+
+```bash
+# Clone and set up environment
+git clone https://github.com/gpt-cmdr/ras-commander.git
+cd ras-commander
+uv venv .venv && uv pip install -e .
+
+# Launch your preferred coding agent
+claude          # Claude Code
+codex           # OpenAI Codex
+aider           # Aider
+```
+
+The repository includes `AGENTS.md` files that provide context to coding agents about repository structure and conventions.
 
 ## Questions?
 

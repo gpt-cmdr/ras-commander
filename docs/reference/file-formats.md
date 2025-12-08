@@ -2,6 +2,9 @@
 
 Reference for HEC-RAS file types and naming conventions.
 
+!!! tip "Related Documentation"
+    ras-commander parses these file formats into pandas DataFrames for programmatic access. See the [DataFrame Reference](dataframe-reference.md) for complete documentation of the DataFrame structures returned by each parsing function.
+
 ## Project Files
 
 | Extension | Description |

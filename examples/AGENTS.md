@@ -104,6 +104,14 @@ How agents should use notebooks
 - Supported versions: 3.1, 4.1, 5.0.x (501, 503, 505, 506), 6.0, 6.3, 6.6.
 - Key: Must specify version in init_ras_project(path, "4.1") for RasControl to work.
 
+24_aorc_precipitation.ipynb
+- Focus: Download and apply NOAA AORC gridded precipitation for rain-on-grid models.
+- Functions: [PrecipAorc.get_info](../ras_commander/precip/PrecipAorc.py), [PrecipAorc.check_availability](../ras_commander/precip/PrecipAorc.py), [PrecipAorc.download](../ras_commander/precip/PrecipAorc.py), [PrecipAorc.get_storm_catalog](../ras_commander/precip/PrecipAorc.py), [PrecipAorc.create_storm_plans](../ras_commander/precip/PrecipAorc.py), [RasUnsteady.set_gridded_precipitation](../ras_commander/RasUnsteady.py).
+- Pattern: Define WGS84 bounds → generate storm catalog → download AORC data → configure unsteady files → batch create plans.
+- Notable cells: Storm catalog generation with configurable parameters (inter_event_hours, min_depth_inches, buffer_hours, percentile_threshold); batch plan creation from storm catalog.
+- Dependencies: xarray, zarr, s3fs, netCDF4, rioxarray (optional for reprojection).
+- Key: AORC data reprojected to SHG (EPSG:5070) at 2000m resolution for HEC-RAS GDAL Raster import.
+
 101_Core_Sensitivity(.ipynb, _aircooled)
 - Focus: Runtime vs core count experiments.
 - Functions: [RasCmdr.compute_plan](../ras_commander/RasCmdr.py); [RasPlan.set_num_cores](../ras_commander/RasPlan.py).

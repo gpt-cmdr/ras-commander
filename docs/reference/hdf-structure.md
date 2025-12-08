@@ -10,6 +10,88 @@ Detailed reference for HEC-RAS HDF5 file structure.
 | `.g##.hdf` | Preprocessed geometry (hydraulic tables) |
 | `Terrain.hdf` | Terrain data |
 | `*.tif.hdf` | Raster data (land cover, soil, etc.) |
+| `Land Cover.*.hdf` | Land cover classification data |
+| `Soils.*.hdf` | Soil classification data |
+
+## Data Provenance: Plain Text vs HDF Primary
+
+!!! warning "Critical Concept for Automation"
+    Understanding where HEC-RAS stores **authoritative data** is essential before attempting any programmatic modifications.
+
+### The Two Data Sources
+
+HEC-RAS maintains data in two locations with different roles:
+
+| Storage Type | File Types | Authoritative? | Direct Edit Safe? |
+|--------------|------------|----------------|-------------------|
+| Plain Text | `.prj`, `.p##`, `.g##`, `.f##`, `.u##` | Yes (usually) | Yes |
+| HDF | `.hdf` (various types) | Sometimes | With extreme caution |
+
+### Plain Text as Primary (HDF is Derived)
+
+For most model components, **plain text files are the authoritative source**. HDF contains copies that are regenerated when you run the geometry preprocessor or execute plans:
+
+| Data Category | Plain Text Source | HDF Location | Regeneration Trigger |
+|---------------|-------------------|--------------|---------------------|
+| Cross Sections | `.g##` (Sta/Elev, Mann n) | `/Geometry/Cross Sections/` | Geometry preprocessor |
+| 2D Flow Area Perimeter | `.g##` | `/Geometry/2D Flow Areas/` | Geometry preprocessor |
+| Storage Areas | `.g##` | `/Geometry/Storage Areas/` | Geometry preprocessor |
+| SA/2D Connections | `.g##` (weir profiles, gates) | `/Geometry/Structures/` | Geometry preprocessor |
+| Lateral Structures | `.g##` | `/Geometry/Structures/` | Geometry preprocessor |
+| Inline Weirs | `.g##` | `/Geometry/Structures/` | Geometry preprocessor |
+| Bridges/Culverts | `.g##` | `/Geometry/Structures/` | Geometry preprocessor |
+| Plan Settings | `.p##` | `/Plan Data/` | Plan execution |
+| Boundary Conditions | `.u##` | `/Event Conditions/` | Plan execution |
+| Steady Flow Data | `.f##` | (included in results) | Plan execution |
+
+**Rule**: For these data types, edit the plain text file, then let HEC-RAS regenerate the HDF.
+
+### HDF as Primary (No Plain Text Equivalent)
+
+These data types are **only stored in HDF** - there is no plain text representation:
+
+| Data Category | HDF File Type | HDF Location | Why HDF-Only |
+|---------------|---------------|--------------|--------------|
+| **Gridded Precipitation** | `.p##.hdf` | `/Event Conditions/Meteorology/` | Raster/gridded data too large for text |
+| **Gridded Land Cover** | `Land Cover.*.hdf` | `//Raster Map`, `//Variables` | Raster classification + attribute table |
+| **Gridded Soils** | `Soils.*.hdf` | `//Raster Map`, `//Variables` | Raster classification + attribute table |
+| **Infiltration Base Overrides** | `.g##.hdf` | `/Geometry/Infiltration/Base Overrides` | Calibration region table |
+| **Pipe Networks** | `.g##.hdf` | `/Geometry/Pipe Networks/` | Complex 3D pipe network |
+| **Terrain Data** | `Terrain.hdf` | `//Elevation` | Native raster format |
+| **Computed Results** | `.p##.hdf` | `/Results/` | Time series output |
+| **Computed Mesh Geometry** | `.g##.hdf` | `/Geometry/2D Flow Areas/*/Cells` | Generated from perimeter |
+| **Hydraulic Tables (HTAB)** | `.g##.hdf` | `/Geometry/Cross Sections/Property Tables/` | Computed cross section properties |
+
+**Rule**: For these data types, direct HDF editing is required - but with extreme care to match HEC-RAS's exact expectations. See the [HDF Writing Guide](hdf-writing-guide.md).
+
+### Hybrid Cases
+
+Some data exists in both locations with different information:
+
+| Data | Plain Text Contains | HDF Contains |
+|------|---------------------|--------------|
+| **2D Flow Areas** | Perimeter polygon, parameters | Full computed mesh (cells, faces, property tables) |
+| **Cross Sections** | Station-elevation points, roughness | Property tables (HTAB), indexed geometry |
+| **Structures** | Weir profiles, gate parameters | Indexed/processed versions |
+
+For hybrids, the plain text holds the **input definition** while HDF holds **computed/processed versions**.
+
+### Practical Implications
+
+**For most automation tasks:**
+
+1. **Modify the plain text** file (`.g##`, `.p##`, `.u##`)
+2. **Run geometry preprocessor** if you changed geometry
+3. **Run the plan** to regenerate results HDF
+
+**For HDF-only data (gridded data, infiltration overrides):**
+
+1. **Create reference files** by doing the workflow manually in HEC-RAS
+2. **Analyze HDF structure** using HDFView or h5py
+3. **Match structure exactly** (dtype, compression, chunks, fill values)
+4. **Validate** by opening in HEC-RAS and running simulation
+
+See the [HDF Writing Guide](hdf-writing-guide.md) for detailed instructions on safe HDF modification.
 
 ## Plan Results Structure
 
