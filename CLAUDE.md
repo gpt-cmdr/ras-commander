@@ -333,6 +333,18 @@ category_projects = RasExamples.list_projects("1D Unsteady Flow Hydraulics")
 - GUI applications in `apps/` (create if needed)
 - Utility tools in `tools/`
 - AI/LLM resources in `ai_tools/`
+- **Planning documents in `planning_docs/`** - All temporary markdown files, analysis reports, and planning documents created during development should be placed here, not in the repository root
+
+### Planning Documents Rule
+When creating planning documents, analysis reports, or temporary markdown/text files during development:
+- **Always place them in `planning_docs/`** subfolder, not in the repository root
+- This keeps the root directory clean and focused on repository essentials
+- Planning docs are not committed to the repository (add to .gitignore if needed)
+- Examples of files that belong in `planning_docs/`:
+  - Implementation plans (e.g., `DOCUMENTATION_REVISION_PLAN.md`)
+  - Analysis reports (e.g., `HDF_COMPARISON_REPORT.md`)
+  - Comparison outputs (e.g., `precipitation_comparison_output.txt`)
+  - Temporary test scripts created during investigation
 
 ### Creating New Applications
 - Create subdirectory in `apps/` or `tools/`
@@ -349,12 +361,65 @@ category_projects = RasExamples.list_projects("1D Unsteady Flow Hydraulics")
 - Optimized for LLM code assistance and generation
 - Examples serve dual purpose as documentation and tests to reduce hallucination
 
+## Documentation Build Configuration
+
+### Dual-Platform Deployment
+Documentation is deployed to two platforms:
+- **GitHub Pages**: https://gpt-cmdr.github.io/ras-commander/ (via `.github/workflows/docs.yml`)
+- **ReadTheDocs**: https://ras-commander.readthedocs.io (via `.readthedocs.yaml`)
+
+### Notebook Integration
+Example notebooks from `examples/` are integrated into docs at `docs/notebooks/`:
+
+**GitHub Actions** (`.github/workflows/docs.yml`):
+```yaml
+- name: Create notebooks symlink
+  run: ln -s ../examples docs/notebooks
+```
+
+**ReadTheDocs** (`.readthedocs.yaml`):
+```yaml
+build:
+  jobs:
+    pre_build:
+      - cp -r examples docs/notebooks  # MUST use cp, NOT ln -s
+```
+
+### Critical: ReadTheDocs Strips Symlinks
+**ReadTheDocs uses `rsync --safe-links` during deployment, which removes symlinks for security.**
+- Symlinks work during build but content is NOT uploaded to the live site
+- Always use `cp -r` instead of `ln -s` in `.readthedocs.yaml`
+- The `.gitignore` includes `docs/notebooks/` to prevent committing copied files
+
+### Validation Configuration
+The `mkdocs.yml` includes validation settings to handle AGENTS.md files (which contain relative links to Python source files):
+```yaml
+validation:
+  links:
+    unrecognized_links: info  # Prevents strict mode failures
+```
+
+### mkdocs-jupyter Configuration
+```yaml
+- mkdocs-jupyter:
+    include_source: true
+    execute: false
+    include: ["notebooks/*.ipynb"]
+    ignore: ["notebooks/example_projects/**"]
+    ignore_h1_titles: true  # Use nav titles, not notebook H1
+```
+
+### Notebook Title Requirements
+Each notebook must have a markdown cell with an H1 heading as its first cell. This title is used in navigation when `ignore_h1_titles: false`, but with `ignore_h1_titles: true`, the nav entry title takes precedence.
+
 ## Common Pitfalls to Avoid
 
-- Don't instantiate static classes like `RasCmdr()` 
+- Don't instantiate static classes like `RasCmdr()`
 - Always specify `ras_object` parameter when working with multiple projects
 - Use pathlib.Path for all path operations
 - Don't forget `@log_call` decorator on new functions
 - Ensure HEC-RAS project is initialized before calling compute functions
 - Handle file permissions carefully on Windows systems
 - Test with actual HEC-RAS example projects, not synthetic data
+- **Never use symlinks in ReadTheDocs builds** - they get stripped during deployment
+- **Keep `.readthedocs.yaml` and `.github/workflows/docs.yml` in sync** for notebook handling
