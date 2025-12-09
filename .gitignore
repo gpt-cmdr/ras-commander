@@ -93,3 +93,6 @@ RemoteWorkers.json
 # Ignore ai_tools old docs and docker build artifacts
 ai_tools/docs_old/
 ras_commander/remote/docker/build/
+
+# Ignore docs/notebooks (generated from examples during build)
+docs/notebooks/

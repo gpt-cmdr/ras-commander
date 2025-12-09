@@ -9,7 +9,7 @@ build:
     python: "3.11"
   jobs:
     pre_build:
-      - ln -s ../examples docs/notebooks
+      - cp -r examples docs/notebooks
 
 mkdocs:
   configuration: mkdocs.yml
