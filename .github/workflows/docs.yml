@@ -48,6 +48,10 @@ jobs:
           pip install -r docs/requirements-docs.txt
           pip install -e .
 
+      - name: Create notebooks symlink
+        run: |
+          ln -s ../examples docs/notebooks
+
       - name: Build documentation
         run: |
           mkdocs build --strict
