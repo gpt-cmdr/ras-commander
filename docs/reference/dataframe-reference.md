@@ -18,7 +18,7 @@ The file formats use:
 - Version-specific variations across HEC-RAS releases
 - Nested data structures with non-obvious hierarchies
 
-Resources like [Breaking the HEC-RAS Code](https://hecrasmodel.blogspot.com/) by Krey Price represent the most complete third-party documentation available, but even comprehensive community efforts cannot cover every edge case or version change.
+Resources like [Breaking the HEC-RAS Code](https://hecrasmodel.blogspot.com/) by Chris Goodell represent the most complete third-party documentation available, but even comprehensive community efforts cannot cover every edge case or version change.
 
 **This lack of documentation has historically hindered the development of robust automation toolsets.** Most HEC-RAS automation has been:
 - Closed-source proprietary solutions
