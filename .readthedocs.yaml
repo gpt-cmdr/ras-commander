@@ -7,6 +7,9 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
+  jobs:
+    pre_build:
+      - ln -s ../examples docs/notebooks
 
 mkdocs:
   configuration: mkdocs.yml
@@ -14,3 +17,5 @@ mkdocs:
 python:
   install:
     - requirements: docs/requirements-docs.txt
+    - method: pip
+      path: .
