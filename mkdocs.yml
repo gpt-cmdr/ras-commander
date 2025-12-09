@@ -90,6 +90,10 @@ markdown_extensions:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
+validation:
+  links:
+    unrecognized_links: info
+
 extra_javascript:
   - https://unpkg.com/mermaid@10/dist/mermaid.min.js
 
