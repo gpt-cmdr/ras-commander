@@ -31,10 +31,18 @@ Resources like [Breaking the HEC-RAS Code](https://hecrasmodel.blogspot.com/) by
 **ras-commander provides Pythonic DataFrame access to all HEC-RAS file data**, transforming cryptic file formats into structured, queryable, and modifiable data structures.
 
 The philosophy is simple:
-1. **Parse once, use everywhere** - File parsing logic is centralized and tested
-2. **DataFrames as the universal interface** - All data becomes pandas DataFrames with documented columns
-3. **Read-modify-write patterns** - DataFrames enable intuitive data manipulation before writing back
-4. **Open source transparency** - Every parsing decision is visible and improvable
+
+1. **Parse once, use everywhere**
+   File parsing logic is centralized and tested
+
+2. **DataFrames as the universal interface**
+   All data becomes pandas DataFrames with documented columns
+
+3. **Read-modify-write patterns**
+   DataFrames enable intuitive data manipulation before writing back
+
+4. **Open source transparency**
+   Every parsing decision is visible and improvable
 
 ---
 
