@@ -768,10 +768,12 @@ class RasUnsteady:
         # Convert from instantaneous rate (mm/hr) to cumulative total (mm)
         precip_cumulative = np.cumsum(precip_flat, axis=0).astype(np.float32)
 
-        # Create timestamp strings in HEC-RAS format
+        # Create timestamp strings in HEC-RAS format for Timestamp dataset
         import pandas as pd
         timestamps = pd.to_datetime(times)
         timestamp_strs = [t.strftime('%d%b%Y %H:%M:%S') for t in timestamps]
+        # Create ISO 8601 format timestamps for Times attribute on Values datasets
+        timestamp_iso = [t.strftime('%Y-%m-%d %H:%M:%S') for t in timestamps]
 
         # EPSG:5070 WKT string (NAD83 / Conus Albers)
         srs_wkt = ('PROJCS["NAD83 / Conus Albers",GEOGCS["NAD83",DATUM["North_American_Datum_1983",'
@@ -808,8 +810,8 @@ class RasUnsteady:
 
                 precip_grp = f[precip_grp_path]
 
-                # Update Precipitation group attributes
-                precip_grp.attrs['Enabled'] = np.int32(1)
+                # Update Precipitation group attributes (use uint8 for Enabled like HEC-RAS does)
+                precip_grp.attrs['Enabled'] = np.uint8(1)
                 precip_grp.attrs['Mode'] = np.bytes_('Gridded')
                 precip_grp.attrs['Source'] = np.bytes_('GDAL Raster File(s)')
                 precip_grp.attrs['GDAL Filename'] = np.bytes_(netcdf_rel_path)
@@ -817,6 +819,15 @@ class RasUnsteady:
                 precip_grp.attrs['GDAL Filter'] = np.bytes_('')
                 precip_grp.attrs['GDAL Folder'] = np.bytes_('')
                 precip_grp.attrs['Interpolation Method'] = np.bytes_(interpolation)
+
+                # Create/update Meteorology Attributes index dataset
+                # This tells HEC-RAS which meteorology variables are active
+                met_attrs_path = 'Event Conditions/Meteorology/Attributes'
+                if met_attrs_path in f:
+                    del f[met_attrs_path]
+                dt = np.dtype([('Variable', 'S32'), ('Group', 'S42')])
+                attrs_data = np.array([(b'Precipitation', b'Event Conditions/Meteorology/Precipitation')], dtype=dt)
+                f.create_dataset(met_attrs_path, data=attrs_data)
 
                 # Create/recreate Imported Raster Data group
                 raster_grp_path = f'{precip_grp_path}/Imported Raster Data'
@@ -852,16 +863,23 @@ class RasUnsteady:
                     'Rate Time Units': np.bytes_('Hour'),
                     'Storage Configuration': np.bytes_('Sequential'),
                     'Time Series Data Type': np.bytes_('Amount'),
-                    'Times': np.array(timestamp_strs, dtype='S22'),
+                    'Times': np.array(timestamp_iso, dtype='S19'),
                     'Units': np.bytes_('mm'),
                     'Version': np.bytes_('1.0'),
                 }
 
                 # Create Values dataset - shape (n_times, n_rows*n_cols)
+                # Use gzip compression, chunking, and nan fillvalue to match HEC-RAS format
+                n_cells = n_rows * n_cols
                 values_ds = raster_grp.create_dataset(
                     'Values',
                     data=precip_cumulative,
-                    dtype=np.float32
+                    dtype=np.float32,
+                    chunks=(n_times, n_cells),
+                    compression='gzip',
+                    compression_opts=1,
+                    fillvalue=np.nan,
+                    maxshape=(None, None)
                 )
                 for attr_name, attr_val in values_attrs.items():
                     values_ds.attrs[attr_name] = attr_val
@@ -870,7 +888,12 @@ class RasUnsteady:
                 values_vert_ds = raster_grp.create_dataset(
                     'Values (Vertical)',
                     data=precip_cumulative,
-                    dtype=np.float32
+                    dtype=np.float32,
+                    chunks=(n_times, n_cells),
+                    compression='gzip',
+                    compression_opts=1,
+                    fillvalue=np.nan,
+                    maxshape=(None, None)
                 )
                 for attr_name, attr_val in values_attrs.items():
                     values_vert_ds.attrs[attr_name] = attr_val
