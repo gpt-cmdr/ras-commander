@@ -36,7 +36,7 @@ print(f"Visualizations: {results.visualization_folder}")
 
 ## RasFixit
 
-::: ras_commander.RasFixit
+::: ras_commander.fixit.RasFixit
     options:
       show_root_heading: true
       heading_level: 3
@@ -262,4 +262,4 @@ The repository includes the **HCFCD M3 Model A120-00-00** (Harris County Flood C
 - **Cross sections**: 91 total, 15 with overlapping obstructions
 - **Source**: `examples/data/A120-00-00.zip`
 
-See the [example notebook](../notebooks/27_fixit_blocked_obstructions.ipynb) for a complete walkthrough using this project.
+An example notebook for blocked obstructions will be added in a future release; the API above covers the current workflow end-to-end.

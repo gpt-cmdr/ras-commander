@@ -555,7 +555,10 @@ class RasUtils:
 
     @staticmethod
     @log_call
-    def convert_to_dataframe(data_source: Union[pd.DataFrame, Path], **kwargs) -> pd.DataFrame:
+    def convert_to_dataframe(
+        data_source: Union[pd.DataFrame, Path],
+        **kwargs: Any
+    ) -> pd.DataFrame:
         """
         Converts input to a pandas DataFrame. Supports existing DataFrames or file paths (CSV, Excel, TSV, Parquet).
 
@@ -597,7 +600,11 @@ class RasUtils:
 
     @staticmethod
     @log_call
-    def save_to_excel(dataframe: pd.DataFrame, excel_path: Path, **kwargs) -> None:
+    def save_to_excel(
+        dataframe: pd.DataFrame,
+        excel_path: Path,
+        **kwargs: Any
+    ) -> None:
         """
         Saves a pandas DataFrame to an Excel file with retry functionality.
 

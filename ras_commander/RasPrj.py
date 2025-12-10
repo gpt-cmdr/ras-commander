@@ -1430,7 +1430,11 @@ ras = RasPrj()
 # START OF FUNCTION DEFINITIONS
 
 @log_call
-def init_ras_project(ras_project_folder, ras_version=None, ras_object=None):
+def init_ras_project(
+    ras_project_folder,
+    ras_version=None,
+    ras_object=None
+) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
 
