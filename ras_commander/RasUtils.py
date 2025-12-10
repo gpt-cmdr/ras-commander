@@ -50,8 +50,9 @@ List of Functions in RasUtils:
 - consolidate_dataframe()
 - find_nearest_value()
 - horizontal_distance()
-    
-        
+- find_valid_ras_folders()
+- is_valid_ras_folder()
+
 """
 import os
 from pathlib import Path
@@ -1010,8 +1011,205 @@ class RasUtils:
             5.0
         """
         return np.linalg.norm(coord2 - coord1)
-    
-    
-    
-    
-    
+
+    @staticmethod
+    def find_valid_ras_folders(
+        search_path: Union[str, Path],
+        max_depth: Optional[int] = None,
+        return_project_info: bool = False
+    ) -> Union[List[Path], List[Dict[str, Any]]]:
+        """
+        Recursively search for valid HEC-RAS project folders.
+
+        A valid HEC-RAS project folder contains:
+        1. A .prj file with "Proj Title=" on the first line (HEC-RAS project file)
+        2. At least one .pXX file where XX is 01-99 (plan files)
+
+        This function does NOT require the global ras object to be initialized,
+        making it suitable for discovery operations before project initialization.
+
+        Args:
+            search_path (Union[str, Path]): Root directory to search for HEC-RAS projects.
+            max_depth (Optional[int]): Maximum folder depth to search. None means unlimited.
+                Depth 0 = search_path only, 1 = immediate subdirectories, etc.
+            return_project_info (bool): If True, return list of dicts with folder path,
+                project name, prj file path, and plan count. If False, return list of Paths.
+
+        Returns:
+            Union[List[Path], List[Dict[str, Any]]]:
+                - If return_project_info=False: List of Path objects for valid HEC-RAS folders
+                - If return_project_info=True: List of dicts with keys:
+                    - 'folder': Path to the project folder
+                    - 'project_name': Name extracted from .prj filename
+                    - 'prj_file': Path to the .prj file
+                    - 'plan_count': Number of plan files found
+                    - 'plan_numbers': List of plan numbers (e.g., ['01', '02', '15'])
+
+        Example:
+            >>> # Find all valid HEC-RAS project folders
+            >>> folders = RasUtils.find_valid_ras_folders("C:/Projects/Hydrology")
+            >>> for folder in folders:
+            ...     print(f"Found project: {folder}")
+
+            >>> # Get detailed info about each project
+            >>> projects = RasUtils.find_valid_ras_folders(
+            ...     "C:/Projects",
+            ...     max_depth=3,
+            ...     return_project_info=True
+            ... )
+            >>> for proj in projects:
+            ...     print(f"{proj['project_name']}: {proj['plan_count']} plans")
+
+        Note:
+            This function distinguishes HEC-RAS .prj files from ESRI projection files
+            by checking for "Proj Title=" on the first line of the file.
+        """
+        search_path = Path(search_path)
+        if not search_path.exists():
+            logger.warning(f"Search path does not exist: {search_path}")
+            return []
+
+        if not search_path.is_dir():
+            logger.warning(f"Search path is not a directory: {search_path}")
+            return []
+
+        valid_folders = []
+
+        def is_valid_ras_prj(prj_file: Path) -> bool:
+            """Check if a .prj file is a valid HEC-RAS project file."""
+            try:
+                with open(prj_file, 'r', encoding='utf-8', errors='replace') as f:
+                    first_line = f.readline()
+                    return first_line.strip().startswith("Proj Title=")
+            except Exception as e:
+                logger.debug(f"Could not read .prj file {prj_file}: {e}")
+                return False
+
+        def get_plan_files(folder: Path) -> List[Tuple[str, Path]]:
+            """Get all valid plan files (.p01 to .p99) in a folder."""
+            plan_files = []
+            for i in range(1, 100):
+                plan_num = f"{i:02d}"
+                # Look for files matching *.pXX pattern
+                for pfile in folder.glob(f"*.p{plan_num}"):
+                    plan_files.append((plan_num, pfile))
+            return plan_files
+
+        def check_folder(folder: Path) -> Optional[Dict[str, Any]]:
+            """Check if a folder is a valid HEC-RAS project folder."""
+            # Find .prj files
+            prj_files = list(folder.glob("*.prj"))
+
+            if not prj_files:
+                return None
+
+            # Find valid HEC-RAS .prj file (not ESRI projection file)
+            valid_prj = None
+            for prj_file in prj_files:
+                if is_valid_ras_prj(prj_file):
+                    valid_prj = prj_file
+                    break
+
+            if valid_prj is None:
+                return None
+
+            # Check for plan files
+            plan_files = get_plan_files(folder)
+            if not plan_files:
+                return None
+
+            # This is a valid HEC-RAS project folder
+            return {
+                'folder': folder,
+                'project_name': valid_prj.stem,
+                'prj_file': valid_prj,
+                'plan_count': len(plan_files),
+                'plan_numbers': [pn for pn, _ in plan_files]
+            }
+
+        def scan_directory(current_path: Path, current_depth: int):
+            """Recursively scan directories for HEC-RAS projects."""
+            # Check if we've exceeded max depth
+            if max_depth is not None and current_depth > max_depth:
+                return
+
+            # Check current folder
+            result = check_folder(current_path)
+            if result:
+                valid_folders.append(result)
+                # Don't search subdirectories of a valid project folder
+                # (nested projects are uncommon and would cause confusion)
+                return
+
+            # Scan subdirectories
+            try:
+                for item in current_path.iterdir():
+                    if item.is_dir() and not item.name.startswith('.'):
+                        scan_directory(item, current_depth + 1)
+            except PermissionError:
+                logger.debug(f"Permission denied accessing: {current_path}")
+            except Exception as e:
+                logger.debug(f"Error scanning {current_path}: {e}")
+
+        # Start scanning
+        logger.info(f"Searching for HEC-RAS projects in: {search_path}")
+        scan_directory(search_path, 0)
+        logger.info(f"Found {len(valid_folders)} valid HEC-RAS project folders")
+
+        if return_project_info:
+            return valid_folders
+        else:
+            return [info['folder'] for info in valid_folders]
+
+    @staticmethod
+    def is_valid_ras_folder(folder_path: Union[str, Path]) -> bool:
+        """
+        Check if a single folder is a valid HEC-RAS project folder.
+
+        A valid HEC-RAS project folder contains:
+        1. A .prj file with "Proj Title=" on the first line
+        2. At least one .pXX file where XX is 01-99
+
+        This function does NOT require the global ras object to be initialized.
+
+        Args:
+            folder_path (Union[str, Path]): Path to the folder to check.
+
+        Returns:
+            bool: True if the folder is a valid HEC-RAS project folder.
+
+        Example:
+            >>> if RasUtils.is_valid_ras_folder("C:/Projects/MyRASModel"):
+            ...     print("This is a valid HEC-RAS project folder")
+            ... else:
+            ...     print("Not a valid HEC-RAS project folder")
+        """
+        folder_path = Path(folder_path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return False
+
+        # Find .prj files
+        prj_files = list(folder_path.glob("*.prj"))
+        if not prj_files:
+            return False
+
+        # Check if any .prj file is a valid HEC-RAS project file
+        def is_valid_ras_prj(prj_file: Path) -> bool:
+            try:
+                with open(prj_file, 'r', encoding='utf-8', errors='replace') as f:
+                    first_line = f.readline()
+                    return first_line.strip().startswith("Proj Title=")
+            except Exception:
+                return False
+
+        has_valid_prj = any(is_valid_ras_prj(pf) for pf in prj_files)
+        if not has_valid_prj:
+            return False
+
+        # Check for at least one plan file (.p01 to .p99)
+        for i in range(1, 100):
+            plan_num = f"{i:02d}"
+            if list(folder_path.glob(f"*.p{plan_num}")):
+                return True
+
+        return False
