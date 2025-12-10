@@ -837,3 +837,273 @@ class HdfResultsPlan:
 
             logger.debug(f"No computation messages found for {hdf_path.name}")
             return ""
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_steady_results(hdf_path: Path) -> pd.DataFrame:
+        """
+        Extract steady state profile results from HEC-RAS HDF file.
+
+        This function extracts all key hydraulic results for steady state
+        profiles in a single call, matching the schema of RasControl.get_steady_results()
+        for consistency between COM and HDF-based workflows.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file (.p##.hdf)
+
+        Returns
+        -------
+        pd.DataFrame
+            Steady state results with one row per cross-section per profile.
+
+            **Schema:**
+
+            +----------------+----------+---------------------------------------+
+            | Column         | Type     | Description                           |
+            +================+==========+=======================================+
+            | river          | str      | River name                            |
+            +----------------+----------+---------------------------------------+
+            | reach          | str      | Reach name                            |
+            +----------------+----------+---------------------------------------+
+            | node_id        | str      | Cross section river station           |
+            +----------------+----------+---------------------------------------+
+            | profile        | str      | Profile name (e.g., "PF 1", "1Pct")   |
+            +----------------+----------+---------------------------------------+
+            | wsel           | float    | Water surface elevation (ft or m)     |
+            +----------------+----------+---------------------------------------+
+            | velocity       | float    | Channel velocity (ft/s or m/s)        |
+            +----------------+----------+---------------------------------------+
+            | flow           | float    | Total flow (cfs or cms)               |
+            +----------------+----------+---------------------------------------+
+            | froude         | float    | Channel Froude number (dimensionless) |
+            +----------------+----------+---------------------------------------+
+            | energy         | float    | Energy grade elevation (ft or m)      |
+            +----------------+----------+---------------------------------------+
+            | max_depth      | float    | Maximum channel depth (ft or m)       |
+            +----------------+----------+---------------------------------------+
+            | min_ch_el      | float    | Minimum channel elevation (ft or m)   |
+            +----------------+----------+---------------------------------------+
+            | top_width      | float    | Total top width (ft or m)             |
+            +----------------+----------+---------------------------------------+
+            | area           | float    | Total flow area (sq ft or sq m)       |
+            +----------------+----------+---------------------------------------+
+            | eg_slope       | float    | Energy grade slope (ft/ft or m/m)     |
+            +----------------+----------+---------------------------------------+
+            | friction_slope | float    | Friction slope (ft/ft or m/m)         |
+            +----------------+----------+---------------------------------------+
+
+        Raises
+        ------
+        ValueError
+            If the HDF file does not contain steady state results.
+
+        Notes
+        -----
+        **Comparison with RasControl.get_steady_results():**
+
+        This HDF-based method provides the same schema as the COM-based
+        RasControl.get_steady_results(), plus additional hydraulic variables
+        (top_width, area, eg_slope, friction_slope) that are readily
+        available in the HDF file.
+
+        **Performance:**
+
+        This method is significantly faster than COM-based extraction
+        since it reads directly from the HDF file without opening HEC-RAS.
+
+        Examples
+        --------
+        Extract all steady results:
+
+        >>> from ras_commander import init_ras_project, HdfResultsPlan
+        >>> init_ras_project("/path/to/project", "6.6")
+        >>> df = HdfResultsPlan.get_steady_results("01")
+        >>> df.to_csv('steady_results.csv', index=False)
+
+        Filter by profile:
+
+        >>> profile_1 = df[df['profile'] == 'PF 1']
+
+        Plot water surface profile:
+
+        >>> import matplotlib.pyplot as plt
+        >>> plt.plot(profile_1['node_id'].astype(float), profile_1['wsel'])
+        >>> plt.xlabel('Station')
+        >>> plt.ylabel('Water Surface Elevation (ft)')
+
+        See Also
+        --------
+        RasControl.get_steady_results : COM-based steady results extraction
+        is_steady_plan : Check if plan contains steady results
+        get_steady_profile_names : Get list of profile names
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if "Results/Steady" not in hdf_file:
+                    raise ValueError(
+                        f"HDF file does not contain steady state results: {hdf_path.name}\n"
+                        "Ensure this is a steady flow plan that has been computed."
+                    )
+
+                # Paths
+                base_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+                xs_path = f"{base_path}/Cross Sections"
+                add_vars_path = f"{xs_path}/Additional Variables"
+                xs_attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
+                profile_names_path = f"{base_path}/Profile Names"
+
+                # Get profile names
+                if profile_names_path in hdf_file:
+                    profile_names_raw = hdf_file[profile_names_path][()]
+                    profile_names = [
+                        name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
+                        for name in profile_names_raw
+                    ]
+                else:
+                    raise ValueError("Profile names not found in HDF file")
+
+                # Get XS attributes
+                xs_attrs = hdf_file[xs_attrs_path][()]
+                num_xs = len(xs_attrs)
+                num_profiles = len(profile_names)
+
+                # Get main variables (WSE, Flow)
+                wse_data = hdf_file[f"{xs_path}/Water Surface"][()]
+                flow_data = hdf_file[f"{xs_path}/Flow"][()]
+
+                # Get additional variables (with graceful fallback for missing)
+                def get_additional_var(var_name, default=np.nan):
+                    path = f"{add_vars_path}/{var_name}"
+                    if path in hdf_file:
+                        return hdf_file[path][()]
+                    return np.full((num_profiles, num_xs), default)
+
+                velocity_data = get_additional_var('Velocity Channel')
+                energy_data = get_additional_var('Energy Grade')
+                froude_data = get_additional_var('Froude # Channel')
+                max_depth_data = get_additional_var('Hydraulic Depth Channel')
+                min_ch_el_data = get_additional_var('Min Ch El')
+                top_width_data = get_additional_var('Top Width Total')
+                area_data = get_additional_var('Area Flow Total')
+                eg_slope_data = get_additional_var('EG Slope')
+                friction_slope_data = get_additional_var('Friction Slope')
+
+                # Build results DataFrame
+                rows = []
+                for prof_idx, prof_name in enumerate(profile_names):
+                    for xs_idx in range(num_xs):
+                        river = xs_attrs[xs_idx]['River']
+                        reach = xs_attrs[xs_idx]['Reach']
+                        station = xs_attrs[xs_idx]['Station']
+
+                        # Decode byte strings
+                        river = river.decode('utf-8').strip() if isinstance(river, bytes) else str(river).strip()
+                        reach = reach.decode('utf-8').strip() if isinstance(reach, bytes) else str(reach).strip()
+                        station = station.decode('utf-8').strip() if isinstance(station, bytes) else str(station).strip()
+
+                        rows.append({
+                            'river': river,
+                            'reach': reach,
+                            'node_id': station,
+                            'profile': prof_name,
+                            'wsel': float(wse_data[prof_idx, xs_idx]),
+                            'velocity': float(velocity_data[prof_idx, xs_idx]),
+                            'flow': float(flow_data[prof_idx, xs_idx]),
+                            'froude': float(froude_data[prof_idx, xs_idx]),
+                            'energy': float(energy_data[prof_idx, xs_idx]),
+                            'max_depth': float(max_depth_data[prof_idx, xs_idx]),
+                            'min_ch_el': float(min_ch_el_data[prof_idx, xs_idx]),
+                            'top_width': float(top_width_data[prof_idx, xs_idx]),
+                            'area': float(area_data[prof_idx, xs_idx]),
+                            'eg_slope': float(eg_slope_data[prof_idx, xs_idx]),
+                            'friction_slope': float(friction_slope_data[prof_idx, xs_idx]),
+                        })
+
+                df = pd.DataFrame(rows)
+                logger.info(f"Extracted steady results: {len(df)} rows "
+                           f"({num_profiles} profiles x {num_xs} cross sections)")
+                return df
+
+        except Exception as e:
+            logger.error(f"Error reading steady results: {str(e)}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def list_steady_variables(hdf_path: Path) -> Dict[str, List[str]]:
+        """
+        List all available steady state variables in the HDF file.
+
+        This is a diagnostic function useful for exploring what data
+        is available in a particular steady state results file.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to HEC-RAS plan HDF file
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            Dictionary with keys:
+            - 'cross_sections': Variables in Cross Sections group
+            - 'additional': Variables in Additional Variables group
+            - 'structures': Variables in Structures group (if present)
+
+        Example
+        -------
+        >>> vars = HdfResultsPlan.list_steady_variables('01')
+        >>> print(vars['additional'])
+        ['Area Flow Channel', 'Velocity Channel', 'Top Width Total', ...]
+        """
+        try:
+            result = {
+                'cross_sections': [],
+                'additional': [],
+                'structures': []
+            }
+
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if "Results/Steady" not in hdf_file:
+                    logger.warning("No steady state results in this file")
+                    return result
+
+                base_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+
+                # Cross Sections variables
+                xs_path = f"{base_path}/Cross Sections"
+                if xs_path in hdf_file:
+                    xs_group = hdf_file[xs_path]
+                    for key in xs_group.keys():
+                        if isinstance(xs_group[key], h5py.Dataset):
+                            result['cross_sections'].append(key)
+
+                # Additional Variables
+                add_path = f"{xs_path}/Additional Variables"
+                if add_path in hdf_file:
+                    add_group = hdf_file[add_path]
+                    for key in add_group.keys():
+                        if isinstance(add_group[key], h5py.Dataset):
+                            result['additional'].append(key)
+
+                # Structures
+                struct_path = f"{base_path}/Structures"
+                if struct_path in hdf_file:
+                    struct_group = hdf_file[struct_path]
+                    for key in struct_group.keys():
+                        if isinstance(struct_group[key], h5py.Dataset):
+                            result['structures'].append(key)
+
+                logger.info(f"Found {len(result['cross_sections'])} XS vars, "
+                           f"{len(result['additional'])} additional vars, "
+                           f"{len(result['structures'])} structure vars")
+
+                return result
+
+        except Exception as e:
+            logger.error(f"Error listing steady variables: {str(e)}")
+            return {'cross_sections': [], 'additional': [], 'structures': []}
