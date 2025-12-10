@@ -42,5 +42,6 @@ Dependencies:
 """
 
 from .PrecipAorc import PrecipAorc
+from .StormGenerator import StormGenerator
 
-__all__ = ['PrecipAorc']
+__all__ = ['PrecipAorc', 'StormGenerator']
