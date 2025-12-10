@@ -76,7 +76,7 @@ import os
 import re
 from pathlib import Path
 import pandas as pd
-from typing import Union, Any, List, Dict, Tuple
+from typing import Union, Any, List, Dict, Tuple, Optional
 import logging
 from ras_commander.LoggingConfig import get_logger
 from ras_commander.Decorators import log_call
@@ -1274,6 +1274,117 @@ class RasPrj:
             return df[cols_to_return]
         
         return df
+
+    # =========================================================================
+    # Convenience Methods for Common Lookups
+    # =========================================================================
+
+    def get_plans_with_results(self) -> List[str]:
+        """
+        Get list of plan numbers that have HDF results files.
+
+        Returns:
+            List[str]: List of plan number strings (e.g., ['01', '02'])
+
+        Example:
+            >>> ras = init_ras_project('/path/to/project', '6.6')
+            >>> plans = ras.get_plans_with_results()
+            >>> print(f"Plans with results: {plans}")
+        """
+        self.check_initialized()
+        return self.plan_df[
+            self.plan_df['HDF_Results_Path'].notna()
+        ]['plan_number'].tolist()
+
+    def get_plans_without_results(self) -> List[str]:
+        """
+        Get list of plan numbers that do not have HDF results files.
+
+        Returns:
+            List[str]: List of plan number strings
+
+        Example:
+            >>> plans_pending = ras.get_plans_without_results()
+            >>> print(f"Plans needing execution: {plans_pending}")
+        """
+        self.check_initialized()
+        return self.plan_df[
+            self.plan_df['HDF_Results_Path'].isna()
+        ]['plan_number'].tolist()
+
+    def get_plan_info(self, plan_number: str) -> Dict:
+        """
+        Get key attributes for a specific plan.
+
+        Args:
+            plan_number: Plan number string (e.g., '01', '02')
+
+        Returns:
+            Dict with keys:
+            - plan_number: The plan number
+            - title: Plan title
+            - shortid: Short identifier
+            - has_results: Whether HDF results exist
+            - results_path: Path to HDF results file (or None)
+            - geom_path: Path to geometry file
+            - flow_path: Path to flow file
+
+        Example:
+            >>> info = ras.get_plan_info('01')
+            >>> print(f"Plan: {info['title']}, Has Results: {info['has_results']}")
+        """
+        self.check_initialized()
+
+        matching = self.plan_df[self.plan_df['plan_number'] == plan_number]
+        if matching.empty:
+            raise ValueError(f"Plan '{plan_number}' not found. Available: {self.plan_df['plan_number'].tolist()}")
+
+        row = matching.iloc[0]
+        return {
+            'plan_number': plan_number,
+            'title': row.get('Plan Title', ''),
+            'shortid': row.get('Short Identifier', ''),
+            'has_results': pd.notna(row.get('HDF_Results_Path')),
+            'results_path': row.get('HDF_Results_Path'),
+            'geom_path': row.get('Geom Path'),
+            'flow_path': row.get('Flow Path'),
+        }
+
+    def get_hdf_paths(self, plan_number: str) -> Dict[str, Optional[Path]]:
+        """
+        Get HDF file paths for a specific plan.
+
+        This is a convenience method to quickly access both the results HDF
+        and geometry HDF paths for a plan, avoiding repeated DataFrame lookups.
+
+        Args:
+            plan_number: Plan number string (e.g., '01', '02')
+
+        Returns:
+            Dict with keys:
+            - results: Path to results HDF file (or None if not computed)
+            - geometry: Path to geometry HDF file (or None)
+
+        Example:
+            >>> paths = ras.get_hdf_paths('01')
+            >>> if paths['results']:
+            ...     data = HdfResultsPlan.get_runtime_data(paths['results'])
+        """
+        self.check_initialized()
+
+        matching = self.plan_df[self.plan_df['plan_number'] == plan_number]
+        if matching.empty:
+            raise ValueError(f"Plan '{plan_number}' not found. Available: {self.plan_df['plan_number'].tolist()}")
+
+        row = matching.iloc[0]
+
+        results_path = row.get('HDF_Results_Path')
+        geom_path = row.get('Geom Path')
+
+        return {
+            'results': Path(results_path) if pd.notna(results_path) else None,
+            'geometry': Path(str(geom_path) + '.hdf') if pd.notna(geom_path) else None,
+        }
 
 
 # Create a global instance named 'ras'
