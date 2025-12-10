@@ -71,6 +71,67 @@ logger = get_logger(__name__)
 
 
 class RasCmdr:
+    """
+    Static class for HEC-RAS plan execution operations.
+
+    All methods are static and designed to be used without instantiation.
+
+    Methods:
+        compute_plan(): Execute a single HEC-RAS plan
+        compute_parallel(): Execute multiple plans in parallel using worker folders
+        compute_test_mode(): Execute multiple plans sequentially in a test folder
+    """
+
+    @staticmethod
+    def _get_hdf_path(plan_number: Union[str, Number], ras_object: 'RasPrj') -> Path:
+        """
+        Get the expected HDF results path for a plan.
+
+        Args:
+            plan_number: Plan number (e.g., "01", 1)
+            ras_object: RasPrj instance
+
+        Returns:
+            Path to the expected HDF file
+        """
+        # Normalize plan number to 2-digit string
+        if isinstance(plan_number, Number):
+            plan_num_str = f"{int(plan_number):02d}"
+        else:
+            plan_num_str = str(plan_number).zfill(2)
+
+        return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
+
+    @staticmethod
+    def _verify_completion(hdf_path: Path) -> bool:
+        """
+        Verify that a HEC-RAS computation completed successfully by checking
+        for 'Complete Process' in the compute messages.
+
+        Args:
+            hdf_path: Path to the plan HDF file
+
+        Returns:
+            True if 'Complete Process' found in compute messages, False otherwise
+        """
+        if not hdf_path.exists():
+            logger.debug(f"HDF file does not exist: {hdf_path}")
+            return False
+
+        try:
+            # Late import to avoid circular dependency
+            from .hdf.HdfResultsPlan import HdfResultsPlan
+
+            compute_msgs = HdfResultsPlan.get_compute_messages(hdf_path)
+            if compute_msgs and 'Complete Process' in compute_msgs:
+                logger.debug(f"Verification passed: 'Complete Process' found in {hdf_path.name}")
+                return True
+            else:
+                logger.debug(f"Verification failed: 'Complete Process' not found in {hdf_path.name}")
+                return False
+        except Exception as e:
+            logger.warning(f"Error verifying completion for {hdf_path}: {e}")
+            return False
     
     @staticmethod
     @log_call
@@ -80,7 +141,9 @@ class RasCmdr:
         ras_object=None,
         clear_geompre=False,
         num_cores=None,
-        overwrite_dest=False
+        overwrite_dest=False,
+        skip_existing: bool = False,
+        verify: bool = False
     ):
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -99,14 +162,21 @@ class RasCmdr:
                 Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
                 Set to True when geometry has been modified to force recomputation of preprocessor files.
-            num_cores (int, optional): Number of cores to use for the plan execution. 
+            num_cores (int, optional): Number of cores to use for the plan execution.
                 If None, the current setting in the plan file is not changed.
                 Generally, 2-4 cores provides good performance for most models.
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
                 Set to True to replace an existing destination folder with the same name.
+            skip_existing (bool, optional): If True, skip computation if HDF results file already exists
+                and contains 'Complete Process' in compute messages. Defaults to False.
+                Useful for resuming interrupted batch runs or incremental workflows.
+            verify (bool, optional): If True, verify computation completed successfully by checking
+                for 'Complete Process' in compute messages after execution. Defaults to False.
+                Returns False if verification fails even if subprocess returned success.
 
         Returns:
-            bool: True if the execution was successful, False otherwise.
+            bool: True if the execution was successful (and verification passed if enabled), False otherwise.
+                When skip_existing=True and results exist, returns True without running.
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
@@ -117,25 +187,32 @@ class RasCmdr:
         Examples:
             # Run a plan in the original project folder
             RasCmdr.compute_plan("01")
-            
+
             # Run a plan in a separate folder
             RasCmdr.compute_plan("01", dest_folder="computation_folder")
-            
+
             # Run a plan with a specific number of cores
             RasCmdr.compute_plan("01", num_cores=4)
-            
+
             # Run a plan in a specific folder, overwriting if it exists
             RasCmdr.compute_plan("01", dest_folder="computation_folder", overwrite_dest=True)
-            
+
+            # Skip computation if results already exist
+            RasCmdr.compute_plan("01", skip_existing=True)
+
+            # Run with verification of successful completion
+            RasCmdr.compute_plan("01", verify=True)
+
             # Run a plan in a specific folder with multiple options
             RasCmdr.compute_plan(
-                "01", 
+                "01",
                 dest_folder="computation_folder",
                 num_cores=2,
                 clear_geompre=True,
-                overwrite_dest=True
+                overwrite_dest=True,
+                verify=True
             )
-            
+
         Notes:
             - For executing multiple plans, consider using compute_parallel() or compute_test_mode().
             - Setting num_cores appropriately is important for performance:
@@ -143,15 +220,17 @@ class RasCmdr:
               * 3-8 cores: Good balance for most models
               * >8 cores: May have diminishing returns due to overhead
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
+            - When skip_existing=True with dest_folder, the check happens AFTER copying to destination.
+            - The verify parameter checks for 'Complete Process' in HDF compute messages.
         """
         try:
             ras_obj = ras_object if ras_object is not None else ras
             logger.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
             ras_obj.check_initialized()
-            
+
             if dest_folder is not None:
                 dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
-                
+
                 if dest_folder.exists():
                     if overwrite_dest:
                         shutil.rmtree(dest_folder)
@@ -160,11 +239,11 @@ class RasCmdr:
                         error_msg = f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite."
                         logger.error(error_msg)
                         raise ValueError(error_msg)
-                
+
                 dest_folder.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True)
                 logger.info(f"Copied project folder to destination: {dest_folder}")
-                
+
                 compute_ras = RasPrj()
                 compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
                 compute_prj_path = compute_ras.prj_file
@@ -178,6 +257,13 @@ class RasCmdr:
             if not compute_prj_path or not compute_plan_path:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 return False
+
+            # Check if results already exist and skip if requested
+            if skip_existing:
+                hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
+                if RasCmdr._verify_completion(hdf_path):
+                    logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
+                    return True
 
             # Clear geometry preprocessor files if requested
             if clear_geompre:
@@ -208,6 +294,17 @@ class RasCmdr:
                 run_time = end_time - start_time
                 logger.info(f"HEC-RAS execution completed for plan: {plan_number}")
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+
+                # Verify completion if requested
+                if verify:
+                    hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
+                    if RasCmdr._verify_completion(hdf_path):
+                        logger.info(f"Verification passed for plan {plan_number}")
+                        return True
+                    else:
+                        logger.error(f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages")
+                        return False
+
                 return True
             except subprocess.CalledProcessError as e:
                 end_time = time.time()
@@ -238,7 +335,9 @@ class RasCmdr:
         clear_geompre: bool = False,
         ras_object: Optional['RasPrj'] = None,
         dest_folder: Union[str, Path, None] = None,
-        overwrite_dest: bool = False
+        overwrite_dest: bool = False,
+        skip_existing: bool = False,
+        verify: bool = False
     ) -> Dict[str, bool]:
         """
         Execute multiple HEC-RAS plans in parallel using multiple worker instances.
@@ -248,7 +347,7 @@ class RasCmdr:
         It's ideal for running independent plans simultaneously to make better use of system resources.
 
         Args:
-            plan_number (Union[str, List[str], None]): Plan number(s) to compute. 
+            plan_number (Union[str, List[str], None]): Plan number(s) to compute.
                 If None, all plans in the project are computed.
                 If string, only that plan will be computed.
                 If list, all specified plans will be computed.
@@ -270,10 +369,18 @@ class RasCmdr:
                 If Path, uses the exact path provided.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
                 Set to True to replace an existing destination folder with the same name.
+            skip_existing (bool): If True, skip computation for plans that already have HDF results
+                with 'Complete Process' in compute messages. Defaults to False.
+                Skipped plans are marked as successful (True) in results. Checked on source folder.
+            verify (bool): If True, verify each plan completed successfully by checking
+                for 'Complete Process' in compute messages. Defaults to False.
+                Plans that fail verification are marked False in results.
 
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
                 Keys are plan numbers and values are boolean success indicators.
+                When skip_existing=True, skipped plans return True.
+                When verify=True, plans failing verification return False.
 
         Raises:
             ValueError: If the destination folder already exists, is not empty, and overwrite_dest is False.
@@ -284,20 +391,26 @@ class RasCmdr:
         Examples:
             # Run all plans in parallel with default settings
             RasCmdr.compute_parallel()
-            
+
             # Run all plans with 4 workers, 2 cores per worker
             RasCmdr.compute_parallel(max_workers=4, num_cores=2)
-            
+
             # Run specific plans in parallel
             RasCmdr.compute_parallel(plan_number=["01", "03"], max_workers=2)
-            
+
+            # Resume interrupted parallel run - skip already completed plans
+            RasCmdr.compute_parallel(skip_existing=True)
+
+            # Run with verification of successful completion
+            RasCmdr.compute_parallel(verify=True)
+
             # Run all plans with dynamic worker allocation based on system resources
             import psutil
             physical_cores = psutil.cpu_count(logical=False)
             cores_per_worker = 2
             max_workers = max(1, physical_cores // cores_per_worker)
             RasCmdr.compute_parallel(max_workers=max_workers, num_cores=cores_per_worker)
-            
+
             # Run all plans in a specific destination folder
             RasCmdr.compute_parallel(dest_folder="parallel_results", overwrite_dest=True)
 
@@ -305,19 +418,24 @@ class RasCmdr:
             - Worker Assignment: Plans are assigned to workers in a round-robin fashion.
               For example, with 3 workers and 5 plans, assignment would be:
               Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
-            
+
             - Resource Management: Each HEC-RAS instance (worker) typically requires:
               * 2-4 GB of RAM
               * 2-4 cores for optimal performance
-            
+
             - When to use parallel vs. sequential:
               * Parallel: For independent plans, faster overall completion
               * Sequential: For dependent plans, consistent resource usage, easier debugging
-            
+
             - The function creates worker folders during execution and consolidates results
               to the destination folder upon completion.
-              
+
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
+
+            - skip_existing checks the SOURCE folder before creating workers. Plans with existing
+              results are not assigned to workers at all.
+
+            - verify is passed through to compute_plan() for each worker execution.
         """
         try:
             ras_obj = ras_object or ras
@@ -352,9 +470,33 @@ class RasCmdr:
             else:
                 filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
 
-            num_plans = len(ras_obj.plan_df)
-            max_workers = min(max_workers, num_plans) if num_plans > 0 else 1
-            logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans: {num_plans}")
+            # Initialize execution_results dict
+            execution_results: Dict[str, bool] = {}
+
+            # Filter out plans with existing results if skip_existing is True
+            if skip_existing:
+                plans_to_skip = []
+                plans_to_compute = []
+                for plan_num in filtered_plan_numbers:
+                    hdf_path = RasCmdr._get_hdf_path(plan_num, ras_obj)
+                    if RasCmdr._verify_completion(hdf_path):
+                        plans_to_skip.append(plan_num)
+                        execution_results[plan_num] = True  # Mark as successful (results exist)
+                    else:
+                        plans_to_compute.append(plan_num)
+                if plans_to_skip:
+                    logger.info(f"Skipping {len(plans_to_skip)} plans with existing results: {plans_to_skip}")
+                filtered_plan_numbers = plans_to_compute
+
+            num_plans = len(filtered_plan_numbers)
+
+            # If all plans were skipped, return early
+            if num_plans == 0:
+                logger.info("All plans skipped (existing results found). No computation needed.")
+                return execution_results
+
+            max_workers = min(max_workers, num_plans)
+            logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
 
             worker_ras_objects = {}
             for worker_id in range(1, max_workers + 1):
@@ -381,16 +523,15 @@ class RasCmdr:
             worker_cycle = cycle(range(1, max_workers + 1))
             plan_assignments = [(next(worker_cycle), plan_num) for plan_num in filtered_plan_numbers]
 
-            execution_results: Dict[str, bool] = {}
-
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
                     executor.submit(
                         RasCmdr.compute_plan,
-                        plan_num, 
-                        ras_object=worker_ras_objects[worker_id], 
+                        plan_num,
+                        ras_object=worker_ras_objects[worker_id],
                         clear_geompre=clear_geompre,
-                        num_cores=num_cores
+                        num_cores=num_cores,
+                        verify=verify
                     )
                     for worker_id, plan_num in plan_assignments
                 ]
@@ -490,20 +631,22 @@ class RasCmdr:
         clear_geompre=False,
         num_cores=None,
         ras_object=None,
-        overwrite_dest=False
+        overwrite_dest=False,
+        skip_existing: bool = False,
+        verify: bool = False
     ):
         """
         Execute HEC-RAS plans sequentially in a separate test folder.
 
         This function creates a separate test folder, copies the project there, and executes
-        the specified plans in sequential order. It's useful for batch processing plans that 
+        the specified plans in sequential order. It's useful for batch processing plans that
         need to be run in a specific order or when you want to ensure consistent resource usage.
 
         Args:
-            plan_number (Union[str, Number, List[Union[str, Number]], None], optional): Plan number or list of plan numbers to execute (e.g., "01", 1, 1.0, or ["01", 2]). 
+            plan_number (Union[str, Number, List[Union[str, Number]], None], optional): Plan number or list of plan numbers to execute (e.g., "01", 1, 1.0, or ["01", 2]).
                 If None, all plans will be executed. Default is None.
                 Recommended to use two-digit strings for plan numbers for consistency (e.g., "01" instead of 1).
-            dest_folder_suffix (str, optional): Suffix to append to the test folder name. 
+            dest_folder_suffix (str, optional): Suffix to append to the test folder name.
                 Defaults to "[Test]".
                 The test folder is always created in the project folder's parent directory.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files.
@@ -514,13 +657,21 @@ class RasCmdr:
                 For sequential execution, 4-8 cores often provides good performance.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
                 Useful when working with multiple projects simultaneously.
-            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. 
+            overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists.
                 Defaults to False.
                 Set to True to replace an existing test folder with the same name.
+            skip_existing (bool, optional): If True, skip computation for plans that already have HDF results
+                with 'Complete Process' in compute messages. Defaults to False.
+                Skipped plans are marked as successful (True) in results. Check happens in test folder.
+            verify (bool, optional): If True, verify each plan completed successfully by checking
+                for 'Complete Process' in compute messages. Defaults to False.
+                Plans that fail verification are marked False in results.
 
         Returns:
             Dict[str, bool]: Dictionary of plan numbers and their execution success status.
                 Keys are plan numbers and values are boolean success indicators.
+                When skip_existing=True, skipped plans return True.
+                When verify=True, plans failing verification return False.
 
         Raises:
             ValueError: If the destination folder already exists, is not empty, and overwrite_dest is False.
@@ -530,49 +681,60 @@ class RasCmdr:
         Examples:
             # Run all plans sequentially
             RasCmdr.compute_test_mode()
-            
+
             # Run a specific plan
             RasCmdr.compute_test_mode(plan_number="01")
-            
+
             # Run multiple specific plans
             RasCmdr.compute_test_mode(plan_number=["01", "03", "05"])
-            
+
             # Run plans with a custom folder suffix
             RasCmdr.compute_test_mode(dest_folder_suffix="[SequentialRun]")
-            
+
             # Run plans with a specific number of cores
             RasCmdr.compute_test_mode(num_cores=4)
-            
+
+            # Resume interrupted test run - skip completed plans
+            RasCmdr.compute_test_mode(skip_existing=True)
+
+            # Run with verification of successful completion
+            RasCmdr.compute_test_mode(verify=True)
+
             # Run specific plans with multiple options
             RasCmdr.compute_test_mode(
                 plan_number=["01", "02"],
                 dest_folder_suffix="[SpecificSequential]",
                 clear_geompre=True,
                 num_cores=6,
-                overwrite_dest=True
+                overwrite_dest=True,
+                verify=True
             )
 
         Notes:
             - This function was created to replicate the original HEC-RAS command line -test flag,
               which does not work in recent versions of HEC-RAS.
-            
+
             - Key differences from other compute functions:
               * compute_plan: Runs a single plan, with option for destination folder
               * compute_parallel: Runs multiple plans simultaneously in worker folders
               * compute_test_mode: Runs multiple plans sequentially in a single test folder
-            
+
             - Use cases:
               * Running plans in a specific order
               * Ensuring consistent resource usage
               * Easier debugging (one plan at a time)
               * Isolated test environment
-            
+
             - Performance considerations:
               * Sequential execution is generally slower overall than parallel execution
               * Each plan gets consistent resource usage
               * Execution time scales linearly with the number of plans
-            
+
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
+
+            - skip_existing checks the TEST folder after copying. This allows resuming interrupted test runs.
+
+            - verify is passed through to compute_plan() for each plan execution.
         """
         try:
             ras_obj = ras_object or ras
@@ -640,27 +802,29 @@ class RasCmdr:
             execution_results = {}
             logger.info("Running selected plans sequentially...")
             for _, plan in ras_compute_plan_entries.iterrows():
-                plan_number = plan["plan_number"]
+                current_plan_number = plan["plan_number"]
                 start_time = time.time()
                 try:
                     success = RasCmdr.compute_plan(
-                        plan_number,
+                        current_plan_number,
                         ras_object=compute_ras,
                         clear_geompre=clear_geompre,
-                        num_cores=num_cores
+                        num_cores=num_cores,
+                        skip_existing=skip_existing,
+                        verify=verify
                     )
-                    execution_results[plan_number] = success
+                    execution_results[current_plan_number] = success
                     if success:
-                        logger.info(f"Successfully computed plan {plan_number}")
+                        logger.info(f"Successfully computed plan {current_plan_number}")
                     else:
-                        logger.error(f"Failed to compute plan {plan_number}")
+                        logger.error(f"Failed to compute plan {current_plan_number}")
                 except Exception as e:
-                    execution_results[plan_number] = False
-                    logger.error(f"Error computing plan {plan_number}: {str(e)}")
+                    execution_results[current_plan_number] = False
+                    logger.error(f"Error computing plan {current_plan_number}: {str(e)}")
                 finally:
                     end_time = time.time()
                     run_time = end_time - start_time
-                    logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+                    logger.info(f"Total run time for plan {current_plan_number}: {run_time:.2f} seconds")
 
             logger.info("All selected plans have been executed.")
             logger.info("compute_test_mode completed.")
