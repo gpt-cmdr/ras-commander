@@ -63,7 +63,7 @@ import re
 import logging
 from pathlib import Path
 import shutil
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Dict
 from numbers import Number
 import pandas as pd
 from .RasPrj import RasPrj, ras
@@ -667,9 +667,25 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_plan(template_plan: Union[str, Number], new_shortid=None, new_plan_shortid=None, new_title=None, ras_object=None):
+    def clone_plan(
+        template_plan: Union[str, Number],
+        new_shortid=None,
+        new_plan_shortid=None,
+        new_title=None,
+        geometry: Union[str, Number] = None,
+        unsteady_flow: Union[str, Number] = None,
+        steady_flow: Union[str, Number] = None,
+        num_cores: int = None,
+        intervals: Dict = None,
+        run_flags: Dict = None,
+        description: str = None,
+        ras_object=None
+    ):
         """
-        Create a new plan file based on a template and update the project file.
+        Create a new plan file based on a template and optionally configure it.
+
+        This function clones a plan file and can optionally configure multiple
+        settings in one call, reducing the need for separate function calls.
 
         Parameters:
         template_plan (Union[str, Number]): Plan number to use as template (e.g., '01', 1, or 1.0)
@@ -680,27 +696,48 @@ class RasPlan:
                                           new_plan_shortid takes precedence.
         new_title (str, optional): New plan title (max 32 chars, updates "Plan Title=" line).
                                    If not provided, keeps original title.
+        geometry (Union[str, Number], optional): Geometry file number to assign to the new plan.
+        unsteady_flow (Union[str, Number], optional): Unsteady flow file number to assign.
+        steady_flow (Union[str, Number], optional): Steady flow file number to assign.
+        num_cores (int, optional): Number of compute cores to use.
+        intervals (Dict, optional): Plan intervals to set. Keys can include:
+            - 'computation' or 'computation_interval': e.g., '5SEC', '1MIN'
+            - 'output' or 'output_interval': e.g., '15MIN', '1HOUR'
+            - 'mapping' or 'mapping_interval': e.g., '1HOUR'
+            - 'hydrograph' or 'hydrograph_output_interval': e.g., '15MIN'
+        run_flags (Dict, optional): Run flags to set. Keys can include:
+            - 'geometry_preprocessor': bool
+            - 'unsteady_flow_simulation': bool
+            - 'post_processor': bool
+            - 'floodplain_mapping': bool
+            - 'sediment': bool
+            - 'water_quality': bool
+        description (str, optional): Plan description text.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
         str: New plan number
 
         Example:
-        >>> # Clone with default shortid and title (string input)
+        >>> # Simple clone (original behavior)
         >>> new_plan = RasPlan.clone_plan('01')
         >>>
-        >>> # Clone with integer input
-        >>> new_plan = RasPlan.clone_plan(1)
-        >>>
-        >>> # Clone with custom shortid and title (either parameter name works)
-        >>> new_plan = RasPlan.clone_plan('01', new_shortid='Steady_v41',
-        ...                               new_title='Steady Flow - HEC-RAS 4.1')
-        >>> new_plan = RasPlan.clone_plan('01', new_plan_shortid='Steady_v41',
-        ...                               new_title='Steady Flow - HEC-RAS 4.1')
+        >>> # Clone with full configuration in one call
+        >>> new_plan = RasPlan.clone_plan(
+        ...     '01',
+        ...     new_plan_shortid='Sensitivity_01',
+        ...     geometry='01',
+        ...     unsteady_flow='02',
+        ...     num_cores=4,
+        ...     intervals={'computation': '5SEC', 'output': '1MIN'},
+        ...     run_flags={'geometry_preprocessor': True, 'unsteady_flow_simulation': True},
+        ...     description='Sensitivity run with modified Manning\'s n'
+        ... )
 
         Note:
             Both new_shortid and new_title are optional.
             new_plan_shortid is an alias for new_shortid for improved clarity.
+            Configuration parameters are applied after the clone is created.
             This function updates the ras object's dataframes after modifying the project structure.
         """
         # Handle parameter aliasing: new_plan_shortid takes precedence if both provided
@@ -764,6 +801,45 @@ class RasPlan:
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+        # Apply optional configuration parameters
+        if geometry is not None:
+            RasPlan.set_geom(new_plan_num, geometry, ras_object=ras_obj)
+
+        if unsteady_flow is not None:
+            RasPlan.set_unsteady(new_plan_num, unsteady_flow, ras_object=ras_obj)
+
+        if steady_flow is not None:
+            RasPlan.set_steady(new_plan_num, steady_flow, ras_object=ras_obj)
+
+        if num_cores is not None:
+            RasPlan.set_num_cores(new_plan_num, num_cores, ras_object=ras_obj)
+
+        if intervals is not None:
+            # Map flexible keys to actual parameter names
+            interval_kwargs = {}
+            key_mapping = {
+                'computation': 'computation_interval',
+                'computation_interval': 'computation_interval',
+                'output': 'output_interval',
+                'output_interval': 'output_interval',
+                'mapping': 'mapping_interval',
+                'mapping_interval': 'mapping_interval',
+                'hydrograph': 'hydrograph_output_interval',
+                'hydrograph_output_interval': 'hydrograph_output_interval',
+            }
+            for key, value in intervals.items():
+                mapped_key = key_mapping.get(key.lower().replace(' ', '_'))
+                if mapped_key:
+                    interval_kwargs[mapped_key] = value
+            if interval_kwargs:
+                RasPlan.update_plan_intervals(new_plan_num, ras_object=ras_obj, **interval_kwargs)
+
+        if run_flags is not None:
+            RasPlan.update_run_flags(new_plan_num, ras_object=ras_obj, **run_flags)
+
+        if description is not None:
+            RasPlan.update_plan_description(new_plan_num, description, ras_object=ras_obj)
 
         return new_plan_num
 
