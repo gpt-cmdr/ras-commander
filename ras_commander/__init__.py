@@ -28,6 +28,7 @@ from .M3Model import M3Model
 from .RasCmdr import RasCmdr
 from .RasControl import RasControl
 from .RasMap import RasMap
+from .RasProcess import RasProcess
 from .RasGuiAutomation import RasGuiAutomation
 from .RasBreach import RasBreach
 
@@ -62,14 +63,32 @@ _REMOTE_EXPORTS = {
 # This keeps the Java dependency truly optional for users who don't need DSS
 _DSS_EXPORTS = {'RasDss'}
 
+# Check module - QA validation for HEC-RAS steady flow models (unofficial cHECk-RAS clone)
+_CHECK_EXPORTS = {
+    'RasCheck', 'CheckResults', 'CheckMessage', 'Severity',
+    'ValidationThresholds', 'get_default_thresholds', 'get_state_surcharge_limit',
+    'RasCheckReport', 'ReportMetadata', 'generate_html_report', 'export_messages_csv',
+}
+
+# Fixit module - Automated geometry repair for HEC-RAS models
+_FIXIT_EXPORTS = {
+    'RasFixit', 'FixResults', 'FixMessage', 'FixAction', 'BlockedObstruction',
+}
+
 def __getattr__(name):
-    """Lazy load remote execution and DSS components on first access."""
+    """Lazy load remote execution, DSS, check, and fixit components on first access."""
     if name in _REMOTE_EXPORTS:
         from . import remote
         return getattr(remote, name)
     if name in _DSS_EXPORTS:
         from . import dss
         return getattr(dss, name)
+    if name in _CHECK_EXPORTS:
+        from . import check
+        return getattr(check, name)
+    if name in _FIXIT_EXPORTS:
+        from . import fixit
+        return getattr(fixit, name)
     raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
 
 
@@ -78,7 +97,7 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasGuiAutomation', 'HdfFluvialPluvial',
+    'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'RasGuiAutomation', 'HdfFluvialPluvial',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
@@ -96,6 +115,14 @@ __all__ = [
 
     # DSS operations (lazy loaded)
     'RasDss',
+
+    # Check module - QA validation (lazy loaded) - unofficial cHECk-RAS clone
+    'RasCheck', 'CheckResults', 'CheckMessage', 'Severity',
+    'ValidationThresholds', 'get_default_thresholds', 'get_state_surcharge_limit',
+    'RasCheckReport', 'ReportMetadata', 'generate_html_report', 'export_messages_csv',
+
+    # Fixit module - Automated geometry repair (lazy loaded)
+    'RasFixit', 'FixResults', 'FixMessage', 'FixAction', 'BlockedObstruction',
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
