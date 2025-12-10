@@ -122,6 +122,13 @@ nav:
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md
     - Dam Breach Analysis: user-guide/dam-breach-analysis.md
     - DSS Operations: user-guide/dss-operations.md
+    - Quality Assurance (RasCheck):
+      - Overview: user-guide/quality-assurance.md
+      - NT Check (Manning's n): user-guide/quality-assurance/nt-check.md
+      - XS Check (Cross Sections): user-guide/quality-assurance/xs-check.md
+      - Structure Check: user-guide/quality-assurance/structure-check.md
+      - Floodway Check: user-guide/quality-assurance/floodway-check.md
+      - Profiles Check: user-guide/quality-assurance/profiles-check.md
     - Legacy COM Interface: user-guide/legacy-com-interface.md
     - Remote Execution: user-guide/remote-execution.md
   - Example Notebooks:
@@ -156,9 +163,14 @@ nav:
       - Stored Map Generation: notebooks/15_stored_map_generation.ipynb
       - RASMapper Raster Exports: notebooks/21_rasmap_raster_exports.ipynb
       - Programmatic Result Mapping: notebooks/25_programmatic_result_mapping.ipynb
+      - RasProcess Stored Maps: notebooks/26_rasprocess_stored_maps.ipynb
     - Automation:
       - Win32COM Automation: notebooks/16_automating_ras_with_win32com.ipynb
       - AORC Precipitation: notebooks/24_aorc_precipitation.ipynb
+    - Geometry Repair:
+      - Fixit Blocked Obstructions: notebooks/27_fixit_blocked_obstructions.ipynb
+    - Quality Assurance:
+      - RasCheck Validation: notebooks/28_quality_assurance_rascheck.ipynb
     - Sensitivity & Benchmarking:
       - Core Sensitivity Testing: notebooks/101_Core_Sensitivity.ipynb
       - Version Benchmarking (6.1-6.6): notebooks/102_benchmarking_versions_6.1_to_6.6.ipynb
@@ -178,6 +190,7 @@ nav:
     - Core Classes: api/core.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md
+    - Fixit Module: api/fixit.md
     - DSS Modules: api/dss.md
     - Remote Modules: api/remote.md
     - DataFrame Reference: reference/dataframe-reference.md

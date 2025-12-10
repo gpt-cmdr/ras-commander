@@ -246,10 +246,90 @@ class HdfUtils:
         snapped = filled.fillna(-1).astype(np.int64).to_numpy()
         return snapped
 
+    @staticmethod
+    @log_call
+    def scan_hdf_files(ras_folder: Path) -> Dict[str, Path]:
+        """
+        Scan for HDF plan and geometry files in a RAS project folder.
+
+        Args:
+            ras_folder: Path to HEC-RAS project folder containing .prj file
+
+        Returns:
+            Dictionary mapping HDF types to file paths:
+            {'plan_01': Path, 'geom_01': Path, ...}
+
+        Examples:
+            >>> hdf_files = HdfUtils.scan_hdf_files(Path("/path/to/project"))
+            >>> plan_hdf = hdf_files.get('plan_01')
+            >>> geom_hdf = hdf_files.get('geom_01')
+        """
+        results = {}
+        # Scan for plan HDFs (p##.hdf pattern)
+        for hdf_file in ras_folder.glob("*.p[0-9][0-9].hdf"):
+            # Extract plan number from filename
+            plan_num = hdf_file.stem[-2:]
+            results[f"plan_{plan_num}"] = hdf_file
+            logger.debug(f"Found plan HDF: {hdf_file.name} -> Plan {plan_num}")
+
+        # Scan for geometry HDFs (g##.hdf pattern)
+        for hdf_file in ras_folder.glob("*.g[0-9][0-9].hdf"):
+            # Extract geometry number from filename
+            geom_num = hdf_file.stem[-2:]
+            results[f"geom_{geom_num}"] = hdf_file
+            logger.debug(f"Found geometry HDF: {hdf_file.name} -> Geometry {geom_num}")
+
+        return results
+
+    @staticmethod
+    @log_call
+    def resolve_hdf_paths(ras_folder: Path, plan_number: str, ras_object=None) -> Dict[str, Optional[Path]]:
+        """
+        Resolve HDF plan and geometry file paths for a plan.
+
+        Args:
+            ras_folder: Path to HEC-RAS project folder
+            plan_number: Plan number (e.g., "01", "08")
+            ras_object: Optional RAS object instance
+
+        Returns:
+            Dictionary with 'plan' and 'geometry' HDF paths (or None if not found)
+
+        Examples:
+            >>> hdfs = HdfUtils.resolve_hdf_paths(Path("/path/to/project"), "01")
+            >>> plan_hdf = hdfs['plan']
+            >>> geom_hdf = hdfs['geometry']
+        """
+        from ..RasPrj import ras as default_ras
+        ras_obj = ras_object or default_ras
+        ras_obj.check_initialized()
+
+        plan_num = str(plan_number).zfill(2)
+        result = {'plan': None, 'geometry': None}
+
+        # Scan for HDF files
+        hdf_files = HdfUtils.scan_hdf_files(ras_folder)
+
+        # Get plan HDF
+        plan_key = f"plan_{plan_num}"
+        if plan_key in hdf_files:
+            result['plan'] = hdf_files[plan_key]
+
+        # Get geometry HDF if we know the geometry number
+        plan_row = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
+        if not plan_row.empty:
+            geom_num = plan_row.iloc[0].get('geometry_number')
+            if geom_num is not None:
+                geom_key = f"geom_{str(geom_num).zfill(2)}"
+                if geom_key in hdf_files:
+                    result['geometry'] = hdf_files[geom_key]
+
+        return result
 
 
 
-# Datetime Parsing Methods: 
+
+# Datetime Parsing Methods:
 
     @staticmethod
     @log_call

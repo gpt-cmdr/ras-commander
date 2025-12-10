@@ -585,20 +585,30 @@ class RasPrj:
         """Process plan entry data."""
         entry = {}
         plan_info = self._parse_plan_file(Path(full_path))
-        
+
+        # Log warning if parsing returned empty dict (file encoding issues, locks, etc.)
+        if not plan_info:
+            logger.warning(
+                f"Plan file parsing returned no data for plan {entry_number} at {full_path}. "
+                f"Geom Path and Flow Path may be None. Check file encoding and format."
+            )
+
+        # ALWAYS call processing functions - they handle empty dicts gracefully
+        # This ensures Geom File, Flow File columns exist (even if None)
+        # Fixes bug where empty dict {} evaluated to False, skipping these calls
+        entry.update(self._process_flow_file(plan_info))
+        entry.update(self._process_geom_file(plan_info))
+
+        # Add remaining plan info (only if data exists)
         if plan_info:
-            entry.update(self._process_flow_file(plan_info))
-            entry.update(self._process_geom_file(plan_info))
-            
-            # Add remaining plan info
             for key, value in plan_info.items():
                 if key not in ['Flow File', 'Geom File']:
                     entry[key] = value
-            
-            # Add HDF results path
-            hdf_results_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
-            entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
-        
+
+        # Add HDF results path
+        hdf_results_path = self.project_folder / f"{self.project_name}.p{entry_number}.hdf"
+        entry['HDF_Results_Path'] = str(hdf_results_path) if hdf_results_path.exists() else None
+
         return entry
 
     def _process_flow_file(self, plan_info: dict) -> dict:
@@ -879,7 +889,29 @@ class RasPrj:
             ...     print(plan_entries.iloc[0])
         """
         self.check_initialized()
-        return self._get_prj_entries('Plan')
+        plan_df = self._get_prj_entries('Plan')
+
+        # Ensure required columns exist and set file paths
+        # This mirrors what _load_project_data() does during initialization
+        required_columns = [
+            'plan_number', 'unsteady_number', 'geometry_number',
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+        ]
+        for col in required_columns:
+            if col not in plan_df.columns:
+                plan_df[col] = None
+
+        # Set Geom Path and Flow Path for each row
+        for idx, row in plan_df.iterrows():
+            if pd.notna(row.get('Geom File')):
+                geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+                plan_df.at[idx, 'Geom Path'] = str(geom_path)
+            if pd.notna(row.get('Flow File')):
+                prefix = 'u' if pd.notna(row.get('unsteady_number')) else 'f'
+                flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+                plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+        return plan_df
 
     @log_call
     def get_flow_entries(self):

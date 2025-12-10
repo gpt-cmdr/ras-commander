@@ -35,6 +35,14 @@ List of Functions in RasUnsteady:
 - parse_fixed_width_table()
 - extract_tables()
 - write_table_to_file()
+- set_gridded_precipitation()
+
+DSS Boundary Condition Functions:
+- get_dss_boundaries() - Extract all DSS-linked BCs with full path info
+- get_inline_hydrograph_boundaries() - Extract inline table BCs with time series data
+- update_dss_run_identifier() - Update DSS path F-part for new scenarios
+- set_boundary_dss_link() - Convert inline BC to DSS-linked
+- get_unique_dss_subbasins() - Get unique HMS subbasin names from DSS paths
         
 """
 import os
@@ -677,16 +685,24 @@ class RasUnsteady:
         hdf_path: Path,
         netcdf_path: Path,
         netcdf_rel_path: str,
-        interpolation: str = "Bilinear"
+        interpolation: str = "Nearest"
     ) -> None:
         """
-        Import precipitation raster data into HDF in HEC-RAS format.
+        Import precipitation raster data into HDF in HEC-RAS 6.6 format.
 
         This function imports gridded precipitation from NetCDF into the HDF file
-        in the exact format HEC-RAS expects when using "Import Raster Data" in the GUI.
+        in the exact format HEC-RAS 6.6 creates when using "Import Raster Data" in the GUI.
 
         The data is transformed from instantaneous rates to cumulative totals and
         flattened from (time, y, x) to (time, rows*cols) shape.
+
+        HEC-RAS 6.6 Format Requirements (verified against GUI import):
+        - Timestamps in ISO 8601 format: 'YYYY-MM-DD HH:MM:SS' (|S19)
+        - No separate Timestamp dataset (timestamps only in Times attribute)
+        - Values dataset: chunked, gzip compressed, fillvalue=nan
+        - NoData attribute as float32(-9999.0)
+        - Grid extent attributes on Values dataset (not on Imported Raster Data group)
+        - Meteorology/Attributes dataset preserved for proper indexing
 
         Parameters
         ----------
@@ -697,7 +713,8 @@ class RasUnsteady:
         netcdf_rel_path : str
             Relative path string for HDF attributes (e.g., ".\\Precipitation\\file.nc")
         interpolation : str
-            Interpolation method ("Bilinear" or "Nearest")
+            Interpolation method ("Bilinear" or "Nearest"). Default is "Nearest"
+            which matches HEC-RAS 6.6 GUI default.
         """
         import h5py
         import numpy as np
@@ -748,14 +765,11 @@ class RasUnsteady:
         # Calculate raster extent parameters
         cellsize = abs(x_coords[1] - x_coords[0]) if len(x_coords) > 1 else 2000.0
         x_min = float(x_coords.min())
-        x_max = float(x_coords.max())
         y_min = float(y_coords.min())
         y_max = float(y_coords.max())
 
         # Raster bounds (cell edges, not centers)
         raster_left = x_min - cellsize / 2
-        raster_right = x_max + cellsize / 2
-        raster_bottom = y_min - cellsize / 2
         raster_top = y_max + cellsize / 2
 
         # Transform data: flatten spatial dims and convert to cumulative
@@ -768,12 +782,11 @@ class RasUnsteady:
         # Convert from instantaneous rate (mm/hr) to cumulative total (mm)
         precip_cumulative = np.cumsum(precip_flat, axis=0).astype(np.float32)
 
-        # Create timestamp strings in HEC-RAS format for Timestamp dataset
+        # Create timestamp strings in HEC-RAS 6.6 format (ISO 8601)
+        # Format: 'YYYY-MM-DD HH:MM:SS' stored as |S19 fixed-length bytes
         import pandas as pd
         timestamps = pd.to_datetime(times)
-        timestamp_strs = [t.strftime('%d%b%Y %H:%M:%S') for t in timestamps]
-        # Create ISO 8601 format timestamps for Times attribute on Values datasets
-        timestamp_iso = [t.strftime('%Y-%m-%d %H:%M:%S') for t in timestamps]
+        timestamp_strs = [t.strftime('%Y-%m-%d %H:%M:%S') for t in timestamps]
 
         # EPSG:5070 WKT string (NAD83 / Conus Albers)
         srs_wkt = ('PROJCS["NAD83 / Conus Albers",GEOGCS["NAD83",DATUM["North_American_Datum_1983",'
@@ -793,24 +806,22 @@ class RasUnsteady:
         # Update the HDF file
         try:
             with h5py.File(hdf_path, 'r+') as f:
-                precip_grp_path = 'Event Conditions/Meteorology/Precipitation'
+                met_path = 'Event Conditions/Meteorology'
+                precip_grp_path = f'{met_path}/Precipitation'
 
                 # Create parent groups if they don't exist
                 if precip_grp_path not in f:
                     logger.info(f"Creating precipitation group hierarchy in HDF")
-                    # Create Event Conditions if needed
                     if 'Event Conditions' not in f:
                         f.create_group('Event Conditions')
-                    # Create Meteorology if needed
-                    met_path = 'Event Conditions/Meteorology'
                     if met_path not in f:
                         f.create_group(met_path)
-                    # Create Precipitation group
                     f.create_group(precip_grp_path)
 
                 precip_grp = f[precip_grp_path]
 
-                # Update Precipitation group attributes (use uint8 for Enabled like HEC-RAS does)
+                # Update Precipitation group attributes
+                # HEC-RAS 6.6 uses uint8 for Enabled
                 precip_grp.attrs['Enabled'] = np.uint8(1)
                 precip_grp.attrs['Mode'] = np.bytes_('Gridded')
                 precip_grp.attrs['Source'] = np.bytes_('GDAL Raster File(s)')
@@ -820,40 +831,34 @@ class RasUnsteady:
                 precip_grp.attrs['GDAL Folder'] = np.bytes_('')
                 precip_grp.attrs['Interpolation Method'] = np.bytes_(interpolation)
 
-                # Create/update Meteorology Attributes index dataset
-                # This tells HEC-RAS which meteorology variables are active
-                met_attrs_path = 'Event Conditions/Meteorology/Attributes'
-                if met_attrs_path in f:
-                    del f[met_attrs_path]
-                dt = np.dtype([('Variable', 'S32'), ('Group', 'S42')])
-                attrs_data = np.array([(b'Precipitation', b'Event Conditions/Meteorology/Precipitation')], dtype=dt)
-                f.create_dataset(met_attrs_path, data=attrs_data)
+                # HEC-RAS 6.6 requires Meteorology/Attributes dataset for indexing
+                attrs_path = f'{met_path}/Attributes'
+                if attrs_path not in f:
+                    # Create compound dtype for Attributes dataset
+                    attr_dtype = np.dtype([('Variable', 'S32'), ('Group', 'S42')])
+                    attr_data = np.array(
+                        [(b'Precipitation', b'Event Conditions/Meteorology/Precipitation')],
+                        dtype=attr_dtype
+                    )
+                    f.create_dataset(attrs_path, data=attr_data, chunks=(1,), compression='gzip')
 
                 # Create/recreate Imported Raster Data group
+                # HEC-RAS 6.6: NO attributes on this group (grid attrs go on Values dataset)
                 raster_grp_path = f'{precip_grp_path}/Imported Raster Data'
                 if raster_grp_path in f:
                     del f[raster_grp_path]
-
                 raster_grp = f.create_group(raster_grp_path)
 
-                # Raster extent attributes on group
-                raster_grp.attrs['Cellsize'] = np.float64(cellsize)
-                raster_grp.attrs['Cols'] = np.int32(n_cols)
-                raster_grp.attrs['Rows'] = np.int32(n_rows)
-                raster_grp.attrs['Left'] = np.float64(raster_left)
-                raster_grp.attrs['Right'] = np.float64(raster_right)
-                raster_grp.attrs['Bottom'] = np.float64(raster_bottom)
-                raster_grp.attrs['Top'] = np.float64(raster_top)
+                # HEC-RAS 6.6: NO separate Timestamp dataset (timestamps only in Times attribute)
 
-                # Create Timestamp dataset
-                dt = h5py.string_dtype(encoding='ascii', length=22)
-                raster_grp.create_dataset('Timestamp', data=timestamp_strs, dtype=dt)
+                # Number of cells for dataset shape
+                n_cells = n_rows * n_cols
 
-                # Common attributes for Values datasets
+                # Common attributes for Values datasets (HEC-RAS 6.6 format)
                 values_attrs = {
                     'Data Type': np.bytes_('cumulative'),
                     'GUID': np.bytes_(guid),
-                    'NoData': np.float64(-9999.0),
+                    'NoData': np.float32(-9999.0),  # HEC-RAS 6.6 uses float32
                     'Projection': np.bytes_(srs_wkt),
                     'Raster Cellsize': np.float64(cellsize),
                     'Raster Cols': np.int32(n_cols),
@@ -863,14 +868,15 @@ class RasUnsteady:
                     'Rate Time Units': np.bytes_('Hour'),
                     'Storage Configuration': np.bytes_('Sequential'),
                     'Time Series Data Type': np.bytes_('Amount'),
-                    'Times': np.array(timestamp_iso, dtype='S19'),
+                    'Times': np.array(timestamp_strs, dtype='S19'),  # HEC-RAS 6.6: ISO format |S19
                     'Units': np.bytes_('mm'),
                     'Version': np.bytes_('1.0'),
                 }
 
-                # Create Values dataset - shape (n_times, n_rows*n_cols)
-                # Use gzip compression, chunking, and nan fillvalue to match HEC-RAS format
-                n_cells = n_rows * n_cols
+                # Create Values dataset - HEC-RAS 6.6 format:
+                # - Chunked as single chunk (n_times, n_cells)
+                # - gzip compression level 1
+                # - fillvalue = nan
                 values_ds = raster_grp.create_dataset(
                     'Values',
                     data=precip_cumulative,
@@ -878,13 +884,12 @@ class RasUnsteady:
                     chunks=(n_times, n_cells),
                     compression='gzip',
                     compression_opts=1,
-                    fillvalue=np.nan,
-                    maxshape=(None, None)
+                    fillvalue=np.nan
                 )
                 for attr_name, attr_val in values_attrs.items():
                     values_ds.attrs[attr_name] = attr_val
 
-                # Create Values (Vertical) dataset - same data as Values
+                # Create Values (Vertical) dataset - same format
                 values_vert_ds = raster_grp.create_dataset(
                     'Values (Vertical)',
                     data=precip_cumulative,
@@ -892,13 +897,12 @@ class RasUnsteady:
                     chunks=(n_times, n_cells),
                     compression='gzip',
                     compression_opts=1,
-                    fillvalue=np.nan,
-                    maxshape=(None, None)
+                    fillvalue=np.nan
                 )
                 for attr_name, attr_val in values_attrs.items():
                     values_vert_ds.attrs[attr_name] = attr_val
 
-                logger.info(f"  Imported {n_times} timesteps, {n_rows*n_cols} cells (cumulative)")
+                logger.info(f"  Imported {n_times} timesteps, {n_cells} cells (cumulative)")
                 logger.info(f"  Precip range: {precip_cumulative.min():.1f} - {precip_cumulative.max():.1f} mm")
 
         except Exception as e:
@@ -1072,169 +1076,702 @@ class RasUnsteady:
         else:
             logger.warning(f"HDF file not found: {hdf_path} - precipitation data not imported")
 
+    # ==========================================================================
+    # DSS Boundary Condition Functions
+    # ==========================================================================
 
+    @staticmethod
+    @log_call
+    def get_dss_boundaries(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Extract all DSS-linked boundary conditions from an unsteady flow file.
 
+        This function parses .u## files and extracts boundary conditions that use
+        DSS files (Use DSS=True), including the full DSS path information needed
+        for updating precipitation scenarios.
 
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        ras_object : optional
+            Custom RAS object to use instead of the global one
 
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns:
+            - river: River name
+            - reach: Reach name
+            - station: River station
+            - bc_type: Boundary condition type (Flow Hydrograph, Lateral Inflow, etc.)
+            - interval: Time interval (e.g., 5MIN)
+            - dss_file: DSS file path
+            - dss_path: Full DSS path (//A/B/C/D/E/F/)
+            - dss_part_a: DSS Part A (project)
+            - dss_part_b: DSS Part B (location/subbasin)
+            - dss_part_c: DSS Part C (parameter)
+            - dss_part_d: DSS Part D (date)
+            - dss_part_e: DSS Part E (interval)
+            - dss_part_f: DSS Part F (run identifier)
+            - use_dss: Boolean True/False
+            - line_number: Line number of Boundary Location in file
 
-'''
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> dss_bcs = RasUnsteady.get_dss_boundaries("project.u01")
+        >>> print(f"Found {len(dss_bcs)} DSS-linked boundaries")
+        >>> # Get unique HMS subbasins (Part B)
+        >>> subbasins = dss_bcs['dss_part_b'].unique()
+        >>> print(f"Unique subbasins: {subbasins}")
 
+        Notes
+        -----
+        DSS Path Format: //A/B/C/D/E/F/
+        - Part A: Project identifier (often empty)
+        - Part B: Location/Subbasin name (key for HMS matching)
+        - Part C: Parameter (FLOW, STAGE, etc.)
+        - Part D: Date reference
+        - Part E: Time interval (5MIN, 1HOUR, etc.)
+        - Part F: Run identifier (e.g., RUN:1%_24HR)
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass  # Allow standalone use without initialized project
 
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
 
-Flow Title=Single 2D Area with Bridges
-Program Version=6.60
-Use Restart= 0 
-Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DSNormalDepth                   ,                                
-Friction Slope=0.0003,0
-Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DS2NormalD                      ,                                
-Friction Slope=0.0003,0
-Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,Upstream Inflow                 ,                                
-Interval=1HOUR
-Flow Hydrograph= 200 
-    1000    3000    6500    8000    9500   11000   12500   14000   15500   17000
-   18500   20000   22000   24000   26000   28000   30000   34000   38000   42000
-   46000   50000   54000   58000   62000   66000   70000   73000   76000   79000
-   82000   85000   87200   89400   91600   93800   96000   96800   97600   98400
-   99200  100000   99600   99200   98800   98400   98000   96400   94800   93200
-   91600   90000   88500   87000   85500   84000   82500   81000   79500   78000
-   76500   75000   73500   7200070666.6669333.34   6800066666.6665333.33   64000
-62666.6761333.33   6000058666.6757333.33   5600054666.6753333.33   5200050666.67
-49333.33   4800046666.6745333.33   4400042666.6741333.33   4000039166.6738333.33
-   3750036666.6735833.33   3500034166.6733333.33   3250031666.6730833.33   30000
-29166.6728333.33   2750026666.6725833.33   2500024166.6723333.33   2250021666.67
-20833.33   2000019655.1719310.3518965.5218620.6918275.8617931.0417586.2117241.38
-16896.5516551.72 16206.915862.0715517.2415172.4114827.5914482.7614137.93 13793.1
-13448.2813103.4512758.6212413.7912068.9711724.1411379.3111034.4810689.6610344.83
-   10000 9915.25 9830.51 9745.76 9661.02 9576.27 9491.53 9406.78 9322.03 9237.29
- 9152.54  9067.8 8983.05 8898.31 8813.56 8728.81 8644.07 8559.32 8474.58 8389.83
- 8305.09 8220.34 8135.59 8050.85  7966.1 7881.36 7796.61 7711.86 7627.12 7542.37
- 7457.63 7372.88 7288.14 7203.39 7118.64  7033.9 6949.15 6864.41 6779.66 6694.92
- 6610.17 6525.42 6440.68 6355.93 6271.19 6186.44  6101.7 6016.95  5932.2 5847.46
- 5762.71 5677.97 5593.22 5508.48 5423.73 5338.98 5254.24 5169.49 5084.75    5000
-Stage Hydrograph TW Check=0
-Flow Hydrograph QMult= 0.5 
-Flow Hydrograph Slope= 0.0005 
-DSS Path=
-Use DSS=False
-Use Fixed Start Time=False
-Fixed Start Date/Time=,
-Is Critical Boundary=False
-Critical Boundary Flow=
-Boundary Location=                ,                ,        ,        ,Sayers Dam      ,                ,                ,                                ,                                
-Gate Name=Gate #1     
-Gate DSS Path=
-Gate Use DSS=False
-Gate Time Interval=1HOUR
-Gate Use Fixed Start Time=False
-Gate Fixed Start Date/Time=,
-Gate Openings= 100 
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-       2       2       2       2       2       2       2       2       2       2
-Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DS2NormalDepth                  ,                                
-Friction Slope=0.0003,0
-Met Point Raster Parameters=,,,,
-Precipitation Mode=Disable
-Wind Mode=No Wind Forces
-Air Density Mode=
-Wave Mode=No Wave Forcing
-Met BC=Precipitation|Expanded View=0
-Met BC=Precipitation|Point Interpolation=Nearest
-Met BC=Precipitation|Gridded Source=DSS
-Met BC=Precipitation|Gridded Interpolation=
-Met BC=Evapotranspiration|Expanded View=0
-Met BC=Evapotranspiration|Point Interpolation=Nearest
-Met BC=Evapotranspiration|Gridded Source=DSS
-Met BC=Evapotranspiration|Gridded Interpolation=
-Met BC=Wind Speed|Expanded View=0
-Met BC=Wind Speed|Constant Units=ft/s
-Met BC=Wind Speed|Point Interpolation=Nearest
-Met BC=Wind Speed|Gridded Source=DSS
-Met BC=Wind Speed|Gridded Interpolation=
-Met BC=Wind Direction|Expanded View=0
-Met BC=Wind Direction|Point Interpolation=Nearest
-Met BC=Wind Direction|Gridded Source=DSS
-Met BC=Wind Direction|Gridded Interpolation=
-Met BC=Wind Velocity X|Expanded View=0
-Met BC=Wind Velocity X|Constant Units=ft/s
-Met BC=Wind Velocity X|Point Interpolation=Nearest
-Met BC=Wind Velocity X|Gridded Source=DSS
-Met BC=Wind Velocity X|Gridded Interpolation=
-Met BC=Wind Velocity Y|Expanded View=0
-Met BC=Wind Velocity Y|Constant Units=ft/s
-Met BC=Wind Velocity Y|Point Interpolation=Nearest
-Met BC=Wind Velocity Y|Gridded Source=DSS
-Met BC=Wind Velocity Y|Gridded Interpolation=
-Met BC=Wave Forcing X|Expanded View=0
-Met BC=Wave Forcing X|Point Interpolation=Nearest
-Met BC=Wave Forcing X|Gridded Source=DSS
-Met BC=Wave Forcing X|Gridded Interpolation=
-Met BC=Wave Forcing Y|Expanded View=0
-Met BC=Wave Forcing Y|Point Interpolation=Nearest
-Met BC=Wave Forcing Y|Gridded Source=DSS
-Met BC=Wave Forcing Y|Gridded Interpolation=
-Met BC=Air Density|Mode=Constant
-Met BC=Air Density|Expanded View=0
-Met BC=Air Density|Constant Value=1.225
-Met BC=Air Density|Constant Units=kg/m3
-Met BC=Air Density|Point Interpolation=Nearest
-Met BC=Air Density|Gridded Source=DSS
-Met BC=Air Density|Gridded Interpolation=
-Met BC=Air Temperature|Expanded View=0
-Met BC=Air Temperature|Point Interpolation=Nearest
-Met BC=Air Temperature|Gridded Source=DSS
-Met BC=Air Temperature|Gridded Interpolation=
-Met BC=Humidity|Expanded View=0
-Met BC=Humidity|Point Interpolation=Nearest
-Met BC=Humidity|Gridded Source=DSS
-Met BC=Humidity|Gridded Interpolation=
-Met BC=Air Pressure|Mode=Constant
-Met BC=Air Pressure|Expanded View=0
-Met BC=Air Pressure|Constant Value=1013.2
-Met BC=Air Pressure|Constant Units=mb
-Met BC=Air Pressure|Point Interpolation=Nearest
-Met BC=Air Pressure|Gridded Source=DSS
-Met BC=Air Pressure|Gridded Interpolation=
-Non-Newtonian Method= 0 , 
-Non-Newtonian Constant Vol Conc=0
-Non-Newtonian Yield Method= 0 , 
-Non-Newtonian Yield Coef=0, 0
-User Yeild=   0
-Non-Newtonian Sed Visc= 0 , 
-Non-Newtonian Obrian B=0
-User Viscosity=0
-User Viscosity Ratio=0
-Herschel-Bulkley Coef=0, 0
-Clastic Method= 0 , 
-Coulomb Phi=0
-Voellmy X=0
-Non-Newtonian Hindered FV= 0 
-Non-Newtonian FV K=0
-Non-Newtonian ds=0
-Non-Newtonian Max Cv=0
-Non-Newtonian Bulking Method= 0 , 
-Non-Newtonian High C Transport= 0 , 
-Lava Activation= 0 
-Temperature=1300,15,,15,14,980
-Heat Ballance=1,1200,0.5,1,70,0.95
-Viscosity=1000,,,
-Yield Strength=,,,
-Consistency Factor=,,,
-Profile Coefficient=4,1.3,
-Lava Param=,2500,
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
 
+        boundaries = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
 
+            if line.startswith('Boundary Location='):
+                bc = RasUnsteady._parse_boundary_block_dss(lines, i)
+                if bc.get('use_dss') == 'True':
+                    bc['line_number'] = i + 1  # 1-indexed for user reference
+                    boundaries.append(bc)
+            i += 1
 
+        df = pd.DataFrame(boundaries)
+        logger.info(f"Found {len(df)} DSS-linked boundaries in {unsteady_path.name}")
+        return df
 
-'''
+    @staticmethod
+    def _parse_boundary_block_dss(lines: List[str], start_idx: int) -> Dict:
+        """Parse a boundary block and extract DSS-related fields."""
+        bc = {
+            'river': '',
+            'reach': '',
+            'station': '',
+            'bc_type': '',
+            'interval': '',
+            'dss_file': '',
+            'dss_path': '',
+            'dss_part_a': '',
+            'dss_part_b': '',
+            'dss_part_c': '',
+            'dss_part_d': '',
+            'dss_part_e': '',
+            'dss_part_f': '',
+            'use_dss': 'False',
+            'data_count': 0
+        }
 
+        # Parse location line
+        loc_line = lines[start_idx].replace('Boundary Location=', '')
+        parts = [p.strip() for p in loc_line.split(',')]
+        if len(parts) >= 1:
+            bc['river'] = parts[0]
+        if len(parts) >= 2:
+            bc['reach'] = parts[1]
+        if len(parts) >= 3:
+            bc['station'] = parts[2]
 
+        # Scan following lines for DSS info
+        i = start_idx + 1
+        while i < len(lines) and i < start_idx + 50:
+            line = lines[i].strip()
 
+            if line.startswith('Boundary Location='):
+                break
+            elif line.startswith('Interval='):
+                bc['interval'] = line.replace('Interval=', '').strip()
+            elif line.startswith('Flow Hydrograph='):
+                bc['bc_type'] = 'Flow Hydrograph'
+                try:
+                    bc['data_count'] = int(line.replace('Flow Hydrograph=', '').strip())
+                except:
+                    pass
+            elif line.startswith('Lateral Inflow Hydrograph='):
+                bc['bc_type'] = 'Lateral Inflow Hydrograph'
+                try:
+                    bc['data_count'] = int(line.replace('Lateral Inflow Hydrograph=', '').strip())
+                except:
+                    pass
+            elif line.startswith('Uniform Lateral Inflow='):
+                bc['bc_type'] = 'Uniform Lateral Inflow'
+                try:
+                    bc['data_count'] = int(line.replace('Uniform Lateral Inflow=', '').strip())
+                except:
+                    pass
+            elif line.startswith('Stage Hydrograph='):
+                bc['bc_type'] = 'Stage Hydrograph'
+            elif line.startswith('Friction Slope='):
+                bc['bc_type'] = 'Normal Depth'
+            elif line.startswith('Rating Curve='):
+                bc['bc_type'] = 'Rating Curve'
+            elif line.startswith('DSS File='):
+                bc['dss_file'] = line.replace('DSS File=', '').strip()
+            elif line.startswith('DSS Path='):
+                dss_path = line.replace('DSS Path=', '').strip()
+                bc['dss_path'] = dss_path
+                # Parse DSS path parts
+                if dss_path:
+                    dss_parts = RasUnsteady._parse_dss_path(dss_path)
+                    bc.update(dss_parts)
+            elif line.startswith('Use DSS='):
+                bc['use_dss'] = line.replace('Use DSS=', '').strip()
 
+            i += 1
+
+        return bc
+
+    @staticmethod
+    def _parse_dss_path(dss_path: str) -> Dict:
+        """
+        Parse a DSS path into its component parts.
+
+        DSS Path Format: //A/B/C/D/E/F/
+        Example: //P100A/FLOW/31MAY2007/5MIN/RUN:1%_24HR/
+        """
+        parts = {
+            'dss_part_a': '',
+            'dss_part_b': '',
+            'dss_part_c': '',
+            'dss_part_d': '',
+            'dss_part_e': '',
+            'dss_part_f': ''
+        }
+
+        # Remove leading slashes and split
+        clean_path = dss_path.strip('/')
+        segments = clean_path.split('/')
+
+        if len(segments) >= 1:
+            parts['dss_part_a'] = segments[0]
+        if len(segments) >= 2:
+            parts['dss_part_b'] = segments[1]
+        if len(segments) >= 3:
+            parts['dss_part_c'] = segments[2]
+        if len(segments) >= 4:
+            parts['dss_part_d'] = segments[3]
+        if len(segments) >= 5:
+            parts['dss_part_e'] = segments[4]
+        if len(segments) >= 6:
+            parts['dss_part_f'] = segments[5]
+
+        return parts
+
+    @staticmethod
+    @log_call
+    def get_inline_hydrograph_boundaries(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Extract all inline hydrograph boundary conditions from an unsteady flow file.
+
+        This function parses .u## files and extracts boundary conditions that have
+        inline time series data (Use DSS=False with Flow Hydrograph or Lateral Inflow
+        tables). These are the manually-entered hydrographs that need to be matched
+        to HMS subbasins for DSS conversion.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns:
+            - river: River name
+            - reach: Reach name
+            - station: River station
+            - bc_type: Boundary condition type
+            - interval: Time interval (e.g., 5MIN)
+            - data_count: Number of data points
+            - values: numpy array of hydrograph values
+            - peak_value: Maximum flow value
+            - peak_index: Index of peak (time step)
+            - time_to_peak_hrs: Time to peak in hours
+            - min_value: Minimum flow value
+            - line_number: Line number of Boundary Location in file
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> inline_bcs = RasUnsteady.get_inline_hydrograph_boundaries("project.u01")
+        >>> print(f"Found {len(inline_bcs)} inline hydrograph boundaries")
+        >>> for idx, bc in inline_bcs.iterrows():
+        ...     print(f"{bc['river']}/{bc['reach']}/{bc['station']}: "
+        ...           f"Peak={bc['peak_value']:.0f} cfs @ {bc['time_to_peak_hrs']:.1f} hrs")
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass  # Allow standalone use
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        boundaries = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            if line.startswith('Boundary Location='):
+                bc = RasUnsteady._parse_boundary_block_inline(lines, i)
+                if bc.get('has_inline_table') and bc.get('use_dss') == 'False':
+                    bc['line_number'] = i + 1
+                    boundaries.append(bc)
+            i += 1
+
+        df = pd.DataFrame(boundaries)
+
+        # Remove internal fields
+        if 'has_inline_table' in df.columns:
+            df = df.drop(columns=['has_inline_table'])
+
+        logger.info(f"Found {len(df)} inline hydrograph boundaries in {unsteady_path.name}")
+        return df
+
+    @staticmethod
+    def _parse_boundary_block_inline(lines: List[str], start_idx: int) -> Dict:
+        """Parse a boundary block and extract inline table data."""
+        bc = {
+            'river': '',
+            'reach': '',
+            'station': '',
+            'bc_type': '',
+            'interval': '',
+            'data_count': 0,
+            'values': None,
+            'peak_value': None,
+            'peak_index': None,
+            'time_to_peak_hrs': None,
+            'min_value': None,
+            'use_dss': 'False',
+            'has_inline_table': False
+        }
+
+        # Parse location line
+        loc_line = lines[start_idx].replace('Boundary Location=', '')
+        parts = [p.strip() for p in loc_line.split(',')]
+        if len(parts) >= 1:
+            bc['river'] = parts[0]
+        if len(parts) >= 2:
+            bc['reach'] = parts[1]
+        if len(parts) >= 3:
+            bc['station'] = parts[2]
+
+        # Scan for boundary info and inline table
+        i = start_idx + 1
+        table_start = None
+        expected_count = 0
+
+        while i < len(lines) and i < start_idx + 100:
+            line = lines[i].strip()
+
+            if line.startswith('Boundary Location='):
+                break
+            elif line.startswith('Interval='):
+                bc['interval'] = line.replace('Interval=', '').strip()
+            elif line.startswith('Flow Hydrograph='):
+                bc['bc_type'] = 'Flow Hydrograph'
+                try:
+                    expected_count = int(line.replace('Flow Hydrograph=', '').strip())
+                    bc['data_count'] = expected_count
+                    if expected_count > 0:
+                        bc['has_inline_table'] = True
+                        table_start = i + 1
+                except:
+                    pass
+            elif line.startswith('Lateral Inflow Hydrograph='):
+                bc['bc_type'] = 'Lateral Inflow Hydrograph'
+                try:
+                    expected_count = int(line.replace('Lateral Inflow Hydrograph=', '').strip())
+                    bc['data_count'] = expected_count
+                    if expected_count > 0:
+                        bc['has_inline_table'] = True
+                        table_start = i + 1
+                except:
+                    pass
+            elif line.startswith('Uniform Lateral Inflow='):
+                bc['bc_type'] = 'Uniform Lateral Inflow'
+                try:
+                    expected_count = int(line.replace('Uniform Lateral Inflow=', '').strip())
+                    bc['data_count'] = expected_count
+                    if expected_count > 0:
+                        bc['has_inline_table'] = True
+                        table_start = i + 1
+                except:
+                    pass
+            elif line.startswith('Use DSS='):
+                bc['use_dss'] = line.replace('Use DSS=', '').strip()
+
+            i += 1
+
+        # Parse inline table if present
+        if bc['has_inline_table'] and table_start and expected_count > 0:
+            values = RasUnsteady._parse_inline_values(lines, table_start, expected_count)
+            if values is not None and len(values) > 0:
+                bc['values'] = values
+                bc['min_value'] = float(np.min(values))
+                bc['peak_value'] = float(np.max(values))
+                bc['peak_index'] = int(np.argmax(values))
+
+                # Calculate time to peak
+                if bc['interval']:
+                    interval_mins = RasUnsteady._parse_interval_to_minutes(bc['interval'])
+                    if interval_mins:
+                        bc['time_to_peak_hrs'] = (bc['peak_index'] * interval_mins) / 60.0
+
+        return bc
+
+    @staticmethod
+    def _parse_inline_values(lines: List[str], start_idx: int, expected_count: int) -> np.ndarray:
+        """Parse inline table values from fixed-width format (8 chars per value)."""
+        values = []
+        i = start_idx
+
+        while len(values) < expected_count and i < len(lines):
+            line = lines[i]
+
+            # Check if line looks like data
+            if line.strip() and (line[0].isspace() or line[0].isdigit() or line[0] == '-'):
+                # Parse 8-char fixed-width format
+                for j in range(0, min(len(line), 80), 8):
+                    chunk = line[j:j+8].strip()
+                    if chunk:
+                        try:
+                            values.append(float(chunk))
+                        except ValueError:
+                            # Try regex for merged numbers
+                            nums = re.findall(r'-?\d+\.?\d*', chunk)
+                            values.extend([float(n) for n in nums])
+            elif '=' in line:
+                # Hit a keyword, stop parsing
+                break
+
+            i += 1
+
+            # Safety limit
+            if i > start_idx + 500:
+                break
+
+        return np.array(values[:expected_count]) if values else None
+
+    @staticmethod
+    def _parse_interval_to_minutes(interval: str) -> Optional[int]:
+        """Convert interval string (e.g., '5MIN', '1HOUR') to minutes."""
+        interval = interval.upper().strip()
+
+        # Try numeric + MIN
+        match = re.match(r'(\d+)\s*MIN', interval)
+        if match:
+            return int(match.group(1))
+
+        # Try numeric + HOUR
+        match = re.match(r'(\d+)\s*HOUR', interval)
+        if match:
+            return int(match.group(1)) * 60
+
+        # Try numeric + HR
+        match = re.match(r'(\d+)\s*HR', interval)
+        if match:
+            return int(match.group(1)) * 60
+
+        return None
+
+    @staticmethod
+    @log_call
+    def update_dss_run_identifier(
+        unsteady_file: Union[str, Path],
+        old_run_id: str,
+        new_run_id: str,
+        ras_object: Optional[Any] = None
+    ) -> int:
+        """
+        Update the DSS path run identifier (F-part) for all matching boundaries.
+
+        This function modifies the DSS Path values in a .u## file, changing the
+        run identifier (Part F) from one value to another. This is useful when
+        updating precipitation from TP40 to Atlas 14, where the run identifier
+        indicates the storm scenario.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        old_run_id : str
+            Current run identifier to replace (e.g., "RUN:1%_24HR")
+        new_run_id : str
+            New run identifier value (e.g., "RUN:1%_24HR_ATLAS14")
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        int
+            Number of DSS paths updated
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> # Update run identifier from TP40 to Atlas 14
+        >>> count = RasUnsteady.update_dss_run_identifier(
+        ...     "project.u01",
+        ...     old_run_id="RUN:1%_24HR",
+        ...     new_run_id="RUN:1%_24HR_ATLAS14"
+        ... )
+        >>> print(f"Updated {count} DSS paths")
+
+        Notes
+        -----
+        The DSS path format is: //A/B/C/D/E/F/
+        This function modifies Part F (run identifier) while preserving all other parts.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        update_count = 0
+        for i, line in enumerate(lines):
+            if line.startswith('DSS Path='):
+                dss_path = line.replace('DSS Path=', '').strip()
+                if old_run_id in dss_path:
+                    new_dss_path = dss_path.replace(old_run_id, new_run_id)
+                    lines[i] = f'DSS Path={new_dss_path}\n'
+                    update_count += 1
+                    logger.debug(f"Updated DSS Path at line {i+1}: {dss_path} -> {new_dss_path}")
+
+        if update_count > 0:
+            with open(unsteady_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"Updated {update_count} DSS paths in {unsteady_path.name}")
+        else:
+            logger.warning(f"No DSS paths found with run identifier '{old_run_id}'")
+
+        return update_count
+
+    @staticmethod
+    @log_call
+    def set_boundary_dss_link(
+        unsteady_file: Union[str, Path],
+        river: str,
+        reach: str,
+        station: str,
+        dss_file: str,
+        dss_path: str,
+        interval: str = "5MIN",
+        ras_object: Optional[Any] = None
+    ) -> bool:
+        """
+        Convert an inline hydrograph boundary to use DSS linkage.
+
+        This function modifies a boundary condition in a .u## file to use a DSS
+        file reference instead of inline table data. This is useful for converting
+        manually-linked models to DSS-linked models.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        river : str
+            River name for the boundary
+        reach : str
+            Reach name for the boundary
+        station : str
+            River station for the boundary
+        dss_file : str
+            Path to the DSS file (relative to project folder)
+        dss_path : str
+            Full DSS path (e.g., "//SUBBASIN/FLOW/DATE/5MIN/RUN:1%_24HR/")
+        interval : str, default "5MIN"
+            Time interval for the boundary condition
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        bool
+            True if boundary was successfully updated, False if not found
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> # Link a boundary to DSS
+        >>> success = RasUnsteady.set_boundary_dss_link(
+        ...     "project.u01",
+        ...     river="Turkey Creek",
+        ...     reach="A119-00-00",
+        ...     station="23601.19",
+        ...     dss_file="P1000000.dss",
+        ...     dss_path="//A119-01-00A/FLOW/31MAY2007/5MIN/RUN:1%_24HR/"
+        ... )
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        # Find the boundary location
+        boundary_idx = None
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_line = line.replace('Boundary Location=', '')
+                parts = [p.strip() for p in loc_line.split(',')]
+                if (len(parts) >= 3 and
+                    parts[0] == river and
+                    parts[1] == reach and
+                    parts[2] == station):
+                    boundary_idx = i
+                    break
+
+        if boundary_idx is None:
+            logger.warning(f"Boundary not found: {river}/{reach}/{station}")
+            return False
+
+        # Find and update DSS-related lines for this boundary
+        i = boundary_idx + 1
+        dss_file_updated = False
+        dss_path_updated = False
+        use_dss_updated = False
+        interval_updated = False
+
+        while i < len(lines) and i < boundary_idx + 50:
+            line = lines[i]
+
+            if line.startswith('Boundary Location='):
+                break
+            elif line.startswith('DSS File='):
+                lines[i] = f'DSS File={dss_file}\n'
+                dss_file_updated = True
+            elif line.startswith('DSS Path='):
+                lines[i] = f'DSS Path={dss_path}\n'
+                dss_path_updated = True
+            elif line.startswith('Use DSS='):
+                lines[i] = 'Use DSS=True\n'
+                use_dss_updated = True
+            elif line.startswith('Interval='):
+                lines[i] = f'Interval={interval}\n'
+                interval_updated = True
+
+            i += 1
+
+        # Insert any missing lines
+        insert_idx = boundary_idx + 1
+        if not interval_updated:
+            lines.insert(insert_idx, f'Interval={interval}\n')
+            insert_idx += 1
+        if not dss_file_updated:
+            lines.insert(insert_idx, f'DSS File={dss_file}\n')
+            insert_idx += 1
+        if not dss_path_updated:
+            lines.insert(insert_idx, f'DSS Path={dss_path}\n')
+            insert_idx += 1
+        if not use_dss_updated:
+            lines.insert(insert_idx, 'Use DSS=True\n')
+
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        logger.info(f"Updated boundary {river}/{reach}/{station} to use DSS link")
+        return True
+
+    @staticmethod
+    @log_call
+    def get_unique_dss_subbasins(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> List[str]:
+        """
+        Get list of unique HMS subbasin names from DSS paths in unsteady file.
+
+        This convenience function extracts the DSS Part B (location/subbasin)
+        from all DSS-linked boundaries and returns the unique values. This is
+        useful for identifying which HMS subbasins are used by the RAS model.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        List[str]
+            Sorted list of unique subbasin names from DSS Part B
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> subbasins = RasUnsteady.get_unique_dss_subbasins("project.u01")
+        >>> print(f"Model uses {len(subbasins)} HMS subbasins:")
+        >>> for sb in subbasins[:10]:
+        ...     print(f"  - {sb}")
+        """
+        df = RasUnsteady.get_dss_boundaries(unsteady_file, ras_object)
+
+        if df.empty:
+            return []
+
+        # Get unique Part B values (subbasin names)
+        subbasins = df['dss_part_b'].dropna().unique().tolist()
+        subbasins = [s for s in subbasins if s]  # Remove empty strings
+        subbasins.sort()
+
+        logger.info(f"Found {len(subbasins)} unique HMS subbasins in DSS paths")
+        return subbasins

@@ -14,6 +14,7 @@ Primary classes for project management and execution:
 - [`RasUtils`](core.md#rasutils) - Utility functions
 - [`RasExamples`](core.md#rasexamples) - Example project management
 - [`RasMap`](core.md#rasmap) - RASMapper configuration
+- [`RasProcess`](core.md#rasprocess) - RasProcess.exe CLI automation (stored maps)
 - [`RasControl`](core.md#rascontrol) - Legacy COM interface
 
 ## HDF Modules
@@ -40,6 +41,14 @@ Classes for parsing geometry files:
 - [`RasGeometryUtils`](geometry.md#rasgeometryutils) - Parsing utilities
 - [`RasStruct`](geometry.md#rasstruct) - Inline structures
 - [`RasBreach`](geometry.md#rasbreach) - Breach parameters
+
+## Fixit Module
+
+Automated geometry repair:
+
+- [`RasFixit`](fixit.md#rasfixit) - Fix blocked obstruction overlaps
+- [`FixResults`](fixit.md#fixresults) - Fix operation results
+- [`log_parser`](fixit.md#log-parser) - HEC-RAS log parsing for error detection
 
 ## DSS Modules
 

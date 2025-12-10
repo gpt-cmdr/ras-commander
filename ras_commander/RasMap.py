@@ -954,8 +954,10 @@ class RasMap:
                 - "horizontal": Constant WSE per cell (default). Matches RASMapper's
                   "Horizontal" water surface rendering mode. Validated to 99.997%
                   pixel-level match with RASMapper output.
-                - "sloped": Sloped surface using cell corner elevations.
-                  **Not yet implemented** - will raise NotImplementedError.
+                - "sloped": Sloped surface using cell corner elevations. Uses planar
+                  regression to compute vertex WSE from face values, then interpolates
+                  using scipy griddata. Note: Current implementation is approximate
+                  and may differ from RASMapper's exact algorithm.
             ras_object: Optional RAS object instance.
 
         Returns:
@@ -966,7 +968,6 @@ class RasMap:
             ValueError: If plan not found, no mesh results available, or Depth requested
                 without terrain_path.
             FileNotFoundError: If terrain file not found.
-            NotImplementedError: If interpolation_method="sloped" (future feature).
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
@@ -990,7 +991,9 @@ class RasMap:
               with RASMapper output.
             - Velocity is computed as the maximum of adjacent face velocities for each cell.
             - Perimeter cells are filled using nearest-neighbor from interior cells.
-            - Sloped interpolation (cell corners) is planned for future implementation.
+            - Sloped interpolation computes face and vertex WSE using hydraulic connectivity
+              and planar regression, then interpolates to the grid using scipy griddata.
+              This is an approximation of RASMapper's exact algorithm.
         """
         # Lazy imports for heavy dependencies
         import geopandas as gpd
@@ -1016,16 +1019,10 @@ class RasMap:
 
         # Validate interpolation method
         interpolation_method = interpolation_method.lower()
-        if interpolation_method == "sloped":
-            raise NotImplementedError(
-                "Sloped interpolation (cell corners) is not yet implemented. "
-                "Use interpolation_method='horizontal' (default) for now. "
-                "Sloped interpolation is planned for a future release."
-            )
-        elif interpolation_method != "horizontal":
+        if interpolation_method not in ("horizontal", "sloped"):
             raise ValueError(
                 f"Unknown interpolation_method '{interpolation_method}'. "
-                "Valid options: 'horizontal' (implemented), 'sloped' (future)."
+                "Valid options: 'horizontal', 'sloped'."
             )
 
         # Normalize inputs
@@ -1182,28 +1179,69 @@ class RasMap:
             logger.info(f"Generating {variable} raster")
 
             if variable == "WSE":
-                # Rasterize WSE values
-                shapes = [
-                    (geom, float(val))
-                    for geom, val in zip(mesh_gdf.geometry, mesh_gdf["maximum_water_surface"])
-                    if geom is not None and not np.isnan(val)
-                ]
-                raster_data = rasterize(
-                    shapes=shapes,
-                    out_shape=(grid_height, grid_width),
-                    transform=grid_transform,
-                    fill=np.nan,
-                    dtype='float32',
-                    all_touched=False
-                )
+                if interpolation_method == "sloped":
+                    # Use sloped interpolation (cell corners)
+                    from .mapping import compute_sloped_wse_arrays, rasterize_sloped_wse, NODATA as MAPPING_NODATA
 
-                # Filter to wet cells only (depth > 0) to match RASMapper output
-                if terrain_data is not None:
-                    depth_check = raster_data - terrain_data.astype('float32')
-                    if terrain_nodata is not None:
-                        depth_check[terrain_data == terrain_nodata] = np.nan
-                    # Set dry cells (depth <= 0) to nodata
-                    raster_data = np.where(depth_check > 0, raster_data, np.nan)
+                    logger.info("Using sloped (cell corners) interpolation")
+
+                    # Get topology and compute sloped values
+                    topology = HdfMesh.get_mesh_sloped_topology(plan_hdf)
+                    if not topology:
+                        raise ValueError("Could not extract mesh topology for sloped interpolation")
+
+                    # Build cell_wse array indexed by cell_id (not filtered mesh_gdf indices)
+                    n_cells = topology['n_cells']
+                    cell_wse_full = np.full(n_cells, MAPPING_NODATA, dtype=np.float32)
+
+                    # Fill in values from max_ws_df which has cell_id
+                    for _, row in max_ws_df.iterrows():
+                        cell_id = int(row['cell_id'])
+                        wse_val = row['maximum_water_surface']
+                        if cell_id < n_cells and not np.isnan(wse_val):
+                            cell_wse_full[cell_id] = wse_val
+
+                    # Compute face and vertex WSE
+                    face_wse_a, face_wse_b, vertex_wse, face_midsides = compute_sloped_wse_arrays(
+                        topology, cell_wse_full
+                    )
+
+                    # Rasterize using griddata interpolation
+                    raster_data = rasterize_sloped_wse(
+                        topology=topology,
+                        cell_wse=cell_wse_full,
+                        vertex_wse=vertex_wse,
+                        transform=grid_transform,
+                        shape=(grid_height, grid_width),
+                        terrain=terrain_data if terrain_data is not None else None,
+                    )
+
+                    # Convert NODATA to NaN for consistency
+                    raster_data = np.where(raster_data == MAPPING_NODATA, np.nan, raster_data)
+
+                else:
+                    # Use horizontal interpolation (constant WSE per cell)
+                    shapes = [
+                        (geom, float(val))
+                        for geom, val in zip(mesh_gdf.geometry, mesh_gdf["maximum_water_surface"])
+                        if geom is not None and not np.isnan(val)
+                    ]
+                    raster_data = rasterize(
+                        shapes=shapes,
+                        out_shape=(grid_height, grid_width),
+                        transform=grid_transform,
+                        fill=np.nan,
+                        dtype='float32',
+                        all_touched=False
+                    )
+
+                    # Filter to wet cells only (depth > 0) to match RASMapper output
+                    if terrain_data is not None:
+                        depth_check = raster_data - terrain_data.astype('float32')
+                        if terrain_nodata is not None:
+                            depth_check[terrain_data == terrain_nodata] = np.nan
+                        # Set dry cells (depth <= 0) to nodata
+                        raster_data = np.where(depth_check > 0, raster_data, np.nan)
 
             elif variable == "Depth":
                 # First get WSE raster
@@ -1313,6 +1351,258 @@ class RasMap:
             logger.info(f"Wrote {variable} raster to {output_path}")
 
         return outputs
+
+    @staticmethod
+    @log_call
+    def scan_results_folders(ras_folder: Path) -> Dict[str, Dict]:
+        """
+        Scan RAS project folder for results folders containing raster files.
+
+        Args:
+            ras_folder: Path to HEC-RAS project folder containing .prj file
+
+        Returns:
+            Dictionary mapping folder names to folder information:
+            {folder_name: {'path': Path, 'has_vrt': bool, 'has_tif': bool}}
+
+        Examples:
+            >>> folders = RasMap.scan_results_folders(Path("/path/to/project"))
+            >>> for name, info in folders.items():
+            ...     print(f"{name}: {info['path']}")
+        """
+        results = {}
+        for folder in ras_folder.iterdir():
+            if folder.is_dir() and not folder.name.startswith('.'):
+                # Check for raster files
+                tif_files = list(folder.glob('*.tif'))
+                vrt_files = list(folder.glob('*.vrt'))
+
+                if tif_files or vrt_files:
+                    results[folder.name] = {
+                        'path': folder,
+                        'has_vrt': len(vrt_files) > 0,
+                        'has_tif': len(tif_files) > 0
+                    }
+                    logger.debug(f"Found results folder: {folder.name} "
+                               f"(VRT: {len(vrt_files)}, TIF: {len(tif_files)})")
+        return results
+
+    @staticmethod
+    @log_call
+    def find_results_folder(ras_folder: Path, short_id: str) -> Optional[Path]:
+        """
+        Find results folder for a plan Short ID.
+
+        Args:
+            ras_folder: Path to HEC-RAS project folder
+            short_id: Plan Short Identifier (from plan file)
+
+        Returns:
+            Path to results folder, or None if not found
+
+        Examples:
+            >>> folder = RasMap.find_results_folder(Path("/path/to/project"), "H100_CP")
+        """
+        # Normalize Short ID to match Windows folder naming
+        # RASMapper replaces special characters for Windows compatibility
+        replacements = {
+            '/': '_', '\\': '_', ':': '_', '*': '_',
+            '?': '_', '"': '_', '<': '_', '>': '_',
+            '|': '_', '+': '_', ' ': '_'
+        }
+
+        normalized = short_id
+        for old, new in replacements.items():
+            normalized = normalized.replace(old, new)
+
+        # Remove trailing underscores
+        normalized = normalized.rstrip('_')
+
+        # Scan for folders
+        folders = RasMap.scan_results_folders(ras_folder)
+
+        # Try exact match
+        if short_id in folders:
+            return folders[short_id]['path']
+
+        # Try normalized name
+        if normalized in folders:
+            return folders[normalized]['path']
+
+        # Try partial match
+        for folder_name, folder_info in folders.items():
+            # Check if short_id is contained in folder name or vice versa
+            if short_id in folder_name or folder_name in short_id:
+                return folder_info['path']
+            # Check normalized version
+            if normalized in folder_name or folder_name in normalized:
+                return folder_info['path']
+
+        return None
+
+    @staticmethod
+    @log_call
+    def resolve_raster_paths(results_folder: Path) -> Dict[str, Optional[Path]]:
+        """
+        Resolve WSE and Depth raster paths from results folder.
+
+        Priority order:
+        1. Unsteady flow VRT files (e.g., "Depth (Max).vrt")
+        2. Steady flow VRT files (e.g., "Depth.vrt")
+        3. Unsteady flow TIF files (e.g., "Depth (Max).tif")
+        4. Steady flow TIF files (e.g., "Depth.tif")
+
+        Args:
+            results_folder: Path to RASMapper results folder
+
+        Returns:
+            Dictionary with 'wse' and 'depth' paths (or None if not found)
+
+        Examples:
+            >>> rasters = RasMap.resolve_raster_paths(Path("/path/to/project/H100_CP"))
+            >>> wse_path = rasters['wse']
+            >>> depth_path = rasters['depth']
+        """
+        result = {'wse': None, 'depth': None}
+
+        # Priority 1: Look for unsteady flow VRT files (with "max")
+        for vrt_file in results_folder.glob('*.vrt'):
+            name_lower = vrt_file.name.lower()
+            if 'depth' in name_lower and 'max' in name_lower:
+                result['depth'] = vrt_file
+                logger.debug(f"Found unsteady depth VRT: {vrt_file.name}")
+            elif 'wse' in name_lower and 'max' in name_lower:
+                result['wse'] = vrt_file
+                logger.debug(f"Found unsteady WSE VRT: {vrt_file.name}")
+
+        # Priority 2: Look for steady flow VRT files (without "max") - only if not already found
+        if not result['depth'] or not result['wse']:
+            for vrt_file in results_folder.glob('*.vrt'):
+                name_lower = vrt_file.name.lower()
+                name_base = vrt_file.stem.lower()
+
+                # Match depth files - steady flow patterns
+                if not result['depth'] and 'depth' in name_lower and 'max' not in name_lower:
+                    if (name_base == 'depth' or
+                        name_base.startswith('depth (') or
+                        name_base.startswith('depth ') or
+                        name_base.startswith('depth_grid')):
+                        result['depth'] = vrt_file
+                        logger.debug(f"Found steady depth VRT: {vrt_file.name}")
+
+                # Match WSE files - steady flow patterns
+                elif not result['wse'] and 'wse' in name_lower and 'max' not in name_lower:
+                    if (name_base == 'wse' or
+                        name_base.startswith('wse (') or
+                        name_base.startswith('wse ') or
+                        name_base.startswith('wse_grid')):
+                        result['wse'] = vrt_file
+                        logger.debug(f"Found steady WSE VRT: {vrt_file.name}")
+
+        # Priority 3: Fall back to unsteady flow TIF files if no VRT found
+        if not result['depth'] or not result['wse']:
+            for tif_file in results_folder.glob('*.tif'):
+                name_lower = tif_file.name.lower()
+                if not result['depth'] and 'depth' in name_lower and 'max' in name_lower:
+                    result['depth'] = tif_file
+                    logger.debug(f"Found unsteady depth TIF: {tif_file.name}")
+                elif not result['wse'] and 'wse' in name_lower and 'max' in name_lower:
+                    result['wse'] = tif_file
+                    logger.debug(f"Found unsteady WSE TIF: {tif_file.name}")
+
+        # Priority 4: Fall back to steady flow TIF files if still not found
+        if not result['depth'] or not result['wse']:
+            for tif_file in results_folder.glob('*.tif'):
+                name_lower = tif_file.name.lower()
+                name_base = tif_file.stem.lower()
+
+                # Match depth TIF files - steady flow patterns
+                if not result['depth'] and 'depth' in name_lower and 'max' not in name_lower:
+                    if (name_base == 'depth' or
+                        name_base.startswith('depth (') or
+                        name_base.startswith('depth ') or
+                        name_base.startswith('depth_grid')):
+                        result['depth'] = tif_file
+                        logger.debug(f"Found steady depth TIF: {tif_file.name}")
+
+                # Match WSE TIF files - steady flow patterns
+                elif not result['wse'] and 'wse' in name_lower and 'max' not in name_lower:
+                    if (name_base == 'wse' or
+                        name_base.startswith('wse (') or
+                        name_base.startswith('wse ') or
+                        name_base.startswith('wse_grid')):
+                        result['wse'] = tif_file
+                        logger.debug(f"Found steady WSE TIF: {tif_file.name}")
+
+        # Log detected model type
+        if result['depth'] or result['wse']:
+            depth_path = str(result.get('depth', '')).lower()
+            wse_path = str(result.get('wse', '')).lower()
+            if 'max' in depth_path or 'max' in wse_path:
+                logger.info(f"Detected unsteady flow model in {results_folder.name}")
+            else:
+                logger.info(f"Detected steady flow model in {results_folder.name}")
+
+        return result
+
+    @staticmethod
+    @log_call
+    def find_steady_raster(results_folder: Path, profile_name: str, raster_type: str) -> Optional[Path]:
+        """
+        Find steady state raster for a specific profile.
+
+        Args:
+            results_folder: Path to RASMapper results folder
+            profile_name: Profile name (e.g., "1Pct", "10Pct", "50Pct")
+            raster_type: Type of raster ('WSE' or 'Depth')
+
+        Returns:
+            Path to raster file, or None if not found
+
+        Examples:
+            >>> raster = RasMap.find_steady_raster(Path("/path/to/project/H100_CP"), "10Pct", "WSE")
+        """
+        # Search patterns for steady state profile-specific rasters
+        # Pattern 1: Standard format with parentheses "WSE (1Pct).vrt"
+        pattern1 = f"{raster_type} ({profile_name}).vrt"
+        vrt_path = results_folder / pattern1
+        if vrt_path.exists():
+            logger.debug(f"Found steady raster (pattern 1): {vrt_path.name}")
+            return vrt_path
+
+        # Pattern 2: Terrain-specific variant "WSE (1Pct).Terrain.{terrain_name}.tif"
+        pattern2 = f"{raster_type} ({profile_name}).Terrain.*.tif"
+        tif_files = list(results_folder.glob(pattern2))
+        if tif_files:
+            logger.debug(f"Found steady raster (pattern 2): {tif_files[0].name}")
+            return tif_files[0]
+
+        # Pattern 3: Underscore format "WSE_1Pct.vrt"
+        pattern3 = f"{raster_type}_{profile_name}.vrt"
+        alt_vrt = results_folder / pattern3
+        if alt_vrt.exists():
+            logger.debug(f"Found steady raster (pattern 3): {alt_vrt.name}")
+            return alt_vrt
+
+        # Pattern 4: Space instead of underscore "WSE 1Pct.vrt"
+        pattern4 = f"{raster_type} {profile_name}.vrt"
+        space_vrt = results_folder / pattern4
+        if space_vrt.exists():
+            logger.debug(f"Found steady raster (pattern 4): {space_vrt.name}")
+            return space_vrt
+
+        # Pattern 5: TIF variant without terrain suffix
+        pattern5 = f"{raster_type} ({profile_name}).tif"
+        tif_path = results_folder / pattern5
+        if tif_path.exists():
+            logger.debug(f"Found steady raster (pattern 5): {tif_path.name}")
+            return tif_path
+
+        logger.warning(
+            f"Could not find steady state raster for profile '{profile_name}', type {raster_type}. "
+            f"Searched in: {results_folder}"
+        )
+        return None
 
     @staticmethod
     def _detect_terrain_path(ras_obj) -> Optional[Path]:

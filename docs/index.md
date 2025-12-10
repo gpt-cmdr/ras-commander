@@ -34,6 +34,10 @@
 
     Distribute computations across multiple machines using PsExec, Docker, or SSH workers.
 
+- :material-wrench: **Geometry Repair**
+
+    Automatically detect and fix common geometry issues like overlapping blocked obstructions with engineering-grade verification outputs.
+
 </div>
 
 ## Quick Install

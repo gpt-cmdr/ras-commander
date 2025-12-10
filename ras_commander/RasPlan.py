@@ -2027,6 +2027,69 @@ class RasPlan:
 
     @staticmethod
     @log_call
+    def get_plan_flow_type(plan_number: str, ras_object=None) -> str:
+        """
+        Get flow type for a plan from plan metadata (fast, no HDF required).
+
+        Args:
+            plan_number: Plan number (e.g., "01", "08")
+            ras_object: Optional RAS object instance
+
+        Returns:
+            str: 'Steady', 'Unsteady', or 'Unknown'
+
+        Notes:
+            - Uses plan file metadata (already parsed by ras-commander)
+            - Deterministic: plans with unsteady_number are Unsteady, others are Steady
+            - Does NOT require HDF file to exist
+            - Much faster than HDF inspection (reads from memory)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        try:
+            plan_num = RasUtils.normalize_ras_number(plan_number)
+            plan_row = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
+
+            if plan_row.empty:
+                logger.debug(f"Plan {plan_num} not found in plan_df")
+                return 'Unknown'
+
+            # Use flow_type column if available (preferred)
+            if 'flow_type' in plan_row.columns:
+                flow_type = plan_row.iloc[0]['flow_type']
+                logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
+                return flow_type
+
+            # Fallback: determine from unsteady_number
+            import pandas as pd
+            unsteady_num = plan_row.iloc[0]['unsteady_number']
+            flow_type = 'Unsteady' if pd.notna(unsteady_num) else 'Steady'
+            logger.debug(f"Plan {plan_num}: {flow_type} (from unsteady_number)")
+            return flow_type
+
+        except Exception as e:
+            logger.warning(f"Could not determine flow type for plan {plan_number}: {e}")
+            return 'Unknown'
+
+    @staticmethod
+    @log_call
+    def is_plan_steady_state(plan_number: str, ras_object=None) -> bool:
+        """
+        Check if a plan is steady state.
+
+        Args:
+            plan_number: Plan number (e.g., "01", "08")
+            ras_object: Optional RAS object instance
+
+        Returns:
+            bool: True if steady state, False otherwise
+        """
+        flow_type = RasPlan.get_plan_flow_type(plan_number, ras_object)
+        return flow_type == 'Steady'
+
+    @staticmethod
+    @log_call
     def remove_hdf_output_variable(
         plan_number_or_path: Union[str, Number, Path],
         variable: str,

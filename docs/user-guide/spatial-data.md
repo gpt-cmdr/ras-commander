@@ -99,9 +99,83 @@ soil_path = ras.rasmap_df['soil_hdf_path'][0]
 
 ## Automating Stored Map Generation
 
-HEC-RAS can generate stored maps (raster outputs like depth and water surface elevation) through the GUI, but `RasMap.postprocess_stored_maps()` automates this process.
+HEC-RAS can generate stored maps (raster outputs like depth and water surface elevation) through the GUI. RAS Commander provides two approaches for automation:
 
-### Basic Stored Map Generation
+1. **`RasProcess.store_maps()`** - Headless CLI-based generation (recommended)
+2. **`RasMap.postprocess_stored_maps()`** - GUI automation approach
+
+### Headless Generation with RasProcess (Recommended)
+
+The `RasProcess` class uses the undocumented RasProcess.exe CLI tool bundled with HEC-RAS to generate stored maps without opening the GUI. This is faster and more reliable for batch processing.
+
+```python
+from ras_commander import RasCmdr, RasProcess
+
+# First, ensure the simulation has been run
+RasCmdr.compute_plan("01")
+
+# Generate stored maps (headless - no GUI)
+results = RasProcess.store_maps(
+    plan_number="01",
+    profile="Max",
+    wse=True,
+    depth=True,
+    velocity=True
+)
+
+# Results is a dict of generated file paths
+for map_type, files in results.items():
+    print(f"{map_type}: {len(files)} file(s)")
+    for f in files:
+        print(f"  - {f}")
+```
+
+#### Available Map Types
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `wse` | Water Surface Elevation | True |
+| `depth` | Water Depth | True |
+| `velocity` | Velocity Magnitude | True |
+| `froude` | Froude Number | False |
+| `shear_stress` | Bed Shear Stress | False |
+| `depth_x_velocity` | D×V Hazard Index | False |
+| `depth_x_velocity_sq` | D×V² Impact Index | False |
+
+#### Profile Selection
+
+```python
+# Generate Max values (default)
+results = RasProcess.store_maps(plan_number="01", profile="Max")
+
+# Generate Min values
+results = RasProcess.store_maps(plan_number="01", profile="Min")
+
+# Generate for specific timestep
+timestamps = RasProcess.get_plan_timestamps("01")
+results = RasProcess.store_maps(plan_number="01", profile=timestamps[10])
+```
+
+#### Batch Processing All Plans
+
+```python
+# Generate maps for ALL plans with HDF results
+all_results = RasProcess.store_all_maps(
+    profile="Max",
+    wse=True,
+    depth=True,
+    velocity=True,
+    froude=True
+)
+
+for plan_num, files in all_results.items():
+    total = sum(len(f) for f in files.values())
+    print(f"Plan {plan_num}: {total} files generated")
+```
+
+### GUI-Based Generation with RasMap
+
+The `RasMap.postprocess_stored_maps()` method opens the HEC-RAS GUI to generate maps. Use this when RasProcess is not available or for compatibility with older HEC-RAS versions.
 
 ```python
 from ras_commander import RasCmdr, RasMap
@@ -109,7 +183,7 @@ from ras_commander import RasCmdr, RasMap
 # First, ensure the simulation has been run
 RasCmdr.compute_plan("01")
 
-# Generate stored maps automatically
+# Generate stored maps (opens HEC-RAS GUI)
 success = RasMap.postprocess_stored_maps(
     plan_number="01",
     specify_terrain="Terrain50",

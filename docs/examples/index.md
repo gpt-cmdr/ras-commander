@@ -94,6 +94,14 @@ Automate HEC-RAS with COM interfaces and precipitation data.
 | Win32COM Automation | Direct HEC-RAS automation using the Win32COM interface | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/16_automating_ras_with_win32com.ipynb) |
 | AORC Precipitation | Retrieve AORC gridded precipitation data for model input | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/24_aorc_precipitation.ipynb) |
 
+### Geometry Repair
+
+Detect and fix common geometry issues.
+
+| Notebook | Description | Source |
+|----------|-------------|--------|
+| Fixit Blocked Obstructions | Automatically detect and fix overlapping blocked obstructions | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/27_fixit_blocked_obstructions.ipynb) |
+
 ### Sensitivity & Benchmarking
 
 Performance testing and sensitivity analysis workflows.

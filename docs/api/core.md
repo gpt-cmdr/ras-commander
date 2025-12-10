@@ -322,3 +322,103 @@ indices = RasUtils.perform_kdtree_query(
         - parse_rasmap
         - get_terrain_path
         - get_landcover_path
+
+### RasProcess
+
+::: ras_commander.RasProcess
+    options:
+      show_root_heading: true
+      heading_level: 3
+      members:
+        - find_rasprocess
+        - get_plan_timestamps
+        - store_maps
+        - store_all_maps
+        - run_command
+
+#### RasProcess Details
+
+!!! info "RasProcess.exe CLI"
+    RasProcess.exe is an undocumented command-line interface bundled with HEC-RAS that enables headless automation of RASMapper operations. The `RasProcess` class wraps this CLI for programmatic access.
+
+##### Supported Map Types
+
+| Parameter | XML Type | Display Name | Default |
+|-----------|----------|--------------|---------|
+| `wse` | elevation | WSE | True |
+| `depth` | depth | Depth | True |
+| `velocity` | velocity | Velocity | True |
+| `froude` | froude | Froude | False |
+| `shear_stress` | Shear | Shear Stress | False |
+| `depth_x_velocity` | depth and velocity | D * V | False |
+| `depth_x_velocity_sq` | depth and velocity squared | D * V² | False |
+
+##### Profile Selection
+
+The `profile` parameter accepts:
+
+- `"Max"` - Maximum values across all timesteps (default)
+- `"Min"` - Minimum values across all timesteps
+- Specific timestamp string from `get_plan_timestamps()` (e.g., `"10SEP2018 02:30:00"`)
+
+##### Basic Usage
+
+```python
+from ras_commander import init_ras_project, RasProcess
+
+# Initialize project
+init_ras_project("path/to/project", "6.6")
+
+# Generate default maps (WSE, Depth, Velocity)
+results = RasProcess.store_maps(
+    plan_number="01",
+    profile="Max",
+    wse=True,
+    depth=True,
+    velocity=True
+)
+
+# Results is a dict: {'wse': [Path(...)], 'depth': [...], ...}
+for map_type, files in results.items():
+    print(f"{map_type}: {len(files)} file(s)")
+```
+
+##### Batch Processing
+
+```python
+# Generate maps for ALL plans with HDF results
+all_results = RasProcess.store_all_maps(
+    profile="Max",
+    wse=True,
+    depth=True,
+    velocity=True,
+    froude=True
+)
+
+for plan_num, files in all_results.items():
+    print(f"Plan {plan_num}: {sum(len(f) for f in files.values())} files")
+```
+
+##### Timestep Maps
+
+```python
+# Get available timestamps
+timestamps = RasProcess.get_plan_timestamps("01")
+print(f"Available: {timestamps[:3]}...")  # ['10SEP2018 00:00:00', ...]
+
+# Generate map for specific time
+results = RasProcess.store_maps(
+    plan_number="01",
+    profile=timestamps[10],  # 10th timestep
+    wse=True
+)
+```
+
+!!! warning "Georeferencing Fix"
+    RasProcess.exe has a known bug where generated TIFs may lack proper CRS information.
+    Set `fix_georef=True` (default) to automatically apply the CRS from the project's
+    projection file using rasterio.
+
+!!! note "Output Location"
+    Generated files are written to the plan's result layer folder as defined in the
+    `.rasmap` file (e.g., `PMF Multi 2D/WSE (Max).Terrain.tif`), not a custom path.

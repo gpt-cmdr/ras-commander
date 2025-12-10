@@ -94,6 +94,7 @@ flowchart TB
 | `RasUtils` | General utility functions |
 | `RasMap` | RASMapper configuration parsing |
 | `RasDss` | DSS file operations for boundary conditions |
+| `RasFixit` | Geometry repair (blocked obstructions) |
 
 ### HDF Data Access
 
@@ -248,6 +249,11 @@ ras_commander/
 │
 ├── dss/                  # DSS file operations
 │   └── RasDss.py
+│
+├── fixit/                # Geometry repair
+│   ├── RasFixit.py
+│   ├── obstructions.py
+│   └── log_parser.py
 │
 └── remote/               # Remote execution
     ├── LocalWorker.py

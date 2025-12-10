@@ -166,6 +166,17 @@ Important highlights from AGENTS.md:
 - **Parsing**: Uses 8-character fixed-width and comma-separated formats
 - See `research/geometry file parsing/api-geom.md` for complete API reference
 
+**Geometry Repair (Fixit Module)**:
+- `RasFixit` - Automated geometry repair for common HEC-RAS issues
+  - `fix_blocked_obstructions()` - Fix overlapping blocked obstructions using elevation envelope algorithm
+  - `detect_obstruction_overlaps()` - Non-destructive detection of obstruction issues
+- **Result Classes**: `FixResults`, `FixMessage`, `FixAction` for detailed fix reporting
+- **Log Parsing**: `log_parser` submodule parses HEC-RAS compute logs for error detection
+- **Verification Outputs**: Before/after PNG visualizations, timestamped backups, audit trails
+- **Algorithm**: Uses max elevation in overlap zones (hydraulically conservative), inserts 0.02-unit gaps
+- **Example Project**: HCFCD M3 Model A120-00-00 included in `examples/example_projects/`
+- See `examples/27_fixit_blocked_obstructions.ipynb` for complete workflow
+
 ### Execution Modes
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control
 2. **Parallel**: `RasCmdr.compute_parallel()` - Run multiple plans simultaneously using worker folders
