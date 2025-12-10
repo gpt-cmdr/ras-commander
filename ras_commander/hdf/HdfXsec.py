@@ -84,12 +84,16 @@ class HdfXsec:
             Cross-section data with columns:
             - geometry: LineString of cross-section path
             - station_elevation: Station-elevation profile points
-            - mannings_n: Dictionary of Manning's n values and stations
+            - mannings_n: Dictionary of Manning's n values and stations (raw data)
+            - n_lob: Left overbank Manning's n value (computed from bank stations)
+            - n_channel: Main channel Manning's n value (computed from bank stations)
+            - n_rob: Right overbank Manning's n value (computed from bank stations)
             - ineffective_blocks: List of ineffective flow area blocks
             - River, Reach, RS: River system identifiers
             - Name, Description: Cross-section labels
             - Len Left/Channel/Right: Flow path lengths
             - Left/Right Bank: Bank station locations
+            - Contr, Expan: Contraction and expansion coefficients
             - Additional hydraulic parameters and attributes
 
         Notes
@@ -127,6 +131,9 @@ class HdfXsec:
                 station_elevations = []
                 mannings_n = []
                 ineffective_blocks = []
+                n_lob_list = []
+                n_channel_list = []
+                n_rob_list = []
                 
                 # Process each cross section
                 for i in range(len(poly_info)):
@@ -167,7 +174,57 @@ class HdfXsec:
                             'Mann n': mann_n_section[:, 1].tolist()
                         }
                         mannings_n.append(mann_n_dict)
-                        
+
+                        # Compute LOB/Channel/ROB Manning's n values
+                        # Get bank stations for this XS
+                        left_bank = float(xs_attrs[i]['Left Bank'])
+                        right_bank = float(xs_attrs[i]['Right Bank'])
+
+                        # Map n values to LOB/Channel/ROB based on stations
+                        if mann_count == 0:
+                            n_lob_val = n_channel_val = n_rob_val = np.nan
+                        elif mann_count == 3:
+                            # Simple LOB/Channel/ROB model (most common)
+                            n_lob_val = float(mann_n_section[0, 1])
+                            n_channel_val = float(mann_n_section[1, 1])
+                            n_rob_val = float(mann_n_section[2, 1])
+                        elif mann_count == 2:
+                            # Two regions
+                            sta1, n1 = float(mann_n_section[0, 0]), float(mann_n_section[0, 1])
+                            sta2, n2 = float(mann_n_section[1, 0]), float(mann_n_section[1, 1])
+                            if sta1 < left_bank and sta2 >= left_bank:
+                                n_lob_val, n_channel_val, n_rob_val = n1, n2, n2
+                            else:
+                                n_lob_val, n_channel_val, n_rob_val = n1, n1, n2
+                        elif mann_count >= 4:
+                            # Variable n - map by station regions
+                            n_lob_val = n_channel_val = n_rob_val = None
+                            for j in range(mann_count):
+                                sta, n_val = float(mann_n_section[j, 0]), float(mann_n_section[j, 1])
+                                if sta < left_bank:
+                                    n_lob_val = n_val
+                                elif sta < right_bank:
+                                    if n_channel_val is None:
+                                        n_channel_val = n_val
+                                else:
+                                    if n_rob_val is None:
+                                        n_rob_val = n_val
+                            # Fill missing
+                            if n_lob_val is None:
+                                n_lob_val = float(mann_n_section[0, 1])
+                            if n_channel_val is None:
+                                n_channel_val = n_lob_val
+                            if n_rob_val is None:
+                                n_rob_val = n_channel_val
+                        else:
+                            # Single value
+                            n_lob_val = n_channel_val = n_rob_val = float(mann_n_section[0, 1])
+
+                        # Append computed Manning's n values
+                        n_lob_list.append(n_lob_val)
+                        n_channel_list.append(n_channel_val)
+                        n_rob_list.append(n_rob_val)
+
                         # Extract ineffective blocks data
                         if ineff_info is not None and ineff_blocks is not None:
                             ineff_start_idx = ineff_info[i][0]
@@ -194,6 +251,9 @@ class HdfXsec:
                     'geometry': geometries,
                     'station_elevation': station_elevations,
                     'mannings_n': mannings_n,
+                    'n_lob': n_lob_list,
+                    'n_channel': n_channel_list,
+                    'n_rob': n_rob_list,
                     'ineffective_blocks': ineffective_blocks,
                 }
                 
