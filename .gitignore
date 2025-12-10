@@ -96,3 +96,6 @@ ras_commander/remote/docker/build/
 
 # Ignore docs/notebooks (generated from examples during build)
 docs/notebooks/
+/site
+/planning_docs
+use-deepseek-reasoner.bat

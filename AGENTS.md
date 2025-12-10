@@ -45,6 +45,19 @@
   4) Execute the script via `uv run ...` with inputs and output folders in `working/`.
 - The examples index at `examples/AGENTS.md` highlights unique logic that lives only in notebooks (e.g., nearest-cell/face search, Atlas 14 workflows).
 
+**Discovering HEC-RAS Projects**
+- Before initializing a project, agents often need to find valid HEC-RAS folders in a directory tree.
+- Use `RasUtils.find_valid_ras_folders()` to recursively search for projects:
+  - `from ras_commander import RasUtils`
+  - `projects = RasUtils.find_valid_ras_folders("C:/Projects", max_depth=5, return_project_info=True)`
+  - Returns list of dicts with: `folder`, `project_name`, `prj_file`, `plan_count`, `plan_numbers`
+- Use `RasUtils.is_valid_ras_folder()` to check a single folder:
+  - `if RasUtils.is_valid_ras_folder("C:/Projects/MyModel"): ...`
+- Validation criteria (a valid HEC-RAS project folder contains):
+  1. A `.prj` file with `Proj Title=` on the first line (distinguishes from ESRI projection files)
+  2. At least one `.pXX` plan file where XX is 01-99
+- These functions do NOT require `init_ras_project()` first, making them ideal for discovery workflows.
+
 **Core Execution Examples**
 - Initialize a project and run a plan to a clean folder:
   - `from ras_commander import init_ras_project, RasCmdr`
