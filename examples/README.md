@@ -188,7 +188,7 @@ This notebook shows how to extract and analyze 2D data from HEC-RAS HDF files us
 - Visualizing 2D model results with terrain data
 - Extracting and interpreting cell and face time series data
 
-### [12_2d_hdf_data_extraction_pipes_and_pumps.ipynb](12_2d_hdf_data_extraction_pipes_and_pumps.ipynb)
+### [12_2d_hdf_data_extraction pipes and pumps.ipynb](12_2d_hdf_data_extraction%20pipes%20and%20pumps.ipynb)
 
 This notebook focuses on extracting and analyzing data related to pipes, conduits, and pump stations from HEC-RAS HDF files.
 
@@ -230,7 +230,7 @@ This notebook demonstrates how to delineate fluvial and pluvial flooding areas b
 - Understanding the difference between river-driven and rainfall-driven flooding
 - Using cell polygon geometry for spatial analysis
 
-### [15_mannings_sensitivity_bulk_analysis.ipynb](15_mannings_sensitivity_bulk_analysis.ipynb)
+### [105_mannings_sensitivity_bulk_analysis.ipynb](105_mannings_sensitivity_bulk_analysis.ipynb)
 
 This notebook provides tools for analyzing the sensitivity of HEC-RAS models to changes in Manning's n values applied *in bulk* across land cover types based on literature ranges.
 
@@ -242,7 +242,7 @@ This notebook provides tools for analyzing the sensitivity of HEC-RAS models to 
 - Extracting results at a point of interest.
 - Comparing and visualizing the impact of bulk Manning's n changes on water surface elevation.
 
-### [16_mannings_sensitivity_multi-interval.ipynb](16_mannings_sensitivity_multi-interval.ipynb)
+### [106_mannings_sensitivity_multi-interval.ipynb](106_mannings_sensitivity_multi-interval.ipynb)
 
 This notebook performs a more detailed Manning's n sensitivity analysis by varying the roughness coefficient for *individual significant land uses* across a range of values.
 
@@ -283,7 +283,7 @@ This notebook compares performance across different versions of HEC-RAS by runni
 - Setting up flexible testing environments for multiple versions
 - Interpreting HEC-RAS version performance evolution
 
-### [103_Generating_AEP_Events_from_Atlas_14.ipynb](103_Generating_AEP_Events_from_Atlas_14.ipynb)
+### [103_Running_AEP_Events_from_Atlas_14.ipynb](103_Running_AEP_Events_from_Atlas_14.ipynb)
 
 This notebook demonstrates an end-to-end workflow for generating and analyzing multiple Annual Exceedance Probability events.
 
