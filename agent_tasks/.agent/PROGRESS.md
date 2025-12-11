@@ -161,8 +161,8 @@ The comprehensive roadmap and worktree workflow are now in place for systematic,
 **Goal**: HMS-RAS coordination research and documentation consolidation
 
 **Completed**:
-- HMS coordination research, documentation consolidation, ras_agents/ creation
-- Created ras_agents/CLAUDE.md emphasizing persistent memory through documentation
+- HMS coordination research, documentation consolidation, ras_skills/ creation
+- Created ras_skills/CLAUDE.md emphasizing persistent memory through documentation
 
 See SESSION_3_CONSOLIDATION_SUMMARY.md for complete details.
 

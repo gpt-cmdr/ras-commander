@@ -81,7 +81,9 @@ research/**/__pycache__/
 examples/flood_polygons.geojson
 ras-commander_logo.png
 /tests
-/.claude
+# .claude/ framework - ignore user settings but track structure
+.claude/settings.local.json
+.claude/settings.json
 nul
 examples/example_projects.csv
 
@@ -99,3 +101,20 @@ docs/notebooks/
 /site
 /planning_docs
 use-deepseek-reasoner.bat
+
+# Agent coordination system - ignore archived/completed work
+agent_tasks/.old/
+agent_tasks/tasks/*/
+
+# Ignore large development work in ras_agents/ and ras_skills/
+ras_agents/Model Updater*/
+ras_agents/1D Mannings*/
+ras_skills/*/Template Models/
+ras_skills/*/Working/
+ras_skills/*/working/
+
+# Keep only production-ready skill documentation
+!ras_skills/*/SKILL.md
+!ras_skills/*/README.md
+!ras_skills/*/STATUS.md
+!ras_skills/*/*.md
