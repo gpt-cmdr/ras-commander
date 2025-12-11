@@ -65,7 +65,8 @@ class RasExamples:
             "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
-    base_dir = Path.cwd()
+    # Find examples directory relative to this module (ras_commander/RasExamples.py -> ../examples)
+    base_dir = Path(__file__).resolve().parent.parent / 'examples'
     examples_dir = base_dir
     projects_dir = examples_dir / 'example_projects'
     csv_file_path = examples_dir / 'example_projects.csv'
