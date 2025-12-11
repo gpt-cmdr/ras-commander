@@ -230,9 +230,24 @@ Important highlights from AGENTS.md:
   - **Use Cases**: Operational forecasting, automated model triggering, early warning systems
   - **Caching**: Automatic cache management with configurable max age
   - **Callbacks**: Custom alert functions for threshold/rate exceedance
+- **Gauge Catalog Generation** (`catalog` module): **NEW v0.89.0+**
+  - `generate_gauge_catalog()` - Create standardized "USGS Gauge Data" folder with catalog and historical data
+  - `load_gauge_catalog()` - Load gauge catalog from standard location
+  - `load_gauge_data()` - Load historical data for specific gauge (flow or stage)
+  - `get_gauge_folder()` - Get path to gauge folder in standard location
+  - `update_gauge_catalog()` - Refresh existing catalog with latest data
+  - **Folder Structure**: Similar to precipitation module pattern (project_folder/USGS Gauge Data/)
+  - **Catalog Files**: gauge_catalog.csv (master), gauge_locations.geojson (spatial), README.md (docs)
+  - **Gauge Folders**: USGS-{site_id}/ containing metadata.json, historical_{parameter}.csv, data_availability.json
+  - **Use Cases**: One-command gauge discovery, standard project organization, engineering review
+  - **Progress Reporting**: Optional tqdm progress bars for multi-gauge processing
+  - **Error Handling**: Continues on individual gauge failures, returns summary statistics
 - **Dependencies**: Requires `pip install dataretrieval` for USGS NWIS access
 - **Lazy Loading**: Module loads without dataretrieval; methods check on first use
 - See `examples/29_usgs_gauge_data_integration.ipynb` for complete workflow
+- See `examples/30_usgs_real_time_monitoring.ipynb` for real-time monitoring examples
+- See `examples/31_bc_generation_from_live_gauge.ipynb` for boundary condition generation
+- See `examples/32_model_validation_with_usgs.ipynb` for model validation workflow
 
 **Real-Time Computation Messages** (as of v0.88.0+):
 - `stream_callback` parameter for `RasCmdr.compute_plan()` - Monitor HEC-RAS execution progress in real-time
@@ -424,18 +439,25 @@ category_projects = RasExamples.list_projects("1D Unsteady Flow Hydraulics")
 - GUI applications in `apps/` (create if needed)
 - Utility tools in `tools/`
 - AI/LLM resources in `ai_tools/`
-- **Planning documents in `planning_docs/`** - All temporary markdown files, analysis reports, and planning documents created during development should be placed here, not in the repository root
+- **Planning and coordination in `agent_tasks/`** - Strategic planning, task coordination, and session memory for multi-session development
+- **Feature research in `feature_dev_notes/`** - Feature-specific development research, prototypes, and large example projects
 
-### Planning Documents Rule
-When creating planning documents, analysis reports, or temporary markdown/text files during development:
-- **Always place them in `planning_docs/`** subfolder, not in the repository root
-- This keeps the root directory clean and focused on repository essentials
-- Planning docs are not committed to the repository (add to .gitignore if needed)
-- Examples of files that belong in `planning_docs/`:
-  - Implementation plans (e.g., `DOCUMENTATION_REVISION_PLAN.md`)
-  - Analysis reports (e.g., `HDF_COMPARISON_REPORT.md`)
-  - Comparison outputs (e.g., `precipitation_comparison_output.txt`)
-  - Temporary test scripts created during investigation
+### Planning and Documentation Locations
+
+**For strategic planning and task coordination**:
+- Use `agent_tasks/` for project-wide planning (ROADMAP.md, strategic docs)
+- Coordinate multi-session work via agent_tasks/.agent/ (STATE, BACKLOG, PROGRESS)
+- See agent_tasks/README.md for complete memory system documentation
+
+**For feature-specific development**:
+- Create folders in `feature_dev_notes/[feature-name]/` for research and prototypes
+- Include large example projects, analysis, experiments
+- See feature_dev_notes/CLAUDE.md for organization guidance
+
+**Keep root directory clean**:
+- No ad-hoc planning documents in repository root
+- Use agent_tasks/ (project-wide) or feature_dev_notes/ (feature-specific)
+- Both folders ignored in git (see .gitignore)
 
 ### Creating New Applications
 - Create subdirectory in `apps/` or `tools/`
@@ -518,11 +540,11 @@ The repository includes comprehensive strategic planning documents:
 - 15 major feature areas analyzed
 - Organized in 4 phases by priority and complexity
 - Timeline estimates and resource allocation guidance
-- Generated from `feature_dev_notes/` and `planning_docs/` analysis
+- Generated from comprehensive feature_dev_notes/ analysis
 
 **Git Worktree Workflow** (`agent_tasks/WORKTREE_WORKFLOW.md`):
 - Develop features in isolated worktrees
-- Sideload `feature_dev_notes/` and `planning_docs/` for research access
+- Sideload `feature_dev_notes/` for research access
 - Share `agent_tasks/` memory system across all worktrees
 - Clean git history with branch isolation
 
