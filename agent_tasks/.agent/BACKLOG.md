@@ -33,6 +33,7 @@ This backlog is organized by roadmap phases. See `ROADMAP.md` for detailed descr
 - [x] `gauge-003` **Forecasting model boundary conditions** - Real-time USGS data for operational forecasting ✓
 - [x] `gauge-004` **Model validation** - NSE, KGE, RMSE, PBIAS metrics ✓
 - [x] `gauge-005` **Example notebook** - End-to-end workflow with Bald Eagle Creek ✓
+- [x] `gauge-006` **Real-time monitoring** - Continuous gauge monitoring with callbacks and alerts ✓ (v0.87.0+, Session 6)
 
 ### Permutation Logic
 - [ ] `perm-001` **Core API implementation** - RasPermutation class, ParameterRange, PermutationConfig
@@ -114,6 +115,7 @@ This backlog is organized by roadmap phases. See `ROADMAP.md` for detailed descr
 - [x] `task-002` **Worktree workflow documentation** - Session 2 ✓
 - [x] `precip-aorc` **AORC/GDAL precipitation import** - v0.8x+ (example: 24_aorc_precipitation.ipynb) ✓
 - [x] `gauge-001` to `gauge-005` **USGS Gauge Data Integration** - v0.86.0+ (Session 3, see above for details) ✓
+- [x] `gauge-006` **Real-Time USGS Monitoring** - v0.87.0+ (Session 6, RasUsgsRealTime with 6 monitoring methods) ✓
 - [x] `lib-001` **Real-time computation messages** - v0.88.0+ (Session 5, BcoMonitor + ExecutionCallback + example callbacks) ✓
 
 ---

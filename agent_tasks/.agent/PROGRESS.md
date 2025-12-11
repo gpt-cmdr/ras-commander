@@ -858,3 +858,150 @@ Real-Time Computation Messages feature is **production-ready** and fully integra
 - ✅ Production-ready
 
 Feature is ready for merge to main branch pending integration testing.
+
+
+---
+
+## Session 6: Real-Time USGS Monitoring Enhancement (2025-12-11)
+
+**Goal**: Implement real-time monitoring capabilities for USGS gauge data integration
+
+**Context**: User requested continuation of USGS integration next steps. Chose enhancement #1 (Real-Time Data Integration) from future enhancements list as highest impact feature.
+
+### Implementation Summary
+
+**Deliverables**:
+- [x] Created `ras_commander/usgs/real_time.py` (897 lines)
+  - RasUsgsRealTime static class with 6 methods
+  - Lazy-loaded dataretrieval dependency
+  - Comprehensive docstrings with examples
+
+- [x] Updated `ras_commander/usgs/__init__.py`
+  - Imported RasUsgsRealTime class
+  - Exposed 6 convenience functions at package level
+  - Updated module docstring with real_time section
+  - Added to __all__ list
+
+- [x] Updated `CLAUDE.md` (lines 223-232)
+  - New Real-Time Monitoring subsection
+  - Documented all 6 functions
+  - Listed use cases and capabilities
+
+- [x] Created reference example script
+  - feature_dev_notes/gauge_data_import/real_time_example.py
+  - 350+ lines with 6 complete examples
+  - Production-ready callback patterns
+
+### Technical Implementation
+
+**Module: RasUsgsRealTime** (ras_commander/usgs/real_time.py)
+
+**Method 1: get_latest_value(site_id, parameter)**
+- Retrieves most recent gauge reading from USGS NWIS
+- Returns dict with value, datetime, age_minutes, qualifiers
+- Use case: Check current conditions before model run
+
+**Method 2: get_recent_data(site_id, parameter, hours)**
+- Gets last N hours of time series data
+- Returns standardized DataFrame with metadata attrs
+- Use case: Analyze recent trends, populate recent boundary conditions
+
+**Method 3: refresh_data(site_id, parameter, cached_df, max_age_hours)**
+- Incremental cache updates (only new records)
+- Efficient data synchronization
+- Automatic cache trimming by age
+- Use case: Keep local cache current without re-downloading
+
+**Method 4: monitor_gauge(site_id, parameter, interval_minutes, callback, duration_hours, threshold, rate_threshold)**
+- Continuous monitoring with periodic refresh
+- Callback invocation when new data arrives
+- Optional threshold and rate detection
+- Graceful KeyboardInterrupt handling
+- Use case: Automated alerts, operational forecasting
+
+**Method 5: detect_threshold_crossing(data_df, threshold, direction)**
+- Detects when readings cross specified threshold
+- Supports rising, falling, or both directions
+- Returns crossing time, value, count
+- Use case: Flood stage alerts
+
+**Method 6: detect_rapid_change(data_df, rate_threshold, window_minutes)**
+- Calculates rate of change over moving window
+- Detects flash flood conditions
+- Returns max rate, direction, timing
+- Use case: Early warning for rapid rises
+
+### Design Patterns Used
+
+**1. Lazy Loading** - Import dataretrieval only when methods called
+**2. Static Class Pattern** - Consistent with ras-commander architecture
+**3. DataFrame Metadata Storage** - Use attrs dict for metadata
+**4. Incremental Cache Updates** - Only download new data since last timestamp
+**5. Callback Pattern** - Custom alert functions for monitoring
+
+### Use Cases Enabled
+
+**1. Operational Forecasting** - Get current conditions for model initialization
+**2. Automated Model Triggering** - Start HEC-RAS runs when thresholds crossed
+**3. Early Warning Systems** - Detect flash flood conditions
+**4. Real-Time Boundary Conditions** - Continuously update .u## files
+
+### Git Commit
+
+**Commit**: 5e0b5c6
+**Message**: "Add Real-Time USGS Data Integration (v0.87.0+)"
+**Files Changed**:
+- new file: ras_commander/usgs/real_time.py (897 lines)
+- modified: ras_commander/usgs/__init__.py (+92 lines)
+- modified: CLAUDE.md (+10 lines real-time section)
+**Total**: 989 insertions
+
+### Lessons Learned
+
+**1. USGS Real-Time vs Instantaneous Values**
+- Real-time is about data freshness, not API endpoint
+- Instantaneous Values (IV) updated hourly, suitable for operational use
+
+**2. Cache Efficiency**
+- Only download data newer than last timestamp (major bandwidth savings)
+- Automatic deduplication and age-based trimming
+
+**3. Callback Parameter Design**
+- Provide 4 parameters: site_id, latest_value, change_info, data_df
+- change_info dict enables optional threshold/rate detection
+
+**4. Thread Safety Not Required**
+- monitor_gauge() runs in single thread (blocking loop)
+- Unlike RasCmdr callbacks which need threading.Lock
+
+### Agent Memory Updates
+
+**BACKLOG.md**: Added gauge-006 to completed section
+**STATE.md**: Updated Current Focus and Quick Context
+**PROGRESS.md**: Added this complete Session 6 entry
+
+### Handoff Notes
+
+**Status**: ✅ COMPLETE
+
+**What Was Delivered**:
+1. RasUsgsRealTime module (897 lines, 6 methods)
+2. Package-level convenience functions (6 exposed)
+3. Complete documentation (CLAUDE.md, docstrings)
+4. Reference examples (real_time_example.py, 350+ lines)
+
+**What Works**:
+- Latest value retrieval, recent data queries, incremental refresh
+- Continuous monitoring, threshold detection, rate detection
+
+**What Needs Testing**:
+- Field validation with live gauges during flood event
+- Network error resilience, long-running monitoring sessions
+
+**Next Steps** (User's Choice):
+1. Test real-time features with active gauges
+2. Integrate with example 29 notebook
+3. Move to next enhancement (multi-gauge processing, DSS export)
+4. Start different Phase 1 Quick Win (Atlas 14 caching, testing suite)
+
+**Code Quality**: Type-hinted, documented, lazy-loaded, production-ready
