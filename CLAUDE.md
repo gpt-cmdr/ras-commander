@@ -29,6 +29,32 @@ This repository uses the AGENTS.md standard alongside CLAUDE.md:
 
 **Target Users**: Hydraulic engineers, researchers, automation developers
 
+## LLM Forward Development Philosophy
+
+This repository embodies **LLM Forward** engineering principles:
+
+**Core Tenets**:
+1. **Professional Responsibility First**: Public safety, ethics, and professional licensure remain paramount
+2. **LLMs Forward (Not First)**: Technology accelerates engineering insight without replacing professional judgment
+3. **Multi-Level Verifiability**: HEC-RAS projects (GUI review) + visual outputs (plots/figures) + code audit trails
+4. **Human-in-the-Loop**: Multiple review pathways - traditional engineering review, visual inspection, and code review
+5. **Domain Expertise Accelerated**: H&H knowledge translated efficiently into working code
+6. **Focus on LLMs Specifically**: Not general AI/ML - LLMs excel at code generation and documentation
+
+**When contributing with AI assistance**:
+- ✅ Test with real HEC-RAS projects using `RasExamples.extract_project()`
+- ✅ Create reviewable HEC-RAS projects with descriptive plan titles/descriptions; models openable in GUI
+- ✅ Generate visual outputs (plots/figures) at each calculation step for visual verification
+- ✅ Maintain audit trails: @log_call decorators, comprehensive logging, self-documenting scripts
+- ✅ Enable multiple review pathways: traditional engineering review + visual inspection + code review
+- ✅ Follow static class patterns for predictable, reviewable code
+- ❌ Don't use synthetic test data or mock objects
+- ❌ Don't create black-box implementations that bypass professional review
+
+**Framework Origin**: The LLM Forward approach was formalized by [CLB Engineering Corporation](https://clbengineering.com/).
+
+**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
+
 ## Development Guidance - Navigate to Rules
 
 **For detailed patterns, see topic-specific rules** (auto-loaded from `.claude/rules/`):

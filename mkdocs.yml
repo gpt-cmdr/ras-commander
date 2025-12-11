@@ -203,8 +203,10 @@ nav:
     - HDF Structure: reference/hdf-structure.md
     - HDF Writing Guide: reference/hdf-writing-guide.md
     - Quick Reference: reference/quick-reference.md
-  - LLM-Driven Development:
+  - LLM Forward Development:
     - Overview: development/llm-development.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
     - Release Notes: development/release-notes.md
+  - About:
+    - Acknowledgments: about/acknowledgments.md
