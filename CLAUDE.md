@@ -220,6 +220,16 @@ Important highlights from AGENTS.md:
   - `cache_gauge_data()` - Save USGS data to standardized CSV format
   - `load_cached_gauge_data()` - Load cached data with metadata
   - `get_gauge_data_dir()` - Create gauge_data/ directory structure
+- **Real-Time Monitoring** (`RasUsgsRealTime` module): **NEW v0.87.0+**
+  - `get_latest_value()` - Get most recent gauge reading (updated hourly)
+  - `get_recent_data()` - Retrieve last N hours of data for trend analysis
+  - `refresh_data()` - Incrementally update cache with only new records (efficient data sync)
+  - `monitor_gauge()` - Continuous monitoring with periodic refresh and callback notifications
+  - `detect_threshold_crossing()` - Detect when readings cross flood stage or other thresholds
+  - `detect_rapid_change()` - Detect flash flood conditions (rapid rise/recession rates)
+  - **Use Cases**: Operational forecasting, automated model triggering, early warning systems
+  - **Caching**: Automatic cache management with configurable max age
+  - **Callbacks**: Custom alert functions for threshold/rate exceedance
 - **Dependencies**: Requires `pip install dataretrieval` for USGS NWIS access
 - **Lazy Loading**: Module loads without dataretrieval; methods check on first use
 - See `examples/29_usgs_gauge_data_integration.ipynb` for complete workflow

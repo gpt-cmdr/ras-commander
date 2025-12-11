@@ -11,6 +11,7 @@ Modules:
     file_io: File management and caching for gauge data
     visualization: Comparison plots for model validation
     metrics: Statistical metrics for model validation (NSE, KGE, RMSE, etc.)
+    real_time: Real-time monitoring and operational forecasting
 
 Public API:
     From core:
@@ -44,6 +45,14 @@ Public API:
         - classify_performance: Classify model performance rating
         - calculate_all_metrics: Comprehensive metric calculation
 
+    From real_time:
+        - get_latest_value: Get most recent gauge reading
+        - get_recent_data: Get last N hours of data
+        - refresh_data: Incrementally update cached data
+        - monitor_gauge: Continuous monitoring with callbacks
+        - detect_threshold_crossing: Detect threshold exceedance
+        - detect_rapid_change: Detect rapid rises/recessions
+
 Example:
     >>> from ras_commander.usgs import retrieve_flow_data, get_gauge_metadata
     >>>
@@ -60,9 +69,10 @@ Example:
     ... )
     >>> print(f"Peak flow: {flow_df['value'].max():.0f} cfs")
     >>>
-    >>> # Cache the data
-    >>> path = cache_gauge_data(flow_df, "08074500", "2017-08-25",
-    ...                          "2017-09-02", "flow", "C:/models/my_project")
+    >>> # Real-time monitoring
+    >>> from ras_commander.usgs import get_latest_value
+    >>> latest = get_latest_value("08074500", parameter='flow')
+    >>> print(f"Current flow: {latest['value']:.0f} cfs ({latest['age_minutes']:.1f} min old)")
 """
 
 # Import and expose public API from core module
@@ -114,6 +124,11 @@ from .metrics import (
     calculate_all_metrics
 )
 
+# Import real-time monitoring functions
+from .real_time import (
+    RasUsgsRealTime,
+)
+
 # Expose static methods directly at package level for convenience
 # From core module
 retrieve_flow_data = RasUsgsCore.retrieve_flow_data
@@ -128,6 +143,60 @@ load_cached_gauge_data = RasUsgsFileIo.load_cached_gauge_data
 get_cache_filename = RasUsgsFileIo.get_cache_filename
 save_validation_results = RasUsgsFileIo.save_validation_results
 
+# From real_time module
+get_latest_value = RasUsgsRealTime.get_latest_value
+get_recent_data = RasUsgsRealTime.get_recent_data
+refresh_data = RasUsgsRealTime.refresh_data
+monitor_gauge = RasUsgsRealTime.monitor_gauge
+detect_threshold_crossing = RasUsgsRealTime.detect_threshold_crossing
+detect_rapid_change = RasUsgsRealTime.detect_rapid_change
+
+def check_dependencies():
+    """
+    Check if optional dependencies for USGS module are installed.
+
+    Returns:
+        dict: Dictionary with dependency names as keys and availability as boolean values.
+
+    Example:
+        >>> from ras_commander.usgs import check_dependencies
+        >>> deps = check_dependencies()
+        >>> if deps['dataretrieval']:
+        ...     print("Ready to retrieve USGS data")
+    """
+    deps = {}
+
+    # Check dataretrieval (required for USGS NWIS data)
+    try:
+        import dataretrieval
+        deps['dataretrieval'] = True
+    except ImportError:
+        deps['dataretrieval'] = False
+
+    # Check geopandas (required for spatial queries)
+    try:
+        import geopandas
+        deps['geopandas'] = True
+    except ImportError:
+        deps['geopandas'] = False
+
+    # Check pyproj (required for coordinate transforms)
+    try:
+        import pyproj
+        deps['pyproj'] = True
+    except ImportError:
+        deps['pyproj'] = False
+
+    # Check matplotlib (required for visualization)
+    try:
+        import matplotlib
+        deps['matplotlib'] = True
+    except ImportError:
+        deps['matplotlib'] = False
+
+    return deps
+
+
 # Define what gets imported with "from ras_commander.usgs import *"
 __all__ = [
     # Classes
@@ -136,6 +205,7 @@ __all__ = [
     'RasUsgsFileIo',
     'InitialConditions',
     'GaugeMatcher',
+    'RasUsgsRealTime',
     # Core data retrieval functions
     'retrieve_flow_data',
     'retrieve_stage_data',
@@ -167,4 +237,13 @@ __all__ = [
     'calculate_volume_error',
     'classify_performance',
     'calculate_all_metrics',
+    # Real-time monitoring functions
+    'get_latest_value',
+    'get_recent_data',
+    'refresh_data',
+    'monitor_gauge',
+    'detect_threshold_crossing',
+    'detect_rapid_change',
+    # Utility functions
+    'check_dependencies',
 ]
