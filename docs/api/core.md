@@ -74,6 +74,113 @@ Core classes for HEC-RAS project management and execution.
         - compute_parallel
         - compute_test_mode
 
+#### Real-Time Execution Monitoring (v0.88.0+)
+
+The `stream_callback` parameter enables real-time progress monitoring during HEC-RAS execution:
+
+```python
+from ras_commander import RasCmdr
+from ras_commander.callbacks import ConsoleCallback
+
+# Simple console monitoring
+callback = ConsoleCallback(verbose=True)
+RasCmdr.compute_plan("01", stream_callback=callback)
+```
+
+**Output:**
+```
+[Plan 01] Starting execution...
+[Plan 01] Geometry Preprocessor Version 6.6
+[Plan 01] Computing Cross Section HTAB's
+[Plan 01] Starting Unsteady Flow Computations
+[Plan 01] Time: 01JAN2020 0600 [  1.25% Done]
+[Plan 01] SUCCESS in 45.2s
+```
+
+##### Callback Lifecycle
+
+Callbacks receive notifications at key execution points:
+
+1. `on_prep_start(plan_number)` - Before geometry preprocessing
+2. `on_prep_complete(plan_number)` - After preprocessing
+3. `on_exec_start(plan_number, command)` - When HEC-RAS subprocess starts
+4. `on_exec_message(plan_number, message)` - Each .bco file message (real-time)
+5. `on_exec_complete(plan_number, success, duration)` - After execution
+6. `on_verify_result(plan_number, verified)` - After HDF verification (if `verify=True`)
+
+##### Built-in Callbacks
+
+::: ras_commander.callbacks.ConsoleCallback
+    options:
+      show_root_heading: true
+      heading_level: 6
+
+::: ras_commander.callbacks.FileLoggerCallback
+    options:
+      show_root_heading: true
+      heading_level: 6
+
+::: ras_commander.callbacks.ProgressBarCallback
+    options:
+      show_root_heading: true
+      heading_level: 6
+
+::: ras_commander.callbacks.SynchronizedCallback
+    options:
+      show_root_heading: true
+      heading_level: 6
+
+##### Custom Callbacks
+
+Create custom callbacks by implementing the `ExecutionCallback` protocol:
+
+```python
+class CustomCallback:
+    """Minimal custom callback - implement only what you need."""
+
+    def on_exec_complete(self, plan_number, success, duration):
+        status = "SUCCESS" if success else "FAILED"
+        print(f"Plan {plan_number}: {status} in {duration:.1f}s")
+
+# Use it
+RasCmdr.compute_plan("01", stream_callback=CustomCallback())
+```
+
+!!! warning "Thread Safety for Parallel Execution"
+    Callbacks used with `compute_parallel()` must be thread-safe. Use `threading.Lock` for shared state:
+
+    ```python
+    from threading import Lock
+
+    class ThreadSafeCallback:
+        def __init__(self):
+            self.lock = Lock()
+            self.results = {}
+
+        def on_exec_complete(self, plan_number, success, duration):
+            with self.lock:
+                self.results[plan_number] = (success, duration)
+    ```
+
+##### BcoMonitor Utility
+
+::: ras_commander.BcoMonitor
+    options:
+      show_root_heading: true
+      heading_level: 6
+      members:
+        - enable_detailed_logging
+        - monitor_until_signal
+
+##### ExecutionCallback Protocol
+
+::: ras_commander.ExecutionCallback
+    options:
+      show_root_heading: true
+      heading_level: 6
+
+All callback methods are **optional** - implement only what you need. The protocol uses `@runtime_checkable` for flexible duck-typing.
+
 ### RasControl
 
 ::: ras_commander.RasControl

@@ -66,7 +66,7 @@ Important highlights from AGENTS.md:
 ### Core Classes and Execution Model
 
 **Primary Execution Class**: `RasCmdr` - Static class for HEC-RAS plan execution
-- `RasCmdr.compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=False, num_cores=None, overwrite_dest=False)`
+- `RasCmdr.compute_plan(plan_number, dest_folder=None, ras_object=None, clear_geompre=False, num_cores=None, overwrite_dest=False, stream_callback=None)`
 - `RasCmdr.compute_parallel()` - Parallel execution across multiple worker processes
 - `RasCmdr.compute_test_mode()` - Sequential execution in test environment
 
@@ -372,6 +372,7 @@ init_ras_project(r"/path/to/project1", "6.5", ras_object=project1)
 - `clear_geompre`: Clear geometry preprocessor files (Boolean)
 - `num_cores`: Number of processing cores (Integer)
 - `overwrite_dest`: Overwrite existing destination (Boolean)
+- `stream_callback`: Optional callback for real-time progress monitoring (Callable, default None)
 
 ### Example Project Management with RasExamples
 ```python
