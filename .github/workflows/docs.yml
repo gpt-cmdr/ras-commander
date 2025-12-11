@@ -48,9 +48,10 @@ jobs:
           pip install -r docs/requirements-docs.txt
           pip install -e .
 
-      - name: Create notebooks symlink
+      - name: Copy notebooks into docs
         run: |
-          ln -s ../examples docs/notebooks
+          rm -rf docs/notebooks
+          cp -r examples docs/notebooks
 
       - name: Build documentation
         run: |
