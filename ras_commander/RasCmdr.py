@@ -63,6 +63,8 @@ from typing import Union, List, Optional, Dict
 from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .BcoMonitor import BcoMonitor
+from typing import Callable
 
 logger = get_logger(__name__)
 
@@ -143,7 +145,8 @@ class RasCmdr:
         num_cores=None,
         overwrite_dest=False,
         skip_existing: bool = False,
-        verify: bool = False
+        verify: bool = False,
+        stream_callback: Optional[Callable] = None
     ):
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -173,6 +176,16 @@ class RasCmdr:
             verify (bool, optional): If True, verify computation completed successfully by checking
                 for 'Complete Process' in compute messages after execution. Defaults to False.
                 Returns False if verification fails even if subprocess returned success.
+            stream_callback (Callable, optional): Callback object for real-time execution progress monitoring.
+                Must implement ExecutionCallback protocol methods (all methods optional):
+                - on_prep_start(plan_number): Called before geometry preprocessing
+                - on_prep_complete(plan_number): Called after preprocessing
+                - on_exec_start(plan_number, command): Called when HEC-RAS subprocess starts
+                - on_exec_message(plan_number, message): Called for each .bco file message (real-time)
+                - on_exec_complete(plan_number, success, duration): Called when execution finishes
+                - on_verify_result(plan_number, verified): Called after verification (if verify=True)
+                IMPORTANT: Must be thread-safe when used with compute_parallel().
+                See ras_commander.callbacks for example implementations.
 
         Returns:
             bool: True if the execution was successful (and verification passed if enabled), False otherwise.
@@ -202,6 +215,11 @@ class RasCmdr:
 
             # Run with verification of successful completion
             RasCmdr.compute_plan("01", verify=True)
+
+            # Run with real-time progress monitoring
+            from ras_commander.callbacks import ConsoleCallback
+            callback = ConsoleCallback()
+            RasCmdr.compute_plan("01", stream_callback=callback)
 
             # Run a plan in a specific folder with multiple options
             RasCmdr.compute_plan(
@@ -265,6 +283,28 @@ class RasCmdr:
                     logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
                     return True
 
+            # Enable .bco monitoring if callback provided
+            bco_monitor = None
+            if stream_callback:
+                # Enable detailed logging in plan file to create .bco file
+                BcoMonitor.enable_detailed_logging(compute_plan_path)
+
+                # Create monitor with callback wrapper
+                bco_monitor = BcoMonitor(
+                    project_path=Path(compute_ras.project_folder),
+                    plan_number=str(plan_number).zfill(2) if isinstance(plan_number, (int, Number)) else str(plan_number),
+                    project_name=compute_ras.project_name,
+                    message_callback=lambda msg: (
+                        stream_callback.on_exec_message(str(plan_number), msg)
+                        if hasattr(stream_callback, 'on_exec_message') else None
+                    )
+                )
+                logger.debug(f"BcoMonitor initialized for plan {plan_number}")
+
+            # Callback: preprocessing start
+            if stream_callback and hasattr(stream_callback, 'on_prep_start'):
+                stream_callback.on_prep_start(str(plan_number))
+
             # Clear geometry preprocessor files if requested
             if clear_geompre:
                 try:
@@ -281,24 +321,67 @@ class RasCmdr:
                 except Exception as e:
                     logger.error(f"Error setting number of cores for plan {plan_number}: {str(e)}")
 
+            # Callback: preprocessing complete
+            if stream_callback and hasattr(stream_callback, 'on_prep_complete'):
+                stream_callback.on_prep_complete(str(plan_number))
+
             # Prepare the command for HEC-RAS execution
             cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
             logger.info("Running HEC-RAS from the Command Line:")
             logger.info(f"Running command: {cmd}")
 
+            # Callback: execution start
+            if stream_callback and hasattr(stream_callback, 'on_exec_start'):
+                stream_callback.on_exec_start(str(plan_number), cmd)
+
             # Execute the HEC-RAS command
             start_time = time.time()
             try:
-                subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+                # Choose execution method based on whether callback is provided
+                if stream_callback and bco_monitor:
+                    # Use Popen for real-time monitoring
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        cwd=str(compute_ras.project_folder),
+                        shell=True
+                    )
+
+                    # Monitor .bco file until process completes
+                    # (BcoMonitor will call on_exec_message callback as messages appear)
+                    bco_monitor.monitor_until_signal(process)
+
+                    # Wait for process to complete
+                    return_code = process.wait()
+
+                    # Check if subprocess succeeded
+                    if return_code != 0:
+                        raise subprocess.CalledProcessError(return_code, cmd)
+
+                else:
+                    # Original behavior when no callback
+                    subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+
                 end_time = time.time()
                 run_time = end_time - start_time
                 logger.info(f"HEC-RAS execution completed for plan: {plan_number}")
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
+                # Callback: execution complete
+                if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                    stream_callback.on_exec_complete(str(plan_number), True, run_time)
+
                 # Verify completion if requested
                 if verify:
                     hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                    if RasCmdr._verify_completion(hdf_path):
+                    verified = RasCmdr._verify_completion(hdf_path)
+
+                    # Callback: verification result
+                    if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        stream_callback.on_verify_result(str(plan_number), verified)
+
+                    if verified:
                         logger.info(f"Verification passed for plan {plan_number}")
                         return True
                     else:
@@ -312,6 +395,11 @@ class RasCmdr:
                 logger.error(f"Error running plan: {plan_number}")
                 logger.error(f"Error message: {e.output}")
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+
+                # Callback: execution complete (failure case)
+                if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                    stream_callback.on_exec_complete(str(plan_number), False, run_time)
+
                 return False
         except Exception as e:
             logger.critical(f"Error in compute_plan: {str(e)}")

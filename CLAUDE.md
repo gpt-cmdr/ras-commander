@@ -49,8 +49,12 @@ Important highlights from AGENTS.md:
 - **Python**: Requires 3.10+
 - **Core packages**: h5py, numpy, pandas, geopandas, matplotlib, shapely, scipy, xarray, tqdm, requests, rasterstats, rtree
 - **Legacy support**: pywin32>=227 (COM interface), psutil>=5.6.6 (process management)
-- **Optional**: tkinterdnd2 (for GUI applications with drag-and-drop)
+- **Optional**:
+  - tkinterdnd2 (for GUI applications with drag-and-drop)
+  - dataretrieval (for USGS gauge data integration)
+  - paramiko (for Docker/SSH remote execution)
 - Install dependencies: `pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely pathlib rasterstats rtree pywin32 psutil`
+- Install optional: `pip install dataretrieval` (USGS data), `pip install paramiko docker` (remote execution)
 
 ### Environment Management
 - Supports both pip and uv for package management
@@ -176,6 +180,71 @@ Important highlights from AGENTS.md:
 - **Algorithm**: Uses max elevation in overlap zones (hydraulically conservative), inserts 0.02-unit gaps
 - **Example Project**: HCFCD M3 Model A120-00-00 included in `examples/example_projects/`
 - See `examples/27_fixit_blocked_obstructions.ipynb` for complete workflow
+
+**USGS Gauge Data Integration** (as of v0.86.0+):
+- `ras_commander.usgs` - Complete workflow for integrating USGS gauge data with HEC-RAS models **NEW**
+- **Core Data Retrieval** (`RasUsgsCore`):
+  - `retrieve_flow_data()` - Retrieve flow time series from USGS NWIS (instantaneous or daily)
+  - `retrieve_stage_data()` - Retrieve stage/elevation time series
+  - `get_gauge_metadata()` - Get gauge metadata (location, drainage area, station name)
+  - `check_data_availability()` - Check if data exists for a time period
+- **Spatial Queries** (`UsgsGaugeSpatial`):
+  - `find_gauges_in_project()` - Query USGS gauges within HEC-RAS project bounds
+  - `get_project_gauges_with_data()` - Find gauges with available data for simulation period
+- **Gauge Matching** (`GaugeMatcher`):
+  - `match_gauge_to_cross_section()` - Match gauge to nearest 1D cross section
+  - `match_gauge_to_2d_area()` - Match gauge to 2D flow area
+  - `auto_match_gauges()` - Automatically match multiple gauges to model features
+- **Time Series Processing** (`RasUsgsTimeSeries`):
+  - `resample_to_hecras_interval()` - Resample to HEC-RAS intervals (15MIN, 1HOUR, etc.)
+  - `check_data_gaps()` - Detect and report data quality issues
+  - `align_timeseries()` - Align observed and modeled data for validation
+- **Initial Conditions** (`InitialConditions`):
+  - `create_ic_line()` - Generate properly formatted IC lines for .u## files
+  - `get_ic_value_from_usgs()` - Extract IC value from USGS data at simulation start
+  - `parse_initial_conditions()` - Parse existing IC lines from unsteady files
+- **Boundary Conditions** (`RasUsgsBoundaryGeneration`):
+  - `generate_flow_hydrograph_table()` - Create fixed-width flow table for .u## files
+  - `generate_stage_hydrograph_table()` - Create stage boundary condition table
+  - `update_boundary_hydrograph()` - Update existing boundary condition in unsteady file
+- **Validation Metrics** (`metrics` module):
+  - `nash_sutcliffe_efficiency()` - NSE metric for model performance
+  - `kling_gupta_efficiency()` - KGE metric with components (correlation, bias, variability)
+  - `calculate_peak_error()` - Peak flow/stage error and timing
+  - `calculate_all_metrics()` - Comprehensive suite of validation metrics
+- **Visualization** (`visualization` module):
+  - `plot_timeseries_comparison()` - Publication-quality observed vs modeled plots
+  - `plot_scatter_comparison()` - Scatter plots with 1:1 line and statistics
+  - `plot_residuals()` - 4-panel residual diagnostics
+- **File I/O** (`RasUsgsFileIo`):
+  - `cache_gauge_data()` - Save USGS data to standardized CSV format
+  - `load_cached_gauge_data()` - Load cached data with metadata
+  - `get_gauge_data_dir()` - Create gauge_data/ directory structure
+- **Dependencies**: Requires `pip install dataretrieval` for USGS NWIS access
+- **Lazy Loading**: Module loads without dataretrieval; methods check on first use
+- See `examples/29_usgs_gauge_data_integration.ipynb` for complete workflow
+
+**Real-Time Computation Messages** (as of v0.88.0+):
+- `stream_callback` parameter for `RasCmdr.compute_plan()` - Monitor HEC-RAS execution progress in real-time
+- **BcoMonitor** - Utility class for .bco file monitoring
+  - `enable_detailed_logging()` - Automatically enable "Write Detailed=1" in plan files
+  - `monitor_until_signal()` - Poll .bco file for execution messages and signals
+  - Thread-safe incremental file reading with encoding resilience
+- **ExecutionCallback Protocol** - Type-safe callback interface (all methods optional)
+  - `on_prep_start()` - Called before geometry preprocessing
+  - `on_prep_complete()` - Called after preprocessing complete
+  - `on_exec_start()` - Called when HEC-RAS subprocess starts
+  - `on_exec_message()` - Called for each new .bco file message (real-time streaming)
+  - `on_exec_complete()` - Called when execution finishes (success or failure)
+  - `on_verify_result()` - Called after HDF verification (if verify=True)
+- **Example Callbacks** (`ras_commander.callbacks`):
+  - `ConsoleCallback` - Simple console output (verbose mode available)
+  - `FileLoggerCallback` - Per-plan log files with thread-safe file operations
+  - `ProgressBarCallback` - tqdm progress bars (requires: pip install tqdm)
+  - `SynchronizedCallback` - Thread-safe wrapper for non-thread-safe callbacks
+- **Thread Safety**: All example callbacks use threading.Lock for safe parallel execution
+- **Backward Compatible**: Optional parameter (default None), no impact on existing code
+- Usage: `RasCmdr.compute_plan("01", stream_callback=ConsoleCallback())`
 
 ### Execution Modes
 1. **Single Plan**: `RasCmdr.compute_plan()` - Execute one plan with full parameter control
@@ -371,6 +440,82 @@ When creating planning documents, analysis reports, or temporary markdown/text f
 - Cursor IDE integration with `.cursorrules`
 - Optimized for LLM code assistance and generation
 - Examples serve dual purpose as documentation and tests to reduce hallucination
+
+## Agent Coordination for Long-Running Tasks
+
+For complex, multi-session development tasks, use the agent coordination system located at:
+**`agent_tasks/`** (in repository root)
+
+### When to Use Agent Coordination
+
+**Use for:**
+- Multi-session features (can't finish in one context window)
+- Complex tasks requiring exploration and planning
+- Work involving multiple files and components
+- Tasks where decisions and rationale need tracking
+
+**Don't use for:**
+- Simple bug fixes or single-file changes
+- Quick documentation updates
+- Obvious, straightforward implementations
+
+### Session Lifecycle
+
+**Every session start:**
+1. Read `agent_tasks/.agent/STATE.md` - Current project state
+2. Read `agent_tasks/.agent/PROGRESS.md` (last 2 entries) - Recent context
+3. Check `agent_tasks/.agent/BACKLOG.md` - Pick next task if nothing in progress
+
+**During session:**
+- Work on ONE task at a time
+- Make incremental commits
+- Document decisions in PROGRESS.md
+- Update STATE.md if blocked
+
+**Every session end:**
+1. Update `.agent/STATE.md` with current status
+2. Append to `.agent/PROGRESS.md` with session summary
+3. Update `.agent/BACKLOG.md` (mark completed, add new tasks)
+4. Write detailed handoff notes (assume next session knows nothing)
+
+### Memory System Files
+
+- **STATE.md** - Single source of truth for project state (health, current focus, blockers)
+- **CONSTITUTION.md** - Project principles, constraints, quality standards
+- **BACKLOG.md** - Task queue (ready/blocked/completed)
+- **PROGRESS.md** - Append-only session log with handoff notes
+- **LEARNINGS.md** - What worked, what didn't, project-specific patterns
+
+### Task Organization
+
+Active tasks use folder structure: `agent_tasks/tasks/{task-id}-{name}/`
+- Each task folder contains TASK.md, work files, and RESULT.md
+- Completed tasks archived to `agent_tasks/.old/tasks/`
+- Planning docs go in `agent_tasks/.old/planning/`
+
+### Key Principle
+
+**Every session starts with amnesia - only files persist.** The memory system ensures context continuity across sessions by maintaining structured state in markdown files.
+
+See `agent_tasks/README.md` for complete coordination system documentation.
+
+### Strategic Planning
+
+The repository includes comprehensive strategic planning documents:
+
+**Development Roadmap** (`agent_tasks/ROADMAP.md`):
+- 15 major feature areas analyzed
+- Organized in 4 phases by priority and complexity
+- Timeline estimates and resource allocation guidance
+- Generated from `feature_dev_notes/` and `planning_docs/` analysis
+
+**Git Worktree Workflow** (`agent_tasks/WORKTREE_WORKFLOW.md`):
+- Develop features in isolated worktrees
+- Sideload `feature_dev_notes/` and `planning_docs/` for research access
+- Share `agent_tasks/` memory system across all worktrees
+- Clean git history with branch isolation
+
+These planning documents provide long-term direction and recommended development patterns.
 
 ## Documentation Build Configuration
 
