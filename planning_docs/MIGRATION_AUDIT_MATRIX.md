@@ -1,7 +1,8 @@
 # feature_dev_notes Migration Audit Matrix
 
 **Created**: 2025-12-12
-**Status**: Phase 1 - Audit in Progress
+**Updated**: 2025-12-12 Session 9
+**Status**: Phase 2 - Migrations in Progress (3/9 complete, 33%)
 
 ## Subagent Audit Results
 
@@ -9,7 +10,7 @@
 
 | Subagent | References Found | File(s) | Type | Priority | Status |
 |----------|------------------|---------|------|----------|--------|
-| **remote-executor** | docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md | SUBAGENT.md (3 refs: lines 8, 53, 400) | CRITICAL | HIGH | ⏳ Needs Migration |
+| **remote-executor** | docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md | SUBAGENT.md (3 refs: lines 8, 53, 400) | CRITICAL | HIGH | ✅ MIGRATED Session 9 (8855f76) |
 | **hierarchical-knowledge-agent-skill-memory-curator** | Multiple feature_dev_notes refs | AGENT.md + 7 reference files | META | EXCEPTION | ✅ Documented Exception |
 | **README.md** | General docs | .claude/subagents/README.md | DOCS | LOW | ⏳ Review Needed |
 
@@ -30,16 +31,16 @@
 
 ### High Priority Mappings (Clear Ownership)
 
-| feature_dev_notes Directory | Primary Subagent | Secondary Subagent(s) | Migration Priority |
-|-----------------------------|------------------|----------------------|-------------------|
-| **cHECk-RAS** | quality-assurance | - | HIGH |
-| **RasMapper Interpolation** | hdf-analyst | - | HIGH |
-| **parallel run agent** | remote-executor | - | HIGH |
-| **Decompilation Agent** | (none - standalone) | hdf-analyst | ✅ MIGRATED |
-| **gauge_data_import** | usgs-integrator | precipitation-specialist | MEDIUM |
-| **National Water Model** | precipitation-specialist | - | MEDIUM |
-| **1D_Floodplain_Mapping** | geometry-parser | - | MEDIUM |
-| **Build_Documentation** | documentation-generator | - | MEDIUM |
+| feature_dev_notes Directory | Primary Subagent | Secondary Subagent(s) | Priority | Status |
+|-----------------------------|------------------|----------------------|----------|--------|
+| **cHECk-RAS** | quality-assurance | - | HIGH | ✅ MIGRATED Session 9 (b7b29b3) |
+| **RasMapper Interpolation** | hdf-analyst | - | HIGH | ✅ MIGRATED Session 9 (ce40c94) |
+| **parallel run agent** | remote-executor | - | HIGH | ✅ MIGRATED Session 9 (8855f76) |
+| **Decompilation Agent** | (none - standalone) | hdf-analyst | HIGH | ✅ MIGRATED Session 8 |
+| **gauge_data_import** | usgs-integrator | precipitation-specialist | MEDIUM | ⏳ Pending |
+| **National Water Model** | precipitation-specialist | - | MEDIUM | ⏳ Pending |
+| **1D_Floodplain_Mapping** | geometry-parser | - | MEDIUM | ⏳ Pending |
+| **Build_Documentation** | documentation-generator | - | MEDIUM | ⏳ Pending |
 
 ### Medium Priority Mappings (Shared or Utility)
 
@@ -161,15 +162,22 @@
 
 ## Success Metrics
 
-### Before Migration (Current State)
+### Before Migration (Session 8)
 - Subagents with feature_dev_notes refs: 3 (remote-executor, hierarchical-knowledge, README)
 - ras_agents: 1 (decompilation-agent)
 - feature_dev_notes directories: 33 total
 - Gitignored references: 3+ instances
 
+### Current State (Session 9)
+- Subagents with feature_dev_notes refs: 0 active (hierarchical-knowledge is documented exception)
+- ras_agents: 4 (decompilation, remote-executor, quality-assurance, hdf-analyst)
+- Domains migrated: 3/9 (33%)
+- Files migrated: 42 files, ~20,000 lines
+- Security audits: 3 completed (1 CRITICAL redaction, 2 clean)
+
 ### After Migration (Target State)
 - Subagents with feature_dev_notes refs: 0 (except documented exceptions)
-- ras_agents: 7-10 (all domains needing reference data)
+- ras_agents: 9-10 (all domains needing reference data)
 - feature_dev_notes directories: Same (experimental space)
 - Gitignored references: 0 in production agents
 
