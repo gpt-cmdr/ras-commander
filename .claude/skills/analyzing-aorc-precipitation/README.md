@@ -2,13 +2,20 @@
 
 Claude Code skill for working with AORC historical precipitation and NOAA Atlas 14 design storms in HEC-RAS/HMS projects.
 
+**This is a NAVIGATOR skill** - it points to primary sources rather than duplicating content.
+
 ## Files
 
-- **SKILL.md** - Main skill definition with quick start, workflows, and use cases
-- **reference/aorc-api.md** - Complete AORC API reference
-- **reference/atlas14.md** - Atlas 14 design storm API reference
-- **examples/aorc-retrieval.py** - Basic AORC workflow script
-- **examples/design-storm.py** - Atlas 14 design storm generation script
+- **SKILL.md** - Lightweight skill navigator (~390 lines) pointing to primary sources
+- **README.md** - This file (skill overview)
+
+## Primary Sources
+
+All detailed workflows and API documentation live in:
+- `ras_commander/precip/CLAUDE.md` - Complete API reference (329 lines)
+- `examples/24_aorc_precipitation.ipynb` - AORC workflow demonstration
+- `examples/103_Running_AEP_Events_from_Atlas_14.ipynb` - Atlas 14 workflow
+- `examples/104_Atlas14_AEP_Multi_Project.ipynb` - Multi-project batch processing
 
 ## Trigger Keywords
 
@@ -42,13 +49,12 @@ hyeto = StormGenerator.generate_design_storm(precip, 24, "SCS_Type_II", 15)
 StormGenerator.export_to_dss(hyeto, "design.dss", "/PATH//DESIGN//15MIN/SYN/")
 ```
 
-## Cross-References
+## Navigation Pattern
 
-- **Precip Module**: `ras_commander/precip/CLAUDE.md`
-- **Example Notebooks**:
-  - `examples/24_aorc_precipitation.ipynb`
-  - `examples/103_Running_AEP_Events_from_Atlas_14.ipynb`
-  - `examples/104_Atlas14_AEP_Multi_Project.ipynb`
+1. **Read SKILL.md** for overview and navigation map
+2. **Consult primary sources** (`ras_commander/precip/CLAUDE.md`) for API details
+3. **Review example notebooks** for working implementations
+4. **Implement** using patterns from examples
 
 ## See Also
 

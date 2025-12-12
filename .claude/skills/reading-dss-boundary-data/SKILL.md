@@ -25,9 +25,9 @@ version: 1.0.0
 
 # Reading DSS Boundary Data
 
-Expert guidance for extracting boundary condition data from HEC-DSS files using ras-commander's RasDss class.
+**Primary Source Navigator**: This skill provides a concise entry point to DSS file operations. Complete documentation exists in authoritative sources.
 
-## Quick Start
+## Quick Reference
 
 ```python
 from ras_commander import init_ras_project, RasDss
@@ -48,6 +48,50 @@ enhanced = RasDss.extract_boundary_timeseries(
 )
 ```
 
+## Primary Sources (Read These First)
+
+### 1. Module Architecture & Developer Guidance
+**Location**: `C:\GH\ras-commander\ras_commander\dss\AGENTS.md`
+
+Read this for:
+- Lazy loading architecture (no overhead until first use)
+- Three-level lazy loading (package → subpackage → method)
+- Public API reference table
+- DataFrame metadata structure (`df.attrs`)
+- Dependencies (pyjnius, Java, HEC Monolith)
+- Adding new DSS methods
+- Testing DSS operations
+- Common issues and troubleshooting
+
+**Why this is authoritative**: Written by maintainers, updated with code changes, read by developers working on the module.
+
+### 2. Complete Workflow Example
+**Location**: `C:\GH\ras-commander\examples\22_dss_boundary_extraction.ipynb`
+
+Read this for:
+- Step-by-step extraction workflow
+- Real project (BaldEagleCrkMulti2D)
+- Catalog reading examples
+- Single time series extraction
+- Batch extraction with `extract_boundary_timeseries()`
+- Plotting DSS boundary data
+- Exporting results to CSV
+- Accessing extracted DataFrames
+
+**Why this is authoritative**: Tested with real HEC-RAS projects, serves as functional test, maintained alongside library.
+
+### 3. Source Code & Docstrings
+**Location**: `C:\GH\ras-commander\ras_commander\dss\RasDss.py`
+
+Read this for:
+- Complete method signatures
+- Parameter types and defaults
+- Return value structures
+- Error handling patterns
+- Implementation details
+
+**Why this is authoritative**: Source code is always correct, docstrings updated with each release.
+
 ## When to Use This Skill
 
 Use when:
@@ -61,8 +105,7 @@ Use when:
 ## Technology Overview
 
 ### HEC-DSS Format
-- **DSS** = Data Storage System
-- Binary format for time series and paired data
+- **DSS** = Data Storage System (binary format)
 - Used by HEC-HMS, HEC-ResSim, HEC-FIA
 - Versions: V6 (older) and V7 (current)
 - Data identified by **pathname** (7-part string)
@@ -86,14 +129,17 @@ Example:
 ## Lazy Loading Architecture
 
 ### No Overhead Until First Use
-RasDss uses three-level lazy loading:
+
+See `ras_commander/dss/AGENTS.md` for complete details.
+
+**Three-level lazy loading**:
 
 1. **Package Import**: Lightweight, no Java loaded
    ```python
    from ras_commander import RasDss  # Fast, no JVM
    ```
 
-2. **First Method Call**: Configures JVM, downloads Monolith
+2. **First Method Call**: Configures JVM, downloads Monolith (~20 MB, one-time)
    ```python
    catalog = RasDss.get_catalog("file.dss")  # Triggers setup
    ```
@@ -102,13 +148,6 @@ RasDss uses three-level lazy loading:
    ```python
    df = RasDss.read_timeseries(...)  # Fast, reuses JVM
    ```
-
-### What Gets Downloaded?
-**HEC Monolith** (~20 MB, one-time):
-- 7 JAR files from HEC Nexus
-- Platform-specific native library (javaHeclib.dll/.so/.dylib)
-- Downloaded to `~/.ras-commander/dss/`
-- Auto-download on first use
 
 ### Dependencies
 **Required** (must install manually):
@@ -120,82 +159,52 @@ pip install pyjnius
 - Java JRE or JDK 8+ (set JAVA_HOME)
 
 **Auto-downloaded**:
-- HEC Monolith libraries
+- HEC Monolith libraries (~20 MB) to `~/.ras-commander/dss/`
 
-## Core Workflows
+## Core Methods
 
-### 1. Read DSS Catalog
+See `ras_commander/dss/AGENTS.md` for complete API reference table.
 
-List all data in a DSS file:
+### Essential Methods
 
-```python
-catalog = RasDss.get_catalog("Bald_Eagle_Creek.dss")
-print(f"Total paths: {len(catalog)}")
+1. **`get_catalog(dss_file)`** - List all paths in DSS file
+   - Returns: `List[str]` of DSS pathnames
+   - Use: Explore DSS file contents
 
-for path in catalog[:10]:
-    print(path)
-```
+2. **`read_timeseries(dss_file, pathname)`** - Extract single time series
+   - Returns: `DataFrame` with DatetimeIndex and 'value' column
+   - Metadata in `df.attrs` (pathname, units, type, interval, dss_file)
+   - Use: Extract specific boundary data
 
-Output:
-```
-//BALD EAGLE AT MILESBURG/FLOW/01SEP2004/15MIN/GAGE/
-//FISHING CREEK/FLOW-BASE/01JUN1972/15MIN/RUN:1972 CALIBRATION EVENT/
-...
-```
+3. **`extract_boundary_timeseries(boundaries_df, ras_object)`** - Extract ALL DSS boundaries
+   - Returns: Enhanced DataFrame with 'dss_timeseries' column
+   - Automatically processes all DSS-defined boundaries
+   - Use: **Recommended** for complete boundary extraction
 
-### 2. Get DSS File Info
+4. **`get_info(dss_file)`** - Quick file summary
+   - Returns: `Dict` with filename, size, total_paths, sample_paths
+   - Use: Validate DSS file before full extraction
 
-Quick summary without reading all paths:
+5. **`read_multiple_timeseries(dss_file, pathnames)`** - Batch extract
+   - Returns: `Dict[str, DataFrame]` mapping pathname to data
+   - Use: Extract specific set of paths efficiently
 
-```python
-info = RasDss.get_info("file.dss")
-print(f"File: {info['filename']}")
-print(f"Size: {info['file_size_mb']:.2f} MB")
-print(f"Total paths: {info['total_paths']}")
-print(f"Sample paths: {info['sample_paths'][:5]}")
-```
+## Common Workflows
 
-### 3. Extract Single Time Series
-
-Read one pathname:
+### Workflow 1: Read Catalog and Extract Single Path
 
 ```python
-pathname = "//BALD EAGLE 40/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/"
-df = RasDss.read_timeseries("file.dss", pathname)
+# List available data
+catalog = RasDss.get_catalog("file.dss")
+flow_paths = [p for p in catalog if '/FLOW/' in p]
 
-print(f"Points: {len(df)}")
-print(f"Date range: {df.index.min()} to {df.index.max()}")
-print(f"Value range: {df['value'].min():.2f} to {df['value'].max():.2f}")
+# Extract specific path
+df = RasDss.read_timeseries("file.dss", flow_paths[0])
 print(f"Units: {df.attrs['units']}")
+print(f"Points: {len(df)}")
 ```
 
-**DataFrame Structure**:
-- Index: DatetimeIndex
-- Column: 'value' (float)
-- Attrs: pathname, units, type, interval, dss_file
-
-### 4. Extract Multiple Time Series
-
-Batch read multiple paths:
-
-```python
-pathnames = [
-    "//LOCATION1/FLOW/01JAN1999/15MIN/RUN:PMF/",
-    "//LOCATION2/FLOW/01JAN1999/15MIN/RUN:PMF/",
-]
-
-results = RasDss.read_multiple_timeseries("file.dss", pathnames)
-
-for pathname, df in results.items():
-    if df is not None:
-        print(f"{pathname}: {len(df)} points")
-    else:
-        print(f"{pathname}: FAILED")
-```
-
-### 5. Extract ALL Boundary DSS Data (Recommended)
-
-Automatically extract DSS data for all DSS-defined boundaries:
+### Workflow 2: Extract ALL Boundary Data (Recommended)
 
 ```python
 from ras_commander import init_ras_project, RasDss
@@ -216,119 +225,41 @@ for idx, row in enhanced.iterrows():
         print(f"{row['bc_type']}: {len(df)} points")
 ```
 
-**Result**: Original boundaries_df with new 'dss_timeseries' column containing DataFrames.
-
-## Working with Extracted Data
-
-### Access Time Series
-
-```python
-# Get first DSS boundary
-dss_boundaries = enhanced[enhanced['Use DSS'] == True]
-first_dss = dss_boundaries.iloc[0]
-
-# Access time series DataFrame
-df = first_dss['dss_timeseries']
-
-# Statistics
-print(df['value'].describe())
-
-# Metadata
-print(f"Units: {df.attrs['units']}")
-print(f"Pathname: {df.attrs['pathname']}")
-print(f"Interval: {df.attrs['interval']} minutes")
-```
-
-### Plot Time Series
+### Workflow 3: Plot DSS Boundary
 
 ```python
 import matplotlib.pyplot as plt
 
-df = row['dss_timeseries']
+# Get DSS boundary
+dss_boundaries = enhanced[enhanced['Use DSS'] == True]
+first_dss = dss_boundaries.iloc[0]
+
+# Plot
+df = first_dss['dss_timeseries']
 df['value'].plot(figsize=(12, 4))
-plt.title(f"{row['bc_type']} - {row['river_reach_name']}")
+plt.title(f"{first_dss['bc_type']} - {first_dss['river_reach_name']}")
 plt.ylabel(f"Flow ({df.attrs['units']})")
 plt.grid(True)
 plt.show()
 ```
 
-### Export to CSV
-
-```python
-# Drop DataFrame column for CSV export
-export_df = enhanced.drop(columns=['dss_timeseries'])
-
-# Add summary statistics
-for idx, row in enhanced.iterrows():
-    if row['Use DSS'] and row['dss_timeseries'] is not None:
-        df = row['dss_timeseries']
-        export_df.at[idx, 'dss_points'] = len(df)
-        export_df.at[idx, 'dss_mean'] = df['value'].mean()
-        export_df.at[idx, 'dss_max'] = df['value'].max()
-
-export_df.to_csv("boundaries_summary.csv", index=False)
-```
-
-## Common Patterns
-
-### Pattern 1: Find Flow Hydrographs
-
-```python
-catalog = RasDss.get_catalog("file.dss")
-flow_paths = [p for p in catalog if '/FLOW/' in p]
-print(f"Found {len(flow_paths)} flow time series")
-```
-
-### Pattern 2: Extract by Date Range
-
-```python
-# Note: Start/end date filtering not yet implemented
-# Extract full series and filter with pandas
-df = RasDss.read_timeseries("file.dss", pathname)
-df_filtered = df.loc['2000-01-01':'2000-01-07']
-```
-
-### Pattern 3: Compare Manual vs DSS Boundaries
-
-```python
-manual = enhanced[enhanced['Use DSS'] == False]
-dss = enhanced[enhanced['Use DSS'] == True]
-
-print(f"Manual boundaries: {len(manual)}")
-print(f"DSS boundaries: {len(dss)}")
-```
-
-### Pattern 4: Validate DSS Files
-
-```python
-# Check if DSS file exists before extraction
-from pathlib import Path
-
-dss_file = Path("file.dss")
-if not dss_file.exists():
-    print(f"DSS file not found: {dss_file}")
-else:
-    catalog = RasDss.get_catalog(dss_file)
-    print(f"File OK: {len(catalog)} paths")
-```
-
 ## Error Handling
+
+See `ras_commander/dss/AGENTS.md` for complete troubleshooting guide.
 
 ### Common Errors
 
 **1. pyjnius Not Installed**
 ```
 ImportError: pyjnius is required for DSS file operations.
-Install with: pip install pyjnius
 ```
 **Fix**: `pip install pyjnius`
 
 **2. Java Not Found**
 ```
 RuntimeError: JAVA_HOME not set and Java not found automatically.
-Please install Java JRE/JDK 8+ and set JAVA_HOME.
 ```
-**Fix**: Install Java and set JAVA_HOME environment variable
+**Fix**: Install Java JRE/JDK 8+ and set JAVA_HOME
 
 **3. JVM Already Started**
 ```
@@ -342,7 +273,7 @@ FileNotFoundError: DSS file not found: ...
 ```
 **Fix**: Use absolute paths or resolve relative to project directory
 
-### Robust Error Handling
+### Robust Pattern
 
 ```python
 from pathlib import Path
@@ -362,77 +293,30 @@ except ImportError as e:
 except RuntimeError as e:
     print(f"Java/JVM error: {e}")
     print("Check JAVA_HOME and Java installation")
-
-except Exception as e:
-    print(f"Unexpected error: {e}")
 ```
 
-## Integration with HEC-RAS
+## Complete Documentation
 
-### Workflow 1: Extract and Analyze
+**DO NOT read the reference/ or examples/ folders in this skill directory** - they contain outdated duplicated content.
 
-```python
-from ras_commander import init_ras_project, RasDss
+**Always prefer primary sources**:
 
-# Initialize project
-ras = init_ras_project("project_path", "6.6")
-
-# Get plan boundaries
-plan_boundaries = ras.boundaries_df[
-    ras.boundaries_df['unsteady_number'] == '07'
-]
-
-# Extract DSS data
-enhanced = RasDss.extract_boundary_timeseries(
-    plan_boundaries,
-    ras_object=ras
-)
-
-# Count DSS boundaries
-dss_count = (enhanced['Use DSS'] == True).sum()
-print(f"Plan 07: {dss_count} DSS boundaries")
-```
-
-### Workflow 2: DSS + Manual Boundaries
-
-```python
-# Separate DSS and manual boundaries
-dss_bc = enhanced[enhanced['Use DSS'] == True]
-manual_bc = enhanced[enhanced['Use DSS'] == False]
-
-print("DSS Boundaries:")
-for idx, row in dss_bc.iterrows():
-    if row['dss_timeseries'] is not None:
-        df = row['dss_timeseries']
-        print(f"  {row['bc_type']}: {len(df)} points")
-
-print("\nManual Boundaries:")
-for idx, row in manual_bc.iterrows():
-    print(f"  {row['bc_type']}: {row['hydrograph_num_values']} points")
-```
-
-## Cross-References
-
-- **API Reference**: See [dss-api.md](reference/dss-api.md) for complete method signatures
-- **Troubleshooting**: See [troubleshooting.md](reference/troubleshooting.md) for Java/JVM issues
-- **Examples**: See [examples/](examples/) for complete scripts
-- **Source**: See `ras_commander/dss/AGENTS.md` for developer guidance
+1. **Module architecture**: `ras_commander/dss/AGENTS.md`
+2. **Complete workflow**: `examples/22_dss_boundary_extraction.ipynb`
+3. **API details**: `ras_commander/dss/RasDss.py` docstrings
 
 ## Key Takeaways
 
 1. **Lazy Loading**: No overhead until first DSS method call
-2. **Auto-Download**: HEC Monolith installed automatically
+2. **Auto-Download**: HEC Monolith installed automatically (~20 MB, one-time)
 3. **Unified API**: DSS and manual boundaries in same DataFrame
 4. **One-Call Extraction**: `extract_boundary_timeseries()` handles all DSS data
-5. **Metadata Preserved**: Units, pathname, interval in df.attrs
+5. **Metadata Preserved**: Units, pathname, interval in `df.attrs`
 6. **V6 and V7**: Both DSS versions supported
+7. **Primary Sources**: Always read AGENTS.md and notebook 22 for authoritative guidance
 
-## Example Project
+## Version History
 
-The BaldEagleCrkMulti2D example contains DSS boundary conditions:
-```python
-from ras_commander import RasExamples
-project_path = RasExamples.extract_project("BaldEagleCrkMulti2D")
-```
-
-See `examples/22_dss_boundary_extraction.ipynb` for complete workflow.
+- **v1.0.0**: Refactored to lightweight navigator (points to primary sources)
+- **v0.82.0**: Initial RasDss implementation
+- **v0.86.0**: Moved to `dss/` subpackage with lazy loading

@@ -1,176 +1,87 @@
-# Reading DSS Boundary Data Skill
+# Reading DSS Boundary Data - Skill
 
-Expert guidance for extracting boundary condition data from HEC-DSS files using ras-commander's RasDss class.
+**Type**: Lightweight Primary Source Navigator
+**Version**: 1.0.0
+**Lines**: ~320 (SKILL.md only)
 
-## Overview
+## Purpose
 
-This skill provides comprehensive guidance for working with HEC-DSS files (V6 and V7) in ras-commander. It covers JVM configuration, HEC Monolith auto-download, catalog reading, time series extraction, and boundary condition mapping.
+This skill provides a **concise entry point** to DSS (Data Storage System) file operations in ras-commander. It does NOT duplicate documentation - instead it directs you to authoritative primary sources.
 
-## Contents
+## Primary Sources (Read These)
 
-### SKILL.md (~440 lines)
+1. **Module Architecture**: `C:\GH\ras-commander\ras_commander\dss\AGENTS.md`
+   - Lazy loading architecture
+   - Public API reference
+   - Developer guidance
 
-Main skill documentation with:
-- Quick start examples
-- When to use this skill
-- Technology overview (DSS format, pathname structure)
-- Lazy loading architecture
-- Core workflows (5 patterns)
-- Common patterns
-- Error handling
-- Integration with HEC-RAS
-- Cross-references
+2. **Complete Workflow**: `C:\GH\ras-commander\examples\22_dss_boundary_extraction.ipynb`
+   - Step-by-step extraction examples
+   - Real project (BaldEagleCrkMulti2D)
+   - Plotting and analysis
 
-**Trigger Keywords**: DSS, HEC-DSS, boundary condition, time series, JVM, Java, catalog, pathname, HEC-HMS, Monolith, pyjnius
+3. **Source Code**: `C:\GH\ras-commander\ras_commander\dss\RasDss.py`
+   - Method signatures and docstrings
+   - Implementation details
 
-### reference/dss-api.md (~400 lines)
+## What This Skill Provides
 
-Complete API reference with:
-- Class overview
-- All methods with parameters, returns, examples
-- DSS pathname format (7-part structure)
-- DataFrame structure and metadata
-- JVM configuration details
-- Testing instructions
+- Quick reference code snippets
+- Overview of DSS pathname format
+- Overview of lazy loading architecture
+- Common workflows (catalog reading, extraction, plotting)
+- Error handling patterns
+- **Explicit pointers to primary sources**
 
-**Methods Documented**:
-- `get_catalog()` - List all pathnames
-- `read_timeseries()` - Read single time series
-- `read_multiple_timeseries()` - Batch read
-- `get_info()` - File summary
-- `extract_boundary_timeseries()` - Auto-extract all BC data
-- `shutdown_jvm()` - Placeholder
+## What This Skill Does NOT Provide
 
-### reference/troubleshooting.md (~600 lines)
+- Complete API documentation (see dss/AGENTS.md)
+- Detailed examples (see notebook 22)
+- Troubleshooting guides (see dss/AGENTS.md)
+- Method implementation details (see RasDss.py)
 
-Comprehensive troubleshooting guide:
+## Design Philosophy
 
-**Java/JVM Issues**:
-- pyjnius not installed
-- JAVA_HOME not set
-- JVM already started
-- Java class not found
-- Native library not found
-- OutOfMemoryError
+**Lightweight Navigator Pattern**:
+- Skills should be ~300-400 lines TOTAL
+- Provide enough context to orient the user
+- **Point to primary sources for complete information**
+- Avoid duplicating content that exists elsewhere
+- Primary sources are maintained, skills are stable
 
-**DSS File Issues**:
-- DSS file not found
-- Invalid pathname
-- Empty time series
-- Corrupted DSS file
+## Version History
 
-**Performance Issues**:
-- Slow catalog reading
-- Slow time series extraction
+- **v1.0.0** (2025-12-11): Refactored from 1,821 lines to 320 lines
+  - Deleted `reference/` folder (duplicated AGENTS.md content)
+  - Deleted `examples/` folder (notebook 22 already exists)
+  - Rewrote SKILL.md as primary source navigator
+  - Added explicit warnings NOT to read deleted folders
 
-**Integration Issues**:
-- Boundaries not extracted
-- Wrong project directory
+- **v0.1.0** (Initial): 1,821 lines with extensive duplication
+  - `SKILL.md`: 439 lines
+  - `reference/dss-api.md`: 498 lines (duplicated AGENTS.md)
+  - `reference/troubleshooting.md`: 379 lines (duplicated AGENTS.md)
+  - `examples/`: 505 lines (duplicated notebook 22)
 
-**Debugging**:
-- Enable debug logging
-- Check versions
-- Minimal test case
-- Report issues
+## File Structure
 
-### examples/read-catalog.py
-
-Complete working example for catalog exploration:
-- Extract example project
-- Get file info
-- Read full catalog
-- Analyze catalog contents (parameters, intervals)
-- Find flow time series
-- Find specific scenarios
-- Export catalog to text and CSV
-
-### examples/extract-boundaries.py
-
-Complete working example for boundary extraction:
-- Extract example project
-- Initialize HEC-RAS project
-- Extract all DSS boundary data
-- Summary statistics (manual vs DSS)
-- Export to CSV with metadata
-- Export individual time series
-- Create multi-panel plots
-- Save visualizations
-
-## Quick Start
-
-```python
-from ras_commander import init_ras_project, RasDss
-
-# Initialize project
-ras = init_ras_project("path/to/project", "6.6")
-
-# Extract ALL boundary DSS data (one-call solution)
-enhanced = RasDss.extract_boundary_timeseries(
-    ras.boundaries_df,
-    ras_object=ras
-)
-
-# Access extracted data
-for idx, row in enhanced.iterrows():
-    if row['Use DSS'] and row['dss_timeseries'] is not None:
-        df = row['dss_timeseries']
-        print(f"{row['bc_type']}: {len(df)} points")
+```
+reading-dss-boundary-data/
+├── SKILL.md                      # ~320 lines - Primary source navigator
+├── README.md                     # This file
+└── COMPLETION_SUMMARY.md         # Refactoring notes
 ```
 
-## Technology Stack
+**Deleted** (v1.0.0):
+- `reference/` - Duplicated dss/AGENTS.md content
+- `examples/` - Duplicated notebook 22 content
 
-- **HEC Monolith**: Java libraries (~20 MB, auto-downloaded)
-- **pyjnius**: Python-Java bridge (must install: `pip install pyjnius`)
-- **Java**: JRE/JDK 8+ required (set JAVA_HOME)
+## Usage
 
-## Lazy Loading
+When Claude Code reads this skill, it will:
+1. Read SKILL.md for quick reference
+2. Be directed to read `dss/AGENTS.md` for architecture
+3. Be directed to read `examples/22_dss_boundary_extraction.ipynb` for workflow
+4. Have immediate access to code snippets for common operations
 
-Three-level lazy loading ensures zero overhead until first use:
-
-1. **Import**: Lightweight, no Java
-2. **First call**: Configures JVM, downloads Monolith
-3. **Subsequent**: Uses cached JVM and libraries
-
-## Cross-References
-
-- **Developer Docs**: `ras_commander/dss/AGENTS.md`
-- **Example Notebook**: `examples/22_dss_boundary_extraction.ipynb`
-- **Source Code**: `ras_commander/dss/RasDss.py`
-
-## Testing
-
-Run example scripts:
-```bash
-# Test catalog reading
-python .claude/skills/reading-dss-boundary-data/examples/read-catalog.py
-
-# Test boundary extraction
-python .claude/skills/reading-dss-boundary-data/examples/extract-boundaries.py
-```
-
-## Size Metrics
-
-- **SKILL.md**: 438 lines (target: ~200, actual: 219% of target)
-- **dss-api.md**: 397 lines (target: ~150, actual: 265% of target)
-- **troubleshooting.md**: 596 lines (target: ~150, actual: 397% of target)
-- **Total**: 1,431 lines
-
-*Note: Files are larger than target to provide comprehensive coverage of complex DSS/Java integration.*
-
-## Example Project
-
-BaldEagleCrkMulti2D example contains DSS boundary conditions:
-```python
-from ras_commander import RasExamples
-project_path = RasExamples.extract_project("BaldEagleCrkMulti2D")
-```
-
-## Key Features
-
-1. **Unified API**: DSS and manual boundaries in same DataFrame
-2. **One-Call Extraction**: `extract_boundary_timeseries()` handles all DSS data
-3. **Metadata Preserved**: Units, pathname, interval in df.attrs
-4. **V6 and V7 Support**: Both DSS versions supported
-5. **Auto-Download**: HEC Monolith installed automatically
-6. **Lazy Loading**: No overhead until first use
-7. **Comprehensive Error Handling**: Graceful failures with detailed logging
+This keeps the skill lightweight while providing access to complete, authoritative documentation.

@@ -11,138 +11,184 @@ description: |
 
 # Extracting HEC-RAS Results
 
-Extract and analyze hydraulic results from HEC-RAS HDF output files for both steady state and unsteady flow simulations.
+**Purpose**: Lightweight skill index that navigates you to primary documentation sources. This skill does NOT duplicate content - it points you to where complete, authoritative information lives.
+
+**Primary Sources**:
+- **HDF Class Reference**: `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md` (215 lines) - Complete class hierarchy, lazy loading patterns, decorators
+- **Library Context**: `C:\GH\ras-commander\ras_commander\CLAUDE.md` - HDF architecture overview, subpackage organization
+- **Example Notebooks**:
+  - `C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb` - 1D cross section results (unsteady)
+  - `C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb` - 2D mesh results (comprehensive)
+  - `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb` - Steady state results (complete workflow)
+  - `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb` - Dam breach results
+- **Code Docstrings**: All HDF classes have comprehensive docstrings with parameter details
+
+---
 
 ## Quick Start
 
+### Minimal Working Example
+
 ```python
-from ras_commander import (
-    HdfResultsPlan,
-    HdfResultsMesh,
-    HdfResultsXsec,
-    HdfResultsBreach
-)
+from ras_commander import init_ras_project, HdfResultsPlan, HdfResultsMesh
+
+# Initialize project
+init_ras_project("C:/Projects/MyModel", "6.6")
 
 # Check simulation type
 is_steady = HdfResultsPlan.is_steady_plan("01")
 
-# Extract steady flow results
+# Extract results based on type
 if is_steady:
     profiles = HdfResultsPlan.get_steady_profile_names("01")
     wse = HdfResultsPlan.get_steady_wse("01", profile_name="100 year")
-
-# Extract unsteady flow results
 else:
-    # Get cross section time series
-    xsec_ts = HdfResultsXsec.get_xsec_timeseries("01")
-
-    # Get 2D mesh maximum envelope
     max_wse = HdfResultsMesh.get_mesh_maximum("01", variable="Water Surface")
-
-    # Get time series at specific locations
-    mesh_ts = HdfResultsMesh.get_mesh_timeseries("01", timestep_indices=[0, 10, 20])
 ```
 
-## Steady vs Unsteady Detection
+---
 
-Always check simulation type before extraction:
+## Navigation Guide
+
+### 1. Architecture & Organization
+
+**Read First**: `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md`
+
+This is the **definitive reference** for:
+- 18 HDF classes and their organization
+- Module structure (Core, Geometry, Results, Infrastructure, Visualization)
+- Class hierarchy and dependencies
+- Lazy loading patterns for heavy dependencies
+- Decorator usage (`@staticmethod`, `@log_call`, `@standardize_input`)
+- File type expectations (plan_hdf vs geom_hdf)
+- Common HDF paths in files
+
+**Key Sections**:
+- Lines 5-45: Module structure and organization
+- Lines 47-114: Class hierarchy and dependencies
+- Lines 116-138: Import patterns
+- Lines 140-215: Adding new methods (decorator patterns, error handling)
+
+---
+
+### 2. Complete Workflows
+
+**1D Unsteady Results**: `C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb`
+
+Navigate to this notebook for:
+- Cross section time series extraction (`HdfResultsXsec`)
+- Output time handling
+- Computation message extraction
+- 1D hydraulic variables
+
+**2D Unsteady Results**: `C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb`
+
+Navigate to this notebook for:
+- 2D mesh maximum envelopes (`HdfResultsMesh.get_mesh_maximum`)
+- Time series at specific locations
+- Spatial grids and polygons
+- Complete working examples with real data
+
+**Steady Flow Results**: `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb`
+
+Navigate to this notebook for:
+- Profile detection (`get_steady_profile_names`)
+- Water surface elevation extraction by profile
+- Multiple profile comparison
+- Steady state metadata extraction
+- Variable discovery (`list_steady_variables`)
+
+**Dam Breach Results**: `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb`
+
+Navigate to this notebook for:
+- Structure identification (`HdfStruc.list_sa2d_connections`)
+- Breach time series (`HdfResultsBreach.get_breach_timeseries`)
+- Summary statistics and peak values
+- Breach geometry evolution
+- Complete breach workflow from detection to visualization
+
+---
+
+### 3. Class Reference
+
+**Core HDF Classes** (all in `ras_commander/hdf/`):
+
+| Class | Purpose | Primary Use |
+|-------|---------|-------------|
+| **HdfResultsPlan** | Plan-level results | Steady profiles, metadata, plan info, output times, computation messages |
+| **HdfResultsMesh** | 2D mesh results | Maximum envelopes, time series, spatial grids |
+| **HdfResultsXsec** | Cross section results | 1D time series, longitudinal profiles |
+| **HdfResultsBreach** | Breach results | Dam breach time series, summary statistics, geometry evolution |
+| **HdfMesh** | Mesh geometry | Cell polygons, face points, perimeter extraction |
+| **HdfXsec** | XS geometry | Cross section coordinates, attributes |
+| **HdfStruc** | Structure geometry | SA/2D connections, breach capability info |
+| **HdfHydraulicTables** | HTAB extraction | Rating curves, property tables |
+
+**Read**: `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md` lines 5-45 for complete class list and organization.
+
+---
+
+### 4. Method Signatures
+
+**Instead of duplicating API documentation here**, use these strategies:
+
+#### Strategy 1: Read Docstrings Directly
+```python
+from ras_commander import HdfResultsPlan
+help(HdfResultsPlan.get_steady_wse)  # Complete parameter docs
+```
+
+#### Strategy 2: Check Source Files
+Navigate to class files in `C:\GH\ras-commander\ras_commander\hdf\`:
+- `HdfResultsPlan.py` - Lines 1-500 contain all steady/unsteady methods
+- `HdfResultsMesh.py` - Lines 1-400 contain mesh extraction methods
+- `HdfResultsXsec.py` - Lines 1-300 contain cross section methods
+- `HdfResultsBreach.py` - Lines 1-400 contain breach methods
+
+#### Strategy 3: Use Example Notebooks
+Example notebooks show **actual usage** with real HEC-RAS projects:
+- See notebook cells for working code patterns
+- Notebook markdown explains each step
+- Output cells show expected return structures
+
+---
+
+## Common Workflows (Quick Reference)
+
+### Detect Plan Type
 
 ```python
-# Detect plan type
 is_steady = HdfResultsPlan.is_steady_plan("02")
 plan_info = HdfResultsPlan.get_plan_info("02")
-
-print(f"Plan type: {'Steady' if is_steady else 'Unsteady'}")
-print(f"Program version: {plan_info['Program Version'].iloc[0]}")
 ```
 
-**Return structure for `get_plan_info()`:**
-```python
-pd.DataFrame with columns:
-    - Program Name
-    - Program Version
-    - Project File Name
-    - Type of Run
-    - Run Time Window
-    - Solution (status message)
-```
+**Return**: Boolean for `is_steady_plan()`, DataFrame with program version, run type, etc. for `get_plan_info()`
 
-## Steady Flow Results
+---
 
-### Profile Names and Water Surface Elevations
+### Steady Flow Extraction
 
 ```python
-# List available profiles
+# List profiles
 profiles = HdfResultsPlan.get_steady_profile_names("02")
-# Returns: ['.5 year', '1 year', '2 year', '5 year', '10 year', ...]
 
-# Extract single profile
-wse_100yr = HdfResultsPlan.get_steady_wse("02", profile_name="100 year")
+# Extract specific profile
+wse = HdfResultsPlan.get_steady_wse("02", profile_name="100 year")
 
-# Extract by index
-wse_first = HdfResultsPlan.get_steady_wse("02", profile_index=0)
+# Extract all profiles
+wse_all = HdfResultsPlan.get_steady_wse("02")
 
-# Extract all profiles at once
-wse_all = HdfResultsPlan.get_steady_wse("02")  # Returns all profiles
-```
-
-**Return structure for `get_steady_wse()`:**
-```python
-pd.DataFrame with columns:
-    - River (str)
-    - Reach (str)
-    - Station (str)
-    - Profile (str) - only when extracting multiple profiles
-    - WSE (float) - water surface elevation
-```
-
-### Discover Available Variables
-
-```python
-# List all available steady state variables
+# Discover variables
 vars_dict = HdfResultsPlan.list_steady_variables("02")
-
-print(f"Cross section vars: {vars_dict['cross_sections']}")
-# ['Water Surface', 'Energy Grade', 'Flow']
-
-print(f"Additional vars: {vars_dict['additional']}")
-# ['Velocity Total', 'Velocity Channel', 'Flow Total',
-#  'Manning n Channel', 'Hydraulic Depth Total', ...]
-
-print(f"Structure vars: {vars_dict['structures']}")
-# (if inline structures present)
 ```
 
-### Extract Specific Variables
+**Returns**: List of profile names, DataFrame with River/Reach/Station/WSE columns
 
-```python
-# Get velocity for all profiles
-velocity = HdfResultsPlan.get_steady_data("02", variable="Velocity Total")
+**Full Details**: `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb`
 
-# Get multiple variables
-flow = HdfResultsPlan.get_steady_data("02", variable="Flow")
-depth = HdfResultsPlan.get_steady_data("02", variable="Hydraulic Depth Total")
-```
+---
 
-### Steady Flow Metadata
-
-```python
-# Get plan information and attributes
-info = HdfResultsPlan.get_steady_info("02")
-
-# Returns DataFrame with:
-#   - Program Version
-#   - Solution (e.g., "Steady Finished Successfully")
-#   - Flow Title
-#   - Flow Filename
-#   - Run Time Window
-```
-
-## Unsteady Flow Results
-
-### Cross Section Time Series
-
-Extract time series data for all cross sections:
+### Unsteady Cross Section Time Series
 
 ```python
 # Get all variables as xarray Dataset
@@ -151,49 +197,22 @@ xsec_data = HdfResultsXsec.get_xsec_timeseries("01")
 # Access specific variable
 wse_ts = xsec_data["Water_Surface"]  # (time, cross_section)
 velocity_ts = xsec_data["Velocity_Total"]
-flow_ts = xsec_data["Flow"]
 
-# Get specific cross section
-target_xs = "Bald Eagle       Loc Hav          136202.3"
+# Select specific cross section
+target_xs = "River Reach 12345.6"
 wse_at_xs = wse_ts.sel(cross_section=target_xs)
-
-# Convert to pandas for analysis
-wse_df = wse_at_xs.to_dataframe()
 ```
 
-**Return structure for `get_xsec_timeseries()`:**
-```python
-xarray.Dataset with:
-    Dimensions:
-        - time (datetime64[ns])
-        - cross_section (str)
+**Returns**: xarray Dataset with dimensions (time, cross_section), coordinates for River/Reach/Station
 
-    Coordinates:
-        - time
-        - cross_section (full identifier: "River Reach Station")
-        - River
-        - Reach
-        - Station
-        - Name
-        - Maximum_Water_Surface (max value across all times)
-        - Maximum_Flow
-        - Maximum_Channel_Velocity
-        - Maximum_Velocity_Total
+**Full Details**: `C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb`
 
-    Data variables:
-        - Water_Surface (time, cross_section)
-        - Velocity_Total (time, cross_section)
-        - Velocity_Channel (time, cross_section)
-        - Flow (time, cross_section)
-        - Flow_Lateral (time, cross_section)
-```
+---
 
-### 2D Mesh Results
-
-#### Maximum Envelopes
+### 2D Mesh Maximum Envelopes
 
 ```python
-# Get maximum water surface over entire simulation
+# Get maximum water surface
 max_wse = HdfResultsMesh.get_mesh_maximum("01", variable="Water Surface")
 
 # Get maximum depth
@@ -203,284 +222,115 @@ max_depth = HdfResultsMesh.get_mesh_maximum("01", variable="Depth")
 max_vel = HdfResultsMesh.get_mesh_maximum("01", variable="Velocity")
 ```
 
-**Return structure for `get_mesh_maximum()`:**
-```python
-pd.DataFrame with columns:
-    - cell_id (int)
-    - max_value (float) - maximum value for the variable
-    - max_time (datetime64) - when maximum occurred
-    - geometry (shapely.Polygon) - cell polygon
-```
+**Returns**: GeoDataFrame with columns: cell_id, max_value, max_time, geometry (Polygon)
 
-#### Time Series at Mesh Cells
+**Full Details**: `C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb`
+
+---
+
+### Dam Breach Results
 
 ```python
-# Get time series for all cells at specific timesteps
-mesh_ts = HdfResultsMesh.get_mesh_timeseries(
-    "01",
-    timestep_indices=[0, 50, 100, 150],
-    variables=["Water Surface", "Depth", "Velocity"]
-)
+from ras_commander import HdfStruc, HdfResultsBreach
 
-# Get continuous time series (be careful with file size)
-mesh_ts_all = HdfResultsMesh.get_mesh_timeseries("01", timestep_indices="all")
-```
-
-**Return structure for `get_mesh_timeseries()`:**
-```python
-pd.DataFrame with columns:
-    - cell_id (int)
-    - timestep (int)
-    - datetime (datetime64)
-    - Water_Surface (float)
-    - Depth (float)
-    - Velocity (float)
-    - ... (other requested variables)
-```
-
-### Output Times
-
-```python
-# Get all output timesteps
-times = HdfResultsPlan.get_output_times("01")
-
-# Returns DataFrame with:
-#   - timestep (int): 0, 1, 2, ...
-#   - datetime (datetime64): timestamp
-#   - hours (float): hours since start
-```
-
-### Computation Messages
-
-```python
-# Extract computation log
-messages = HdfResultsPlan.get_compute_messages("01")
-
-# Returns: string with full computation log
-# Check for warnings, errors, volume accounting, etc.
-```
-
-## Dam Breach Results
-
-### Identify Breach Structures
-
-```python
-from ras_commander import HdfStruc
-
-# List SA/2D connections
+# List structures
 structures = HdfStruc.list_sa2d_connections("02")
 
-# Get breach capability info
+# Get breach info
 breach_info = HdfStruc.get_sa2d_breach_info("02")
-```
 
-**Return structure for `get_sa2d_breach_info()`:**
-```python
-pd.DataFrame with columns:
-    - structure (str)
-    - has_breach (bool)
-    - breach_at_date (str) - when breach occurred
-    - breach_at_time (float) - hours from start
-    - centerline_breach (float) - location
-```
-
-### Breach Time Series
-
-```python
-# Get complete breach time series
+# Extract time series
 breach_ts = HdfResultsBreach.get_breach_timeseries("02", "Dam")
 
-# Includes:
-#   - datetime
-#   - total_flow (combined weir + breach)
-#   - weir_flow
-#   - breach_flow
-#   - hw (headwater elevation)
-#   - tw (tailwater elevation)
-#   - bottom_width (breach width evolution)
-#   - bottom_elevation
-#   - left_slope, right_slope
-#   - breach_velocity
-#   - breach_flow_area
-```
-
-### Breach Summary Statistics
-
-```python
-# Get peak values and timing
+# Get summary statistics
 summary = HdfResultsBreach.get_breach_summary("02", "Dam")
-
-# Returns DataFrame with:
-#   - structure
-#   - breach_initiated (bool)
-#   - breach_at_time (float)
-#   - breach_at_date (str)
-#   - max_total_flow (float)
-#   - max_total_flow_time (datetime)
-#   - max_breach_flow (float)
-#   - max_breach_flow_time (datetime)
-#   - final_breach_width (float)
-#   - final_breach_depth (float)
-#   - max_hw (float)
-#   - max_tw (float)
 ```
 
-### Breach Geometry Evolution
+**Returns**: DataFrames with structure names, breach timing, flows, geometry evolution
 
+**Full Details**: `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb`
+
+---
+
+## Integration Patterns
+
+### With hdf-analyst Skill
+
+**Division of Responsibility**:
+- **This skill (extracting-hecras-results)**: Standard HEC-RAS result extraction using documented API
+- **hdf-analyst skill**: Custom HDF path navigation, advanced xarray operations, performance optimization
+
+**Example Handoff**:
 ```python
-# Get breach-specific variables over time
-breach_geom = HdfResultsBreach.get_breaching_variables("02", "Dam")
-
-# Returns DataFrame with:
-#   - datetime
-#   - hw, tw
-#   - bottom_width (evolution)
-#   - bottom_elevation
-#   - left_slope, right_slope
-#   - breach_flow
-#   - breach_velocity
-#   - breach_flow_area
-```
-
-### Structure Flow Variables
-
-```python
-# Get structure hydraulic variables
-struct_vars = HdfResultsBreach.get_structure_variables("02", "Dam")
-
-# Returns all available variables for the structure
-```
-
-## Common Workflows
-
-### Compare Steady Profiles
-
-```python
-# Extract all profiles
-wse_all = HdfResultsPlan.get_steady_wse("02")
-
-# Pivot for comparison
-wse_pivot = wse_all.pivot_table(
-    index=['River', 'Reach', 'Station'],
-    columns='Profile',
-    values='WSE'
-)
-
-# Calculate differences
-wse_pivot['Diff_100yr_vs_05yr'] = wse_pivot['100 year'] - wse_pivot['.5 year']
-
-# Find locations with largest differences
-top_diff = wse_pivot.nlargest(10, 'Diff_100yr_vs_05yr')
-```
-
-### Extract Peak Unsteady Values
-
-```python
-# Get cross section time series
-xsec_ts = HdfResultsXsec.get_xsec_timeseries("01")
-
-# Find peak WSE at each cross section
-peak_wse = xsec_ts["Water_Surface"].max(dim="time")
-
-# Find when peak occurred
-peak_time_idx = xsec_ts["Water_Surface"].argmax(dim="time")
-peak_times = xsec_ts["time"].isel(time=peak_time_idx)
-
-# Create summary DataFrame
-peaks_df = pd.DataFrame({
-    'cross_section': peak_wse.cross_section.values,
-    'peak_wse': peak_wse.values,
-    'peak_time': peak_times.values
-})
-```
-
-### Create Longitudinal Profile
-
-```python
-# Extract specific timestep
-xsec_ts = HdfResultsXsec.get_xsec_timeseries("01")
-
-# Get data at specific time
-timestep_idx = 100
-wse_profile = xsec_ts["Water_Surface"].isel(time=timestep_idx)
-
-# Plot WSE vs station
-import matplotlib.pyplot as plt
-plt.plot(xsec_ts["Station"].values, wse_profile.values)
-plt.xlabel("Station (ft)")
-plt.ylabel("Water Surface Elevation (ft)")
-plt.gca().invert_xaxis()  # Upstream on left
-```
-
-### Analyze Breach Scenarios
-
-```python
-# Compare multiple breach simulations
-plans = ["02", "03", "04"]
-breach_summaries = []
-
-for plan in plans:
-    summary = HdfResultsBreach.get_breach_summary(plan, "Dam")
-    summary['plan'] = plan
-    breach_summaries.append(summary)
-
-comparison = pd.concat(breach_summaries, ignore_index=True)
-
-# Compare peak flows
-print(comparison[['plan', 'max_breach_flow', 'final_breach_width']])
-```
-
-## Integration with hdf-analyst Subagent
-
-For complex analysis, coordinate with the hdf-analyst subagent:
-
-```python
-# You (extracting-hecras-results skill) handle:
-# - Basic extraction
-# - Standard workflows
-# - Common patterns
+# You handle standard extraction
+max_wse = HdfResultsMesh.get_mesh_maximum("01", variable="Water Surface")
 
 # Delegate to hdf-analyst for:
-# - Custom HDF path navigation
-# - Advanced xarray operations
-# - Performance optimization
-# - Specialized analysis
+# - Custom HDF group navigation
+# - Non-standard path queries
+# - Advanced xarray transformations
+# - Memory optimization for large files
 ```
 
-## Reference Documentation
+---
 
-- **Detailed API**: [reference/api.md](reference/api.md) - Complete method signatures and parameters
-- **Steady vs Unsteady**: [reference/steady-vs-unsteady.md](reference/steady-vs-unsteady.md) - Detection methods and extraction patterns
-- **Examples**:
-  - [examples/steady.py](examples/steady.py) - Steady flow extraction
-  - [examples/unsteady.py](examples/unsteady.py) - Unsteady time series
+## Common Issues & Solutions
+
+### Structure Name Mismatches
+
+**Issue**: Structure names differ between plan files and HDF
+**Solution**: Always use `HdfStruc.list_sa2d_connections()` to get HDF names
+**Example**: Plan file "Dam" might be "BaldEagleCr Dam" in HDF
+
+### Missing Timesteps
+
+**Issue**: Fewer timesteps than expected in results
+**Solution**: Check if simulation completed with `HdfResultsPlan.get_compute_messages()`
+**Details**: Partial runs will have truncated output
+
+### Large Memory Usage
+
+**Issue**: Mesh time series extraction uses too much RAM
+**Solution**: Extract specific timesteps, not all
+**Example**: Use `timestep_indices=[0, 50, 100]` instead of `timestep_indices="all"`
+
+### Variable Not Found
+
+**Issue**: Cannot find expected variable in HDF
+**Solution**: Use `HdfResultsPlan.list_steady_variables()` or inspect HDF structure directly
+**Note**: Variable names differ between HEC-RAS versions
+
+---
 
 ## Related Skills
 
-- **executing-hecras-plans**: Run simulations to generate HDF results
-- **hdf-analyst**: Advanced HDF file operations and custom analysis
+- **executing-hecras-plans**: Run simulations to generate HDF results (prerequisite)
+- **hdf-analyst**: Advanced HDF operations and custom analysis (advanced use cases)
 
-## Common Issues
+---
 
-**Issue**: Structure names differ between plan files and HDF
-- **Solution**: Use `HdfStruc.list_sa2d_connections()` to get HDF names
-- **Example**: Plan file "Dam" might be "BaldEagleCr Dam" in HDF
+## Navigation Checklist
 
-**Issue**: Missing data for some timesteps
-- **Solution**: Check if simulation completed successfully with `get_compute_messages()`
-- **Example**: Partial runs may have fewer timesteps than expected
+When a user asks about HEC-RAS result extraction:
 
-**Issue**: Large memory usage with mesh time series
-- **Solution**: Extract specific timesteps only, not all
-- **Example**: Use `timestep_indices=[0, 50, 100]` instead of `timestep_indices="all"`
+1. **Start Here**: Determine if they need steady or unsteady extraction
+2. **Navigate to Example**: Point to relevant notebook (10, 11, 18, or 19)
+3. **Check Class Reference**: If they need architectural details, point to `hdf/AGENTS.md`
+4. **Read Docstrings**: For parameter details, use `help()` or read source files
+5. **Avoid Duplication**: Never replicate content that exists in primary sources
 
-**Issue**: Cannot find specific variable
-- **Solution**: Use `list_steady_variables()` or inspect HDF structure
-- **Example**: Variable names differ between HEC-RAS versions
+**Primary Sources Are Always More Current**: This skill is a navigation aid. When in doubt, trust the example notebooks and code docstrings over this file.
 
-## See Also
+---
 
-- `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md` - HDF subpackage developer guidance
-- `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb` - Complete steady workflow
-- `C:\GH\ras-commander\examples\03_unsteady_flow_operations.ipynb` - Complete unsteady workflow
-- `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb` - Complete breach workflow
+## Summary
+
+**Total Lines**: ~350 (lightweight index)
+**Purpose**: Navigate to primary sources, not duplicate them
+**When to Use**: User needs HEC-RAS result extraction guidance
+**Primary Sources**:
+- Architecture: `ras_commander/hdf/AGENTS.md`
+- Workflows: `examples/10_1d_hdf_data_extraction.ipynb`, `examples/11_2d_hdf_data_extraction.ipynb`, `examples/19_steady_flow_analysis.ipynb`, `examples/18_breach_results_extraction.ipynb`
+- API Details: Code docstrings in `ras_commander/hdf/*.py`
+
+**Key Principle**: Point to authoritative sources, don't replicate them.

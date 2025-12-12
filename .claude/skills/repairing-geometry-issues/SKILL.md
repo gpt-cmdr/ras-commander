@@ -24,172 +24,88 @@ triggers:
   - "model validation"
   - "USACE"
   - "cHECk-RAS"
-version: 1.0.0
+version: 2.0.0
 ---
 
 # Repairing Geometry Issues
 
-Expert guidance for detecting, fixing, and validating HEC-RAS geometry issues using ras-commander's RasCheck and RasFixit modules.
+**Lightweight skill for navigating ras-commander's geometry checking and repair capabilities.**
 
-## Quick Start
+This skill provides quick navigation to primary sources for RasCheck (validation) and RasFixit (repair). **Do not duplicate content from primary sources** - this file serves as an index only.
+
+## Primary Sources (Read These First)
+
+### Quality Validation (RasCheck)
+**C:\GH\ras-commander\ras_commander\check\CLAUDE.md** (262 lines)
+- 5 comprehensive checks (NT, XS, Structure, Floodway, Profiles)
+- FEMA/USACE standards implementation
+- Custom thresholds and state-specific surcharge limits
+- Report generation (HTML, CSV, JSON)
+
+### Automated Repair (RasFixit)
+**C:\GH\ras-commander\ras_commander\fixit\AGENTS.md** (119 lines)
+- Blocked obstruction repair algorithm
+- 0.02-unit gap insertion requirement
+- Elevation envelope details
+- Module organization and patterns
+
+### Complete Workflows
+**C:\GH\ras-commander\examples\27_fixit_blocked_obstructions.ipynb**
+- RasFixit demonstration with visualizations
+- Before/after comparison workflow
+- Engineering review requirements
+
+**C:\GH\ras-commander\examples\28_quality_assurance_rascheck.ipynb**
+- RasCheck validation workflow
+- Multi-check execution and reporting
+- Custom threshold configuration
+
+## Quick Start Patterns
+
+### Check → Fix → Verify Workflow
 
 ```python
-from ras_commander import RasFixit, RasCheck
+from ras_commander import RasCheck, RasFixit
 
-# 1. Check for issues
+# 1. CHECK: Detect issues
 results = RasCheck.run_all("01")
-
-# 2. Fix blocked obstructions (if detected)
-fix_results = RasFixit.fix_blocked_obstructions(
-    "model.g01",
-    backup=True,      # Create timestamped backup
-    visualize=True    # Generate before/after PNGs
-)
-
-# 3. Verify fixes
-final_results = RasCheck.run_all("01")
-```
-
-## When to Use This Skill
-
-Use when:
-- HEC-RAS geometry preprocessing fails
-- Need to validate model quality (FEMA/USACE standards)
-- Fixing overlapping blocked obstructions
-- Preparing models for peer review or submission
-- Ensuring FEMA Base Level Engineering compliance
-- Detecting Manning's n or cross section issues
-- Validating structure (bridge/culvert) geometry
-- Checking floodway surcharge limits
-- Need audit trail and visualizations for engineering review
-
-## Core Workflow: Check → Fix → Verify
-
-The geometry repair workflow follows three steps:
-
-### 1. Check (Detection)
-
-Use **RasCheck** to detect issues:
-```python
-from ras_commander.check import RasCheck
-
-# Run all checks
-results = RasCheck.run_all("01")
-
-# Or run specific checks
-nt_results = RasCheck.check_nt(geom_hdf)       # Manning's n
-xs_results = RasCheck.check_xs(geom_hdf)       # Cross sections
-struct_results = RasCheck.check_structures(geom_hdf)  # Bridges/culverts
-```
-
-### 2. Fix (Repair)
-
-Use **RasFixit** to repair detected issues:
-```python
-from ras_commander import RasFixit
-
-# Fix blocked obstructions (most common issue)
-fix_results = RasFixit.fix_blocked_obstructions(
-    "model.g01",
-    backup=True,      # ALWAYS create backup
-    visualize=True    # ALWAYS generate verification PNGs
-)
-
-# Non-destructive detection only (dry run)
-detect_results = RasFixit.detect_obstruction_overlaps("model.g01")
-```
-
-### 3. Verify (Validation)
-
-Re-run checks to confirm fixes:
-```python
-# Verify no overlaps remain
-verify_results = RasFixit.detect_obstruction_overlaps("model.g01")
-if verify_results.total_xs_fixed == 0:
-    print("SUCCESS: All obstructions fixed!")
-
-# Run full quality validation
-final_results = RasCheck.run_all("01")
-```
-
-## RasCheck: Quality Validation
-
-### Check Categories
-
-RasCheck implements **5 comprehensive validation checks** based on FEMA's cHECk-RAS tool:
-
-| Check Type | Function | Validates |
-|------------|----------|-----------|
-| **NT Check** | `check_nt()` | Manning's n, transition coefficients |
-| **XS Check** | `check_xs()` | Cross section spacing, station ordering, reach lengths |
-| **Structure Check** | `check_structures()` | Bridges, culverts, inline weirs |
-| **Floodway Check** | `check_floodways()` | Surcharge limits, encroachment methods |
-| **Profiles Check** | `check_profiles()` | WSE ordering, discharge consistency |
-
-### Running Validation Checks
-
-**All checks at once** (recommended):
-```python
-results = RasCheck.run_all("01")
-
-print(f"Total messages: {len(results.messages)}")
 print(f"Errors: {results.get_error_count()}")
 print(f"Warnings: {results.get_warning_count()}")
-```
 
-**Individual checks** (for targeted validation):
-```python
-# Get HDF paths from plan
-plan_row = ras.plan_df[ras.plan_df['plan_number'] == "01"].iloc[0]
-geom_hdf = Path(plan_row['Geom Path']).with_suffix('.hdf')
-
-# Run specific check
-nt_results = RasCheck.check_nt(geom_hdf)
-```
-
-### Analyzing Results
-
-**Convert to DataFrame**:
-```python
-df = results.to_dataframe()
-
-# Filter by severity
-errors = df[df['severity'] == 'ERROR']
-warnings = df[df['severity'] == 'WARNING']
-
-# Filter by check type
-nt_issues = df[df['check_type'] == 'NT']
-
-# Filter by station
-station_issues = df[df['station'] == '12345.67']
-```
-
-**Generate reports**:
-```python
-from ras_commander.check import ReportMetadata
-
-# HTML report with metadata
-metadata = ReportMetadata(
-    project_name=ras.project_name,
-    plan_number="01",
-    checked_by="Engineer Name"
+# 2. FIX: Repair blocked obstructions (if detected)
+fix_results = RasFixit.fix_blocked_obstructions(
+    "model.g01",
+    backup=True,      # ALWAYS create timestamped backup
+    visualize=True    # ALWAYS generate verification PNGs
 )
-results.to_html("validation_report.html", metadata=metadata)
+print(f"Fixed {fix_results.total_xs_fixed} cross sections")
 
-# CSV export for Excel
-df.to_csv("validation_messages.csv", index=False)
+# 3. VERIFY: Confirm repairs
+verify_results = RasCheck.run_all("01")
 ```
 
-### Custom Thresholds
+### Detection Only (Non-Destructive)
 
-Override default FEMA/USACE standards:
+```python
+# Detect overlaps without modifying files
+detect_results = RasFixit.detect_obstruction_overlaps("model.g01")
+print(f"Cross sections with overlaps: {detect_results.total_xs_fixed}")
+
+# Review affected stations
+for msg in detect_results.messages:
+    print(f"RS {msg.station}: {msg.original_count} → {msg.fixed_count}")
+```
+
+### Custom Validation Thresholds
+
 ```python
 from ras_commander.check import create_custom_thresholds
 
+# Override FEMA defaults for stricter standards
 custom = create_custom_thresholds({
     'mannings_n.overbank_max': 0.150,        # Stricter limit
     'reach_length.max_length_ft': 2000.0,    # More conservative
-    'transitions.normal_contraction': 0.1,   # Custom coefficient
+    'floodway.surcharge_ft': 0.5,            # USACE standard (vs 1.0 ft FEMA)
 })
 
 results = RasCheck.run_all("01", thresholds=custom)
@@ -197,12 +113,11 @@ results = RasCheck.run_all("01", thresholds=custom)
 
 ### State-Specific Standards
 
-Use state-specific floodway surcharge limits:
 ```python
 from ras_commander.check import get_state_surcharge_limit
 
-# Illinois uses stricter 0.1 ft limit (vs FEMA's 1.0 ft)
-il_limit = get_state_surcharge_limit('IL')  # Returns 0.1
+# Use state-specific floodway surcharge limits
+il_limit = get_state_surcharge_limit('IL')  # Returns 0.1 ft (vs FEMA 1.0 ft)
 
 results = RasCheck.run_all(
     "01",
@@ -211,78 +126,39 @@ results = RasCheck.run_all(
 )
 ```
 
-States with non-standard limits:
-- **IL**: 0.1 ft
-- **WI**: 0.0 ft (no surcharge allowed)
-- **MN**: 0.5 ft
-- **NJ**: 0.2 ft
-- **MI, IN, OH**: 0.5 ft
-- **Default (TX, most states)**: 1.0 ft
+### Report Generation
 
-## RasFixit: Automated Repair
-
-### Blocked Obstruction Repair
-
-**Problem**: Overlapping or adjacent blocked obstructions cause HEC-RAS preprocessing errors.
-
-**Solution**: Elevation envelope algorithm with 0.02-unit gap insertion.
-
-### Fix Workflow
-
-**Step 1: Detect issues** (non-destructive):
 ```python
-results = RasFixit.detect_obstruction_overlaps("model.g01")
+from ras_commander.check import ReportMetadata
 
-print(f"Cross sections checked: {results.total_xs_checked}")
-print(f"Cross sections with overlaps: {results.total_xs_fixed}")
-
-# Review affected stations
-for msg in results.messages:
-    print(f"RS {msg.station}: {msg.original_count} → {msg.fixed_count}")
-```
-
-**Step 2: Apply fixes**:
-```python
-fix_results = RasFixit.fix_blocked_obstructions(
-    "model.g01",
-    backup=True,      # Creates .g01.backup_YYYYMMDD_HHMMSS
-    visualize=True    # Creates folder with before/after PNGs
+# Generate HTML report with metadata
+metadata = ReportMetadata(
+    project_name=ras.project_name,
+    plan_number="01",
+    checked_by="Engineer Name"
 )
+results.to_html("validation_report.html", metadata=metadata)
 
-print(f"Fixed {fix_results.total_xs_fixed} cross sections")
-print(f"Backup: {fix_results.backup_path}")
-print(f"Visualizations: {fix_results.visualization_folder}")
+# Export to CSV for Excel analysis
+df = results.to_dataframe()
+df.to_csv("validation_messages.csv", index=False)
 ```
 
-**Step 3: Review visualizations**:
-```python
-# View PNG visualizations for engineering review
-import matplotlib.pyplot as plt
-from matplotlib.image import imread
+## Critical Technical Details
 
-png_files = sorted(fix_results.visualization_folder.glob("*.png"))
-for png_file in png_files[:3]:  # First 3 stations
-    img = imread(png_file)
-    plt.figure(figsize=(14, 10))
-    plt.imshow(img)
-    plt.axis('off')
-    plt.title(png_file.name)
-    plt.show()
-```
+### Blocked Obstruction Algorithm (Elevation Envelope)
 
-**Step 4: Export audit trail**:
-```python
-# Export to CSV for documentation
-df = fix_results.to_dataframe()
-df.to_csv("obstruction_fixes.csv", index=False)
-```
+**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (lines 40-60)
 
-### Elevation Envelope Algorithm
+**CRITICAL WARNING - 0.02-Unit Gap Requirement**:
+- HEC-RAS **REQUIRES** minimum 0.02-unit separation between adjacent obstructions
+- This is a hard requirement in the HEC-RAS geometry preprocessor
+- The gap size is defined in `obstructions.py` as `GAP_SIZE = 0.02`
+- **DO NOT modify this constant** - changing it will cause preprocessing failures
 
-The repair algorithm is **hydraulically conservative**:
-
+**Algorithm Steps**:
 1. **Collect critical stations**: All start/end points of obstructions
-2. **Maximum elevation wins**: In overlap zones, use highest elevation (most restrictive)
+2. **Maximum elevation wins**: In overlap zones, use highest elevation (hydraulically conservative)
 3. **Merge adjacent segments**: Combine segments with same elevation
 4. **Insert 0.02-unit gaps**: Minimum separation where elevations differ
 
@@ -292,74 +168,96 @@ Original (overlapping):
   Segment 1: 100.0 - 200.0 ft, elev 35.0
   Segment 2: 150.0 - 250.0 ft, elev 36.0
 
-Fixed (elevation envelope with gap):
+Fixed (elevation envelope with 0.02 gap):
   Segment 1: 100.0 - 150.0 ft, elev 35.0
   Segment 2: 150.02 - 250.0 ft, elev 36.0  # 0.02 gap inserted
 ```
 
-### Fix Results Data Structure
+### Fixed-Width FORTRAN Parsing
 
-**FixResults** contains:
-- `total_xs_checked`: Cross sections scanned
-- `total_xs_fixed`: Cross sections modified
-- `messages`: List of FixMessage objects
-- `backup_path`: Path to timestamped backup
-- `visualization_folder`: Path to PNG folder
+**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (lines 53-56)
 
-**FixMessage** contains:
-- `station`: River station (e.g., "12345.67")
-- `action`: FixAction enum (OVERLAP_RESOLVED, GAP_INSERTED, etc.)
-- `original_data`: List of original (start, end, elev) tuples
-- `fixed_data`: List of fixed (start, end, elev) tuples
-- `original_count`: Number of original obstructions
-- `fixed_count`: Number of fixed obstructions
+- HEC-RAS geometry files use 8-character fixed-width columns
+- `FIELD_WIDTH = 8` constant must not be changed
+- Overflow handled with asterisks (`********`)
+- Section terminators: `Bank Sta=`, `#XS Ineff=`, `#Mann=`, `XS Rating Curve=`, `XS HTab`, `Exp/Cntr=`
 
-## Log Parsing for Automated Workflows
+## When to Use This Skill
 
-Detect errors from HEC-RAS compute logs:
+**Use for**:
+- HEC-RAS geometry preprocessing failures
+- FEMA/USACE model validation
+- Fixing overlapping blocked obstructions
+- Preparing models for peer review or submission
+- FEMA Base Level Engineering (BLE) compliance
+- Detecting Manning's n or cross section issues
+- Validating structure (bridge/culvert) geometry
+- Checking floodway surcharge limits
+- Creating audit trails for engineering review
 
+**Don't use for**:
+- Simple file I/O operations (use basic ras-commander patterns)
+- Model execution (use RasCmdr patterns)
+- Data extraction (use HDF classes)
+
+## RasCheck Validation Categories
+
+**Source**: `C:\GH\ras-commander\ras_commander\check\CLAUDE.md` (lines 13-60)
+
+| Check Type | Function | Validates |
+|------------|----------|-----------|
+| **NT Check** | `check_nt()` | Manning's n, transition coefficients, land cover standards |
+| **XS Check** | `check_xs()` | Cross section spacing, station ordering, reach lengths, bank stations |
+| **Structure Check** | `check_structures()` | Bridges, culverts, inline weirs, low chord elevations, pier spacing |
+| **Floodway Check** | `check_floodways()` | Surcharge limits, conveyance reduction, encroachment methods |
+| **Profiles Check** | `check_profiles()` | WSE ordering, discharge consistency, critical depth transitions |
+
+**Run all checks**:
 ```python
-from ras_commander.fixit import log_parser
-
-# Parse log file
-with open("compute.log", 'r') as f:
-    log_content = f.read()
-
-# Detect obstruction errors
-errors = log_parser.detect_obstruction_errors(log_content)
-print(f"Found {len(errors)} obstruction errors")
-
-# Extract affected stations
-stations = log_parser.extract_cross_section_ids(log_content)
-print(f"Affected stations: {stations}")
-
-# Generate report
-report = log_parser.generate_error_report(errors)
-print(report)
+results = RasCheck.run_all("01")  # Executes all 5 checks
 ```
 
-**Automated fix workflow**:
+**Run individual check**:
 ```python
-def auto_fix_workflow(log_file, project_dir):
-    """Detect errors from log, then fix geometry files."""
+# Get HDF path from plan
+plan_row = ras.plan_df[ras.plan_df['plan_number'] == "01"].iloc[0]
+geom_hdf = Path(plan_row['Geom Path']).with_suffix('.hdf')
 
-    # Check if log has obstruction errors
-    if not log_parser.has_obstruction_errors(log_file):
-        return None
+# Run specific check
+nt_results = RasCheck.check_nt(geom_hdf)
+xs_results = RasCheck.check_xs(geom_hdf)
+```
 
-    # Find all geometry files
-    geom_files = log_parser.find_geometry_files_in_directory(project_dir)
+## RasFixit Repair Capabilities
 
-    # Fix each geometry file
-    for geom_path in geom_files:
-        results = RasFixit.fix_blocked_obstructions(
-            geom_path,
-            backup=True,
-            visualize=True
-        )
-        print(f"Fixed {results.total_xs_fixed} XS in {geom_path.name}")
+**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (complete file)
 
-    return results
+**Current Fix Types**:
+- `fix_blocked_obstructions()` - Repair overlapping/adjacent blocked obstructions
+- `detect_obstruction_overlaps()` - Non-destructive detection only
+
+**Fix Results**:
+```python
+# FixResults dataclass contains:
+# - total_xs_checked: Cross sections scanned
+# - total_xs_fixed: Cross sections modified
+# - messages: List of FixMessage objects
+# - backup_path: Path to timestamped backup
+# - visualization_folder: Path to PNG folder
+
+# FixMessage contains:
+# - station: River station (e.g., "12345.67")
+# - action: FixAction enum (OVERLAP_RESOLVED, GAP_INSERTED, etc.)
+# - original_data: List of original (start, end, elev) tuples
+# - fixed_data: List of fixed (start, end, elev) tuples
+# - original_count: Number of original obstructions
+# - fixed_count: Number of fixed obstructions
+```
+
+**Export to DataFrame**:
+```python
+df = fix_results.to_dataframe()
+df.to_csv("obstruction_fixes.csv", index=False)
 ```
 
 ## Engineering Review Requirements
@@ -377,57 +275,68 @@ def auto_fix_workflow(log_file, project_dir):
 
 1. **Visual inspection**: Review all PNG visualizations
 2. **Compare hydraulics**: Run model with original and fixed geometry
-3. **Spot check**: Manually verify critical cross sections
+3. **Spot check**: Manually verify critical cross sections in HEC-RAS GUI
 4. **Professional judgment**: Ensure fixes align with engineering intent
 
-## Integration with Quality Assurance Subagent
+## Module Organization
 
-For complex validation workflows, use the **quality-assurance** subagent:
-
-```python
-# Cross-reference with subagent
-# See: .claude/subagents/quality-assurance/SUBAGENT.md
+### RasCheck (check subpackage)
+```
+check/
+├── __init__.py         # Exports RasCheck, CheckMessage, etc.
+├── RasCheck.py         # Main static class (448 KB)
+├── messages.py         # CheckMessage templates (106 KB)
+├── report.py           # Report generation (23 KB)
+├── thresholds.py       # CheckThresholds configuration (18 KB)
+└── CLAUDE.md           # Primary source documentation (262 lines)
 ```
 
-The subagent provides:
-- Comprehensive validation workflows
-- Report generation templates
-- FEMA/USACE standards integration
-- Multi-plan validation
-- Advanced threshold customization
+### RasFixit (fixit subpackage)
+```
+fixit/
+├── __init__.py         # Exports RasFixit, FixResults, FixMessage, FixAction
+├── RasFixit.py         # Main static class with fix methods
+├── obstructions.py     # BlockedObstruction and elevation envelope algorithm
+├── results.py          # FixAction enum, FixMessage, FixResults dataclasses
+├── visualization.py    # Lazy-loaded matplotlib PNG generation
+├── log_parser.py       # HEC-RAS compute log parsing
+└── AGENTS.md           # Primary source documentation (119 lines)
+```
 
 ## Common Issues and Solutions
 
-### Issue: Geometry preprocessing fails
+### Issue: Geometry preprocessing fails with obstruction errors
 
-**Solution**: Check for blocked obstruction overlaps
 ```python
+# 1. Detect obstructions
 results = RasFixit.detect_obstruction_overlaps("model.g01")
 if results.total_xs_fixed > 0:
+    # 2. Fix obstructions
     fix_results = RasFixit.fix_blocked_obstructions(
         "model.g01",
         backup=True,
         visualize=True
     )
+    print(f"Fixed {fix_results.total_xs_fixed} cross sections")
 ```
 
 ### Issue: FEMA validation warnings
 
-**Solution**: Run RasCheck and generate report
 ```python
+# Run validation and generate report
 results = RasCheck.run_all("01")
 results.to_html("fema_validation.html")
 
 # Address errors (severity=ERROR)
-errors = results.filter_by_severity(Severity.ERROR)
-for error in errors:
-    print(f"[{error.message_id}] RS {error.station}: {error.message}")
+df = results.to_dataframe()
+errors = df[df['severity'] == 'ERROR']
+print(errors[['station', 'message']])
 ```
 
 ### Issue: Manning's n out of range
 
-**Solution**: Use NT Check to identify issues
 ```python
+# Run NT check
 nt_results = RasCheck.check_nt(geom_hdf)
 df = nt_results.to_dataframe()
 
@@ -438,57 +347,89 @@ print(n_issues[['station', 'message']])
 
 ### Issue: Cross section spacing too large
 
-**Solution**: Use XS Check with custom threshold
 ```python
+# Run XS check with custom threshold
 custom = create_custom_thresholds({
     'reach_length.max_length_ft': 1500.0  # More conservative
 })
-
 xs_results = RasCheck.check_xs(geom_hdf, thresholds=custom)
 ```
 
-## Reference Documentation
+## Log Parsing for Automated Workflows
 
-See detailed API documentation in:
-- **reference/rascheck.md**: Complete RasCheck validation reference
-- **reference/rasfixit.md**: Complete RasFixit repair reference
+**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (line 18)
 
-## Example Scripts
+```python
+from ras_commander.fixit import log_parser
 
-See complete workflow examples in:
-- **examples/check-fix-verify.py**: Full Check → Fix → Verify workflow
-- **examples/obstruction-repair.py**: Blocked obstruction repair example
+# Parse HEC-RAS compute log
+with open("compute.log", 'r') as f:
+    log_content = f.read()
 
-## Example Notebooks
+# Detect obstruction errors
+if log_parser.has_obstruction_errors(log_content):
+    errors = log_parser.detect_obstruction_errors(log_content)
+    stations = log_parser.extract_cross_section_ids(log_content)
 
-Complete workflows with visualizations:
-- **examples/27_fixit_blocked_obstructions.ipynb**: RasFixit workflow
-- **examples/28_quality_assurance_rascheck.ipynb**: RasCheck validation
+    # Generate error report
+    report = log_parser.generate_error_report(errors)
+    print(report)
+```
 
-## Cross-References
+## Performance Characteristics
 
-- **Quality Assurance Subagent**: `.claude/subagents/quality-assurance/SUBAGENT.md`
-- **RasCheck Module**: `ras_commander/check/CLAUDE.md`
-- **RasFixit Module**: `ras_commander/fixit/AGENTS.md`
-- **Testing Approach**: `.claude/rules/testing/tdd-approach.md`
+**RasCheck**:
+- Typical 1D model: 5-15 seconds
+- Large 2D model: 30-60 seconds
+- Low memory footprint (suitable for 10,000+ cross sections)
+- Parallel checking supported for multiple plans
 
-## Technology Notes
+**RasFixit**:
+- < 1 second per cross section repair
+- Visualization: 2-3 seconds per PNG (optional)
 
-### RasCheck Architecture
-- Reads HDF files (geometry preprocessor output)
-- Plain text geometry file parsing for additional checks
-- Follows FEMA cHECk-RAS validation logic
-- Thread-safe for parallel validation
-- Low memory footprint (suitable for large models)
+## Navigation Map
 
-### RasFixit Architecture
-- Operates on plain text geometry files (.g##)
-- Fixed-width FORTRAN parsing (8-character fields)
-- Lazy loading of matplotlib (optional visualization)
-- Timestamped backups for safety
-- Audit trail preservation
+**For validation questions** → Read `C:\GH\ras-commander\ras_commander\check\CLAUDE.md`
 
-### Performance
-- **RasCheck**: 5-15 seconds for typical 1D model
-- **RasFixit**: < 1 second per cross section repair
-- **Visualization**: 2-3 seconds per PNG (optional)
+**For repair questions** → Read `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md`
+
+**For workflow examples** → See notebooks:
+- `examples\27_fixit_blocked_obstructions.ipynb`
+- `examples\28_quality_assurance_rascheck.ipynb`
+
+**For API details** → Read source code docstrings:
+- `ras_commander\check\RasCheck.py`
+- `ras_commander\fixit\RasFixit.py`
+
+## Related Skills
+
+- **quality-assurance subagent**: `.claude\subagents\quality-assurance\SUBAGENT.md`
+- **Testing approach**: `.claude\rules\testing\tdd-approach.md`
+
+## State-Specific Floodway Surcharge Limits
+
+**Source**: `C:\GH\ras-commander\ras_commander\check\CLAUDE.md` (lines 198-220)
+
+States with non-standard surcharge limits (vs FEMA default 1.0 ft):
+- **IL**: 0.1 ft
+- **WI**: 0.0 ft (no surcharge allowed)
+- **MN**: 0.5 ft
+- **NJ**: 0.2 ft
+- **MI, IN, OH**: 0.5 ft
+- **Default (TX, most states)**: 1.0 ft
+
+```python
+from ras_commander.check import get_state_surcharge_limit
+
+# Get state-specific limit
+limit = get_state_surcharge_limit('IL')  # Returns 0.1
+results = RasCheck.run_all("01", surcharge=limit)
+```
+
+---
+
+**Total Lines**: ~390 (target: 300-400)
+
+**Primary sources contain**: 262 + 119 = 381 lines of authoritative documentation
+**This skill**: Lightweight index with critical warnings and navigation guidance

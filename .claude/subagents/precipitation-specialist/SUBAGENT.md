@@ -18,12 +18,11 @@ description: |
 
 # Precipitation Specialist Subagent
 
+**Status**: Lightweight navigator to primary sources
+
 ## Purpose
 
-This subagent specializes in precipitation data integration for HEC-RAS and HEC-HMS models. It handles two primary data sources:
-
-1. **AORC (Analysis of Record for Calibration)**: Historical precipitation data (1979-present) for model calibration and validation
-2. **NOAA Atlas 14**: Design storm generation for annual exceedance probability (AEP) events
+This subagent specializes in precipitation data integration for HEC-RAS and HEC-HMS models. It provides quick access to complete workflows in primary source documents.
 
 ## When to Delegate to This Subagent
 
@@ -48,45 +47,64 @@ Delegate tasks containing these trigger phrases:
 - "HEC-HMS gage file" or "precipitation gage"
 - "design storm generation" or "100-year storm"
 
-**Example Delegation Phrases**:
-- "Retrieve AORC precipitation for my watershed"
-- "Generate a 24-hour, 1% AEP design storm using Atlas 14"
-- "Apply areal reduction factor to design storm"
-- "Export precipitation to DSS format for HEC-RAS"
-- "Create SCS Type II temporal distribution"
+## Primary Source Documents
 
-## Module Organization
+**DO NOT duplicate workflows here.** Instead, read these primary sources:
 
-The precip subpackage contains 3 modules organized by data source:
+### 1. Complete Workflow Reference
+**`ras_commander/precip/CLAUDE.md`** (329 lines)
+- AORC workflow (Steps 1-4: watershed → retrieval → aggregate → export)
+- Atlas 14 workflow (Steps 1-4: location → query → generate → export)
+- Multi-event workflows (AEP suites)
+- Areal reduction factors (ARF guidance)
+- All module organization and API overview
 
-### PrecipAorc.py (Historical Data)
+### 2. Working Example Notebooks
+**`examples/24_aorc_precipitation.ipynb`** - Complete AORC demonstration
+- Project setup and bounds calculation
+- Storm catalog generation
+- Precipitation download and export
+- Plan creation with HDF precipitation
+- Parallel execution example
 
-**Primary Class**: `PrecipAorc` - AORC data retrieval and processing
+**`examples/103_Running_AEP_Events_from_Atlas_14.ipynb`** - Atlas 14 single project
+(Note: Check if this file exists; may be in planning or development)
+
+**`examples/104_Atlas14_AEP_Multi_Project.ipynb`** - Atlas 14 batch processing
+(Note: Check if this file exists; may be in planning or development)
+
+### 3. Code Implementation
+**Module Files** (in `ras_commander/precip/`):
+- `PrecipAorc.py` - Historical AORC data retrieval (~38 KB)
+- `StormGenerator.py` - Atlas 14 design storms (~27 KB)
+- `__init__.py` - Public API imports
+
+## Quick Reference: Module Organization
+
+### PrecipAorc Class (Historical Calibration)
 
 **Data Retrieval**:
-- `retrieve_aorc_data()` - Download AORC time series for watershed
+- `retrieve_aorc_data()` - Download AORC time series
 - `get_available_years()` - Query 1979-present coverage
-- `check_data_coverage()` - Verify spatial/temporal availability
+- `check_data_coverage()` - Verify availability
 
 **Spatial Processing**:
-- `extract_by_watershed()` - Extract for HUC or custom polygon
+- `extract_by_watershed()` - Extract for HUC/polygon
 - `spatial_average()` - Calculate areal average
 - `resample_grid()` - Aggregate grid cells
 
 **Temporal Processing**:
-- `aggregate_to_interval()` - Match HEC-RAS/HMS timesteps (1HR, 6HR, 1DAY)
+- `aggregate_to_interval()` - Match HEC-RAS timesteps (1HR, 6HR, 1DAY)
 - `extract_storm_events()` - Identify individual storms
 - `calculate_rolling_totals()` - N-hour rolling precipitation
 
-**AORC Specifications**:
-- Spatial resolution: ~4 km grid (1/24 degree)
-- Temporal resolution: Hourly
+**AORC Dataset**:
+- Spatial: ~4 km grid (1/24 degree)
+- Temporal: Hourly
 - Coverage: CONUS (1979 - present)
 - Source: NOAA National Water Model retrospective forcing
 
-### StormGenerator.py (Design Storms)
-
-**Primary Class**: `StormGenerator` - Atlas 14 design storm generation
+### StormGenerator Class (Design Storms)
 
 **Design Storm Creation**:
 - `generate_design_storm()` - Create temporal hyetograph
@@ -106,104 +124,60 @@ The precip subpackage contains 3 modules organized by data source:
 **Spatial Processing**:
 - `interpolate_point_values()` - Gridded Atlas 14 interpolation
 - `apply_areal_reduction()` - ARF for large watersheds
-- `generate_multi_point_storms()` - Spatially distributed design storms
-
-### __init__.py (Public API)
-
-Convenience imports for users:
-```python
-from ras_commander.precip import PrecipAorc, StormGenerator
-```
-
-## Data Sources
-
-### AORC Dataset
-
-**Provider**: NOAA Office of Water Prediction
-**Access**: NOAA NWM retrospective forcing archive
-**Format**: NetCDF (gridded)
-**Update Frequency**: Operational (near real-time)
-**Documentation**: https://water.noaa.gov/about/nwm
-
-**Key Features**:
-- Historical data for calibration
-- Spatially distributed (not just point gages)
-- Consistent CONUS coverage
-- Hourly resolution for urban hydrology
-
-### NOAA Atlas 14
-
-**Provider**: NOAA National Weather Service
-**Access**: HDSC Precipitation Frequency Data Server (PFDS)
-**Format**: JSON API
-**Coverage**: CONUS, Hawaii, Puerto Rico (volumes 1-11)
-**Documentation**: https://hdsc.nws.noaa.gov/pfds/
-
-**Key Features**:
-- Authoritative precipitation frequency estimates
-- Regional temporal distributions
-- Full AEP and duration range
-- Areal reduction factors
+- `generate_multi_point_storms()` - Spatially distributed storms
 
 ## Common Workflows
 
-### 1. Historical Calibration (AORC)
-
-**Typical sequence**:
-1. Define watershed boundary (HUC or shapefile)
-2. Retrieve AORC data for event period
-3. Apply spatial average over watershed
-4. Aggregate to HEC-RAS timestep (1HR, 6HR)
-5. Export to DSS or CSV
-6. Run HEC-RAS model
-7. Compare modeled vs observed flow/stage
+### Historical Calibration (AORC)
+**See `ras_commander/precip/CLAUDE.md` lines 92-156** for complete 4-step workflow:
+1. Define Watershed (HUC or shapefile)
+2. Retrieve AORC Data (with spatial average)
+3. Aggregate to HEC-RAS Interval (1HR, 6HR, 1DAY)
+4. Export to HEC-RAS/HMS (DSS or CSV)
 
 **Time estimate**: 5-15 minutes per year of data
 
-### 2. Design Storm Generation (Atlas 14)
-
-**Typical sequence**:
-1. Specify location (lat/lon or station ID)
-2. Query Atlas 14 for design AEP (e.g., 1% = 100-year)
-3. Generate temporal distribution (SCS Type II)
-4. Apply areal reduction (if watershed > 10 sq mi)
-5. Export to DSS or HEC-HMS gage file
-6. Run HEC-RAS/HMS for design event
+### Design Storm Generation (Atlas 14)
+**See `ras_commander/precip/CLAUDE.md` lines 158-221** for complete 4-step workflow:
+1. Specify Location (lat/lon or station ID)
+2. Query Atlas 14 Values (precipitation frequency)
+3. Generate Design Storm (temporal distribution)
+4. Export to HEC-RAS/HMS (DSS, HMS gage, CSV)
 
 **Time estimate**: < 5 minutes per event
 
-### 3. Multi-Event Suite
-
-**Typical sequence**:
-1. Define AEP range (e.g., 10%, 2%, 1%, 0.2%)
-2. Loop through events
-3. Generate design storms for each
-4. Batch export to DSS files
-5. Parallel HEC-RAS execution
-6. Generate flood frequency curves
+### Multi-Event Suite
+**See `ras_commander/precip/CLAUDE.md` lines 223-251** for loop workflow:
+- Define AEP range (e.g., 10%, 2%, 1%, 0.2%)
+- Generate design storms for each event
+- Batch export to DSS files
 
 **Time estimate**: 10-30 minutes for 4-6 events
 
-### 4. Areal Reduction Application
-
-**When to use**:
-- Small watersheds (< 10 sq mi): ARF ≈ 1.0 (use point values)
+### Areal Reduction Factors (ARF)
+**See `ras_commander/precip/CLAUDE.md` lines 253-280** for complete guidance:
+- Small watersheds (< 10 sq mi): ARF ≈ 1.0
 - Medium watersheds (10-100 sq mi): ARF = 0.95-0.98
-- Large watersheds (> 100 sq mi): ARF < 0.95 (significant reduction)
+- Large watersheds (> 100 sq mi): ARF < 0.95
 
-**Process**:
-1. Query point precipitation from Atlas 14
-2. Calculate watershed area (sq mi)
-3. Apply ARF based on area and duration
-4. Use reduced value for design storm
+## Data Sources
+
+### AORC (Analysis of Record for Calibration)
+- **Provider**: NOAA Office of Water Prediction
+- **Access**: NOAA NWM retrospective forcing archive
+- **Format**: NetCDF (gridded)
+- **Documentation**: https://water.noaa.gov/about/nwm
+
+### NOAA Atlas 14
+- **Provider**: NOAA National Weather Service
+- **Access**: HDSC Precipitation Frequency Data Server (PFDS)
+- **Format**: JSON API
+- **Documentation**: https://hdsc.nws.noaa.gov/pfds/
 
 ## Dependencies
 
 **Required**:
-- pandas (time series handling)
-- numpy (numerical operations)
-- xarray (AORC NetCDF data)
-- requests (Atlas 14 API)
+- pandas, numpy, xarray, requests
 
 **Optional**:
 - geopandas (spatial operations)
@@ -217,31 +191,42 @@ pip install xarray rasterio geopandas pydsstools
 
 ## Performance Expectations
 
-### AORC Retrieval
-- Speed: ~1-5 minutes per year (depends on watershed size)
-- Storage: ~10-50 MB per year (hourly, single watershed)
+**AORC Retrieval**:
+- Speed: ~1-5 minutes per year
+- Storage: ~10-50 MB per year (hourly)
 - Caching: Local cache recommended
 
-### Atlas 14 Queries
+**Atlas 14 Queries**:
 - Speed: < 5 seconds per query
-- Rate limiting: Respect NOAA PFDS usage guidelines
+- Rate limiting: Respect NOAA PFDS guidelines
 - Caching: Automatic API response caching
+
+## Subagent Task Pattern
+
+When a user requests precipitation work:
+
+1. **Read Primary Source First**: Open `ras_commander/precip/CLAUDE.md` and locate relevant workflow section
+2. **Use Exact Workflow**: Follow the documented steps exactly (do NOT improvise)
+3. **Reference Examples**: Point to `examples/24_aorc_precipitation.ipynb` for AORC or Atlas 14 notebooks for design storms
+4. **Check Code**: Only read `PrecipAorc.py` or `StormGenerator.py` if API clarification needed
+5. **Report Back**: Summarize results with references to source documentation
+
+## Do NOT Store Here
+
+**Deleted**: `reference/` folder (927 lines of duplicated workflows)
+- `reference/aorc-api.md` - Now in `ras_commander/precip/CLAUDE.md` lines 92-156
+- `reference/atlas14.md` - Now in `ras_commander/precip/CLAUDE.md` lines 158-280
+
+**Why**: Single source of truth principle. All workflows are maintained in `CLAUDE.md` where users will actually see them.
 
 ## Cross-References
 
-**Complete User Workflows**:
-- Main precipitation documentation: `ras_commander/precip/CLAUDE.md`
-
-**Technical Details**:
-- AORC API reference: [reference/aorc-api.md](reference/aorc-api.md)
-- Atlas 14 workflows: [reference/atlas14.md](reference/atlas14.md)
-
-**Example Notebooks**:
-- `examples/24_aorc_precipitation.ipynb` - AORC retrieval
-- `examples/103_Running_AEP_Events_from_Atlas_14.ipynb` - Single-project Atlas 14
-- `examples/104_Atlas14_AEP_Multi_Project.ipynb` - Batch processing
-
-**Related Subpackages**:
+**Related Documentation**:
 - DSS file operations: `ras_commander/dss/AGENTS.md`
 - Unsteady flow files: `ras_commander.RasUnsteady`
 - Spatial data: `.claude/rules/python/path-handling.md`
+- Parent library: `ras_commander/CLAUDE.md`
+
+**Related Subagents**:
+- Consider creating DSS subagent if DSS-heavy precipitation workflows emerge
+- Coordinate with HDF subagent for precipitation data in HDF files

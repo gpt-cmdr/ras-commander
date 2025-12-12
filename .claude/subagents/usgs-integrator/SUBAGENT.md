@@ -14,16 +14,59 @@ description: |
   from gauges, validating models, or monitoring real-time conditions.
 ---
 
-# USGS Integrator
+# USGS Integrator - Primary Source Navigator
 
 ## Purpose
 
-Complete USGS gauge data integration workflow from spatial discovery to model validation. This subagent provides comprehensive support for integrating United States Geological Survey (USGS) National Water Information System (NWIS) gauge data with HEC-RAS hydraulic models.
+This subagent is a **lightweight navigator** to the USGS integration documentation. All detailed workflows, API references, and examples are maintained in primary sources.
 
-## When to Delegate
+**DO NOT duplicate workflow details here.** Point to primary sources instead.
 
-**Trigger this subagent when users mention:**
+## Primary Documentation Sources
 
+### 1. Complete Module Reference (PRIMARY)
+**Location**: `ras_commander/usgs/CLAUDE.md` (310 lines)
+
+**Contains**:
+- Complete module overview (14 modules)
+- All function signatures and parameters
+- Complete workflows (discovery → validation)
+- Real-time monitoring workflows (v0.87.0+)
+- Catalog generation workflows (v0.89.0+)
+- Code examples for every workflow stage
+
+**When to use**: For ANY technical question about USGS integration
+
+### 2. Example Notebooks (DEMONSTRATIONS)
+
+**Primary workflows**:
+- `examples/29_usgs_gauge_data_integration.ipynb` - Complete end-to-end workflow
+- `examples/30_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
+- `examples/31_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
+- `examples/32_model_validation_with_usgs.ipynb` - Model validation workflow
+- `examples/33_gauge_catalog_generation.ipynb` - Catalog generation (v0.89.0+)
+
+**When to use**: For working examples and jupyter-based demonstrations
+
+### 3. Code Docstrings (API DETAILS)
+
+**Locations**: `ras_commander/usgs/*.py` files
+- `core.py` - Data retrieval (RasUsgsCore)
+- `spatial.py` - Geospatial queries (UsgsGaugeSpatial)
+- `gauge_matching.py` - Gauge-to-model matching (GaugeMatcher)
+- `time_series.py` - Resampling and alignment (RasUsgsTimeSeries)
+- `boundary_generation.py` - BC table generation (RasUsgsBoundaryGeneration)
+- `initial_conditions.py` - IC extraction (InitialConditions)
+- `real_time.py` - Real-time monitoring (RasUsgsRealTime)
+- `catalog.py` - Catalog generation (v0.89.0+)
+- `metrics.py` - Validation metrics (NSE, KGE, peak error)
+- `visualization.py` - Publication-quality plots
+
+**When to use**: For precise function signatures and parameter details
+
+## When to Delegate to This Subagent
+
+**Trigger phrases**:
 - "Find USGS gauges near this model"
 - "Download gauge data from USGS"
 - "Generate boundary conditions from USGS"
@@ -36,7 +79,7 @@ Complete USGS gauge data integration workflow from spatial discovery to model va
 - "Get latest gauge reading"
 - "Monitor flood conditions"
 
-**Workflow indicators:**
+**Workflow indicators**:
 - Spatial queries for gauges within project bounds
 - Retrieving historical flow or stage data
 - Generating HEC-RAS boundary condition tables
@@ -44,218 +87,83 @@ Complete USGS gauge data integration workflow from spatial discovery to model va
 - Real-time operational forecasting
 - QAQC of gauge data quality
 
-## Module Overview (14 Modules)
+## Quick Reference: Workflow Stages
 
-The usgs subpackage is organized by workflow stage:
+This subagent supports these workflow stages (details in `usgs/CLAUDE.md`):
 
-### Spatial Discovery
-- **UsgsGaugeSpatial** - Find gauges within project bounds, filter by data availability
-- **GaugeMatcher** - Match gauges to HEC-RAS features (cross sections, 2D areas)
+1. **Spatial Discovery** - Find gauges in project area
+2. **Data Retrieval** - Download flow/stage from USGS NWIS
+3. **Gauge Matching** - Associate gauges with HEC-RAS features
+4. **Time Series Processing** - Resample to HEC-RAS intervals
+5. **Initial Conditions** - Extract IC values from observations
+6. **Boundary Generation** - Create BC tables for unsteady files
+7. **Real-Time Monitoring** - Monitor gauges for operational forecasting (v0.87.0+)
+8. **Catalog Generation** - Create standardized gauge data folder (v0.89.0+)
+9. **Model Validation** - Calculate metrics and generate plots
 
-### Data Retrieval
-- **RasUsgsCore** - Primary data retrieval from USGS NWIS (flow, stage, metadata)
-- **RasUsgsFileIo** - Cache data locally, load cached data, export to DSS
+See `ras_commander/usgs/CLAUDE.md` for complete workflow documentation.
 
-### Time Series Processing
-- **RasUsgsTimeSeries** - Resample to HEC-RAS intervals, gap detection, alignment
+## Module Organization (14 Modules)
+
+Brief overview - see `usgs/CLAUDE.md` for complete details:
+
+### Data Operations
+- **RasUsgsCore** - Primary data retrieval from USGS NWIS
+- **RasUsgsFileIo** - Cache data locally, load cached data
+- **RasUsgsTimeSeries** - Resample to HEC-RAS intervals, gap detection
+
+### Spatial Operations
+- **UsgsGaugeSpatial** - Find gauges within project bounds
+- **GaugeMatcher** - Match gauges to HEC-RAS features
 
 ### Boundary Conditions
-- **RasUsgsBoundaryGeneration** - Generate fixed-width flow/stage tables for .u## files
-- **InitialConditions** - Extract IC values, create IC lines, update unsteady files
+- **RasUsgsBoundaryGeneration** - Generate fixed-width BC tables for .u## files
+- **InitialConditions** - Extract IC values, create IC lines
 
-### Real-Time Monitoring (v0.87.0+)
+### Real-Time Operations (v0.87.0+)
 - **RasUsgsRealTime** - Get latest values, monitor gauges, detect thresholds
 - **Callbacks** - Alert functions for threshold/rate exceedance
 
-### Catalog Generation (v0.89.0+)
-- **catalog** module - Generate standardized "USGS Gauge Data" folder with historical data
+### Catalog Operations (v0.89.0+)
+- **catalog** module - Generate standardized "USGS Gauge Data" folder
 
 ### Validation
 - **metrics** module - NSE, KGE, peak error, volume bias
 - **visualization** module - Time series plots, scatter, residuals, flow duration curves
 
 ### Configuration
-- **config** - USGS service endpoints, parameter codes, cache settings
+- **config** - USGS service endpoints, parameter codes
 - **rate_limiter** - Respectful API usage (1 req/sec default)
 
-## Workflow Stages
+## Common Questions → Primary Source Routing
 
-### Stage 1: Spatial Discovery
+**Q: How do I find gauges near my model?**
+- See: `usgs/CLAUDE.md` Section "Complete Workflow → 1. Spatial Discovery"
+- Example: `examples/29_usgs_gauge_data_integration.ipynb`
 
-**Objective**: Find USGS gauges within or near HEC-RAS project bounds
+**Q: How do I generate boundary conditions from USGS data?**
+- See: `usgs/CLAUDE.md` Section "Complete Workflow → 5. Boundary Generation"
+- Example: `examples/31_bc_generation_from_live_gauge.ipynb`
 
-**Key functions**:
-- `UsgsGaugeSpatial.find_gauges_in_project()` - Query by project bounds
-- `UsgsGaugeSpatial.get_project_gauges_with_data()` - Filter by data availability
-- `UsgsGaugeSpatial.find_gauges_near_point()` - Query by radius
+**Q: How do I validate my model with observed data?**
+- See: `usgs/CLAUDE.md` Section "Complete Workflow → 6. Model Validation"
+- Example: `examples/32_model_validation_with_usgs.ipynb`
 
-**Output**: GeoDataFrame with gauge locations, metadata, drainage areas
+**Q: How do I monitor gauges in real-time?**
+- See: `usgs/CLAUDE.md` Section "Real-Time Workflows (v0.87.0+)"
+- Example: `examples/30_usgs_real_time_monitoring.ipynb`
 
-### Stage 2: Data Retrieval
+**Q: How do I create a gauge catalog for my project?**
+- See: `usgs/CLAUDE.md` Section "Catalog generation" (catalog.py)
+- Example: `examples/33_gauge_catalog_generation.ipynb`
 
-**Objective**: Download flow and stage time series from USGS NWIS
+**Q: What validation metrics are available?**
+- See: `usgs/CLAUDE.md` Section "Validation Metrics (metrics.py)"
+- Functions: `nash_sutcliffe_efficiency()`, `kling_gupta_efficiency()`, `calculate_peak_error()`, `calculate_all_metrics()`
 
-**Key functions**:
-- `RasUsgsCore.retrieve_flow_data()` - Flow time series (parameter 00060)
-- `RasUsgsCore.retrieve_stage_data()` - Stage time series (parameter 00065)
-- `RasUsgsCore.get_gauge_metadata()` - Gauge metadata and location
-- `RasUsgsCore.check_data_availability()` - Verify data exists for period
-
-**Service types**:
-- `iv` - Instantaneous values (15-min or hourly)
-- `dv` - Daily values (for historical analysis)
-
-### Stage 3: Gauge Matching
-
-**Objective**: Associate gauges with HEC-RAS model features
-
-**Key functions**:
-- `GaugeMatcher.match_gauge_to_cross_section()` - Find nearest 1D XS
-- `GaugeMatcher.match_gauge_to_2d_area()` - Match to 2D flow area
-- `GaugeMatcher.auto_match_gauges()` - Automatic multi-gauge matching
-
-**Matching criteria**:
-- Spatial proximity (distance)
-- Drainage area comparison
-- River/reach name matching
-
-### Stage 4: Time Series Processing
-
-**Objective**: Prepare USGS data for HEC-RAS compatibility
-
-**Key functions**:
-- `RasUsgsTimeSeries.resample_to_hecras_interval()` - Resample to 15MIN, 1HOUR, 1DAY
-- `RasUsgsTimeSeries.check_data_gaps()` - Detect missing data
-- `RasUsgsTimeSeries.fill_data_gaps()` - Interpolate gaps
-- `RasUsgsTimeSeries.align_timeseries()` - Align observed vs modeled
-
-**HEC-RAS intervals**: 15MIN, 30MIN, 1HOUR, 2HOUR, 6HOUR, 1DAY
-
-### Stage 5: Boundary Generation
-
-**Objective**: Create HEC-RAS boundary condition tables
-
-**Key functions**:
-- `RasUsgsBoundaryGeneration.generate_flow_hydrograph_table()` - Fixed-width flow table
-- `RasUsgsBoundaryGeneration.generate_stage_hydrograph_table()` - Stage table
-- `RasUsgsBoundaryGeneration.update_boundary_hydrograph()` - Update .u## file
-
-**Output format**: HEC-RAS fixed-width format compatible with unsteady files
-
-**Typical workflow**:
-1. Retrieve USGS flow data
-2. Resample to HEC-RAS interval
-3. Generate boundary table
-4. Insert into .u## file or update existing BC
-
-### Stage 6: Initial Conditions
-
-**Objective**: Set IC values from observed data at simulation start
-
-**Key functions**:
-- `InitialConditions.get_ic_value_from_usgs()` - Extract IC at start time
-- `InitialConditions.create_ic_line()` - Format IC line for .u## file
-- `InitialConditions.update_initial_conditions()` - Update unsteady file
-
-**IC types**: Flow IC (upstream), Stage IC (downstream)
-
-### Stage 7: Real-Time Monitoring (v0.87.0+)
-
-**Objective**: Monitor gauges for operational forecasting and early warning
-
-**Key functions**:
-- `RasUsgsRealTime.get_latest_value()` - Most recent reading (updated hourly)
-- `RasUsgsRealTime.get_recent_data()` - Last N hours for trend analysis
-- `RasUsgsRealTime.refresh_data()` - Incremental cache update (efficient)
-- `RasUsgsRealTime.monitor_gauge()` - Continuous monitoring with callbacks
-- `RasUsgsRealTime.detect_threshold_crossing()` - Flood stage detection
-- `RasUsgsRealTime.detect_rapid_change()` - Flash flood conditions
-
-**Use cases**:
-- Automated model triggering when flow exceeds threshold
-- Early warning systems for flood response
-- Real-time boundary condition updates
-- Operational forecasting workflows
-
-**Caching**: Automatic cache management prevents redundant API calls
-
-### Stage 8: Catalog Generation (v0.89.0+)
-
-**Objective**: Create standardized gauge data folder for project organization
-
-**Key functions**:
-- `catalog.generate_gauge_catalog()` - One-command gauge discovery and download
-- `catalog.load_gauge_catalog()` - Load catalog from standard location
-- `catalog.load_gauge_data()` - Load historical data for specific gauge
-- `catalog.update_gauge_catalog()` - Refresh with latest data
-
-**Folder structure**:
-```
-project_folder/
-  USGS Gauge Data/
-    gauge_catalog.csv           # Master catalog
-    gauge_locations.geojson     # Spatial data
-    README.md                   # Documentation
-    USGS-{site_id}/
-      metadata.json
-      historical_flow.csv
-      historical_stage.csv
-      data_availability.json
-```
-
-**Benefits**: Standard organization, engineering review, reproducible workflows
-
-### Stage 9: Model Validation
-
-**Objective**: Assess model performance against observed data
-
-**Validation metrics** (`metrics` module):
-- `nash_sutcliffe_efficiency()` - NSE (−∞ to 1, perfect = 1)
-- `kling_gupta_efficiency()` - KGE with components (correlation, bias, variability)
-- `calculate_peak_error()` - Peak timing and magnitude error
-- `calculate_volume_error()` - Total volume bias
-- `calculate_all_metrics()` - Comprehensive suite
-
-**Visualization** (`visualization` module):
-- `plot_timeseries_comparison()` - Observed vs modeled with statistics
-- `plot_scatter_comparison()` - Scatter with 1:1 line
-- `plot_residuals()` - 4-panel diagnostics (time series, histogram, Q-Q, scatter)
-- `plot_flow_duration_curve()` - Duration curve comparison
-
-## Common Workflows
-
-### Workflow A: Discovery to Boundary Generation
-
-**Typical sequence**:
-1. Find gauges in project: `UsgsGaugeSpatial.find_gauges_in_project()`
-2. Retrieve flow data: `RasUsgsCore.retrieve_flow_data()`
-3. Match to cross section: `GaugeMatcher.match_gauge_to_cross_section()`
-4. Resample to interval: `RasUsgsTimeSeries.resample_to_hecras_interval()`
-5. Generate BC table: `RasUsgsBoundaryGeneration.generate_flow_hydrograph_table()`
-6. Update unsteady file: `RasUsgsBoundaryGeneration.update_boundary_hydrograph()`
-
-**See**: `reference/end-to-end.md` for complete example
-
-### Workflow B: Real-Time Monitoring
-
-**Typical sequence**:
-1. Get latest reading: `RasUsgsRealTime.get_latest_value()`
-2. Check threshold: `RasUsgsRealTime.detect_threshold_crossing()`
-3. Setup monitoring: `RasUsgsRealTime.monitor_gauge()` with callback
-4. Auto-trigger model if threshold exceeded
-
-**See**: `reference/real-time.md` for complete example
-
-### Workflow C: Model Validation
-
-**Typical sequence**:
-1. Retrieve observed data: `RasUsgsCore.retrieve_flow_data()`
-2. Extract modeled results: `HdfResultsXsec.get_xsec_timeseries()`
-3. Align time series: `RasUsgsTimeSeries.align_timeseries()`
-4. Calculate metrics: `metrics.calculate_all_metrics()`
-5. Generate plots: `visualization.plot_timeseries_comparison()`
-
-**See**: `reference/validation.md` for complete example
+**Q: What parameter codes does USGS use?**
+- See: `usgs/CLAUDE.md` Section "Configuration (config.py)"
+- Common codes: 00060 = flow (cfs), 00065 = stage (ft)
 
 ## Dependencies
 
@@ -267,8 +175,8 @@ project_folder/
 ### Optional (Lazy-Loaded)
 - `dataretrieval` - USGS NWIS Python client (**required for most functions**)
   - Install: `pip install dataretrieval`
-  - Methods check availability on first use
-  - Import error raised with installation instructions if missing
+  - Module loads without it; methods check on first use
+  - Helpful error raised if missing
 
 ### Checking Dependencies
 ```python
@@ -277,15 +185,15 @@ deps = check_dependencies()
 # Returns: {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 ```
 
-## Key Features
+## Key Features (Brief - see usgs/CLAUDE.md for details)
 
 ### Multi-Level Verifiability
-- **HEC-RAS Projects**: Boundary conditions reviewable in HEC-RAS GUI
-- **Visual Outputs**: Time series plots for domain expert review
-- **Code Audit Trails**: All functions use @log_call decorators
+- HEC-RAS boundary conditions reviewable in GUI
+- Visual outputs for domain expert review
+- Code audit trails with @log_call decorators
 
 ### USGS Service Compliance
-- Respectful API usage with rate limiting (1 req/sec default)
+- Rate limiting (1 req/sec default)
 - Proper parameter codes (00060 = flow, 00065 = stage)
 - Service timeout handling and retry logic
 
@@ -294,26 +202,10 @@ deps = check_dependencies()
 - Data availability checks before processing
 - Validation of resampled time series
 
-## Cross-References
-
-**Primary documentation**: `ras_commander/usgs/CLAUDE.md` (complete module reference)
-
-**Example notebooks**:
-- `examples/29_usgs_gauge_data_integration.ipynb` - Complete workflow
-- `examples/30_usgs_real_time_monitoring.ipynb` - Real-time monitoring
-- `examples/31_bc_generation_from_live_gauge.ipynb` - BC generation
-- `examples/32_model_validation_with_usgs.ipynb` - Validation workflow
-- `examples/33_gauge_catalog_generation.ipynb` - Catalog generation
-
-**Related components**:
-- `ras_commander.RasUnsteady` - Boundary condition utilities
-- `ras_commander.HdfResultsXsec` - Extract modeled 1D results for validation
-- `ras_commander.HdfResultsMesh` - Extract modeled 2D results for validation
-
 ## Implementation Notes
 
 ### Lazy Loading Pattern
-The usgs module loads without dataretrieval installed. Methods check for availability on first use and raise helpful errors if missing.
+The usgs module loads without dataretrieval. Methods check for availability on first use and raise helpful errors if missing.
 
 ### USGS Parameter Codes
 - `00060` - Discharge (cfs)
@@ -326,5 +218,38 @@ Boundary tables use HEC-RAS fixed-width format (Fortran-style). Functions handle
 ### Time Zone Handling
 USGS data is in UTC. Functions handle timezone conversions automatically when aligning with HEC-RAS simulation windows.
 
-### Rate Limiting
-Built-in rate limiter prevents overwhelming USGS servers. Configurable via `rate_limiter.RateLimiter` class.
+## Related Components
+
+**HEC-RAS Integration**:
+- `ras_commander.RasUnsteady` - Boundary condition utilities
+- `ras_commander.HdfResultsXsec` - Extract modeled 1D results for validation
+- `ras_commander.HdfResultsMesh` - Extract modeled 2D results for validation
+
+**Real-time execution**:
+- `.claude/rules/hec-ras/execution.md` - Real-time computation callbacks
+
+## Subagent Workflow
+
+When delegated a task:
+
+1. **Read the primary source first**: `ras_commander/usgs/CLAUDE.md`
+2. **Check example notebooks** for working demonstrations
+3. **Read code docstrings** for precise API details
+4. **Implement the workflow** based on primary sources
+5. **DO NOT create new workflow documentation** - point to existing sources
+
+## Maintenance Notes
+
+**This file should remain ~300-400 lines** as a lightweight navigator.
+
+**If you find yourself duplicating workflows**:
+1. Stop immediately
+2. Check if the workflow exists in `usgs/CLAUDE.md`
+3. If yes: Point to it instead of duplicating
+4. If no: Add it to `usgs/CLAUDE.md` (primary source), then reference it here
+
+**Primary source hierarchy**:
+1. `ras_commander/usgs/CLAUDE.md` - COMPLETE workflows and API reference
+2. `examples/29-33_*.ipynb` - Working demonstrations
+3. Code docstrings - Precise function signatures
+4. This file - Lightweight navigator ONLY
