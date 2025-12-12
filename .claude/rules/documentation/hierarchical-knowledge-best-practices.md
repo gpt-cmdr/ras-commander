@@ -112,6 +112,26 @@ Subagent/Skill (lightweight navigator) ← POINTS TO ABOVE
 
 **Rationale**: These are too critical to risk users missing them by not reading primary sources.
 
+### 5. Legitimate reference/ Folder Exceptions
+
+**TWO subagents are permitted to have reference/ folders with substantial content:**
+
+✅ **Exception 1: hierarchical-knowledge-agent-skill-memory-curator**
+- **File**: `.claude/subagents/hierarchical-knowledge-agent-skill-memory-curator.md` (468 lines + 104KB reference/)
+- **Rationale**: Contains meta-knowledge about the hierarchical system itself
+- **Reference content**: Implementation phases, governance rules, research synthesis, memory system architecture
+- **Why justified**: Self-referential system - must contain organizational knowledge that doesn't belong elsewhere
+- **Status**: Documented exception, no action needed
+
+✅ **Exception 2: claude-code-guide**
+- **File**: `.claude/subagents/claude-code-guide.md` (331 lines + 46KB reference/)
+- **Rationale**: Caches official Anthropic documentation to prevent repeated web fetches
+- **Reference content**: Official docs from claude.com and code.claude.com (skills creation, memory system)
+- **Why justified**: External authoritative source that should be cached locally for offline access
+- **Status**: Documented exception, no action needed
+
+**All other subagents and skills MUST follow the lightweight navigator pattern (200-400 lines, no reference/ folders).**
+
 ## Template Structure
 
 ### Subagent/Skill YAML Frontmatter
@@ -359,12 +379,13 @@ Your hierarchical knowledge structure is correctly implemented if:
 
 - ✅ Each concept documented in exactly ONE authoritative location
 - ✅ Subagents/skills are 200-400 lines (navigators, not documentation)
-- ✅ No reference/ folders with duplicated content
+- ✅ No unauthorized reference/ folders (only 2 documented exceptions allowed - see section 5)
 - ✅ No examples/ folders duplicating notebooks
 - ✅ All "See X" links point to existing files
 - ✅ Updates happen in ONE location (primary source)
 - ✅ Critical warnings prominent in navigators
-- ✅ File count minimal (15 navigators, not 75 duplicates)
+- ✅ File count minimal (17 navigators including 2 exceptions, not 75 duplicates)
+- ✅ Exceptions documented with clear rationale (section 5)
 
 ## See Also
 
