@@ -151,6 +151,9 @@ description: |
   Research feature_dev_notes to identify critical {domain} content for
   migration to ras_agents. Search assigned directories, extract key patterns,
   document findings, and propose migration structure.
+
+  CRITICAL: Perform security audit before migration - check for passwords,
+  credentials, IP addresses, and sensitive configuration.
 ---
 
 # {Domain} Feature Dev Notes Researcher
@@ -169,18 +172,27 @@ identify critical reference content, and prepare migration to ras_agents.
    - Algorithms and patterns (code, pseudocode)
    - Critical warnings and lessons learned
 
-2. Categorize findings:
+2. **SECURITY AUDIT** (CRITICAL - DO BEFORE MIGRATION):
+   - Scan for passwords, credentials, API keys
+   - Check for IP addresses, hostnames, usernames
+   - Identify connection strings with authentication
+   - **If found**: REDACT or GENERALIZE before migration
+   - **Document**: What was redacted and why
+
+3. Categorize findings:
    - CRITICAL: Must migrate (core algorithms, reference data)
    - USEFUL: Should migrate (helper patterns, examples)
    - EXPERIMENTAL: Leave in feature_dev_notes (WIP, testing)
+   - SENSITIVE: Redact or exclude (passwords, credentials)
 
-3. Document in findings report:
+4. Document in findings report:
    - What was found
    - Why it's critical
    - Proposed ras_agents location
    - Migration priority
+   - **Security audit results**: What was redacted
 
-4. Output: {domain}_MIGRATION_FINDINGS.md
+5. Output: {domain}_MIGRATION_FINDINGS.md
 
 ## Success Criteria
 - All assigned directories searched
