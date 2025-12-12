@@ -30,6 +30,7 @@ Testing approaches:
 
 ### documentation/
 Documentation standards:
+- `hierarchical-knowledge-best-practices.md` - Subagent/skill patterns, avoiding duplication
 - `mkdocs-config.md` - Notebook integration, symlink handling
 - `notebook-standards.md` - Title requirements, execution policy
 
