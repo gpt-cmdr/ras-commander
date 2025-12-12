@@ -5,34 +5,58 @@
 **Health**: 🟢 Green
 
 ## Current Focus
-**Task**: feature_dev_notes Migration Planning - IN PROGRESS ⏳
-**Status**: Phase 1 (Audit) complete, ready for Phase 2 (Research Sub-Subagents)
+**Task**: feature_dev_notes Migration Planning - COMPLETE ✅
+**Status**: Phase 1 (Audit) complete, Phase 2 (Research) ready with security requirements
 **Deliverables**:
-- ✅ Master migration plan created (FEATURE_DEV_NOTES_MIGRATION_PLAN.md, 540 lines)
+- ✅ Master migration plan created (FEATURE_DEV_NOTES_MIGRATION_PLAN.md, 558 lines)
 - ✅ Audit matrix created (MIGRATION_AUDIT_MATRIX.md, 260 lines)
+- ✅ Migration handoff created (MIGRATION_HANDOFF.md, 330 lines)
+- ✅ Security audit requirement added (CRITICAL: check for passwords before commit)
 - ✅ Identified 1 critical migration (remote-executor → docs_old refs)
 - ✅ Mapped 33 feature_dev_notes dirs to 8 subagent domains
-- ✅ Defined 4-phase migration strategy
-- ⏳ Ready to create first research sub-subagent (remote-executor-researcher)
+- ✅ Defined 4-phase migration strategy with security protocol
+- ✅ Research sub-subagent template updated with security audit step
 **Results**:
 - Problem identified: feature_dev_notes gitignored (agents can't reference)
 - Audit complete: remote-executor has 3 refs to docs_old/feature_dev_notes/
 - Priority order: remote-executor (immediate) → quality-assurance, hdf-analyst, precipitation (high)
-- Research sub-subagent template defined
+- Security requirement: ALL migrations must audit for passwords/credentials before commit
+- Research sub-subagent template ready with security protocol
 - Estimated effort: 8-14 hours across 4-5 sessions
-**Score**: Phase 1 complete, 8 migrations planned ✅
+**Score**: Phase 1 complete with security requirements ✅
 
-## Next Up
-1. **Other Phase 1 Quick Wins**:
-   - lib-002: Atlas 14 caching (2-3 hours estimated)
+## Next Session (Session 9) - START HERE
+
+**READ THESE FILES FIRST** (in order):
+1. `agent_tasks/.agent/MIGRATION_HANDOFF.md` (330 lines) - CRITICAL context & security requirements
+2. `planning_docs/FEATURE_DEV_NOTES_MIGRATION_PLAN.md` (558 lines) - Full strategy
+3. `planning_docs/MIGRATION_AUDIT_MATRIX.md` (260 lines) - Audit results
+
+**THEN EXECUTE**:
+1. Create remote-executor-researcher sub-subagent
+2. Execute research (with SECURITY AUDIT for passwords/credentials)
+3. Create ras_agents/remote-executor-agent/
+4. Migrate REMOTE_WORKER_SETUP_GUIDE.md (27KB) - AFTER security redaction
+5. Update .claude/subagents/remote-executor/SUBAGENT.md (remove docs_old refs)
+6. Commit migration
+
+**CRITICAL**: Security audit REQUIRED before any commit to ras_agents
+
+## Other Next Up
+1. **feature_dev_notes Migrations** (continue after remote-executor):
+   - quality-assurance → cHECk-RAS (HIGH priority)
+   - hdf-analyst → RasMapper Interpolation (HIGH priority)
+   - precipitation-specialist → National Water Model (HIGH priority)
+
+2. **Phase 1 Quick Wins**:
+   - lib-002: Atlas 14 caching (2-3 hours)
    - lib-003: Testing suite
    - nb-001 to nb-003: Notebook improvements
 
-2. **Phase 2: Core Features**:
-   - check-001 to check-006: Complete cHECk-RAS to 95% coverage (currently 83%)
+3. **Phase 2: Core Features**:
+   - check-001 to check-006: Complete cHECk-RAS to 95% coverage
    - perm-001 to perm-004: Permutation logic
    - dss-001 to dss-004: DSS grid writing
-   - mrms-001 to mrms-005: MRMS precipitation integration
 
 See ROADMAP.md for complete development plan.
 
