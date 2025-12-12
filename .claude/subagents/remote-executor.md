@@ -235,20 +235,13 @@ compute_parallel_remote(
 
 ### Primary References
 
-See `reference/` folder for detailed documentation:
-
-**worker-configuration.md** - Detailed configuration for each worker type:
-- PsExec setup (session_id, Group Policy, Registry, network shares)
-- Docker worker setup (SSH keys, container images, path mapping)
-- SSH worker configuration (stubs)
-- Cloud worker configuration (stubs)
-
-**common-issues.md** - Troubleshooting guide:
-- PsExec hangs (system_account issue)
-- UNC path errors
-- Session configuration problems
-- Registry requirement failures
-- Permission denied errors
+**ras_agents/remote-executor-agent/** - Production agent reference data:
+- **AGENT.md** - Lightweight navigator with quick reference patterns
+- **reference/REMOTE_WORKER_SETUP_GUIDE.md** - Complete 11-part setup guide:
+  - Part 1-3: Network shares, user rights, registry
+  - Part 4-6: Service configuration, firewall, session ID
+  - Part 7-9: Testing, validation, troubleshooting
+  - Part 10-11: Usage examples, multi-worker setup
 
 ### Related Documentation
 
