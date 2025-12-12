@@ -141,17 +141,56 @@ See **remote.md** for complete remote configuration requirements.
 
 ## Development Environment
 
+### Environment Management
+
+**Agent Scripts and Tools**: Use `uv` and `python` for all agent scripts, development tools, and utilities.
+
+**Jupyter Notebook Testing**: Use dedicated Anaconda environments:
+- **`rascmdr_local`** - Test with local development version (when making code changes)
+- **`rascmdr_pip`** - Test with published pip package (user experience validation)
+
+See **`.claude/rules/testing/environment-management.md`** for complete setup and usage instructions.
+
 ### Build and Install
 
 ```bash
 # Build package
 python setup.py sdist bdist_wheel
 
-# Install for development
+# Install for development (editable mode)
 pip install -e .
 
-# Install from build
+# Install from PyPI
 pip install ras-commander
+```
+
+### Testing Environments Setup
+
+**For agent scripts (using uv)**:
+```bash
+# Create virtual environment
+uv venv .venv
+
+# Activate and install
+.venv\Scripts\activate  # Windows
+pip install -e .
+```
+
+**For Jupyter notebooks (using Anaconda)**:
+```bash
+# Local development testing
+conda create -n rascmdr_local python=3.10
+conda activate rascmdr_local
+pip install -e .
+pip install jupyter ipykernel
+python -m ipykernel install --user --name rascmdr_local
+
+# Published package testing
+conda create -n rascmdr_pip python=3.10
+conda activate rascmdr_pip
+pip install ras-commander
+pip install jupyter ipykernel
+python -m ipykernel install --user --name rascmdr_pip
 ```
 
 ### Dependencies
@@ -180,7 +219,7 @@ init_ras_project(path, "6.5")
 RasCmdr.compute_plan("01")
 ```
 
-See **tdd-approach.md** for complete testing patterns.
+See **`.claude/rules/testing/tdd-approach.md`** for complete testing patterns and **`.claude/rules/testing/environment-management.md`** for environment details.
 
 ## Repository Structure
 
