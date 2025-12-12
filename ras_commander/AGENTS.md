@@ -1,3 +1,5 @@
+**Note**: This AGENTS.md file is being migrated to CLAUDE.md format for broader LLM compatibility. See `ras_commander/CLAUDE.md` for Claude Code guidance. This file will be maintained through v0.90.0 and deprecated in v0.91.0+.
+
 **Scope**
 - Guidance for agents working inside `ras_commander/` (the core library). Inherits root policies; adds coding and API usage specifics.
 

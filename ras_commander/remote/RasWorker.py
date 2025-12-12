@@ -272,18 +272,20 @@ def load_workers_from_json(
         exclude_fields = {"name", "worker_type", "enabled"}
 
         for key, value in worker_config.items():
-            if key not in exclude_fields:
-                # Handle credentials - convert username/password to credentials dict
-                if key == "username":
-                    if "credentials" not in kwargs:
-                        kwargs["credentials"] = {}
-                    kwargs["credentials"]["username"] = value
-                elif key == "password":
-                    if "credentials" not in kwargs:
-                        kwargs["credentials"] = {}
-                    kwargs["credentials"]["password"] = value
-                else:
-                    kwargs[key] = value
+            # Skip excluded fields and underscore-prefixed fields (comments)
+            if key in exclude_fields or key.startswith("_"):
+                continue
+            # Handle credentials - convert username/password to credentials dict
+            if key == "username":
+                if "credentials" not in kwargs:
+                    kwargs["credentials"] = {}
+                kwargs["credentials"]["username"] = value
+            elif key == "password":
+                if "credentials" not in kwargs:
+                    kwargs["credentials"] = {}
+                kwargs["credentials"]["password"] = value
+            else:
+                kwargs[key] = value
 
         # Use name as worker_id if provided
         if "name" in worker_config:

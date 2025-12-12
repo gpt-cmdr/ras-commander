@@ -1,0 +1,34 @@
+DSS Skill Refactoring - Quick Reference
+
+BEFORE (v0.1.0):
+- SKILL.md: 439 lines
+- reference/dss-api.md: 397 lines
+- reference/troubleshooting.md: 498 lines
+- examples/read-catalog.py: 120 lines
+- examples/extract-boundaries.py: 163 lines
+- Total: 1,821 lines (excluding support files)
+
+AFTER (v1.0.0):
+- SKILL.md: 322 lines (lightweight navigator)
+- reference/: DELETED
+- examples/: DELETED
+- Total: 322 lines
+
+REDUCTION: 82% (1,821 → 322 lines in core content)
+
+PRIMARY SOURCES (Now in SKILL.md):
+1. ras_commander/dss/AGENTS.md - Architecture & API
+2. examples/22_dss_boundary_extraction.ipynb - Complete workflow
+3. ras_commander/dss/RasDss.py - Source code & docstrings
+
+PATTERN ESTABLISHED:
+- Skills are ~300-400 lines TOTAL
+- Provide orientation and quick reference
+- Point to authoritative primary sources
+- Avoid duplicating maintained documentation
+- Primary sources stay current, skills stay stable
+
+USE THIS PATTERN FOR:
+- precipitation-data (point to precipitation/AGENTS.md)
+- usgs-gauge-data (point to usgs/AGENTS.md)
+- Any skill where strong AGENTS.md exists

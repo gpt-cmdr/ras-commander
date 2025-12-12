@@ -1,6 +1,8 @@
-# LLM-Driven Development
+# LLM Forward Development
 
-RAS Commander is a library **co-developed with LLMs** and designed **for LLM-driven workflows**. This page explains how to leverage AI assistants effectively with the library, whether you're using coding agents, IDE integrations, or web-based chat interfaces.
+RAS Commander is a library **co-developed with LLMs** and designed **for LLM Forward workflows**. This page explains how to leverage AI assistants effectively with the library while maintaining professional responsibility and verifiability.
+
+"LLM Forward" means focusing specifically on Large Language Models, placing professional responsibility first, and positioning LLMs forward to accelerate insight without eroding accountability. Whether you're using coding agents, IDE integrations, or web-based chat interfaces, this guide shows how to apply LLM Forward principles to HEC-RAS automation.
 
 ## The LLM Forward Philosophy
 
@@ -8,13 +10,28 @@ RAS Commander embraces an "LLM Forward" approach to engineering software:
 
 | Principle | Description |
 |-----------|-------------|
+| **Professional Responsibility First** | Public safety, ethics, and licensure remain first priority |
+| **LLMs Forward (Not First)** | Technology serves professional judgment, doesn't replace it |
 | **Licensed Professionals in Responsible Charge** | LLMs assist; engineers verify and approve |
-| **Deterministic, Code-Based Solutions** | Outputs are reproducible Python scripts, not black boxes |
+| **Multi-Level Verifiability** | HEC-RAS projects (GUI review) + visual outputs (plots/figures) + code audit trails |
 | **Domain Expertise Accelerated** | H&H knowledge translated efficiently into working code |
-| **LLMs Where They Provide Impact** | Applied to code generation, documentation, and exploration |
-| **First Principles Approach** | Revisiting hard problems with modern tooling |
+| **Human-in-the-Loop** | Multiple review pathways: traditional engineering review, visual inspection, code review |
+| **Focus on LLMs Specifically** | Not general AI/ML - LLMs provide greatest impact for code generation |
 
 This philosophy shifts the burden of development to **applied creativity, iteration, and verification** while LLMs handle boilerplate and pattern implementation.
+
+### Framework Attribution
+
+The **LLM Forward** philosophy was formalized by [CLB Engineering Corporation](https://clbengineering.com/) as a framework for responsible adoption of large language models in professional engineering practice.
+
+**Key Distinction**: "LLM Forward" emphasizes:
+- **Focus on LLMs specifically** (not general AI/ML)
+- **Professional responsibility first** (public safety, ethics, licensure)
+- **LLMs positioned forward** (accelerating insight without eroding accountability)
+
+RAS Commander serves as a practical demonstration of these principles applied to hydraulic & hydrologic modeling automation.
+
+**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
 
 ## History & Evolution
 

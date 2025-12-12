@@ -314,6 +314,114 @@ This notebook demonstrates the **RasControl** class for working with legacy HEC-
 - Integration with `init_ras_project()` and the global `ras` object
 - Open-operate-close pattern to prevent conflicts with modern workflows
 
+### [29_usgs_gauge_data_integration.ipynb](29_usgs_gauge_data_integration.ipynb)
+
+This notebook demonstrates the complete workflow for integrating USGS gauge data into HEC-RAS models for boundary conditions and validation.
+
+**Key contents:**
+- Querying USGS stream gauges using the National Water Information System (NWIS)
+- Spatial queries to find gauges within or near project extents
+- Retrieving historical and real-time flow and stage data
+- Matching gauges to model cross sections and boundaries
+- Generating initial conditions from gauge data
+- Creating boundary condition hydrographs from USGS observations
+- Resampling data to match HEC-RAS time intervals
+- Data quality checks and gap detection
+- Model validation using observed vs modeled comparisons
+- Calculating validation metrics (NSE, KGE, peak error, RMSE, bias)
+- Creating publication-quality comparison plots
+
+**Dependencies:** Requires `pip install dataretrieval` for USGS NWIS access
+
+### [30_usgs_real_time_monitoring.ipynb](30_usgs_real_time_monitoring.ipynb)
+
+This notebook demonstrates real-time monitoring capabilities using live USGS gauge data for operational forecasting scenarios.
+
+**Key contents:**
+- Checking gauge metadata and available parameters
+- Visualizing project geometry and gauge locations
+- Getting the latest real-time reading from active gauges
+- Analyzing recent data trends (48-hour window)
+- Implementing incremental cache refresh for efficient data management
+- Setting up threshold detection for operational triggers
+- Detecting rapid changes and rate-of-rise conditions
+- Continuous monitoring with callback functions
+- Building production monitoring systems
+- Automated model triggering based on gauge conditions
+- Real-time status dashboards and alerts
+
+**Use case:** Enables continuous monitoring of watershed conditions for flood warning systems and automated model execution
+
+### [31_bc_generation_from_live_gauge.ipynb](31_bc_generation_from_live_gauge.ipynb)
+
+This notebook demonstrates generating HEC-RAS boundary conditions from live USGS gauge data with drainage area scaling.
+
+**Key contents:**
+- Identifying boundary conditions for real-time updates
+- Querying live flow data from upstream USGS gauges
+- Applying drainage area scaling to match model locations
+- Converting gauge data to HEC-RAS hydrograph format
+- Generating properly formatted boundary condition tables
+- Updating unsteady flow files (.u##) with new BCs
+- Verifying boundary condition updates
+- Creating working copies for safe modifications
+- Operational forecasting workflow implementation
+- Automated BC generation for continuous model runs
+
+**Use case:** Enables operational forecasting where current gauge conditions drive model boundary conditions for real-time predictions
+
+### [32_model_validation_with_usgs.ipynb](32_model_validation_with_usgs.ipynb)
+
+This notebook demonstrates comprehensive model validation by comparing HEC-RAS results against observed USGS gauge data.
+
+**Key contents:**
+- Extracting modeled flow timeseries from HDF results
+- Querying observed data from downstream validation gauges
+- Aligning modeled and observed timeseries for comparison
+- Calculating Nash-Sutcliffe Efficiency (NSE) metrics
+- Computing Kling-Gupta Efficiency (KGE) with components
+- Analyzing peak flow errors and timing differences
+- Calculating RMSE, MAE, bias, and correlation metrics
+- Creating timeseries comparison plots with metrics
+- Generating scatter plots with 1:1 reference lines
+- 4-panel residual diagnostic plots for error analysis
+- Performance rating and calibration recommendations
+- Identifying systematic biases and timing errors
+
+**Use case:** Provides quantitative assessment of model performance and guides calibration efforts for improved accuracy
+
+### [33_gauge_catalog_generation.ipynb](33_gauge_catalog_generation.ipynb)
+
+This notebook demonstrates generating and using a standardized USGS gauge data catalog for your HEC-RAS project.
+
+**Key contents:**
+- One-command gauge discovery and data download
+- Creating standardized "USGS Gauge Data" folder structure
+- Generating master catalog (CSV) with all gauges in project extent
+- Creating spatial data (GeoJSON) for mapping applications
+- Downloading historical data for each gauge (flow and stage)
+- Organizing data in individual gauge folders with metadata
+- Auto-generating README documentation
+- Loading catalog and gauge data using helper functions
+- Processing all gauges in catalog for batch operations
+- Updating existing catalog with latest data
+- Integrating catalog data with boundary condition generation
+
+**Folder structure created:**
+```
+project_folder/USGS Gauge Data/
+├── gauge_catalog.csv          # Master catalog
+├── gauge_locations.geojson    # Spatial data
+├── README.md                  # Documentation
+├── USGS-{site_id}/            # Individual gauge folders
+│   ├── metadata.json
+│   ├── historical_flow.csv
+│   ├── historical_stage.csv
+│   └── data_availability.json
+```
+
+**Use case:** Provides standard project organization similar to precipitation module, enables engineering review of all available gauges, and serves as foundation for automated workflows
+
 
 ## Contributing
 

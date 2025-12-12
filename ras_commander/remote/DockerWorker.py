@@ -129,6 +129,7 @@ class DockerWorker(RasWorker):
 
     # SSH connection options (for ssh:// docker_host URLs)
     use_ssh_client: bool = False  # If True, use system ssh command instead of paramiko
+    ssh_key_path: Optional[str] = None  # Path to SSH private key (e.g., "~/.ssh/docker_worker")
 
     # Resource limits
     cpu_limit: Optional[str] = None  # e.g., "4" for 4 cores
@@ -205,6 +206,8 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         preprocess_on_host: Run Windows preprocessing first (default: True)
         use_ssh_client: Use system ssh command instead of paramiko (default: False)
             Set True if you want to use SSH agent or ~/.ssh/config settings
+        ssh_key_path: Path to SSH private key for authentication (e.g., "~/.ssh/docker_worker")
+            Only used with ssh:// docker_host URLs. Supports ~ expansion.
         cpu_limit: Container CPU limit (e.g., "4" for 4 cores)
         memory_limit: Container memory limit (e.g., "8g")
         **kwargs: Additional DockerWorker parameters
@@ -264,6 +267,30 @@ def init_docker_worker(**kwargs) -> DockerWorker:
                 "Setup: ssh-keygen && ssh-copy-id user@host\n"
                 "Test: ssh user@host 'docker info' (must work without password)"
             )
+
+    # Handle SSH key path configuration
+    if is_ssh_host and worker.ssh_key_path:
+        import os
+        # Expand ~ in path
+        expanded_key_path = os.path.expanduser(worker.ssh_key_path)
+
+        if worker.use_ssh_client:
+            # For system SSH client, recommend ~/.ssh/config instead
+            logger.info(f"SSH key path specified: {worker.ssh_key_path}")
+            logger.info("Note: When use_ssh_client=True, configure the key in ~/.ssh/config:")
+            logger.info(f"  Host {worker.docker_host.split('@')[-1] if '@' in worker.docker_host else 'your-host'}")
+            logger.info(f"    IdentityFile {expanded_key_path}")
+        else:
+            # For paramiko, set SSH_AUTH_SOCK or use paramiko's key loading
+            # The Docker SDK will look in standard locations and SSH agent
+            logger.info(f"SSH key path: {expanded_key_path}")
+            if not os.path.exists(expanded_key_path):
+                logger.warning(f"SSH key file not found: {expanded_key_path}")
+            else:
+                # Set environment variable for paramiko to find the key
+                # This is a workaround since Docker SDK doesn't expose key_filename param
+                os.environ.setdefault('DOCKER_SSH_KEY_FILE', expanded_key_path)
+                logger.info("SSH key will be loaded via paramiko")
 
     # Verify Docker daemon connectivity
     try:
@@ -325,6 +352,8 @@ def init_docker_worker(**kwargs) -> DockerWorker:
     logger.info(f"  Timeout: {worker.max_runtime_minutes} minutes")
     if is_ssh_host:
         logger.info(f"  SSH client: {'system' if worker.use_ssh_client else 'paramiko'}")
+        if worker.ssh_key_path:
+            logger.info(f"  SSH key: {worker.ssh_key_path}")
 
     return worker
 

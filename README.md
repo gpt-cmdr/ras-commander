@@ -6,14 +6,20 @@
 
 RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library was initially conceptualized in the Australian Water School course "AI Tools for Modelling Innovation", and subsequently expanded to cover much of the basic functionality of the HECRASController COM32 interface using open-source python libraries.  This library uses a Test Driven Development strategy, leveraging the publicly-available HEC-RAS Example projects to create repeatable demonstration examples.  The "Commmander" moniker is inspired by the "Command Line is All You Need" approach to HEC-RAS automation that was first implemented in the HEC-Commander Tools repository.
 
+## LLM Forward Engineering
+
+This library was developed using an **LLM Forward** approach - focusing on Large Language Models to accelerate engineering workflows while maintaining professional responsibility and verifiability. See [LLM Forward Development](https://ras-commander.readthedocs.io/en/latest/development/llm-development/) for philosophy and best practices.
+
 [![Documentation Status](https://readthedocs.org/projects/ras-commander/badge/?version=latest)](https://ras-commander.readthedocs.io/en/latest/?badge=latest)
 
 **[📖 Full Documentation](https://ras-commander.readthedocs.io/)** | *[ASFPM Presentation](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)*
 
 ## Repository Author
 
-**[William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)**  
-Owner & Vice President, [CLB Engineering Corporation](https://clbengineering.com/)  
+**[William Katzenmeyer, P.E., C.F.M.](https://engineeringwithllms.info)**
+Owner & Vice President, [CLB Engineering Corporation](https://clbengineering.com/)
+
+This library demonstrates the **LLM Forward** approach to engineering software development - a framework emphasizing professional responsibility first while leveraging large language models to accelerate insight and automation.
 
 
 ## Don't Ask Me, Ask a GPT!
@@ -30,7 +36,12 @@ This repository has several methods of interaction with Large Language Models an
 
 
 ## Background
-The ras-commander library emerged from the initial test-bed of AI-driven coding represented by the [HEC-Commander tools](https://github.com/gpt-cmdr/HEC-Commander) Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations. In 2024, I taught a series of progressively more complex webinars demonstrating how to use simple prompting, example projects and natural language instruction to effectively code HEC-RAS automation workflows, culminating in a 6 hour course.  The library published for utilization in that course, [awsrastools](https://github.com/gpt-cmdr/awsrastools) served as a foundation of examples which were iteratively extended into the full RAS-Commander library.  Unlike the original notebook by the same name, this library is not focused on parallel execution across multiple machines.  Instead, it is focused on providing a general-purpose python API for interacting with HEC-RAS projects, and building an AI-friendly library that will allow new users to quickly scaffold their own workflows into a python script. Example notebooks are provided, but the intention is to empower engineers, software developers, GIS personnel and data analysts to more easily access and interact with HEC-RAS data in a python environment.  Also, by publishing these examples publicly, with complete working code examples and LLM optimization, future users can readily rewrite they key functions of the library for inclusion in into their own preferred libraries, languages or return formats.
+
+The ras-commander library emerged from the initial test-bed of LLM Forward engineering represented by the [HEC-Commander tools](https://github.com/gpt-cmdr/HEC-Commander) Python notebooks. These notebooks served as a proof of concept, demonstrating the value proposition of automating HEC-RAS operations through responsible LLM adoption.
+
+In 2024, William Katzenmeyer taught a series of progressively more complex webinars demonstrating how to use simple prompting, example projects, and natural language instruction to effectively code HEC-RAS automation workflows, culminating in a 6-hour course. The library published for utilization in that course, [awsrastools](https://github.com/gpt-cmdr/awsrastools), served as a foundation of examples which were iteratively extended into the full RAS-Commander library using LLM Forward development principles.
+
+Unlike the original notebook by the same name, this library is not focused on parallel execution across multiple machines. Instead, it is focused on providing a general-purpose python API for interacting with HEC-RAS projects, and building an AI-friendly library that will allow new users to quickly scaffold their own workflows into a python script. Example notebooks are provided, but the intention is to empower engineers, software developers, GIS personnel and data analysts to more easily access and interact with HEC-RAS data in a python environment. Also, by publishing these examples publicly, with complete working code examples and LLM optimization, future users can readily rewrite the key functions of the library for inclusion into their own preferred libraries, languages or return formats.
 
 ## Features
 
@@ -546,10 +557,14 @@ For detailed usage instructions and API documentation, visit the **[RAS Commande
 
 ## Future Development
 
-The ras-commander library is an ongoing project. Future plans include:
-- Integration of more advanced AI-driven features
-- Expansion of HMS and DSS functionalities
-- Community-driven development of new modules and features
+The ras-commander library is an ongoing project embodying LLM Forward engineering principles. Future plans include:
+
+- Integration of more advanced LLM-assisted features while maintaining professional oversight
+- Expansion of HMS and DSS functionalities through community-driven development
+- Enhanced verifiability and interpretability features for engineering review
+- Community-driven development of new modules following LLM Forward best practices
+
+See [LLM Forward Development Philosophy](https://ras-commander.readthedocs.io/en/latest/development/llm-development/) for contribution guidelines.
 
 ## Related Resources
 
