@@ -30,15 +30,20 @@ Task Subagents (Haiku)
 └─ Cost-effective bulk operations
 ```
 
-## Recommended Specialist Subagents
+## Implemented Subagents
+
+1. **claude-code-guide** - Claude Code best practices and configuration (Haiku)
+2. **hierarchical-knowledge-agent-skill-memory-curator** - Memory system curation (Haiku)
+3. **remote-executor** - Distributed HEC-RAS execution across workers (Sonnet)
+
+## Recommended Future Subagents
 
 1. **hdf-analyst** - HEC-RAS HDF file analysis and result extraction
 2. **geometry-parser** - Geometry file parsing and modification
-3. **remote-executor** - Distributed execution across workers
-4. **usgs-integrator** - USGS gauge data integration and validation
-5. **precipitation-specialist** - AORC and Atlas 14 workflows
-6. **quality-assurance** - RasFixit geometry repair and validation
-7. **documentation-generator** - Example notebooks and API docs
+3. **usgs-integrator** - USGS gauge data integration and validation
+4. **precipitation-specialist** - AORC and Atlas 14 workflows
+5. **quality-assurance** - RasFixit geometry repair and validation
+6. **documentation-generator** - Example notebooks and API docs
 
 ## Subagent Definition Format
 
