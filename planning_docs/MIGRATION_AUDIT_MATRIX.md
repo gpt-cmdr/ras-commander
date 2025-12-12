@@ -1,8 +1,8 @@
 # feature_dev_notes Migration Audit Matrix
 
 **Created**: 2025-12-12
-**Updated**: 2025-12-12 Session 9
-**Status**: Phase 2 - Migrations in Progress (3/9 complete, 33%)
+**Updated**: 2025-12-12 Session 10
+**Status**: Phase 2 - Migrations in Progress (4/9 migrated, 2 excluded, 44% complete)
 
 ## Subagent Audit Results
 
@@ -37,9 +37,9 @@
 | **RasMapper Interpolation** | hdf-analyst | - | HIGH | ✅ MIGRATED Session 9 (ce40c94) |
 | **parallel run agent** | remote-executor | - | HIGH | ✅ MIGRATED Session 9 (8855f76) |
 | **Decompilation Agent** | (none - standalone) | hdf-analyst | HIGH | ✅ MIGRATED Session 8 |
-| **gauge_data_import** | usgs-integrator | precipitation-specialist | MEDIUM | ⏳ Pending |
-| **National Water Model** | precipitation-specialist | - | MEDIUM | ⏳ Pending |
-| **1D_Floodplain_Mapping** | geometry-parser | - | MEDIUM | ⏳ Pending |
+| **precip/ + precipitation_investigation/** | precipitation-specialist | - | HIGH | ✅ MIGRATED Session 10 (6b6b1d3) |
+| **gauge_data_import** | usgs-integrator | - | MEDIUM | 🔴 SKIP Session 10 - 100% redundant (ras_commander/usgs/) |
+| **1D_Floodplain_Mapping** | geometry-parser | - | MEDIUM | 🔴 EXCLUDE Session 10 - Wrong domain (floodplain mapping) |
 | **Build_Documentation** | documentation-generator | - | MEDIUM | ⏳ Pending |
 
 ### Medium Priority Mappings (Shared or Utility)
@@ -168,12 +168,14 @@
 - feature_dev_notes directories: 33 total
 - Gitignored references: 3+ instances
 
-### Current State (Session 9)
+### Current State (Session 10)
 - Subagents with feature_dev_notes refs: 0 active (hierarchical-knowledge is documented exception)
-- ras_agents: 4 (decompilation, remote-executor, quality-assurance, hdf-analyst)
-- Domains migrated: 3/9 (33%)
-- Files migrated: 42 files, ~20,000 lines
-- Security audits: 3 completed (1 CRITICAL redaction, 2 clean)
+- ras_agents: 5 (decompilation, remote-executor, quality-assurance, hdf-analyst, precipitation-specialist)
+- Domains migrated: 4/9 (44%)
+- Domains excluded: 2 (usgs-integrator redundant, geometry-parser wrong domain)
+- Files migrated: 53 files, ~20,047 KB
+- Security audits: 4 completed (1 CRITICAL redaction, 3 clean)
+- Future features identified: 3 data downloaders (terrain, NLCD, SSURGO) added to roadmap
 
 ### After Migration (Target State)
 - Subagents with feature_dev_notes refs: 0 (except documented exceptions)

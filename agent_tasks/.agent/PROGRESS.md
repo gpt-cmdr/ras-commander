@@ -1509,3 +1509,86 @@ Session 9 successfully completed 3 high-priority migrations (remote-executor, qu
 
 **Status**: 3/9 complete (33%), 6 remaining (~4.5 hours estimated)
 
+
+
+---
+
+## Session 10 - Continue Migrations + Data Downloaders Planning (2025-12-12)
+
+**Focus**: Continue feature_dev_notes migrations, identify future features, clean up directories
+
+**Achievements**:
+
+1. **precipitation-specialist Migration** (Commit 6b6b1d3)
+   - Migrated 11 files (47 KB) to ras_agents/precipitation-specialist-agent/
+   - Content: AORC implementation plan, HEC-RAS 6.6 format breakthrough, test scripts
+   - Source: docs_old/precip/ (80 KB) + docs_old/precipitation_investigation/ (252 KB)
+   - Security: CLEAN (excluded LOCAL_REPOS.md with local paths C:\GH\)
+   - Created AGENT.md (371 lines)
+
+2. **usgs-integrator Exclusion** (Commit 7cafa02)
+   - Decision: SKIP - 100% REDUNDANT
+   - Reason: All content already in ras_commander/usgs/ (Session 3, 14 modules)
+   - Source: feature_dev_notes/gauge_data_import/ (244 KB + 345 MB archived)
+   - Finding: Historical development artifacts, production implementation comprehensive
+   - Created redundancy findings report
+
+3. **geometry-parser Exclusion** (Commit 3b90aa6)
+   - Decision: EXCLUDE - Wrong Feature Domain
+   - Reason: 1D_Floodplain_Mapping is for floodplain result mapping (NOT geometry parsing)
+   - Source: feature_dev_notes/1D_Floodplain_Mapping/ (32 KB, research phase only)
+   - Finding: Different feature (floodplain inundation from WSE interpolation)
+   - Created exclusion findings report
+
+4. **Data Downloaders Planning** (Commit 925e941 + local)
+   - Created feature_dev_notes/data-downloaders/ (gitignored experimental space)
+   - Components:
+     - terrain/ (py3dep terrain downloader - research complete)
+     - nlcd/ (NLCD land cover downloader - planning complete)
+     - ssurgo/ (SSURGO soils downloader - planning complete)
+     - soils-post-processing/ (existing Soil Stats Tool)
+   - Added Phase 2.6 to ROADMAP.md (8-12 hrs effort)
+   - Use case: Automated project setup (terrain + roughness + infiltration)
+
+5. **Directory Cleanup**
+   - gauge_data_import: Archived temp files to .old/session_summaries/ and .old/test_scripts/
+   - Preserved research files for future terrain/NLCD/SSURGO development
+   - Directory now clean (README.md only in root)
+
+**Files Created**:
+- ras_agents/precipitation-specialist-agent/AGENT.md (371 lines)
+- ras_agents/precipitation-specialist-agent/reference/ (11 files)
+- .claude/subagents/precipitation-specialist/researchers/ (research protocol)
+- .claude/subagents/usgs-integrator/researchers/ (research protocol)
+- .claude/subagents/geometry-parser/researchers/ (research protocol)
+- planning_docs/precipitation-specialist_MIGRATION_FINDINGS.md (security audit)
+- planning_docs/usgs-integrator_MIGRATION_FINDINGS.md (redundancy analysis)
+- planning_docs/geometry-parser_MIGRATION_FINDINGS.md (exclusion decision)
+- feature_dev_notes/data-downloaders/ (local gitignored - terrain, NLCD, SSURGO planning)
+- agent_tasks/ROADMAP.md Phase 2.6 (geospatial data downloaders)
+
+**Metrics**:
+- Domains reviewed: 3 (precipitation-specialist, usgs-integrator, geometry-parser)
+- Domains migrated: 1 (precipitation-specialist)
+- Domains excluded: 2 (usgs-integrator redundant, geometry-parser wrong domain)
+- Files migrated: 11 files (47 KB)
+- Total migrated (Sessions 9-10): 53 files (~20,047 KB across 4 domains)
+- Commits: 4
+
+**Key Learnings**:
+- **Redundancy Analysis Works**: usgs-integrator correctly identified as redundant (saves migration effort)
+- **Feature Domain Mapping Important**: 1D_Floodplain_Mapping not related to geometry parsing (audit matrix had incorrect mapping)
+- **Future Planning Integration**: Discovered need for terrain/NLCD/SSURGO downloaders while reviewing gauge data
+- **Experimental Space Usage**: Created feature_dev_notes/data-downloaders/ for future development (proper use of gitignored space)
+- **Pattern Refined**: research → audit → decision (migrate if unique, skip if redundant, exclude if wrong domain)
+
+**Progress**:
+- Migrations complete: 4/9 (44%)
+- Domains reviewed: 6/9 (67%)
+- Exclusions documented: 2 (usgs-integrator, geometry-parser)
+- Remaining: 3 potential migrations (documentation-generator, geometry content search, general sweep)
+
+**Time Spent**: ~45 minutes (1 migration + 2 exclusion analyses + data downloaders planning)
+
+**Next Session**: documentation-generator migration, geometry content verification, final sweep
+

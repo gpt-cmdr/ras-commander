@@ -1,71 +1,88 @@
 # Project State
 
 **Last Updated**: 2025-12-12
-**Last Session**: 9 (complete)
+**Last Session**: 10 (complete)
 **Health**: 🟢 Green
 
 ## Current Focus
-**Task**: Three Domain Migrations - COMPLETE ✅
-**Status**: Session 9 complete, 3/9 domains migrated (33% complete)
+**Task**: Continue feature_dev_notes Migrations + Data Downloaders Planning - COMPLETE ✅
+**Status**: Session 10 complete, 4/9 domains migrated (44% complete), 2 domains excluded, data downloaders roadmap added
 **Deliverables**:
+
+**Session 9** (remote-executor, quality-assurance, hdf-analyst):
 - ✅ **Migration 1 (remote-executor)**: Setup guide with full redaction (password, IP, username)
 - ✅ **Migration 2 (quality-assurance)**: 13 specifications, FEMA cHECk-RAS standards
 - ✅ **Migration 3 (hdf-analyst)**: 28 docs (algorithms, RASMapper API), clean-room ethics
-- ✅ Created 3 researcher sub-subagents with security audit protocols
-- ✅ All security verifications PASSED (zero sensitive info in tracked files)
-- ✅ 3 AGENT.md navigators created (325, 389, 401 lines - all within target)
-- ✅ All committed (8855f76, b7b29b3, ce40c94, 679ef14)
+- ✅ 3 researcher sub-subagents, 3 AGENT.md navigators (325, 389, 401 lines)
+- ✅ Commits: 8855f76, b7b29b3, ce40c94, 679ef14
+
+**Session 10** (precipitation-specialist + exclusions + data downloaders):
+- ✅ **Migration 4 (precipitation-specialist)**: 11 files (47 KB) - AORC implementation, HEC-RAS 6.6 format discovery
+- ✅ **Exclusion: usgs-integrator**: 100% redundant (already in ras_commander/usgs/)
+- ✅ **Exclusion: geometry-parser**: Wrong feature domain (1D_Floodplain_Mapping ≠ geometry parsing)
+- ✅ **Data Downloaders Planning**: Terrain (3DEP), NLCD land cover, SSURGO soils
+- ✅ **Roadmap Updated**: Added Phase 2.6 Geospatial Data Downloaders (8-12 hrs)
+- ✅ **Cleanup**: gauge_data_import archived (temp files → .old/)
+- ✅ Commits: 6b6b1d3, 7cafa02, 3b90aa6, 925e941
+
 **Results**:
-- **remote-executor**: CRITICAL security finding - password in 15+ files, full redaction applied
-- **quality-assurance**: Clean audit, 156/187 FEMA checks documented (~83% coverage)
-- **hdf-analyst**: 99.996% size reduction (255KB from 5.7GB), excluded decompiled code
-- **Total migrated**: 42 files, ~20,000 lines of production-ready documentation
-- **Security protocol**: Validated 3x, prevented credential leaks, handled proprietary exclusions
-- **Pattern efficiency**: ~45min per domain, scalable to remaining 6 migrations
-**Score**: 3/9 migrations complete (33%), pattern proven and efficient ✅
+- **Session 9**: 3 migrations (remote-executor, quality-assurance, hdf-analyst)
+  - CRITICAL security finding prevented (password redaction)
+  - 42 files, ~20,000 lines migrated
+  - Clean-room ethics documented
+- **Session 10**: 1 migration + 2 exclusions + data downloaders
+  - precipitation-specialist: 11 files (47 KB) - AORC + HEC-RAS 6.6 format
+  - usgs-integrator: SKIP - 100% redundant with ras_commander/usgs/
+  - geometry-parser: EXCLUDE - wrong feature domain (floodplain mapping ≠ geometry parsing)
+  - Data downloaders: Terrain (3DEP), NLCD, SSURGO added to roadmap
+  - gauge_data_import: Cleaned up (temp files archived)
+- **Total migrated**: 53 files (~20,047 KB across 4 domains)
+- **Security protocol**: Validated 4x, all clean or properly redacted
+- **Efficiency**: 3 domains reviewed in ~40 min (improved with exclusion decisions)
+**Score**: 4/9 migrations complete (44%), 2 domains excluded appropriately, data downloaders roadmap created ✅
 
-## Next Session (Session 10) - START HERE
+## Next Session (Session 11) - START HERE
 
-**PROGRESS**: ✅ 3/9 migrations complete (33%) - remote-executor, quality-assurance, hdf-analyst
+**PROGRESS**: ✅ 4/9 migrations complete (44%), 2 excluded - precipitation-specialist, quality-assurance, hdf-analyst, remote-executor
 
-**SESSION 9 ACHIEVEMENTS**:
-- 3 domains migrated in single session (validates efficiency)
-- 42 files, ~20,000 lines migrated
-- Security protocol proven (credentials prevented, decompiled code excluded)
-- Clean-room ethics documented for hdf-analyst
-- Pattern validated: ~45min per domain
+**SESSION 10 ACHIEVEMENTS**:
+- 1 domain migrated: precipitation-specialist (AORC + HEC-RAS 6.6 format)
+- 2 domains appropriately excluded (usgs-integrator redundant, geometry-parser wrong domain)
+- Data downloaders planning created (terrain, NLCD, SSURGO)
+- ROADMAP.md updated with Phase 2.6 Geospatial Data Downloaders
+- gauge_data_import cleaned up (temp files archived)
+- Pattern refined: research → audit → decision (migrate/skip/exclude)
 
 **READ THESE FILES FIRST**:
-1. `ras_agents/hdf-analyst-agent/AGENT.md` - Latest migration (clean-room ethics example)
-2. `planning_docs/MIGRATION_AUDIT_MATRIX.md` - Remaining 6 migrations prioritized
-3. `planning_docs/hdf-analyst_MIGRATION_FINDINGS.md` - Selective migration approach
+1. `ras_agents/precipitation-specialist-agent/AGENT.md` - Latest migration
+2. `planning_docs/MIGRATION_AUDIT_MATRIX.md` - Remaining domains status
+3. `planning_docs/usgs-integrator_MIGRATION_FINDINGS.md` - Redundancy analysis example
+4. `planning_docs/geometry-parser_MIGRATION_FINDINGS.md` - Exclusion decision example
 
-**NEXT MIGRATIONS** (6 remaining, pick 2-3 per session):
-
-**High Priority:**
-- ⏳ precipitation-specialist → National Water Model (AORC workflows)
-- ⏳ usgs-integrator → gauge_data_import (gauge workflows, BC generation)
+**NEXT MIGRATIONS** (3 remaining actual migrations):
 
 **Medium Priority:**
-- ⏳ geometry-parser → 1D_Floodplain_Mapping (floodplain algorithms)
 - ⏳ documentation-generator → Build_Documentation (doc generation patterns)
+- ⏳ Check for actual geometry parsing content (may already be in ras_commander/geom/)
 
 **Final Sweep:**
 - ⏳ General sweep → Unassigned directories (cross-cutting patterns)
+- ⏳ Final audit and cleanup
 
-**Estimated**: 6 domains @ 45min = ~4.5 hours (2 sessions)
+**Estimated**: 3 remaining potential migrations @ 45min = ~2-3 hours (1 session)
 
-**Pattern**: research → audit → selective migration → ethics check → verify → commit
+**Pattern**: research → audit → decision (migrate if unique, skip if redundant, exclude if wrong domain) → commit
 
 ## Other Next Up
-1. **feature_dev_notes Migrations** (remaining 6 domains):
-   - ✅ remote-executor → RasRemote (COMPLETE - 27KB setup guide, redacted)
-   - ✅ quality-assurance → cHECk-RAS (COMPLETE - 13 specs, FEMA standards)
-   - ✅ hdf-analyst → RasMapper Interpolation (COMPLETE - 28 docs, clean-room)
-   - ⏳ precipitation-specialist → National Water Model (HIGH priority - NEXT)
-   - ⏳ usgs-integrator → gauge_data_import (HIGH priority)
-   - ⏳ geometry-parser → 1D_Floodplain_Mapping (MEDIUM priority)
-   - ⏳ documentation-generator → Build_Documentation (MEDIUM priority)
+1. **feature_dev_notes Migrations** (4 migrated, 2 excluded, 3 remaining):
+   - ✅ remote-executor → RasRemote (COMPLETE - Session 9)
+   - ✅ quality-assurance → cHECk-RAS (COMPLETE - Session 9)
+   - ✅ hdf-analyst → RasMapper Interpolation (COMPLETE - Session 9)
+   - ✅ precipitation-specialist → precip/ + precipitation_investigation/ (COMPLETE - Session 10)
+   - 🔴 usgs-integrator → gauge_data_import (SKIP - 100% redundant, Session 10)
+   - 🔴 geometry-parser → 1D_Floodplain_Mapping (EXCLUDE - wrong domain, Session 10)
+   - ⏳ documentation-generator → Build_Documentation (MEDIUM priority - NEXT)
+   - ⏳ Check for actual geometry parsing content (may be in ras_commander/geom/)
    - ⏳ General sweep → Unassigned directories (LOW priority)
 
 2. **Phase 1 Quick Wins**:
@@ -84,4 +101,4 @@ See ROADMAP.md for complete development plan.
 - None
 
 ## Quick Context
-Session 3: USGS integration. Session 4: Organized feature_dev_notes. Session 5: Real-Time Computation Messages (lib-001). Session 6: Real-Time USGS Monitoring (gauge-006). Session 7: Hierarchical knowledge refactor (83.6% duplication reduction). Session 8: ras_agents/ infrastructure, migration planning (Phase 1 audit, 4-phase strategy). **Session 9 (complete): 3 HIGH PRIORITY migrations** - (1) remote-executor: CRITICAL credentials found (password in 15+ files, IP in 40+), full redaction, 27KB guide migrated. (2) quality-assurance: Clean audit, 13 FEMA specs (~10K lines, 83% coverage), disclaimer added. (3) hdf-analyst: Selective migration (28 docs, 255KB from 5.7GB), excluded 947 decompiled .cs files (ethical), clean-room implementation documented. **Commits**: 8855f76, b7b29b3, ce40c94, 679ef14. **Total**: 42 files, ~20K lines. **Progress**: 3/9 domains (33%). **Pattern**: research → audit → selective migration → verify → commit (~45min/domain). **Ready**: 6 domains remaining (~4.5 hours, 2 sessions).
+Session 3: USGS integration. Session 4: Organized feature_dev_notes. Session 5: Real-Time Computation Messages (lib-001). Session 6: Real-Time USGS Monitoring (gauge-006). Session 7: Hierarchical knowledge refactor (83.6% duplication reduction). Session 8: ras_agents/ infrastructure, migration planning (Phase 1 audit, 4-phase strategy). **Session 9**: 3 HIGH PRIORITY migrations - (1) remote-executor: CRITICAL credentials redacted, (2) quality-assurance: 13 FEMA specs, (3) hdf-analyst: 28 docs, clean-room ethics. Commits: 8855f76, b7b29b3, ce40c94. **Session 10 (complete)**: 1 migration + 2 exclusions + data downloaders - (1) precipitation-specialist: 11 files (AORC + HEC-RAS 6.6 format), clean audit. (2) usgs-integrator SKIP: 100% redundant with ras_commander/usgs/. (3) geometry-parser EXCLUDE: 1D_Floodplain_Mapping is wrong domain (floodplain mapping ≠ geometry parsing). (4) Data downloaders: Created feature_dev_notes/data-downloaders/ with terrain (py3dep, ready), NLCD (planning), SSURGO (planning). Added ROADMAP.md Phase 2.6. Cleaned gauge_data_import (archived to .old/). **Commits**: 6b6b1d3, 7cafa02, 3b90aa6, 925e941. **Progress**: 4/9 migrated (44%), 2 excluded. **Remaining**: 3 potential (documentation-generator, geometry content search, general sweep). **Pattern**: research → audit → decision (migrate/skip/exclude). **Ready**: Final migrations (~2-3 hours, 1 session).
