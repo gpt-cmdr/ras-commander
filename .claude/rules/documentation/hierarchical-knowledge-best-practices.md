@@ -387,9 +387,34 @@ Your hierarchical knowledge structure is correctly implemented if:
 - ✅ File count minimal (17 navigators including 2 exceptions, not 75 duplicates)
 - ✅ Exceptions documented with clear rationale (section 5)
 
+## Agent Reference Data Locations
+
+### ras_agents/ vs feature_dev_notes/
+
+**Important Distinction**:
+
+**ras_agents/** - Production-ready, tracked agent reference data:
+- ✅ Tracked in git for version control
+- ✅ Organized following hierarchical knowledge principles
+- ✅ Production-ready for automated agent operation
+- ✅ Agents can safely reference this location
+
+**feature_dev_notes/** - Experimental, gitignored development space:
+- ❌ Gitignored (not tracked)
+- ❌ Unorganized experimentation
+- ❌ Agents cannot reference this location
+- ✅ Used for testing before formalizing in ras_agents/
+
+**Migration Path**: When feature_dev_notes/ agents are ready, migrate to ras_agents/ following hierarchical knowledge principles.
+
+**Example**: Decompilation Agent
+- **Development**: `feature_dev_notes/Decompilation Agent/` (gitignored, local only)
+- **Production**: `ras_agents/decompilation-agent/` (tracked, agents can reference)
+
 ## See Also
 
 - `.claude/rules/documentation/mkdocs-config.md` - Documentation deployment
 - `.claude/rules/documentation/notebook-standards.md` - Example notebook standards
 - `planning_docs/PHASE_4_REFACTOR_SUMMARY.md` - Complete refactoring analysis
 - Root `CLAUDE.md` - Strategic overview and hierarchical knowledge philosophy
+- `ras_agents/README.md` - Production agent reference data structure

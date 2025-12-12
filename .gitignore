@@ -109,6 +109,11 @@ agent_tasks/tasks/*/
 # Ignore large development work in ras_agents/ and ras_skills/
 ras_agents/Model Updater*/
 ras_agents/1D Mannings*/
+
+# Ignore decompiled assembly sources (too large for git)
+# These are generated locally via ILSpyCMD from HEC-RAS DLLs
+ras_agents/decompilation-agent/decompiled/
+ras_agents/*/decompiled/
 ras_skills/*/Template Models/
 ras_skills/*/Working/
 ras_skills/*/working/

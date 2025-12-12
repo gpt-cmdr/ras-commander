@@ -241,6 +241,9 @@ ras-commander/
 │   │   └── documentation/  # Doc standards
 │   ├── skills/             # Library workflow skills
 │   └── subagents/          # Specialist definitions
+├── ras_agents/             # Production agent reference data (tracked)
+│   ├── README.md           # Agent organization guidelines
+│   └── decompilation-agent/# .NET assembly reverse engineering
 ├── ras_skills/             # Production domain skills
 ├── examples/               # Example notebooks
 │   ├── AGENTS.md           # Notebook index
@@ -248,7 +251,7 @@ ras-commander/
 ├── agent_tasks/            # Multi-session task coordination
 │   ├── .agent/             # Memory system (STATE, BACKLOG, PROGRESS)
 │   └── README.md           # Complete memory system docs
-├── feature_dev_notes/      # Feature-specific research
+├── feature_dev_notes/      # Experimental space (gitignored, NOT for agent reference)
 │   └── CLAUDE.md           # Feature dev guidance
 ├── docs/                   # Documentation source
 ├── tests/                  # Test scripts
