@@ -323,11 +323,12 @@ class RasUsgsRealTime:
             start_date = end_date - timedelta(hours=hours)
 
             # Retrieve data
+            # Note: Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS) for USGS API compatibility
             data_df, metadata = nwis.get_iv(
                 sites=site_id,
                 parameterCd=param_code,
-                start=start_date.strftime("%Y-%m-%d %H:%M"),
-                end=end_date.strftime("%Y-%m-%d %H:%M")
+                start=start_date.strftime("%Y-%m-%dT%H:%M:%S"),
+                end=end_date.strftime("%Y-%m-%dT%H:%M:%S")
             )
 
             if data_df.empty:
@@ -446,11 +447,12 @@ class RasUsgsRealTime:
             end_date = datetime.now()
 
             # Retrieve new data
+            # Note: Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS) for USGS API compatibility
             new_data_df, metadata = nwis.get_iv(
                 sites=site_id,
                 parameterCd=param_code,
-                start=start_date.strftime("%Y-%m-%d %H:%M"),
-                end=end_date.strftime("%Y-%m-%d %H:%M")
+                start=start_date.strftime("%Y-%m-%dT%H:%M:%S"),
+                end=end_date.strftime("%Y-%m-%dT%H:%M:%S")
             )
 
             # Standardize new data

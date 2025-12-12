@@ -219,19 +219,15 @@ class UsgsGaugeSpatial:
         # Query USGS Water Services API
         try:
             kwargs = {
-                'bBox': f"{west},{south},{east},{north}",
-                'siteType': site_type
+                'bbox': [west, south, east, north],  # List of floats, not string
             }
 
             # Add parameter code filter if specified
             if param_codes is not None:
                 kwargs['parameterCd'] = param_codes
 
-            # Add site status filter
-            if active_only:
-                kwargs['siteStatus'] = 'active'
-            else:
-                kwargs['siteStatus'] = 'all'
+            # Note: site_type and active_only filtering happens on returned data
+            # The API doesn't reliably filter by these parameters
 
             logger.debug(f"USGS query parameters: {kwargs}")
 
@@ -263,6 +259,22 @@ class UsgsGaugeSpatial:
 
             logger.debug(f"Created GeoDataFrame with {len(gdf)} gauges")
             logger.debug(f"Columns: {list(gdf.columns)}")
+
+            # Filter by site type if specified
+            if site_type and 'site_type_code' in gdf.columns:
+                initial_count = len(gdf)
+                gdf = gdf[gdf['site_type_code'] == site_type].copy()
+                filtered_count = initial_count - len(gdf)
+                if filtered_count > 0:
+                    logger.info(f"Filtered out {filtered_count} non-{site_type} sites ({len(gdf)} {site_type} sites remaining)")
+
+            # Filter for active sites if requested
+            if active_only and 'site_status' in gdf.columns:
+                initial_count = len(gdf)
+                gdf = gdf[gdf['site_status'] == 'Active'].copy()
+                filtered_count = initial_count - len(gdf)
+                if filtered_count > 0:
+                    logger.info(f"Filtered out {filtered_count} inactive sites ({len(gdf)} active remaining)")
 
             return gdf
 

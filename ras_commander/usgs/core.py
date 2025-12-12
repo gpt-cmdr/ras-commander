@@ -402,7 +402,12 @@ class RasUsgsCore:
 
         try:
             # Get site information
-            site_info = nwis.get_info(sites=site_id)
+            # Note: dataretrieval 1.1.0+ returns tuple (DataFrame, metadata_dict)
+            result = nwis.get_info(sites=site_id)
+            if isinstance(result, tuple):
+                site_info, _ = result  # Unpack tuple for newer versions
+            else:
+                site_info = result  # Handle older versions
 
             if site_info is None or site_info.empty:
                 raise ValueError(f"Site {site_id} not found or invalid")
