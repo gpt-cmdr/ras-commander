@@ -12,6 +12,7 @@ Modules:
     visualization: Comparison plots for model validation
     metrics: Statistical metrics for model validation (NSE, KGE, RMSE, etc.)
     real_time: Real-time monitoring and operational forecasting
+    catalog: Gauge catalog generation and management
 
 Public API:
     From core:
@@ -52,6 +53,13 @@ Public API:
         - monitor_gauge: Continuous monitoring with callbacks
         - detect_threshold_crossing: Detect threshold exceedance
         - detect_rapid_change: Detect rapid rises/recessions
+
+    From catalog:
+        - generate_gauge_catalog: Create standardized gauge data catalog
+        - load_gauge_catalog: Load gauge catalog from standard location
+        - load_gauge_data: Load historical data for specific gauge
+        - get_gauge_folder: Get path to gauge folder
+        - update_gauge_catalog: Refresh existing catalog with new data
 
 Example:
     >>> from ras_commander.usgs import retrieve_flow_data, get_gauge_metadata
@@ -114,6 +122,16 @@ from .gauge_matching import (
     auto_match_gauges
 )
 
+# Import boundary generation functions
+from .boundary_generation import (
+    BoundaryGenerator,
+)
+
+# Import time series processing functions
+from .time_series import (
+    TimeSeriesProcessor,
+)
+
 # Import metrics functions
 from .metrics import (
     nash_sutcliffe_efficiency,
@@ -127,6 +145,24 @@ from .metrics import (
 # Import real-time monitoring functions
 from .real_time import (
     RasUsgsRealTime,
+)
+
+# Import catalog functions
+from .catalog import (
+    generate_gauge_catalog,
+    load_gauge_catalog,
+    load_gauge_data,
+    get_gauge_folder,
+    update_gauge_catalog
+)
+
+# Import rate limiting utilities
+from .rate_limiter import (
+    UsgsRateLimiter,
+    retry_with_backoff,
+    configure_api_key,
+    check_api_key,
+    get_rate_limit_info
 )
 
 # Expose static methods directly at package level for convenience
@@ -150,6 +186,16 @@ refresh_data = RasUsgsRealTime.refresh_data
 monitor_gauge = RasUsgsRealTime.monitor_gauge
 detect_threshold_crossing = RasUsgsRealTime.detect_threshold_crossing
 detect_rapid_change = RasUsgsRealTime.detect_rapid_change
+
+# From boundary_generation module
+generate_flow_hydrograph_table = BoundaryGenerator.generate_flow_hydrograph_table
+generate_stage_hydrograph_table = BoundaryGenerator.generate_stage_hydrograph_table
+update_boundary_hydrograph = BoundaryGenerator.update_boundary_hydrograph
+
+# From time_series module
+align_timeseries = TimeSeriesProcessor.align_timeseries
+resample_to_hecras_interval = TimeSeriesProcessor.resample_to_hecras_interval
+check_data_gaps = TimeSeriesProcessor.check_data_gaps
 
 def check_dependencies():
     """
@@ -244,6 +290,28 @@ __all__ = [
     'monitor_gauge',
     'detect_threshold_crossing',
     'detect_rapid_change',
+    # Boundary generation functions
+    'BoundaryGenerator',
+    'generate_flow_hydrograph_table',
+    'generate_stage_hydrograph_table',
+    'update_boundary_hydrograph',
+    # Time series processing functions
+    'TimeSeriesProcessor',
+    'align_timeseries',
+    'resample_to_hecras_interval',
+    'check_data_gaps',
+    # Catalog functions
+    'generate_gauge_catalog',
+    'load_gauge_catalog',
+    'load_gauge_data',
+    'get_gauge_folder',
+    'update_gauge_catalog',
+    # Rate limiting utilities
+    'UsgsRateLimiter',
+    'retry_with_backoff',
+    'configure_api_key',
+    'check_api_key',
+    'get_rate_limit_info',
     # Utility functions
     'check_dependencies',
 ]
