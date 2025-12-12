@@ -1197,3 +1197,244 @@ Feature is ready for merge to main branch pending integration testing.
 **Total Lines Added**: ~428 lines (395 assessment + 33 best practices)
 **Duplication Eliminated**: 0 (already at 0 from Phase 4)
 **Success Criteria Met**: 9/9 ✅
+
+---
+
+## Session 8: Production Agent Reference Infrastructure (2025-12-12)
+
+### Objective
+Create production-ready tracked location (ras_agents/) for agent reference data, replacing gitignored feature_dev_notes/ which cannot be referenced by automated agents.
+
+### What Was Accomplished
+
+#### 1. Session 7 Cleanup and Merge
+**Commits Created** (6 commits on main after merge):
+- 3ed066e: Updated agent_tasks (STATE.md, PROGRESS.md), deleted obsolete docs
+- 3a716d1: Added environment management documentation (testing/environment-management.md)
+- 35849cb: Documented two legitimate exceptions in hierarchical knowledge best practices
+- a2e0009: Removed try/except anti-patterns from 16 example notebooks
+- e43026e: Added notebook cleanup documentation and automation script
+- Removed temporary .bak files
+
+**Merge to Main**:
+- Merged feature/hierarchical-knowledge to main (--no-ff)
+- 40 commits total from Phases 1-4
+- 131 files changed, 38,790 insertions, 5,992 deletions
+
+#### 2. ras_agents/ Infrastructure Creation
+
+**ras_agents/README.md** (99 lines):
+- Documents production-ready agent reference data structure
+- Establishes ras_agents (tracked) vs feature_dev_notes (gitignored) distinction
+- Hierarchical knowledge principles for all agents
+- Relationship to .claude/subagents/, .claude/skills/, feature_dev_notes/, ras_skills/
+- Guidance for adding new agents
+- References to hierarchical knowledge best practices
+
+**ras_agents/decompilation-agent/AGENT.md** (231 lines):
+- YAML frontmatter with trigger-rich description
+- Primary sources section pointing to reference/DECOMPILATION_GUIDE.md
+- Quick reference: ILSpyCMD installation and workflow
+- Common HEC-RAS assemblies table (4 assemblies documented)
+- 3 common workflows:
+  1. Reverse-engineer RASMapper interpolation
+  2. Extract mesh operation logic
+  3. Find configuration flags
+- Critical warnings:
+  - Legal considerations (permitted/not permitted)
+  - Reading VB.NET decompiled code artifacts
+  - Decompiled sources location (feature_dev_notes, not tracked)
+- File organization patterns
+- Search patterns for HEC-RAS code
+- Success criteria (4 criteria listed)
+
+**ras_agents/decompilation-agent/reference/DECOMPILATION_GUIDE.md** (209 lines):
+- Migrated from feature_dev_notes/Decompilation Agent/
+- Complete methodology for .NET assembly decompilation
+- Prerequisites (ILSpyCMD, PowerShell, .NET Runtime)
+- 5-step decompilation process
+- Best practices for reading decompiled code
+- Tracing algorithm flow
+- Common patterns in HEC software
+- Example: RASMapper sloped interpolation analysis
+- Troubleshooting section
+- Legal considerations
+- File organization recommendations
+- Commands reference
+- Success metrics
+
+#### 3. Documentation Updates
+
+**.gitignore** (added lines 113-116):
+- Ignore decompiled assembly sources (too large for git)
+- Exclude ras_agents/decompilation-agent/decompiled/
+- Exclude ras_agents/*/decompiled/ (pattern for future agents)
+
+**.claude/rules/documentation/hierarchical-knowledge-best-practices.md**:
+- Added section "Agent Reference Data Locations" (lines 390-420)
+- Documents ras_agents/ (tracked, production) vs feature_dev_notes/ (gitignored, experimental)
+- Migration path explanation
+- Example: Decompilation Agent migration from feature_dev_notes to ras_agents
+
+**CLAUDE.md**:
+- Updated Repository Structure section (lines 224-259)
+- Added ras_agents/ to directory tree
+- Clarified feature_dev_notes/ is gitignored and NOT for agent reference
+
+### Technical Details
+
+**Directory Structure Created**:
+```
+ras_agents/
+├── README.md (99 lines)
+├── decompilation-agent/
+│   ├── AGENT.md (231 lines)
+│   └── reference/
+│       └── DECOMPILATION_GUIDE.md (209 lines)
+```
+
+**Git Commits**:
+- 512f9f6: "Add ras_agents infrastructure with decompilation-agent"
+- Clean working tree after commit
+- 41 commits ahead of origin/main
+
+### Lessons Learned
+
+#### 1. Critical Distinction: Tracked vs Gitignored
+**Problem**: feature_dev_notes is gitignored, so automated agents cannot reference it
+**Solution**: Create ras_agents/ as tracked location for production agent reference data
+**Impact**: Agents can now reliably reference decompilation methodology
+
+#### 2. Decompiled Sources Too Large for Git
+**Problem**: HEC-RAS 6.6 decompiled sources = 201 files, 1.6MB
+**Solution**:
+- Add decompiled/ folders to .gitignore
+- Document that sources are regenerable via ILSpyCMD
+- Include complete regeneration instructions in DECOMPILATION_GUIDE.md
+**Impact**: Keep repository size manageable while preserving methodology
+
+#### 3. Hierarchical Knowledge Pattern for Agents
+**Validated**: AGENT.md follows lightweight navigator pattern (231 lines)
+- YAML frontmatter for discoverability
+- Primary sources section (points to authoritative content)
+- Quick reference (copy-paste ready)
+- Common workflows (brief with pointers)
+- Critical warnings (must be visible)
+**Result**: No duplication, single source of truth maintained
+
+#### 4. Migration Path Established
+**Pattern**: feature_dev_notes/ → ras_agents/ when production-ready
+**Process**:
+1. Create ras_agents/{agent-name}/ directory
+2. Write AGENT.md (200-400 lines, lightweight navigator)
+3. Migrate reference materials to reference/ folder (if needed)
+4. Update .gitignore for large generated files
+5. Document in hierarchical knowledge best practices
+6. Update root CLAUDE.md repository structure
+**Reusable**: Other feature_dev_notes agents can follow same pattern
+
+#### 5. Reference Folder Exception Justified
+**decompilation-agent has reference/ folder because**:
+- Content cannot exist elsewhere (methodology specific to .NET decompilation)
+- Not duplicating primary sources (DECOMPILATION_GUIDE.md is primary source)
+- Too specialized for .claude/rules/ (agent-specific workflow)
+**Documented**: Added to hierarchical-knowledge-best-practices.md exceptions
+
+### Files Modified Summary
+
+**Created** (3 files, 539 lines):
+- ras_agents/README.md (99 lines)
+- ras_agents/decompilation-agent/AGENT.md (231 lines)
+- ras_agents/decompilation-agent/reference/DECOMPILATION_GUIDE.md (209 lines)
+
+**Modified** (3 files, 34 lines added):
+- .gitignore (+5 lines: decompiled/ exclusions)
+- .claude/rules/documentation/hierarchical-knowledge-best-practices.md (+25 lines: ras_agents section)
+- CLAUDE.md (+4 lines: repository structure)
+
+**Total**: 6 files, 573 lines added
+
+### Success Metrics
+
+✅ **ras_agents/ infrastructure created** - Tracked location for agent reference data
+✅ **Decompilation agent migrated** - From feature_dev_notes to ras_agents
+✅ **Lightweight navigator** - AGENT.md is 231 lines (within 200-400 target)
+✅ **Single source of truth** - No duplication, clear primary sources
+✅ **Documented distinction** - ras_agents vs feature_dev_notes in best practices
+✅ **Reusable pattern** - Migration path established for other agents
+✅ **Working tree clean** - All changes committed to main
+
+### Recommendations for Future Sessions
+
+#### Immediate Next Steps (Priority 1)
+1. **Migrate other feature_dev_notes agents** (if any ready for production)
+   - Follow ras_agents migration pattern
+   - Update hierarchical knowledge docs
+
+2. **Continue Phase 1 Quick Wins**:
+   - lib-002: Atlas 14 caching (2-3 hours)
+   - lib-003: Testing suite
+   - nb-001 to nb-003: Notebook improvements
+
+#### Medium Priority (Priority 2)
+1. **Add reference/ folder to other agents as needed**:
+   - Only when content cannot exist elsewhere
+   - Document exceptions in hierarchical knowledge best practices
+
+2. **Create ras_agents/README.md template** for new agents:
+   - Standardize YAML frontmatter
+   - Common sections (Primary Sources, Quick Reference, Workflows)
+
+#### Low Priority (Priority 3)
+1. **Automated validation** for ras_agents:
+   - Check all AGENT.md files follow template
+   - Verify primary source links exist
+   - Validate line count targets (200-400)
+
+### Agent Memory Updates
+
+**BACKLOG.md**: No updates (no new tasks identified)
+**STATE.md**: Updated to Session 8, ras_agents infrastructure complete
+**PROGRESS.md**: Added this comprehensive Session 8 entry
+
+### Handoff Notes
+
+**Status**: ✅ COMPLETE
+
+**What Was Delivered**:
+1. ras_agents/ infrastructure (3 files, 539 lines)
+2. Decompilation agent migrated from feature_dev_notes
+3. Documented ras_agents vs feature_dev_notes distinction
+4. Updated hierarchical knowledge best practices
+5. Clean working tree, ready for next session
+
+**What Works**:
+- Agents can reference decompilation methodology (ras_agents is tracked)
+- Lightweight navigator pattern validated (231 lines)
+- Decompiled sources excluded (regenerable, documented)
+- Migration path established for other agents
+
+**What's Ready for Next Session**:
+- ras_agents/ infrastructure complete
+- Pattern established for migrating other feature_dev_notes agents
+- Phase 1 Quick Wins (lib-002, lib-003, nb-001 to nb-003)
+- Phase 2 Core Features (check-001 to check-006)
+
+**Next Steps** (User's Choice):
+1. Migrate other feature_dev_notes agents to ras_agents
+2. Continue Phase 1 Quick Wins (Atlas 14 caching, testing suite)
+3. Begin Phase 2 Core Features (complete cHECk-RAS to 95%)
+4. Start different feature (MRMS, permutation logic, DSS grid writing)
+
+**Code Quality**: Well-organized, tracked, production-ready, zero technical debt, clear documentation
+
+---
+
+**Session Duration**: ~1.5 hours
+**Git Commits**: 7 (6 Session 7 cleanup + 1 ras_agents infrastructure)
+**Merge Commits**: 1 (feature/hierarchical-knowledge → main, 40 commits)
+**Files Created**: 3 (ras_agents infrastructure)
+**Files Modified**: 3 (gitignore, best practices, CLAUDE.md)
+**Total Lines Added**: 573 lines
+**Duplication**: 0 (maintained from Phase 4)
+**Migration Path**: Established (feature_dev_notes → ras_agents) ✅
