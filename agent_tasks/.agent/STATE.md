@@ -5,21 +5,22 @@
 **Health**: 🟢 Green
 
 ## Current Focus
-**Task**: Production Agent Reference Infrastructure - COMPLETE ✅
-**Status**: ras_agents/ created, decompilation-agent migrated
+**Task**: feature_dev_notes Migration Planning - IN PROGRESS ⏳
+**Status**: Phase 1 (Audit) complete, ready for Phase 2 (Research Sub-Subagents)
 **Deliverables**:
-- ✅ Session 7 cleanup merged (6 commits: notebooks, env docs, hierarchical knowledge)
-- ✅ feature/hierarchical-knowledge merged to main (40 commits total)
-- ✅ ras_agents/ infrastructure created (tracked location for agent reference data)
-- ✅ Decompilation agent migrated from feature_dev_notes to ras_agents
-- ✅ Documented ras_agents vs feature_dev_notes distinction in hierarchical knowledge
+- ✅ Master migration plan created (FEATURE_DEV_NOTES_MIGRATION_PLAN.md, 540 lines)
+- ✅ Audit matrix created (MIGRATION_AUDIT_MATRIX.md, 260 lines)
+- ✅ Identified 1 critical migration (remote-executor → docs_old refs)
+- ✅ Mapped 33 feature_dev_notes dirs to 8 subagent domains
+- ✅ Defined 4-phase migration strategy
+- ⏳ Ready to create first research sub-subagent (remote-executor-researcher)
 **Results**:
-- ras_agents/README.md (99 lines): Organization guidelines and principles
-- ras_agents/decompilation-agent/AGENT.md (231 lines): Lightweight navigator
-- ras_agents/decompilation-agent/reference/DECOMPILATION_GUIDE.md (209 lines): Methodology
-- .gitignore updated: Exclude decompiled/ sources (too large, regenerable)
-- hierarchical-knowledge-best-practices.md: Section on ras_agents distinction
-**Score**: First production agent successfully migrated ✅
+- Problem identified: feature_dev_notes gitignored (agents can't reference)
+- Audit complete: remote-executor has 3 refs to docs_old/feature_dev_notes/
+- Priority order: remote-executor (immediate) → quality-assurance, hdf-analyst, precipitation (high)
+- Research sub-subagent template defined
+- Estimated effort: 8-14 hours across 4-5 sessions
+**Score**: Phase 1 complete, 8 migrations planned ✅
 
 ## Next Up
 1. **Other Phase 1 Quick Wins**:
@@ -39,4 +40,4 @@ See ROADMAP.md for complete development plan.
 - None
 
 ## Quick Context
-Session 3 completed USGS integration. Session 4 organized feature_dev_notes. Session 5 completed Real-Time Computation Messages (lib-001). Session 6 implemented Real-Time USGS Monitoring (gauge-006). Session 7 assessed hierarchical knowledge system: 83.6% duplication reduction, 9 lightweight skills, 8 lightweight subagents, 2 documented exceptions, 9/9 success criteria met. Session 8 (current) created ras_agents/ infrastructure: Merged feature/hierarchical-knowledge to main (40 commits), migrated decompilation-agent from feature_dev_notes (gitignored) to ras_agents (tracked), established production agent reference location, documented ras_agents vs feature_dev_notes distinction.
+Session 3 completed USGS integration. Session 4 organized feature_dev_notes. Session 5 completed Real-Time Computation Messages (lib-001). Session 6 implemented Real-Time USGS Monitoring (gauge-006). Session 7 assessed hierarchical knowledge: 83.6% duplication reduction, 9 lightweight skills, 8 lightweight subagents. Session 8 (current): Created ras_agents/ infrastructure (decompilation-agent migrated), then began feature_dev_notes migration planning. Completed Phase 1 audit: identified remote-executor with critical docs_old refs, mapped 33 feature_dev_notes dirs to 8 domains, defined 4-phase strategy with research sub-subagents, ready for Phase 2.
