@@ -363,6 +363,117 @@ class PermutationConfig:
 
 ---
 
+### 2.6 Geospatial Data Downloaders - PRIORITY 4 ⭐ NEW
+**Status**: 33% (terrain research complete, NLCD/SSURGO planned)
+**Effort**: 8-12 hours total (3-4 hrs each)
+**Complexity**: Medium
+**Feature Gap**: CRITICAL - No automated geospatial data acquisition
+
+**Purpose**: Automate download of critical geospatial datasets for HEC-RAS project setup using project spatial extents
+
+**Components**:
+
+**2.6.1 USGS 3DEP Terrain Downloader** (Research Complete - Priority HIGH)
+- **Status**: Research complete (py3dep integration guide ready)
+- **Effort**: 2-3 hours
+- **Source**: `feature_dev_notes/data-downloaders/terrain/py3dep-specialist.md` (451 lines)
+- **Capabilities**:
+  - Download USGS 3DEP DEMs (1m to 60m resolution)
+  - Project extent-based spatial queries with automatic buffering
+  - Terrain derivatives (slope, aspect, hillshade)
+  - Integration with HyRiver ecosystem (py3dep)
+- **Proposed API**:
+  ```python
+  from ras_commander.terrain import download_dem
+
+  dem_path = download_dem(
+      project_folder="/path/to/project",
+      resolution=10,  # meters
+      buffer_miles=1.0,
+      output_folder="terrain"
+  )
+  ```
+
+**2.6.2 NLCD Land Cover Downloader** (Planning - Priority MEDIUM)
+- **Status**: Planning complete
+- **Effort**: 3-4 hours
+- **Source**: `feature_dev_notes/data-downloaders/nlcd/PLANNING.md`
+- **Capabilities**:
+  - Download NLCD rasters (30m resolution, 2001-2021)
+  - Project extent-based download
+  - Land cover class to Manning's n mapping (Anderson/Chow)
+  - RASMapper-compatible layer export
+- **Proposed API**:
+  ```python
+  from ras_commander.landcover import download_nlcd, generate_mannings_from_nlcd
+
+  nlcd_path = download_nlcd(project_folder="/path/to/project", year=2021)
+  mannings_raster = generate_mannings_from_nlcd(nlcd_path, mapping="anderson")
+  ```
+
+**2.6.3 USGS SSURGO Soils Downloader** (Planning - Priority MEDIUM)
+- **Status**: Planning complete
+- **Effort**: 4-5 hours
+- **Source**: `feature_dev_notes/data-downloaders/ssurgo/PLANNING.md`
+- **Capabilities**:
+  - Download gSSURGO rasters (10m resolution)
+  - Extract soil properties (Ksat, porosity, HSG)
+  - Generate Green-Ampt infiltration parameters
+  - Generate SCS Curve Numbers (with NLCD integration)
+  - RASMapper-compatible infiltration layer export
+- **Proposed API**:
+  ```python
+  from ras_commander.soils import download_ssurgo, generate_greenampt_from_ssurgo
+
+  ssurgo_path = download_ssurgo(project_folder="/path/to/project", data_type="gSSURGO")
+  greenampt_params = generate_greenampt_from_ssurgo(ssurgo_path, method="rawls_brakensiek")
+  ```
+
+**Existing Soils Tool**:
+- ✅ Soil Stats Tool (post-processing) - Analyzes soils already imported into RASMapper
+- Location: `feature_dev_notes/data-downloaders/soils-post-processing/`
+
+**Integration Workflow**:
+```python
+from ras_commander import init_ras_project
+from ras_commander.data import download_all_geospatial
+
+# One-command project data setup
+data_paths = download_all_geospatial(
+    project_folder="/path/to/project",
+    terrain_resolution=10,    # 10m DEM
+    nlcd_year=2021,           # Latest land cover
+    ssurgo_type="gSSURGO",    # Gridded soils
+    buffer_miles=1.0
+)
+```
+
+**Dependencies**:
+- `py3dep` (HyRiver) - USGS 3DEP elevation data
+- `requests`, `rasterio` - Already in ras-commander
+- USGS TNM API, MRLC API, NRCS SDA API (public access)
+
+**Use Cases**:
+- Automated project setup (terrain + roughness + infiltration)
+- Ungauged watershed modeling (derive parameters from geospatial data)
+- Baseline parameter estimation (calibration starting point)
+- Multi-scenario analysis with land cover change
+
+**Deliverables**:
+- `ras_commander/terrain/` or `ras_commander/data/terrain.py`
+- `ras_commander/landcover/` or `ras_commander/data/landcover.py`
+- `ras_commander/soils/` or `ras_commander/data/soils.py`
+- Example notebooks for each downloader + integrated workflow
+- Skills for automated data acquisition
+
+**Timeline**:
+- Phase 1 (Terrain): Q1 2026 (2-3 hours)
+- Phase 2 (NLCD): Q2 2026 (3-4 hours)
+- Phase 3 (SSURGO): Q2-Q3 2026 (4-5 hours)
+- Phase 4 (Integration): Q3 2026 (2 hours)
+
+---
+
 ## Phase 3: Advanced Feature Development (12-16 weeks)
 
 **Goal**: Implement complex, specialized features requiring significant research and development
