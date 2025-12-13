@@ -1,0 +1,1 @@
+We are ending the conversation after this message. Ultrathink and use your remaining output to write to your current documentation and task files all information that would be needed to independently research and make progress on this task. Perform any closeout actions and clean up your files.

@@ -1,0 +1,1 @@
+Clean up the files from your current task in a non-destructive manner. Move outdated or unneeded outputs to .old. List any temporary or unnecessary files for deletion for the user to decide. Consult the folder organizational plan or hierarchical knowledge subagent for recommendations as needed.
