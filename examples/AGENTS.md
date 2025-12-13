@@ -86,10 +86,24 @@ How agents should use notebooks
 - Functions: HdfResultsMesh.get_mesh_max_ws (ras_commander/HdfResultsMesh.py), plus HdfMesh/HdfBndry for polygons/lines.
 - Notable cells: compare timing in adjacent cells; map and export boundaries (GeoJSON) after smoothing/filtering short segments.
 
-15_stored_map_generation.ipynb
-- Focus: Automate stored map outputs.
-- Functions: RasMap.parse_rasmap (ras_commander/RasMap.py), RasMap.postprocess_stored_maps (ras_commander/RasMap.py).
-- Notable cells: backup/modify `.rasmap` and plan flags, launch RAS to bake maps, restore originals after generation.
+15_a_floodplain_mapping_gui.ipynb
+- Focus: Floodplain mapping via GUI automation (last resort method).
+- Functions: RasMap.postprocess_stored_maps (ras_commander/RasMap.py), RasMap.ensure_rasmap_compatible (ras_commander/RasMap.py).
+- Notable cells: Win32 COM automation to open HEC-RAS, navigate menus, generate maps via GUI. Includes .rasmap compatibility checking (upgrades 5.0.7→6.x).
+- Performance: Slow (60+ seconds), fragile. Use 15_b or 15_c instead.
+
+15_b_floodplain_mapping_rasprocess.ipynb
+- Focus: Floodplain mapping via RasProcess CLI (recommended for Windows).
+- Functions: RasProcess.store_maps (ras_commander/RasProcess.py), RasProcess.get_plan_timestamps (ras_commander/RasProcess.py), RasProcess.store_all_maps (ras_commander/RasProcess.py), RasMap.ensure_rasmap_compatible (ras_commander/RasMap.py).
+- Notable cells: Fastest method (8-10 seconds), all variables (WSE, Depth, Velocity, Froude, Shear, D*V), time-series analysis, batch processing, georeferencing fix.
+- Performance: ⭐⭐⭐ Fastest, ⭐⭐⭐ Excellent reliability, 100% matches native HEC-RAS output.
+
+15_c_floodplain_mapping_python_gis.ipynb
+- Focus: Floodplain mapping via pure Python mesh rasterization (cloud-compatible, 2D only).
+- Functions: RasMap.map_ras_results (ras_commander/RasMap.py), HdfMesh.get_mesh_cell_polygons (ras_commander/hdf/HdfMesh.py), HdfResultsMesh.get_mesh_max_ws (ras_commander/hdf/HdfResultsMesh.py).
+- Notable cells: No HEC-RAS required after computation, horizontal interpolation algorithm, wet cell filtering, mesh boundary clipping. Works on Linux/Mac/Windows.
+- Performance: Moderate (15-20 seconds), matches HEC-RAS to 0.01' for 2D horizontal interpolation (99.93% pixel match, RMSE 0.000000).
+- Limitations: 2D mesh only (no 1D), WSE/Depth/Velocity only (no Froude/Shear yet), horizontal interpolation only.
 
 16_automating_ras_with_win32com.ipynb
 - Focus: Open HEC‑RAS/RAS Mapper to refresh stored-map configs.

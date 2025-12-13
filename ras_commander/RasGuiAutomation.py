@@ -635,22 +635,58 @@ class RasGuiAutomation:
                 logger.info("Found Unsteady Flow Analysis dialog")
                 logger.info("Looking for Compute button...")
 
-                # Try to find and click Compute button
-                compute_button = RasGuiAutomation.find_button_by_text(dialog_hwnd, "Compute")
+                # Ensure dialog has focus
+                try:
+                    win32gui.SetForegroundWindow(dialog_hwnd)
+                    time.sleep(0.5)
+                except:
+                    pass
+
+                # Try multiple button text variations
+                compute_button = None
+                button_variations = [
+                    "Compute",
+                    "&Compute",
+                    "C&ompute",
+                    "OK",
+                    "&OK"
+                ]
+
+                for button_text in button_variations:
+                    compute_button = RasGuiAutomation.find_button_by_text(dialog_hwnd, button_text)
+                    if compute_button:
+                        logger.info(f"Found button with text '{button_text}'")
+                        break
 
                 if compute_button:
                     logger.info("Clicking Compute button...")
                     RasGuiAutomation.click_button(compute_button)
+                    time.sleep(0.5)
                 else:
-                    logger.warning("Could not find Compute button - user must click manually")
-                    logger.info("Trying keyboard shortcut as fallback...")
+                    logger.warning("Could not find Compute button - trying keyboard shortcut as fallback...")
+
+                    # Try multiple keyboard approaches
                     try:
-                        shell = win32com.client.Dispatch("WScript.Shell")
+                        # Approach 1: Direct keyboard events
+                        logger.debug("Trying win32api keyboard events...")
+                        win32api.keybd_event(0x0D, 0, 0, 0)  # Enter down
+                        time.sleep(0.05)
+                        win32api.keybd_event(0x0D, 0, 0x0002, 0)  # Enter up
+                        logger.info("Sent Enter key via win32api")
                         time.sleep(0.5)
-                        shell.SendKeys("{ENTER}")
-                        logger.info("Sent Enter key to dialog")
-                    except Exception as e:
-                        logger.warning(f"Keyboard fallback failed: {e}")
+                    except Exception as e1:
+                        logger.warning(f"win32api keyboard approach failed: {e1}")
+
+                        # Approach 2: WScript.Shell fallback
+                        try:
+                            logger.debug("Trying WScript.Shell SendKeys...")
+                            shell = win32com.client.Dispatch("WScript.Shell")
+                            time.sleep(0.5)
+                            shell.SendKeys("{ENTER}")
+                            logger.info("Sent Enter key via WScript.Shell")
+                        except Exception as e2:
+                            logger.warning(f"WScript.Shell approach failed: {e2}")
+                            logger.info("User must manually click Compute button")
             else:
                 logger.warning("Could not find Unsteady Flow Analysis dialog")
                 logger.info("User must manually click 'Run > Unsteady Flow Analysis' and Compute")

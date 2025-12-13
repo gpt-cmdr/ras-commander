@@ -205,6 +205,7 @@ nav:
     - Quick Reference: reference/quick-reference.md
   - LLM Forward Development:
     - Overview: development/llm-development.md
+    - Agent Infrastructure: development/agent-infrastructure.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
     - Release Notes: development/release-notes.md

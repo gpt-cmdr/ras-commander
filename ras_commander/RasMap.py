@@ -284,13 +284,13 @@ class RasMap:
     def get_terrain_names(rasmap_path: Union[str, Path]) -> List[str]:
         """
         Extracts terrain layer names from a given .rasmap file.
-        
+
         Args:
             rasmap_path (Union[str, Path]): Path to the .rasmap file.
 
         Returns:
             List[str]: A list of terrain names.
-        
+
         Raises:
             FileNotFoundError: If the rasmap file does not exist.
             ValueError: If the file is not a valid XML or lacks a 'Terrains' section.
@@ -313,6 +313,349 @@ class RasMap:
         terrain_names = [layer.get('Name') for layer in terrains_element.findall('Layer') if layer.get('Name')]
         logger.info(f"Extracted terrain names: {terrain_names}")
         return terrain_names
+
+    @staticmethod
+    @log_call
+    def ensure_rasmap_compatible(ras_object=None, auto_upgrade=True) -> Dict[str, Any]:
+        """
+        Ensure .rasmap file is compatible with current HEC-RAS version.
+
+        For HEC-RAS 5.0.7 projects opened in HEC-RAS 6.x, the .rasmap file needs to be
+        upgraded to the 6.x format (adds <Results> section). This function detects
+        version incompatibility and attempts automatic upgrade via GUI automation.
+
+        Args:
+            ras_object: Optional RasPrj object instance (default: global ras).
+            auto_upgrade (bool): If True, attempt automatic upgrade via GUI automation.
+                If False, only detect version and return status without upgrading.
+
+        Returns:
+            Dict[str, Any]: Status dictionary with keys:
+                - 'status' (str): One of:
+                    - 'ready': .rasmap is already compatible
+                    - 'upgraded': Successfully upgraded .rasmap file
+                    - 'manual_needed': Upgrade required but auto-upgrade failed
+                - 'message' (str): Human-readable status message
+                - 'version' (str): Detected .rasmap version (e.g., "5.0.7", "6.6")
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>>
+            >>> # Check compatibility (auto-upgrade if needed)
+            >>> result = RasMap.ensure_rasmap_compatible(auto_upgrade=True)
+            >>> print(result['status'])  # 'ready', 'upgraded', or 'manual_needed'
+            >>>
+            >>> # Check only (no auto-upgrade)
+            >>> result = RasMap.ensure_rasmap_compatible(auto_upgrade=False)
+
+        Notes:
+            - Detection Logic:
+                * Parses .rasmap XML for <Version> element
+                * Checks for <Results> section (present in 6.x, missing in 5.0.7)
+                * Upgrade needed if version starts with "5." AND no <Results> section
+
+            - Auto-upgrade Process (if auto_upgrade=True):
+                * Opens HEC-RAS with the project
+                * Uses GUI automation to click "GIS Tools" > "RAS Mapper"
+                * Waits for RASMapper to open (triggers .rasmap upgrade dialog)
+                * Closes RASMapper and HEC-RAS
+                * Verifies upgrade by re-parsing .rasmap
+
+            - Integration:
+                * Called automatically by postprocess_stored_maps()
+                * Should be called before RasProcess.store_maps() workflows
+                * Not needed for map_ras_results() (pure Python, no .rasmap dependency)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Get .rasmap path
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+
+        if not rasmap_path.exists():
+            logger.warning(f"No .rasmap file found: {rasmap_path}")
+            return {
+                'status': 'manual_needed',
+                'message': f'No .rasmap file found at {rasmap_path}',
+                'version': None
+            }
+
+        # Parse .rasmap XML to detect version
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+
+            # Extract version
+            version_elem = root.find("Version")
+            version = version_elem.text if version_elem is not None else "unknown"
+
+            # Check for Results section (present in 6.x, missing in 5.0.7)
+            results_elem = root.find("Results")
+
+            # Determine if upgrade needed
+            needs_upgrade = (
+                version.startswith("5.") and  # Old version number
+                results_elem is None           # Missing modern Results section
+            )
+
+            if not needs_upgrade:
+                logger.info(f".rasmap file is already compatible (version {version})")
+                return {
+                    'status': 'ready',
+                    'message': f'Already compatible (version {version})',
+                    'version': version
+                }
+
+            logger.info(f".rasmap file needs upgrade from version {version}")
+
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return {
+                'status': 'manual_needed',
+                'message': f'XML parse error: {e}',
+                'version': None
+            }
+
+        # If upgrade not needed or auto_upgrade disabled, return status
+        if not auto_upgrade:
+            return {
+                'status': 'manual_needed',
+                'message': f'Upgrade needed from version {version} (auto_upgrade=False)',
+                'version': version
+            }
+
+        # Attempt GUI automation to upgrade .rasmap
+        logger.info("Attempting automatic .rasmap upgrade via GUI automation...")
+
+        try:
+            # Import GUI automation (lazy import to avoid dependencies if not needed)
+            try:
+                import win32gui
+                import win32con
+                import time
+                import subprocess
+                import sys
+            except ImportError as e:
+                logger.error(f"GUI automation requires win32gui: {e}")
+                return {
+                    'status': 'manual_needed',
+                    'message': f'GUI automation requires pywin32 package: {e}',
+                    'version': version
+                }
+
+            # Open HEC-RAS with project
+            ras_exe = ras_obj.ras_exe_path
+            prj_path = str(ras_obj.prj_file)
+
+            logger.info(f"Opening HEC-RAS: {ras_exe} {prj_path}")
+
+            if sys.platform == "win32":
+                process = subprocess.Popen(f'"{ras_exe}" "{prj_path}"')
+            else:
+                raise RuntimeError("GUI automation only supported on Windows")
+
+            # Wait for HEC-RAS main window to appear
+            time.sleep(5)  # Initial wait
+
+            # Find HEC-RAS main window
+            hecras_hwnd = None
+            for _ in range(30):  # Try for up to 30 seconds
+                hecras_hwnd = win32gui.FindWindow(None, f"HEC-RAS {ras_obj.ras_version}")
+                if hecras_hwnd:
+                    break
+                time.sleep(1)
+
+            if not hecras_hwnd:
+                logger.error("Could not find HEC-RAS window")
+                process.terminate()
+                return {
+                    'status': 'manual_needed',
+                    'message': 'HEC-RAS window not found (GUI automation failed)',
+                    'version': version
+                }
+
+            logger.info(f"Found HEC-RAS window: {hecras_hwnd}")
+
+            # Helper function to find RASMapper window
+            def find_rasmapper_window():
+                """Find any RAS Mapper window"""
+                def callback(hwnd, windows):
+                    if win32gui.IsWindowVisible(hwnd) and win32gui.IsWindowEnabled(hwnd):
+                        try:
+                            window_title = win32gui.GetWindowText(hwnd)
+                            if "RAS Mapper" in window_title:
+                                windows.append((hwnd, window_title))
+                        except:
+                            pass
+                    return True
+
+                windows = []
+                win32gui.EnumWindows(callback, windows)
+                return windows
+
+            # Helper function to wait for window to appear
+            def wait_for_window(find_window_func, timeout=90, check_interval=2):
+                """Wait for a window to appear"""
+                start_time = time.time()
+                while time.time() - start_time < timeout:
+                    windows = find_window_func()
+                    if windows:
+                        return windows
+                    time.sleep(check_interval)
+                return None
+
+            # Helper function to close RASMapper
+            def close_rasmapper():
+                """Close RASMapper window"""
+                windows = find_rasmapper_window()
+                for hwnd, title in windows:
+                    try:
+                        win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                        logger.debug(f"Sent WM_CLOSE to RASMapper window: {title}")
+                        return True
+                    except:
+                        pass
+                return False
+
+            # Step 1: Open RASMapper via menu
+            logger.info("Opening RASMapper via menu...")
+            win32gui.SetForegroundWindow(hecras_hwnd)
+            time.sleep(0.5)
+
+            # Enumerate menus to find "GIS Tools" > "RAS Mapper"
+            menu_bar = win32gui.GetMenu(hecras_hwnd)
+            if menu_bar:
+                menu_count = win32gui.GetMenuItemCount(menu_bar)
+                rasmapper_found = False
+
+                for i in range(menu_count):
+                    submenu = win32gui.GetSubMenu(menu_bar, i)
+                    if submenu:
+                        submenu_count = win32gui.GetMenuItemCount(submenu)
+                        for j in range(submenu_count):
+                            try:
+                                # Get menu item info
+                                menu_id = win32gui.GetMenuItemID(submenu, j)
+                                # Try to get menu string (may not work for all items)
+
+                                # For RASMapper, we'll try a different approach
+                                # Send the menu command for typical RASMapper menu ID
+                                # This varies by version, so we'll try clicking and checking
+                                if menu_id > 0:
+                                    # Try sending this menu command
+                                    win32gui.PostMessage(hecras_hwnd, win32con.WM_COMMAND, menu_id, 0)
+                                    time.sleep(1)
+
+                                    # Check if RASMapper opened
+                                    if find_rasmapper_window():
+                                        logger.info("RASMapper opened successfully via menu")
+                                        rasmapper_found = True
+                                        break
+                            except:
+                                continue
+                        if rasmapper_found:
+                            break
+
+                # Fallback: Try keyboard shortcut
+                if not rasmapper_found:
+                    logger.info("Menu enumeration failed, trying keyboard shortcut...")
+                    import win32api
+                    win32api.keybd_event(0x12, 0, 0, 0)  # Alt down
+                    time.sleep(0.1)
+                    win32api.keybd_event(ord('G'), 0, 0, 0)  # G
+                    time.sleep(0.1)
+                    win32api.keybd_event(0x12, 0, 0x0002, 0)  # Alt up
+                    time.sleep(0.5)
+                    win32api.keybd_event(ord('M'), 0, 0, 0)  # M for Mapper
+                    time.sleep(0.1)
+
+            # Step 2: Wait for RASMapper window to appear (60-90 second timeout)
+            logger.info("Waiting for RASMapper to open (up to 90 seconds)...")
+            rasmapper_windows = wait_for_window(find_rasmapper_window, timeout=90, check_interval=2)
+
+            if not rasmapper_windows:
+                logger.error("RASMapper window did not appear within timeout")
+                return {
+                    'status': 'manual_needed',
+                    'message': 'RASMapper window did not open automatically. Please open RASMapper manually.',
+                    'version': version
+                }
+
+            logger.info(f"RASMapper is open: {rasmapper_windows[0][1]}")
+
+            # Step 3: Wait 2 additional seconds for .rasmap file write
+            logger.info("Allowing time for .rasmap update...")
+            time.sleep(2)
+
+            # Step 4: Close RASMapper cleanly (with retry)
+            logger.info("Attempting to close RASMapper...")
+            close_attempts = 0
+            max_attempts = 10
+
+            while close_attempts < max_attempts:
+                if close_rasmapper():
+                    logger.info("Sent close message to RASMapper")
+                    break
+                logger.debug(f"Retry {close_attempts+1}/{max_attempts} to close RASMapper...")
+                time.sleep(2)
+                close_attempts += 1
+
+            if close_attempts >= max_attempts:
+                logger.warning("Could not send close message to RASMapper")
+
+            # Step 5: Wait until RASMapper is fully closed
+            logger.info("Waiting for RASMapper to fully close...")
+            close_wait_start = time.time()
+            close_timeout = 30
+
+            while time.time() - close_wait_start < close_timeout:
+                if not find_rasmapper_window():
+                    logger.info("RASMapper closed successfully")
+                    break
+                logger.debug("Waiting for RASMapper to fully close...")
+                time.sleep(2)
+
+            # Step 6: Close HEC-RAS
+            logger.info("Closing HEC-RAS...")
+            win32gui.PostMessage(hecras_hwnd, win32con.WM_CLOSE, 0, 0)
+            time.sleep(1)
+
+            # Wait for HEC-RAS to close
+            try:
+                process.wait(timeout=10)
+                logger.info("HEC-RAS closed")
+            except:
+                logger.warning("HEC-RAS did not close cleanly, may still be running")
+
+            # Re-parse .rasmap to verify upgrade
+            time.sleep(1)
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+            results_elem = root.find("Results")
+
+            if results_elem is not None:
+                logger.info(".rasmap file successfully upgraded")
+                return {
+                    'status': 'upgraded',
+                    'message': f'Successfully upgraded from version {version}',
+                    'version': version
+                }
+            else:
+                logger.warning(".rasmap file was not upgraded")
+                return {
+                    'status': 'manual_needed',
+                    'message': 'Upgrade verification failed - please open RASMapper manually',
+                    'version': version
+                }
+
+        except Exception as e:
+            logger.error(f"GUI automation failed: {e}")
+            return {
+                'status': 'manual_needed',
+                'message': f'Auto-upgrade failed: {e}. Please open RASMapper manually.',
+                'version': version
+            }
 
 
     @staticmethod
@@ -346,9 +689,30 @@ class RasMap:
         Notes:
             - auto_click_compute=True: Automated GUI workflow (clicks menu and Compute button)
             - auto_click_compute=False: Manual workflow (user must click Compute)
+            - Automatically calls ensure_rasmap_compatible() to upgrade 5.0.7→6.x .rasmap files
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        # Ensure .rasmap compatibility (upgrade 5.0.7 to 6.x if needed)
+        logger.info("Checking .rasmap compatibility...")
+        compat_result = RasMap.ensure_rasmap_compatible(ras_object=ras_obj, auto_upgrade=True)
+
+        if compat_result['status'] == 'manual_needed':
+            logger.error(
+                f".rasmap upgrade required but failed: {compat_result['message']}\n\n"
+                "Manual steps required:\n"
+                "1. Open project in HEC-RAS\n"
+                "2. Click 'GIS Tools' > 'RAS Mapper'\n"
+                "3. Wait for RASMapper to open (this upgrades .rasmap)\n"
+                "4. Close RASMapper and HEC-RAS\n"
+                "5. Re-run this function"
+            )
+            return False
+        elif compat_result['status'] == 'upgraded':
+            logger.info(f".rasmap successfully upgraded: {compat_result['message']}")
+        else:  # 'ready'
+            logger.info(f".rasmap compatibility check passed: {compat_result['message']}")
 
         if layers is None:
             layers = ['WSEL', 'Velocity', 'Depth']
