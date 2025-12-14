@@ -106,9 +106,10 @@ How agents should use notebooks
 - Limitations: 2D mesh only (no 1D), WSE/Depth/Velocity only (no Froude/Shear yet), horizontal interpolation only.
 
 16_automating_ras_with_win32com.ipynb
-- Focus: Open HEC‑RAS/RAS Mapper to refresh stored-map configs.
-- Functions: RasMap.parse_rasmap (ras_commander/RasMap.py); external `subprocess` to `Ras.exe`.
-- Notable cells: manual steps to update mapper, then resume automation.
+- Focus: Open HEC‑RAS/RAS Mapper to refresh stored-map configs using win32 automation.
+- Functions: RasMap.parse_rasmap (ras_commander/RasMap.py), RasGuiAutomation.open_rasmapper (ras_commander/RasGuiAutomation.py), RasGuiAutomation.handle_already_running_dialog (ras_commander/RasGuiAutomation.py).
+- Notable cells: manual steps to update mapper, then resume automation; demonstrates window enumeration and button clicking patterns.
+- Key: Library functions automatically handle the "already running" dialog - no manual intervention needed.
 
 17_extracting_profiles_with_hecrascontroller.ipynb
 - Focus: Extract steady AND unsteady results from legacy HEC-RAS versions (3.x-4.x) using RasControl.
@@ -125,6 +126,13 @@ How agents should use notebooks
 - Notable cells: Storm catalog generation with configurable parameters (inter_event_hours, min_depth_inches, buffer_hours, percentile_threshold); batch plan creation from storm catalog.
 - Dependencies: xarray, zarr, s3fs, netCDF4, rioxarray (optional for reprojection).
 - Key: AORC data reprojected to SHG (EPSG:5070) at 2000m resolution for HEC-RAS GDAL Raster import.
+
+24_1d_boundary_condition_visualization.ipynb
+- Focus: Visualize 1D boundary conditions in RASMapper with DSS path labels.
+- Functions: RasUnsteady.extract_boundary_and_tables (ras_commander/RasUnsteady.py), HdfXsec.get_cross_sections (ras_commander/hdf/HdfXsec.py), HdfBase.get_projection (ras_commander/hdf/HdfBase.py), RasMap.list_map_layers (ras_commander/RasMap.py), RasMap.add_map_layer (ras_commander/RasMap.py), RasMap.remove_map_layer (ras_commander/RasMap.py), RasMap.list_geometries (ras_commander/RasMap.py), RasMap.set_geometry_visibility (ras_commander/RasMap.py), RasMap.set_all_geometries_visibility (ras_commander/RasMap.py), RasGuiAutomation.open_rasmapper (ras_commander/RasGuiAutomation.py).
+- Pattern: Extract XS geometry → parse boundary conditions from unsteady file → match boundaries to XS → create GeoJSON with DSS path attributes → add to RASMapper → configure geometry visibility → open for visualization.
+- Notable cells: DSS path parsing to identify HMS basin connections; GeoJSON creation with boundary type classification; geometry visibility management (show only relevant geometry); before/after layer listing; GUI automation to open RASMapper.
+- Key: Creates output in `1D_Boundary_Conditions/` subfolder within project; supports labeling with DSS path to show HMS linkage; GeoJSON files MUST be in WGS84 (EPSG:4326) for RASMapper.
 
 101_Core_Sensitivity(.ipynb, _aircooled)
 - Focus: Runtime vs core count experiments.
@@ -280,4 +288,130 @@ General Tips
 - Keep original projects immutable; use `dest_folder`/suffixes.
 - Plotting: GeoPandas for spatial layers; xarray/pandas for timeseries.
 - Logging: library functions are decorated; prefer `get_logger(__name__)` for extra context.
+
+---
+
+## RasGuiAutomation - Windows GUI Automation
+
+The `RasGuiAutomation` class provides win32-based automation for HEC-RAS GUI operations that don't have API support.
+
+**Module**: `ras_commander/RasGuiAutomation.py`
+
+### Core Functions
+
+| Function | Purpose |
+|----------|---------|
+| `open_rasmapper(prj_file, ras_exe, ...)` | Open RASMapper via GIS Tools menu |
+| `open_and_compute(prj_file, plan_number, ...)` | Open HEC-RAS, set plan, navigate menus |
+| `run_multiple_plans(prj_file, plan_numbers, ...)` | Automate "Run Multiple Plans" workflow |
+| `handle_already_running_dialog(timeout=5)` | Auto-click Yes on "already running" dialog |
+
+### Dialog Handling (Automatic)
+
+When HEC-RAS is launched while another instance is running, a dialog appears:
+> "There is already an instance of HEC-RAS running on the system, do you want to start another?"
+
+**Library functions automatically handle this** - no manual intervention needed:
+- `open_rasmapper()` calls `handle_already_running_dialog()` internally
+- `open_and_compute()` calls `handle_already_running_dialog()` internally
+- `run_multiple_plans()` calls `handle_already_running_dialog()` internally
+
+The handler detects the dialog by:
+- Window class `#32770` (standard Windows dialog)
+- Keywords in child controls: "already", "another", "instance"
+- Clicks "Yes" button (supports "Yes", "&Yes", "Ja", "&Ja")
+- Falls back to Enter key if button not found
+
+### Helper Functions
+
+| Function | Purpose |
+|----------|---------|
+| `get_windows_by_pid(pid)` | Return all windows for a process ID |
+| `find_main_hecras_window(windows)` | Identify main HEC-RAS window |
+| `enumerate_all_menus(hwnd)` | List all menu items |
+| `click_menu_item(hwnd, menu_id)` | Trigger a menu item |
+| `find_dialog_by_title(pattern, exact)` | Find dialog by title |
+| `find_button_by_text(hwnd, text)` | Find button in dialog |
+| `click_button(button_hwnd)` | Simulate button click |
+| `find_combobox_by_neighbor(hwnd, text)` | Find combo box near label |
+| `select_combobox_item_by_text(combo, text)` | Select combo item by text |
+| `set_current_plan(hwnd, plan_number, ...)` | Set current plan in dropdown |
+| `wait_for_window(find_window_func, ...)` | Wait for window with timeout |
+| `close_window(hwnd)` | Close window via WM_CLOSE |
+
+---
+
+## RasMap - Map Layer and Geometry Management
+
+The `RasMap` class provides functions for managing RASMapper configuration files (.rasmap).
+
+**Module**: `ras_commander/RasMap.py`
+
+### Map Layer Functions
+
+| Function | Purpose |
+|----------|---------|
+| `list_map_layers(ras_object=None)` | List all custom map layers |
+| `add_map_layer(layer_name, file_path, ...)` | Add GeoJSON/shapefile layer |
+| `remove_map_layer(layer_name, ras_object=None)` | Remove layer by name |
+
+**Example: Adding a GeoJSON layer**
+```python
+from ras_commander import init_ras_project, RasMap
+
+init_ras_project("/path/to/project", "6.6")
+
+# Add boundary conditions layer
+RasMap.add_map_layer(
+    layer_name="1D Boundary Conditions",
+    file_path="./1D_Boundary_Conditions/boundaries.geojson",
+    layer_type="PolylineFeatureLayer"
+)
+```
+
+**WGS84 Requirement**: GeoJSON files for RASMapper MUST be in WGS84 (EPSG:4326):
+```python
+# Always reproject before saving GeoJSON for RASMapper
+gdf_wgs84 = gdf.to_crs("EPSG:4326")
+gdf_wgs84.to_file("output.geojson", driver="GeoJSON")
+```
+
+### Geometry Visibility Functions
+
+| Function | Purpose |
+|----------|---------|
+| `list_geometries(ras_object=None)` | List all geometry layers with visibility status |
+| `set_geometry_visibility(geom_id, visible, ...)` | Show/hide specific geometry |
+| `set_all_geometries_visibility(visible, except_geom, ...)` | Bulk visibility control |
+
+**Example: Show only one geometry**
+```python
+from ras_commander import init_ras_project, RasMap
+
+init_ras_project("/path/to/project", "6.6")
+
+# List all geometries
+geoms = RasMap.list_geometries()
+for g in geoms:
+    print(f"{g['geom_number']}: {g['name']} - Visible: {g['checked']}")
+
+# Hide all geometries except G08
+RasMap.set_all_geometries_visibility(visible=False, except_geom="08")
+RasMap.set_geometry_visibility("08", visible=True)
+```
+
+**Geometry identifier formats** (all valid):
+- Geometry number: `"08"` or `"8"`
+- With prefix: `"g08"` or `"G08"`
+- By name: `"1D-2D Dam Break Model Refined Grid"`
+- Filename pattern: `"g08.hdf"`
+
+### Other RasMap Functions
+
+| Function | Purpose |
+|----------|---------|
+| `parse_rasmap(ras_object=None)` | Parse .rasmap XML into dict |
+| `ensure_rasmap_compatible(ras_object=None)` | Upgrade 5.0.7 format to 6.x |
+| `postprocess_stored_maps(ras_object=None)` | Post-process stored map configurations |
+| `map_ras_results(...)` | Pure Python mesh rasterization |
 

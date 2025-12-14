@@ -44,6 +44,91 @@ infiltration_path = ras.rasmap_df['infiltration_hdf_path'][0][0]
 landcover_path = ras.rasmap_df['landcover_hdf_path'][0]
 ```
 
+## Map Layer Management
+
+The `RasMap` class provides methods for managing custom map layers in RASMapper, allowing you to add GeoJSON or shapefile layers programmatically.
+
+### Adding Custom Map Layers
+
+```python
+from ras_commander import init_ras_project, RasMap
+
+init_ras_project(r"C:\Projects\MyModel", "6.6")
+
+# Add a GeoJSON layer to RASMapper
+RasMap.add_map_layer(
+    layer_name="Boundary Conditions",
+    file_path="./custom_layers/boundaries.geojson",
+    layer_type="PolylineFeatureLayer"
+)
+```
+
+!!! warning "WGS84 Requirement for GeoJSON"
+    GeoJSON files for RASMapper **must** be in WGS84 (EPSG:4326) coordinate system:
+    ```python
+    # Always reproject before saving GeoJSON for RASMapper
+    gdf_wgs84 = gdf.to_crs("EPSG:4326")
+    gdf_wgs84.to_file("output.geojson", driver="GeoJSON")
+    ```
+
+### Listing and Removing Layers
+
+```python
+# List all custom map layers
+layers = RasMap.list_map_layers()
+for layer in layers:
+    print(f"  {layer['name']}: {layer['filename']}")
+
+# Remove a layer by name
+RasMap.remove_map_layer("Old Analysis Layer")
+```
+
+## Geometry Visibility Control
+
+Control which geometry layers are visible in RASMapper. This is useful when a project has multiple geometries and you want to focus on a specific one.
+
+### Listing Geometries
+
+```python
+# List all geometry layers with visibility status
+geoms = RasMap.list_geometries()
+for g in geoms:
+    status = "✓" if g['checked'] else " "
+    print(f"[{status}] {g['geom_number']}: {g['name']}")
+```
+
+Example output:
+```
+[✓] 06: Original 1D Model
+[ ] 08: 1D-2D Dam Break Model Refined Grid
+[ ] 09: Alternative Geometry
+```
+
+### Setting Visibility
+
+```python
+# Show a specific geometry
+RasMap.set_geometry_visibility("08", visible=True)
+
+# Hide a specific geometry
+RasMap.set_geometry_visibility("06", visible=False)
+
+# Hide all geometries except one
+RasMap.set_all_geometries_visibility(visible=False, except_geom="08")
+RasMap.set_geometry_visibility("08", visible=True)
+```
+
+### Geometry Identifier Formats
+
+The geometry visibility functions accept multiple identifier formats:
+
+| Format | Example | Notes |
+|--------|---------|-------|
+| Number | `"08"` or `"8"` | Geometry number |
+| With prefix | `"g08"` or `"G08"` | Common notation |
+| By name | `"1D-2D Dam Break Model"` | Full geometry name |
+| Filename | `"g08.hdf"` | Filename pattern |
+
 ## Terrain Data Access
 
 The `RasMap` class provides methods for working with terrain datasets.

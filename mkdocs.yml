@@ -162,6 +162,7 @@ nav:
     - Mapping & Visualization:
       - Stored Map Generation: notebooks/15_stored_map_generation.ipynb
       - RASMapper Raster Exports: notebooks/21_rasmap_raster_exports.ipynb
+      - 1D Boundary Condition Visualization: notebooks/24_1d_boundary_condition_visualization.ipynb
       - Programmatic Result Mapping: notebooks/25_programmatic_result_mapping.ipynb
       - RasProcess Stored Maps: notebooks/26_rasprocess_stored_maps.ipynb
     - Automation:
