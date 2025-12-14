@@ -24,6 +24,9 @@ List of Functions in RasMap:
 - get_rasmap_path(): Get the path to the .rasmap file based on the current project
 - initialize_rasmap_df(): Initialize the rasmap_df as part of project initialization
 - get_terrain_names(): Extracts terrain layer names from a given .rasmap file
+- list_map_layers(): List all map layers in the RASMapper configuration file
+- add_map_layer(): Add a map layer to the RASMapper configuration file
+- remove_map_layer(): Remove a map layer from the RASMapper configuration file
 - postprocess_stored_maps(): Automates the generation of stored floodplain map outputs (e.g., .tif files)
 - get_results_folder(): Get the folder path containing raster results for a specified plan
 - get_results_raster(): Get the .vrt file path for a specified plan and variable name
@@ -313,6 +316,499 @@ class RasMap:
         terrain_names = [layer.get('Name') for layer in terrains_element.findall('Layer') if layer.get('Name')]
         logger.info(f"Extracted terrain names: {terrain_names}")
         return terrain_names
+
+    @staticmethod
+    @log_call
+    def list_map_layers(ras_object=None) -> List[Dict[str, Any]]:
+        """
+        List all map layers in the RASMapper configuration file.
+
+        Args:
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            List[Dict[str, Any]]: List of dicts with layer info:
+                [{"name": str, "type": str, "filename": str, "checked": bool}, ...]
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> layers = RasMap.list_map_layers()
+            >>> for layer in layers:
+            ...     print(f"{layer['name']}: {layer['filename']}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return []
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return []
+
+        map_layers = root.find("MapLayers")
+        if map_layers is None:
+            logger.debug("No MapLayers section found in .rasmap")
+            return []
+
+        layers = []
+        for layer in map_layers.findall("Layer"):
+            layers.append({
+                "name": layer.get("Name", ""),
+                "type": layer.get("Type", ""),
+                "filename": layer.get("Filename", ""),
+                "checked": layer.get("Checked", "False").lower() == "true"
+            })
+
+        logger.info(f"Found {len(layers)} map layers in .rasmap")
+        return layers
+
+    @staticmethod
+    @log_call
+    def add_map_layer(
+        layer_name: str,
+        layer_file: Union[str, Path],
+        layer_type: str = "PolylineFeatureLayer",
+        checked: bool = True,
+        label_field: Optional[str] = None,
+        label_config: Optional[Dict[str, Any]] = None,
+        symbology: Optional[Dict[str, Any]] = None,
+        ras_object=None
+    ) -> bool:
+        """
+        Add a map layer to the RASMapper configuration file (.rasmap).
+
+        Args:
+            layer_name: Display name for the layer in RASMapper.
+            layer_file: Path to GeoJSON, shapefile, or other supported file.
+            layer_type: RASMapper layer type:
+                - "PolylineFeatureLayer" (default) - for lines (cross-sections)
+                - "PolygonFeatureLayer" - for polygons
+                - "PointFeatureLayer" - for points
+            checked: Whether layer is visible by default (True).
+            label_field: Field name to use for labels (e.g., "dss_path").
+            label_config: Optional label configuration dict with keys:
+                - "font_size": float (default 8.25)
+                - "color": int (default -16777216 = black)
+                - "position": int (0=center, 1=above, etc.)
+            symbology: Optional symbology configuration dict with keys:
+                - "line_color": tuple (R, G, B, A)
+                - "line_width": int
+                - "fill_color": tuple (R, G, B, A) for polygons
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            bool: True if layer was successfully added.
+
+        Raises:
+            FileNotFoundError: If .rasmap file doesn't exist.
+            ValueError: If layer_file doesn't exist.
+
+        Note:
+            **GeoJSON files MUST be in WGS84 (EPSG:4326) coordinate system** for
+            RASMapper to display them correctly. Always reproject your GeoDataFrame
+            to WGS84 before saving:
+
+            >>> gdf_wgs84 = gdf.to_crs("EPSG:4326")
+            >>> gdf_wgs84.to_file("output.geojson", driver="GeoJSON")
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>>
+            >>> # Add boundary conditions GeoJSON
+            >>> RasMap.add_map_layer(
+            ...     layer_name="Boundary Conditions",
+            ...     layer_file="boundary_cross_sections.geojson",
+            ...     label_field="dss_path"
+            ... )
+            >>>
+            >>> # Add with custom symbology
+            >>> RasMap.add_map_layer(
+            ...     layer_name="BC Locations",
+            ...     layer_file="bc_points.shp",
+            ...     layer_type="PointFeatureLayer",
+            ...     symbology={"line_color": (255, 0, 0, 255), "line_width": 2}
+            ... )
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # 1. Validate inputs
+        layer_file = Path(layer_file)
+        if not layer_file.is_absolute():
+            layer_file = ras_obj.project_folder / layer_file
+        if not layer_file.exists():
+            raise ValueError(f"Layer file not found: {layer_file}")
+
+        # 2. Get rasmap path
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f"RASMapper file not found: {rasmap_path}")
+
+        try:
+            # 3. Parse XML
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+
+            # 4. Find or create <MapLayers> section
+            map_layers = root.find("MapLayers")
+            if map_layers is None:
+                # Insert after Results section (or at end if no Results)
+                results = root.find("Results")
+                if results is not None:
+                    idx = list(root).index(results) + 1
+                    map_layers = ET.Element("MapLayers")
+                    map_layers.set("Checked", "True")
+                    map_layers.set("Expanded", "True")
+                    root.insert(idx, map_layers)
+                else:
+                    map_layers = ET.SubElement(root, "MapLayers")
+                    map_layers.set("Checked", "True")
+                    map_layers.set("Expanded", "True")
+                logger.info("Created new MapLayers section in .rasmap")
+
+            # 5. Create relative path for .rasmap (HEC-RAS convention)
+            try:
+                relative_path = layer_file.relative_to(ras_obj.project_folder)
+                filename = f".\\{relative_path}"
+            except ValueError:
+                # File outside project folder - use absolute path
+                filename = str(layer_file)
+
+            # 6. Build layer element
+            layer_elem = ET.SubElement(map_layers, "Layer")
+            layer_elem.set("Name", layer_name)
+            layer_elem.set("Type", layer_type)
+            layer_elem.set("Checked", "True" if checked else "False")
+            layer_elem.set("Filename", filename)
+
+            # 7. Add label configuration if specified
+            if label_field:
+                label_elem = ET.SubElement(layer_elem, "LabelFeatures")
+                label_elem.set("Checked", "True")
+                label_elem.set("PercentPosition", "0")
+                label_elem.set("rows", "1")
+                label_elem.set("cols", "1")
+                label_elem.set("r0c0", label_field)
+                label_elem.set("Position", str(label_config.get("position", 0) if label_config else 0))
+                label_elem.set("Color", str(label_config.get("color", -16777216) if label_config else -16777216))
+                label_elem.set("FontSize", str(label_config.get("font_size", 8.25) if label_config else 8.25))
+
+            # 8. Add symbology if specified
+            if symbology:
+                sym_elem = ET.SubElement(layer_elem, "Symbology")
+                if "line_color" in symbology:
+                    r, g, b, a = symbology["line_color"]
+                    pen_elem = ET.SubElement(sym_elem, "Pen")
+                    pen_elem.set("R", str(r))
+                    pen_elem.set("G", str(g))
+                    pen_elem.set("B", str(b))
+                    pen_elem.set("A", str(a))
+                    pen_elem.set("Dash", "0")
+                    pen_elem.set("Width", str(symbology.get("line_width", 2)))
+                if "fill_color" in symbology:
+                    r, g, b, a = symbology["fill_color"]
+                    brush_elem = ET.SubElement(sym_elem, "Brush")
+                    brush_elem.set("Type", "SolidBrush")
+                    brush_elem.set("R", str(r))
+                    brush_elem.set("G", str(g))
+                    brush_elem.set("B", str(b))
+                    brush_elem.set("A", str(a))
+                    brush_elem.set("Name", "PolygonFill")
+
+            # 9. Write updated XML
+            tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+            logger.info(f"Added map layer '{layer_name}' to {rasmap_path}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error adding map layer: {e}")
+            return False
+
+    @staticmethod
+    @log_call
+    def remove_map_layer(
+        layer_name: str,
+        ras_object=None
+    ) -> bool:
+        """
+        Remove a map layer from the RASMapper configuration file (.rasmap).
+
+        Args:
+            layer_name: Name of the layer to remove.
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            bool: True if layer was found and removed, False if not found.
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> RasMap.remove_map_layer("Boundary Conditions")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return False
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return False
+
+        map_layers = root.find("MapLayers")
+        if map_layers is None:
+            logger.warning("No MapLayers section found in .rasmap")
+            return False
+
+        # Find and remove layer by name
+        for layer in map_layers.findall("Layer"):
+            if layer.get("Name") == layer_name:
+                map_layers.remove(layer)
+                tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+                logger.info(f"Removed map layer '{layer_name}' from {rasmap_path}")
+                return True
+
+        logger.warning(f"Layer '{layer_name}' not found in .rasmap")
+        return False
+
+    @staticmethod
+    @log_call
+    def list_geometries(ras_object=None) -> List[Dict[str, Any]]:
+        """
+        List all geometry layers in the RASMapper configuration file.
+
+        Args:
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            List[Dict[str, Any]]: List of dicts with geometry info:
+                [{"name": str, "filename": str, "geom_number": str, "checked": bool}, ...]
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> geoms = RasMap.list_geometries()
+            >>> for g in geoms:
+            ...     print(f"{g['geom_number']}: {g['name']} - Visible: {g['checked']}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return []
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return []
+
+        geometries_elem = root.find("Geometries")
+        if geometries_elem is None:
+            logger.debug("No Geometries section found in .rasmap")
+            return []
+
+        geometries = []
+        for layer in geometries_elem.findall("Layer"):
+            filename = layer.get("Filename", "")
+            # Extract geometry number from filename (e.g., ".\BaldEagle.g08.hdf" -> "08")
+            import re
+            match = re.search(r'\.g(\d+)\.hdf', filename)
+            geom_num = match.group(1) if match else ""
+
+            geometries.append({
+                "name": layer.get("Name", ""),
+                "filename": filename,
+                "geom_number": geom_num,
+                "checked": layer.get("Checked", "").lower() == "true"
+            })
+
+        logger.info(f"Found {len(geometries)} geometries in .rasmap")
+        return geometries
+
+    @staticmethod
+    @log_call
+    def set_geometry_visibility(
+        geom_identifier: str,
+        visible: bool = True,
+        ras_object=None
+    ) -> bool:
+        """
+        Set visibility of a specific geometry layer in RASMapper.
+
+        Args:
+            geom_identifier: Geometry to modify - can be:
+                - Geometry name (e.g., "1D-2D Dam Break Model Refined Grid")
+                - Geometry number (e.g., "08" or "g08")
+                - Filename pattern (e.g., "g08.hdf")
+            visible: True to show geometry, False to hide.
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            bool: True if geometry was found and modified.
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> # Show geometry by number
+            >>> RasMap.set_geometry_visibility("08", visible=True)
+            >>> # Hide geometry by name
+            >>> RasMap.set_geometry_visibility("Old Geometry", visible=False)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return False
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return False
+
+        geometries_elem = root.find("Geometries")
+        if geometries_elem is None:
+            logger.warning("No Geometries section found in .rasmap")
+            return False
+
+        # Normalize identifier for matching
+        identifier_lower = geom_identifier.lower().strip()
+        # Handle "g08" -> "08" format
+        if identifier_lower.startswith('g') and identifier_lower[1:].isdigit():
+            identifier_lower = identifier_lower[1:]
+
+        found = False
+        for layer in geometries_elem.findall("Layer"):
+            name = layer.get("Name", "")
+            filename = layer.get("Filename", "")
+
+            # Check if this layer matches the identifier
+            matches = (
+                name.lower() == identifier_lower or
+                identifier_lower in filename.lower() or
+                f".g{identifier_lower}." in filename.lower() or
+                f".g{identifier_lower.zfill(2)}." in filename.lower()
+            )
+
+            if matches:
+                layer.set("Checked", "True" if visible else "False")
+                logger.info(f"Set geometry '{name}' visibility to {visible}")
+                found = True
+                break
+
+        if found:
+            tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+            return True
+        else:
+            logger.warning(f"Geometry '{geom_identifier}' not found in .rasmap")
+            return False
+
+    @staticmethod
+    @log_call
+    def set_all_geometries_visibility(
+        visible: bool = False,
+        except_geom: Optional[str] = None,
+        ras_object=None
+    ) -> int:
+        """
+        Set visibility for all geometry layers, optionally excluding one.
+
+        This is useful for hiding all geometries except the one you want to display.
+
+        Args:
+            visible: True to show all geometries, False to hide all.
+            except_geom: Optional geometry to exclude from visibility change.
+                Can be geometry name, number (e.g., "08"), or filename pattern.
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            int: Number of geometries modified.
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> # Hide all geometries except G08
+            >>> RasMap.set_all_geometries_visibility(visible=False, except_geom="08")
+            >>> # Then show only G08
+            >>> RasMap.set_geometry_visibility("08", visible=True)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return 0
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return 0
+
+        geometries_elem = root.find("Geometries")
+        if geometries_elem is None:
+            logger.warning("No Geometries section found in .rasmap")
+            return 0
+
+        # Normalize except identifier for matching
+        except_lower = None
+        if except_geom:
+            except_lower = except_geom.lower().strip()
+            if except_lower.startswith('g') and except_lower[1:].isdigit():
+                except_lower = except_lower[1:]
+
+        modified_count = 0
+        for layer in geometries_elem.findall("Layer"):
+            name = layer.get("Name", "")
+            filename = layer.get("Filename", "")
+
+            # Check if this is the exception geometry
+            if except_lower:
+                is_exception = (
+                    name.lower() == except_lower or
+                    except_lower in filename.lower() or
+                    f".g{except_lower}." in filename.lower() or
+                    f".g{except_lower.zfill(2)}." in filename.lower()
+                )
+                if is_exception:
+                    # Set opposite visibility for exception
+                    layer.set("Checked", "False" if visible else "True")
+                    logger.debug(f"Exception: Set geometry '{name}' to {not visible}")
+                    modified_count += 1
+                    continue
+
+            # Set visibility for all others
+            layer.set("Checked", "True" if visible else "False")
+            modified_count += 1
+
+        if modified_count > 0:
+            tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+            logger.info(f"Modified visibility for {modified_count} geometries")
+
+        return modified_count
 
     @staticmethod
     @log_call
