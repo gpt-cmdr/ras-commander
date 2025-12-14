@@ -16,10 +16,12 @@ Public functions:
     find_combobox_by_neighbor(hwnd, text)      - Find a combo box control near a label with specific text.
     select_combobox_item_by_text(combo, text)  - Select an item in a combo box by its text.
     set_current_plan(hwnd, plan_number, ...)   - Set the current plan in HEC-RAS by selecting from the plan dropdown.
+    handle_already_running_dialog(timeout)     - Auto-click Yes on "already an instance running" dialog.
     wait_for_window(find_window_func, ...)     - Wait for a window using a polling function and timeout.
     open_and_compute(...)                      - Open HEC-RAS, set plan, navigate via menu, optionally click Compute.
     close_window(hwnd)                         - Close the given window handle via WM_CLOSE.
     run_multiple_plans(...)                    - Automate GUI workflow for "Run Multiple Plans" in HEC-RAS.
+    open_rasmapper(...)                        - Open RASMapper via GIS Tools menu for viewing map layers.
 
 Private functions (scoped within above):
     Various local callback functions for window and child window enumeration.
@@ -485,6 +487,110 @@ class RasGuiAutomation:
 
     @staticmethod
     @log_call
+    def handle_already_running_dialog(timeout: int = 5) -> bool:
+        """
+        Handle the "already an instance of HEC-RAS running" dialog.
+
+        When HEC-RAS is launched while another instance is running, a dialog appears
+        asking "There is already an instance of HEC-RAS running on the system, do you
+        want to start another?" This function automatically clicks "Yes" to continue.
+
+        Args:
+            timeout (int): Maximum seconds to wait for dialog to appear. Default 5.
+
+        Returns:
+            bool: True if dialog was found and dismissed, False if no dialog appeared.
+
+        Notes:
+            - This function should be called shortly after launching HEC-RAS
+            - The dialog only appears when another HEC-RAS instance is already running
+            - If no dialog appears within timeout, function returns False (not an error)
+            - Dialog title typically contains "HEC-RAS" and message contains "already"
+        """
+        if not WIN32_AVAILABLE:
+            return False
+
+        logger.debug("Checking for 'already running' dialog...")
+        start_time = time.time()
+        check_interval = 0.5
+
+        while time.time() - start_time < timeout:
+            # Look for dialogs that might be the "already running" prompt
+            # These are typically MessageBox dialogs with "HEC-RAS" in title
+            def find_already_running_dialog():
+                """Find the 'already running' dialog by scanning visible windows."""
+                def callback(hwnd, dialogs):
+                    if win32gui.IsWindowVisible(hwnd) and win32gui.IsWindowEnabled(hwnd):
+                        title = win32gui.GetWindowText(hwnd)
+                        class_name = win32gui.GetClassName(hwnd)
+
+                        # Check for dialog boxes with HEC-RAS related titles
+                        # The dialog is typically a #32770 class (standard dialog)
+                        if class_name == "#32770":
+                            # Check if this looks like the "already running" dialog
+                            # by checking title or looking for Yes/No buttons
+                            if "HEC-RAS" in title or title == "":
+                                # Check child controls for text containing "already" or "instance"
+                                child_texts = []
+                                def child_callback(child_hwnd, texts):
+                                    try:
+                                        text = win32gui.GetWindowText(child_hwnd)
+                                        if text:
+                                            texts.append(text.lower())
+                                    except:
+                                        pass
+                                    return True
+                                win32gui.EnumChildWindows(hwnd, child_callback, child_texts)
+
+                                # Look for keywords indicating this is the "already running" dialog
+                                combined_text = " ".join(child_texts)
+                                if "already" in combined_text or "another" in combined_text or "instance" in combined_text:
+                                    dialogs.append(hwnd)
+                    return True
+
+                dialogs = []
+                win32gui.EnumWindows(callback, dialogs)
+                return dialogs[0] if dialogs else None
+
+            dialog_hwnd = find_already_running_dialog()
+
+            if dialog_hwnd:
+                logger.info("Found 'already running' dialog - clicking Yes to continue")
+
+                # Find and click the Yes button
+                yes_button = None
+                for button_text in ["Yes", "&Yes", "Ja", "&Ja"]:  # Include German for internationalization
+                    yes_button = RasGuiAutomation.find_button_by_text(dialog_hwnd, button_text)
+                    if yes_button:
+                        break
+
+                if yes_button:
+                    RasGuiAutomation.click_button(yes_button)
+                    logger.info("Clicked 'Yes' button on already running dialog")
+                    time.sleep(0.5)  # Brief wait for dialog to close
+                    return True
+                else:
+                    # Fallback: Try sending Enter key (Yes is typically default)
+                    logger.debug("Yes button not found, trying Enter key...")
+                    try:
+                        win32gui.SetForegroundWindow(dialog_hwnd)
+                        time.sleep(0.1)
+                        win32api.keybd_event(0x0D, 0, 0, 0)  # Enter down
+                        time.sleep(0.05)
+                        win32api.keybd_event(0x0D, 0, 0x0002, 0)  # Enter up
+                        logger.info("Sent Enter key to dismiss dialog")
+                        time.sleep(0.5)
+                        return True
+                    except Exception as e:
+                        logger.warning(f"Failed to dismiss dialog: {e}")
+
+            time.sleep(check_interval)
+
+        logger.debug("No 'already running' dialog detected")
+        return False
+
+    @staticmethod
+    @log_call
     def wait_for_window(
         find_window_func: Callable,
         timeout: int = 60,
@@ -592,9 +698,13 @@ class RasGuiAutomation:
             logger.error(f"Failed to open HEC-RAS: {e}")
             return False
 
-        # Step 3: Wait for main window
+        # Step 3: Handle "already running" dialog if it appears
+        time.sleep(1)  # Brief wait for dialog to appear
+        RasGuiAutomation.handle_already_running_dialog(timeout=3)
+
+        # Step 4: Wait for main window
         logger.info("Waiting for HEC-RAS main window...")
-        time.sleep(3)  # Initial wait for process to start
+        time.sleep(2)  # Wait for process to start
 
         def find_ras_window():
             windows = RasGuiAutomation.get_windows_by_pid(hecras_process.pid)
@@ -795,9 +905,13 @@ class RasGuiAutomation:
             logger.error(f"Failed to open HEC-RAS: {e}")
             return False
 
-        # Step 2: Wait for main window
+        # Step 2: Handle "already running" dialog if it appears
+        time.sleep(1)  # Brief wait for dialog to appear
+        RasGuiAutomation.handle_already_running_dialog(timeout=3)
+
+        # Step 3: Wait for main window
         logger.info("Waiting for HEC-RAS main window...")
-        time.sleep(3)  # Initial wait for process to start
+        time.sleep(2)  # Wait for process to start
 
         def find_ras_window():
             windows = RasGuiAutomation.get_windows_by_pid(hecras_process.pid)
@@ -812,7 +926,7 @@ class RasGuiAutomation:
 
         logger.info(f"Found HEC-RAS main window: {win32gui.GetWindowText(hec_ras_hwnd)}")
 
-        # Step 3: Click "Run > Run Multiple Plans" (menu ID 52)
+        # Step 4: Click "Run > Run Multiple Plans" (menu ID 52)
         logger.info("Clicking 'Run > Run Multiple Plans' menu...")
         time.sleep(1)  # Let window fully load
 
@@ -897,6 +1011,247 @@ class RasGuiAutomation:
                 return False
         else:
             logger.info("Returning without waiting for HEC-RAS to close")
+            logger.info(f"HEC-RAS process ID: {hecras_process.pid}")
+
+        return True
+
+    @staticmethod
+    @log_call
+    def open_rasmapper(
+        ras_object=None,
+        wait_for_user: bool = True,
+        timeout: int = 300
+    ) -> bool:
+        """
+        Open RASMapper via HEC-RAS GUI automation.
+
+        This function:
+        1. Opens HEC-RAS with the current project
+        2. Waits for main window to appear
+        3. Clicks GIS Tools > RAS Mapper menu
+        4. Waits for RASMapper window to appear and become responsive
+        5. Optionally waits for user to close RASMapper
+
+        Args:
+            ras_object: Optional RasPrj object instance.
+            wait_for_user (bool): If True, wait for user to close RASMapper. Default True.
+            timeout (int): Max seconds to wait for RASMapper window. Default 300 (5 min).
+                Large projects may take several minutes to load geometry/terrain.
+
+        Returns:
+            bool: True if RASMapper opened successfully.
+
+        Notes:
+            - RASMapper has NO COM interface - must use GUI automation
+            - Opening RASMapper automatically upgrades .rasmap to current version
+            - Large projects may take minutes to load - progress is logged every 15s
+            - Window detection checks if RASMapper is responsive, not just visible
+            - Use this to view newly added map layers
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasGuiAutomation
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>>
+            >>> # Open RASMapper and wait for user
+            >>> RasGuiAutomation.open_rasmapper(wait_for_user=True)
+            >>>
+            >>> # Open RASMapper, don't wait (returns immediately after RASMapper opens)
+            >>> RasGuiAutomation.open_rasmapper(wait_for_user=False)
+            >>>
+            >>> # For very large projects, increase timeout
+            >>> RasGuiAutomation.open_rasmapper(timeout=600)  # 10 minutes
+        """
+        if not WIN32_AVAILABLE:
+            logger.error("GUI automation requires Windows and pywin32")
+            return False
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Step 1: Open HEC-RAS
+        logger.info("Opening HEC-RAS...")
+        ras_exe = ras_obj.ras_exe_path
+        prj_path = f'"{str(ras_obj.prj_file)}"'
+        command = f"{ras_exe} {prj_path}"
+
+        try:
+            if sys.platform == "win32":
+                hecras_process = subprocess.Popen(command)
+            else:
+                hecras_process = subprocess.Popen([str(ras_exe), str(ras_obj.prj_file)])
+
+            logger.info(f"HEC-RAS opened with Process ID: {hecras_process.pid}")
+        except Exception as e:
+            logger.error(f"Failed to open HEC-RAS: {e}")
+            return False
+
+        # Step 2: Handle "already running" dialog if it appears
+        time.sleep(1)  # Brief wait for dialog to appear
+        RasGuiAutomation.handle_already_running_dialog(timeout=3)
+
+        # Step 3: Wait for main window
+        logger.info("Waiting for HEC-RAS main window...")
+        time.sleep(2)
+
+        def find_ras_window():
+            windows = RasGuiAutomation.get_windows_by_pid(hecras_process.pid)
+            hwnd, title = RasGuiAutomation.find_main_hecras_window(windows)
+            return hwnd
+
+        hec_ras_hwnd = RasGuiAutomation.wait_for_window(find_ras_window, timeout=30)
+
+        if not hec_ras_hwnd:
+            logger.error("Could not find HEC-RAS main window")
+            try:
+                hecras_process.terminate()
+            except:
+                pass
+            return False
+
+        logger.info(f"Found HEC-RAS main window: {win32gui.GetWindowText(hec_ras_hwnd)}")
+
+        # Step 4: Click GIS Tools > RAS Mapper menu
+        logger.info("Opening RASMapper via menu...")
+        try:
+            win32gui.SetForegroundWindow(hec_ras_hwnd)
+        except:
+            pass
+        time.sleep(0.5)
+
+        # Find RAS Mapper menu ID by enumerating menus
+        menus = RasGuiAutomation.enumerate_all_menus(hec_ras_hwnd)
+        rasmapper_id = None
+
+        # Note: enumerate_all_menus returns items as (item_text, menu_id) tuples
+        for menu_name, items in menus.items():
+            if "gis" in menu_name.lower():
+                for item_text, menu_id in items:  # FIXED: Correct tuple order
+                    if isinstance(item_text, str) and "mapper" in item_text.lower():
+                        rasmapper_id = menu_id  # Now correctly assigns numeric ID
+                        logger.info(f"Found RAS Mapper menu item: '{item_text}' (ID: {menu_id})")
+                        break
+                if rasmapper_id:
+                    break
+
+        if rasmapper_id and isinstance(rasmapper_id, int) and rasmapper_id > 0:
+            RasGuiAutomation.click_menu_item(hec_ras_hwnd, rasmapper_id)
+            logger.info("Clicked RAS Mapper menu via menu ID")
+        else:
+            # Fallback: Try keyboard shortcut Alt+G, M
+            logger.info("Menu ID not found, trying keyboard shortcut...")
+            try:
+                win32gui.SetForegroundWindow(hec_ras_hwnd)
+                time.sleep(0.2)
+
+                # Alt+G to open GIS Tools menu
+                win32api.keybd_event(0x12, 0, 0, 0)  # Alt down
+                time.sleep(0.05)
+                win32api.keybd_event(ord('G'), 0, 0, 0)  # G key down
+                time.sleep(0.05)
+                win32api.keybd_event(ord('G'), 0, 0x0002, 0)  # G key up
+                time.sleep(0.05)
+                win32api.keybd_event(0x12, 0, 0x0002, 0)  # Alt up
+                time.sleep(0.3)
+
+                # M to select Mapper
+                win32api.keybd_event(ord('M'), 0, 0, 0)  # M down
+                time.sleep(0.05)
+                win32api.keybd_event(ord('M'), 0, 0x0002, 0)  # M up
+                logger.info("Sent keyboard shortcut Alt+G, M")
+            except Exception as e:
+                logger.warning(f"Keyboard shortcut failed: {e}")
+                logger.info("User must manually click GIS Tools > RAS Mapper")
+
+        # Step 4: Wait for RASMapper window with progress logging
+        logger.info(f"Waiting for RASMapper window (up to {timeout} seconds)...")
+        logger.info("Note: Large projects may take several minutes to load...")
+
+        def find_rasmapper_window():
+            """Find RASMapper window by title."""
+            def callback(hwnd, windows):
+                if win32gui.IsWindowVisible(hwnd) and win32gui.IsWindowEnabled(hwnd):
+                    title = win32gui.GetWindowText(hwnd)
+                    if "RAS Mapper" in title:
+                        windows.append((hwnd, title))
+                return True
+
+            windows = []
+            win32gui.EnumWindows(callback, windows)
+            return windows[0] if windows else None
+
+        def is_window_responsive(hwnd):
+            """Check if window is responding (not hung)."""
+            try:
+                # SendMessageTimeout returns 0 if window is not responding
+                result = ctypes.windll.user32.SendMessageTimeoutW(
+                    hwnd, 0, 0, 0,  # WM_NULL message
+                    0x0002,  # SMTO_ABORTIFHUNG
+                    1000,  # 1 second timeout
+                    ctypes.byref(ctypes.c_ulong())
+                )
+                return result != 0
+            except:
+                return False
+
+        # Custom wait loop with progress logging
+        start_time = time.time()
+        check_interval = 3
+        last_log_time = start_time
+        rasmapper_result = None
+
+        while time.time() - start_time < timeout:
+            result = find_rasmapper_window()
+            if result:
+                hwnd, title = result
+                # Check if window is actually responsive (not just visible)
+                if is_window_responsive(hwnd):
+                    rasmapper_result = result
+                    break
+                else:
+                    logger.debug("RASMapper window found but still loading...")
+
+            # Log progress every 15 seconds
+            elapsed = time.time() - start_time
+            if elapsed - (last_log_time - start_time) >= 15:
+                logger.info(f"Still waiting for RASMapper... ({int(elapsed)}s elapsed)")
+                last_log_time = time.time()
+
+            time.sleep(check_interval)
+
+        if not rasmapper_result:
+            elapsed = int(time.time() - start_time)
+            logger.error(f"RASMapper window did not appear after {elapsed} seconds")
+            logger.info("User may need to manually open RASMapper via GIS Tools menu")
+            if not wait_for_user:
+                return False
+        else:
+            rasmapper_hwnd, rasmapper_title = rasmapper_result
+            elapsed = int(time.time() - start_time)
+            logger.info(f"RASMapper opened: {rasmapper_title} (took {elapsed}s)")
+
+        # Step 5: Wait for user or return
+        if wait_for_user:
+            logger.info("Waiting for user to close RASMapper...")
+
+            while True:
+                time.sleep(2)
+                if not find_rasmapper_window():
+                    logger.info("RASMapper closed by user")
+                    break
+
+            # Close HEC-RAS
+            logger.info("Closing HEC-RAS...")
+            try:
+                win32gui.PostMessage(hec_ras_hwnd, win32con.WM_CLOSE, 0, 0)
+            except:
+                pass
+            try:
+                hecras_process.wait(timeout=10)
+            except:
+                pass
+            logger.info("HEC-RAS closed")
+        else:
+            logger.info("Returning without waiting for RASMapper to close")
             logger.info(f"HEC-RAS process ID: {hecras_process.pid}")
 
         return True
