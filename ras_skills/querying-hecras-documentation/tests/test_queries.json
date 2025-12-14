@@ -1,0 +1,234 @@
+{
+  "version": "1.0",
+  "description": "Test cases for HEC-RAS Documentation Query skill",
+  "categories": {
+    "ui_location": {
+      "description": "Questions about finding UI elements and buttons",
+      "expected_manual": "rasum",
+      "tests": [
+        {
+          "id": "ui_001",
+          "question": "Where is the Run Simulation button?",
+          "expected_manual": "rasum",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["Run", "Simulation", "compute", "button"],
+            "should_have_screenshot": true
+          }
+        },
+        {
+          "id": "ui_002",
+          "question": "How do I access the 2D mesh editor?",
+          "expected_manual": "r2dum",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["mesh", "editor", "2D", "flow area"],
+            "should_have_screenshot": true
+          }
+        },
+        {
+          "id": "ui_003",
+          "question": "Where do I create stored maps in RASMapper?",
+          "expected_manual": "rmum",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["stored map", "RASMapper", "results"],
+            "should_have_screenshot": true
+          }
+        }
+      ]
+    },
+    "workflow": {
+      "description": "Questions about complete workflows and procedures",
+      "tests": [
+        {
+          "id": "wf_001",
+          "question": "How do I set up a dam breach simulation?",
+          "expected_manual": "rasum",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["dam breach", "breach parameters", "simulation"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "wf_002",
+          "question": "What is the complete workflow for 2D modeling?",
+          "expected_manual": "r2dum",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["2D", "flow area", "mesh", "terrain", "boundary conditions"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "wf_003",
+          "question": "How do I create a steady flow analysis?",
+          "expected_manual": "rasum",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["steady flow", "water surface", "boundary conditions"],
+            "should_have_screenshot": false
+          }
+        }
+      ]
+    },
+    "concepts": {
+      "description": "Questions about hydraulic concepts and theory",
+      "tests": [
+        {
+          "id": "con_001",
+          "question": "What is an ineffective flow area?",
+          "expected_manual": "rasum",
+          "expected_confidence": "medium",
+          "validation": {
+            "should_mention": ["ineffective", "flow area", "cross section"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "con_002",
+          "question": "What is the difference between 1D and 2D modeling?",
+          "expected_manual": "r2dum",
+          "expected_confidence": "medium",
+          "validation": {
+            "should_mention": ["1D", "2D", "difference", "modeling"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "con_003",
+          "question": "What are the numerical methods used in HEC-RAS?",
+          "expected_manual": "ras1dtechref",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["numerical", "method", "equation"],
+            "should_have_screenshot": false
+          }
+        }
+      ]
+    },
+    "version_specific": {
+      "description": "Questions about version-specific features and release notes",
+      "tests": [
+        {
+          "id": "ver_001",
+          "question": "What's new in HEC-RAS 6.6?",
+          "expected_manual": "rasrn",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["6.6", "new", "feature"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "ver_002",
+          "question": "When was terrain layering added to HEC-RAS?",
+          "expected_manual": "rasrn",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["terrain", "layer", "version"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "ver_003",
+          "question": "What are the known issues with 2D mesh generation?",
+          "expected_manual": "raski",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["2D", "mesh", "issue", "problem"],
+            "should_have_screenshot": false
+          }
+        }
+      ]
+    },
+    "troubleshooting": {
+      "description": "Questions about errors and troubleshooting",
+      "tests": [
+        {
+          "id": "tro_001",
+          "question": "Why is my 2D mesh not computing?",
+          "expected_manual": "r2dum",
+          "expected_confidence": "medium",
+          "validation": {
+            "should_mention": ["2D", "mesh", "computation", "error"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "tro_002",
+          "question": "What causes unstable flow in HEC-RAS?",
+          "expected_manual": "rasum",
+          "expected_confidence": "medium",
+          "validation": {
+            "should_mention": ["unstable", "flow", "computation"],
+            "should_have_screenshot": false
+          }
+        },
+        {
+          "id": "tro_003",
+          "question": "Known issues with RASMapper terrain display",
+          "expected_manual": "raski",
+          "expected_confidence": "high",
+          "validation": {
+            "should_mention": ["RASMapper", "terrain", "issue"],
+            "should_have_screenshot": false
+          }
+        }
+      ]
+    },
+    "multi_manual": {
+      "description": "Complex questions that may require information from multiple manuals",
+      "tests": [
+        {
+          "id": "mm_001",
+          "question": "How do I set up and visualize a 2D unsteady flow simulation?",
+          "expected_manual": "r2dum",
+          "expected_confidence": "high",
+          "also_check": ["rasum", "rmum"],
+          "validation": {
+            "should_mention": ["2D", "unsteady", "flow", "simulation", "visualize"],
+            "should_have_screenshot": false,
+            "multi_page": true
+          }
+        },
+        {
+          "id": "mm_002",
+          "question": "What are the best practices for terrain processing and mesh generation?",
+          "expected_manual": "r2dum",
+          "expected_confidence": "high",
+          "also_check": ["rmum"],
+          "validation": {
+            "should_mention": ["terrain", "mesh", "best practice"],
+            "should_have_screenshot": false,
+            "multi_page": true
+          }
+        }
+      ]
+    }
+  },
+  "test_settings": {
+    "timeout_ms": 30000,
+    "retry_count": 2,
+    "screenshot_cache": true,
+    "verbose": true
+  },
+  "validation_criteria": {
+    "manual_selection": {
+      "high_confidence_threshold": 5,
+      "accepts_expected_manual": true,
+      "accepts_alternative_if_reasonable": true
+    },
+    "content_extraction": {
+      "min_text_length": 100,
+      "requires_sections": true,
+      "max_images_to_check": 10
+    },
+    "screenshot_quality": {
+      "min_file_size_kb": 50,
+      "max_file_size_mb": 10,
+      "cache_valid_hours": 24
+    }
+  }
+}

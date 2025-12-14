@@ -1592,3 +1592,44 @@ Session 9 successfully completed 3 high-priority migrations (remote-executor, qu
 
 **Next Session**: documentation-generator migration, geometry content verification, final sweep
 
+---
+## Session 15 - 2025-12-14
+
+**Goal**: Holistic review of `examples/*.ipynb` notebooks as essential documentation
+
+**Completed**:
+- Full-coverage review notes written (basic 00–14 + all additional notebooks present in `examples/`)
+- Identified cross-cutting documentation anti-patterns and a conservative implementation sequence
+- Documented mkdocs/ReadTheDocs notebook plumbing issues and filename/nav mismatches
+- Built local review automation outputs (inventory + extracted code cells) to speed iteration
+
+**Deliverables (local, gitignored by default)**:
+- Review index + docs plumbing notes:
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/README.md`
+- Cross-cutting recommendations:
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/COMPREHENSIVE_RECOMMENDATIONS.md`
+- Conservative rollout plan:
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/IMPLEMENTATION_SEQUENCE.md`
+- Batch reviews:
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/BATCH_05_09_REVIEW.md`
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/BATCH_10_14_REVIEW.md`
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/BATCH_15_22_REVIEW.md`
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/BATCH_101_106_REVIEW.md`
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/BATCH_200_424_REVIEW.md`
+- Handoff summary + environment constraints:
+  - `feature_dev_notes/Example_Notebook_Holistic_Review/HANDOFF_STATE.md`
+
+**Key Findings**:
+- Documentation plumbing is fragile:
+  - `mkdocs.yml` expects `docs/notebooks/*.ipynb`
+  - `.readthedocs.yaml` uses `cp -r examples docs/notebooks` which likely nests notebooks under `docs/notebooks/examples/`
+  - mkdocs nav references notebooks that do not exist/misnamed in `examples/`
+- Safety/runtime blockers exist in notebooks (examples include broken f-strings and destructive `rmtree`)
+- Notebooks need a shared “Parameters” cell, plan-number-first discipline, DataFrame-first usage, and a strict output hygiene contract (run-copy project + `_outputs/<notebook_id>/...`)
+
+**Next Steps (recommended)**:
+1) Phase 0: fix docs plumbing + notebook syntax/safety blockers (no behavior redesign)
+2) Phase 1: enforce output hygiene + parameters cell across all notebooks
+3) Phase 2: reduce LOC via shared helpers (keep outputs identical)
+4) Phase 3: add LLM Forward verification artifacts (saved plots/logs/run summaries)
+

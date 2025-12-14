@@ -63,7 +63,8 @@ def generate_gauge_catalog(
     historical_years: int = 10,
     output_folder: Optional[Union[str, Path]] = None,
     parameters: List[str] = None,
-    rate_limit_rps: float = 5.0
+    rate_limit_rps: float = 5.0,
+    project_crs: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Generate standardized USGS gauge data catalog for project.
@@ -72,11 +73,6 @@ def generate_gauge_catalog(
     - Master gauge catalog (CSV)
     - Spatial data (GeoJSON)
     - Individual gauge folders with metadata and historical data
-
-    **Important:** This function requires the HEC-RAS project to have a defined
-    coordinate reference system (CRS/projection). If your project shows "No valid
-    projection found" warnings, open RASMapper and set the projection before using
-    this function.
 
     Parameters
     ----------
@@ -95,6 +91,10 @@ def generate_gauge_catalog(
     rate_limit_rps : float, default 5.0
         Rate limit in requests per second (5.0 = conservative, 10.0 = moderate)
         Set to 0 to disable rate limiting. USGS recommends 5-10 req/sec sustained.
+    project_crs : str, optional
+        Override CRS for projects without embedded projection. Use EPSG codes
+        like "EPSG:26918" (UTM Zone 18N). Required for Bald Eagle Creek and 
+        other HEC-RAS example projects that don't have embedded CRS.
 
     Returns
     -------
@@ -116,10 +116,12 @@ def generate_gauge_catalog(
     >>> from ras_commander.usgs import generate_gauge_catalog
     >>>
     >>> init_ras_project("C:/models/bald_eagle", "6.6")
+    >>> # For projects without CRS, specify project_crs:
     >>> summary = generate_gauge_catalog(
     ...     buffer_percent=50.0,
     ...     historical_years=10,
-    ...     parameters=['flow', 'stage']
+    ...     parameters=['flow', 'stage'],
+    ...     project_crs="EPSG:26918"  # UTM Zone 18N for Bald Eagle Creek
     ... )
     >>> print(f"Found {summary['gauge_count']} gauges")
     >>> print(f"Location: {summary['output_folder']}")
@@ -177,7 +179,8 @@ def generate_gauge_catalog(
     logger.info("Step 1/7: Finding gauges in project extent...")
     gauges_df = UsgsGaugeSpatial.find_gauges_in_project(
         hdf_path=geom_hdf_path,
-        buffer_percent=buffer_percent
+        buffer_percent=buffer_percent,
+        project_crs=project_crs
     )
 
     if gauges_df is None or len(gauges_df) == 0:

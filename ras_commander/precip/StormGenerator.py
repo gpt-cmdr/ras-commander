@@ -38,6 +38,7 @@ References:
     - Alternating Block Method: Chow, Maidment, Mays (1988)
 """
 
+import ast
 import re
 import logging
 from pathlib import Path
@@ -115,7 +116,8 @@ class StormGenerator:
         data: str = 'depth',
         units: str = 'english',
         series: str = 'pds',
-        timeout: int = 30
+        timeout: int = 30,
+        project_folder: Optional[Union[str, Path]] = None
     ) -> 'StormGenerator':
         """
         Download NOAA Atlas 14 precipitation frequency data for a location.
@@ -124,6 +126,13 @@ class StormGenerator:
         Design Studies Center (HDSC) API, eliminating the need to manually
         download CSV files from the PFDS website.
 
+        **LLM Forward Caching Pattern**: When `project_folder` is provided, the raw
+        NOAA API response is cached to `{project_folder}/NOAA_Atlas_14/` for:
+        - **Verifiability**: Raw NOAA data preserved for engineering review
+        - **Reproducibility**: Same data used across all analyses
+        - **Speed**: Subsequent calls load from cache (no API request)
+        - **Offline**: Works without internet after initial download
+
         Args:
             lat: Latitude in decimal degrees (positive for Northern Hemisphere)
             lon: Longitude in decimal degrees (negative for Western Hemisphere)
@@ -131,6 +140,8 @@ class StormGenerator:
             units: Unit system - 'english' or 'metric'
             series: Time series type - 'pds' (partial duration) or 'ams' (annual maximum)
             timeout: Request timeout in seconds
+            project_folder: Optional path to project folder for caching. If provided,
+                          data is cached to {project_folder}/NOAA_Atlas_14/
 
         Returns:
             StormGenerator instance with data loaded and ready for hyetograph generation
@@ -141,15 +152,16 @@ class StormGenerator:
             TimeoutError: If request times out
 
         Example:
-            >>> # Download data for Washington, DC
+            >>> # Download data for Washington, DC (no caching)
             >>> gen = StormGenerator.download_from_coordinates(38.9, -77.0)
             >>> hyeto = gen.generate_hyetograph(ari=100, duration_hours=24)
             >>>
-            >>> # Download with metric units
+            >>> # Download with caching (LLM Forward pattern)
             >>> gen = StormGenerator.download_from_coordinates(
-            ...     lat=40.7, lon=-74.0,  # New York City
-            ...     units='metric'
+            ...     lat=38.9, lon=-77.0,
+            ...     project_folder="/path/to/project"
             ... )
+            >>> # Data cached to /path/to/project/NOAA_Atlas_14/lat38.9_lon-77.0_depth_english_pds.json
 
         Note:
             NOAA Atlas 14 coverage includes most of the contiguous United States,
@@ -159,6 +171,33 @@ class StormGenerator:
         import urllib.request
         import urllib.error
         import ast
+        import json
+
+        # Check for cached data if project_folder provided
+        cache_file = None
+        if project_folder is not None:
+            project_folder = Path(project_folder)
+            cache_dir = project_folder / "NOAA_Atlas_14"
+            cache_file = cache_dir / f"lat{lat}_lon{lon}_{data}_{units}_{series}.json"
+
+            if cache_file.exists():
+                logger.info(f"Loaded cached Atlas 14 data from: {cache_file}")
+                try:
+                    with open(cache_file, 'r') as f:
+                        data_dict = json.load(f)
+
+                    logger.info(f"Using cached Atlas 14 data for ({lat}, {lon})")
+
+                    # Convert to DataFrame format
+                    instance = cls()
+                    instance._load_from_api_data(data_dict, units)
+
+                    region = data_dict.get('region', 'Unknown')
+                    logger.info(f"Downloaded Atlas 14 data for region: {region}")
+
+                    return instance
+                except Exception as e:
+                    logger.warning(f"Failed to load cache file, downloading fresh: {e}")
 
         # Build request URL
         params = {
@@ -202,6 +241,16 @@ class StormGenerator:
                 "This location may be outside NOAA Atlas 14 coverage."
             )
 
+        # Cache the data if project_folder provided
+        if cache_file is not None:
+            try:
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                with open(cache_file, 'w') as f:
+                    json.dump(data_dict, f, indent=2)
+                logger.info(f"Cached Atlas 14 data to: {cache_file}")
+            except Exception as e:
+                logger.warning(f"Failed to cache Atlas 14 data: {e}")
+
         # Convert to DataFrame format
         instance = cls()
         instance._load_from_api_data(data_dict, units)
@@ -216,8 +265,8 @@ class StormGenerator:
         """
         Parse the NOAA API response into a dictionary.
 
-        The API returns Python code with variable assignments.
-        We safely parse this without using eval().
+        The API returns JavaScript-style code with variable assignments
+        (semicolon-terminated). We safely parse this without using eval().
 
         Args:
             content: Raw response content from NOAA API
@@ -236,6 +285,10 @@ class StormGenerator:
                     var_name, value_str = line.split('=', 1)
                     var_name = var_name.strip()
                     value_str = value_str.strip()
+
+                    # Remove trailing semicolon (JavaScript-style syntax from NOAA API)
+                    if value_str.endswith(';'):
+                        value_str = value_str[:-1].strip()
 
                     # Use ast.literal_eval for safe parsing
                     try:
@@ -275,7 +328,21 @@ class StormGenerator:
         # Create DataFrame
         df_data = {'duration_hours': durations}
         for i, ari in enumerate(ari_cols):
-            df_data[ari] = [row[i] if i < len(row) else np.nan for row in quantiles]
+            # Convert string values to float (cached JSON has strings)
+            values = []
+            for row in quantiles:
+                if i < len(row):
+                    val = row[i]
+                    # Convert string to float if needed
+                    if isinstance(val, str):
+                        try:
+                            val = float(val)
+                        except (ValueError, TypeError):
+                            val = np.nan
+                    values.append(val)
+                else:
+                    values.append(np.nan)
+            df_data[ari] = values
 
         self.data = pd.DataFrame(df_data)
         self.durations_hours = np.array(durations)

@@ -1,6 +1,9 @@
 # Ignore the example_projects folder and all its subfolders
 examples/example_projects/
 
+# Ignore parallel notebook extraction folders (example_projects_* pattern)
+examples/example_projects_*/
+
 # Ignore workspace, projects, and my_projects folders
 workspace/
 projects/

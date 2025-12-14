@@ -152,9 +152,28 @@ class HdfBase:
             hdf_path (Path): Path to the HDF file.
 
         Returns:
-            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), or None if not found.
+            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), WKT string if no 
+                          EPSG match found, or None if no projection found.
         """
         from pyproj import CRS
+
+        def wkt_to_crs_string(wkt_string: str, source: str) -> str:
+            """Convert WKT to EPSG code if possible, otherwise return WKT."""
+            try:
+                crs = CRS.from_wkt(wkt_string)
+                # Try to get EPSG code
+                epsg = crs.to_epsg()
+                if epsg:
+                    epsg_str = f"EPSG:{epsg}"
+                    logger.info(f"Converted WKT to {epsg_str} from {source}")
+                    return epsg_str
+                else:
+                    # No EPSG match - return WKT (pyproj/geopandas can still use it)
+                    logger.debug(f"No EPSG match for CRS '{crs.name}' from {source}, using WKT")
+                    return wkt_string
+            except Exception as e:
+                logger.warning(f"Could not parse WKT from {source}: {e}. Returning raw WKT.")
+                return wkt_string
 
         project_folder = hdf_path.parent
         wkt = None
@@ -168,7 +187,7 @@ class HdfBase:
                     if isinstance(proj_wkt, (bytes, np.bytes_)):
                         wkt = proj_wkt.decode("utf-8")
                         logger.info(f"Found projection in HDF file: {hdf_path}")
-                        return wkt
+                        return wkt_to_crs_string(wkt, f"HDF file {hdf_path.name}")
         except Exception as e:
             logger.error(f"Error reading projection from HDF file {hdf_path}: {str(e)}")
 
@@ -187,7 +206,7 @@ class HdfBase:
                             with open(proj_file, 'r') as f:
                                 wkt = f.read().strip()
                                 logger.info(f"Found projection in RASMapper file: {proj_file}")
-                                return wkt
+                                return wkt_to_crs_string(wkt, f"RASMapper file {proj_file.name}")
             except Exception as e:
                 logger.error(f"Error reading RASMapper projection file: {str(e)}")
         

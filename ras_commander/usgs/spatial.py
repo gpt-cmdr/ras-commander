@@ -74,7 +74,8 @@ class UsgsGaugeSpatial:
         buffer_percent: float = 50.0,
         site_type: str = 'ST',
         parameter_codes: Optional[Union[str, List[str]]] = None,
-        active_only: bool = True
+        active_only: bool = True,
+        project_crs: Optional[str] = None
     ) -> 'gpd.GeoDataFrame':
         """
         Query USGS gauges within HEC-RAS project bounds.
@@ -107,6 +108,10 @@ class UsgsGaugeSpatial:
         active_only : bool, default True
             If True, only return currently active gauges. If False,
             include inactive/historical gauges.
+        project_crs : str, optional
+            Override CRS for projects without embedded projection. Use EPSG codes
+            like "EPSG:26918" (UTM Zone 18N) or "EPSG:2271" (PA State Plane North).
+            Required for Bald Eagle Creek and other example projects without CRS.
 
         Returns
         -------
@@ -191,7 +196,8 @@ class UsgsGaugeSpatial:
         logger.info(f"Retrieving project bounds from: {hdf_path}")
         west, south, east, north = HdfProject.get_project_bounds_latlon(
             hdf_path,
-            buffer_percent=buffer_percent
+            buffer_percent=buffer_percent,
+            project_crs=project_crs
         )
 
         if west == 0.0 and south == 0.0 and east == 0.0 and north == 0.0:
@@ -244,11 +250,44 @@ class UsgsGaugeSpatial:
             return gpd.GeoDataFrame()
 
         logger.info(f"Found {len(df)} USGS gauges")
+        logger.debug(f"API response columns: {list(df.columns)}")
 
-        # Create geometry column
+        # Create geometry column - handle different API response formats
         try:
+            # Try different column name conventions (API format changed over time)
+            lon_col = None
+            lat_col = None
+            
+            # Check for common longitude column names
+            for col in ['dec_long_va', 'longitude', 'long', 'lng', 'x']:
+                if col in df.columns:
+                    lon_col = col
+                    break
+            
+            # Check for common latitude column names
+            for col in ['dec_lat_va', 'latitude', 'lat', 'y']:
+                if col in df.columns:
+                    lat_col = col
+                    break
+            
+            # If still not found, check for geometry column from GeoJSON response
+            if lon_col is None or lat_col is None:
+                if 'geometry' in df.columns:
+                    # Extract coordinates from geometry column
+                    logger.debug("Extracting coordinates from geometry column")
+                    df['_lon'] = df['geometry'].apply(lambda g: g.x if hasattr(g, 'x') else g['coordinates'][0] if isinstance(g, dict) else None)
+                    df['_lat'] = df['geometry'].apply(lambda g: g.y if hasattr(g, 'y') else g['coordinates'][1] if isinstance(g, dict) else None)
+                    lon_col = '_lon'
+                    lat_col = '_lat'
+            
+            if lon_col is None or lat_col is None:
+                logger.error(f"Could not find longitude/latitude columns. Available columns: {list(df.columns)}")
+                return gpd.GeoDataFrame()
+            
+            logger.debug(f"Using columns: lon={lon_col}, lat={lat_col}")
+            
             geometry = [Point(float(lon), float(lat))
-                       for lon, lat in zip(df['dec_long_va'], df['dec_lat_va'])]
+                       for lon, lat in zip(df[lon_col], df[lat_col])]
 
             # Create GeoDataFrame
             gdf = gpd.GeoDataFrame(
@@ -259,6 +298,51 @@ class UsgsGaugeSpatial:
 
             logger.debug(f"Created GeoDataFrame with {len(gdf)} gauges")
             logger.debug(f"Columns: {list(gdf.columns)}")
+            
+            # Normalize column names to expected format (handle API version differences)
+            # Map new OGC API names to legacy names expected by downstream code
+            column_mapping = {
+                # Site identification
+                'id': 'site_no',
+                'monitoringLocationIdentifier': 'site_no',
+                'identifier': 'site_no',
+                'siteNumber': 'site_no',
+                # Station name
+                'name': 'station_nm',
+                'monitoringLocationName': 'station_nm', 
+                'stationName': 'station_nm',
+                'siteName': 'station_nm',
+                # Site type
+                'monitoringLocationType': 'site_type_code',
+                'siteType': 'site_type_code',
+                'type': 'site_type_code',
+                # Status
+                'activityStatus': 'site_status',
+                'status': 'site_status',
+                # Drainage area
+                'drainageArea': 'drain_area_va',
+                'contributingDrainageArea': 'drain_area_va',
+                # Coordinates (already handled above, but add for completeness)
+                'latitude': 'dec_lat_va',
+                'longitude': 'dec_long_va',
+            }
+            
+            # Apply column mapping
+            for old_name, new_name in column_mapping.items():
+                if old_name in gdf.columns and new_name not in gdf.columns:
+                    gdf[new_name] = gdf[old_name]
+                    logger.debug(f"Mapped column '{old_name}' -> '{new_name}'")
+            
+            # Special handling for site_no - strip common prefixes
+            if 'site_no' in gdf.columns:
+                # Remove 'USGS-' prefix if present (new API format)
+                gdf['site_no'] = gdf['site_no'].astype(str).str.replace('USGS-', '', regex=False)
+                logger.debug(f"Cleaned site_no values, sample: {gdf['site_no'].iloc[0] if len(gdf) > 0 else 'N/A'}")
+            
+            # Log final columns for debugging
+            logger.debug(f"Final GeoDataFrame columns: {list(gdf.columns)}")
+            if 'site_no' not in gdf.columns:
+                logger.warning(f"'site_no' column not found! Available columns: {list(gdf.columns)}")
 
             # Filter by site type if specified
             if site_type and 'site_type_code' in gdf.columns:
@@ -431,16 +515,22 @@ def find_gauges_in_project(
     buffer_percent: float = 50.0,
     site_type: str = 'ST',
     parameter_codes: Optional[Union[str, List[str]]] = None,
-    active_only: bool = True
+    active_only: bool = True,
+    project_crs: Optional[str] = None
 ) -> 'gpd.GeoDataFrame':
     """
     Query USGS gauges within HEC-RAS project bounds.
 
     Convenience function that calls UsgsGaugeSpatial.find_gauges_in_project().
     See UsgsGaugeSpatial.find_gauges_in_project for full documentation.
+    
+    Parameters
+    ----------
+    project_crs : str, optional
+        Override CRS for projects without embedded projection (e.g., "EPSG:26918").
     """
     return UsgsGaugeSpatial.find_gauges_in_project(
-        hdf_path, buffer_percent, site_type, parameter_codes, active_only
+        hdf_path, buffer_percent, site_type, parameter_codes, active_only, project_crs
     )
 
 

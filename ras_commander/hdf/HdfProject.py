@@ -214,7 +214,8 @@ class HdfProject:
         buffer_percent: float = 50.0,
         include_1d: bool = True,
         include_2d: bool = True,
-        include_storage: bool = True
+        include_storage: bool = True,
+        project_crs: Optional[str] = None
     ) -> Tuple[float, float, float, float]:
         """
         Get project bounds in WGS84 lat/lon coordinates.
@@ -234,6 +235,10 @@ class HdfProject:
             Include 2D elements
         include_storage : bool, default True
             Include storage areas
+        project_crs : str, optional
+            Override CRS for projects without embedded projection. Use EPSG codes
+            like "EPSG:26918" (UTM Zone 18N) or "EPSG:2271" (PA State Plane North).
+            If None, attempts to read CRS from HDF file.
 
         Returns
         -------
@@ -247,6 +252,13 @@ class HdfProject:
         ...     buffer_percent=50.0
         ... )
         >>> print(f"Lat/Lon bounds: W={west}, S={south}, E={east}, N={north}")
+        
+        >>> # For projects without embedded CRS, specify manually:
+        >>> west, south, east, north = HdfProject.get_project_bounds_latlon(
+        ...     "BaldEagle.g01.hdf",
+        ...     buffer_percent=50.0,
+        ...     project_crs="EPSG:26918"  # UTM Zone 18N
+        ... )
         """
         extent_gdf, _ = HdfProject.get_project_extent(
             hdf_path,
@@ -261,18 +273,48 @@ class HdfProject:
             return (0.0, 0.0, 0.0, 0.0)
 
         # Transform to WGS84
+        # Use provided project_crs if extent has no CRS defined
         if extent_gdf.crs is None:
-            logger.warning("No CRS defined, assuming WGS84")
-            extent_wgs84 = extent_gdf
-        else:
+            if project_crs is not None:
+                logger.info(f"No CRS in HDF file, using provided project_crs: {project_crs}")
+                extent_gdf = extent_gdf.set_crs(project_crs)
+            else:
+                logger.warning("No CRS defined and no project_crs provided. Cannot transform to WGS84.")
+                bounds = extent_gdf.total_bounds
+                west, south, east, north = bounds
+                logger.warning(f"Original bounds (no CRS): W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
+                return (west, south, east, north)
+        
+        try:
+            from pyproj import CRS as PyprojCRS
+            # Validate the source CRS can be parsed
+            source_crs = PyprojCRS.from_user_input(extent_gdf.crs)
+            logger.debug(f"Source CRS: {source_crs.name}")
+            
             extent_wgs84 = extent_gdf.to_crs("EPSG:4326")
-
-        bounds = extent_wgs84.total_bounds
-        west, south, east, north = bounds
-
-        logger.info(f"WGS84 bounds: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
-
-        return (west, south, east, north)
+            bounds = extent_wgs84.total_bounds
+            west, south, east, north = bounds
+            
+            # Validate the transformation actually worked (WGS84 bounds check)
+            if not (-180 <= west <= 180 and -180 <= east <= 180 and 
+                    -90 <= south <= 90 and -90 <= north <= 90):
+                logger.error(f"CRS transformation failed - coordinates not in valid WGS84 range. "
+                           f"Got: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}. "
+                           f"Source CRS: {source_crs.name}")
+                # Return original bounds with warning
+                original_bounds = extent_gdf.total_bounds
+                logger.warning(f"Returning original projected coordinates: {original_bounds}")
+                return tuple(original_bounds)
+            
+            logger.info(f"WGS84 bounds: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
+            return (west, south, east, north)
+            
+        except Exception as e:
+            logger.error(f"Failed to transform CRS to WGS84: {e}")
+            bounds = extent_gdf.total_bounds
+            west, south, east, north = bounds
+            logger.warning(f"Returning original projected coordinates: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
+            return (west, south, east, north)
 
     @staticmethod
     @log_call
