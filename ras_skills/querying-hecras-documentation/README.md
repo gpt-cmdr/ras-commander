@@ -221,13 +221,10 @@ querying-hecras-documentation/
 ├── tests/
 │   ├── test_queries.json        # Test cases (17 tests)
 │   ├── run_tests.mjs            # Manual selection test runner
-│   ├── test_web_search.mjs      # Web search test suite (Phase 2.5) ← NEW
-│   └── test_results/            # Test output
+│   └── test_web_search.mjs      # Web search test suite (Phase 2.5)
 ├── SKILL.md                     # Skill definition
 ├── README.md                    # This file
-├── INSTALLATION.md              # Setup instructions
-├── VALIDATION_REPORT.md         # Test validation results ← NEW
-└── STATUS.md                    # Implementation status
+└── INSTALLATION.md              # Setup instructions
 ```
 
 ## Query Modes
