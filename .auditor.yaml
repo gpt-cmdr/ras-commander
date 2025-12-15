@@ -1,0 +1,314 @@
+# API Consistency Auditor Configuration
+#
+# This file documents classes that are exceptions to the static class pattern.
+# The auditor uses this to distinguish intentional instantiation from violations.
+#
+# Format:
+#   exception_classes:
+#     - class_name: ClassName
+#       module: module.path
+#       reason: Why this class needs instantiation
+#       category: project_management | workers | callbacks | data_containers | utilities
+
+exception_classes:
+  # ============================================================================
+  # PROJECT MANAGEMENT
+  # ============================================================================
+  - class_name: RasPrj
+    module: ras_commander.RasPrj
+    reason: |
+      Manages state for HEC-RAS projects, including dataframes of plans, geometry
+      files, and flow files. Multiple RasPrj instances allow working with multiple
+      projects simultaneously. Default global 'ras' object created by init_ras_project().
+    category: project_management
+    instantiation_required: true
+    example: |
+      project1 = RasPrj()
+      init_ras_project("/path1", "6.5", ras_object=project1)
+      project2 = RasPrj()
+      init_ras_project("/path2", "6.5", ras_object=project2)
+
+  # ============================================================================
+  # REMOTE EXECUTION WORKERS
+  # ============================================================================
+  - class_name: PsexecWorker
+    module: ras_commander.remote.PsexecWorker
+    reason: |
+      Maintains worker state for remote Windows execution via PsExec. Each worker
+      represents a remote machine with configuration (hostname, credentials, session_id,
+      share paths). Workers manage execution queues and resource allocation.
+    category: workers
+    instantiation_required: true
+    example: |
+      worker = init_ras_worker(
+          worker_type='psexec',
+          hostname='192.168.1.100',
+          session_id=2,
+          remote_share=r'\\192.168.1.100\RAS_Share'
+      )
+
+  - class_name: LocalWorker
+    module: ras_commander.remote.LocalWorker
+    reason: |
+      Manages local parallel execution state with multiple worker folders. Each
+      LocalWorker maintains execution queue and coordinates parallel plan execution
+      on the same machine.
+    category: workers
+    instantiation_required: true
+    example: |
+      worker = init_ras_worker(
+          worker_type='local',
+          cores_total=8,
+          cores_per_plan=4
+      )
+
+  - class_name: DockerWorker
+    module: ras_commander.remote.DockerWorker
+    reason: |
+      Manages Docker containerized execution state. Maintains container configuration,
+      resource limits, volume mounts, and execution queue. Coordinates preprocessing
+      on host and execution in Linux container.
+    category: workers
+    instantiation_required: true
+    example: |
+      worker = init_ras_worker(
+          worker_type='docker',
+          docker_image='hecras:6.6',
+          preprocess_on_host=True
+      )
+
+  - class_name: SshWorker
+    module: ras_commander.remote.SshWorker
+    reason: |
+      Future worker for SSH-based remote execution. Maintains SSH connection state,
+      remote file paths, and execution queue.
+    category: workers
+    instantiation_required: true
+    status: planned
+
+  - class_name: WinrmWorker
+    module: ras_commander.remote.WinrmWorker
+    reason: |
+      Future worker for Windows Remote Management execution. Maintains WinRM session
+      state and execution queue.
+    category: workers
+    instantiation_required: true
+    status: planned
+
+  # ============================================================================
+  # EXECUTION CALLBACKS
+  # ============================================================================
+  - class_name: ConsoleCallback
+    module: ras_commander.callbacks.ConsoleCallback
+    reason: |
+      Maintains callback state for console output during HEC-RAS execution. Tracks
+      verbose mode and formats real-time computation messages.
+    category: callbacks
+    instantiation_required: true
+    example: |
+      callback = ConsoleCallback(verbose=True)
+      RasCmdr.compute_plan("01", stream_callback=callback)
+
+  - class_name: FileLoggerCallback
+    module: ras_commander.callbacks.FileLoggerCallback
+    reason: |
+      Maintains callback state for file logging. Tracks log file handle and writes
+      real-time computation messages to file.
+    category: callbacks
+    instantiation_required: true
+    example: |
+      callback = FileLoggerCallback(log_file="execution.log")
+      RasCmdr.compute_plan("01", stream_callback=callback)
+
+  - class_name: ProgressBarCallback
+    module: ras_commander.callbacks.ProgressBarCallback
+    reason: |
+      Maintains callback state for progress bar display using tqdm. Tracks progress
+      and updates visual progress bar during execution.
+    category: callbacks
+    instantiation_required: true
+    example: |
+      callback = ProgressBarCallback()
+      RasCmdr.compute_plan("01", stream_callback=callback)
+
+  - class_name: SynchronizedCallback
+    module: ras_commander.callbacks.SynchronizedCallback
+    reason: |
+      Thread-safe wrapper for callbacks used in parallel execution. Maintains lock
+      state to prevent race conditions when multiple plans call callbacks simultaneously.
+    category: callbacks
+    instantiation_required: true
+    example: |
+      base_callback = ConsoleCallback()
+      sync_callback = SynchronizedCallback(base_callback)
+      RasCmdr.compute_parallel(["01", "02"], stream_callback=sync_callback)
+
+  - class_name: ExecutionCallback
+    module: ras_commander.callbacks.ExecutionCallback
+    reason: |
+      Abstract base class for custom callbacks. Users subclass and maintain custom
+      state for handling execution events.
+    category: callbacks
+    instantiation_required: true
+    abstract: true
+
+  # ============================================================================
+  # DATA CONTAINERS
+  # ============================================================================
+  - class_name: FixResults
+    module: ras_commander.fixit.FixResults
+    reason: |
+      Data container for geometry repair results. Maintains collection of FixMessage
+      objects representing repairs performed by RasFixit.
+    category: data_containers
+    instantiation_required: true
+    example: |
+      results = FixResults()
+      results.add_message(FixMessage(...))
+
+  - class_name: FixMessage
+    module: ras_commander.fixit.FixMessage
+    reason: |
+      Data container for individual geometry repair messages. Immutable record of
+      a single repair action with severity, location, and action taken.
+    category: data_containers
+    instantiation_required: true
+
+  - class_name: FixAction
+    module: ras_commander.fixit.FixAction
+    reason: |
+      Enumeration of available geometry repair actions. Used internally by RasFixit
+      to track repair types.
+    category: data_containers
+    instantiation_required: false
+    note: Enum class, typically not instantiated directly
+
+  # ============================================================================
+  # UTILITY CLASSES (State Required)
+  # ============================================================================
+  - class_name: UsgsRateLimiter
+    module: ras_commander.usgs.rate_limiter
+    reason: |
+      Token bucket rate limiter maintaining token count and refill state. Requires
+      instantiation to track available tokens and last update time across multiple
+      API calls.
+    category: utilities
+    instantiation_required: true
+    example: |
+      limiter = UsgsRateLimiter(requests_per_second=5.0, burst_size=40)
+      for site_id in site_ids:
+          limiter.wait_if_needed()
+          data = retrieve_flow_data(site_id)
+
+  - class_name: LoggingConfig
+    module: ras_commander.LoggingConfig
+    reason: |
+      Centralized logging configuration. While primarily used via static methods,
+      can be instantiated for custom logging setups. Most users use static
+      setup_logging() method.
+    category: utilities
+    instantiation_required: false
+    note: |
+      Primarily used as static class: LoggingConfig.setup_logging()
+      Instantiation allowed for advanced custom configurations
+
+# ============================================================================
+# AUDITOR RULES
+# ============================================================================
+rules:
+  # Rule 1: Static Classes
+  static_classes:
+    description: Most classes use static methods with @staticmethod decorator
+    exceptions: |
+      Classes listed above with instantiation_required: true
+      Dataclasses (automatically identified by @dataclass decorator)
+      Abstract base classes (identified by ABCMeta or abc.ABC)
+
+  # Rule 2: @log_call Decorator
+  log_call:
+    description: All public functions/methods must use @log_call decorator
+    exceptions: |
+      Dunder methods (__init__, __str__, __repr__, etc.)
+      @property methods
+      Private methods (starting with _)
+      Decorators themselves (functions that return functions)
+    violations_severity: minor
+
+  # Rule 3: @standardize_input Decorator
+  standardize_input:
+    description: Functions accepting Path parameters must use @standardize_input
+    exceptions: |
+      Functions where Path conversion is handled manually
+      Functions that explicitly document accepting only strings or only Path
+    note: |
+      @standardize_input supports different file types:
+      - file_type='plan_hdf' - Plan HDF files (.p##.hdf)
+      - file_type='geom_hdf' - Geometry HDF files (.g##.hdf)
+      - file_type='hdf' - Any HDF file
+      - No file_type - Generic path standardization
+
+  # Rule 4: No Instantiation
+  no_instantiation:
+    description: Static classes should not be instantiated
+    check: |
+      Verify docstrings clearly state "do not instantiate" or similar
+      Check for __init__ methods that raise errors
+    exceptions: Classes listed in exception_classes above
+
+  # Rule 5: Backward Compatibility
+  backward_compatibility:
+    description: Provide function aliases when converting standalone functions to static classes
+    check: |
+      When standalone function becomes Class.method(), verify:
+      - Module-level function alias exists: function_name = Class.method_name
+      - Function alias documented in module __all__
+      - Function alias has docstring referencing static method
+    example: |
+      # Static class method
+      class UsgsGaugeCatalog:
+          @staticmethod
+          def generate_gauge_catalog(...):
+              ...
+
+      # Backward-compatible alias
+      def generate_gauge_catalog(...):
+          '''Convenience function. See UsgsGaugeCatalog.generate_gauge_catalog.'''
+          return UsgsGaugeCatalog.generate_gauge_catalog(...)
+
+# ============================================================================
+# AUDIT SCOPE
+# ============================================================================
+audit_scope:
+  include:
+    - ras_commander/*.py
+    - ras_commander/**/*.py
+
+  exclude:
+    - ras_commander/__init__.py  # Just imports
+    - ras_commander/version.py  # Just version string
+    - tests/**  # Test code has different patterns
+    - setup.py  # Build script
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+
+  priority_files:
+    # Files recently modified or commonly used
+    - ras_commander/RasCmdr.py
+    - ras_commander/hdf/Hdf*.py
+    - ras_commander/usgs/*.py
+    - ras_commander/remote/*.py
+
+# ============================================================================
+# METADATA
+# ============================================================================
+metadata:
+  created: 2025-12-15
+  phase: Phase 0 P0.3
+  purpose: Document exception classes for API Consistency Auditor
+  version: 1.0
+  notes: |
+    This configuration is read by the API Consistency Auditor subagent
+    to distinguish intentional design patterns from rule violations.
+
+    All exceptions are documented with rationale to ensure they are
+    architecturally justified, not convenience shortcuts.
