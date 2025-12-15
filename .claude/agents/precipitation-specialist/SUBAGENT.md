@@ -1,6 +1,6 @@
 ---
 name: precipitation-specialist
-model: haiku
+model: sonnet
 tools:
   - Read
   - Write

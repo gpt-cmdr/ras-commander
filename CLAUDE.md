@@ -94,6 +94,106 @@ This repository embodies **LLM Forward** engineering principles:
 
 **Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
 
+## Orchestrator Pattern & Subagent Delegation
+
+**You are the orchestrator.** The main Claude session (typically Opus 4.5) acts as the orchestrator, delegating to specialized subagents for domain-specific tasks. This optimizes the tradeoff between intelligence, cost, and speed.
+
+### Model Tiers
+
+| Model | Strengths | Cost | Use For |
+|-------|-----------|------|---------|
+| **Opus 4.5** | Most intelligent, best reasoning | High | Complex reasoning, architecture decisions, orchestration |
+| **Sonnet 4.5** | Reasonably intelligent, reliable | Medium | Domain specialists, code generation, analysis |
+| **Haiku 4.5** | Fast, instruction-following, long context | Low | Log review, output auditing, pattern matching |
+
+### When to Delegate to Subagents
+
+**ALWAYS consider delegation** for:
+- Domain-specific tasks (HDF analysis, geometry parsing, USGS integration)
+- Long context review (notebook outputs, compute logs, large files)
+- Repetitive operations (file scanning, pattern extraction)
+- Tasks with clear, well-defined instructions
+
+**Handle directly as orchestrator** when:
+- Complex multi-domain reasoning required
+- High-level architecture decisions
+- User interaction and clarification needed
+- Tasks requiring full conversation context
+
+### Subagent Invocation Pattern
+
+**CRITICAL**: Always pass context via markdown file paths (relative paths), not raw text.
+
+```python
+# ✅ CORRECT: Pass file paths for context
+Task(
+    subagent_type="hdf-analyst",
+    model="sonnet",  # or "haiku" for simpler tasks
+    prompt="""
+    Analyze the HDF results for anomalies.
+
+    Context files (read these first):
+    - .claude/outputs/current-task-context.md
+    - agent_tasks/.agent/STATE.md
+
+    Task: Extract WSE data from examples/Muncie.p01.hdf and identify any
+    values outside normal range (0-1000 ft).
+
+    Write findings to: .claude/outputs/hdf-analyst/{date}-wse-analysis.md
+    """
+)
+
+# ❌ WRONG: Passing large text blobs in prompt
+Task(
+    subagent_type="hdf-analyst",
+    prompt=f"Here is the full context: {huge_text_blob}..."  # Context lost after session
+)
+```
+
+### Model Selection Guidelines
+
+**Start with default model**, escalate if needed:
+
+1. **First attempt**: Use subagent's default model (usually Sonnet or Haiku)
+2. **If subagent struggles**: Re-invoke with `model="sonnet"` override
+3. **For complex reasoning**: Use `model="opus"` for demanding tasks
+
+**Override examples**:
+```python
+# Simple log review - use Haiku (fast, cheap)
+Task(subagent_type="notebook-output-auditor", model="haiku", prompt="...")
+
+# Complex domain analysis - use Sonnet (default)
+Task(subagent_type="hdf-analyst", prompt="...")
+
+# Subagent didn't understand - escalate to Opus
+Task(subagent_type="hdf-analyst", model="opus", prompt="[more detailed instructions]...")
+```
+
+### Subagent Output Requirements
+
+All subagents MUST:
+1. **Write results to markdown files** in `.claude/outputs/{subagent}/`
+2. **Return file paths** (not raw text) to orchestrator
+3. **Follow naming convention**: `{date}-{subagent}-{task}.md`
+
+This ensures knowledge persistence across sessions. See `.claude/rules/subagent-output-pattern.md`.
+
+### Available Subagents
+
+See `.claude/agents/` for complete list. Key specialists:
+
+| Subagent | Default | Purpose |
+|----------|---------|---------|
+| `ras-commander-api-expert` | Sonnet | API integration, dataframe structures, spawns explore subagents |
+| `hdf-analyst` | Sonnet | HDF file analysis, results extraction |
+| `geometry-parser` | Sonnet | Geometry file parsing, cross-section analysis |
+| `usgs-integrator` | Sonnet | USGS gauge data integration |
+| `remote-executor` | Sonnet | Distributed HEC-RAS execution |
+| `notebook-output-auditor` | Haiku | Review notebook outputs for errors |
+| `notebook-anomaly-spotter` | Haiku | Detect anomalies in notebook results |
+| `hierarchical-knowledge-agent-skill-memory-curator` | Opus | Knowledge organization, structural reasoning |
+
 ## Development Guidance - Navigate to Rules
 
 **For detailed patterns, see topic-specific rules** (auto-loaded from `.claude/rules/`):

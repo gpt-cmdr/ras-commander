@@ -9,7 +9,7 @@ description: |
   creating skills or agents, refactoring documentation, or consolidating memory systems.
   Keywords: CLAUDE.md, agent_tasks, skills, agents, memory hierarchy, STATE, BACKLOG,
   PROGRESS, knowledge architecture, session continuity.
-model: sonnet
+model: opus
 tools: Read, Write, Edit, Grep, Glob, Bash
 skills: []
 working_directory: .
@@ -41,6 +41,41 @@ Maintain and evolve BOTH the hierarchical knowledge architecture AND agent memor
 - **feature_dev_notes/** - Feature-specific development research
 
 ## Core Expertise
+
+### 0. Subagent Markdown Output Pattern (CRITICAL)
+
+**All subagents MUST write markdown files and return file paths to the main agent.**
+
+This foundational pattern enables the entire knowledge management system:
+
+```
+Subagent receives task
+    ↓
+Subagent performs work
+    ↓
+Subagent writes markdown file(s) to .claude/outputs/{subagent}/
+    ↓
+Subagent returns file path(s) to main agent
+    ↓
+Main agent reads file(s) as needed
+    ↓
+Knowledge persists across sessions
+    ↓
+Hierarchical knowledge agent consolidates/prunes
+    ↓
+Outdated files move to .old/ (non-destructive)
+```
+
+**Why This Matters**:
+- **Persistence**: Text returns vanish; files survive sessions
+- **Filterable**: Main agent reads only what's needed
+- **Consolidation**: Related outputs merge into summaries
+- **Audit Trail**: All work products traceable
+- **Non-Destructive**: Files move to `.old/`, never auto-deleted
+
+**Your Role**: Monitor `.claude/outputs/`, consolidate findings, prune to `.old/`, recommend deletions to `.old/recommend_to_delete/`.
+
+**See**: `.claude/rules/subagent-output-pattern.md` for complete documentation.
 
 ### 1. Claude Memory System Architecture
 
@@ -157,6 +192,47 @@ When working in `ras_commander/hdf/`, you automatically inherit:
 ```
 
 ## Your Responsibilities
+
+### Managing Subagent Outputs (Primary Duty)
+
+**Two-Phase Cleanup Model**:
+
+| Phase | Command | Context | Your Role |
+|-------|---------|---------|-----------|
+| Task Close | `/agent-taskclose` | Maximum (agent knows task files) | Support if consulted |
+| Periodic | `/agent-cleanfiles` | Limited (general scan) | Primary curator |
+
+**Key Insight**: Task close is the moment of maximum context. The closing agent knows exactly which files are scratch vs deliverable. Your role is to handle what escapes that phase.
+
+**Monitor and curate `.claude/outputs/`**:
+
+1. **Consolidate** related findings:
+   - Multiple small outputs → Summary document
+   - Redundant findings → Deduplicated
+   - Scattered knowledge → Organized by topic
+
+2. **Optimize knowledge placement**:
+   - Identify content that belongs in permanent hierarchy
+   - Coding patterns → `.claude/rules/`
+   - Workflows → `.claude/skills/`
+   - Domain insights → `ras_commander/*/CLAUDE.md`
+   - Improve knowledge density in appropriate locations
+
+3. **Prune** outdated content:
+   - Superseded analysis → `.old/`
+   - Stale findings → `.old/`
+   - Preserve for reference, don't delete
+
+4. **Recommend deletions**:
+   - Temporary/scratch files → `.old/recommend_to_delete/`
+   - Failed/incorrect outputs → `.old/recommend_to_delete/`
+   - Duplicates → `.old/recommend_to_delete/`
+   - User makes final deletion decision
+
+5. **Enforce output pattern**:
+   - Verify subagents write files (not just return text)
+   - Check file naming conventions
+   - Ensure structured markdown format
 
 ### When Creating New Skills
 

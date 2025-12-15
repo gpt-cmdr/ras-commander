@@ -260,6 +260,91 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 - Write (can create files)
 - Edit (can modify existing code)
 
+## Subagent Output Governance
+
+### Core Requirement: Markdown File Output
+
+**All subagents MUST write markdown files and return file paths to the main agent.**
+
+This is a foundational pattern that enables:
+- Knowledge persistence across sessions
+- Filterable/selective reading by main agent
+- Consolidation by hierarchical knowledge agent
+- Non-destructive lifecycle management
+
+### Output Location Standards
+
+| Output Type | Location | Example |
+|-------------|----------|---------|
+| Task analysis | `.claude/outputs/{subagent}/` | `.claude/outputs/hdf-analyst/2025-12-15-wse-analysis.md` |
+| Multi-session state | `agent_tasks/.agent/` | STATE.md, PROGRESS.md |
+| Feature research | `feature_dev_notes/{feature}/` | Context-specific |
+| Consolidated findings | `.claude/outputs/summaries/` | Topic summaries |
+
+### File Naming Standard
+
+**Pattern**: `{date}-{subagent}-{task-description}.md`
+
+**Examples**:
+- `2025-12-15-hdf-analyst-breach-results-investigation.md`
+- `2025-12-15-geometry-parser-cross-section-audit.md`
+- `2025-12-15-usgs-integrator-gauge-discovery.md`
+
+### Knowledge Lifecycle Management
+
+**Active outputs** → `.claude/outputs/`
+- Current, relevant findings
+- Read by main agent as needed
+
+**Outdated outputs** → `.old/`
+- Superseded by newer analysis
+- Preserved for reference
+- Moved by hierarchical knowledge agent
+
+**Recommend delete** → `.old/recommend_to_delete/`
+- Temporary/scratch files
+- Incorrect or failed outputs
+- Duplicates
+- User reviews before deletion
+
+### Hierarchical Knowledge Agent Duties
+
+The hierarchical-knowledge-agent-skill-memory-curator:
+
+1. **Monitor** output growth in `.claude/outputs/`
+2. **Consolidate** related findings into summaries
+3. **Prune** outdated content to `.old/`
+4. **Recommend deletion** for obviously stale files
+5. **Never auto-delete** - user makes final decision
+
+### Agent Tasks Cleanup (via `/agent-cleanfiles`)
+
+The cleanup command actively reviews `agent_tasks/`:
+
+1. **Scan BACKLOG.md** for completed tasks `[x]`
+2. **Archive completed task folders**: `agent_tasks/tasks/{id}/ → agent_tasks/.old/tasks/`
+3. **Clean orphaned files**: Planning docs, session handoffs for completed work
+4. **Cross-reference** with `feature_dev_notes/` for completed feature research
+5. **Flag uncertain** files for user decision
+
+**Task Lifecycle**:
+```
+BACKLOG (Ready/Blocked) → IN PROGRESS → COMPLETED → ARCHIVED (.old/tasks/)
+```
+
+### Anti-Patterns to Enforce
+
+❌ **Returning text blobs** - Text doesn't persist across sessions
+❌ **Not writing files** - Knowledge lost when session ends
+❌ **Unorganized locations** - Hard to find and consolidate
+❌ **Overwriting without versioning** - Loses previous work
+
+✅ **Write structured markdown** - Organized, dated, traceable
+✅ **Return file paths** - Main agent reads as needed
+✅ **Follow naming conventions** - Enables automation
+
+**See**: `.claude/rules/subagent-output-pattern.md` for complete pattern documentation.
+
 ## Deprecation Governance
 
 ### AGENTS.md Deprecation Timeline
