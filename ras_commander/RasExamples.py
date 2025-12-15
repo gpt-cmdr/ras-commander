@@ -43,7 +43,7 @@ import zipfile
 import pandas as pd
 from pathlib import Path
 import shutil
-from typing import Union, List
+from typing import Union, List, Optional
 import csv
 from datetime import datetime
 import logging
@@ -129,15 +129,20 @@ class RasExamples:
         self._save_to_csv()
 
     @classmethod
-    def extract_project(cls, project_names: Union[str, List[str]], output_path: Union[str, Path] = None) -> Union[Path, List[Path]]:
+    def extract_project(cls, project_names: Union[str, List[str]], output_path: Union[str, Path] = None, suffix: Optional[str] = None) -> Union[Path, List[Path]]:
         """Extract one or more specific HEC-RAS projects from the zip file.
-        
+
         Args:
             project_names: Single project name as string or list of project names
             output_path: Optional path where the project folder will be placed.
                         Can be a relative path (creates subfolder in current directory)
                         or an absolute path. If None, uses default 'example_projects' folder.
-            
+            suffix: Optional suffix to append to folder name using format "{project_name}_{suffix}".
+                   If None (default), uses original project name.
+                   Useful for extracting the same project multiple times with different configurations.
+                   Suffix is sanitized to remove special characters.
+                   Example: suffix="aep_30yr" with project "Davis" → "Davis_aep_30yr"
+
         Returns:
             Path: Single Path object if one project extracted
             List[Path]: List of Path objects if multiple projects extracted
@@ -171,28 +176,32 @@ class RasExamples:
         extracted_paths = []
 
         for project_name in project_names:
+            # Compute final folder name with optional suffix
+            folder_name = cls._get_folder_name(project_name, suffix)
+
             # Check if this is a special project
             if project_name in cls.SPECIAL_PROJECTS:
                 try:
-                    special_path = cls._extract_special_project(project_name, base_output_path)
+                    special_path = cls._extract_special_project(project_name, base_output_path, suffix)
                     extracted_paths.append(special_path)
                     continue
                 except Exception as e:
                     logger.error(f"Failed to extract special project '{project_name}': {e}")
                     continue
-            
+
             # Regular project extraction logic
             logger.info("----- RasExamples Extracting Project -----")
-            logger.info(f"Extracting project '{project_name}'")
+            logger.info(f"Extracting project '{project_name}'" + (f" as '{folder_name}'" if suffix else ""))
             project_path = base_output_path
+            final_folder_path = project_path / folder_name
 
-            if (project_path / project_name).exists():
-                logger.info(f"Project '{project_name}' already exists. Deleting existing folder...")
+            if final_folder_path.exists():
+                logger.info(f"Folder '{folder_name}' already exists. Deleting existing folder...")
                 try:
-                    shutil.rmtree(project_path / project_name)
-                    logger.info(f"Existing folder for project '{project_name}' has been deleted.")
+                    shutil.rmtree(final_folder_path)
+                    logger.info(f"Existing folder '{folder_name}' has been deleted.")
                 except Exception as e:
-                    logger.error(f"Failed to delete existing project folder '{project_name}': {e}")
+                    logger.error(f"Failed to delete existing folder '{folder_name}': {e}")
                     continue
 
             project_info = cls._folder_df[cls._folder_df['Project'] == project_name]
@@ -206,8 +215,14 @@ class RasExamples:
                     for file in zip_ref.namelist():
                         parts = Path(file).parts
                         if len(parts) > 1 and parts[1] == project_name:
-                            relative_path = Path(*parts[1:])
-                            extract_path = project_path / relative_path
+                            # Build path relative to the original project name
+                            original_relative = Path(*parts[1:])
+                            # Replace original project name with folder_name in the path
+                            if len(original_relative.parts) > 0:
+                                new_relative = Path(folder_name) / Path(*original_relative.parts[1:]) if len(original_relative.parts) > 1 else Path(folder_name)
+                            else:
+                                new_relative = Path(folder_name)
+                            extract_path = project_path / new_relative
                             if file.endswith('/'):
                                 extract_path.mkdir(parents=True, exist_ok=True)
                             else:
@@ -215,8 +230,8 @@ class RasExamples:
                                 with zip_ref.open(file) as source, open(extract_path, "wb") as target:
                                     shutil.copyfileobj(source, target)
 
-                logger.info(f"Successfully extracted project '{project_name}' to {project_path / project_name}")
-                extracted_paths.append(project_path / project_name)
+                logger.info(f"Successfully extracted project '{project_name}' to {final_folder_path}")
+                extracted_paths.append(final_folder_path)
             except Exception as e:
                 logger.error(f"An error occurred while extracting project '{project_name}': {str(e)}")
 
@@ -423,6 +438,25 @@ class RasExamples:
         return safe_name
 
     @classmethod
+    def _get_folder_name(cls, project_name: str, suffix: str = None) -> str:
+        """
+        Compute the folder name for project extraction.
+
+        Args:
+            project_name: Original project name from zip
+            suffix: Optional suffix to append
+
+        Returns:
+            Final folder name: "{project_name}" if suffix is None,
+            else "{project_name}_{sanitized_suffix}"
+        """
+        if suffix is None:
+            return project_name
+
+        safe_suffix = cls._make_safe_folder_name(suffix)
+        return f"{project_name}_{safe_suffix}"
+
+    @classmethod
     def _download_file_with_progress(cls, url: str, dest_folder: Path, file_size: int) -> Path:
         """
         Download a file from a URL to a specified destination folder with progress bar.
@@ -464,48 +498,52 @@ class RasExamples:
         return int(number * units[unit])
 
     @classmethod
-    def _extract_special_project(cls, project_name: str, output_path: Path = None) -> Path:
+    def _extract_special_project(cls, project_name: str, output_path: Path = None, suffix: Optional[str] = None) -> Path:
         """
         Download and extract special projects that are not in the main zip file.
-        
+
         Args:
             project_name: Name of the special project ('NewOrleansMetro' or 'BeaverLake')
             output_path: Base output directory path. If None, uses cls.projects_dir
-            
+            suffix: Optional suffix to append to folder name using format "{project_name}_{suffix}".
+
         Returns:
             Path: Path to the extracted project directory
-            
+
         Raises:
             ValueError: If the project is not a recognized special project
         """
         if project_name not in cls.SPECIAL_PROJECTS:
             raise ValueError(f"'{project_name}' is not a recognized special project")
-        
+
+        # Compute final folder name with optional suffix
+        folder_name = cls._get_folder_name(project_name, suffix)
+
         logger.info(f"----- RasExamples Extracting Special Project -----")
-        logger.info(f"Extracting special project '{project_name}'")
-        
+        logger.info(f"Extracting special project '{project_name}'" + (f" as '{folder_name}'" if suffix else ""))
+
         # Use provided output_path or default
         base_path = output_path if output_path else cls.projects_dir
-        
-        # Create the project directory
-        project_path = base_path / project_name
+
+        # Create the project directory with suffix-aware folder name
+        project_path = base_path / folder_name
         
         # Check if already exists
         if project_path.exists():
-            logger.info(f"Special project '{project_name}' already exists. Deleting existing folder...")
+            logger.info(f"Folder '{folder_name}' already exists. Deleting existing folder...")
             try:
                 shutil.rmtree(project_path)
-                logger.info(f"Existing folder for project '{project_name}' has been deleted.")
+                logger.info(f"Existing folder '{folder_name}' has been deleted.")
             except Exception as e:
-                logger.error(f"Failed to delete existing project folder '{project_name}': {e}")
+                logger.error(f"Failed to delete existing folder '{folder_name}': {e}")
                 raise
-        
+
         # Create the project directory
         project_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Download the zip file
         url = cls.SPECIAL_PROJECTS[project_name]
-        zip_file_path = base_path / f"{project_name}_temp.zip"
+        zip_file_path = base_path / f"{folder_name}_temp.zip"
         
         logger.info(f"Downloading special project from: {url}")
         logger.info("This may take a few moments...")
