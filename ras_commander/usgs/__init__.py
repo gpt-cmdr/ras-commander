@@ -5,6 +5,16 @@ This subpackage provides tools for integrating USGS gauge data with HEC-RAS mode
 including data retrieval, boundary condition generation, initial condition setting,
 model validation, and performance metrics.
 
+API Key (Optional but Recommended):
+    Get a free USGS API key to increase rate limits from 5 to 10 requests/sec:
+
+    Sign up: https://api.waterdata.usgs.gov/signup/ (instant approval)
+
+    Usage:
+        >>> from ras_commander.usgs import test_api_key, generate_gauge_catalog
+        >>> if test_api_key("your_key_here"):
+        ...     generate_gauge_catalog(api_key="your_key_here", rate_limit_rps=10.0)
+
 Modules:
     core: USGS data retrieval from NWIS (flow, stage, metadata)
     spatial: Spatial queries for USGS gauge discovery
@@ -13,6 +23,7 @@ Modules:
     metrics: Statistical metrics for model validation (NSE, KGE, RMSE, etc.)
     real_time: Real-time monitoring and operational forecasting
     catalog: Gauge catalog generation and management
+    rate_limiter: API rate limiting and key validation
 
 Public API:
     From core:
@@ -61,6 +72,12 @@ Public API:
             - load_gauge_data: Load historical data for specific gauge
             - get_gauge_folder: Get path to gauge folder
             - update_gauge_catalog: Refresh existing catalog with new data
+
+    From rate_limiter:
+        - test_api_key: Validate USGS API key functionality
+        - UsgsRateLimiter: Token bucket rate limiter for API requests
+        - retry_with_backoff: Decorator for exponential backoff on API errors
+        - get_rate_limit_info: Get current rate limit configuration
 
 Example:
     >>> from ras_commander.usgs import retrieve_flow_data, get_gauge_metadata

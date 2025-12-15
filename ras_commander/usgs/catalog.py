@@ -13,12 +13,25 @@ Key Class:
         - get_gauge_folder: Get path to gauge folder in standard location
         - update_gauge_catalog: Refresh existing catalog with latest data
 
+API Key (Optional):
+    A free USGS API key increases rate limits from 5 to 10 requests/sec.
+    Sign up at: https://api.waterdata.usgs.gov/signup/ (instant approval)
+    Use test_api_key() to validate your key before use.
+
 Example:
     >>> from ras_commander import init_ras_project
     >>> from ras_commander.usgs.catalog import UsgsGaugeCatalog
     >>>
     >>> init_ras_project("C:/models/bald_eagle", "6.6")
+    >>>
+    >>> # Without API key (most users)
     >>> summary = UsgsGaugeCatalog.generate_gauge_catalog()
+    >>>
+    >>> # With API key (faster processing)
+    >>> summary = UsgsGaugeCatalog.generate_gauge_catalog(
+    ...     api_key="your_key_here",
+    ...     rate_limit_rps=10.0
+    ... )
     >>> print(f"Found {summary['gauge_count']} gauges")
 """
 
@@ -170,6 +183,7 @@ class UsgsGaugeCatalog:
             logger.info("Using API key from environment for USGS requests")
         else:
             logger.info(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
+            logger.info("TIP: Get a free USGS API key for faster processing (10 req/sec): https://api.waterdata.usgs.gov/signup/")
 
         # Use global ras object if not provided
         if ras_object is None:
