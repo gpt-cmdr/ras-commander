@@ -9,6 +9,16 @@ This backlog is organized by roadmap phases. See `ROADMAP.md` for detailed descr
 - [ ] `lib-002` **Atlas 14 caching** - Prevent duplicate NOAA API calls
 - [ ] `lib-003` **Testing suite** - Create tests for formalized functions
 
+### GUI Automation Integration (IN PROGRESS)
+- [x] `gui-001` **handle_already_running_dialog()** - Auto-dismiss "already running" dialog ✓ (Commit 07c39ab)
+- [x] `gui-002` **1D BC Visualization Tool** - RasMap layer functions + notebook 24 ✓ (Commit 8153566)
+- [x] `gui-003` **Document in AGENTS.md** - Add new functions to examples/AGENTS.md ✓ (2024-12-14)
+- [ ] `gui-004` **Update notebook 15** - Replace custom GUI code with RasGuiAutomation functions
+- [ ] `gui-005` **Update notebook 16** - Document dialog handling in win32com example
+- [ ] `gui-006` **Review floodplain notebooks** - Check 15_a and 15_b for GUI automation
+
+See: `agent_tasks/tasks/gui-automation-integration/TASK.md` for full implementation details.
+
 ### Notebook Updates
 - [ ] `nb-001` **Tier 1 improvements** - StormGenerator, ParameterSweep, HdfBatch, mesh utilities
 - [ ] `nb-002` **Tier 2 improvements** - Project setup helpers, plan cloning configurations

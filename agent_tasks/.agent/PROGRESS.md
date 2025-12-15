@@ -1633,3 +1633,79 @@ Session 9 successfully completed 3 high-priority migrations (remote-executor, qu
 3) Phase 2: reduce LOC via shared helpers (keep outputs identical)
 4) Phase 3: add LLM Forward verification artifacts (saved plots/logs/run summaries)
 
+
+---
+## Session - 2024-12-14: GUI Automation & BC Visualization
+
+**Goal**: Complete 1D Boundary Condition Visualization Tool and enhance GUI automation
+
+**Completed**:
+- [x] Fixed WGS84 reprojection for GeoJSON files (RASMapper requires EPSG:4326)
+- [x] Added geometry visibility functions to RasMap.py:
+  - `list_geometries()` - List geometry layers with visibility status
+  - `set_geometry_visibility()` - Show/hide specific geometry
+  - `set_all_geometries_visibility()` - Bulk visibility control
+- [x] Added map layer management functions to RasMap.py:
+  - `list_map_layers()` - List custom map layers
+  - `add_map_layer()` - Add GeoJSON/shapefile with symbology
+  - `remove_map_layer()` - Remove layers by name
+- [x] Created notebook 24: 1D Boundary Condition Visualization
+- [x] Added `handle_already_running_dialog()` to RasGuiAutomation.py
+  - Detects "already an instance running" dialog
+  - Auto-clicks "Yes" button
+  - Integrated into `open_rasmapper()`, `open_and_compute()`, `run_multiple_plans()`
+
+**Commits**:
+- `8153566` - Add 1D Boundary Condition Visualization Tool (RasMap.py + notebook)
+- `07c39ab` - Add handle_already_running_dialog() for GUI automation
+
+**Critical Knowledge Documented**:
+- GeoJSON files for RASMapper MUST be in WGS84 (EPSG:4326)
+- Dialog class #32770 is standard Windows dialog
+- Keywords "already", "another", "instance" identify the dialog
+
+**Files Modified** (committed):
+- `ras_commander/RasGuiAutomation.py` - Dialog handler function
+- `ras_commander/RasMap.py` - Geometry visibility + map layer functions
+- `examples/24_1d_boundary_condition_visualization.ipynb` - New notebook
+
+**Files Created** (local only):
+- `agent_tasks/tasks/gui-automation-integration/TASK.md` - Task details
+- `feature_dev_notes/Subagents_Under_Construction/RAS1D_BC_Visualization_Tool/INTEGRATION_TASKS.md`
+- `feature_dev_notes/Subagents_Under_Construction/RAS1D_BC_Visualization_Tool/SESSION_SUMMARY.md`
+
+---
+## Session - 2024-12-14b: GUI Automation Documentation & Git Cleanup
+
+**Goal**: Document GUI automation features and fix git workflow issues
+
+**Completed**:
+- [x] `gui-003` Document new functions in examples/AGENTS.md
+  - Added RasGuiAutomation section (lines 293-340) with dialog handling, open_rasmapper
+  - Added RasMap section (lines 344-416) with map layers, geometry visibility
+- [x] `gui-003b` Document in docs/user-guide/spatial-data.md
+  - Added Map Layer Management section (lines 47-84)
+  - Added Geometry Visibility Control section (lines 86-131)
+  - Documented WGS84 requirement for GeoJSON
+- [x] `gui-003c` Update mkdocs.yml navigation
+  - Added notebook 24 to Mapping & Visualization section (line 165)
+- [x] Fixed 11GB file blocking git operations
+  - Removed ai_tools/llm_knowledge_bases/ from git tracking (40 files)
+  - Files remain on disk (gitignored), but no longer tracked
+
+**Commits**:
+- `310286d` - Remove ai_tools/llm_knowledge_bases from git tracking (fixed git diff)
+- `ea8d3b7` - Document RasGuiAutomation and RasMap functions
+
+**Issues Identified**:
+- Two notebooks with prefix `24_` - naming conflict (to be resolved)
+  - `24_aorc_precipitation.ipynb` (existing, under Automation)
+  - `24_1d_boundary_condition_visualization.ipynb` (new, under Mapping & Visualization)
+
+**Remaining Tasks** (see TASK.md):
+- [ ] `gui-004` Update notebook 15 to use library functions (HIGH PRIORITY)
+- [ ] `gui-005` Update notebook 16 to document dialog handling
+- [ ] `gui-006` Review floodplain mapping notebooks
+
+**Status**: 4/6 tasks complete, documentation committed
+
