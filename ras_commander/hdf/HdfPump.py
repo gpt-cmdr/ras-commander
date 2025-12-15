@@ -185,8 +185,21 @@ class HdfPump:
                 data_path = f"{pumping_stations_path}/{pump_station}/Structure Variables"
                 data = hdf[data_path][()]
 
-                # Extract time information - Updated to use new method name
-                time = HdfBase.get_unsteady_timestamps(hdf)
+                # Extract time information - try DSS-specific timestamps first
+                dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
+
+                if dss_time_path in hdf:
+                    # Use DSS Hydrograph Output timestamps
+                    raw_datetimes = hdf[dss_time_path][:]
+                    time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
+                else:
+                    # Fallback to Base Output timestamps
+                    time = HdfBase.get_unsteady_timestamps(hdf)
+
+                # Verify time dimension matches data, use index if mismatch
+                if len(time) != data.shape[0]:
+                    logger.warning(f"Timestamp count ({len(time)}) doesn't match data time dimension ({data.shape[0]}). Using numeric index.")
+                    time = list(range(data.shape[0]))
 
                 # Create DataArray
                 da = xr.DataArray(
