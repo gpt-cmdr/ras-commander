@@ -1,0 +1,343 @@
+# Subagent Markdown Output Pattern
+
+**Context**: Design pattern for subagent knowledge persistence
+**Priority**: Critical - ensures knowledge survival across sessions
+**Auto-loads**: Yes (all agents)
+
+## Core Principles
+
+### Principle 1: Subagents Write Files, Return Paths
+
+**Subagents MUST write markdown files and return the file path to the main agent for reading.**
+
+This ensures:
+1. **Knowledge Persistence** - Outputs survive session boundaries
+2. **Filterable Results** - Main agent can selectively read relevant sections
+3. **Consolidation Path** - Hierarchical knowledge agent can organize and prune
+4. **Audit Trail** - Work products are reviewable and traceable
+5. **Non-Destructive Lifecycle** - Files move to `.old/` when outdated, never deleted
+
+### Principle 2: Orchestrator Passes Context via File Paths
+
+**The orchestrator MUST pass context to subagents via markdown file paths (relative paths), not raw text.**
+
+This ensures:
+1. **Context Availability** - Subagent reads files, gets full context
+2. **No Prompt Bloat** - Large context doesn't inflate prompts
+3. **Reusable Context** - Same context files work across multiple subagent calls
+4. **Traceable Handoffs** - Clear record of what context was provided
+
+**Orchestrator Invocation Pattern**:
+```python
+# ✅ CORRECT: Pass file paths for context
+Task(
+    subagent_type="hdf-analyst",
+    model="sonnet",
+    prompt="""
+    Analyze the HDF results for anomalies.
+
+    Context files (read these first):
+    - agent_tasks/.agent/STATE.md (current project state)
+    - .claude/outputs/previous-analysis.md (prior findings)
+
+    Task: Extract WSE data from examples/Muncie.p01.hdf and identify
+    any values outside normal range (0-1000 ft).
+
+    Write findings to: .claude/outputs/hdf-analyst/2025-12-15-wse-analysis.md
+    """
+)
+
+# ❌ WRONG: Passing large text in prompt
+Task(
+    subagent_type="hdf-analyst",
+    prompt=f"Here is the context: {huge_context_string}..."  # Bad!
+)
+```
+
+**Path Format**: Always use relative paths from repository root:
+- ✅ `agent_tasks/.agent/STATE.md`
+- ✅ `.claude/outputs/hdf-analyst/analysis.md`
+- ❌ `C:/GH/ras-commander/agent_tasks/.agent/STATE.md` (absolute)
+
+## The Pattern
+
+### Subagent Workflow
+
+```
+1. Subagent receives task from main agent
+2. Subagent performs research/analysis/work
+3. Subagent writes markdown file(s) with results
+4. Subagent returns file path(s) to main agent
+5. Main agent reads file(s) as needed
+6. Knowledge persists for future sessions
+```
+
+### Output Location
+
+**Working outputs**: Write to task-specific location or `.claude/outputs/`
+
+```
+.claude/outputs/
+├── {subagent-name}/
+│   ├── {task-id}-{description}.md    # Task outputs
+│   ├── {date}-{topic}.md             # Research findings
+│   └── summary-{topic}.md            # Consolidated summaries
+```
+
+**Alternative locations** (context-dependent):
+- `agent_tasks/.agent/` - Multi-session coordination files
+- `feature_dev_notes/` - Feature-specific research
+- Task-specific directories as instructed
+
+### File Naming Convention
+
+```
+{date}-{subagent}-{task-description}.md
+
+Examples:
+2025-12-15-hdf-analyst-breach-results-investigation.md
+2025-12-15-geometry-parser-cross-section-analysis.md
+2025-12-15-usgs-integrator-gauge-discovery-muncie.md
+```
+
+## Implementation
+
+### For Subagents (How to Output)
+
+```python
+# ✅ CORRECT: Write results to markdown file
+output_path = ".claude/outputs/hdf-analyst/2025-12-15-wse-extraction.md"
+
+# Write structured findings
+content = """
+# WSE Extraction Analysis
+
+## Summary
+Found 15 cross sections with water surface elevation data.
+
+## Findings
+- Plan type: Unsteady
+- Time steps: 240
+- Max WSE: 825.4 ft at XS 12345
+
+## Recommendations
+[...]
+
+## Files Examined
+- Muncie.p01.hdf
+"""
+
+# Return path to main agent
+return f"Analysis complete. Results written to: {output_path}"
+```
+
+```python
+# ❌ WRONG: Returning raw text to main agent
+return """
+Found 15 cross sections with water surface elevation data...
+[Large text blob that won't persist]
+"""
+```
+
+### For Main Agent (How to Consume)
+
+```python
+# ✅ CORRECT: Read subagent output file
+result = Task(
+    subagent_type="hdf-analyst",
+    prompt="Analyze WSE data in Muncie.p01.hdf"
+)
+# result contains file path
+# Main agent reads file: Read(result.output_path)
+
+# ✅ CORRECT: Selectively read sections
+# Read just the summary section if that's all needed
+```
+
+### Structured Output Template
+
+Subagents should use consistent markdown structure:
+
+```markdown
+# {Task Title}
+
+**Subagent**: {subagent-name}
+**Date**: {YYYY-MM-DD}
+**Task ID**: {optional-task-reference}
+
+## Summary
+{2-3 sentence executive summary}
+
+## Findings
+{Detailed findings, organized by topic}
+
+### {Subtopic 1}
+{Details}
+
+### {Subtopic 2}
+{Details}
+
+## Recommendations
+{Actionable recommendations if applicable}
+
+## Data/Evidence
+{Supporting data, code snippets, file references}
+
+## Next Steps
+{Suggested follow-up actions if applicable}
+
+---
+*Generated by {subagent-name} subagent*
+```
+
+## Knowledge Lifecycle
+
+### Active → Old → Delete
+
+```
+1. ACTIVE: .claude/outputs/{subagent}/{file}.md
+   - Current, relevant outputs
+   - Main agent reads as needed
+
+2. OUTDATED: .old/{file}.md
+   - Superseded or no longer needed
+   - Moved at task close or by cleanup pass
+   - Preserved for reference
+
+3. RECOMMEND DELETE: .old/recommend_to_delete/{file}.md
+   - Temporary/scratch files
+   - Incorrect outputs
+   - Duplicates
+   - User reviews and decides
+
+4. DELETED: (by user only)
+   - Never auto-deleted
+   - User makes final decision
+```
+
+### Two-Phase Cleanup Model
+
+**Phase 1: Task Close (`/agent-taskclose`)** - AGGRESSIVE
+- Agent has MAXIMUM CONTEXT about task-specific files
+- Knows exactly which outputs are working artifacts
+- Pre-consolidates related findings into summaries
+- Extracts knowledge to permanent hierarchy while context is fresh
+- Moves task artifacts to `.old/` hierarchy immediately
+
+**Phase 2: Periodic Cleanup (`/agent-cleanfiles`)** - CONSERVATIVE
+- Agent has LIMITED CONTEXT (general scan)
+- Identifies obviously stale files (30+ days, no references)
+- Flags uncertain files for user decision
+- Notes consolidation opportunities without executing
+
+**Why This Matters**: Task close is the moment of maximum context. An agent ending a task knows exactly which files were scratch work vs deliverables. That context is LOST after the session ends. Waiting for periodic cleanup means guessing about file purpose.
+
+### Hierarchical Knowledge Agent Responsibilities
+
+The hierarchical-knowledge-agent-skill-memory-curator:
+
+1. **Monitors** `.claude/outputs/` for accumulated outputs
+2. **Consolidates** related findings into summaries (when context permits)
+3. **Moves** clearly outdated files to `.old/`
+4. **Recommends deletion** for obviously stale content
+5. **Improves knowledge density** by identifying placement opportunities
+6. **Never auto-deletes** - user makes final decision
+
+## Benefits
+
+### Knowledge Persistence
+- Session ends → Knowledge survives in files
+- New session → Can resume from written state
+- Context loss → Recovery via file reading
+
+### Filterable & Selective
+- Main agent reads only what's needed
+- Can skip sections via offset/limit
+- Summaries provide quick overview
+
+### Consolidation Path
+- Multiple outputs → Single summary
+- Redundant findings → Deduplicated
+- Scattered knowledge → Organized hierarchy
+
+### Non-Destructive Audit Trail
+- All work products preserved
+- `.old/` provides history
+- Decisions traceable via files
+
+## Anti-Patterns
+
+### ❌ Returning Large Text Blobs
+
+```python
+# BAD: Text doesn't persist
+return f"""
+Here's everything I found:
+{huge_analysis_text}
+{more_text}
+{even_more_text}
+"""
+```
+
+### ❌ Not Writing Files at All
+
+```python
+# BAD: Knowledge lost when session ends
+analysis = perform_complex_analysis()
+return analysis.summary  # Only returns text, nothing persisted
+```
+
+### ❌ Writing to Unorganized Locations
+
+```python
+# BAD: No organization, hard to find later
+Write("analysis.md", content)  # Where? What subagent?
+```
+
+### ❌ Overwriting Without Versioning
+
+```python
+# BAD: Loses previous work
+Write(".claude/outputs/analysis.md", new_content)  # Old content gone
+```
+
+### ✅ Correct Pattern
+
+```python
+# GOOD: Organized, dated, traceable
+output_path = f".claude/outputs/hdf-analyst/{date}-{task_id}-wse-analysis.md"
+Write(output_path, structured_content)
+return f"Analysis complete. Results: {output_path}"
+```
+
+## Integration with Existing Systems
+
+### agent_tasks/ Memory System
+
+For multi-session tasks:
+- STATE.md, BACKLOG.md, PROGRESS.md continue as primary coordination
+- Subagent outputs supplement with detailed findings
+- Cross-reference: "See `.claude/outputs/hdf-analyst/2025-12-15-analysis.md`"
+
+### feature_dev_notes/
+
+For feature development:
+- Subagent research outputs can write to feature-specific folders
+- Maintains feature context alongside development notes
+
+### .claude/rules/
+
+Subagent outputs may inform rule updates:
+- Pattern observed → New rule created
+- Best practice extracted → Rule documented
+
+## See Also
+
+- **Hierarchical Knowledge Best Practices**: `.claude/rules/documentation/hierarchical-knowledge-best-practices.md`
+- **Governance Rules**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator/reference/governance-rules.md`
+- **Agent Memory System**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator/reference/agent-memory-system.md`
+- **Task Close Command**: `.claude/commands/agent-taskclose.md`
+
+---
+
+**Key Takeaway**: Subagents write markdown files, return paths. Main agent reads files. Knowledge persists. Hierarchical knowledge agent consolidates and prunes to `.old/`.

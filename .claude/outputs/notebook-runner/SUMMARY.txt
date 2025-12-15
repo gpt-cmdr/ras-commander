@@ -1,0 +1,34 @@
+NOTEBOOK TEST SUMMARY
+=====================
+
+Notebook: 00_Using_RasExamples.ipynb
+Test Date: 2025-12-15
+Status: PASS
+
+RESULTS:
+- Execution Status: All 14 code cells executed successfully
+- Errors: 0
+- Warnings: 0 (1 non-fatal ZMQ warning)
+- Execution Time: ~1 second
+- Environment: rascmdr_piptest (ras-commander 0.87.4 from pip)
+- Toggle Cell: USE_LOCAL_SOURCE = False (CORRECT for pip testing)
+
+KEY FINDINGS:
+✓ Notebook executes cleanly with published pip package
+✓ RasExamples functionality works correctly
+✓ All outputs valid and expected
+✓ No regressions in pip package
+✓ Ready for documentation and CI/CD pipelines
+
+DETAILED FINDINGS: 
+  .claude/outputs/notebook-runner/2025-12-15-00_Using_RasExamples-test.md
+
+PURPOSE:
+The notebook demonstrates RasExamples utility for managing HEC-RAS
+example projects. Serves as both documentation and functional test.
+
+IMPLICATIONS:
+- Users can reliably extract and manage example projects
+- Published package version works correctly
+- Suitable for automated testing in CI pipelines
+- Recommended as first example notebook for users
