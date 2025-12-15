@@ -55,11 +55,12 @@ Public API:
         - detect_rapid_change: Detect rapid rises/recessions
 
     From catalog:
-        - generate_gauge_catalog: Create standardized gauge data catalog
-        - load_gauge_catalog: Load gauge catalog from standard location
-        - load_gauge_data: Load historical data for specific gauge
-        - get_gauge_folder: Get path to gauge folder
-        - update_gauge_catalog: Refresh existing catalog with new data
+        - UsgsGaugeCatalog: Static class for gauge catalog operations
+            - generate_gauge_catalog: Create standardized gauge data catalog
+            - load_gauge_catalog: Load gauge catalog from standard location
+            - load_gauge_data: Load historical data for specific gauge
+            - get_gauge_folder: Get path to gauge folder
+            - update_gauge_catalog: Refresh existing catalog with new data
 
 Example:
     >>> from ras_commander.usgs import retrieve_flow_data, get_gauge_metadata
@@ -147,13 +148,9 @@ from .real_time import (
     RasUsgsRealTime,
 )
 
-# Import catalog functions
+# Import catalog class
 from .catalog import (
-    generate_gauge_catalog,
-    load_gauge_catalog,
-    load_gauge_data,
-    get_gauge_folder,
-    update_gauge_catalog
+    UsgsGaugeCatalog,
 )
 
 # Import rate limiting utilities
@@ -196,6 +193,13 @@ update_boundary_hydrograph = BoundaryGenerator.update_boundary_hydrograph
 align_timeseries = TimeSeriesProcessor.align_timeseries
 resample_to_hecras_interval = TimeSeriesProcessor.resample_to_hecras_interval
 check_data_gaps = TimeSeriesProcessor.check_data_gaps
+
+# From catalog module
+generate_gauge_catalog = UsgsGaugeCatalog.generate_gauge_catalog
+load_gauge_catalog = UsgsGaugeCatalog.load_gauge_catalog
+load_gauge_data = UsgsGaugeCatalog.load_gauge_data
+get_gauge_folder = UsgsGaugeCatalog.get_gauge_folder
+update_gauge_catalog = UsgsGaugeCatalog.update_gauge_catalog
 
 def check_dependencies():
     """
@@ -252,6 +256,7 @@ __all__ = [
     'InitialConditions',
     'GaugeMatcher',
     'RasUsgsRealTime',
+    'UsgsGaugeCatalog',
     # Core data retrieval functions
     'retrieve_flow_data',
     'retrieve_stage_data',

@@ -1,34 +1,62 @@
-NOTEBOOK TEST SUMMARY
-=====================
+================================================================================
+NOTEBOOK TEST SUMMARY - 05_single_plan_execution.ipynb
+================================================================================
 
-Notebook: 00_Using_RasExamples.ipynb
-Test Date: 2025-12-15
-Status: PASS
+TEST DATE: 2025-12-15
+ENVIRONMENT: rascmdr_piptest (ras-commander 0.87.4 from PyPI)
+HEC-RAS: 6.5 (installed and functional)
 
-RESULTS:
-- Execution Status: All 14 code cells executed successfully
-- Errors: 0
-- Warnings: 0 (1 non-fatal ZMQ warning)
-- Execution Time: ~1 second
-- Environment: rascmdr_piptest (ras-commander 0.87.4 from pip)
-- Toggle Cell: USE_LOCAL_SOURCE = False (CORRECT for pip testing)
+================================================================================
+RESULT: PASS
+================================================================================
 
-KEY FINDINGS:
-✓ Notebook executes cleanly with published pip package
-✓ RasExamples functionality works correctly
-✓ All outputs valid and expected
-✓ No regressions in pip package
-✓ Ready for documentation and CI/CD pipelines
+Execution Status:     PASS (All code cells executed successfully)
+Error Count:          0 (No errors detected)
+Total Code Cells:     11 (All completed)
+Total Outputs:        51 (All valid)
+HDF Output Created:   YES (7.5 MB file)
+Toggle Cell Setting:  USE_LOCAL_SOURCE = False (Correct for PyPI testing)
 
-DETAILED FINDINGS: 
-  .claude/outputs/notebook-runner/2025-12-15-00_Using_RasExamples-test.md
+================================================================================
+NOTEBOOK DETAILS
+================================================================================
 
-PURPOSE:
-The notebook demonstrates RasExamples utility for managing HEC-RAS
-example projects. Serves as both documentation and functional test.
+Title:        Single Plan Execution
+Purpose:      Demonstrate RasCmdr.compute_plan() for single plan execution
+Project:      Bald Eagle Creek (2D Unsteady Flow)
+Plan:         01 (executed successfully)
 
-IMPLICATIONS:
-- Users can reliably extract and manage example projects
-- Published package version works correctly
-- Suitable for automated testing in CI pipelines
-- Recommended as first example notebook for users
+Key Methods Tested:
+- RasExamples.extract_project()
+- init_ras_project()
+- RasCmdr.compute_plan() with various parameters
+- HDF results extraction and validation
+
+================================================================================
+HDF OUTPUT VALIDATION
+================================================================================
+
+HDF File:     BaldEagle.p01.hdf
+Location:     examples/example_projects_05_single_plan_execution/compute_test_cores/
+Size:         7.5 MB
+Status:       VALID (successfully created by HEC-RAS 6.5)
+Results:      Water surface elevation data extracted and verified
+Date:         2025-12-15 12:23 UTC
+
+================================================================================
+DETAILED REPORT
+================================================================================
+
+Full analysis available in:
+  .claude/outputs/notebook-runner/2025-12-15-05_single_plan_execution-test.md
+
+This comprehensive report includes:
+- Execution details and environment verification
+- Notebook structure and contents
+- HDF output properties and validation
+- Performance metrics
+- Testing criteria checklist
+- Compatibility notes
+- Conclusions and recommendations
+
+================================================================================

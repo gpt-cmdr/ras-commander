@@ -1,0 +1,30 @@
+EXECUTION SUMMARY: 05_single_plan_execution.ipynb
+======================================================================
+
+Title: Single Plan Execution
+
+NOTEBOOK STRUCTURE:
+  - Markdown cells: 11
+  - Code cells: 11
+
+NOTEBOOK PURPOSE:
+  - Let's set up our working directory and paths to example projects. We'll also check the number of available CPU cores on this system.
+  - Before we dive into execution, let's understand the `compute_plan` method from the `RasCmdr` class, which is the core function for running HEC-RAS simulations.
+  - - `plan_number` (str, Path): The plan number to execute or the full path to the plan file
+  - - `dest_folder` (str, Path, optional): Destination folder for computation
+  - - `ras_object` (RasPrj, optional): Specific RAS object to use (defaults to global `ras`)
+
+EXECUTION RESULTS:
+  - Total outputs: 51
+  - Errors: 0
+  - Status: PASS
+
+HDF OUTPUT DETECTED: BaldEagle.p01.hdf
+HDF OUTPUT DETECTED: C:\GH\ras-commander\examples\example_projects_05_single_plan_execution\compute_test_cores\BaldEagle.p01.hdf
+HDF OUTPUT DETECTED: BaldEagle.p01.hdf
+HDF OUTPUT DETECTED: C:\GH\ras-commander\examples\example_projects_05_single_plan_execution\compute_test_cores\BaldEagle.p01.hdf
+
+ENVIRONMENT:
+  - Python: rascmdr_piptest (ras-commander 0.87.4)
+  - HEC-RAS: 6.5 (found in standard location)
+  - Execution: jupyter nbconvert --to notebook --execute --inplace

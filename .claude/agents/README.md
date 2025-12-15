@@ -41,6 +41,7 @@ Task Subagents (Haiku)
 - **quality-assurance** - RasFixit geometry repair
 - **win32com-automation-expert** - COM automation, GUI interaction
 - **ras-commander-api-expert** - API integration, dataframe structures, spawns explore subagents
+- **api-consistency-auditor** - Enforces API conventions, detects pattern violations
 
 ### Knowledge Management (Opus)
 - **hierarchical-knowledge-agent-skill-memory-curator** - Knowledge organization, structural reasoning
@@ -197,6 +198,7 @@ Result: Subagent has full context WITHOUT manual passing!
 | **git-operations** | Sonnet | Git workflows, conflict resolution |
 | **win32com-automation-expert** | Sonnet | COM automation, GUI interaction |
 | **ras-commander-api-expert** | Sonnet | API integration, dataframe structures, spawns Haiku subagents |
+| **api-consistency-auditor** | Sonnet | API pattern enforcement, violation detection, fix suggestions |
 | **hierarchical-knowledge-agent-skill-memory-curator** | Opus | Knowledge organization, complex reasoning about structure |
 | **notebook-output-auditor** | Haiku | Long context review, output validation |
 | **notebook-anomaly-spotter** | Haiku | Pattern detection in outputs |

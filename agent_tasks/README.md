@@ -103,6 +103,39 @@ Accumulated wisdom:
 4. **Progress over perfection** - Working code > perfect plans
 5. **Clean as you go** - Archive old work to .old/
 
+## Task Lifecycle & Cleanup
+
+### Task States
+```
+BACKLOG (Ready/Blocked) → IN PROGRESS → COMPLETED → ARCHIVED
+```
+
+### Cleanup Process
+
+**At Task Close (`/agent-taskclose`)**:
+- Agent has maximum context about task files
+- Consolidates findings, extracts knowledge
+- Moves task-specific artifacts to `.old/`
+
+**Periodic Cleanup (`/agent-cleanfiles`)**:
+- Reviews BACKLOG.md for completed tasks `[x]`
+- Archives completed task folders: `tasks/{id}/ → .old/tasks/`
+- Cleans orphaned planning documents
+- Flags uncertain files for user decision
+
+### Archive Structure
+```
+.old/
+├── tasks/           # Completed task folders (TASK.md, RESULT.md, files)
+├── planning/        # Archived planning documents
+└── sessions/        # Old session artifacts
+```
+
+### Non-Destructive Guarantee
+- Files are NEVER deleted automatically
+- Always moved to `.old/` hierarchy
+- User reviews `.old/recommend_to_delete/` before permanent deletion
+
 ## Strategic Planning Documents
 
 ### ROADMAP.md - Development Roadmap

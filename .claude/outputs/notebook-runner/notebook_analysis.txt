@@ -1,0 +1,12 @@
+NOTEBOOK: 05_single_plan_execution.ipynb
+======================================================================
+Total code cells: 11
+
+Successful outputs: 49
+Error outputs: 0
+
+
+EXECUTION STATUS: PASS (no critical errors)
+
+NOTE: Some cells may have warnings or non-critical errors,
+but the notebook completed execution successfully.

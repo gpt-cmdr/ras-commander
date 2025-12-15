@@ -2,24 +2,48 @@
 
 This backlog is organized by roadmap phases. See `ROADMAP.md` for detailed descriptions.
 
+## Phase 0: API Consistency Auditor - Pre-Work (URGENT - Before Next Sprint)
+
+**Target Completion**: Dec 20, 2025 (before Phase 1 start)
+**Priority**: 🔴 Critical - Pre-Sprint Requirement
+**See**: `agent_tasks/API_Consistency_Auditor.md` for complete task tracking
+
+### Pre-Work Tasks
+- [ ] `api-p0.1` **Fix catalog.py violations** - Convert to static class, add decorators (2-3 hours) ⚠️ BLOCKING
+- [ ] `api-p0.2` **Audit recent additions** - Check files since Nov 2024 for violations (1-2 hours) ⚠️ BLOCKING
+- [ ] `api-p0.3` **Document exception classes** - Create .auditor.yaml with RasPrj, workers, callbacks (1 hour)
+- [ ] `api-p0.4` **Create test fixtures** - Example files for testing (valid/invalid patterns) (1-2 hours)
+- [ ] `api-p0.5` **Phase 0 summary** - Compile deliverables, document baseline (30 min)
+
+**Total**: ~7 hours to establish clean baseline
+
+**Rationale**: Recent code (catalog.py, HdfPipe.py) has API violations (missing @staticmethod, @log_call). Next sprint adds new functions - need auditor operational to prevent repeating mistakes. Phase 0 creates clean baseline before building auditor.
+
+**Deliverables**:
+- ✅ catalog.py refactored to static class with decorators
+- ✅ BASELINE_AUDIT.md documenting current state
+- ✅ .auditor.yaml with exception classes
+- ✅ Test fixtures for rule development
+
 ## Phase 1: Quick Wins (Ready - High Priority)
 
 ### Library Improvements
 - [x] `lib-001` **Real-time computation messages** - Callback support for streaming `.bco` file monitoring ✓ (v0.88.0+, Session 5)
-- [ ] `lib-002` **Atlas 14 caching** - Prevent duplicate NOAA API calls
+- [⏸️] `lib-002` **Atlas 14 caching** - Prevent duplicate NOAA API calls ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing to complete
 - [ ] `lib-003` **Testing suite** - Create tests for formalized functions
 
-### GUI Automation Integration (IN PROGRESS)
+### GUI Automation Integration (FINAL STAGES)
 - [x] `gui-001` **handle_already_running_dialog()** - Auto-dismiss "already running" dialog ✓ (Commit 07c39ab)
 - [x] `gui-002` **1D BC Visualization Tool** - RasMap layer functions + notebook 24 ✓ (Commit 8153566)
 - [x] `gui-003` **Document in AGENTS.md** - Add new functions to examples/AGENTS.md ✓ (2024-12-14)
-- [ ] `gui-004` **Update notebook 15** - Replace custom GUI code with RasGuiAutomation functions
-- [ ] `gui-005` **Update notebook 16** - Document dialog handling in win32com example
-- [ ] `gui-006` **Review floodplain notebooks** - Check 15_a and 15_b for GUI automation
+- [⏸️] `gui-004` **Update notebook 15** - Replace custom GUI code with RasGuiAutomation functions ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing
+- [⏸️] `gui-005` **Update notebook 16** - Document dialog handling in win32com example ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing
+- [⏸️] `gui-006` **Review floodplain notebooks** - Check 15_a and 15_b for GUI automation ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing
 
 See: `agent_tasks/tasks/gui-automation-integration/TASK.md` for full implementation details.
 
 ### Notebook Updates
+- [⏸️] **Example Notebook Phase 0 Fixes** - Fix 6 notebooks with syntax/runtime blockers (04, 11, 12, 14, 22, 23) ⚠️ PARTIALLY UPDATED - Temporarily blocked until preliminary testing/QAQC complete. Will backcheck recommendations and re-test.
 - [ ] `nb-001` **Tier 1 improvements** - StormGenerator, ParameterSweep, HdfBatch, mesh utilities
 - [ ] `nb-002` **Tier 2 improvements** - Project setup helpers, plan cloning configurations
 - [ ] `nb-003` **Tier 3 improvements** - RasPrj convenience methods, parallel config helpers

@@ -1,0 +1,4 @@
+Command: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\python.exe -m jupyter nbconvert --to notebook --execute --inplace 01_project_initialization.ipynb --ExecutePreprocessor.timeout=3600 --ExecutePreprocessor.kernel_name=python3
+Working directory: C:\GH\ras-commander\examples
+Python executable: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\python.exe
+Environment: rascmdr_piptest
