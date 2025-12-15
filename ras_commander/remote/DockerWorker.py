@@ -63,6 +63,7 @@ from ..Decorators import log_call
 logger = get_logger(__name__)
 
 
+@log_call
 def check_docker_dependencies():
     """
     Check if docker is available, raise clear error if not.

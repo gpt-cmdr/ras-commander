@@ -54,6 +54,8 @@ from functools import wraps
 from typing import Optional, Callable, Any
 import logging
 
+from ..Decorators import log_call
+
 logger = logging.getLogger(__name__)
 
 
@@ -251,6 +253,7 @@ def retry_with_backoff(
     return decorator
 
 
+@log_call
 def test_api_key(api_key: Optional[str] = None) -> bool:
     """
     Test if a USGS API key is valid and functional.
@@ -346,6 +349,7 @@ def test_api_key(api_key: Optional[str] = None) -> bool:
         return False
 
 
+@log_call
 def configure_api_key(api_key: str):
     """
     [DEPRECATED] Configure USGS API key via environment variable.
@@ -380,6 +384,7 @@ def configure_api_key(api_key: str):
     logger.info("USGS API key configured (rate limits increased)")
 
 
+@log_call
 def check_api_key() -> bool:
     """
     Check if USGS API key is configured in environment.
@@ -417,6 +422,7 @@ def check_api_key() -> bool:
     return has_key
 
 
+@log_call
 def get_rate_limit_info() -> dict:
     """
     Get information about USGS API rate limits and current configuration.
