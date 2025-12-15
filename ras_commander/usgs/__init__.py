@@ -157,7 +157,8 @@ from .catalog import (
 from .rate_limiter import (
     UsgsRateLimiter,
     retry_with_backoff,
-    configure_api_key,
+    test_api_key,
+    configure_api_key,  # DEPRECATED
     check_api_key,
     get_rate_limit_info
 )
@@ -314,7 +315,8 @@ __all__ = [
     # Rate limiting utilities
     'UsgsRateLimiter',
     'retry_with_backoff',
-    'configure_api_key',
+    'test_api_key',
+    'configure_api_key',  # DEPRECATED
     'check_api_key',
     'get_rate_limit_info',
     # Utility functions

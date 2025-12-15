@@ -1,62 +1,60 @@
+NOTEBOOK EXECUTION TEST SUMMARY
 ================================================================================
-NOTEBOOK TEST SUMMARY - 05_single_plan_execution.ipynb
-================================================================================
-
-TEST DATE: 2025-12-15
-ENVIRONMENT: rascmdr_piptest (ras-commander 0.87.4 from PyPI)
-HEC-RAS: 6.5 (installed and functional)
-
-================================================================================
-RESULT: PASS
-================================================================================
-
-Execution Status:     PASS (All code cells executed successfully)
-Error Count:          0 (No errors detected)
-Total Code Cells:     11 (All completed)
-Total Outputs:        51 (All valid)
-HDF Output Created:   YES (7.5 MB file)
-Toggle Cell Setting:  USE_LOCAL_SOURCE = False (Correct for PyPI testing)
+Date: 2025-12-15
+Notebook: examples/08_parallel_execution.ipynb
+Environment: rascmdr_piptest (pip package mode)
+Test Type: Functional execution test with nbconvert
 
 ================================================================================
-NOTEBOOK DETAILS
+OVERALL STATUS: FAIL
 ================================================================================
 
-Title:        Single Plan Execution
-Purpose:      Demonstrate RasCmdr.compute_plan() for single plan execution
-Project:      Bald Eagle Creek (2D Unsteady Flow)
-Plan:         01 (executed successfully)
+Test Result:    FAIL
+Error Type:     NameError - Undefined variable
+Error Location: Cell 6 (init_ras_project(muncie_path, "6.6"))
+Execution Time: 9.37 seconds
+Return Code:    1
 
-Key Methods Tested:
-- RasExamples.extract_project()
-- init_ras_project()
-- RasCmdr.compute_plan() with various parameters
-- HDF results extraction and validation
+CRITICAL FINDING:
+The notebook is INCOMPLETE - it is missing a required code cell that extracts
+the example project using RasExamples.extract_project("Muncie").
+
+The markdown clearly documents this step (Section 4), but the corresponding
+code cell was never implemented.
 
 ================================================================================
-HDF OUTPUT VALIDATION
+ISSUES IDENTIFIED
 ================================================================================
 
-HDF File:     BaldEagle.p01.hdf
-Location:     examples/example_projects_05_single_plan_execution/compute_test_cores/
-Size:         7.5 MB
-Status:       VALID (successfully created by HEC-RAS 6.5)
-Results:      Water surface elevation data extracted and verified
-Date:         2025-12-15 12:23 UTC
+ISSUE #1 (BLOCKING): Missing Project Extraction Cell
+  Location: Between markdown sections 4 and 5
+  Impact: Causes immediate NameError in cell 6
+  Code needed:
+    muncie_path = RasExamples.extract_project("Muncie")
+
+ISSUE #2 (BLOCKING): Missing Setup Code for Parallel Execution
+  Variables undefined: compute_folder, specific_compute_folder
+  Code needed: Path and folder setup before execution cells
+
+ISSUE #3 (BLOCKING): Missing Imports
+  Missing: matplotlib.pyplot, numpy, pandas, IPython.display
+  Used by: Visualization and data analysis cells
+
+================================================================================
+RECOMMENDATION
+================================================================================
+
+STATUS: Do NOT publish or use this notebook
+ACTION: Rewrite missing code cells by comparing with:
+  - examples/05_single_plan_execution.ipynb
+  - examples/06_executing_plan_sets.ipynb  
+  - examples/07_sequential_plan_execution.ipynb
+
+The notebook structure and documentation are good, but implementation is
+incomplete. This is not a runtime issue - it's a missing content issue.
 
 ================================================================================
 DETAILED REPORT
 ================================================================================
+See: .claude/outputs/notebook-runner/2025-12-15-08_parallel_execution-test.md
 
-Full analysis available in:
-  .claude/outputs/notebook-runner/2025-12-15-05_single_plan_execution-test.md
-
-This comprehensive report includes:
-- Execution details and environment verification
-- Notebook structure and contents
-- HDF output properties and validation
-- Performance metrics
-- Testing criteria checklist
-- Compatibility notes
-- Conclusions and recommendations
-
-================================================================================

@@ -5,8 +5,8 @@ This module provides rate limiting and retry logic to help prevent exceeding
 USGS API rate limits and handle 429 "Too Many Requests" errors gracefully.
 
 USGS API Rate Limits:
-    - Without API key: Lower limits (not publicly documented)
-    - With free API key: ~1,000 requests per hour
+    - Without API key: Lower limits (~5 req/sec recommended)
+    - With free API key: ~1,000 requests per hour (~10 req/sec recommended)
     - Recommended sustained rate: 5-10 requests per second
     - Burst rate: Up to 40-50 requests per second (not sustained)
 
@@ -14,27 +14,33 @@ Classes:
     UsgsRateLimiter: Token bucket rate limiter for API requests
 
 Functions:
+    test_api_key: Validate an API key is functional
     retry_with_backoff: Decorator for exponential backoff on API errors
-    configure_api_key: Helper to set USGS API key
-    check_api_key: Check if API key is configured
+    configure_api_key: [DEPRECATED] Set API key in environment
+    check_api_key: Check if API key is in environment
 
-Example Usage:
-    >>> from ras_commander.usgs.rate_limiter import UsgsRateLimiter, configure_api_key
+Recommended Usage (Stateless Pattern):
+    >>> from ras_commander.usgs import test_api_key, UsgsRateLimiter
     >>>
-    >>> # Configure API key (increases rate limits)
-    >>> configure_api_key("your_key_here")
+    >>> # Test API key before using
+    >>> api_key = "your_key_here"
+    >>> if test_api_key(api_key):
+    ...     print("API key is valid!")
     >>>
-    >>> # Create rate limiter (5 requests/sec sustained, bursts to 40)
+    >>> # Pass API key to functions that need it
+    >>> generate_gauge_catalog(api_key=api_key, rate_limit_rps=10.0)
+    >>>
+    >>> # Or use rate limiter directly (no API key needed)
     >>> limiter = UsgsRateLimiter(requests_per_second=5, burst_size=40)
-    >>>
-    >>> # Make rate-limited API calls
     >>> for site_id in site_ids:
     ...     limiter.wait_if_needed()
-    ...     data = retrieve_flow_data(site_id, ...)
+    ...     data = retrieve_flow_data(site_id, api_key=api_key)
+
+Legacy Usage (with state):
+    >>> from ras_commander.usgs import configure_api_key  # DEPRECATED
     >>>
-    >>> # Or use as context manager
-    >>> with limiter:
-    ...     data = retrieve_flow_data(site_id, ...)
+    >>> configure_api_key("your_key_here")  # Stores in environment
+    >>> # API key now used automatically (not recommended)
 
 References:
     - USGS API Keys: https://api.waterdata.usgs.gov/signup/
@@ -245,58 +251,161 @@ def retry_with_backoff(
     return decorator
 
 
+def test_api_key(api_key: Optional[str] = None) -> bool:
+    """
+    Test if a USGS API key is valid and functional.
+
+    Makes a lightweight test request to the USGS API to verify the key works.
+    This helps validate API keys before using them in batch operations.
+
+    Parameters:
+        api_key (str, optional): USGS API key to test. If None, tests without key.
+
+    Returns:
+        bool: True if API key is valid and functional, False otherwise
+
+    Example:
+        >>> from ras_commander.usgs import test_api_key
+        >>>
+        >>> # Test a specific API key
+        >>> if test_api_key("your_key_here"):
+        ...     print("API key is valid!")
+        ... else:
+        ...     print("API key is invalid or not working")
+        >>>
+        >>> # Test without API key (baseline functionality)
+        >>> if test_api_key(None):
+        ...     print("USGS API is accessible without key")
+
+    Notes:
+        - Makes a small test request to verify connectivity and authentication
+        - Does not store the API key (stateless)
+        - Returns False if API is unreachable or key is invalid
+        - Register for free API key at: https://api.waterdata.usgs.gov/signup/
+
+    See Also:
+        - Using API Keys: https://api.waterdata.usgs.gov/docs/ogcapi/keys/
+    """
+    try:
+        # Import dataretrieval (lazy loading)
+        try:
+            import dataretrieval.nwis as nwis
+        except ImportError:
+            logger.warning("dataretrieval package not installed, cannot test API key")
+            return False
+
+        # Make a lightweight test request to a known gauge
+        # Use a small date range to minimize data transfer
+        test_site = "01646500"  # USGS Potomac River at Little Falls
+        test_start = "2024-01-01"
+        test_end = "2024-01-02"  # Just 1 day
+
+        # Temporarily set API key in environment if provided
+        original_key = os.environ.get("API_USGS_PAT")
+        try:
+            if api_key is not None:
+                os.environ["API_USGS_PAT"] = api_key
+            elif "API_USGS_PAT" in os.environ:
+                del os.environ["API_USGS_PAT"]
+
+            # Make test request
+            result = nwis.get_record(
+                sites=test_site,
+                start=test_start,
+                end=test_end,
+                service='iv',
+                parameterCd='00060'  # Flow
+            )
+
+            # get_record returns a DataFrame or tuple (df, metadata)
+            if isinstance(result, tuple):
+                df = result[0]
+            else:
+                df = result
+
+            # If we got data, the key works (or no key is working)
+            if df is not None and len(df) > 0:
+                if api_key is not None:
+                    logger.info("API key validated successfully")
+                else:
+                    logger.debug("USGS API accessible without key")
+                return True
+            else:
+                logger.warning("API request returned no data (key may be invalid)")
+                return False
+
+        finally:
+            # Restore original API key state
+            if original_key is not None:
+                os.environ["API_USGS_PAT"] = original_key
+            elif "API_USGS_PAT" in os.environ:
+                del os.environ["API_USGS_PAT"]
+
+    except Exception as e:
+        logger.warning(f"API key test failed: {e}")
+        return False
+
+
 def configure_api_key(api_key: str):
     """
-    Configure USGS API key for higher rate limits.
+    [DEPRECATED] Configure USGS API key via environment variable.
 
-    Sets the API_USGS_PAT environment variable recognized by the
-    dataretrieval package. Using an API key increases rate limits
-    from low unauthenticated limits to ~1,000 requests per hour.
+    DEPRECATED: This function stores state in os.environ, which violates
+    the static class pattern. Instead, pass api_key as a parameter to
+    functions that need it.
+
+    Recommended approach:
+        >>> # Test API key first
+        >>> from ras_commander.usgs import test_api_key
+        >>> if test_api_key("your_key_here"):
+        ...     # Pass key to functions that need it
+        ...     generate_gauge_catalog(api_key="your_key_here", ...)
 
     Parameters:
         api_key (str): USGS API key from https://api.waterdata.usgs.gov/signup/
 
-    Returns:
-        None
-
-    Example:
-        >>> from ras_commander.usgs import configure_api_key
-        >>> configure_api_key("your_api_key_here")
-        >>> # Now all USGS API calls will use higher rate limits
-
     Notes:
-        - Register for free at: https://api.waterdata.usgs.gov/signup/
-        - Key is automatically used by dataretrieval package
-        - Persists for current Python session only
-        - For permanent config, add to ~/.bashrc or system environment
-
-    See Also:
-        - check_api_key: Check if API key is configured
-        - Using API Keys: https://api.waterdata.usgs.gov/docs/ogcapi/keys/
+        - This function will be removed in a future version
+        - Use test_api_key() to validate keys
+        - Pass api_key as parameter to functions instead of storing in environment
     """
+    import warnings
+    warnings.warn(
+        "configure_api_key() is deprecated. Pass api_key as a parameter to "
+        "functions instead. Use test_api_key() to validate keys.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     os.environ["API_USGS_PAT"] = api_key
     logger.info("USGS API key configured (rate limits increased)")
 
 
 def check_api_key() -> bool:
     """
-    Check if USGS API key is configured.
+    Check if USGS API key is configured in environment.
+
+    NOTE: Prefer using test_api_key() to validate a specific key instead
+    of checking the environment variable.
 
     Returns:
         bool: True if API_USGS_PAT environment variable is set
 
     Example:
-        >>> from ras_commander.usgs import check_api_key, configure_api_key
+        >>> from ras_commander.usgs import test_api_key
         >>>
+        >>> # Preferred approach - test specific key
+        >>> if test_api_key("your_key_here"):
+        ...     print("API key is valid!")
+        >>>
+        >>> # Old approach - check environment (not recommended)
+        >>> from ras_commander.usgs import check_api_key
         >>> if not check_api_key():
-        ...     print("Warning: No API key configured. Rate limits are lower.")
-        ...     print("Register at: https://api.waterdata.usgs.gov/signup/")
-        ...     # configure_api_key("your_key_here")  # Optional
+        ...     print("Warning: No API key in environment")
 
     Notes:
-        - API key increases rate limits to ~1,000 requests/hour
-        - Without key, rate limits are lower (exact limit not documented)
-        - Key registration is free and instant
+        - Checks environment variable only, doesn't validate the key
+        - Prefer test_api_key() for actual validation
+        - Pass api_key as parameter to functions instead of using environment
     """
     has_key = "API_USGS_PAT" in os.environ
 

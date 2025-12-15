@@ -24,6 +24,7 @@ Example:
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -79,7 +80,8 @@ class UsgsGaugeCatalog:
         output_folder: Optional[Union[str, Path]] = None,
         parameters: List[str] = None,
         rate_limit_rps: float = 5.0,
-        project_crs: Optional[str] = None
+        project_crs: Optional[str] = None,
+        api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate standardized USGS gauge data catalog for project.
@@ -110,6 +112,12 @@ class UsgsGaugeCatalog:
             Override CRS for projects without embedded projection. Use EPSG codes
             like "EPSG:26918" (UTM Zone 18N). Required for Bald Eagle Creek and
             other HEC-RAS example projects that don't have embedded CRS.
+        api_key : str, optional
+            USGS API key for higher rate limits (default: None).
+            Without API key: 5 req/sec recommended (default rate_limit_rps=5.0)
+            With API key: 10 req/sec recommended (set rate_limit_rps=10.0)
+            Get free key at: https://api.waterdata.usgs.gov/signup/
+            Use test_api_key() to validate before use.
 
         Returns
         -------
@@ -151,6 +159,17 @@ class UsgsGaugeCatalog:
                 "The 'dataretrieval' package is required for gauge catalog generation. "
                 "Install it with: pip install dataretrieval"
             )
+
+        # Temporarily set API key if provided (restores original state at end)
+        # TODO: Refactor RasUsgsCore methods to accept api_key parameter instead
+        original_api_key = os.environ.get("API_USGS_PAT")
+        if api_key is not None:
+            os.environ["API_USGS_PAT"] = api_key
+            logger.info("Using provided API key for USGS requests")
+        elif original_api_key:
+            logger.info("Using API key from environment for USGS requests")
+        else:
+            logger.info(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
 
         # Use global ras object if not provided
         if ras_object is None:
@@ -485,6 +504,12 @@ class UsgsGaugeCatalog:
         logger.info(f"Data size: {data_size_mb:.2f} MB")
         logger.info(f"Processing time: {processing_time:.1f} seconds")
         logger.info("=" * 60)
+
+        # Restore original API key state
+        if original_api_key is not None:
+            os.environ["API_USGS_PAT"] = original_api_key
+        elif "API_USGS_PAT" in os.environ:
+            del os.environ["API_USGS_PAT"]
 
         return summary
 
