@@ -144,6 +144,7 @@ class RasPrj:
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
+        self.project_path = self.project_folder  # Alias for compatibility
 
         # If user specified a .prj file directly, use it (Phase 2 optimization)
         if prj_file is not None:
