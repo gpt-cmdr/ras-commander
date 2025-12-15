@@ -43,7 +43,7 @@
 1. `ras_commander/usgs/CLAUDE.md` (310 lines) - COMPLETE workflows and API reference
 2. `examples/29-33_*.ipynb` - Working demonstrations
 3. Code docstrings in `ras_commander/usgs/*.py` - Precise function signatures
-4. `.claude/subagents/usgs-integrator/SUBAGENT.md` - Lightweight navigator ONLY
+4. `.claude/agents/usgs-integrator/SUBAGENT.md` - Lightweight navigator ONLY
 
 ## Line Count Reduction
 
@@ -90,11 +90,11 @@ When user asks USGS integration question:
 
 ```bash
 # Verify reference folder deleted
-ls .claude/subagents/usgs-integrator/
+ls .claude/agents/usgs-integrator/
 # Output: Only SUBAGENT.md (no reference/ folder)
 
 # Verify line count
-wc -l .claude/subagents/usgs-integrator/SUBAGENT.md
+wc -l .claude/agents/usgs-integrator/SUBAGENT.md
 # Output: 255 lines (within 300-400 target)
 
 # Verify primary source exists
@@ -114,7 +114,7 @@ ls ras_commander/usgs/CLAUDE.md
 
 ## Lessons Learned
 
-1. **Primary sources are superior** - Maintaining workflows in code-adjacent CLAUDE.md files beats duplicating in subagents
+1. **Primary sources are superior** - Maintaining workflows in code-adjacent CLAUDE.md files beats duplicating in agents
 2. **Navigators beat duplicators** - Subagents should route to primary sources, not duplicate them
-3. **Line count is a quality signal** - Large subagents suggest duplication problem
+3. **Line count is a quality signal** - Large agents suggest duplication problem
 4. **Maintenance notes prevent regression** - Explicit anti-duplication guidance helps future developers

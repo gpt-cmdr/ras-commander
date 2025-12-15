@@ -1,6 +1,6 @@
 # Subagents - Specialist Agent Definitions
 
-This directory contains definitions for specialist subagents that handle specific domains within ras-commander workflows.
+This directory contains definitions for specialist agents that handle specific domains within ras-commander workflows.
 
 ## What are Subagents?
 
@@ -16,13 +16,13 @@ This directory contains definitions for specialist subagents that handle specifi
 Main Agent (Opus)
 ├─ High-level planning and delegation
 ├─ Loads: Root CLAUDE.md + .claude/rules/**
-└─ Spawns specialist subagents when needed
+└─ Spawns specialist agents when needed
 
 Specialist Subagents (Sonnet)
 ├─ Domain expertise (HDF, geometry, remote, USGS)
 ├─ Inherit: Hierarchical CLAUDE.md chain
 ├─ Use: Library skills + domain skills
-└─ Spawn task subagents (Haiku) for quick ops
+└─ Spawn task agents (Haiku) for quick ops
 
 Task Subagents (Haiku)
 ├─ Fast, focused operations
@@ -90,7 +90,7 @@ You have access to the `extracting-hecras-results` skill which provides:
 
 ## Delegation
 
-For quick file reads or simple operations, you can spawn Haiku task subagents.
+For quick file reads or simple operations, you can spawn Haiku task agents.
 ```
 
 ## Context Inheritance Example
@@ -130,7 +130,7 @@ Result: Subagent has full context WITHOUT manual passing!
 
 ## Delegation Decision Tree
 
-Main agent uses this logic to decide when to spawn subagents:
+Main agent uses this logic to decide when to spawn agents:
 
 ```
 User Request
@@ -150,7 +150,7 @@ User Request
 
 1. **Cost optimization**: Use expensive models only where needed
 2. **Automatic specialization**: Folder context = domain expertise
-3. **Parallel execution**: Multiple subagents work concurrently
+3. **Parallel execution**: Multiple agents work concurrently
 4. **Clear boundaries**: Each subagent has defined scope
 
 ## See Also

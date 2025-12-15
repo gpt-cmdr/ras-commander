@@ -7,23 +7,7 @@ description: |
   computing plans, executing models, parallel workflows, setting up
   distributed computation, batch processing, scenario analysis, or monitoring
   execution progress in real-time.
-trigger_keywords:
-  - execute
-  - run
-  - compute
-  - HEC-RAS
-  - plan
-  - simulation
-  - parallel
-  - callback
-  - batch
-  - scenario
-  - destination folder
-  - worker
-  - monitoring
-  - progress
-  - real-time
-location: .claude/skills/executing-hecras-plans
+  Triggers: execute, run, compute, HEC-RAS, plan, simulation, parallel, callback, batch, scenario, destination folder, worker, monitoring, progress, real-time.
 ---
 
 # Executing HEC-RAS Plans

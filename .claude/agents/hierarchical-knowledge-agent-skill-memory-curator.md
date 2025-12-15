@@ -3,11 +3,11 @@ name: hierarchical-knowledge-agent-skill-memory-curator
 description: |
   Expert in Claude's hierarchical memory framework, skills architecture, agent memory
   systems, and knowledge organization. Manages CLAUDE.md hierarchy, agent_tasks/ memory
-  system, creates skills, defines subagents, and maintains documentation structure.
+  system, creates skills, defines agents, and maintains documentation structure.
   Understands relationship between persistent knowledge (HOW to code) and temporal memory
   (WHAT we're doing). Use when organizing project memory, managing agent_tasks/ coordination,
-  creating skills or subagents, refactoring documentation, or consolidating memory systems.
-  Keywords: CLAUDE.md, agent_tasks, skills, subagents, memory hierarchy, STATE, BACKLOG,
+  creating skills or agents, refactoring documentation, or consolidating memory systems.
+  Keywords: CLAUDE.md, agent_tasks, skills, agents, memory hierarchy, STATE, BACKLOG,
   PROGRESS, knowledge architecture, session continuity.
 model: sonnet
 tools: Read, Write, Edit, Grep, Glob, Bash
@@ -27,7 +27,7 @@ Maintain and evolve BOTH the hierarchical knowledge architecture AND agent memor
 - **CLAUDE.md hierarchy** - Root → subpackage context inheritance
 - **.claude/rules/** - Topic-specific auto-loaded guidance
 - **.claude/skills/** - Library workflow skills (how to use ras-commander)
-- **.claude/subagents/** - Specialist agent definitions
+- **.claude/agents/** - Specialist agent definitions
 - **ras_skills/** - Production domain automation
 
 ### Agent Memory System (WHAT we're doing)
@@ -72,7 +72,7 @@ Specialist Subagents (Sonnet)
 ├─ Domain expertise (HDF, geometry, remote, USGS)
 ├─ Inherit: Hierarchical CLAUDE.md chain automatically
 ├─ Skills: Can use any library or domain skill
-└─ Spawn: Task subagents (Haiku) for quick operations
+└─ Spawn: Task agents (Haiku) for quick operations
 
 Task Subagents (Haiku)
 ├─ Fast, focused operations (file reads, simple transforms)
@@ -213,7 +213,7 @@ When working in `ras_commander/hdf/`, you automatically inherit:
    - Progressive disclosure (general → specific)
 
 4. **Verify context inheritance**:
-   - Test subagents inherit correctly
+   - Test agents inherit correctly
    - Check no critical context lost
    - Ensure navigation works
 
@@ -315,7 +315,7 @@ mkdir -p reference examples scripts
 
 ```bash
 # 1. Create subagent definition
-cat > .claude/subagents/domain-specialist.md << 'EOF'
+cat > .claude/agents/domain-specialist.md << 'EOF'
 ---
 name: domain-specialist
 description: |
@@ -465,4 +465,4 @@ Track these indicators:
 
 **Status**: Active specialist subagent
 **Version**: 1.0 (2025-12-11)
-**Research Base**: 5 subagents, 48 minutes, ~23,500 tokens
+**Research Base**: 5 agents, 48 minutes, ~23,500 tokens

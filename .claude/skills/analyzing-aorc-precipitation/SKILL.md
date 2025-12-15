@@ -7,22 +7,7 @@ description: |
   AORC data, calibration workflows, design storm generation, rainfall analysis,
   SCS Type II distributions, AEP events, 100-year storms, or generating
   precipitation boundary conditions for rain-on-grid models.
-trigger_keywords:
-  - precipitation
-  - AORC
-  - Atlas 14
-  - design storm
-  - rainfall
-  - SCS Type II
-  - AEP
-  - 100-year
-  - rain-on-grid
-  - hyetograph
-  - temporal distribution
-  - areal reduction
-  - calibration
-  - historical precipitation
-location: .claude/skills/analyzing-aorc-precipitation
+  Triggers: precipitation, AORC, Atlas 14, design storm, rainfall, SCS Type II, AEP, 100-year, rain-on-grid, hyetograph, temporal distribution, areal reduction, calibration, historical precipitation.
 ---
 
 # Analyzing AORC Precipitation

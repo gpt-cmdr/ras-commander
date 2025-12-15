@@ -170,7 +170,7 @@ ras_agents/remote-executor-agent/
 2. Create ras_agents/remote-executor-agent/ structure
 3. Copy REMOTE_WORKER_SETUP_GUIDE.md with security redactions
 4. Create AGENT.md as lightweight navigator
-5. Update .claude/subagents/remote-executor.md to reference ras_agents
+5. Update .claude/agents/remote-executor.md to reference ras_agents
 6. Commit migration
 ```
 

@@ -1,25 +1,12 @@
 ---
 name: reading-dss-boundary-data
+allowed-tools: [Read, Grep, Glob]
 description: |
   Reads HEC-DSS files (V6 and V7) for boundary condition extraction using
   RasDss class. Handles JVM configuration, HEC Monolith download, catalog
   reading, and time series extraction. Use when working with DSS files,
   extracting boundary data, reading HEC-HMS output, or integrating DSS workflows.
-triggers:
-  - "DSS"
-  - "HEC-DSS"
-  - "boundary condition"
-  - "time series"
-  - "JVM"
-  - "Java"
-  - "catalog"
-  - "pathname"
-  - "HEC-HMS"
-  - "Monolith"
-  - "pyjnius"
-  - "read DSS"
-  - "extract DSS"
-  - "DSS boundary"
+  Triggers: DSS, HEC-DSS, boundary condition, time series, JVM, Java, catalog, pathname, HEC-HMS, Monolith, pyjnius, read DSS, extract DSS, DSS boundary.
 version: 1.0.0
 ---
 

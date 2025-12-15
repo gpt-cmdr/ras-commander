@@ -181,7 +181,7 @@ ras_agents/quality-assurance-agent/
 2. Create ras_agents/quality-assurance-agent/ structure
 3. Migrate critical validation rules with security redactions
 4. Create AGENT.md as lightweight navigator
-5. Update .claude/subagents/quality-assurance.md references
+5. Update .claude/agents/quality-assurance.md references
 6. Commit migration
 ```
 

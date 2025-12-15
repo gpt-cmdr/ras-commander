@@ -32,7 +32,7 @@ Git worktrees create isolated workspaces sharing the same repository, allowing w
 - `git worktree remove` - Cleanup worktrees
 
 **Integration**:
-- `.claude/subagents/git-operations/` - Delegates worktree setup to this skill
+- `.claude/agents/git-operations/` - Delegates worktree setup to this skill
 - `finishing-a-development-branch` skill - REQUIRED for cleanup after work complete
 
 ## Directory Selection Process
@@ -296,8 +296,8 @@ git worktree list
 ## Navigation Map
 
 **For git operations**:
-- Commit preparation → `.claude/subagents/git-operations/`
-- Pull request creation → `.claude/subagents/git-operations/`
+- Commit preparation → `.claude/agents/git-operations/`
+- Pull request creation → `.claude/agents/git-operations/`
 - General git workflow → `git --help`
 
 **For worktree management**:

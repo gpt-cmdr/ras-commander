@@ -1,5 +1,6 @@
 ---
 name: extracting-hecras-results
+allowed-tools: [Read, Grep, Glob]
 description: |
   Extract HEC-RAS hydraulic results from HDF files including water surface elevations (WSE),
   depths, velocities, and flows for both steady and unsteady simulations. Handles cross section

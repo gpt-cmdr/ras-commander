@@ -6,7 +6,7 @@ This directory contains Claude Code's memory and skills configuration using the 
 
 - **`rules/`** - Topic-specific guidance (auto-loaded by Claude)
 - **`skills/`** - Library workflow skills (dynamic discovery)
-- **`subagents/`** - Specialist agent definitions
+- **`agents/`** - Specialist agent definitions
 
 ## How It Works
 
@@ -43,7 +43,7 @@ Skills in `.claude/skills/` are discovered dynamically based on task description
 
 ### Subagents (Explicit Delegation)
 
-Subagent definitions in `.claude/subagents/` specify specialist agents for specific domains:
+Subagent definitions in `.claude/agents/` specify specialist agents for specific domains:
 - HDF file analysis
 - Geometry parsing
 - Remote execution

@@ -1,4 +1,6 @@
 ---
+name: parsing-hecras-geometry
+allowed-tools: [Read, Grep, Glob]
 description: |
   Parses and modifies HEC-RAS plain text geometry files (.g##) using fixed-width
   FORTRAN format. Handles cross sections, storage areas, bridges, culverts,
@@ -376,4 +378,4 @@ xs_df = GeomCrossSection.get_cross_sections("model.g01")
 ## See Also
 
 - **CLAUDE.md**: Architecture section on geometry parsing (lines 165-220)
-- **Subagent**: `.claude/subagents/geometry-parser/SUBAGENT.md` - For delegation
+- **Subagent**: `.claude/agents/geometry-parser/SUBAGENT.md` - For delegation

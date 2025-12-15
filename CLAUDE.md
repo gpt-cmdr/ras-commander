@@ -279,7 +279,7 @@ ras-commander/
 │   │   ├── testing/        # Testing approaches
 │   │   └── documentation/  # Doc standards
 │   ├── skills/             # Library workflow skills
-│   └── subagents/          # Specialist definitions
+│   └── agents/          # Specialist definitions
 ├── ras_agents/             # Production agent reference data (tracked)
 │   ├── README.md           # Agent organization guidelines
 │   └── decompilation-agent/# .NET assembly reverse engineering

@@ -78,7 +78,7 @@ Session 7 (current): Implementing Phase 2 of hierarchical knowledge approach
 
 1. Complete Phase 2 content migration (root → rules)
 2. Create missing CLAUDE.md files (6 subpackages)
-3. Begin Phase 4 (subagents & skills)
+3. Begin Phase 4 (agents & skills)
 
 ## Blockers
 

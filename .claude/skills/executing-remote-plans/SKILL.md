@@ -1,4 +1,5 @@
 ---
+name: executing-remote-plans
 description: |
   Distributed HEC-RAS execution across remote workers (PsExec, Docker, SSH, cloud).
   Handles worker initialization, queue scheduling, and result aggregation. Use when
@@ -6,28 +7,7 @@ description: |
   HEC-RAS across machines, parallel processing on multiple computers, Windows remote
   execution, container-based execution, session-based remote execution, PsExec
   configuration, Docker worker setup, or multi-machine HEC-RAS workflows.
-triggers:
-  - remote execution
-  - distributed execution
-  - PsExec
-  - Docker worker
-  - SSH execution
-  - cloud execution
-  - parallel remote
-  - multi-machine
-  - session_id
-  - remote worker
-  - worker initialization
-  - queue scheduling
-  - network share
-  - container execution
-related_skills:
-  - executing-plans
-  - processing-hdf-results
-related_files:
-  - ras_commander/remote/AGENTS.md
-  - examples/23_remote_execution_psexec.ipynb
-  - docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md
+  Triggers: remote execution, distributed execution, PsExec, Docker worker, SSH execution, cloud execution, parallel remote, multi-machine, session_id, remote worker, worker initialization, queue scheduling, network share, container execution.
 ---
 
 # Executing Remote Plans

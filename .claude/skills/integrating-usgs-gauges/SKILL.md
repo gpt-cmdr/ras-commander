@@ -1,5 +1,6 @@
 ---
 name: integrating-usgs-gauges
+allowed-tools: [Read, Grep, Glob]
 description: |
   Complete USGS gauge data integration workflow from spatial discovery to
   model validation. Handles gauge finding, data retrieval, matching to HEC-RAS

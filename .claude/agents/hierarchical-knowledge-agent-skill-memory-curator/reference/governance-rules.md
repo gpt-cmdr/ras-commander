@@ -213,7 +213,7 @@ Create a specialist subagent when:
 
 **Anti-patterns**:
 - ❌ Creating subagent for single function
-- ❌ Overlapping domains between subagents
+- ❌ Overlapping domains between agents
 - ❌ Subagent without clear working directory
 
 ### Model Selection Standards
@@ -225,12 +225,12 @@ Create a specialist subagent when:
   - Complex multi-domain decisions
   - Cost: ~$15/1M tokens
 
-- **Sonnet**: Specialist subagents
+- **Sonnet**: Specialist agents
   - Domain expertise (HDF, geometry, USGS)
   - Multi-step workflows
   - Cost: ~$1.50/1M tokens
 
-- **Haiku**: Task subagents
+- **Haiku**: Task agents
   - Single file reads
   - Simple transforms
   - Quick operations
@@ -291,7 +291,7 @@ ras-commander now uses Claude's official hierarchical memory framework:
 - CLAUDE.md files for context
 - .claude/rules/ for detailed guidance
 - .claude/skills/ for library workflows
-- .claude/subagents/ for specialist agents
+- .claude/agents/ for specialist agents
 
 See: `feature_dev_notes/Hierarchical_Knowledge_Approach/` for details.
 
@@ -355,7 +355,7 @@ Before committing changes:
 |-----------|--------|----------|
 | Multi-step library workflow | Create skill | .claude/skills/ |
 | Production domain automation | Create skill | ras_skills/ |
-| Specialist domain (>10KB) | Create subagent | .claude/subagents/ |
+| Specialist domain (>10KB) | Create subagent | .claude/agents/ |
 | Topic-specific guidance (50-200 lines) | Create rules file | .claude/rules/ |
 | Subpackage with 3+ modules | Create CLAUDE.md | subpackage/ |
 | File exceeds 60KB | Plan split | - |
@@ -368,8 +368,8 @@ Before committing changes:
 Track decisions requiring user input:
 
 ### Decision 1: Subagent Location ✅ RESOLVED
-**Options**: .claude/subagents/ (centralized) vs alongside code
-**Decision**: .claude/subagents/ (centralized, discoverable)
+**Options**: .claude/agents/ (centralized) vs alongside code
+**Decision**: .claude/agents/ (centralized, discoverable)
 **Date**: 2025-12-11
 
 ### Decision 2: ras_skills/ Merger ✅ RESOLVED

@@ -488,7 +488,7 @@ jupyter kernelspec uninstall rascmdr_local
 - **Import Patterns**: `.claude/rules/python/import-patterns.md` - Flexible imports for notebooks
 - **Testing Approach**: `.claude/rules/testing/tdd-approach.md` - Testing with example projects
 - **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md` - Notebook best practices
-- **Environment Manager Subagent**: `.claude/subagents/python-environment-manager.md` - Automated setup
+- **Environment Manager Subagent**: `.claude/agents/python-environment-manager.md` - Automated setup
 - **Example Toggle Cell**: `examples/00_Using_RasExamples.ipynb`
 
 ---

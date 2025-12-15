@@ -5,25 +5,7 @@ description: |
   Handles blocked obstructions, generates before/after visualizations, and
   creates audit trails. Use when fixing geometry errors, repairing obstructions,
   validating models, or ensuring FEMA compliance.
-triggers:
-  - "fix"
-  - "repair"
-  - "geometry"
-  - "blocked obstruction"
-  - "validate"
-  - "check"
-  - "RasCheck"
-  - "RasFixit"
-  - "FEMA"
-  - "quality assurance"
-  - "QA"
-  - "overlapping"
-  - "obstruction overlap"
-  - "elevation envelope"
-  - "geometry error"
-  - "model validation"
-  - "USACE"
-  - "cHECk-RAS"
+  Triggers: fix, repair, geometry, blocked obstruction, validate, check, RasCheck, RasFixit, FEMA, quality assurance, QA, overlapping, obstruction overlap, elevation envelope, geometry error.
 version: 2.0.0
 ---
 
@@ -404,7 +386,7 @@ if log_parser.has_obstruction_errors(log_content):
 
 ## Related Skills
 
-- **quality-assurance subagent**: `.claude\subagents\quality-assurance\SUBAGENT.md`
+- **quality-assurance subagent**: `.claude\agents\quality-assurance\SUBAGENT.md`
 - **Testing approach**: `.claude\rules\testing\tdd-approach.md`
 
 ## State-Specific Floodway Surcharge Limits

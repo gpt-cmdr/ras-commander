@@ -62,7 +62,7 @@ the tracked example notebook unless explicitly requested).
 ## Output Digest Workflow (for large notebooks)
 
 When notebook outputs are too large to review directly, generate a condensed
-digest and delegate review to Haiku subagents:
+digest and delegate review to Haiku agents:
 
 1. Create digest:
    - `python scripts/notebooks/audit_ipynb.py examples/11_2d_hdf_data_extraction.ipynb --out-dir working/notebook_runs/<run>/`
@@ -71,7 +71,7 @@ digest and delegate review to Haiku subagents:
    - `notebook-output-auditor` (exceptions/tracebacks/stderr)
    - `notebook-anomaly-spotter` (unexpected behavior heuristics)
 
-Only pass the digest files (not the full notebook) to Haiku subagents.
+Only pass the digest files (not the full notebook) to Haiku agents.
 
 ## Delegation Rules
 

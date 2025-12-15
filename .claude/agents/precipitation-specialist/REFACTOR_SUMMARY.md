@@ -78,19 +78,19 @@ When user requests precipitation work:
 
 ```bash
 # Before
-find .claude/subagents/precipitation-specialist -name "*.md" | xargs wc -l
+find .claude/agents/precipitation-specialist -name "*.md" | xargs wc -l
 # Output: 1,174 lines
 
 # After
-wc -l .claude/subagents/precipitation-specialist/SUBAGENT.md
+wc -l .claude/agents/precipitation-specialist/SUBAGENT.md
 # Output: 232 lines
 ```
 
 ## Next Steps
 
-Consider applying this pattern to other subagents:
+Consider applying this pattern to other agents:
 - Remote execution specialist
 - HDF specialist
 - Geometry specialist
 
-**Goal**: All subagents become lightweight navigators (~200-400 lines) pointing to primary sources.
+**Goal**: All agents become lightweight navigators (~200-400 lines) pointing to primary sources.

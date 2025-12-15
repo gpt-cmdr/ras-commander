@@ -9,7 +9,7 @@
 Created ~30,000 lines of duplicated content:
 
 ```
-.claude/subagents/{name}/
+.claude/agents/{name}/
 ├── SUBAGENT.md (300-800 lines with duplicated API)
 └── reference/
     ├── api-patterns.md (400-600 lines - duplicates docstrings)
@@ -40,7 +40,7 @@ Created ~30,000 lines of duplicated content:
 Created ~4,937 lines of primary source navigators:
 
 ```
-.claude/subagents/{name}/
+.claude/agents/{name}/
 └── SUBAGENT.md (200-400 lines - navigator ONLY)
 
 .claude/skills/{name}/
@@ -114,23 +114,23 @@ Subagent/Skill (lightweight navigator) ← POINTS TO ABOVE
 
 ### 5. Legitimate reference/ Folder Exceptions
 
-**TWO subagents are permitted to have reference/ folders with substantial content:**
+**TWO agents are permitted to have reference/ folders with substantial content:**
 
 ✅ **Exception 1: hierarchical-knowledge-agent-skill-memory-curator**
-- **File**: `.claude/subagents/hierarchical-knowledge-agent-skill-memory-curator.md` (468 lines + 104KB reference/)
+- **File**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md` (468 lines + 104KB reference/)
 - **Rationale**: Contains meta-knowledge about the hierarchical system itself
 - **Reference content**: Implementation phases, governance rules, research synthesis, memory system architecture
 - **Why justified**: Self-referential system - must contain organizational knowledge that doesn't belong elsewhere
 - **Status**: Documented exception, no action needed
 
 ✅ **Exception 2: claude-code-guide**
-- **File**: `.claude/subagents/claude-code-guide.md` (331 lines + 46KB reference/)
+- **File**: `.claude/agents/claude-code-guide.md` (331 lines + 46KB reference/)
 - **Rationale**: Caches official Anthropic documentation to prevent repeated web fetches
 - **Reference content**: Official docs from claude.com and code.claude.com (skills creation, memory system)
 - **Why justified**: External authoritative source that should be cached locally for offline access
 - **Status**: Documented exception, no action needed
 
-**All other subagents and skills MUST follow the lightweight navigator pattern (200-400 lines, no reference/ folders).**
+**All other agents and skills MUST follow the lightweight navigator pattern (200-400 lines, no reference/ folders).**
 
 ## Template Structure
 
@@ -141,7 +141,7 @@ Subagent/Skill (lightweight navigator) ← POINTS TO ABOVE
 name: {subagent-name or skill-name}
 model: sonnet  # or haiku for simpler tasks
 tools: [Read, Grep, Glob, Edit, Bash]
-working_directory: {path}  # subagents only
+working_directory: {path}  # agents only
 description: |
   {Trigger-rich description with action verbs, class names, common phrases}
 
@@ -198,7 +198,7 @@ For complete details, always read the primary sources listed above.
 ### Before Refactoring: usgs-integrator (❌ Bloated)
 
 ```
-.claude/subagents/usgs-integrator/
+.claude/agents/usgs-integrator/
 ├── SUBAGENT.md (330 lines)
 └── reference/
     ├── end-to-end.md (423 lines) - DUPLICATES usgs/CLAUDE.md
@@ -211,7 +211,7 @@ Total: 1,650 lines (84.5% duplication)
 ### After Refactoring: usgs-integrator (✅ Lightweight)
 
 ```
-.claude/subagents/usgs-integrator/
+.claude/agents/usgs-integrator/
 └── SUBAGENT.md (255 lines - navigator to usgs/CLAUDE.md)
 
 Total: 255 lines (84.5% reduction, 0% duplication)
@@ -226,7 +226,7 @@ Total: 255 lines (84.5% reduction, 0% duplication)
 
 ## Refactoring Checklist
 
-When creating or updating subagents/skills:
+When creating or updating agents/skills:
 
 ### Planning
 - [ ] Identify all primary sources (CLAUDE.md, AGENTS.md, notebooks, code)
@@ -279,7 +279,7 @@ When creating or updating subagents/skills:
 ❌ **Wrong**: Creating comprehensive API documentation in subagent reference/ folder
 
 ```
-.claude/subagents/hdf-analyst/reference/api-patterns.md (389 lines)
+.claude/agents/hdf-analyst/reference/api-patterns.md (389 lines)
 - Complete API for 19 HDF classes
 - Method signatures, parameters, return types
 - Examples for each method
@@ -288,7 +288,7 @@ When creating or updating subagents/skills:
 ✅ **Right**: Point to authoritative sources
 
 ```
-.claude/subagents/hdf-analyst/SUBAGENT.md (278 lines)
+.claude/agents/hdf-analyst/SUBAGENT.md (278 lines)
 Primary Sources:
 - ras_commander/hdf/AGENTS.md (215 lines) - Complete class reference
 - Grep "def " ras_commander/hdf/Hdf*.py - Method signatures
@@ -355,8 +355,8 @@ Working Examples:
 
 ❌ **With duplicated content** (old approach):
 1. Update `ras_commander/usgs/CLAUDE.md`
-2. Update `.claude/subagents/usgs-integrator/SUBAGENT.md`
-3. Update `.claude/subagents/usgs-integrator/reference/end-to-end.md`
+2. Update `.claude/agents/usgs-integrator/SUBAGENT.md`
+3. Update `.claude/agents/usgs-integrator/reference/end-to-end.md`
 4. Update `.claude/skills/integrating-usgs-gauges/SKILL.md`
 5. Update `.claude/skills/integrating-usgs-gauges/reference/workflow.md`
 6. Risk: Miss one location → version drift

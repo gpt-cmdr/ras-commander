@@ -4,7 +4,7 @@
 
 ### Before
 ```
-.claude/subagents/usgs-integrator/
+.claude/agents/usgs-integrator/
 ├── SUBAGENT.md (331 lines)
 └── reference/
     ├── end-to-end.md (424 lines)
@@ -16,7 +16,7 @@ Total: 1,654 lines
 
 ### After
 ```
-.claude/subagents/usgs-integrator/
+.claude/agents/usgs-integrator/
 ├── SUBAGENT.md (255 lines)
 ├── REFACTOR_SUMMARY.md (summary)
 └── COMPARISON.md (this file)
@@ -188,4 +188,4 @@ Workflow Change → Update usgs/CLAUDE.md only
 6. Verified all workflows exist in primary source
 7. Verified all demonstrations exist in example notebooks
 
-**Pattern is repeatable for other subagents** (precipitation-integrator, results-analyzer, etc.)
+**Pattern is repeatable for other agents** (precipitation-integrator, results-analyzer, etc.)

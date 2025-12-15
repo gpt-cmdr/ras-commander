@@ -20,7 +20,7 @@
 1. ✅ Created .claude/ directory structure
    - .claude/rules/ (python/, hec-ras/, testing/, documentation/)
    - .claude/skills/ (library workflows)
-   - .claude/subagents/ (specialist definitions)
+   - .claude/agents/ (specialist definitions)
 
 2. ✅ Renamed ras_agents → ras_skills
    - Updated all documentation references
@@ -272,7 +272,7 @@ For existing AGENTS.md → CLAUDE.md:
 
 ### 4.1: Define Specialist Subagents
 
-Create 7 subagent definitions in .claude/subagents/:
+Create 7 subagent definitions in .claude/agents/:
 
 1. **hdf-analyst** - HEC-RAS HDF file operations
 2. **geometry-parser** - Geometry file parsing and modification
@@ -367,7 +367,7 @@ test_cases = [
 
 ### 5.5: Integration Testing
 
-1. Complete end-to-end workflow with subagents
+1. Complete end-to-end workflow with agents
 2. Skill discovery and activation
 3. Context inheritance verification
 4. Performance profiling (context loading time)
@@ -407,7 +407,7 @@ Git branch isolation provides safety net.
 
 **Next Week**:
 - Finish Phase 3
-- Start Phase 4 (subagents & skills)
+- Start Phase 4 (agents & skills)
 
 ---
 

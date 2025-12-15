@@ -1,7 +1,7 @@
 # Research Synthesis - Hierarchical Knowledge Approach
 
 **Date**: 2025-12-11
-**Research Agents**: 5 specialized subagents
+**Research Agents**: 5 specialized agents
 **Total Duration**: 48 minutes
 **Total Output**: ~4,400 lines (~23,500 tokens)
 
@@ -104,7 +104,7 @@ Research Claude Code's hierarchical memory features and loading mechanisms.
 
 ### Impact
 
-Revealed Claude's automatic context inheritance mechanism - subagents get full context based on working directory without manual effort.
+Revealed Claude's automatic context inheritance mechanism - agents get full context based on working directory without manual effort.
 
 ## Agent 3: Skills Framework Agent (afc529a)
 
@@ -317,7 +317,7 @@ All 5 agents independently converged on these priorities:
 6. feature_dev_notes/ (research navigation)
 
 **Why Important**:
-- Provides tactical context for subagents
+- Provides tactical context for agents
 - Enables automatic context inheritance
 - Improves developer experience
 
@@ -408,7 +408,7 @@ All 5 agents converged on the same recommendations with complementary perspectiv
 **This Month**:
 - Complete Phase 2: Content migration (root → rules)
 - Complete Phase 3: Create missing CLAUDE.md files
-- Begin Phase 4: Define subagents and skills
+- Begin Phase 4: Define agents and skills
 
 **Next Quarter**:
 - Complete Phase 4: Full subagent/skill suite
@@ -419,6 +419,6 @@ All 5 agents converged on the same recommendations with complementary perspectiv
 
 **Status**: Research phase COMPLETE ✅
 **Readiness**: Implementation Phase 2 ready to begin
-**Documentation**: Consolidated in .claude/subagents/hierarchical-knowledge-curator/
+**Documentation**: Consolidated in .claude/agents/hierarchical-knowledge-curator/
 
 **Full Details**: See `feature_dev_notes/Hierarchical_Knowledge_Approach/AGENT_RESEARCH_INDEX.md`

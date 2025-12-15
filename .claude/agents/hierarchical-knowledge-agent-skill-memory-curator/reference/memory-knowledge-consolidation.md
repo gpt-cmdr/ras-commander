@@ -55,7 +55,7 @@ These are **orthogonal, not redundant**. The consolidation focuses on:
 - CLAUDE.md (root → subpackage hierarchy)
 - .claude/rules/ (topic-specific guidance)
 - .claude/skills/ (library workflows)
-- .claude/subagents/ (specialist definitions)
+- .claude/agents/ (specialist definitions)
 
 ### Agent Memory (agent_tasks/ Ecosystem)
 
@@ -326,7 +326,7 @@ Is this feature-specific research?
 └─ NO ↓
 
 Is this permanent knowledge (HOW to code)?
-├─ YES → .claude/ (CLAUDE.md, rules/, skills/, subagents/)
+├─ YES → .claude/ (CLAUDE.md, rules/, skills/, agents/)
 └─ NO ↓
 
 Is this production-ready skill?
@@ -335,7 +335,7 @@ Is this production-ready skill?
 
 ### Action 5: Add Agent Memory Reference to Curator
 
-**New File**: `.claude/subagents/hierarchical-knowledge-curator/reference/agent-memory-system.md`
+**New File**: `.claude/agents/hierarchical-knowledge-curator/reference/agent-memory-system.md`
 
 **Content**: Complete documentation of agent_tasks/ memory system:
 - How .agent/ files work (STATE, BACKLOG, PROGRESS, LEARNINGS, CONSTITUTION)
@@ -380,12 +380,12 @@ Use content from Action 3 above.
 
 ```bash
 # Rename subagent file
-mv .claude/subagents/hierarchical-knowledge-curator.md \
-   .claude/subagents/hierarchical-knowledge-agent-skill-memory-curator.md
+mv .claude/agents/hierarchical-knowledge-curator.md \
+   .claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md
 
 # Rename reference directory
-mv .claude/subagents/hierarchical-knowledge-curator \
-   .claude/subagents/hierarchical-knowledge-agent-skill-memory-curator
+mv .claude/agents/hierarchical-knowledge-curator \
+   .claude/agents/hierarchical-knowledge-agent-skill-memory-curator
 ```
 
 Update YAML frontmatter name field.

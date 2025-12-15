@@ -103,11 +103,11 @@ When activated, the subagent should:
 
 ## See Also
 
-- **Main subagent**: `.claude/subagents/claude-code-guide.md`
+- **Main subagent**: `.claude/agents/claude-code-guide.md`
 - **Official docs**: https://code.claude.com/docs/en/
 - **Skills blog**: https://claude.com/blog/how-to-create-skills-key-steps-limitations-and-examples
 - **Skills repo**: https://github.com/anthropics/claude-skills
-- **Hierarchical knowledge curator**: `.claude/subagents/hierarchical-knowledge-agent-skill-memory-curator.md`
+- **Hierarchical knowledge curator**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md`
 
 ---
 

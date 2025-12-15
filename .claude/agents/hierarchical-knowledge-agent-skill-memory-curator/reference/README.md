@@ -33,7 +33,7 @@ This directory contains detailed reference documentation for the Hierarchical Kn
 - Phase 1: Foundation ✅ COMPLETE
 - Phase 2: Content migration (root → rules) 🔄 IN PROGRESS
 - Phase 3: Create missing CLAUDE.md files
-- Phase 4: Define subagents and skills
+- Phase 4: Define agents and skills
 - Phase 5: Testing and validation
 
 **governance-rules.md** - Decision framework for knowledge organization
@@ -78,7 +78,7 @@ When working on knowledge organization:
 1. **Before creating new documentation**: Read governance-rules.md
 2. **When refactoring CLAUDE.md**: Read implementation-phases.md
 3. **When creating skills**: Read claude_skills_framework.md
-4. **When defining subagents**: Read research-synthesis.md
+4. **When defining agents**: Read research-synthesis.md
 5. **For health checks**: Read current_state_analysis.md
 
 ## Progressive Disclosure Benefits
