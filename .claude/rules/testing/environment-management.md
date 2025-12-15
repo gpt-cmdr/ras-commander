@@ -11,6 +11,23 @@ ras-commander uses specific environment management approaches for different deve
 - **Agent scripts and tools**: Use `uv` and `python`
 - **Jupyter notebook testing**: Use dedicated Anaconda environments
 
+## Key Decision: No Editable Install for Development
+
+**CRITICAL**: The `rascmdr_local` environment does NOT use `pip install -e .`
+
+Instead, developers use a **toggle cell** in Jupyter notebooks that manipulates `sys.path` to load local source code. This approach:
+- Guarantees local source is always loaded (even if pip package exists)
+- Is simple to understand and explain
+- Works reliably across all environments
+- Can be toggled with a single variable
+
+### Why sys.path.insert(0, ...) Works
+
+Python searches `sys.path` in order (index 0 first). By inserting the local repo path at position 0:
+1. Python finds `ras_commander/` in the repo first
+2. The pip-installed package (if any) is never reached
+3. 100% guaranteed local source loading
+
 ## Agent Scripts and Tools
 
 ### Use uv for Development
@@ -27,9 +44,8 @@ uv venv .venv
 # Linux/Mac:
 source .venv/bin/activate
 
-# Install dependencies
-uv pip install -e .
-uv pip install jupyter pytest
+# Install dependencies ONLY (NOT ras-commander itself)
+uv pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona pytest
 ```
 
 **Why uv**:
@@ -50,8 +66,8 @@ uv pip install jupyter pytest
 
 ras-commander uses **two dedicated Anaconda environments** for notebook testing:
 
-1. **`rascmdr_local`** - Local development version
-2. **`rascmdr_pip`** - Published pip package version
+1. **`rascmdr_local`** - Dependencies only (uses toggle cell to load local source)
+2. **`RasCommander`** - Published pip package version (standard user environment)
 
 ### Environment 1: rascmdr_local (Local Development)
 
@@ -67,13 +83,13 @@ ras-commander uses **two dedicated Anaconda environments** for notebook testing:
 **Setup**:
 ```bash
 # Create Anaconda environment
-conda create -n rascmdr_local python=3.10
+conda create -n rascmdr_local python=3.13
 
 # Activate environment
 conda activate rascmdr_local
 
-# Install ras-commander in editable mode (uses local code)
-pip install -e .
+# Install DEPENDENCIES ONLY - NOT ras-commander itself
+pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona
 
 # Install notebook dependencies
 pip install jupyter notebook ipykernel
@@ -82,23 +98,49 @@ pip install jupyter notebook ipykernel
 python -m ipykernel install --user --name rascmdr_local --display-name "Python (rascmdr_local)"
 ```
 
+**NEVER run `pip install -e .` or `pip install ras-commander` in rascmdr_local!**
+
 **Usage in Jupyter**:
 1. Start Jupyter: `jupyter notebook`
 2. Open notebook in `examples/`
 3. Select kernel: **Kernel → Change Kernel → Python (rascmdr_local)**
-4. Run notebook cells - uses local development code
+4. Ensure toggle cell has `USE_LOCAL_SOURCE = True`
+5. Run toggle cell first, then rest of notebook
+
+**Standard Toggle Cell** (included in all example notebooks):
+```python
+# =============================================================================
+# DEVELOPMENT MODE TOGGLE
+# =============================================================================
+USE_LOCAL_SOURCE = True  # <-- TOGGLE THIS
+
+if USE_LOCAL_SOURCE:
+    import sys
+    from pathlib import Path
+    local_path = str(Path.cwd().parent)
+    if local_path not in sys.path:
+        sys.path.insert(0, local_path)
+    print(f"📁 LOCAL SOURCE MODE: Loading from {local_path}/ras_commander")
+else:
+    print("📦 PIP PACKAGE MODE: Loading installed ras-commander")
+
+from ras_commander import *
+import ras_commander
+print(f"✓ Loaded: {ras_commander.__file__}")
+```
 
 **Validation**:
 ```python
 # In notebook cell, verify using local version
 import ras_commander
 print(ras_commander.__file__)
-# Should show: /path/to/ras-commander/ras_commander/__init__.py
+# Should show: C:\GH\ras-commander\ras_commander\__init__.py (or similar local path)
+# Should NOT contain 'site-packages'
 ```
 
-### Environment 2: rascmdr_pip (Published Package)
+### Environment 2: RasCommander (Published Package)
 
-**Purpose**: Test notebooks with published pip package
+**Purpose**: Test notebooks with published pip package (standard user environment)
 
 **When to use**:
 - ✅ Testing as end-users will experience
@@ -110,10 +152,10 @@ print(ras_commander.__file__)
 **Setup**:
 ```bash
 # Create Anaconda environment
-conda create -n rascmdr_pip python=3.10
+conda create -n RasCommander python=3.13
 
 # Activate environment
-conda activate rascmdr_pip
+conda activate RasCommander
 
 # Install published package from PyPI
 pip install ras-commander
@@ -122,36 +164,37 @@ pip install ras-commander
 pip install jupyter notebook ipykernel
 
 # Register kernel for Jupyter
-python -m ipykernel install --user --name rascmdr_pip --display-name "Python (rascmdr_pip)"
+python -m ipykernel install --user --name RasCommander --display-name "Python (RasCommander)"
 ```
 
 **Usage in Jupyter**:
 1. Start Jupyter: `jupyter notebook`
 2. Open notebook in `examples/`
-3. Select kernel: **Kernel → Change Kernel → Python (rascmdr_pip)**
-4. Run notebook cells - uses published package
+3. Select kernel: **Kernel → Change Kernel → Python (RasCommander)**
+4. Set toggle cell to `USE_LOCAL_SOURCE = False`
+5. Run notebook cells - uses published package
 
 **Validation**:
 ```python
 # In notebook cell, verify using pip package
 import ras_commander
 print(ras_commander.__file__)
-# Should show: /path/to/anaconda/envs/rascmdr_pip/lib/python3.10/site-packages/ras_commander/__init__.py
+# Should show: .../site-packages/ras_commander/__init__.py
 ```
 
 ## Environment Selection Guide
 
 ### Decision Matrix
 
-| Scenario | Environment | Rationale |
-|----------|-------------|-----------|
-| Testing code changes | `rascmdr_local` | See immediate impact of changes |
-| Validating bug fix | `rascmdr_local` | Test fix before release |
-| Running example notebooks | `rascmdr_pip` | Matches user experience |
-| Updating documentation | `rascmdr_pip` | Ensure examples work for users |
-| Debugging user issue | `rascmdr_pip` | Reproduce user's environment |
-| Pre-release testing | Both | Verify local changes + published package |
-| Agent scripts/tools | `uv venv` | Fast, modern tooling |
+| Scenario | Environment | Toggle Setting | Rationale |
+|----------|-------------|----------------|-----------|
+| Testing code changes | `rascmdr_local` | `True` | See immediate impact of changes |
+| Validating bug fix | `rascmdr_local` | `True` | Test fix before release |
+| Running example notebooks (user) | `RasCommander` | `False` | Matches user experience |
+| Updating documentation | `RasCommander` | `False` | Ensure examples work for users |
+| Debugging user issue | `RasCommander` | `False` | Reproduce user's environment |
+| Pre-release testing | Both | Both | Verify local changes + published package |
+| Agent scripts/tools | `uv venv` | N/A | Fast, modern tooling |
 
 ## Workflow Examples
 
@@ -167,19 +210,19 @@ vim ras_commander/hdf/results.py
 conda activate rascmdr_local
 jupyter notebook examples/11_2d_hdf_data_extraction.ipynb
 
-# 3. Run notebook with kernel: Python (rascmdr_local)
-# Verify new method works
+# 3. In notebook: USE_LOCAL_SOURCE = True (default for devs)
+# Run toggle cell, then test cells - uses LOCAL code
 
 # 4. Commit and release changes
 git commit -am "Add new HDF extraction method"
 
 # 5. After PyPI release, test with pip environment
-conda activate rascmdr_pip
+conda activate RasCommander
 pip install --upgrade ras-commander
 jupyter notebook examples/11_2d_hdf_data_extraction.ipynb
 
-# 6. Run notebook with kernel: Python (rascmdr_pip)
-# Verify published package works
+# 6. In notebook: USE_LOCAL_SOURCE = False
+# Run notebook - verify published package works
 ```
 
 ### Example 2: Validating Example Notebooks
@@ -188,7 +231,7 @@ jupyter notebook examples/11_2d_hdf_data_extraction.ipynb
 
 ```bash
 # Use pip environment to match user experience
-conda activate rascmdr_pip
+conda activate RasCommander
 
 # Ensure latest published version
 pip install --upgrade ras-commander
@@ -198,9 +241,10 @@ cd examples
 jupyter notebook
 
 # For each notebook:
-# 1. Select kernel: Python (rascmdr_pip)
-# 2. Restart kernel and run all cells
-# 3. Verify no errors
+# 1. Select kernel: Python (RasCommander)
+# 2. Set USE_LOCAL_SOURCE = False in toggle cell
+# 3. Restart kernel and run all cells
+# 4. Verify no errors
 ```
 
 ### Example 3: Debugging User-Reported Issue
@@ -209,7 +253,7 @@ jupyter notebook
 
 ```bash
 # Reproduce in pip environment
-conda activate rascmdr_pip
+conda activate RasCommander
 
 # Install exact version user reported
 pip install ras-commander==1.2.3
@@ -217,7 +261,7 @@ pip install ras-commander==1.2.3
 # Run problematic notebook
 jupyter notebook examples/18_breach_results_extraction.ipynb
 
-# Select kernel: Python (rascmdr_pip)
+# Set USE_LOCAL_SOURCE = False, run notebook
 # Reproduce error
 
 # Switch to local environment to test fix
@@ -226,32 +270,31 @@ conda activate rascmdr_local
 # Make fix in code
 vim ras_commander/hdf/breach.py
 
-# Test fix
+# Test fix with local source
 jupyter notebook examples/18_breach_results_extraction.ipynb
-# Select kernel: Python (rascmdr_local)
-# Verify fix works
+# Set USE_LOCAL_SOURCE = True
+# Run notebook - verify fix works
 ```
 
 ## Environment Maintenance
 
 ### Updating rascmdr_local
 
-**When code changes**:
+**When dependencies change**:
 ```bash
 conda activate rascmdr_local
 
-# Editable install picks up changes automatically
-# No reinstall needed for most changes
-
-# For dependency changes (setup.py):
-pip install -e .
+# Reinstall dependencies
+pip install --upgrade h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona
 ```
 
-### Updating rascmdr_pip
+**When code changes**: Just restart the Jupyter kernel - the toggle cell reloads local source automatically.
+
+### Updating RasCommander
 
 **When new version published**:
 ```bash
-conda activate rascmdr_pip
+conda activate RasCommander
 
 # Upgrade to latest published version
 pip install --upgrade ras-commander
@@ -268,7 +311,7 @@ pip install ras-commander==1.2.3
 # Delete old environment
 conda env remove -n rascmdr_local
 # or
-conda env remove -n rascmdr_pip
+conda env remove -n RasCommander
 
 # Recreate following setup instructions above
 ```
@@ -277,7 +320,7 @@ conda env remove -n rascmdr_pip
 
 ### GitHub Actions Testing
 
-**Use both environments in CI pipeline**:
+**Use both approaches in CI pipeline**:
 
 ```yaml
 name: Test Notebooks
@@ -293,15 +336,16 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          python-version: '3.13'
 
-      - name: Install local version
-        run: pip install -e .
+      - name: Install dependencies
+        run: pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona pytest pytest-nbmake
 
       - name: Test notebooks with local version
         run: pytest --nbmake examples/*.ipynb
+        # Toggle cell defaults to USE_LOCAL_SOURCE = True
 
-  test-pip:
+  test-RasCommander:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -309,13 +353,14 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          python-version: '3.13'
 
       - name: Install published package
-        run: pip install ras-commander
+        run: pip install ras-commander pytest pytest-nbmake
 
-      - name: Test notebooks with pip version
+      - name: Test notebooks with RasCommander package
         run: pytest --nbmake examples/*.ipynb
+        # Note: Notebooks should have USE_LOCAL_SOURCE = False for pip testing
 ```
 
 ## Troubleshooting
@@ -332,7 +377,7 @@ print(sys.executable)
 # Should show path to correct environment
 
 # If wrong, select correct kernel:
-# Kernel → Change Kernel → Python (rascmdr_local or rascmdr_pip)
+# Kernel → Change Kernel → Python (rascmdr_local or RasCommander)
 ```
 
 ### Import Errors in Local Environment
@@ -340,16 +385,16 @@ print(sys.executable)
 **Problem**: `ModuleNotFoundError` in rascmdr_local
 
 **Solution**:
-```bash
-# Reinstall in editable mode
-conda activate rascmdr_local
-pip install -e .
+1. Make sure toggle cell has `USE_LOCAL_SOURCE = True`
+2. Run the toggle cell before any imports
+3. Verify `Path.cwd().parent` points to repo root:
+   ```python
+   from pathlib import Path
+   print(Path.cwd())  # Should be .../examples
+   print(Path.cwd().parent)  # Should be repo root
+   ```
 
-# Verify installation
-python -c "import ras_commander; print(ras_commander.__file__)"
-```
-
-### Stale Code in Local Environment
+### Local Changes Not Showing
 
 **Problem**: Changes to code not reflected in notebook
 
@@ -358,30 +403,44 @@ python -c "import ras_commander; print(ras_commander.__file__)"
 # In notebook, restart kernel:
 # Kernel → Restart
 
-# For persistent issues, reload module:
-import importlib
+# Then re-run the toggle cell (it will reload local source)
+```
+
+### Wrong Source Loading
+
+**Problem**: Pip package loading instead of local source
+
+**Solution**:
+```python
+# After imports, check where it loaded from:
 import ras_commander
-importlib.reload(ras_commander)
+print(ras_commander.__file__)
+
+# If shows 'site-packages', your toggle cell isn't working
+# Verify USE_LOCAL_SOURCE = True and run toggle cell FIRST
 ```
 
 ## Best Practices
 
 ### ✅ DO
 
-- Use `rascmdr_local` when making code changes
-- Use `rascmdr_pip` for user-facing documentation
+- Use `rascmdr_local` with `USE_LOCAL_SOURCE = True` when making code changes
+- Use `RasCommander` with `USE_LOCAL_SOURCE = False` for user-facing documentation
 - Test with both environments before releases
 - Use `uv` for agent scripts and tools
-- Keep environments updated
+- Keep dependencies updated
 - Document which environment was used for testing
+- Always run toggle cell first in notebooks
 
 ### ❌ DON'T
 
+- Install ras-commander via pip in rascmdr_local environment
+- Use `pip install -e .` in rascmdr_local (we use toggle cell instead)
 - Mix development code with pip package testing
 - Use base conda environment for testing
 - Forget to select correct kernel in Jupyter
-- Skip testing with pip environment before release
-- Use `rascmdr_pip` when debugging library code
+- Skip testing with RasCommander environment before release
+- Use `RasCommander` when debugging library code
 
 ## Quick Reference
 
@@ -389,25 +448,26 @@ importlib.reload(ras_commander)
 
 ```bash
 # Create environments (one-time setup)
-conda create -n rascmdr_local python=3.10
-conda create -n rascmdr_pip python=3.10
+conda create -n rascmdr_local python=3.13
+conda create -n RasCommander python=3.13
 
 # Activate environments
 conda activate rascmdr_local  # For development
-conda activate rascmdr_pip    # For pip testing
+conda activate RasCommander   # For pip testing
 
 # Install in each environment
-# rascmdr_local:
-pip install -e .
+# rascmdr_local (dependencies only):
+pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona jupyter ipykernel
 
-# rascmdr_pip:
-pip install ras-commander
+# RasCommander (pip package):
+pip install ras-commander jupyter ipykernel
 
 # List environments
 conda env list
 
 # Remove environment
 conda env remove -n rascmdr_local
+conda env remove -n RasCommander
 ```
 
 ### Jupyter Kernel Selection
@@ -428,8 +488,9 @@ jupyter kernelspec uninstall rascmdr_local
 - **Import Patterns**: `.claude/rules/python/import-patterns.md` - Flexible imports for notebooks
 - **Testing Approach**: `.claude/rules/testing/tdd-approach.md` - Testing with example projects
 - **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md` - Notebook best practices
-- **Root CLAUDE.md**: Development Environment section
+- **Environment Manager Subagent**: `.claude/subagents/python-environment-manager.md` - Automated setup
+- **Example Toggle Cell**: `examples/00_Using_RasExamples.ipynb`
 
 ---
 
-**Key Takeaway**: Use `rascmdr_local` (editable install) when making code changes, `rascmdr_pip` (published package) when testing user experience, and `uv` for agent scripts and tools.
+**Key Takeaway**: Use `rascmdr_local` (dependencies only + toggle cell) when making code changes, `RasCommander` (published package) when testing user experience, and `uv` for agent scripts and tools. Never use `pip install -e .` - the toggle cell with `sys.path.insert(0, ...)` guarantees local source loading.
