@@ -302,17 +302,21 @@ class UsgsGaugeSpatial:
             # Normalize column names to expected format (handle API version differences)
             # Map new OGC API names to legacy names expected by downstream code
             column_mapping = {
-                # Site identification
+                # Site identification (new OGC API format)
+                'monitoring_location_number': 'site_no',
+                'monitoring_location_id': 'site_no',
                 'id': 'site_no',
                 'monitoringLocationIdentifier': 'site_no',
                 'identifier': 'site_no',
                 'siteNumber': 'site_no',
                 # Station name
+                'monitoring_location_name': 'station_nm',
                 'name': 'station_nm',
                 'monitoringLocationName': 'station_nm', 
                 'stationName': 'station_nm',
                 'siteName': 'station_nm',
-                # Site type
+                # Site type (new API already uses site_type_code)
+                'site_type': 'site_type_code',
                 'monitoringLocationType': 'site_type_code',
                 'siteType': 'site_type_code',
                 'type': 'site_type_code',
@@ -320,8 +324,10 @@ class UsgsGaugeSpatial:
                 'activityStatus': 'site_status',
                 'status': 'site_status',
                 # Drainage area
+                'drainage_area': 'drain_area_va',
                 'drainageArea': 'drain_area_va',
-                'contributingDrainageArea': 'drain_area_va',
+                'contributing_drainage_area': 'contrib_drain_area_va',
+                'contributingDrainageArea': 'contrib_drain_area_va',
                 # Coordinates (already handled above, but add for completeness)
                 'latitude': 'dec_lat_va',
                 'longitude': 'dec_long_va',

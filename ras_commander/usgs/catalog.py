@@ -224,9 +224,26 @@ def generate_gauge_catalog(
         gauge_iterator = gauges_df.iterrows()
         logger.info("Progress: tqdm not installed, progress bars disabled")
 
+    # Determine site_no column name (handle API version differences)
+    site_id_col = None
+    for col_name in ['site_no', 'monitoring_location_number', 'monitoring_location_id', 
+                     'id', 'monitoringLocationIdentifier', 'identifier', 'siteNumber']:
+        if col_name in gauges_df.columns:
+            site_id_col = col_name
+            logger.debug(f"Using '{col_name}' column for site identification")
+            break
+    
+    if site_id_col is None:
+        logger.error(f"Cannot find site ID column. Available columns: {list(gauges_df.columns)}")
+        raise ValueError(f"Cannot find site ID column in gauge data. Available: {list(gauges_df.columns)}")
+
     # Step 2-6: Process each gauge
     for idx, gauge in gauge_iterator:
-        site_id = gauge['site_no']
+        # Get site_id from the detected column and clean it
+        site_id = str(gauge[site_id_col])
+        # Remove common prefixes like "USGS-"
+        if site_id.startswith('USGS-'):
+            site_id = site_id[5:]
 
         try:
             # Create gauge folder
@@ -238,13 +255,29 @@ def generate_gauge_catalog(
                 rate_limiter.wait_if_needed()
 
             # Get metadata
-            logger.debug(f"Processing gauge {site_id}: Getting metadata...")
-            metadata = RasUsgsCore.get_gauge_metadata(site_id, ras_object=ras_object)
+            logger.info(f"Processing gauge {site_id}: Getting metadata...")
+            metadata = None
+            try:
+                metadata = RasUsgsCore.get_gauge_metadata(site_id)
+            except Exception as metadata_err:
+                logger.warning(f"Gauge {site_id}: Metadata retrieval failed: {metadata_err}")
 
+            # Fallback: use data from gauge DataFrame if metadata retrieval failed
             if metadata is None:
-                logger.warning(f"Gauge {site_id}: Metadata not available, skipping")
-                gauges_failed += 1
-                continue
+                logger.info(f"Gauge {site_id}: Using data from spatial query as fallback")
+                # Build metadata from available gauge DataFrame columns
+                metadata = {
+                    'site_id': site_id,
+                    'station_name': str(gauge.get('station_nm', gauge.get('monitoring_location_name', 'Unknown'))),
+                    'latitude': float(gauge.get('dec_lat_va', gauge.get('_lat', 0.0))),
+                    'longitude': float(gauge.get('dec_long_va', gauge.get('_lon', 0.0))),
+                    'drainage_area_sqmi': float(gauge.get('drain_area_va', gauge.get('drainage_area', 0.0))) if pd.notna(gauge.get('drain_area_va', gauge.get('drainage_area'))) else None,
+                    'gage_datum_ft': float(gauge.get('altitude', 0.0)) if pd.notna(gauge.get('altitude')) else None,
+                    'state': str(gauge.get('state_cd', gauge.get('state_code', gauge.get('state_name', '')))),
+                    'county': str(gauge.get('county_nm', gauge.get('county_name', ''))),
+                    'huc_cd': str(gauge.get('huc_cd', gauge.get('hydrologic_unit_code', ''))),
+                    'site_type': str(gauge.get('site_tp_cd', gauge.get('site_type_code', gauge.get('site_type', '')))),
+                }
 
             # Save metadata.json
             metadata_file = gauge_folder / "metadata.json"
@@ -262,11 +295,16 @@ def generate_gauge_catalog(
                     if rate_limiter:
                         rate_limiter.wait_if_needed()
 
+                    # Calculate time range for data check
+                    end_datetime = datetime.now()
+                    start_datetime = end_datetime - timedelta(days=365 * historical_years)
+                    
                     # Check data availability
                     availability = RasUsgsCore.check_data_availability(
                         site_id,
-                        parameter=param,
-                        ras_object=ras_object
+                        start_datetime=start_datetime,
+                        end_datetime=end_datetime,
+                        parameter=param
                     )
 
                     if not availability['available']:
@@ -283,9 +321,6 @@ def generate_gauge_catalog(
 
                     # Download historical data if requested
                     if include_historical:
-                        end_date = datetime.now()
-                        start_date = end_date - timedelta(days=365 * historical_years)
-
                         logger.debug(f"Gauge {site_id}: Downloading {historical_years} years of {param} data...")
 
                         # Rate limit: historical data retrieval
@@ -295,16 +330,14 @@ def generate_gauge_catalog(
                         if param == 'flow':
                             data_df = RasUsgsCore.retrieve_flow_data(
                                 site_id,
-                                start_date=start_date,
-                                end_date=end_date,
-                                ras_object=ras_object
+                                start_datetime=start_datetime,
+                                end_datetime=end_datetime
                             )
                         elif param == 'stage':
                             data_df = RasUsgsCore.retrieve_stage_data(
                                 site_id,
-                                start_date=start_date,
-                                end_date=end_date,
-                                ras_object=ras_object
+                                start_datetime=start_datetime,
+                                end_datetime=end_datetime
                             )
                         else:
                             logger.warning(f"Gauge {site_id}: Unknown parameter '{param}', skipping")
@@ -495,7 +528,8 @@ def load_gauge_catalog(ras_object: RasPrj = None, catalog_folder: Optional[Union
             "Generate catalog first with: generate_gauge_catalog()"
         )
 
-    catalog_df = pd.read_csv(catalog_file)
+    # Ensure site_id is read as string to preserve leading zeros (e.g., '01545680')
+    catalog_df = pd.read_csv(catalog_file, dtype={'site_id': str})
     logger.info(f"Loaded gauge catalog: {len(catalog_df)} gauges from {catalog_file}")
 
     return catalog_df
@@ -745,22 +779,20 @@ def update_gauge_catalog(
                         rate_limiter.wait_if_needed()
 
                     # Get latest data (last 30 days)
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=30)
+                    end_datetime = datetime.now()
+                    start_datetime = end_datetime - timedelta(days=30)
 
                     if param == 'flow':
                         new_data = RasUsgsCore.retrieve_flow_data(
                             site_id,
-                            start_date=start_date,
-                            end_date=end_date,
-                            ras_object=ras_object
+                            start_datetime=start_datetime,
+                            end_datetime=end_datetime
                         )
                     elif param == 'stage':
                         new_data = RasUsgsCore.retrieve_stage_data(
                             site_id,
-                            start_date=start_date,
-                            end_date=end_date,
-                            ras_object=ras_object
+                            start_datetime=start_datetime,
+                            end_datetime=end_datetime
                         )
                     else:
                         continue
@@ -812,26 +844,43 @@ def update_gauge_catalog(
 # Internal Helper Functions
 # ============================================================================
 
+def _convert_to_native(obj):
+    """Convert numpy types to native Python types for JSON serialization."""
+    import numpy as np
+    if isinstance(obj, (np.intc, np.intp, np.int8, np.int16, np.int32, np.int64,
+                        np.uint8, np.uint16, np.uint32, np.uint64)):
+        return int(obj)
+    elif isinstance(obj, (np.float16, np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif pd.isna(obj):
+        return None
+    return obj
+
+
 def _save_metadata_json(metadata: Dict, output_file: Path) -> None:
     """Save gauge metadata to JSON file."""
     metadata_dict = {
-        'site_id': metadata.get('site_id'),
-        'station_name': metadata.get('station_name'),
+        'site_id': _convert_to_native(metadata.get('site_id')),
+        'station_name': _convert_to_native(metadata.get('station_name')),
         'location': {
-            'latitude': metadata.get('latitude'),
-            'longitude': metadata.get('longitude'),
-            'state': metadata.get('state'),
-            'county': metadata.get('county'),
-            'huc_cd': metadata.get('huc_cd')
+            'latitude': _convert_to_native(metadata.get('latitude')),
+            'longitude': _convert_to_native(metadata.get('longitude')),
+            'state': _convert_to_native(metadata.get('state')),
+            'county': _convert_to_native(metadata.get('county')),
+            'huc_cd': _convert_to_native(metadata.get('huc_cd'))
         },
-        'drainage_area_sqmi': metadata.get('drainage_area_sqmi'),
-        'gage_datum_ft': metadata.get('gage_datum_ft'),
-        'active': metadata.get('active', True),
+        'drainage_area_sqmi': _convert_to_native(metadata.get('drainage_area_sqmi')),
+        'gage_datum_ft': _convert_to_native(metadata.get('gage_datum_ft')),
+        'active': _convert_to_native(metadata.get('active', True)),
         'available_parameters': metadata.get('available_parameters', []),
         'period_of_record': {
-            'start': metadata.get('begin_date'),
-            'end': metadata.get('end_date'),
-            'years': metadata.get('count_nu')
+            'start': _convert_to_native(metadata.get('begin_date')),
+            'end': _convert_to_native(metadata.get('end_date')),
+            'years': _convert_to_native(metadata.get('count_nu'))
         },
         'last_updated': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
