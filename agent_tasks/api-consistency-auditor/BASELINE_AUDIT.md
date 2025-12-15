@@ -33,28 +33,25 @@ This audit covers recently added or modified files for compliance with the 5 cri
 
 ---
 
-### 2. ras_commander/usgs/rate_limiter.py (448 lines)
+### 2. ras_commander/usgs/rate_limiter.py (450 lines)
 
-**Status**: ⚠️ VIOLATIONS FOUND
+**Status**: ✅ COMPLIANT (Fixed 2025-12-15)
 
 **Classes**:
-- `UsgsRateLimiter` (line 60) - Correctly designed for instantiation (token bucket pattern requires state)
+- `UsgsRateLimiter` (line 62) - Correctly designed for instantiation (token bucket pattern requires state)
 
 **Standalone Functions**:
 1. `retry_with_backoff()` (line 168) - Decorator, doesn't need @log_call
-2. `test_api_key()` (line 254) - ❌ **MISSING @log_call**
-3. `configure_api_key()` (line 349) - ❌ **MISSING @log_call** (deprecated, but still callable)
-4. `check_api_key()` (line 383) - ❌ **MISSING @log_call**
-5. `get_rate_limit_info()` (line 420) - ❌ **MISSING @log_call**
+2. `test_api_key()` (line 257) - ✅ **Has @log_call** (added 2025-12-15)
+3. `configure_api_key()` (line 353) - ✅ **Has @log_call** (added 2025-12-15, deprecated)
+4. `check_api_key()` (line 388) - ✅ **Has @log_call** (added 2025-12-15)
+5. `get_rate_limit_info()` (line 426) - ✅ **Has @log_call** (added 2025-12-15)
 
-**Violations**:
-- **Rule 2 (@log_call)**: 4 functions missing `@log_call` decorator
-  - `test_api_key()` - Should have @log_call (public API function)
-  - `configure_api_key()` - Should have @log_call (deprecated but still public)
-  - `check_api_key()` - Should have @log_call (public API function)
-  - `get_rate_limit_info()` - Should have @log_call (public API function)
+**Changes Made**:
+- Added `from ..Decorators import log_call` import
+- Added `@log_call` decorator to 4 public functions
 
-**Recommendation**: Add `@log_call` decorator to all four functions for consistency and automatic execution tracking.
+**Violations**: None (all fixed in commit 5c43ebe)
 
 ---
 
@@ -105,52 +102,60 @@ This audit covers recently added or modified files for compliance with the 5 cri
 
 ### 6. ras_commander/remote/DockerWorker.py (300+ lines)
 
-**Status**: ⚠️ VIOLATION FOUND
+**Status**: ✅ COMPLIANT (Fixed 2025-12-15)
 
 **Class Type**: `DockerWorker` - Intentional instantiation (dataclass, RasWorker subclass)
 - Correctly designed as a @dataclass for maintaining worker state
 - Exception to static class rule (worker classes need state)
 
 **Standalone Function**:
-- `check_docker_dependencies()` (line 66) - ❌ **MISSING @log_call**
+- `check_docker_dependencies()` (line 67) - ✅ **Has @log_call** (added 2025-12-15)
 
-**Violations**:
-- **Rule 2 (@log_call)**: `check_docker_dependencies()` should have @log_call decorator
+**Changes Made**:
+- Added `@log_call` decorator to `check_docker_dependencies()` function
 
-**Note**: This is a helper function that checks for Docker dependencies. While it's a utility function, it's part of the public module interface and should be logged for consistency.
+**Violations**: None (fixed in commit 5c43ebe)
+
+**Note**: log_call import was already present in file at line 61.
 
 ---
 
 ## Summary of Violations
 
+### Current Status: ✅ 100% COMPLIANT (as of 2025-12-15)
+
+All violations have been fixed in commit 5c43ebe.
+
 ### By Rule
 
 **Rule 1 (Static Classes)**: 0 violations
-**Rule 2 (@log_call)**: 5 violations
-- rate_limiter.py: `test_api_key()`, `configure_api_key()`, `check_api_key()`, `get_rate_limit_info()`
-- DockerWorker.py: `check_docker_dependencies()`
-
-**Rule 3 (@standardize_input)**: 0 violations (not applicable to audited files)
+**Rule 2 (@log_call)**: 0 violations (5 fixed on 2025-12-15)
+**Rule 3 (@standardize_input)**: 0 violations
 **Rule 4 (No Instantiation)**: 0 violations
 **Rule 5 (Backward Compatibility)**: 0 violations
 
 ### By File
 
-| File | Violations | Severity |
-|------|-----------|----------|
+| File | Violations | Status |
+|------|-----------|--------|
 | usgs/spatial.py | 0 | ✅ Compliant |
-| usgs/catalog.py | 0 | ✅ Compliant (fixed in P0.1) |
-| usgs/rate_limiter.py | 4 | ⚠️ Minor (missing @log_call) |
+| usgs/catalog.py | 0 | ✅ Compliant (fixed P0.1) |
+| usgs/rate_limiter.py | 0 | ✅ Compliant (fixed 2025-12-15) |
 | hdf/HdfPipe.py | 0 | ✅ Compliant |
 | hdf/HdfPump.py | 0 | ✅ Compliant |
-| remote/DockerWorker.py | 1 | ⚠️ Minor (missing @log_call) |
+| remote/DockerWorker.py | 0 | ✅ Compliant (fixed 2025-12-15) |
 
-### Severity Classification
+**Overall**: 6/6 files compliant (100%)
 
-**All violations are Minor**:
-- Missing @log_call decorators on standalone utility functions
-- Does not affect functionality, only affects execution logging
-- Easy to fix (add single decorator line)
+### Historical Violations (Now Fixed)
+
+**Previously found** (Phase 0 P0.2):
+- 5 missing @log_call decorators across 2 files
+- All classified as Minor severity
+
+**Fixed** (2025-12-15, commit 5c43ebe):
+- rate_limiter.py: Added @log_call to 4 functions
+- DockerWorker.py: Added @log_call to 1 function
 
 ---
 
@@ -168,49 +173,23 @@ This audit covers recently added or modified files for compliance with the 5 cri
 
 ## Recommendations
 
-### Immediate Fixes (Before Phase 1)
+### Status: ✅ ALL RECOMMENDATIONS COMPLETED
 
-Add `@log_call` decorator to 5 functions:
+All baseline violations have been fixed as of 2025-12-15 (commit 5c43ebe).
 
-**ras_commander/usgs/rate_limiter.py**:
-```python
-@log_call
-def test_api_key(api_key: Optional[str] = None) -> bool:
+**Changes Applied**:
+- Added `@log_call` decorator to 5 functions across 2 files
+- Added missing import: `from ..Decorators import log_call` to rate_limiter.py
+- Total time: ~15 minutes as estimated
 
-@log_call
-def configure_api_key(api_key: str):  # Deprecated but still public
+**Result**: 100% baseline compliance achieved
 
-@log_call
-def check_api_key() -> bool:
+### Next Steps
 
-@log_call
-def get_rate_limit_info() -> dict:
-```
-
-**ras_commander/remote/DockerWorker.py**:
-```python
-@log_call
-def check_docker_dependencies():
-```
-
-**Estimated Time**: 15 minutes (straightforward decorator additions)
-
-### Priority
-
-These violations are **LOW PRIORITY**:
-- Functions work correctly without @log_call
-- Only affects execution logging and audit trails
-- No user-facing functional impact
-- Can be fixed incrementally or batched with other changes
-
-### Defer Decision to User
-
-**Options**:
-1. **Fix now** (15 min) - Clean baseline before Phase 1
-2. **Fix during Phase 1** - Batch with other consistency fixes
-3. **Create GitHub issue** - Track for future release
-
-**Recommendation**: Fix now for clean baseline, but not critical.
+With a clean baseline, the repository is ready for:
+1. ✅ Phase 1 implementation (if approved by user)
+2. ✅ Ongoing development with consistent API patterns
+3. ✅ Automated auditing tools (future work)
 
 ---
 
