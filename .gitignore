@@ -126,3 +126,6 @@ ras_skills/*/working/
 !ras_skills/*/README.md
 !ras_skills/*/STATUS.md
 !ras_skills/*/*.md
+
+# Archive directories
+.old/
