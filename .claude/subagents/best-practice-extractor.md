@@ -107,7 +107,7 @@ CATEGORIES = {
 
 ### Testing Patterns
 - TDD with real projects
-- Environment management (rascmdr_local vs rascmdr_pip)
+- Environment management (rascmdr_local vs RasCommander)
 
 ## Formalization Recommendations
 

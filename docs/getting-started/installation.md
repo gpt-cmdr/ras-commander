@@ -2,33 +2,76 @@
 
 ## Requirements
 
-- **Python**: 3.10 or higher
+- **Python**: 3.10 or higher (3.13 recommended for new installations)
 - **HEC-RAS**: 6.0+ recommended (3.x-5.x supported via RasControl)
 - **Operating System**: Windows (for HEC-RAS execution), Linux/Mac (for HDF analysis only)
 
-## Install from PyPI
+## Prerequisites
 
-The simplest way to install RAS Commander:
+### Install Astral uv (Recommended)
 
+uv is a fast Python package manager required for Claude Code agent operations and recommended for all users:
+
+=== "Windows (PowerShell)"
+    ```powershell
+    irm https://astral.sh/uv/install.ps1 | iex
+    ```
+
+=== "macOS/Linux"
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+Verify installation:
 ```bash
-pip install --upgrade ras-commander
+uv --version  # Should show: uv 0.5.x or later
 ```
 
-!!! tip "Use a Virtual Environment"
-    Always install in a virtual environment to avoid dependency conflicts:
+!!! info "Why uv?"
+    - 10-100x faster than pip for package installation
+    - Required for Claude Code agent scripts and skills
+    - Enables one-off script execution with `uvx`
+    - Better dependency resolution
 
+### Install Anaconda (Recommended for Notebooks)
+
+For Jupyter notebook work, we recommend Anaconda:
+
+- **Download**: [https://www.anaconda.com/download](https://www.anaconda.com/download)
+- **Verify**: `conda --version`
+
+## Standard Environment Names
+
+RAS Commander uses two standard environment names:
+
+| Environment | Purpose | Install Type |
+|-------------|---------|--------------|
+| **`RasCommander`** | Standard user environment | pip package |
+| **`rascmdr_local`** | Development environment | editable install |
+
+## Install from PyPI (Most Users)
+
+**Environment name**: `RasCommander`
+
+**Use this if**: You're using ras-commander, NOT editing its source code.
+
+```bash
+# Create environment
+conda create -n RasCommander python=3.13
+conda activate RasCommander
+
+# Install ras-commander
+pip install ras-commander
+
+# Install Jupyter (for notebooks)
+pip install jupyter ipykernel
+python -m ipykernel install --user --name RasCommander --display-name "Python (RasCommander)"
+```
+
+!!! tip "Quick Install"
+    For a quick install without Jupyter:
     ```bash
-    # Using venv
-    python -m venv ras_env
-    ras_env\Scripts\activate  # Windows
-
-    # Using conda
-    conda create -n ras_env python=3.11
-    conda activate ras_env
-
-    # Using uv (recommended)
-    uv venv .venv
-    .venv\Scripts\activate  # Windows
+    pip install --upgrade ras-commander
     ```
 
 ## Core Dependencies
@@ -78,19 +121,34 @@ pip install ras-commander[remote-all]
 
 ## Development Installation
 
-For contributing or modifying the library:
+**Environment name**: `rascmdr_local`
+
+**Use this if**: You're editing ras-commander source code or contributing to the library.
 
 ```bash
 # Clone the repository
 git clone https://github.com/gpt-cmdr/ras-commander.git
 cd ras-commander
 
+# Create development environment
+conda create -n rascmdr_local python=3.13
+conda activate rascmdr_local
+
 # Install in editable mode
 pip install -e .
 
-# Or with uv
-uv pip install -e .
+# Install Jupyter (for notebooks)
+pip install jupyter ipykernel
+python -m ipykernel install --user --name rascmdr_local --display-name "Python (rascmdr_local)"
 ```
+
+!!! tip "Using uv for Development"
+    For faster package installation during development:
+    ```bash
+    uv venv .venv
+    .venv\Scripts\activate  # Windows
+    uv pip install -e .
+    ```
 
 ### Flexible Import Pattern
 

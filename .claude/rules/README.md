@@ -27,7 +27,7 @@ Domain-specific knowledge:
 Testing approaches:
 - `tdd-approach.md` - Test with real HEC-RAS examples, not mocks
 - `example-projects.md` - RasExamples.extract_project() workflows
-- `environment-management.md` - Virtual environment setup: uv for agents, Anaconda for notebooks (rascmdr_local/rascmdr_pip)
+- `environment-management.md` - Virtual environment setup: uv for agents, Anaconda for notebooks (rascmdr_local/RasCommander)
 
 ### documentation/
 Documentation standards:

@@ -29,6 +29,45 @@ This repository uses the AGENTS.md standard alongside CLAUDE.md:
 
 **Target Users**: Hydraulic engineers, researchers, automation developers
 
+## Platform Context: You Are on a Windows Host
+
+**CRITICAL ENVIRONMENT NOTICE**:
+
+This repository is **almost always run on Windows hosts**. HEC-RAS is a **Windows-based modeling program** that requires Windows for execution.
+
+**Key Implications**:
+- **Default Platform**: Assume Windows unless explicitly stated otherwise
+- **Path Handling**: Use `pathlib.Path` for cross-platform compatibility (supports both Windows `\` and Unix `/` separators)
+- **HEC-RAS Availability**: HEC-RAS.exe only runs on Windows (no macOS/Linux native support)
+- **Script Execution**: Bash scripts use Git Bash or WSL on Windows
+- **File Paths**: Accept both forward slashes `/` and backslashes `\` in paths (Path handles both)
+
+**Cross-Platform Compatibility**:
+- ✅ **DO**: Use `pathlib.Path` for all file operations
+- ✅ **DO**: Accept forward slashes in paths (works on Windows)
+- ✅ **DO**: Test critical functionality on Linux/macOS where possible (library code should work)
+- ❌ **DON'T**: Hardcode backslash separators (use Path composition with `/` operator)
+- ❌ **DON'T**: Assume Unix-only commands (prefer cross-platform tools)
+- ❌ **DON'T**: Require HEC-RAS for library-only functionality (separate concerns)
+
+**Example Cross-Platform Path Handling**:
+```python
+from pathlib import Path
+
+# ✅ CORRECT - works on all platforms
+project_folder = Path("C:/Projects/MyModel")  # Windows with forward slashes
+geom_file = project_folder / "geometry.g01"   # Path composition
+
+# ❌ INCORRECT - Windows-specific
+project_folder = "C:\\Projects\\MyModel"  # Hardcoded backslashes
+geom_file = project_folder + "\\geometry.g01"  # String concatenation
+```
+
+**HEC-RAS Execution Context**:
+- HEC-RAS installation: Typically `C:/Program Files/HEC/HEC-RAS/<version>/Ras.exe`
+- Project files: Can be anywhere on Windows filesystem or network shares (UNC paths)
+- Remote execution: Uses PsExec (Windows → Windows) or Docker (platform-agnostic)
+
 ## LLM Forward Development Philosophy
 
 This repository embodies **LLM Forward** engineering principles:
@@ -147,7 +186,7 @@ See **remote.md** for complete remote configuration requirements.
 
 **Jupyter Notebook Testing**: Use dedicated Anaconda environments:
 - **`rascmdr_local`** - Test with local development version (when making code changes)
-- **`rascmdr_pip`** - Test with published pip package (user experience validation)
+- **`RasCommander`** - Test with published pip package (user experience validation)
 
 See **`.claude/rules/testing/environment-management.md`** for complete setup and usage instructions.
 
@@ -179,18 +218,18 @@ pip install -e .
 **For Jupyter notebooks (using Anaconda)**:
 ```bash
 # Local development testing
-conda create -n rascmdr_local python=3.10
+conda create -n rascmdr_local python=3.13
 conda activate rascmdr_local
 pip install -e .
 pip install jupyter ipykernel
 python -m ipykernel install --user --name rascmdr_local
 
-# Published package testing
-conda create -n rascmdr_pip python=3.10
-conda activate rascmdr_pip
+# Published package testing (standard user environment)
+conda create -n RasCommander python=3.13
+conda activate RasCommander
 pip install ras-commander
 pip install jupyter ipykernel
-python -m ipykernel install --user --name rascmdr_pip
+python -m ipykernel install --user --name RasCommander
 ```
 
 ### Dependencies

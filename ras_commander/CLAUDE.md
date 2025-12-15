@@ -283,9 +283,41 @@ init_ras_project(path)
 
 See `examples/AGENTS.md` for notebook index and `.claude/rules/testing/tdd-approach.md` for testing philosophy.
 
+## Agent Development with Git Worktrees
+
+When agents work on feature development or significant changes, use git worktrees for isolation.
+
+### Commands
+
+- `/agents-start-gitworktree` - Create isolated worktree for agent work
+- `/agents-close-gitworktree` - Close out worktree when work is complete
+
+### Tracking Registry
+
+**File**: `agent_tasks/git_worktree_status.md`
+
+This file tracks all agent worktrees with:
+- Branch names and paths
+- Purpose descriptions (enables recovery after context reset)
+- Creation/closeout timestamps
+- Status (active/merged/abandoned)
+
+### Recovery After Context Reset
+
+If an agent loses context and needs to find their worktree:
+1. Read `agent_tasks/git_worktree_status.md`
+2. Match purpose description to current task
+3. Verify with `git worktree list`
+4. Navigate to worktree and continue work
+
+### Workflow Reference
+
+See `agent_tasks/WORKTREE_WORKFLOW.md` for complete worktree + sideload workflow patterns.
+
 ## See Also
 
 - **Root CLAUDE.md** - Strategic overview and LLM Forward philosophy
 - **Subpackage AGENTS.md/CLAUDE.md** - Specialized guidance for each subpackage
 - **.claude/rules/** - Detailed coding patterns and standards
 - **examples/** - Example notebooks demonstrating complete workflows
+- **agent_tasks/git_worktree_status.md** - Git worktree tracking for agents
