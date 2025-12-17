@@ -308,12 +308,14 @@ RasExamples.extract_project("Muncie", suffix="02")
 1. **Immediate** (notebooks 09, 11, 12): Update path variables to match extraction location OR use simple extraction pattern
 2. **Future**: Update all notebooks to use `suffix` parameter instead of custom `output_path`
 
-### Known Duplicates
-- `21_dss_boundary_extraction.ipynb` and `22_dss_boundary_extraction.ipynb` (investigate)
-- `22_remote_execution_psexec.ipynb` and `23_remote_execution_psexec.ipynb` (investigate)
-- `28_quality_assurance_rascheck.ipynb` and `300_quality_assurance_rascheck.ipynb` (investigate)
-- `29_usgs_gauge_data_integration.ipynb` and `421_usgs_gauge_data_integration.ipynb` (investigate)
-- `31_bc_generation_from_live_gauge.ipynb` and `31_bc_generation_from_live_gauge_executed.ipynb` (variants?)
+### Known Duplicates (All Resolved 2025-12-17)
+
+**All duplicate notebooks have been removed** - keeping only the latest versions:
+- ✅ Kept `22_dss_boundary_extraction.ipynb` (deleted old 21)
+- ✅ Kept `23_remote_execution_psexec.ipynb` (deleted 22_FIXED)
+- ✅ Kept `300_quality_assurance_rascheck.ipynb` (deleted old 28)
+- ✅ Kept `421_usgs_gauge_data_integration.ipynb` (deleted old 29 if existed)
+- ✅ Kept `423_bc_generation_from_live_gauge.ipynb` (deleted old 31 and 31_executed)
 
 ### Notebooks Likely to be Skipped
 - Remote execution notebooks (require remote workers configured)
@@ -343,10 +345,12 @@ RasExamples.extract_project("Muncie", suffix="02")
 - ⏸️ **BLOCKED**: 1 notebook (101_Core_Sensitivity path mismatch)
 - ⏳ **PENDING**: 13 notebooks (15a manual, 103-106, 200, 300, 400, 420-424, 16-17)
 
-### Batch 5 Tests (2025-12-15)
-- **Notebook 30**: ⏸️ BLOCKED - Library bug in `ras_commander/usgs/real_time.py:227` (timezone issue)
-- **Notebook 33**: ⏹️ BLOCKED - Syntax error in Cell 8 (literal newline in string)
-- **Notebook 31_executed**: ❌ FAIL - Identical toggle cell bug as notebook 31
+### Batch 5 Tests (2025-12-15) - Archived Results
+
+**Note**: Notebooks 30, 31_executed, and old 33 were subsequently deleted as duplicates/superseded versions.
+
+- **Notebook 30** (deleted): ⏸️ BLOCKED - Library bug, replaced by 422_usgs_real_time_monitoring
+- **Notebook 31_executed** (deleted): ❌ FAIL - Superseded by 423_bc_generation_from_live_gauge
 - **Notebook 101**: ⏹️ BLOCKED - Path mismatch (static analysis saved 30-60 min execution)
 - **Notebook 102**: ✅ PASS (expected timeout) - Structurally sound, timeout expected for benchmarking
 
@@ -376,10 +380,10 @@ Completed suffix parameter standardization and Category 3 testing:
 **Average Time per Notebook**: ~95 sec (including compute-heavy notebooks)
 
 **Common Patterns Identified**:
-1. **Toggle Cell Import Bug** (5 notebooks): Standard library imports (Path, os, sys) inside conditional blocks
-   - Notebooks 22, 23, 26, 31, 31_executed
-2. **Path Mismatch** (6 notebooks): Notebooks extract to custom `output_path` but initialize from hardcoded paths
-   - Notebooks 09-13 (all FIXED with suffix parameter), 101
+1. **Toggle Cell Import Bug**: Standard library imports (Path, os, sys) inside conditional blocks
+   - Fixed in notebook 23 (old notebooks 22_FIXED, 26, 31, 31_executed were deleted as duplicates)
+2. **Path Mismatch**: Notebooks extract to custom `output_path` but initialize from hardcoded paths
+   - Notebooks 09-13 (all FIXED with suffix parameter), 101 (still BLOCKED)
 3. **Network Dependency** (2+ notebooks): Notebooks requiring USGS/AORC API access
    - Notebooks 29, 30 (and likely 31-32, AORC notebooks)
 4. **Environment Mismatch** (1 notebook): Notebooks expecting HEC-RAS 6.5 but only 6.6 available
@@ -518,12 +522,14 @@ geom_file = project_folder / "Muncie.g01"
 
 ---
 
-## Test Results: Notebook 31 (BC Generation from Live USGS Gauge Data)
+## Test Results: Notebook 31 (BC Generation from Live USGS Gauge Data) - ARCHIVED
+
+**Note**: This notebook (`31_bc_generation_from_live_gauge.ipynb`) was deleted 2025-12-17 - superseded by `423_bc_generation_from_live_gauge.ipynb` (420-series renumbering).
 
 **Date**: 2025-12-15 14:45 UTC
 **Environment**: rascmdr_piptest (pip-installed ras-commander 0.87.4)
 **Toggle Cell Setting**: USE_LOCAL_SOURCE = False (CRITICAL - pip mode)
-**Status**: FAILED - Import Error in pip Mode
+**Status**: FAILED - Import Error in pip Mode (archived result)
 
 ### Pre-Execution Checks
 
