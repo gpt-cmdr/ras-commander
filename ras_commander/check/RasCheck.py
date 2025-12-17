@@ -2586,6 +2586,98 @@ class RasCheck:
 
             summary_data.append(xs_summary)
 
+        # =====================================================================
+        # Starting WSE Method Validation Checks
+        # =====================================================================
+        from ..hdf.HdfPlan import HdfPlan
+
+        try:
+            # Get starting WSE method from plan HDF
+            wse_method_info = HdfPlan.get_starting_wse_method(plan_hdf)
+            method = wse_method_info.get('method', 'Unknown')
+
+            # PF_IC_01: Known WSE validation
+            if 'Known' in method:
+                known_wse = wse_method_info.get('wse', None)
+                if known_wse is not None:
+                    # Check if known WSE is reasonable (not too high or too low)
+                    if known_wse < -100 or known_wse > 10000:
+                        msg = CheckMessage(
+                            message_id="PF_IC_01",
+                            severity=Severity.WARNING,
+                            check_type="PROFILES",
+                            message=f"Known WSE ({known_wse:.2f} ft) may be unreasonable for starting water surface",
+                            help_text="Known WSE should be within realistic elevation range for the project area.",
+                            value=known_wse
+                        )
+                        messages.append(msg)
+
+            # PF_IC_02: Normal depth slope reasonableness
+            elif 'Normal' in method:
+                slope = wse_method_info.get('slope', None)
+                if slope is not None:
+                    # Check if slope is reasonable (typical range: 0.0001 to 0.1)
+                    if abs(slope) < 0.0001:
+                        msg = CheckMessage(
+                            message_id="PF_IC_02",
+                            severity=Severity.WARNING,
+                            check_type="PROFILES",
+                            message=f"Normal depth slope ({slope:.6f}) may be too flat for convergence",
+                            help_text="Very flat slopes (< 0.0001) may cause convergence issues. Verify slope is appropriate for channel.",
+                            value=abs(slope),
+                            threshold="0.0001"
+                        )
+                        messages.append(msg)
+                    elif abs(slope) > 0.1:
+                        msg = CheckMessage(
+                            message_id="PF_IC_02",
+                            severity=Severity.WARNING,
+                            check_type="PROFILES",
+                            message=f"Normal depth slope ({slope:.6f}) may be too steep",
+                            help_text="Very steep slopes (> 0.1) are unusual. Verify slope is appropriate for channel.",
+                            value=abs(slope),
+                            threshold="0.1"
+                        )
+                        messages.append(msg)
+
+            # PF_IC_03: Critical depth applicability
+            elif 'Critical' in method:
+                # Check if critical depth is appropriate (INFO message)
+                msg = CheckMessage(
+                    message_id="PF_IC_03",
+                    severity=Severity.INFO,
+                    check_type="PROFILES",
+                    message="Critical depth used for starting water surface - appropriate for steep slopes and supercritical flow",
+                    help_text="Critical depth is appropriate when Froude number > 1.0 (supercritical flow). Verify flow regime is supercritical."
+                )
+                messages.append(msg)
+
+            # PF_IC_04: Energy grade line method verification
+            elif 'EGL' in method or 'Energy' in method:
+                # Check if EGL slope line method is used (INFO message)
+                msg = CheckMessage(
+                    message_id="PF_IC_04",
+                    severity=Severity.INFO,
+                    check_type="PROFILES",
+                    message="Energy grade line slope method used for starting water surface",
+                    help_text="EGL slope method is appropriate for gradually varied flow. Verify energy slope is reasonable."
+                )
+                messages.append(msg)
+
+            # If method is Unknown or Error, add warning
+            elif method in ['Unknown', 'Error']:
+                msg = CheckMessage(
+                    message_id="PF_IC_00",
+                    severity=Severity.WARNING,
+                    check_type="PROFILES",
+                    message=f"Starting WSE method could not be determined: {wse_method_info.get('note', 'Unknown reason')}",
+                    help_text="Verify boundary condition method is properly defined in plan file."
+                )
+                messages.append(msg)
+
+        except Exception as e:
+            logger.debug(f"Could not validate starting WSE method: {e}")
+
         results.messages = messages
         if summary_data:
             summary_df = pd.DataFrame(summary_data)

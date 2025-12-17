@@ -474,6 +474,537 @@ class RasDss:
         logger.info("pyjnius handles JVM lifecycle automatically")
         pass
 
+    # =========================================================================
+    # Validation Methods
+    # =========================================================================
+
+    @staticmethod
+    @log_call
+    def check_pathname_format(pathname: str):
+        """
+        Check DSS pathname format validity.
+
+        Validates against DSS pathname specification:
+        - Format: //A/B/C/D/E/F/
+        - Parts: A (basin/project), B (location), C (parameter),
+                 D (date), E (interval), F (scenario)
+
+        Args:
+            pathname: DSS pathname to validate
+
+        Returns:
+            ValidationResult with detailed diagnostics
+
+        Example:
+            >>> from ras_commander.dss import RasDss
+            >>> result = RasDss.check_pathname_format("//BASIN/LOC/FLOW/01JAN2020/1HOUR/OBS/")
+            >>> print(result.passed)
+            True
+        """
+        # Lazy import validation framework
+        try:
+            from ..validation_base import ValidationResult, ValidationSeverity
+        except ImportError:
+            # Return basic dict if validation framework not available
+            if pathname.startswith('//') and pathname.endswith('/') and pathname.count('/') == 8:
+                return {'passed': True, 'message': 'Format appears valid (validation framework not available)'}
+            else:
+                return {'passed': False, 'message': 'Format appears invalid (validation framework not available)'}
+
+        # Check start with '//' and end with '/'
+        if not pathname.startswith('//'):
+            return ValidationResult(
+                check_name="path_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"DSS path must start with '//': {pathname}",
+                details={"pathname": pathname}
+            )
+
+        if not pathname.endswith('/'):
+            return ValidationResult(
+                check_name="path_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"DSS path must end with '/': {pathname}",
+                details={"pathname": pathname}
+            )
+
+        # Split and validate parts
+        # DSS path format: //A/B/C/D/E/F/
+        # Split by '/' gives: ['', '', 'A', 'B', 'C', 'D', 'E', 'F', '']
+        parts = pathname.split('/')
+        # Expected: 9 parts (2 empty at start, 6 data parts, 1 empty at end)
+        if len(parts) != 9:
+            return ValidationResult(
+                check_name="path_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"DSS path must have 6 parts (//A/B/C/D/E/F/), got {len(parts)-3}: {pathname}",
+                details={
+                    "pathname": pathname,
+                    "expected_parts": 6,
+                    "actual_parts": len(parts) - 3
+                }
+            )
+
+        # Extract parts (skip first two empty and last empty)
+        part_names = ['basin', 'location', 'parameter', 'date', 'interval', 'scenario']
+        part_values = parts[2:-1]
+
+        # Check for empty parts (warning, not error - some DSS paths have empty parts)
+        empty_parts = []
+        for i, (name, value) in enumerate(zip(part_names, part_values), start=1):
+            if not value:
+                empty_parts.append((i, name))
+
+        if empty_parts:
+            empty_names = ", ".join(f"{name} (part {i})" for i, name in empty_parts)
+            return ValidationResult(
+                check_name="path_format",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"DSS path has empty parts: {empty_names}",
+                details={
+                    "pathname": pathname,
+                    "empty_parts": empty_names,
+                    "parts": dict(zip(part_names, part_values))
+                }
+            )
+
+        # All checks passed
+        return ValidationResult(
+            check_name="path_format",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message="DSS path format is valid",
+            details={"parts": dict(zip(part_names, part_values))}
+        )
+
+    @staticmethod
+    @log_call
+    def check_file_exists(dss_file: Union[str, Path]):
+        """
+        Check if DSS file exists and is accessible.
+
+        Args:
+            dss_file: Path to DSS file (str or Path)
+
+        Returns:
+            ValidationResult with file existence check outcome
+
+        Example:
+            >>> from pathlib import Path
+            >>> result = RasDss.check_file_exists(Path("data.dss"))
+            >>> if result.passed:
+            ...     print("File exists and is accessible")
+        """
+        # Lazy import validation framework
+        try:
+            from ..validation_base import ValidationResult, ValidationSeverity
+        except ImportError:
+            dss_file = Path(dss_file)
+            if dss_file.exists() and dss_file.is_file():
+                return {'passed': True, 'message': 'File exists (validation framework not available)'}
+            else:
+                return {'passed': False, 'message': 'File not found (validation framework not available)'}
+
+        dss_file = Path(dss_file)
+
+        if not dss_file.exists():
+            return ValidationResult(
+                check_name="file_existence",
+                severity=ValidationSeverity.CRITICAL,
+                passed=False,
+                message=f"DSS file not found: {dss_file}",
+                details={"dss_file": str(dss_file)}
+            )
+
+        if not dss_file.is_file():
+            return ValidationResult(
+                check_name="file_type",
+                severity=ValidationSeverity.CRITICAL,
+                passed=False,
+                message=f"Path is not a file: {dss_file}",
+                details={"dss_file": str(dss_file)}
+            )
+
+        # Check read permissions
+        try:
+            with open(dss_file, 'rb'):
+                pass
+        except PermissionError:
+            return ValidationResult(
+                check_name="file_accessibility",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Permission denied reading: {dss_file}",
+                details={"dss_file": str(dss_file)}
+            )
+
+        # File exists and is readable
+        file_size_mb = dss_file.stat().st_size / (1024 * 1024)
+        return ValidationResult(
+            check_name="file_existence",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message="DSS file exists and is readable",
+            details={
+                "dss_file": str(dss_file),
+                "file_size_mb": round(file_size_mb, 2)
+            }
+        )
+
+    @staticmethod
+    @log_call
+    def check_pathname_exists(
+        dss_file: Union[str, Path],
+        pathname: str
+    ):
+        """
+        Check if pathname exists in DSS file catalog.
+
+        Args:
+            dss_file: Path to DSS file (str or Path)
+            pathname: DSS pathname to check
+
+        Returns:
+            ValidationResult with existence check outcome
+
+        Example:
+            >>> result = RasDss.check_pathname_exists(
+            ...     "data.dss",
+            ...     "//BASIN/FLOW/01JAN2020/1HOUR/RUN1/"
+            ... )
+            >>> if result.passed:
+            ...     print("Pathname found in catalog")
+        """
+        # Lazy import validation framework
+        try:
+            from ..validation_base import ValidationResult, ValidationSeverity
+        except ImportError:
+            # Try basic check without validation framework
+            try:
+                catalog = RasDss.get_catalog(dss_file)
+                if pathname in catalog:
+                    return {'passed': True, 'message': 'Pathname exists (validation framework not available)'}
+                else:
+                    return {'passed': False, 'message': 'Pathname not found (validation framework not available)'}
+            except Exception as e:
+                return {'passed': False, 'message': f'Error checking: {e}'}
+
+        dss_file = Path(dss_file)
+
+        # Get catalog
+        try:
+            catalog = RasDss.get_catalog(str(dss_file))
+        except Exception as e:
+            return ValidationResult(
+                check_name="catalog_access",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read DSS catalog: {e}",
+                details={"error": str(e), "dss_file": str(dss_file)}
+            )
+
+        # Check exact match
+        if pathname in catalog:
+            return ValidationResult(
+                check_name="pathname_existence",
+                severity=ValidationSeverity.INFO,
+                passed=True,
+                message="Pathname exists in DSS file",
+                details={"total_paths": len(catalog)}
+            )
+
+        # Try case-insensitive match (DSS is case-sensitive but provide hint)
+        pathname_upper = pathname.upper()
+        if pathname_upper in [p.upper() for p in catalog]:
+            return ValidationResult(
+                check_name="pathname_existence",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message="Pathname exists but case differs (DSS is case-sensitive)",
+                details={"total_paths": len(catalog)}
+            )
+
+        # Find similar paths (match on location part - index 2)
+        parts = pathname.split('/')
+        if len(parts) >= 3:
+            location = parts[2]
+            similar = [p for p in catalog if location in p]
+        else:
+            similar = []
+
+        return ValidationResult(
+            check_name="pathname_existence",
+            severity=ValidationSeverity.ERROR,
+            passed=False,
+            message="Pathname not found in DSS file",
+            details={
+                "pathname": pathname,
+                "total_paths": len(catalog),
+                "similar_paths": similar[:5]  # First 5 similar paths
+            }
+        )
+
+    @staticmethod
+    @log_call
+    def check_data_availability(
+        dss_file: Union[str, Path],
+        pathname: str,
+        expected_start: Optional[str] = None,
+        expected_end: Optional[str] = None
+    ):
+        """
+        Check if time series data is available for the expected date range.
+
+        Args:
+            dss_file: Path to DSS file (str or Path)
+            pathname: DSS pathname
+            expected_start: Expected start date (optional, datetime or string)
+            expected_end: Expected end date (optional, datetime or string)
+
+        Returns:
+            ValidationResult with data availability check outcome
+
+        Example:
+            >>> from datetime import datetime
+            >>> result = RasDss.check_data_availability(
+            ...     "data.dss",
+            ...     "//BASIN/FLOW/01JAN2020/1HOUR/RUN1/",
+            ...     expected_start=datetime(2020, 1, 1),
+            ...     expected_end=datetime(2020, 12, 31)
+            ... )
+        """
+        # Lazy import validation framework
+        try:
+            from ..validation_base import ValidationResult, ValidationSeverity
+        except ImportError:
+            # Try basic check without validation framework
+            try:
+                df = RasDss.read_timeseries(dss_file, pathname)
+                if df is not None and len(df) > 0:
+                    return {'passed': True, 'message': f'Data available: {len(df)} points'}
+                else:
+                    return {'passed': False, 'message': 'No data found'}
+            except Exception as e:
+                return {'passed': False, 'message': f'Error reading data: {e}'}
+
+        # Convert expected dates to datetime if strings
+        if expected_start is not None and isinstance(expected_start, str):
+            from datetime import datetime
+            expected_start = datetime.strptime(expected_start, '%d%b%Y %H%M')
+        if expected_end is not None and isinstance(expected_end, str):
+            from datetime import datetime
+            expected_end = datetime.strptime(expected_end, '%d%b%Y %H%M')
+
+        # Read time series
+        try:
+            df = RasDss.read_timeseries(str(dss_file), pathname)
+        except Exception as e:
+            return ValidationResult(
+                check_name="data_read",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read time series data: {e}",
+                details={"error": str(e), "pathname": pathname}
+            )
+
+        # Check if data is empty
+        if df is None or len(df) == 0:
+            return ValidationResult(
+                check_name="data_availability",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message="Time series data is empty",
+                details={"pathname": pathname}
+            )
+
+        # Extract actual date range
+        actual_start = df.index.min()
+        actual_end = df.index.max()
+
+        details = {
+            "data_points": len(df),
+            "actual_start": actual_start.strftime('%Y-%m-%d %H:%M:%S'),
+            "actual_end": actual_end.strftime('%Y-%m-%d %H:%M:%S'),
+            "units": df.attrs.get('units', 'unknown'),
+            "interval": df.attrs.get('interval', 'unknown')
+        }
+
+        # Check date range coverage if expected dates provided
+        if expected_start and expected_end:
+            if actual_start > expected_start:
+                return ValidationResult(
+                    check_name="date_coverage",
+                    severity=ValidationSeverity.WARNING,
+                    passed=True,
+                    message=f"Data starts later than expected: {actual_start} > {expected_start}",
+                    details={**details, "expected_start": expected_start.strftime('%Y-%m-%d %H:%M:%S')}
+                )
+
+            if actual_end < expected_end:
+                return ValidationResult(
+                    check_name="date_coverage",
+                    severity=ValidationSeverity.WARNING,
+                    passed=True,
+                    message=f"Data ends earlier than expected: {actual_end} < {expected_end}",
+                    details={**details, "expected_end": expected_end.strftime('%Y-%m-%d %H:%M:%S')}
+                )
+
+        # All checks passed
+        return ValidationResult(
+            check_name="data_availability",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message=f"Time series data available ({len(df)} points from {actual_start.strftime('%Y-%m-%d')} to {actual_end.strftime('%Y-%m-%d')})",
+            details=details
+        )
+
+    @staticmethod
+    @log_call
+    def check_pathname(
+        dss_file: Union[str, Path],
+        pathname: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ):
+        """
+        Comprehensive DSS pathname validation.
+
+        Performs:
+        1. Format validation
+        2. File existence check
+        3. Pathname existence check
+        4. Data availability check (if date range provided)
+
+        Args:
+            dss_file: Path to DSS file (str or Path)
+            pathname: DSS pathname to validate
+            start_date: Optional start date for availability check
+            end_date: Optional end date for availability check
+
+        Returns:
+            ValidationReport with all validation results
+
+        Example:
+            >>> report = RasDss.check_pathname(
+            ...     dss_file="boundary.dss",
+            ...     pathname="//BASIN/FLOW/STAGE/01JAN2020/1HOUR//",
+            ...     start_date="01JAN2020 0000",
+            ...     end_date="31DEC2020 2400"
+            ... )
+            >>> if not report.is_valid:
+            ...     print(report.summary())
+        """
+        # Lazy import validation framework
+        try:
+            from ..validation_base import ValidationReport
+        except ImportError:
+            # Return basic dict if validation framework not available
+            results = []
+            format_ok = RasDss.check_pathname_format(pathname).get('passed', False)
+            results.append(f"Format: {'OK' if format_ok else 'FAIL'}")
+
+            file_ok = RasDss.check_file_exists(dss_file).get('passed', False)
+            results.append(f"File: {'OK' if file_ok else 'FAIL'}")
+
+            if file_ok:
+                exists_ok = RasDss.check_pathname_exists(dss_file, pathname).get('passed', False)
+                results.append(f"Exists: {'OK' if exists_ok else 'FAIL'}")
+
+            return {'results': results, 'is_valid': all('OK' in r for r in results)}
+
+        from datetime import datetime
+
+        report = ValidationReport(
+            target=f"DSS Pathname: {pathname}",
+            timestamp=datetime.now(),
+            results=[]
+        )
+
+        # Check 1: Format
+        result = RasDss.check_pathname_format(pathname)
+        report.results.append(result)
+        if not result.passed:
+            return report  # Stop if format invalid
+
+        # Check 2: File existence
+        file_result = RasDss.check_file_exists(dss_file)
+        report.results.append(file_result)
+        if not file_result.passed:
+            return report  # Stop if file doesn't exist
+
+        # Check 3: Pathname existence
+        exists_result = RasDss.check_pathname_exists(dss_file, pathname)
+        report.results.append(exists_result)
+        if not exists_result.passed:
+            return report  # Stop if pathname doesn't exist
+
+        # Check 4: Data availability (if dates provided)
+        if start_date or end_date:
+            avail_result = RasDss.check_data_availability(
+                dss_file, pathname, start_date, end_date
+            )
+            report.results.append(avail_result)
+
+        return report
+
+    @staticmethod
+    def is_valid_pathname(pathname: str) -> bool:
+        """
+        Quick boolean check for pathname format.
+
+        Args:
+            pathname: DSS pathname to validate
+
+        Returns:
+            True if pathname format is valid
+
+        Example:
+            >>> if RasDss.is_valid_pathname("//BASIN/LOC/FLOW/01JAN2020/1HOUR/OBS/"):
+            ...     print("Valid format")
+        """
+        result = RasDss.check_pathname_format(pathname)
+        # Handle both ValidationResult and dict return types
+        if hasattr(result, 'passed'):
+            return result.passed
+        elif isinstance(result, dict):
+            return result.get('passed', False)
+        return False
+
+    @staticmethod
+    def is_pathname_available(
+        dss_file: Union[str, Path],
+        pathname: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> bool:
+        """
+        Quick boolean check for pathname availability.
+
+        Args:
+            dss_file: Path to DSS file (str or Path)
+            pathname: DSS pathname to check
+            start_date: Optional start date
+            end_date: Optional end date
+
+        Returns:
+            True if pathname exists and has data
+
+        Example:
+            >>> if RasDss.is_pathname_available("data.dss", "//BASIN/FLOW/.../"):
+            ...     print("Data is available")
+        """
+        report = RasDss.check_pathname(dss_file, pathname, start_date, end_date)
+        # Handle both ValidationReport and dict return types
+        if hasattr(report, 'is_valid'):
+            return report.is_valid
+        elif isinstance(report, dict):
+            return report.get('is_valid', False)
+        return False
+
 
 if __name__ == "__main__":
     """Test RasDss class"""

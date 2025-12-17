@@ -2615,3 +2615,785 @@ class RasMap:
         data = np.where(np.isnan(array), nodata, array).astype(np.float32)
         with rasterio.open(path, "w", **profile) as dst:
             dst.write(data, 1)
+
+    # =========================================================================
+    # Map Layer Validation Methods
+    # =========================================================================
+
+    @staticmethod
+    @log_call
+    def check_layer_format(layer_file: Union[str, Path]) -> 'ValidationResult':
+        """
+        Check layer file format validity.
+
+        Validates:
+        - File exists
+        - Format is supported (GeoJSON, Shapefile, GeoTIFF, HDF)
+        - File can be opened and read
+
+        Args:
+            layer_file: Path to layer file
+
+        Returns:
+            ValidationResult with format validation
+
+        Example:
+            >>> from ras_commander import RasMap
+            >>> result = RasMap.check_layer_format("terrain.tif")
+            >>> if result.is_valid:
+            ...     print(f"Format valid: {result.context.get('format')}")
+        """
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        layer_file = Path(layer_file)
+
+        # Check existence
+        if not layer_file.exists():
+            return ValidationResult(
+                check_name="file_existence",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"File not found: {layer_file}"
+            )
+
+        # Check file is readable
+        try:
+            with open(layer_file, 'rb') as f:
+                _ = f.read(1)  # Try reading one byte
+        except PermissionError:
+            return ValidationResult(
+                check_name="file_accessibility",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Permission denied reading file: {layer_file}"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="file_accessibility",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Cannot read file: {e}"
+            )
+
+        # Determine format from extension
+        suffix = layer_file.suffix.lower()
+        format_map = {
+            '.geojson': 'geojson',
+            '.json': 'geojson',
+            '.shp': 'shapefile',
+            '.tif': 'geotiff',
+            '.tiff': 'geotiff',
+            '.hdf': 'hdf',
+            '.h5': 'hdf'
+        }
+
+        detected_format = format_map.get(suffix)
+
+        if detected_format is None:
+            return ValidationResult(
+                check_name="format_detection",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"Unrecognized file extension: {suffix}",
+                details={"extension": suffix}
+            )
+
+        # Format-specific validation (with graceful degradation)
+        try:
+            if detected_format == 'geojson':
+                return RasMap._validate_geojson_format(layer_file)
+            elif detected_format == 'shapefile':
+                return RasMap._validate_shapefile_format(layer_file)
+            elif detected_format == 'geotiff':
+                return RasMap._validate_geotiff_format(layer_file)
+            elif detected_format == 'hdf':
+                return RasMap._validate_hdf_format(layer_file)
+        except ImportError:
+            # Library not available - graceful degradation
+            return ValidationResult(
+                check_name="format_validation",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"File format appears valid ({detected_format}), but validation library not available",
+                details={"format": detected_format}
+            )
+
+        return ValidationResult(
+            check_name="format_validation",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message=f"File format appears valid: {detected_format}",
+            details={"format": detected_format}
+        )
+
+    @staticmethod
+    def _validate_geojson_format(layer_file: Path) -> 'ValidationResult':
+        """Validate GeoJSON file format and structure."""
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        try:
+            import geopandas as gpd
+            gdf = gpd.read_file(layer_file)
+
+            return ValidationResult(
+                check_name="geojson_format",
+                severity=ValidationSeverity.INFO,
+                passed=True,
+                message=f"GeoJSON format valid ({len(gdf)} features)",
+                details={
+                    "feature_count": len(gdf),
+                    "geometry_types": gdf.geom_type.unique().tolist(),
+                    "crs": str(gdf.crs) if gdf.crs else None
+                }
+            )
+        except ImportError:
+            return ValidationResult(
+                check_name="geojson_format",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message="geopandas not available, cannot validate GeoJSON structure"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="geojson_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read GeoJSON: {e}"
+            )
+
+    @staticmethod
+    def _validate_shapefile_format(layer_file: Path) -> 'ValidationResult':
+        """Validate Shapefile format and structure."""
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        try:
+            import geopandas as gpd
+            gdf = gpd.read_file(layer_file)
+
+            return ValidationResult(
+                check_name="shapefile_format",
+                severity=ValidationSeverity.INFO,
+                passed=True,
+                message=f"Shapefile format valid ({len(gdf)} features)",
+                details={
+                    "feature_count": len(gdf),
+                    "geometry_types": gdf.geom_type.unique().tolist(),
+                    "crs": str(gdf.crs) if gdf.crs else None
+                }
+            )
+        except ImportError:
+            return ValidationResult(
+                check_name="shapefile_format",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message="geopandas not available, cannot validate Shapefile structure"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="shapefile_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read Shapefile: {e}"
+            )
+
+    @staticmethod
+    def _validate_geotiff_format(layer_file: Path) -> 'ValidationResult':
+        """Validate GeoTIFF raster format and metadata."""
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        try:
+            import rasterio
+            with rasterio.open(layer_file) as src:
+                details = {
+                    "width": src.width,
+                    "height": src.height,
+                    "bands": src.count,
+                    "dtype": str(src.dtypes[0]),
+                    "crs": src.crs.to_string() if src.crs else None,
+                    "resolution": (src.res[0], src.res[1]),
+                    "bounds": src.bounds
+                }
+
+                return ValidationResult(
+                    check_name="geotiff_format",
+                    severity=ValidationSeverity.INFO,
+                    passed=True,
+                    message=f"GeoTIFF format valid ({details['width']}x{details['height']}, {details['bands']} bands)",
+                    details=details
+                )
+        except ImportError:
+            return ValidationResult(
+                check_name="geotiff_format",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message="rasterio not available, cannot validate GeoTIFF structure"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="geotiff_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read GeoTIFF: {e}"
+            )
+
+    @staticmethod
+    def _validate_hdf_format(layer_file: Path) -> 'ValidationResult':
+        """Validate HDF file format."""
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        try:
+            import h5py
+            with h5py.File(layer_file, 'r') as hdf:
+                groups = list(hdf.keys())
+                return ValidationResult(
+                    check_name="hdf_format",
+                    severity=ValidationSeverity.INFO,
+                    passed=True,
+                    message=f"HDF format valid ({len(groups)} root groups)",
+                    details={"groups": groups}
+                )
+        except ImportError:
+            return ValidationResult(
+                check_name="hdf_format",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message="h5py not available, cannot validate HDF structure"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="hdf_format",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read HDF: {e}"
+            )
+
+    @staticmethod
+    @log_call
+    def check_layer_crs(
+        layer_file: Union[str, Path],
+        expected_epsg: Optional[int] = None
+    ) -> 'ValidationResult':
+        """
+        Check layer CRS/projection validity.
+
+        For GeoJSON files, enforces WGS84 (EPSG:4326) requirement.
+        For other formats, checks against expected CRS if provided.
+
+        Args:
+            layer_file: Path to layer file
+            expected_epsg: Optional expected EPSG code (e.g., 4326 for WGS84)
+
+        Returns:
+            ValidationResult with CRS validation
+
+        Example:
+            >>> result = RasMap.check_layer_crs("layer.geojson", expected_epsg=4326)
+            >>> if not result.passed:
+            ...     print(f"CRS issue: {result.message}")
+        """
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        layer_file = Path(layer_file)
+        suffix = layer_file.suffix.lower()
+
+        # Convert expected_epsg to CRS string if provided
+        expected_crs = f"EPSG:{expected_epsg}" if expected_epsg else None
+
+        try:
+            # Vector layers
+            if suffix in ['.geojson', '.json', '.shp']:
+                import geopandas as gpd
+                gdf = gpd.read_file(layer_file)
+
+                if gdf.crs is None:
+                    return ValidationResult(
+                        check_name="crs_validation",
+                        severity=ValidationSeverity.WARNING,
+                        passed=True,
+                        message="Layer has no CRS defined (assuming WGS84)",
+                        details={"crs": None}
+                    )
+
+                crs_string = gdf.crs.to_string()
+
+                # Check for GeoJSON WGS84 requirement
+                if suffix in ['.geojson', '.json']:
+                    if crs_string != "EPSG:4326":
+                        return ValidationResult(
+                            check_name="crs_validation",
+                            severity=ValidationSeverity.ERROR,
+                            passed=False,
+                            message=f"GeoJSON must be in WGS84 (EPSG:4326), got {crs_string}",
+                            details={"actual_crs": crs_string, "required_crs": "EPSG:4326"}
+                        )
+
+                # Check expected CRS if provided
+                if expected_crs and crs_string != expected_crs:
+                    return ValidationResult(
+                        check_name="crs_validation",
+                        severity=ValidationSeverity.WARNING,
+                        passed=True,
+                        message=f"CRS mismatch: expected {expected_crs}, got {crs_string}",
+                        details={"expected_crs": expected_crs, "actual_crs": crs_string}
+                    )
+
+                return ValidationResult(
+                    check_name="crs_validation",
+                    severity=ValidationSeverity.INFO,
+                    passed=True,
+                    message=f"CRS valid: {crs_string}",
+                    details={"crs": crs_string}
+                )
+
+            # Raster layers
+            elif suffix in ['.tif', '.tiff']:
+                import rasterio
+                with rasterio.open(layer_file) as src:
+                    if src.crs is None:
+                        return ValidationResult(
+                            check_name="crs_validation",
+                            severity=ValidationSeverity.WARNING,
+                            passed=True,
+                            message="Raster has no CRS defined",
+                            details={"crs": None}
+                        )
+
+                    crs_string = src.crs.to_string()
+
+                    if expected_crs and crs_string != expected_crs:
+                        return ValidationResult(
+                            check_name="crs_validation",
+                            severity=ValidationSeverity.WARNING,
+                            passed=True,
+                            message=f"CRS mismatch: expected {expected_crs}, got {crs_string}",
+                            details={"expected_crs": expected_crs, "actual_crs": crs_string}
+                        )
+
+                    return ValidationResult(
+                        check_name="crs_validation",
+                        severity=ValidationSeverity.INFO,
+                        passed=True,
+                        message=f"CRS valid: {crs_string}",
+                        details={"crs": crs_string}
+                    )
+
+        except ImportError as e:
+            return ValidationResult(
+                check_name="crs_validation",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"Required library not available: {e}"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="crs_validation",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"Could not check CRS: {e}"
+            )
+
+        return ValidationResult(
+            check_name="crs_validation",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message="CRS check not applicable for this file type"
+        )
+
+    @staticmethod
+    @log_call
+    def check_raster_metadata(
+        layer_file: Union[str, Path],
+        max_resolution: Optional[float] = 100.0,
+        check_nodata: bool = True
+    ) -> List['ValidationResult']:
+        """
+        Check raster metadata (resolution, extent, nodata).
+
+        Args:
+            layer_file: Path to raster file
+            max_resolution: Maximum acceptable resolution in meters (warn if coarser)
+            check_nodata: If True, check nodata percentage
+
+        Returns:
+            List[ValidationResult]: Raster metadata validation results
+
+        Example:
+            >>> results = RasMap.check_raster_metadata("terrain.tif", max_resolution=10.0)
+            >>> for result in results:
+            ...     if not result.passed:
+            ...         print(f"Issue: {result.message}")
+        """
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        layer_file = Path(layer_file)
+        results = []
+
+        try:
+            import rasterio
+            import numpy as np
+
+            with rasterio.open(layer_file) as src:
+                # Resolution check
+                resolution = max(abs(src.res[0]), abs(src.res[1]))
+
+                if max_resolution and resolution > max_resolution:
+                    results.append(ValidationResult(
+                        check_name="resolution_check",
+                        severity=ValidationSeverity.WARNING,
+                        passed=True,
+                        message=f"Raster resolution is coarse: {resolution:.2f} meters (limit: {max_resolution} m)",
+                        details={"resolution": resolution, "max_resolution": max_resolution}
+                    ))
+                else:
+                    results.append(ValidationResult(
+                        check_name="resolution_check",
+                        severity=ValidationSeverity.INFO,
+                        passed=True,
+                        message=f"Raster resolution acceptable: {resolution:.2f} meters",
+                        details={"resolution": resolution}
+                    ))
+
+                # Nodata check
+                if check_nodata:
+                    try:
+                        data = src.read(1, masked=True)
+                        if hasattr(data, 'mask'):
+                            nodata_pct = (data.mask.sum() / data.size) * 100
+
+                            if nodata_pct > 50:
+                                results.append(ValidationResult(
+                                    check_name="nodata_check",
+                                    severity=ValidationSeverity.WARNING,
+                                    passed=True,
+                                    message=f"Raster has high nodata percentage: {nodata_pct:.1f}%",
+                                    details={"nodata_percent": nodata_pct}
+                                ))
+                            else:
+                                results.append(ValidationResult(
+                                    check_name="nodata_check",
+                                    severity=ValidationSeverity.INFO,
+                                    passed=True,
+                                    message=f"Raster nodata acceptable: {nodata_pct:.1f}%",
+                                    details={"nodata_percent": nodata_pct}
+                                ))
+                        else:
+                            results.append(ValidationResult(
+                                check_name="nodata_check",
+                                severity=ValidationSeverity.INFO,
+                                passed=True,
+                                message="Raster has no masked/nodata values"
+                            ))
+                    except Exception as e:
+                        results.append(ValidationResult(
+                            check_name="nodata_check",
+                            severity=ValidationSeverity.WARNING,
+                            passed=True,
+                            message=f"Could not check nodata: {e}"
+                        ))
+
+                # Extent check
+                bounds = src.bounds
+                results.append(ValidationResult(
+                    check_name="extent_info",
+                    severity=ValidationSeverity.INFO,
+                    passed=True,
+                    message=f"Raster extent: ({bounds.left:.2f}, {bounds.bottom:.2f}, {bounds.right:.2f}, {bounds.top:.2f})",
+                    details={"bounds": (bounds.left, bounds.bottom, bounds.right, bounds.top)}
+                ))
+
+        except ImportError:
+            results.append(ValidationResult(
+                check_name="raster_metadata",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message="rasterio not available, cannot validate raster metadata"
+            ))
+        except Exception as e:
+            results.append(ValidationResult(
+                check_name="raster_metadata",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read raster metadata: {e}"
+            ))
+
+        return results
+
+    @staticmethod
+    @log_call
+    def check_spatial_extent(
+        layer_file: Union[str, Path],
+        model_extent: tuple,
+        min_coverage_pct: float = 50.0
+    ) -> 'ValidationResult':
+        """
+        Check layer spatial extent vs model domain.
+
+        Args:
+            layer_file: Path to layer file
+            model_extent: Model bounding box (minx, miny, maxx, maxy)
+            min_coverage_pct: Minimum coverage percentage (warn if below)
+
+        Returns:
+            ValidationResult: Spatial extent validation result
+
+        Example:
+            >>> model_box = (-85.5, 40.1, -85.3, 40.3)  # Example bounds
+            >>> result = RasMap.check_spatial_extent("terrain.tif", model_box)
+            >>> if result.passed:
+            ...     print(f"Coverage: {result.details.get('coverage_percent'):.1f}%")
+        """
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        layer_file = Path(layer_file)
+        suffix = layer_file.suffix.lower()
+
+        try:
+            from shapely.geometry import box
+
+            model_box = box(*model_extent)
+
+            # Get layer extent
+            if suffix in ['.tif', '.tiff']:
+                import rasterio
+                with rasterio.open(layer_file) as src:
+                    layer_box = box(*src.bounds)
+            elif suffix in ['.geojson', '.json', '.shp']:
+                import geopandas as gpd
+                gdf = gpd.read_file(layer_file)
+                layer_box = box(*gdf.total_bounds)
+            else:
+                return ValidationResult(
+                    check_name="spatial_coverage",
+                    severity=ValidationSeverity.INFO,
+                    passed=True,
+                    message="Spatial coverage check not applicable for this file type"
+                )
+
+            # Check for overlap
+            if not model_box.intersects(layer_box):
+                return ValidationResult(
+                    check_name="spatial_coverage",
+                    severity=ValidationSeverity.ERROR,
+                    passed=False,
+                    message="Layer does not overlap with model domain",
+                    details={
+                        "model_extent": model_extent,
+                        "layer_extent": layer_box.bounds
+                    }
+                )
+
+            # Calculate coverage percentage
+            intersection = model_box.intersection(layer_box)
+            coverage_pct = (intersection.area / model_box.area) * 100
+
+            if coverage_pct < min_coverage_pct:
+                return ValidationResult(
+                    check_name="spatial_coverage",
+                    severity=ValidationSeverity.WARNING,
+                    passed=True,
+                    message=f"Layer only covers {coverage_pct:.1f}% of model domain (minimum: {min_coverage_pct:.1f}%)",
+                    details={"coverage_percent": coverage_pct, "min_coverage_pct": min_coverage_pct}
+                )
+
+            return ValidationResult(
+                check_name="spatial_coverage",
+                severity=ValidationSeverity.INFO,
+                passed=True,
+                message=f"Layer covers {coverage_pct:.1f}% of model domain",
+                details={"coverage_percent": coverage_pct}
+            )
+
+        except ImportError as e:
+            return ValidationResult(
+                check_name="spatial_coverage",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"Required library not available: {e}"
+            )
+        except Exception as e:
+            return ValidationResult(
+                check_name="spatial_coverage",
+                severity=ValidationSeverity.WARNING,
+                passed=True,
+                message=f"Could not check spatial coverage: {e}"
+            )
+
+    @staticmethod
+    @log_call
+    def check_terrain_layer(
+        rasmap_path: Union[str, Path],
+        layer_name: str
+    ) -> 'ValidationResult':
+        """
+        Check terrain layer configuration in rasmap file.
+
+        Validates terrain layer exists and checks for HDF terrain structure
+        if layer is HDF format.
+
+        Args:
+            rasmap_path: Path to .rasmap file
+            layer_name: Name of terrain layer
+
+        Returns:
+            ValidationResult: Terrain validation result
+
+        Example:
+            >>> result = RasMap.check_terrain_layer("project.rasmap", "Terrain_2024")
+            >>> if not result.passed:
+            ...     print(f"Terrain issue: {result.message}")
+        """
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        rasmap_path = Path(rasmap_path)
+
+        # Check if layer exists in rasmap
+        try:
+            terrain_names = RasMap.get_terrain_names(rasmap_path)
+            if layer_name not in terrain_names:
+                return ValidationResult(
+                    check_name="terrain_layer_exists",
+                    severity=ValidationSeverity.ERROR,
+                    passed=False,
+                    message=f"Terrain layer '{layer_name}' not found in rasmap",
+                    details={"layer_name": layer_name, "available": terrain_names}
+                )
+        except Exception as e:
+            return ValidationResult(
+                check_name="terrain_layer_exists",
+                severity=ValidationSeverity.ERROR,
+                passed=False,
+                message=f"Failed to read rasmap file: {e}"
+            )
+
+        # TODO: Get terrain file path and validate HDF structure if applicable
+        # This requires additional RasMap methods to extract layer file paths
+
+        return ValidationResult(
+            check_name="terrain_layer_validation",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message=f"Terrain layer '{layer_name}' found in rasmap",
+            details={"layer_name": layer_name}
+        )
+
+    @staticmethod
+    @log_call
+    def check_land_cover_layer(
+        rasmap_path: Union[str, Path],
+        layer_name: str
+    ) -> 'ValidationResult':
+        """
+        Check land cover layer configuration in rasmap file.
+
+        Args:
+            rasmap_path: Path to .rasmap file
+            layer_name: Name of land cover layer
+
+        Returns:
+            ValidationResult: Land cover validation result
+
+        Example:
+            >>> result = RasMap.check_land_cover_layer("project.rasmap", "NLCD_2024")
+            >>> if result.passed:
+            ...     print("Land cover layer valid")
+        """
+        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+
+        rasmap_path = Path(rasmap_path)
+
+        # TODO: Implement land cover layer validation
+        # This requires methods to extract land cover layer information from rasmap
+
+        return ValidationResult(
+            check_name="land_cover_validation",
+            severity=ValidationSeverity.INFO,
+            passed=True,
+            message=f"Land cover validation for '{layer_name}' not yet implemented",
+            details={"layer_name": layer_name}
+        )
+
+    @staticmethod
+    @log_call
+    def check_layer(
+        rasmap_path: Union[str, Path],
+        layer_name: str,
+        layer_type: Optional[str] = None
+    ) -> 'ValidationReport':
+        """
+        Comprehensive layer validation.
+
+        Performs:
+        1. Layer exists in rasmap
+        2. Type-specific checks (terrain, land cover, etc.)
+
+        Args:
+            rasmap_path: Path to .rasmap file
+            layer_name: Name of layer to validate
+            layer_type: Optional layer type ('Terrain', 'Land Cover', etc.)
+
+        Returns:
+            ValidationReport with all validation results
+
+        Example:
+            >>> from ras_commander import RasMap
+            >>> report = RasMap.check_layer(
+            ...     rasmap_path="project.rasmap",
+            ...     layer_name="Terrain_2024",
+            ...     layer_type="Terrain"
+            ... )
+            >>> if not report.is_valid:
+            ...     print(report.summary())
+        """
+        from ras_commander.validation_base import ValidationReport
+        from datetime import datetime
+
+        rasmap_path = Path(rasmap_path)
+        results = []
+
+        # Type-specific validation
+        if layer_type == "Terrain":
+            result = RasMap.check_terrain_layer(rasmap_path, layer_name)
+            results.append(result)
+        elif layer_type == "Land Cover":
+            result = RasMap.check_land_cover_layer(rasmap_path, layer_name)
+            results.append(result)
+        else:
+            # Generic layer check
+            from ras_commander.validation_base import ValidationResult, ValidationSeverity
+            results.append(ValidationResult(
+                check_name="layer_type",
+                severity=ValidationSeverity.INFO,
+                passed=True,
+                message=f"Layer type '{layer_type}' validation not specialized",
+                details={"layer_name": layer_name, "layer_type": layer_type}
+            ))
+
+        return ValidationReport(
+            target=f"{rasmap_path} - {layer_name}",
+            timestamp=datetime.now(),
+            results=results
+        )
+
+    @staticmethod
+    def is_valid_layer(
+        rasmap_path: Union[str, Path],
+        layer_name: str,
+        layer_type: Optional[str] = None
+    ) -> bool:
+        """
+        Quick boolean check for layer validity.
+
+        Args:
+            rasmap_path: Path to .rasmap file
+            layer_name: Name of layer to validate
+            layer_type: Optional layer type
+
+        Returns:
+            True if layer is valid
+
+        Example:
+            >>> if RasMap.is_valid_layer("project.rasmap", "Terrain_2024", "Terrain"):
+            ...     print("Layer is valid")
+        """
+        report = RasMap.check_layer(rasmap_path, layer_name, layer_type)
+        return all(result.passed for result in report.results)

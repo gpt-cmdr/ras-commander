@@ -1872,6 +1872,33 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "type": MessageType.PROFILESCHECK
     },
 
+    # Initial Condition (Starting WSE Method)
+    "PF_IC_00": {
+        "message": "Starting WSE method could not be determined",
+        "help_text": "Verify boundary condition method is properly defined in plan file. Check downstream reach boundary condition settings.",
+        "type": MessageType.PROFILESCHECK
+    },
+    "PF_IC_01": {
+        "message": "Known WSE may be unreasonable for starting water surface",
+        "help_text": "Known WSE should be within realistic elevation range for the project area. Verify the specified elevation is appropriate.",
+        "type": MessageType.PROFILESCHECK
+    },
+    "PF_IC_02": {
+        "message": "Normal depth slope may cause convergence issues",
+        "help_text": "Very flat slopes (< 0.0001) or very steep slopes (> 0.1) may cause convergence problems. Verify slope is appropriate for the channel.",
+        "type": MessageType.PROFILESCHECK
+    },
+    "PF_IC_03": {
+        "message": "Critical depth used for starting water surface",
+        "help_text": "Critical depth is appropriate when Froude number > 1.0 (supercritical flow). Verify flow regime is supercritical at the downstream boundary.",
+        "type": MessageType.PROFILESCHECK
+    },
+    "PF_IC_04": {
+        "message": "Energy grade line slope method used for starting water surface",
+        "help_text": "EGL slope method is appropriate for gradually varied flow. Verify energy slope is reasonable for the reach.",
+        "type": MessageType.PROFILESCHECK
+    },
+
     # Data Quality
     "MP_DQ_01": {
         "message": "Missing data for {profile} at RS {station}",

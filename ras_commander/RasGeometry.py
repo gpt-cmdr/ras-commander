@@ -260,7 +260,7 @@ class RasGeometry:
             stacklevel=2
         )
         from .geom import GeomLateral
-        return GeomLateral.get_lateral_structures(geom_file, river, reach)
+        return GeomLateral.get_lateral_structures(geom_file, river)
 
     @staticmethod
     @log_call
