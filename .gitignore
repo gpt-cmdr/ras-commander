@@ -129,3 +129,37 @@ ras_skills/*/working/
 
 # Archive directories
 .old/
+/.claude/outputs/notebook-runner
+/.claude/outputs
+
+# Temporary test scripts (task-specific)
+check_*.py
+fix_*.py
+run_*.py
+test_*.py
+monitor_*.py
+cayce_*.py
+generate_*.py
+
+# Temporary output files
+temp_*.txt
+temp_*.log
+test_output*.log
+*_output.txt
+nb*_test_output.txt
+investigate_*.txt
+
+# Batch test files
+test_*.bat
+
+# Temporary example outputs
+examples/core_sensitivity_results.csv
+examples/scenarios_*.csv
+examples/hyetographs_uncertainty/
+examples/Atlas\ 14\ Storm\ Hyetographs/
+
+# Test notebooks
+test_notebook*.ipynb
+
+# Cleanup scripts (can be regenerated)
+cleanup_temp_files.sh
