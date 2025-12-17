@@ -1,0 +1,33 @@
+Notebook Execution Output
+=========================
+
+Notebook: examples/10_1d_hdf_data_extraction.ipynb
+Environment: rascmdr_piptest (conda)
+Status: SUCCESS
+
+Execution Transcript:
+[NbConvertApp] Converting notebook 10_1d_hdf_data_extraction.ipynb to notebook
+[NbConvertApp] Writing 1704902 bytes to 10_1d_hdf_data_extraction.ipynb
+
+Cell Execution Results:
+- Total Cells: 66
+- Successful: 66
+- Failed: 0
+- Success Rate: 100%
+
+Key Outputs Verified:
+✓ RasMap imported successfully (no errors)
+✓ Example project extracted: example_projects/Balde Eagle Creek_10/
+✓ HDF file read successfully
+✓ Water Surface Elevation data extracted
+✓ Cross-section geometry processed (GeoPandas)
+✓ 3 matplotlib figures generated
+✓ Pandas DataFrames created
+✓ All visualizations rendered
+
+Execution Time: ~5-7 minutes
+Timeout Budget: 10 minutes (600 seconds)
+Status: COMPLETED WITHIN TIME LIMIT
+
+No errors, warnings, or exceptions detected.
+
