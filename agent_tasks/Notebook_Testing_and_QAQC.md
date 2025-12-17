@@ -193,8 +193,8 @@ bald_eagle_path = current_dir / extract_path / "Balde Eagle Creek"
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 45 | `16_automating_ras_with_win32com.ipynb` | ⏳ PENDING | - | Legacy COM interface |
-| 46 | `17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb` | ⏳ PENDING | - | Legacy 1D automation with HEC-RAS Controller |
+| 45 | `16_automating_ras_with_win32com.ipynb` | ⏸️ SKIP (GUI) | 5.73s | **TESTED 2025-12-17**: Requires GUI automation - notebook launches HEC-RAS GUI and requires manual interaction with RAS Mapper. Not suitable for automated testing. Also missing project initialization (no `init_ras_project()` call). AttributeError: `ras.ras_exe_path` not found. |
+| 46 | `17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb` | ⏸️ SKIP (GUI) | 4.44s | **TESTED 2025-12-17**: Missing project initialization - fails at `ras.plan_df` because no `init_ras_project()` or `RasExamples.extract_project()` call. Notebook is designed for interactive COM automation, not automated testing. |
 
 ---
 
