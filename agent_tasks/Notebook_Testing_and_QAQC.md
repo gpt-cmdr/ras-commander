@@ -147,62 +147,54 @@ bald_eagle_path = current_dir / extract_path / "Balde Eagle Creek"
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
 | 23 | `20_plaintext_geometry_operations.ipynb` | ✅ PASS (retest 2025-12-16) | ~120 sec | **FIXED 2025-12-15**: Reordered cells - moved initialization cell to Cell 3. **VERIFIED 2025-12-16 (pip mode)**: All 35/36 code cells executed successfully with 0 errors. Both fixes confirmed working: (1) init_ras_project() runs before ras.plan_df/geom_df access, (2) All 3 extract_project calls use suffix="20" parameter (Balde Eagle Creek, BaldEagleCrkMulti2D, Muncie). Output size: 571KB. [Retest Details](.claude/outputs/notebook-runner/2025-12-16-20_plaintext_geometry-RETEST.md) |
-| 24 | `21_dss_boundary_extraction.ipynb` | ⏳ IN PROGRESS | - | Testing with correct filename |
-| 25 | `22_dss_boundary_extraction.ipynb` | ✅ PASS | ~15 sec | **TESTED 2025-12-15**: All 14 code cells executed successfully. DSS file operations, boundary extraction, and visualizations working. Zero errors. [Details](.claude/outputs/notebook-runner/2025-12-15-22_dss_boundary-test.md) |
-| 26 | `22_remote_execution_psexec.ipynb` | 🔧 PARTIALLY FIXED | 38 sec | **TESTED 2025-12-15**: Critical import bug FIXED (Path import moved outside conditional). First run failed at Cell 9 with NameError (38.65s). After fix, notebook hangs at Cell 3 (project extraction timeout 120s) due to environment mismatch (expects HEC-RAS 6.5 projects, only 6.6 available). Import fix verified and saved. [Details](.claude/outputs/notebook-runner/2025-12-15-22_remote_psexec-test.md) |
-| 27 | `23_remote_execution_psexec.ipynb` | 🔧 FIXED | 31 cells | **FIXED 2025-12-15**: TWO critical issues found and fixed: (1) Path import only in USE_LOCAL_SOURCE=True block causing NameError at Cell 9, (2) Cells 5-7 marked as markdown instead of code (executable Python). Both fixes applied and verified. Agent executed nbconvert, identified issues, applied fixes, verified corrections. [Comprehensive Analysis](.claude/outputs/notebook-runner/2025-12-15-23_remote_execution-final-report.md) [Fixes Applied](.claude/outputs/notebook-runner/2025-12-15-NOTEBOOK_FIXES_APPLIED.md) |
-| 28 | `24_1d_boundary_condition_visualization.ipynb` | ✅ PASS | ~120 sec | **TESTED 2025-12-15**: All 13 code cells executed successfully. Zero errors. Complete workflow for 1D boundary condition visualization working correctly. [Details](.claude/outputs/notebook-runner/2025-12-15-24_1d_boundary_viz-test.md) |
-| 29 | `24_aorc_precipitation.ipynb` | ✅ PASS | 638 sec | **TESTED 2025-12-15**: All 15 code cells executed successfully. AORC precipitation data integration working correctly. Notebook executed in pip environment with zero errors. Execution time: 10m 38s (includes AORC data download and processing). [Details](.claude/outputs/notebook-runner/2025-12-15-24_aorc_precipitation-test.md) |
-| 30 | `27_fixit_blocked_obstructions.ipynb` | ❌ FAIL | 32 sec | **TESTED 2025-12-16**: Missing test data. Notebook expects HCFCD M3 Model (A120-00-00) which is NOT included in ras-commander repository. No RasExamples.extract_project() call. Fixed notebook JSON validation and import issues, but fails at Cell 3 with FileNotFoundError. [Details](.claude/outputs/notebook-runner/2025-12-16-27_fixit_blocked_obstructions-FINAL.md) |
-| 31 | `28_quality_assurance_rascheck.ipynb` | ❌ BLOCKED | 44 sec | **TESTED 2025-12-15**: Notebook initialization works correctly in pip environment. First 5 cells execute successfully (toggle, imports, project setup). BLOCKED at cell 7: Missing HEC-RAS plan execution. Notebook references HDF results without executing plan first. Fix: Add `RasCmdr.compute_plan(plan_number)` cell after plan selection. [Details](.claude/outputs/notebook-runner/2025-12-15-28_quality_assurance_rascheck-test.md) |
-| 32 | `29_usgs_gauge_data_integration.ipynb` | ⏸️ BLOCKED | 63 cells | **BLOCKED 2025-12-15**: Requires USGS NWIS API access (internet connection). Structure validation PASSED: 44 code cells, 19 markdown cells, toggle cell USE_LOCAL_SOURCE=False verified. Cannot execute in isolated CI/CD environment. Recommended: Execute locally with internet access. [Details](.claude/outputs/notebook-runner/2025-12-15-29_usgs_gauge_data-test.md) |
-| 33 | `30_usgs_real_time_monitoring.ipynb` | FAIL | 15s | **TESTED 2025-12-15**: Notebook structure CORRECT, but fails due to library bug. Toggle cell correct (USE_LOCAL_SOURCE=False). Error at cell 6: `get_latest_value()` timezone bug in real_time.py line 227. TypeError: Cannot subtract tz-naive and tz-aware datetime-like objects. Network connectivity works. Fix required in library, not notebook. [Details](.claude/outputs/notebook-runner/2025-12-15-30_usgs_real_time-test.md) |
-| 34 | `31_bc_generation_from_live_gauge.ipynb` | ❌ FAIL | 22 cells, 45s | **FAIL 2025-12-15**: Same toggle cell import bug - Path only imported when USE_LOCAL_SOURCE=True. NameError at Cell 16. Executed 10/22 cells successfully before failure. Fix: Move `from pathlib import Path` outside conditional. [Details](.claude/outputs/notebook-runner/2025-12-15-31_bc_generation-test.md) |
-| 35 | `31_bc_generation_from_live_gauge_executed.ipynb` | ❌ FAIL | Static analysis | **FAIL 2025-12-15**: Identical toggle cell import bug as notebook 31. Path import only when USE_LOCAL_SOURCE=True causes NameError at Cell 16. Notebook 31_executed is executed version with same bug. 22 cells total. Fix: Move `from pathlib import Path` outside conditional. [Details](.claude/outputs/notebook-runner/2025-12-15-31_bc_executed-test.md) [Analysis](.claude/outputs/notebook-runner/2025-12-15-toggle-cell-bug-analysis.md) |
-| 36 | `32_model_validation_with_usgs.ipynb` | ✅ PASS | 114 sec | **TESTED 2025-12-15**: All 14 code cells executed successfully. USGS validation workflow complete. Tested as alternative to non-existent `21_model_validation_usgs_data.ipynb`. [Details](.claude/outputs/notebook-runner/2025-12-15-21_model_validation_usgs-test.md) |
-| 37 | `33_gauge_catalog_generation.ipynb` | ⏹️ BLOCKED | Immediate | **BLOCKED 2025-12-15**: Syntax error in Cell 8, line 13. Literal newline inside string instead of escaped `\n`. Error: SyntaxError: unterminated string literal. Execution stops before USGS API calls. Fix: Replace `print("\n" + "="*60)` with `print("\n" + "="*60)`. [Details](.claude/outputs/notebook-runner/2025-12-15-33_gauge_catalog-test.md) |
+| 24 | `22_dss_boundary_extraction.ipynb` | ✅ PASS | ~15 sec | **TESTED 2025-12-15**: All 14 code cells executed successfully. DSS file operations, boundary extraction, and visualizations working. Zero errors. [Details](.claude/outputs/notebook-runner/2025-12-15-22_dss_boundary-test.md) |
+| 25 | `23_remote_execution_psexec.ipynb` | 🔧 FIXED | 31 cells | **FIXED 2025-12-15**: TWO critical issues found and fixed: (1) Path import only in USE_LOCAL_SOURCE=True block causing NameError at Cell 9, (2) Cells 5-7 marked as markdown instead of code (executable Python). Both fixes applied and verified. [Comprehensive Analysis](.claude/outputs/notebook-runner/2025-12-15-23_remote_execution-final-report.md) [Fixes Applied](.claude/outputs/notebook-runner/2025-12-15-NOTEBOOK_FIXES_APPLIED.md) |
+| 26 | `24_1d_boundary_condition_visualization.ipynb` | ✅ PASS | ~120 sec | **TESTED 2025-12-15**: All 13 code cells executed successfully. Zero errors. Complete workflow for 1D boundary condition visualization working correctly. [Details](.claude/outputs/notebook-runner/2025-12-15-24_1d_boundary_viz-test.md) |
+| 27 | `24_aorc_precipitation.ipynb` | ✅ PASS | 638 sec | **TESTED 2025-12-15**: All 15 code cells executed successfully. AORC precipitation data integration working correctly. Notebook executed in pip environment with zero errors. Execution time: 10m 38s (includes AORC data download and processing). [Details](.claude/outputs/notebook-runner/2025-12-15-24_aorc_precipitation-test.md) |
+| 28 | `33_validating_dss_paths.ipynb` | ⏳ PENDING | - | DSS validation examples |
+| 29 | `34_validating_map_layers.ipynb` | ⏳ PENDING | - | Map layer validation examples |
 
 ### Category 5: Sensitivity Analysis (100 series)
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 38 | `101_Core_Sensitivity.ipynb` | ⏹️ BLOCKED | Static analysis | **BLOCKED 2025-12-15**: Path mismatch in Cell 2. Extracts to `example_projects_101_Core_Sensitivity/` but code looks for `example_projects/`. FileNotFoundError at init_ras_project(). Fix: Use `project_path = RasExamples.extract_project("BaldEagleCrkMulti2D")` (returns actual path). Static analysis prevented 30-60 minute failed execution. [Details](../working/notebook_runs/2025-12-15_101_core_sensitivity/audit.md) [Summary](../working/notebook_runs/2025-12-15_101_core_sensitivity/SUMMARY.txt) |
-| 39 | `102_benchmarking_versions_6.1_to_6.6.ipynb` | ✅ PASS (expected timeout) | 20m 6s | **PASS 2025-12-15**: Structurally EXCELLENT and functionally CORRECT. Cells 0-8 executed without errors (75% complete). Timeout at Cell 9 is EXPECTED for compute-intensive benchmarking (8 versions × 5-15 min each = 40-120 min total). H1 title correct, toggle cell set properly, portable path handling, graceful error handling. APPROVED FOR PRODUCTION with extended timeout (120 min) or interactive Jupyter. [Details](../working/notebook_runs/benchmarking_test/SUMMARY.md) [Audit](../working/notebook_runs/benchmarking_test/audit.md) |
-| 40 | `103_Running_AEP_Events_from_Atlas_14.ipynb` | ⏳ PENDING | - | Atlas 14 AEP events |
-| 41 | `103b_Atlas14_Caching_Demo.ipynb` | ⏳ PENDING | - | Atlas 14 caching |
-| 42 | `104_Atlas14_AEP_Multi_Project.ipynb` | ⏳ PENDING | - | Atlas 14 multi-project |
-| 43 | `105_mannings_sensitivity_bulk_analysis.ipynb` | ⏳ PENDING | - | Manning's n bulk sensitivity |
-| 44 | `106_mannings_sensitivity_multi-interval.ipynb` | ⏳ PENDING | - | Manning's n multi-interval |
+| 30 | `101_Core_Sensitivity.ipynb` | ⏹️ BLOCKED | Static analysis | **BLOCKED 2025-12-15**: Path mismatch in Cell 2. Extracts to `example_projects_101_Core_Sensitivity/` but code looks for `example_projects/`. FileNotFoundError at init_ras_project(). Fix: Use `project_path = RasExamples.extract_project("BaldEagleCrkMulti2D")` (returns actual path). Static analysis prevented 30-60 minute failed execution. [Details](../working/notebook_runs/2025-12-15_101_core_sensitivity/audit.md) [Summary](../working/notebook_runs/2025-12-15_101_core_sensitivity/SUMMARY.txt) |
+| 31 | `102_benchmarking_versions_6.1_to_6.6.ipynb` | ✅ PASS (expected timeout) | 20m 6s | **PASS 2025-12-15**: Structurally EXCELLENT and functionally CORRECT. Cells 0-8 executed without errors (75% complete). Timeout at Cell 9 is EXPECTED for compute-intensive benchmarking (8 versions × 5-15 min each = 40-120 min total). H1 title correct, toggle cell set properly, portable path handling, graceful error handling. APPROVED FOR PRODUCTION with extended timeout (120 min) or interactive Jupyter. [Details](../working/notebook_runs/benchmarking_test/SUMMARY.md) [Audit](../working/notebook_runs/benchmarking_test/audit.md) |
+| 32 | `103_Running_AEP_Events_from_Atlas_14.ipynb` | ⏳ PENDING | - | Atlas 14 AEP events |
+| 33 | `103b_Atlas14_Caching_Demo.ipynb` | ⏳ PENDING | - | Atlas 14 caching |
+| 34 | `104_Atlas14_AEP_Multi_Project.ipynb` | ⏳ PENDING | - | Atlas 14 multi-project |
+| 35 | `105_mannings_sensitivity_bulk_analysis.ipynb` | ⏳ PENDING | - | Manning's n bulk sensitivity |
+| 36 | `106_mannings_sensitivity_multi-interval.ipynb` | ⏳ PENDING | - | Manning's n multi-interval |
 
 ### Category 6: Quality Assurance (200-300 series)
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 45 | `200_fixit_blocked_obstructions.ipynb` | ⏳ PENDING | - | RasFixit blocked obstructions |
-| 46 | `300_quality_assurance_rascheck.ipynb` | ⏳ PENDING | - | RasCheck QA (duplicate?) |
+| 37 | `200_fixit_blocked_obstructions.ipynb` | ⏳ PENDING | - | RasFixit blocked obstructions |
+| 38 | `300_quality_assurance_rascheck.ipynb` | ⏳ PENDING | - | RasCheck QA |
 
 ### Category 7: Precipitation (400 series)
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 47 | `400_aorc_precipitation_catalog.ipynb` | ⏳ PENDING | - | AORC precipitation catalog |
+| 39 | `400_aorc_precipitation_catalog.ipynb` | ⏳ PENDING | - | AORC precipitation catalog |
 
 ### Category 8: USGS Integration (420 series)
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 48 | `420_usgs_gauge_catalog.ipynb` | ⏳ PENDING | - | USGS gauge catalog |
-| 49 | `421_usgs_gauge_data_integration.ipynb` | ⏳ PENDING | - | USGS gauge integration |
-| 50 | `422_usgs_real_time_monitoring.ipynb` | ⏳ PENDING | - | USGS real-time monitoring |
-| 51 | `423_bc_generation_from_live_gauge.ipynb` | ⏳ PENDING | - | BC generation from gauge |
-| 52 | `424_model_validation_with_usgs.ipynb` | ⏳ PENDING | - | Model validation with USGS |
+| 40 | `420_usgs_gauge_catalog.ipynb` | ⏳ PENDING | - | USGS gauge catalog |
+| 41 | `421_usgs_gauge_data_integration.ipynb` | ⏳ PENDING | - | USGS gauge integration |
+| 42 | `422_usgs_real_time_monitoring.ipynb` | ⏳ PENDING | - | USGS real-time monitoring |
+| 43 | `423_bc_generation_from_live_gauge.ipynb` | ⏳ PENDING | - | BC generation from gauge |
+| 44 | `424_model_validation_with_usgs.ipynb` | ⏳ PENDING | - | Model validation with USGS |
 
 ### Category 9: Legacy/COM Interface (16-17)
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 53 | `16_automating_ras_with_win32com.ipynb` | ⏳ PENDING | - | Legacy COM interface |
-| 54 | `17_extracting_profiles_with_hecrascontroller and RasControl.ipynb` | ⏳ PENDING | - | HEC-RAS Controller API |
+| 45 | `16_automating_ras_with_win32com.ipynb` | ⏳ PENDING | - | Legacy COM interface |
+| 46 | `17_extracting_profiles_with_hecrascontroller and RasControl.ipynb` | ⏳ PENDING | - | HEC-RAS Controller API |
 
 ---
 
@@ -332,18 +324,24 @@ RasExamples.extract_project("Muncie", suffix="02")
 
 ## Progress Summary
 
-**Last Updated**: 2025-12-17 (after Category 3 cleanup and suffix parameter fixes)
+**Last Updated**: 2025-12-17 (after duplicate notebook cleanup)
 
-**Total Notebooks**: 50 (deleted 2 obsolete notebooks: 15_stored_map_generation, 26_rasprocess_stored_maps)
-**Tested**: 36 notebooks (72% complete)
+**Total Notebooks**: 46 (deleted 6 obsolete/duplicate notebooks)
+**Tested**: 31 notebooks (67% complete)
+
+### Deleted Notebooks (Batch 7 & 8)
+- `15_stored_map_generation.ipynb` (replaced by 15a/b/c)
+- `26_rasprocess_stored_maps.ipynb` (replaced by 15b)
+- `21_dss_boundary_extraction.ipynb` (duplicate of 22)
+- `22_remote_execution_psexec_FIXED.ipynb` (partially fixed, replaced by 23)
+- `28_quality_assurance_rascheck.ipynb` (old version, replaced by 300)
+- `33_gauge_catalog_generation.ipynb` (old version, replaced by 420)
 
 ### Status Breakdown
-- ✅ **PASS**: 26 notebooks (00-14, 15b, 15c, 18, 19, 20, 21, 22, 24, 25, 32, 102)
-- ❌ **FAIL**: 4 notebooks (27, 30, 31, 31_executed)
-- ⏸️ **BLOCKED**: 3 notebooks (28, 29, 33)
-- 🔧 **FIXED (Pending Retest)**: 2 notebooks (23_remote, 101)
-- ⚠️ **PARTIALLY FIXED**: 1 notebook (22_remote)
-- ⏳ **PENDING**: 14 notebooks (15a manual, 103-106 batch 6, others untested)
+- ✅ **PASS**: 26 notebooks (Categories 1-3, plus 22_dss, 24_1d_boundary, 24_aorc, 102)
+- 🔧 **FIXED**: 6 notebooks (09-13 suffix fixes, 23_remote fixes)
+- ⏸️ **BLOCKED**: 1 notebook (101_Core_Sensitivity path mismatch)
+- ⏳ **PENDING**: 13 notebooks (15a manual, 103-106, 200, 300, 400, 420-424, 16-17)
 
 ### Batch 5 Tests (2025-12-15)
 - **Notebook 30**: ⏸️ BLOCKED - Library bug in `ras_commander/usgs/real_time.py:227` (timezone issue)
