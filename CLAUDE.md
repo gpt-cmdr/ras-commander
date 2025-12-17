@@ -224,6 +224,11 @@ See `.claude/rules/documentation/`:
 - **mkdocs-config.md** - CRITICAL: ReadTheDocs strips symlinks, use cp not ln -s
 - **notebook-standards.md** - H1 title required, run before commit
 
+### Validation Framework
+
+See `.claude/rules/validation/`:
+- **validation-patterns.md** - Pre-flight checks, data quality, ValidationSeverity levels, detailed vs boolean methods
+
 ## Architecture Overview
 
 ### Core Execution Classes
@@ -462,6 +467,22 @@ hdf = HdfResultsPlan(path / "Muncie.p01.hdf")
 wse = hdf.get_wse(time_index=-1)
 ```
 
+**Validation (pre-flight checks)**:
+```python
+from ras_commander.dss import RasDss
+from ras_commander import RasMap
+
+# Validate DSS boundary condition
+report = RasDss.check_pathname(dss_file, pathname)
+if not report.is_valid:
+    report.print_report(show_passed=False)
+    raise ValueError("Invalid boundary condition")
+
+# Validate terrain layer
+if not RasMap.is_valid_layer(terrain_file):
+    raise ValueError("Invalid terrain layer")
+```
+
 ### Common Pitfalls
 
 - ❌ Don't instantiate static classes: `RasCmdr()` is wrong
@@ -477,6 +498,7 @@ wse = hdf.get_wse(time_index=-1)
 - Python patterns: `.claude/rules/python/`
 - HEC-RAS domain: `.claude/rules/hec-ras/`
 - Testing: `.claude/rules/testing/`
+- Validation: `.claude/rules/validation/`
 - Documentation: `.claude/rules/documentation/`
 - Multi-session coordination: `agent_tasks/README.md`
 - Feature development: `feature_dev_notes/CLAUDE.md`

@@ -25,6 +25,13 @@ The ras_commander library is organized into core modules and specialized subpack
 - `RasMap` (`RasMap.py`) - RASMapper configuration parsing and stored map processing
 - `RasControl` (`RasControl.py`) - Legacy HEC-RAS 3.x-4.x COM interface
 
+**Validation Framework**:
+- `validation_base` (`validation_base.py`) - Core validation infrastructure
+  - `ValidationSeverity` - Severity levels (INFO < WARNING < ERROR < CRITICAL)
+  - `ValidationResult` - Single validation check result
+  - `ValidationReport` - Comprehensive validation report
+  - Used by `RasDss`, `RasMap`, and other modules for pre-flight checks
+
 **HDF Data Access** (14+ modules):
 - `HdfBase`, `HdfUtils` - Shared HDF helpers and utilities
 - `HdfMesh`, `HdfBndry`, `HdfXsec`, `HdfStruc`, `HdfPlan` - Geometry and metadata extraction

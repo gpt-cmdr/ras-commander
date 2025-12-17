@@ -56,6 +56,20 @@ RasDss.get_catalog("file.dss")    # Loads pyjnius, starts JVM, downloads Monolit
 | `extract_boundary_timeseries(boundaries_df, ...)` | Extract BC data | `DataFrame` |
 | `shutdown_jvm()` | Placeholder (no-op) | `None` |
 
+### Validation Methods
+
+DSS pathname validation methods (see `examples/33_validating_dss_paths.ipynb`):
+
+| Method | Purpose | Returns |
+|--------|---------|---------|
+| `check_pathname_format(pathname)` | Validate DSS pathname structure | `ValidationResult` |
+| `check_file_exists(dss_file)` | Verify file exists and is accessible | `ValidationResult` |
+| `check_pathname_exists(dss_file, pathname)` | Verify pathname in catalog | `ValidationResult` |
+| `check_data_availability(dss_file, pathname, ...)` | Verify time series data coverage | `ValidationResult` |
+| `check_pathname(dss_file, pathname, ...)` | Comprehensive validation (all checks) | `ValidationReport` |
+| `is_valid_pathname(pathname)` | Quick format check (boolean) | `bool` |
+| `is_pathname_available(dss_file, pathname)` | Quick availability check (boolean) | `bool` |
+
 ### DataFrame Metadata
 
 Time series DataFrames include metadata in `df.attrs`:
