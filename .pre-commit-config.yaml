@@ -1,0 +1,109 @@
+# Pre-Commit Configuration for ras-commander
+# ============================================
+#
+# Installation:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Usage:
+#   pre-commit run --all-files       # Run all hooks
+#   pre-commit run ruff --all-files  # Run specific hook
+#   git commit --no-verify           # Bypass hooks (emergency)
+#
+# Documentation: feature_dev_notes/Hooks_Infrastructure/README.md
+
+default_stages: [commit]
+fail_fast: false
+
+repos:
+  # ===========================================================================
+  # TIER 1: UNIVERSAL FILE HYGIENE (Zero Risk, High Reward)
+  # ===========================================================================
+  # Standard pre-commit hooks used by thousands of projects.
+  # Auto-fix safe issues, prevent common problems.
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Whitespace and line ending fixes (auto-fix)
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+
+      - id: end-of-file-fixer
+        name: Ensure files end with newline
+
+      - id: mixed-line-ending
+        name: Normalize line endings to LF
+        args: ['--fix=lf']
+
+      # File format validation (fail on invalid)
+      - id: check-yaml
+        name: Validate YAML syntax
+
+      - id: check-toml
+        name: Validate TOML syntax
+
+      - id: check-json
+        name: Validate JSON syntax
+
+      # Security (fail on detection)
+      - id: detect-private-key
+        name: Detect private keys
+
+      # Size limits (fail if exceeded)
+      - id: check-added-large-files
+        name: Block files over 500KB
+        args: ['--maxkb=500']
+
+  # ===========================================================================
+  # TIER 2: RAS-COMMANDER SPECIFIC GUARDS (Very Low Risk, Very High Reward)
+  # ===========================================================================
+  # Custom hooks protecting repository invariants.
+  # Prevent documented, recurring deployment issues.
+
+  - repo: local
+    hooks:
+      # Guard: docs/notebooks/ must never be committed
+      # These are generated from examples/ during build.
+      # Committing them causes RTD deployment failures.
+      - id: check-docs-notebooks
+        name: Block docs/notebooks commits
+        entry: python hooks/check_docs_notebooks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Guard: ReadTheDocs must use copy, not symlinks
+      # RTD strips symlinks during rsync deployment.
+      # Using ln -s instead of cp -r = broken docs.
+      - id: check-rtd-no-symlinks
+        name: RTD symlink guard
+        entry: python hooks/check_rtd_no_symlinks.py
+        language: system
+        files: ^\.readthedocs\.yaml$
+
+      # Guard: mkdocs-jupyter must not execute notebooks
+      # CI doesn't have HEC-RAS installed.
+      # execute: true = build failures.
+      - id: check-mkdocs-no-execute
+        name: MkDocs execute guard
+        entry: python hooks/check_mkdocs_no_execute.py
+        language: system
+        files: ^mkdocs\.yml$
+
+# ===========================================================================
+# FUTURE TIERS (Not Yet Implemented)
+# ===========================================================================
+# See: feature_dev_notes/Hooks_Infrastructure/STATUS.md
+#
+# Tier 3 (Low Risk):
+#   - Ruff linter/formatter
+#   - audit_ipynb.py integration (--fail-on-error-outputs)
+#
+# Tier 4 (Medium Risk):
+#   - Version consistency check
+#
+# Tier 5 (Higher Risk - Requires Tuning):
+#   - LLM Style Sentinel (Haiku)
+#   - LLM Docs Sentinel (Haiku)
+#   - Opus Orchestrator

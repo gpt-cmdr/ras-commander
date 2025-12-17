@@ -194,7 +194,7 @@ bald_eagle_path = current_dir / extract_path / "Balde Eagle Creek"
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
 | 45 | `16_automating_ras_with_win32com.ipynb` | ⏳ PENDING | - | Legacy COM interface |
-| 46 | `17_extracting_profiles_with_hecrascontroller and RasControl.ipynb` | ⏳ PENDING | - | HEC-RAS Controller API |
+| 46 | `17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb` | ⏳ PENDING | - | Legacy 1D automation with HEC-RAS Controller |
 
 ---
 

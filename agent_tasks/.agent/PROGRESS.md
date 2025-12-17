@@ -2130,3 +2130,24 @@ Session 9 successfully completed 3 high-priority migrations (remote-executor, qu
 
 **Status**: ✅ RASCHECK MODULE COMPLETE - 115% of FEMA cHECk-RAS baseline achieved
 
+---
+## Session 20 - 2025-12-17
+
+**Goal**: Revise notebooks 11 and 13 to use new library API for face selection
+
+**Background**:
+- Spec file: `feature_dev_notes/00-New/2D detail face data notebook.txt`
+- Revision plan: `.claude/outputs/notebook-13-revision-plan.md`
+- Library now has `HdfMesh.find_nearest_face()`, `get_faces_along_profile_line()`, `combine_faces_to_linestring()`
+- Notebooks 11 and 13 have custom helpers that can be replaced with library API
+
+**Tasks**:
+- [ ] Create revised notebook 13 (`_revised` suffix)
+- [ ] Create revised notebook 11 (`_revised` suffix)
+- [ ] Test both notebooks with example projects
+- [ ] Subagent review for functional equivalence
+- [ ] Update documentation (AGENTS.md files)
+- [ ] Replace originals and commit
+
+**Status**: IN PROGRESS
+

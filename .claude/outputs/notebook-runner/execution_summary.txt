@@ -1,62 +1,10 @@
-================================================================================
-NOTEBOOK 14 TEST EXECUTION SUMMARY
-================================================================================
+Notebook 11 Revised - PASS
+Total cells: 138
+Errors: 0
+Warnings: ~27 (non-fatal)
+Status: PASS
 
-NOTEBOOK:    examples/14_fluvial_pluvial_delineation.ipynb
-STATUS:      RUNNING IN BACKGROUND
-TASK ID:     bb88e0f
-TIMEOUT:     3600 seconds (60 minutes)
-START TIME:  2025-12-16
+Key Fix: Removed duplicate cell 47 (find_nearest_cell)
+API Verified: HdfMesh.find_nearest_face() works correctly
 
-COMMAND:
---------
-"C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\python.exe" -m pytest \
-  --nbmake "C:\GH\ras-commander\examples\14_fluvial_pluvial_delineation.ipynb" \
-  -v --overwrite --nbmake-timeout=3600
-
-OUTPUT FILES:
--------------
-1. Test Result Report:
-   C:\GH\ras-commander\.claude\outputs\notebook-runner\14_test_result.md
-
-2. Test Status Tracking:
-   C:\GH\ras-commander\.claude\outputs\notebook-runner\14_test_status.md
-
-3. Monitoring Script:
-   C:\GH\ras-commander\.claude\outputs\notebook-runner\monitor_test_14.py
-
-4. Background Task Output:
-   C:\Users\billk_clb\AppData\Local\Temp\claude\tasks\bb88e0f.output
-
-MONITORING COMMANDS:
---------------------
-Check output file (Windows PowerShell):
-  Get-Content C:\Users\billk_clb\AppData\Local\Temp\claude\tasks\bb88e0f.output
-
-Run monitoring script:
-  python C:\GH\ras-commander\.claude\outputs\notebook-runner\monitor_test_14.py
-
-Check if pytest is still running:
-  Get-Process python
-
-EXPECTED COMPLETION:
---------------------
-Estimated time: 15-60 minutes
-  - HEC-RAS execution: 10-40 minutes
-  - Result extraction: 2-10 minutes
-  - Spatial analysis: 3-10 minutes
-
-COMPLETION INDICATORS:
-----------------------
-Test PASSED if output contains: "PASSED"
-Test FAILED if output contains: "FAILED" or "ERROR"
-Test TIMEOUT if exceeds 60 minutes
-
-NEXT STEPS:
------------
-1. Wait for test completion (15-60 minutes)
-2. Check background task output file for results
-3. Review .claude/outputs/notebook-runner/14_test_result.md
-4. If failed, review error messages and troubleshoot
-
-================================================================================
+See: .claude/outputs/notebook-runner/2025-12-17-notebook-11-revised-retest.md
