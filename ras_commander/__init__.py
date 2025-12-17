@@ -27,7 +27,7 @@ from .RasExamples import RasExamples
 from .M3Model import M3Model
 from .RasCmdr import RasCmdr
 from .RasControl import RasControl
-from .RasMap import RasMap
+from .rasmap import RasMap
 from .RasProcess import RasProcess
 from .RasGuiAutomation import RasGuiAutomation
 from .RasBreach import RasBreach
