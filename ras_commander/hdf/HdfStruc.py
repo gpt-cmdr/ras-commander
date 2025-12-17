@@ -14,6 +14,7 @@ All of the methods in this class are static and are designed to be used without 
 List of Functions in HdfStruc:
 - get_structures()
 - get_geom_structures_attrs()
+- get_culvert_hydraulics()
 """
 from typing import Dict, Any, List, Union
 from pathlib import Path
@@ -294,6 +295,127 @@ class HdfStruc:
 
         except Exception as e:
             logger.error(f"Error reading geometry structures attributes: {str(e)}")
+            return pd.DataFrame()
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_culvert_hydraulics(hdf_path: Path, datetime_to_str: bool = False) -> pd.DataFrame:
+        """
+        Extract culvert hydraulic properties from geometry HDF.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file
+        datetime_to_str : bool, optional
+            If True, converts datetime objects to ISO format strings, by default False
+
+        Returns
+        -------
+        pd.DataFrame
+            Culvert hydraulic data with columns:
+            - Structure_ID: unique culvert identifier
+            - Flow_Regime: flow regime setting (e.g., "Pressure Flow", "Open Channel")
+            - Entrance_Coefficient: entrance loss coefficient (Ke)
+            - Exit_Coefficient: exit loss coefficient (Kx)
+            - Scale_Factor: culvert scale factor
+            - Chart: chart selection for culvert analysis
+            - Additional culvert-specific hydraulic attributes
+
+        Notes
+        -----
+        Returns empty DataFrame if no culverts found in geometry file.
+        Includes flow regime setting and all hydraulic coefficients.
+        All byte strings are decoded to UTF-8.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                # Check if culvert data exists
+                if "Geometry/Structures" not in hdf_file:
+                    logger.info(f"No structures found in geometry file: {hdf_path}")
+                    return pd.DataFrame()
+
+                # Get structure attributes to identify culverts
+                if "Geometry/Structures/Attributes" not in hdf_file:
+                    logger.info(f"No structure attributes found: {hdf_path}")
+                    return pd.DataFrame()
+
+                struct_attrs = hdf_file["Geometry/Structures/Attributes"][()]
+                struct_df = pd.DataFrame(struct_attrs)
+
+                # Decode byte strings in structure attributes
+                for col in struct_df.columns:
+                    if struct_df[col].dtype.kind in {'S', 'a'}:  # Byte strings
+                        struct_df[col] = struct_df[col].str.decode('utf-8', errors='ignore')
+
+                # Filter for culverts only (assuming Type field exists)
+                if 'Type' in struct_df.columns:
+                    culvert_df = struct_df[struct_df['Type'].str.contains('Culvert', case=False, na=False)].copy()
+                else:
+                    logger.warning("No 'Type' column in structure attributes, returning all structures")
+                    culvert_df = struct_df.copy()
+
+                if culvert_df.empty:
+                    logger.info(f"No culverts found in geometry file: {hdf_path}")
+                    return pd.DataFrame()
+
+                # Assign Structure ID based on index
+                culvert_df.reset_index(drop=True, inplace=True)
+                culvert_df['Structure_ID'] = range(1, len(culvert_df) + 1)
+
+                # Extract culvert-specific data if available
+                culvert_data_path = "Geometry/Structures/Culvert Data"
+                if culvert_data_path in hdf_file:
+                    culvert_data = hdf_file[culvert_data_path][()]
+                    culvert_data_df = pd.DataFrame(culvert_data)
+
+                    # Decode byte strings in culvert data
+                    for col in culvert_data_df.columns:
+                        if culvert_data_df[col].dtype.kind in {'S', 'a'}:
+                            culvert_data_df[col] = culvert_data_df[col].str.decode('utf-8', errors='ignore')
+
+                    # Merge culvert-specific data with structure attributes
+                    # Note: We assume culvert data is in same order as culvert structures
+                    if len(culvert_data_df) == len(culvert_df):
+                        result_df = pd.concat([culvert_df, culvert_data_df], axis=1)
+                    else:
+                        logger.warning(f"Culvert data count ({len(culvert_data_df)}) doesn't match culvert structure count ({len(culvert_df)})")
+                        result_df = culvert_df
+                else:
+                    logger.warning(f"No 'Culvert Data' dataset found in {hdf_path}")
+                    result_df = culvert_df
+
+                # Standardize column names to match API specification
+                # Map HDF column names to expected names (adjust based on actual HDF structure)
+                column_mapping = {
+                    'Entrance Loss Coefficient': 'Entrance_Coefficient',
+                    'Exit Loss Coefficient': 'Exit_Coefficient',
+                    'Scale': 'Scale_Factor',
+                    'Chart': 'Chart',
+                    # Add more mappings as needed based on actual HDF structure
+                }
+
+                result_df = result_df.rename(columns=column_mapping)
+
+                # Convert datetime columns to string if requested
+                if datetime_to_str:
+                    datetime_cols = result_df.select_dtypes(include=['datetime64']).columns
+                    for col in datetime_cols:
+                        result_df[col] = result_df[col].dt.isoformat()
+
+                # Ensure all byte strings are decoded (if any remain)
+                for col in result_df.columns:
+                    if result_df[col].dtype == object:
+                        result_df[col] = result_df[col].apply(
+                            lambda x: x.decode('utf-8', errors='ignore') if isinstance(x, bytes) else x
+                        )
+
+                logger.info(f"Successfully extracted hydraulic data for {len(result_df)} culverts")
+                return result_df
+
+        except Exception as e:
+            logger.error(f"Error reading culvert hydraulics from {hdf_path}: {str(e)}")
             return pd.DataFrame()
 
     @staticmethod

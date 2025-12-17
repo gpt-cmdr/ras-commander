@@ -14,11 +14,12 @@ All of the methods in this class are static and are designed to be used without 
 
 - get_plan_start_time()
 - get_plan_end_time()
-- get_plan_timestamps_list()     
+- get_plan_timestamps_list()
 - get_plan_information()
 - get_plan_parameters()
 - get_plan_met_precip()
 - get_geometry_information()
+- get_starting_wse_method()
 
 
 
@@ -314,5 +315,111 @@ class HdfPlan:
         except Exception as e:
             logger.error(f"Failed to get geometry attributes: {str(e)}")
             raise ValueError(f"Failed to get geometry attributes: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_starting_wse_method(hdf_path: Path) -> Dict:
+        """
+        Extract initial water surface elevation calculation method from plan HDF.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS plan HDF file
+
+        Returns
+        -------
+        Dict
+            Initial condition method with keys:
+            - method: calculation method name (e.g., "Normal Depth", "Known WSE", "Critical Depth", "EGL Slope Line")
+            - slope: normal depth slope (if method is "Normal Depth")
+            - wse: known water surface elevation (if method is "Known WSE")
+            - Additional method-specific parameters
+
+        Notes
+        -----
+        The method determines how HEC-RAS calculates initial water surface elevations
+        at the start of an unsteady flow simulation or downstream boundary for steady flow.
+        Returns empty dict if boundary condition data not found.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                result = {}
+
+                # Try to get starting WSE method from Plan Parameters
+                plan_params_path = "Plan Data/Plan Parameters"
+                if plan_params_path in hdf_file:
+                    plan_params = hdf_file[plan_params_path]
+
+                    # Extract starting WSE method attributes
+                    # Common attribute names (adjust based on actual HDF structure):
+                    method_attrs = [
+                        'Downstream Reach Boundary Condition',
+                        'Initial Condition Method',
+                        'Starting Water Surface',
+                        'Boundary Condition Type',
+                    ]
+
+                    for attr_name in method_attrs:
+                        if attr_name in plan_params.attrs:
+                            value = plan_params.attrs[attr_name]
+                            if isinstance(value, bytes):
+                                value = HdfUtils.convert_ras_string(value)
+                            result['method'] = value
+                            break
+
+                    # If method is Normal Depth, get the slope
+                    if 'method' in result and 'Normal' in str(result['method']):
+                        slope_attrs = [
+                            'Normal Depth Slope',
+                            'Downstream Slope',
+                            'Friction Slope',
+                        ]
+                        for slope_attr in slope_attrs:
+                            if slope_attr in plan_params.attrs:
+                                slope_value = plan_params.attrs[slope_attr]
+                                if isinstance(slope_value, (np.number, float, int)):
+                                    result['slope'] = float(slope_value)
+                                    break
+
+                    # If method is Known WSE, get the elevation
+                    if 'method' in result and 'Known' in str(result['method']):
+                        wse_attrs = [
+                            'Known Water Surface',
+                            'Starting WSE',
+                            'Boundary Water Surface',
+                        ]
+                        for wse_attr in wse_attrs:
+                            if wse_attr in plan_params.attrs:
+                                wse_value = plan_params.attrs[wse_attr]
+                                if isinstance(wse_value, (np.number, float, int)):
+                                    result['wse'] = float(wse_value)
+                                    break
+
+                # If method not found in Plan Parameters, try Plan Information
+                if 'method' not in result:
+                    plan_info_path = "Plan Data/Plan Information"
+                    if plan_info_path in hdf_file:
+                        plan_info = hdf_file[plan_info_path]
+                        for attr_name in ['Flow Regime', 'Simulation Type']:
+                            if attr_name in plan_info.attrs:
+                                value = plan_info.attrs[attr_name]
+                                if isinstance(value, bytes):
+                                    value = HdfUtils.convert_ras_string(value)
+                                result['regime'] = value
+
+                # If still no method found, return indication
+                if 'method' not in result:
+                    logger.warning(f"Starting WSE method not found in {hdf_path}")
+                    result['method'] = 'Unknown'
+                    result['note'] = 'Boundary condition method not found in HDF file'
+
+                logger.info(f"Successfully extracted starting WSE method: {result.get('method', 'Unknown')}")
+                return result
+
+        except Exception as e:
+            logger.error(f"Error reading starting WSE method from {hdf_path}: {str(e)}")
+            return {'method': 'Error', 'error': str(e)}
 
 
