@@ -74,12 +74,13 @@ How agents should use notebooks
 - Notable cells: build network GeoDataFrames, summarize pump groups, plot selected elements; record plan run and extract pump/conduit curves.
 
 13_2d_detail_face_data_extraction.ipynb
-- Focus: Face-level analytics along profile lines; unique notebook-only helpers.
-- Functions: HdfMesh.get_mesh_face_property_tables (ras_commander/HdfMesh.py), HdfMesh.get_mesh_cell_property_tables (ras_commander/HdfMesh.py); HdfResultsMesh.get_mesh_faces_timeseries (ras_commander/HdfResultsMesh.py).
+- Focus: Face-level analytics along profile lines using library API.
+- Functions: HdfMesh.get_mesh_cell_faces (ras_commander/HdfMesh.py), HdfMesh.find_nearest_face (ras_commander/HdfMesh.py), HdfMesh.get_faces_along_profile_line (ras_commander/HdfMesh.py), HdfMesh.combine_faces_to_linestring (ras_commander/HdfMesh.py), HdfMesh.get_mesh_face_property_tables (ras_commander/HdfMesh.py); HdfResultsMesh.get_mesh_faces_timeseries (ras_commander/HdfResultsMesh.py).
 - Notable cells:
   - Extract `mesh_cell_faces` GeoDataFrame and preview attributes.
-  - Unique function `find_nearest_cell_face(point, cell_faces_df)`; returns `(face_id, distance)` and supports plotting the nearest face vs all faces.
-  - Profile-line selection along perpendicular faces; compute discharge-weighted velocity; enforce positive flow direction before aggregation.
+  - Use `HdfMesh.find_nearest_face()` to locate faces near points of interest.
+  - Use `HdfMesh.get_faces_along_profile_line()` for perpendicular face selection along transects.
+  - Notebook-specific: discharge-weighted velocity calculation, positive flow direction normalization (candidates for future library API).
 
 14_fluvial_pluvial_delineation.ipynb
 - Focus: Classify flooding mechanism by timing.
@@ -153,9 +154,9 @@ How agents should use notebooks
   - Aggregate key metrics from mesh/plan results; optional plots (disable to keep outputs light).
 
 Notebook‑only utilities and unique logic
-- `find_nearest_cell_face(...)` (13_2d_detail_face_data_extraction): nearest face selection and plotting; not part of the library API.
+- `calculate_discharge_weighted_velocity(...)` (13_2d_detail_face_data_extraction): discharge-weighted velocity aggregation (Vw = Sum(|Q|*V)/Sum(|Q|)); candidate for library API.
+- `convert_to_positive_values(...)` (13_2d_detail_face_data_extraction): positive flow direction normalization; candidate for library API.
 - Hyetograph generation for Atlas 14 AEP events (103_*): end‑to‑end pattern from CSV → plan clones → batch compute.
-- Profile‑based face aggregation (13_*): discharge‑weighted velocity and flow‑direction normalization.
 
 ---
 

@@ -55,8 +55,9 @@
   - `df_unsteady = RasControl.get_unsteady_results("01", max_times=10)`
   - Note: Uses plan numbers like HDF methods; automatically closes HEC-RAS to prevent conflicts
 
-**Face/Cell Utilities (from examples, not library)**
-- The examples include a notebook-only helper `find_nearest_cell_face(point, cell_faces_df)` that computes nearest faces to a point and plots selections. It is not part of the library API; port into scripts as needed.
+**Face/Cell Utilities**
+- Use `HdfMesh.find_nearest_face(point, cell_faces_gdf)` to find nearest faces to a point. See notebooks 11 and 13 for examples with visualization.
+- Use `HdfMesh.get_faces_along_profile_line(profile_line, cell_faces_gdf, ...)` to select faces perpendicular to a transect line. See notebook 13 for profile-based face analysis.
 
 **Performance & Execution**
 - `RasCmdr.compute_plan(..., num_cores=N)`: choose modest N (2–8) unless models benefit from higher parallelism.
