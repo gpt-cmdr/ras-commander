@@ -9,13 +9,16 @@ tools:
 working_directory: .
 description: |
   Handles git operations including commit preparation, pull request creation,
-  and git worktree management. Use when preparing commits with proper formatting,
-  creating pull requests with gh CLI, or setting up isolated git worktrees for
-  feature development. Integrates with using-git-worktrees skill for workspace
-  isolation.
+  git worktree management, and documentation build verification. Use when
+  preparing commits with proper formatting, creating pull requests with gh CLI,
+  setting up isolated git worktrees for feature development, or verifying
+  documentation builds before pushing. Includes critical pre-push checks to
+  prevent documentation build failures. Integrates with using-git-worktrees
+  skill for workspace isolation.
 
   Triggers: "commit", "pull request", "PR", "worktree", "git workflow",
-  "prepare commit", "create PR", "isolated workspace"
+  "prepare commit", "create PR", "isolated workspace", "docs build",
+  "documentation check", "verify build", "pre-push check"
 ---
 
 # Git Operations Subagent
@@ -244,6 +247,170 @@ if [[ $BRANCH == "main" ]] || [[ $BRANCH == "master" ]]; then
   # Ask user for confirmation
 fi
 ```
+
+## Documentation Build Verification
+
+### Critical Pre-Push Check (Prevents Build Failures)
+
+**Problem**: Documentation builds fail on EVERY commit if workflow dependencies are gitignored or missing.
+
+**Root Cause** (from 2025-12-17 incident):
+- `scripts/generate_cognitive_docs.py` was gitignored by overly broad pattern `generate_*.py`
+- Script existed locally but was never pushed to GitHub
+- GitHub Actions failed: "can't open file 'scripts/generate_cognitive_docs.py'"
+
+**Solution**: Verify workflow dependencies BEFORE pushing
+
+### Pre-Push Documentation Checklist
+
+**Run before pushing commits that touch docs/**:
+
+```bash
+# 1. Verify workflow scripts are NOT gitignored
+git check-ignore scripts/generate_cognitive_docs.py
+# Should return NOTHING (exit code 1 = not ignored)
+# If ignored, fix .gitignore immediately!
+
+# 2. Verify workflow scripts are committed
+git ls-files scripts/generate_cognitive_docs.py
+# Should output: scripts/generate_cognitive_docs.py
+# If missing: git add scripts/generate_cognitive_docs.py
+
+# 3. Test generator script runs
+python scripts/generate_cognitive_docs.py
+# Should output:
+#   Generated: docs/cognitive-infrastructure/agents.md
+#   Generated: docs/cognitive-infrastructure/skills.md
+#   Generated: docs/cognitive-infrastructure/commands.md
+
+# 4. Verify generated files created
+ls -la docs/cognitive-infrastructure/*.md
+# Should show: agents.md, commands.md, index.md, skills.md
+
+# 5. Test mkdocs build locally
+mkdocs build
+# Should complete with exit code 0
+# Warnings are OK, errors are NOT
+```
+
+### Quick Verification Script
+
+```bash
+#!/bin/bash
+echo "=== Documentation Build Pre-Push Check ==="
+
+# 1. Check for gitignored workflow files
+if git check-ignore scripts/generate_cognitive_docs.py >/dev/null 2>&1; then
+    echo "✗ FAIL: scripts/generate_cognitive_docs.py is gitignored!"
+    echo "  Fix: Update .gitignore to exclude scripts/ directory"
+    exit 1
+fi
+
+# 2. Verify script is committed
+if ! git ls-files scripts/generate_cognitive_docs.py | grep -q .; then
+    echo "✗ FAIL: Generator script not in repository!"
+    echo "  Fix: git add scripts/generate_cognitive_docs.py"
+    exit 1
+fi
+
+# 3. Test generator script
+if ! python scripts/generate_cognitive_docs.py >/dev/null 2>&1; then
+    echo "✗ FAIL: Generator script failed!"
+    exit 1
+fi
+
+echo "✓ All documentation build checks passed!"
+```
+
+### Common Documentation Build Failures
+
+**1. Missing Generator Script**
+```bash
+# Error: can't open file 'scripts/generate_cognitive_docs.py'
+# Cause: File gitignored or not committed
+# Fix:
+git check-ignore scripts/generate_cognitive_docs.py  # Should return nothing
+git add scripts/generate_cognitive_docs.py
+git commit -m "Add missing generator script"
+```
+
+**2. Overly Broad Gitignore Patterns**
+```bash
+# Bad (catches everything):
+generate_*.py
+
+# Good (specific directory):
+ai_tools/generate_*.py
+```
+
+**3. Missing Dependencies**
+```bash
+# Error: ModuleNotFoundError: No module named 'yaml'
+# Cause: PyYAML not in docs/requirements-docs.txt
+# Fix:
+echo "PyYAML>=6.0" >> docs/requirements-docs.txt
+git add docs/requirements-docs.txt
+```
+
+**4. Broken MkDocs Config**
+```bash
+# Test YAML syntax locally:
+python -c "
+import yaml
+with open('.github/workflows/docs.yml') as f:
+    yaml.safe_load(f)
+print('✓ Valid YAML')
+"
+```
+
+### Workflow Files to Verify
+
+**GitHub Actions**: `.github/workflows/docs.yml`
+- Uses: `python scripts/generate_cognitive_docs.py`
+- Must exist and be committed
+
+**ReadTheDocs**: `.readthedocs.yaml`
+- Pre-build: `python scripts/generate_cognitive_docs.py`
+- Must exist and be committed
+
+**Dependencies**: `docs/requirements-docs.txt`
+- Must include: `PyYAML>=6.0`
+- For generator script imports
+
+### Post-Push Monitoring
+
+```bash
+# Monitor GitHub Actions after push
+gh run watch
+
+# Or view in browser
+echo "https://github.com/gpt-cmdr/ras-commander/actions"
+
+# Check failed logs if build fails
+gh run view --log-failed
+```
+
+### Emergency Fix for Failed Builds
+
+```bash
+# If docs build fails after push:
+
+# 1. Check what's missing
+git ls-files scripts/
+
+# 2. Add missing files immediately
+git add scripts/generate_cognitive_docs.py
+git commit -m "Fix: Add missing workflow script"
+git push
+
+# 3. Monitor fix
+gh run watch
+```
+
+### Reference
+
+**Comprehensive checklist**: `.github/DOC_BUILD_CHECKLIST.md`
+**Created**: 2025-12-17 (after fixing gitignored generator script issue)
 
 ## GitHub CLI Integration
 
