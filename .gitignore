@@ -121,7 +121,16 @@ use-deepseek-reasoner.bat
 run_notebook_test.bat
 run_notebook_test.ps1
 
-# Agent coordination system - ignore archived/completed work
+# Agent coordination system - development files untracked on main
+# Users cloning main get clean workspace; dev branch tracks these for development
+agent_tasks/.agent/
+agent_tasks/*.md
+!agent_tasks/README.md
+agent_tasks/api-consistency-auditor/
+agent_tasks/cross-repo/*.md
+!agent_tasks/cross-repo/README.md
+agent_tasks/ras-commander-api-research/*.md
+!agent_tasks/ras-commander-api-research/README.md
 agent_tasks/.old/
 agent_tasks/tasks/*/
 
