@@ -170,7 +170,7 @@ bald_eagle_path = current_dir / extract_path / "Balde Eagle Creek"
 
 | # | Notebook | QAQC Status | Execution Time | Notes |
 |---|----------|-------------|----------------|-------|
-| 37 | `200_fixit_blocked_obstructions.ipynb` | ⏹️ BLOCKED | 4.30s | **BLOCKED 2025-12-17**: (1) Path import fixed, (2) Missing test data - A120-00-00 HCFCD model not in RasExamples. **M3Model.extract_model()** class available for downloading HCFCD models, but A120 project ID unclear. Needs notebook redesign with M3Model integration or use alternate example. |
+| 37 | `200_fixit_blocked_obstructions.ipynb` | ✅ PASS (after fix) | 14.18s (v0.87.6) | **FIXED & TESTED 2025-12-17**: Integrated M3Model download. Cell 4 now uses `M3Model.extract_model('A')` to download Clear Creek watershed, then extracts A120-00-00 project ZIP. Notebook successfully demonstrates RasFixit blocked obstruction repair with real HCFCD data. All operations complete successfully. |
 | 38 | `300_quality_assurance_rascheck.ipynb` | ✅ PASS (after fix) | 9.97s (v0.87.6) | **FIXED & TESTED 2025-12-17**: API mismatch fixed - updated Cell 35 attribute names (`structure_contraction` → `structure_contraction_max`, `normal_contraction` → `regular_contraction_max`, etc.). All RasCheck validation operations working correctly with v0.87.6. |
 
 ### Category 7: Precipitation (400 series)
@@ -340,11 +340,10 @@ RasExamples.extract_project("Muncie", suffix="02")
 - `33_gauge_catalog_generation.ipynb` (old version, replaced by 420)
 
 ### Status Breakdown (Final as of v0.87.6)
-- ✅ **PASS**: 38 notebooks (including 300 after API fix)
-- 🔧 **FIXED**: 18 notebooks (09-13 suffix, 23_remote, 104-106 Batch 6, 16-17 COM, 420+423 USGS, real_time.py timezone, 101 suffix, 300 API)
-- ⏹️ **BLOCKED/TIMEOUT**: 5 notebooks (cannot be automated):
+- ✅ **PASS**: 39 notebooks (85% passing rate - 39/46)
+- 🔧 **FIXED**: 19 notebooks (09-13 suffix, 23_remote, 104-106 Batch 6, 16-17 COM, 420+423 USGS, real_time.py timezone, 101 suffix, 300 API, 200 M3Model)
+- ⏹️ **BLOCKED/TIMEOUT**: 4 notebooks (9% - cannot be automated):
   - **101**: Timeout during multi-core benchmarking (requires 15-30 min, code correct)
-  - **200**: Missing A120-00-00 test data (needs M3Model integration)
   - **400**: Timeout during storm catalog execution (requires 30+ min, code correct)
   - **422**: Timeout during continuous monitoring loop (expected behavior, timezone fix works)
   - **15a**: Requires manual GUI interaction
