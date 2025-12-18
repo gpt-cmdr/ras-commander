@@ -40,11 +40,11 @@ This subagent is a **lightweight navigator** to the USGS integration documentati
 ### 2. Example Notebooks (DEMONSTRATIONS)
 
 **Primary workflows**:
-- `examples/29_usgs_gauge_data_integration.ipynb` - Complete end-to-end workflow
-- `examples/30_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
-- `examples/31_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
-- `examples/32_model_validation_with_usgs.ipynb` - Model validation workflow
-- `examples/33_gauge_catalog_generation.ipynb` - Catalog generation (v0.89.0+)
+- `examples/421_usgs_gauge_data_integration.ipynb` - Complete end-to-end workflow
+- `examples/422_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
+- `examples/423_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
+- `examples/424_model_validation_with_usgs.ipynb` - Model validation workflow
+- `examples/420_usgs_gauge_catalog.ipynb` - Catalog generation (v0.89.0+)
 
 **When to use**: For working examples and jupyter-based demonstrations
 
@@ -139,23 +139,23 @@ Brief overview - see `usgs/CLAUDE.md` for complete details:
 
 **Q: How do I find gauges near my model?**
 - See: `usgs/CLAUDE.md` Section "Complete Workflow → 1. Spatial Discovery"
-- Example: `examples/29_usgs_gauge_data_integration.ipynb`
+- Example: `examples/421_usgs_gauge_data_integration.ipynb`
 
 **Q: How do I generate boundary conditions from USGS data?**
 - See: `usgs/CLAUDE.md` Section "Complete Workflow → 5. Boundary Generation"
-- Example: `examples/31_bc_generation_from_live_gauge.ipynb`
+- Example: `examples/423_bc_generation_from_live_gauge.ipynb`
 
 **Q: How do I validate my model with observed data?**
 - See: `usgs/CLAUDE.md` Section "Complete Workflow → 6. Model Validation"
-- Example: `examples/32_model_validation_with_usgs.ipynb`
+- Example: `examples/424_model_validation_with_usgs.ipynb`
 
 **Q: How do I monitor gauges in real-time?**
 - See: `usgs/CLAUDE.md` Section "Real-Time Workflows (v0.87.0+)"
-- Example: `examples/30_usgs_real_time_monitoring.ipynb`
+- Example: `examples/422_usgs_real_time_monitoring.ipynb`
 
 **Q: How do I create a gauge catalog for my project?**
 - See: `usgs/CLAUDE.md` Section "Catalog generation" (catalog.py)
-- Example: `examples/33_gauge_catalog_generation.ipynb`
+- Example: `examples/420_usgs_gauge_catalog.ipynb`
 
 **Q: What validation metrics are available?**
 - See: `usgs/CLAUDE.md` Section "Validation Metrics (metrics.py)"
@@ -250,6 +250,6 @@ When delegated a task:
 
 **Primary source hierarchy**:
 1. `ras_commander/usgs/CLAUDE.md` - COMPLETE workflows and API reference
-2. `examples/29-33_*.ipynb` - Working demonstrations
+2. `examples/420-424_*.ipynb` - Working demonstrations
 3. Code docstrings - Precise function signatures
 4. This file - Lightweight navigator ONLY

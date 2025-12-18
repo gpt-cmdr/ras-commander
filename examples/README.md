@@ -297,7 +297,7 @@ This notebook demonstrates an end-to-end workflow for generating and analyzing m
 - Creating a complete workflow from data to flood analysis
 - Comparing results across different return period events
 
-### [17_extracting_profiles_with_hecrascontroller and RasControl.ipynb](17_extracting_profiles_with_hecrascontroller%20and%20RasControl.ipynb)
+### [17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb](17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb)
 
 This notebook demonstrates the **RasControl** class for working with legacy HEC-RAS versions (3.x-4.x) using the HECRASController COM interface.
 

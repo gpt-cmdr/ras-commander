@@ -457,7 +457,7 @@ print("Valid Computation Intervals:", sorted(all_computation_intervals))
 
 ### Phase 2: GUI-Driven Parameter Verification
 
-Combine with win32com automation (see `examples/17_extracting_profiles_with_hecrascontroller.ipynb`) to verify parameter values through the GUI:
+Combine with win32com automation (see `examples/17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb`) to verify parameter values through the GUI:
 
 ```python
 # Conceptual workflow for GUI verification

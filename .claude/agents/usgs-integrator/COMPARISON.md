@@ -90,11 +90,11 @@ $ wc -l ras_commander/usgs/CLAUDE.md
 ### Complete Demonstrations
 ```
 examples/
-├── 29_usgs_gauge_data_integration.ipynb (end-to-end workflow)
-├── 30_usgs_real_time_monitoring.ipynb (real-time monitoring)
-├── 31_bc_generation_from_live_gauge.ipynb (boundary generation)
-├── 32_model_validation_with_usgs.ipynb (validation workflow)
-└── 33_gauge_catalog_generation.ipynb (catalog generation)
+├── 420_usgs_gauge_catalog.ipynb (catalog generation)
+├── 421_usgs_gauge_data_integration.ipynb (end-to-end workflow)
+├── 422_usgs_real_time_monitoring.ipynb (real-time monitoring)
+├── 423_bc_generation_from_live_gauge.ipynb (boundary generation)
+└── 424_model_validation_with_usgs.ipynb (validation workflow)
 ```
 
 **All workflows demonstrated in executable notebooks**

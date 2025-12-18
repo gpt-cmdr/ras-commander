@@ -384,11 +384,7 @@ ras-commander/
 │   │   ├── testing/        # Testing approaches
 │   │   └── documentation/  # Doc standards
 │   ├── skills/             # Library workflow skills
-│   └── agents/          # Specialist definitions
-├── ras_agents/             # Production agent reference data (tracked)
-│   ├── README.md           # Agent organization guidelines
-│   └── decompilation-agent/# .NET assembly reverse engineering
-├── ras_skills/             # Production domain skills
+│   └── agents/             # Specialist definitions
 ├── examples/               # Example notebooks
 │   ├── AGENTS.md           # Notebook index
 │   └── *.ipynb             # Jupyter notebooks

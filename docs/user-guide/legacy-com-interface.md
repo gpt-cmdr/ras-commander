@@ -259,6 +259,6 @@ except RuntimeError as e:
 
 ## See Also
 
-- `examples/17_extracting_profiles_with_hecrascontroller.ipynb`
+- `examples/17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb`
 - [Plan Execution](plan-execution.md) - Modern execution methods
 - [Steady Flow Analysis](steady-flow-analysis.md) - HDF-based steady results

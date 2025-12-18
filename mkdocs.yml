@@ -133,53 +133,61 @@ nav:
     - Remote Execution: user-guide/remote-execution.md
   - Example Notebooks:
     - Overview: examples/index.md
-    - Getting Started:
-      - Using RasExamples: notebooks/00_Using_RasExamples.ipynb
-      - Project Initialization: notebooks/01_project_initialization.ipynb
-    - File Operations:
-      - Plan and Geometry Operations: notebooks/02_plan_and_geometry_operations.ipynb
-      - Unsteady Flow Operations: notebooks/03_unsteady_flow_operations.ipynb
-      - Multiple Project Operations: notebooks/04_multiple_project_operations.ipynb
-      - Plan Parameter Operations: notebooks/09_plan_parameter_operations.ipynb
-      - Plaintext Geometry Parsing: notebooks/20_plaintext_geometry_operations.ipynb
-    - Execution Modes:
-      - Single Plan Execution: notebooks/05_single_plan_execution.ipynb
-      - Executing Plan Sets: notebooks/06_executing_plan_sets.ipynb
-      - Sequential Plan Execution: notebooks/07_sequential_plan_execution.ipynb
-      - Parallel Execution: notebooks/08_parallel_execution.ipynb
-      - Remote Execution (PsExec): notebooks/23_remote_execution_psexec.ipynb
-    - HDF Data Extraction:
-      - 1D HDF Data Extraction: notebooks/10_1d_hdf_data_extraction.ipynb
-      - 2D HDF Data Extraction: notebooks/11_2d_hdf_data_extraction.ipynb
-      - Pipes and Pumps: notebooks/12_2d_hdf_data_extraction pipes and pumps.ipynb
-      - 2D Face Data Extraction: notebooks/13_2d_detail_face_data_extraction.ipynb
-      - Fluvial-Pluvial Delineation: notebooks/14_fluvial_pluvial_delineation.ipynb
-    - Analysis & Results:
-      - Steady Flow Analysis: notebooks/19_steady_flow_analysis.ipynb
-      - Dam Breach Results: notebooks/18_breach_results_extraction.ipynb
-      - HECRASController Profiles: notebooks/17_extracting_profiles_with_hecrascontroller and RasControl.ipynb
-      - DSS Boundary Extraction: notebooks/22_dss_boundary_extraction.ipynb
-    - Mapping & Visualization:
-      - Stored Map Generation: notebooks/15_stored_map_generation.ipynb
-      - RASMapper Raster Exports: notebooks/21_rasmap_raster_exports.ipynb
-      - 1D Boundary Condition Visualization: notebooks/24_1d_boundary_condition_visualization.ipynb
-      - Programmatic Result Mapping: notebooks/25_programmatic_result_mapping.ipynb
-      - RasProcess Stored Maps: notebooks/26_rasprocess_stored_maps.ipynb
-    - Automation:
-      - Win32COM Automation: notebooks/16_automating_ras_with_win32com.ipynb
-      - AORC Precipitation: notebooks/24_aorc_precipitation.ipynb
-    - Geometry Repair:
-      - Fixit Blocked Obstructions: notebooks/27_fixit_blocked_obstructions.ipynb
-    - Quality Assurance:
-      - RasCheck Validation: notebooks/28_quality_assurance_rascheck.ipynb
-    - Sensitivity & Benchmarking:
-      - Core Sensitivity Testing: notebooks/101_Core_Sensitivity.ipynb
-      - Version Benchmarking (6.1-6.6): notebooks/102_benchmarking_versions_6.1_to_6.6.ipynb
-      - Manning's n Bulk Analysis: notebooks/105_mannings_sensitivity_bulk_analysis.ipynb
-      - Manning's n Multi-Interval: notebooks/106_mannings_sensitivity_multi-interval.ipynb
-    - Advanced Workflows:
-      - Atlas 14 AEP Events: notebooks/103_Running_AEP_Events_from_Atlas_14.ipynb
-      - Atlas 14 Multi-Project: notebooks/104_Atlas14_AEP_Multi_Project.ipynb
+    - Basic Automation & Project Data (100s):
+      - Using RasExamples: notebooks/100_using_ras_examples.ipynb
+      - Project Initialization: notebooks/101_project_initialization.ipynb
+      - Multiple Project Operations: notebooks/102_multiple_project_operations.ipynb
+      - Plan and Geometry Operations: notebooks/103_plan_and_geometry_operations.ipynb
+      - Plan Parameter Operations: notebooks/104_plan_parameter_operations.ipynb
+      - Single Plan Execution: notebooks/110_single_plan_execution.ipynb
+      - Executing Plan Sets: notebooks/111_executing_plan_sets.ipynb
+      - Sequential Plan Execution: notebooks/112_sequential_plan_execution.ipynb
+      - Parallel Execution: notebooks/113_parallel_execution.ipynb
+      - Win32COM Automation: notebooks/120_automating_ras_with_win32com.ipynb
+      - Legacy HECRASController: notebooks/121_legacy_hecrascontroller_and_rascontrol.ipynb
+    - Geometry Parsing & Operations (200s):
+      - Plaintext Geometry Operations: notebooks/200_plaintext_geometry_operations.ipynb
+      - Fixit Blocked Obstructions: notebooks/210_fixit_blocked_obstructions.ipynb
+    - Boundary Conditions (300s):
+      - Unsteady Flow Operations: notebooks/300_unsteady_flow_operations.ipynb
+      - DSS Boundary Extraction: notebooks/310_dss_boundary_extraction.ipynb
+      - DSS Path Validation: notebooks/311_validating_dss_paths.ipynb
+      - 1D Boundary Visualization: notebooks/320_1d_boundary_condition_visualization.ipynb
+    - HDF Data Operations (400s):
+      - 1D HDF Data Extraction: notebooks/400_1d_hdf_data_extraction.ipynb
+      - Steady Flow Analysis: notebooks/401_steady_flow_analysis.ipynb
+      - 2D HDF Data Extraction: notebooks/410_2d_hdf_data_extraction.ipynb
+      - Pipes and Pumps: notebooks/411_2d_hdf_pipes_and_pumps.ipynb
+      - 2D Face Data Extraction: notebooks/412_2d_detail_face_data_extraction.ipynb
+      - Breach Results Extraction: notebooks/420_breach_results_extraction.ipynb
+    - Remote Plan Execution (500s):
+      - Remote Execution (PsExec): notebooks/500_remote_execution_psexec.ipynb
+    - Advanced Data Analysis (600s):
+      - Floodplain Mapping GUI: notebooks/600_floodplain_mapping_gui.ipynb
+      - Floodplain Mapping RasProcess: notebooks/601_floodplain_mapping_rasprocess.ipynb
+      - Floodplain Mapping Python GIS: notebooks/602_floodplain_mapping_python_gis.ipynb
+      - Fluvial-Pluvial Delineation: notebooks/610_fluvial_pluvial_delineation.ipynb
+      - Map Layer Validation: notebooks/611_validating_map_layers.ipynb
+    - Sensitivity & Benchmarking (700s):
+      - Core Sensitivity Testing: notebooks/700_core_sensitivity.ipynb
+      - Version Benchmarking (6.1-6.6): notebooks/701_benchmarking_versions_6.1_to_6.6.ipynb
+      - Manning's n Bulk Analysis: notebooks/710_mannings_sensitivity_bulk_analysis.ipynb
+      - Manning's n Multi-Interval: notebooks/711_mannings_sensitivity_multi_interval.ipynb
+      - Atlas 14 AEP Events: notebooks/720_atlas14_aep_events.ipynb
+      - Atlas 14 Caching Demo: notebooks/721_atlas14_caching_demo.ipynb
+      - Atlas 14 Multi-Project: notebooks/722_atlas14_multi_project.ipynb
+    - Quality Assurance (800s):
+      - RasCheck Validation: notebooks/800_quality_assurance_rascheck.ipynb
+      - Advanced Structure Validation: notebooks/801_advanced_structure_validation.ipynb
+      - Custom Workflows & Standards: notebooks/802_custom_workflows_and_standards.ipynb
+    - External Data Integrations (900s):
+      - AORC Precipitation: notebooks/900_aorc_precipitation.ipynb
+      - AORC Precipitation Catalog: notebooks/901_aorc_precipitation_catalog.ipynb
+      - USGS Gauge Catalog: notebooks/910_usgs_gauge_catalog.ipynb
+      - USGS Gauge Data Integration: notebooks/911_usgs_gauge_data_integration.ipynb
+      - USGS Real-Time Monitoring: notebooks/912_usgs_real_time_monitoring.ipynb
+      - BC from Live Gauge: notebooks/913_bc_generation_from_live_gauge.ipynb
+      - Model Validation with USGS: notebooks/914_model_validation_with_usgs.ipynb
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md

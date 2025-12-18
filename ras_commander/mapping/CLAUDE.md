@@ -372,9 +372,9 @@ pip install rasterio scipy geopandas
 
 Complete workflow demonstrations:
 
-- `examples/21_rasmap_raster_exports.ipynb` - RASMapper raster exports
-- `examples/25_programmatic_result_mapping.ipynb` - Programmatic rasterization
-- `examples/26_rasprocess_stored_maps.ipynb` - Stored map generation and export
+- `examples/15_a_floodplain_mapping_gui.ipynb` - RASMapper GUI stored map generation
+- `examples/15_b_floodplain_mapping_rasprocess.ipynb` - RasProcess raster exports
+- `examples/15_c_floodplain_mapping_python_gis.ipynb` - Programmatic Python GIS mapping
 
 ## Common Workflows
 

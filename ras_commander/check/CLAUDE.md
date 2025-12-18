@@ -304,8 +304,8 @@ RasCheck reads HEC-RAS geometry and plan files directly (plain text parsing):
 
 Complete workflow demonstrations:
 
-- `examples/28_quality_assurance_rascheck.ipynb` - Complete RasCheck workflow
-- Integration with RasFixit shown in `examples/27_fixit_blocked_obstructions.ipynb`
+- `examples/300_quality_assurance_rascheck.ipynb` - Complete RasCheck workflow
+- Integration with RasFixit shown in `examples/200_fixit_blocked_obstructions.ipynb`
 
 ## Common Checks Explained
 

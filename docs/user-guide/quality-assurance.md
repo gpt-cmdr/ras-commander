@@ -280,6 +280,6 @@ For comprehensive documentation of all validation checks and message IDs:
 
 ## See Also
 
-- [Example Notebook: RasCheck Validation](../notebooks/28_quality_assurance_rascheck.ipynb)
+- [Example Notebook: RasCheck Validation](../notebooks/300_quality_assurance_rascheck.ipynb)
 - [Steady Flow Analysis](steady-flow-analysis.md)
 - [HDF Data Extraction](hdf-data-extraction.md)

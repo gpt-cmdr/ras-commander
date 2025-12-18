@@ -61,7 +61,6 @@ venv/
 .DS_Store
 Thumbs.db
 Example_Projects_6_6.zip
-/tests/example_projects
 /example_projects
 
 # Research folder - ignore outputs but keep source code
@@ -77,13 +76,10 @@ research/**/__pycache__/
 /feature_dev_notes
 /research
 /docs_old
-/tools
 /examples/working
-/working/
 /examples/hyetographs
 examples/flood_polygons.geojson
 ras-commander_logo.png
-/tests
 # .claude/ framework - ignore user settings but track structure
 .claude/settings.local.json
 .claude/settings.json
@@ -125,25 +121,7 @@ run_notebook_test.ps1
 # Users cloning main get clean workspace; dev branch tracks these for development
 agent_tasks/
 
-# Ignore large development work in ras_agents/ and ras_skills/
-ras_agents/Model Updater*/
-ras_agents/1D Mannings*/
-
-# Ignore decompiled assembly sources (too large for git)
-# These are generated locally via ILSpyCMD from HEC-RAS DLLs
-ras_agents/decompilation-agent/decompiled/
-ras_agents/*/decompiled/
-ras_skills/*/Template Models/
-ras_skills/*/Working/
-ras_skills/*/working/
-
-# Keep only production-ready skill documentation
-!ras_skills/*/SKILL.md
-!ras_skills/*/README.md
-!ras_skills/*/STATUS.md
-!ras_skills/*/*.md
-
-# Archive directories
+# Archive directories (includes moved ras_agents/, ras_skills/, planning_docs/)
 .old/
 .claude/outputs/
 

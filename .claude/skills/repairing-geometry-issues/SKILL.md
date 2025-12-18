@@ -32,12 +32,12 @@ This skill provides quick navigation to primary sources for RasCheck (validation
 - Module organization and patterns
 
 ### Complete Workflows
-**C:\GH\ras-commander\examples\27_fixit_blocked_obstructions.ipynb**
+**C:\GH\ras-commander\examples\200_fixit_blocked_obstructions.ipynb**
 - RasFixit demonstration with visualizations
 - Before/after comparison workflow
 - Engineering review requirements
 
-**C:\GH\ras-commander\examples\28_quality_assurance_rascheck.ipynb**
+**C:\GH\ras-commander\examples\300_quality_assurance_rascheck.ipynb**
 - RasCheck validation workflow
 - Multi-check execution and reporting
 - Custom threshold configuration
@@ -377,8 +377,8 @@ if log_parser.has_obstruction_errors(log_content):
 **For repair questions** → Read `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md`
 
 **For workflow examples** → See notebooks:
-- `examples\27_fixit_blocked_obstructions.ipynb`
-- `examples\28_quality_assurance_rascheck.ipynb`
+- `examples\200_fixit_blocked_obstructions.ipynb`
+- `examples\300_quality_assurance_rascheck.ipynb`
 
 **For API details** → Read source code docstrings:
 - `ras_commander\check\RasCheck.py`

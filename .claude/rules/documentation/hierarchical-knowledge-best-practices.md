@@ -368,7 +368,7 @@ Working Examples:
 ✅ **Update locations**:
 1. Add code to `ras_commander/usgs/catalog.py` with docstrings
 2. Add workflow section to `ras_commander/usgs/CLAUDE.md`
-3. Add example notebook `examples/33_gauge_catalog_generation.ipynb`
+3. Add example notebook `examples/420_usgs_gauge_catalog.ipynb`
 4. Update navigator: Add one line to usgs-integrator SUBAGENT.md pointing to new CLAUDE.md section
 
 **Total**: 4 updates (all in primary sources + 1 line in navigator)
