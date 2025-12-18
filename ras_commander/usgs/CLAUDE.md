@@ -336,11 +336,11 @@ pip install dataretrieval
 
 Complete workflow demonstrations:
 
-- `examples/29_usgs_gauge_data_integration.ipynb` - Complete workflow (discovery → validation)
-- `examples/30_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
-- `examples/31_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
-- `examples/32_model_validation_with_usgs.ipynb` - Model validation workflow
-- `examples/33_gauge_catalog_generation.ipynb` - Catalog generation (v0.89.0+)
+- `examples/421_usgs_gauge_data_integration.ipynb` - Complete workflow (discovery → validation)
+- `examples/422_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
+- `examples/423_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
+- `examples/424_model_validation_with_usgs.ipynb` - Model validation workflow
+- `examples/420_usgs_gauge_catalog.ipynb` - Catalog generation (v0.89.0+)
 
 ## Key Features
 

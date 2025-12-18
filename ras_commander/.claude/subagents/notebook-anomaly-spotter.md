@@ -416,7 +416,7 @@ Some notebooks have "known acceptable" empty results or warnings:
 
 **Example** (`examples/AGENTS.md` metadata):
 ```yaml
-notebook: 29_usgs_real_time_monitoring.ipynb
+notebook: 422_usgs_real_time_monitoring.ipynb
 known_acceptable_anomalies:
   - cell: 8
     pattern: "0 gauges found"

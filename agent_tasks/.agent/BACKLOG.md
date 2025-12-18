@@ -12,7 +12,7 @@ This backlog is organized by roadmap phases. See `ROADMAP.md` for detailed descr
 - [ ] `api-p0.1` **Fix catalog.py violations** - Convert to static class, add decorators (2-3 hours) ⚠️ BLOCKING
 - [ ] `api-p0.2` **Audit recent additions** - Check files since Nov 2024 for violations (1-2 hours) ⚠️ BLOCKING
 - [ ] `api-p0.3` **Document exception classes** - Create .auditor.yaml with RasPrj, workers, callbacks (1 hour)
-- [ ] `api-p0.4` **Create test fixtures** - Example files for testing (valid/invalid patterns) (1-2 hours)
+- [x] `api-p0.4` **Create test fixtures** - Example files for testing (valid/invalid patterns) ✓ (Moved to .claude/agents/api-consistency-auditor/fixtures/)
 - [ ] `api-p0.5` **Phase 0 summary** - Compile deliverables, document baseline (30 min)
 
 **Total**: ~7 hours to establish clean baseline
@@ -29,21 +29,21 @@ This backlog is organized by roadmap phases. See `ROADMAP.md` for detailed descr
 
 ### Library Improvements
 - [x] `lib-001` **Real-time computation messages** - Callback support for streaming `.bco` file monitoring ✓ (v0.88.0+, Session 5)
-- [⏸️] `lib-002` **Atlas 14 caching** - Prevent duplicate NOAA API calls ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing to complete
+- [x] `lib-002` **Atlas 14 caching** - Prevent duplicate NOAA API calls ✓ (Notebook testing complete 2025-12-16)
 - [ ] `lib-003` **Testing suite** - Create tests for formalized functions
 
 ### GUI Automation Integration (FINAL STAGES)
 - [x] `gui-001` **handle_already_running_dialog()** - Auto-dismiss "already running" dialog ✓ (Commit 07c39ab)
 - [x] `gui-002` **1D BC Visualization Tool** - RasMap layer functions + notebook 24 ✓ (Commit 8153566)
 - [x] `gui-003` **Document in AGENTS.md** - Add new functions to examples/AGENTS.md ✓ (2024-12-14)
-- [⏸️] `gui-004` **Update notebook 15** - Replace custom GUI code with RasGuiAutomation functions ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing
-- [⏸️] `gui-005` **Update notebook 16** - Document dialog handling in win32com example ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing
-- [⏸️] `gui-006` **Review floodplain notebooks** - Check 15_a and 15_b for GUI automation ⚠️ SUBSTANTIALLY COMPLETE - Final stages, blocked waiting for notebook testing
+- [x] `gui-004` **Update notebook 15** - Replace custom GUI code with RasGuiAutomation functions ✓ (Tested 2025-12-16)
+- [x] `gui-005` **Update notebook 16** - Document dialog handling in win32com example ✓ (Tested 2025-12-16)
+- [x] `gui-006` **Review floodplain notebooks** - Check 15_a and 15_b for GUI automation ✓ (Tested 2025-12-16)
 
 See: `agent_tasks/tasks/gui-automation-integration/TASK.md` for full implementation details.
 
 ### Notebook Updates
-- [⏸️] **Example Notebook Phase 0 Fixes** - Fix 6 notebooks with syntax/runtime blockers (04, 11, 12, 14, 22, 23) ⚠️ PARTIALLY UPDATED - Temporarily blocked until preliminary testing/QAQC complete. Will backcheck recommendations and re-test.
+- [x] **Example Notebook Phase 0 Fixes** - Fix 6 notebooks with syntax/runtime blockers (04, 11, 12, 14, 22, 23) ✓ (All notebooks passing 2025-12-16)
 - [ ] `nb-001` **Tier 1 improvements** - StormGenerator, ParameterSweep, HdfBatch, mesh utilities
 - [ ] `nb-002` **Tier 2 improvements** - Project setup helpers, plan cloning configurations
 - [ ] `nb-003` **Tier 3 improvements** - RasPrj convenience methods, parallel config helpers
@@ -53,13 +53,13 @@ See: `agent_tasks/tasks/gui-automation-integration/TASK.md` for full implementat
 
 ## Phase 2: Core Features (Ready - Medium-High Priority)
 
-### cHECk-RAS Completion
-- [ ] `check-001` **Floodway structure variants** - 8 missing checks
-- [ ] `check-002` **Bridge ground data checks** - 6 missing checks
-- [ ] `check-003` **Culvert flow type checks** - 5 missing checks
-- [ ] `check-004` **Starting WSE method checks** - 4 missing checks
-- [ ] `check-005` **Levee checks** - 6 missing checks
-- [ ] `check-006` **Enhanced reporting** - PDF export, Excel export, interactive HTML
+### cHECk-RAS Completion ✅ COMPLETE (215 checks, 115% of FEMA baseline - Session 18)
+- [x] `check-001` **Floodway structure variants** - 50 floodway checks ✓
+- [x] `check-002` **Bridge ground data checks** - 26 bridge checks ✓
+- [x] `check-003` **Culvert flow type checks** - 15 culvert checks ✓
+- [x] `check-004` **Starting WSE method checks** - 7 profile checks ✓
+- [x] `check-005` **Levee checks** - 10 levee checks (part of 57 XS checks) ✓
+- [ ] `check-006` **Enhanced reporting** - PDF export, Excel export (optional, low priority)
 
 ### Gauge Data Import ✅ COMPLETE (v0.86.0+)
 - [x] `gauge-001` **Initial conditions from USGS** - Set starting water levels from gauge data ✓

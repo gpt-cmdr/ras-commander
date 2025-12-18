@@ -54,7 +54,7 @@ find docs_old/feature_dev_notes/gauge_data_import/ -type f 2>/dev/null | grep -o
 **ras_commander/usgs/ already has**:
 - Complete USGS gauge integration (ras_commander/usgs/core.py, real_time.py, etc.)
 - CLAUDE.md with comprehensive workflows
-- Example notebooks (examples/29_usgs_gauge_data_integration.ipynb, etc.)
+- Example notebooks (examples/421_usgs_gauge_data_integration.ipynb, etc.)
 
 **Before migrating, check if content already exists in**:
 ```bash

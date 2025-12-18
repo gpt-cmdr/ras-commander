@@ -48,6 +48,12 @@ Expert agent for enforcing ras-commander's API conventions and detecting pattern
 - `.claude/rules/python/path-handling.md` - Path/str flexibility
 - `.claude/rules/python/naming-conventions.md` - Parameter naming
 
+**Test Fixtures** (valid/invalid examples for rule testing):
+- `.claude/agents/api-consistency-auditor/fixtures/` - Example files
+  - `valid_*.py` - Correct pattern implementations
+  - `invalid_*.py` - Violation examples for testing detection
+  - `README.md` - Fixture usage guide
+
 ## Mission
 
 Help enforce ras-commander's API conventions by:
@@ -220,7 +226,7 @@ class UsgsGaugeCatalog:
 3. Add `@staticmethod` to each
 4. Add `@log_call` to each
 5. Update imports in consuming code
-6. Test with `examples/33_gauge_catalog_generation.ipynb`
+6. Test with `examples/420_usgs_gauge_catalog.ipynb`
 
 ### Workflow 3: Audit Recent Additions (Phase 0 Task)
 

@@ -68,7 +68,7 @@ repos:
       # Committing them causes RTD deployment failures.
       - id: check-docs-notebooks
         name: Block docs/notebooks commits
-        entry: python hooks/check_docs_notebooks.py
+        entry: python .github/hooks/check_docs_notebooks.py
         language: system
         pass_filenames: false
         always_run: true
@@ -78,7 +78,7 @@ repos:
       # Using ln -s instead of cp -r = broken docs.
       - id: check-rtd-no-symlinks
         name: RTD symlink guard
-        entry: python hooks/check_rtd_no_symlinks.py
+        entry: python .github/hooks/check_rtd_no_symlinks.py
         language: system
         files: ^\.readthedocs\.yaml$
 
@@ -87,7 +87,7 @@ repos:
       # execute: true = build failures.
       - id: check-mkdocs-no-execute
         name: MkDocs execute guard
-        entry: python hooks/check_mkdocs_no_execute.py
+        entry: python .github/hooks/check_mkdocs_no_execute.py
         language: system
         files: ^mkdocs\.yml$
 

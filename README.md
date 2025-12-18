@@ -64,7 +64,7 @@ Legacy Version Support (NEW in v0.81.0)
 - Version migration validation and comparison
 - Open-operate-close pattern prevents conflicts with modern workflows
 - Seamless integration with ras-commander project management
-- See `examples/17_extracting_profiles_with_hecrascontroller.ipynb` for complete usage
+- See `examples/17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb` for complete usage
 
 HDF Data Access & Analysis
 - 2D mesh results processing (depths, velocities, WSE)
@@ -539,7 +539,7 @@ Check out the examples in the repository to learn how to use RAS Commander:
 - `08_parallel_execution.ipynb`: Run multiple plans in parallel
 
 ### Legacy Version Support
-- `17_extracting_profiles_with_hecrascontroller.ipynb`: Using RasControl for HEC-RAS 3.x-6.x via COM interface
+- `17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb`: Using RasControl for HEC-RAS 3.x-6.x via COM interface
 
 ### Advanced Operations
 - `04_multiple_project_operations.ipynb`: Work with multiple HEC-RAS projects simultaneously

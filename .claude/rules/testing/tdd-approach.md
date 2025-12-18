@@ -168,9 +168,9 @@ def test_project_initialization(project_name):
 ### Notebook Testing
 
 **All notebooks in `examples/` serve as functional tests**:
-- `01_basic_usage.ipynb` - Tests basic API
-- `02_parallel_execution.ipynb` - Tests parallel mode
-- `03_hdf_extraction.ipynb` - Tests results extraction
+- `01_project_initialization.ipynb` - Tests basic project API
+- `08_parallel_execution.ipynb` - Tests parallel mode
+- `10_1d_hdf_data_extraction.ipynb` - Tests results extraction
 - ... etc.
 
 **Execution**:
@@ -363,7 +363,7 @@ pytest tests/test_execution.py
 pytest --nbmake examples/*.ipynb
 
 # Test specific notebook
-pytest --nbmake examples/01_basic_usage.ipynb
+pytest --nbmake examples/01_project_initialization.ipynb
 ```
 
 ### Run with Coverage

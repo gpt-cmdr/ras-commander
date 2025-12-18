@@ -1,6 +1,6 @@
 # Example Notebooks
 
-RAS Commander includes 30+ Jupyter notebooks demonstrating all major features with working code and outputs. Browse the notebooks in the left navigation pane to view them directly in this documentation, complete with rendered outputs.
+RAS Commander includes 40+ Jupyter notebooks demonstrating all major features with working code and outputs. Browse the notebooks in the left navigation pane to view them directly in this documentation, complete with rendered outputs.
 
 ## Running Examples Locally
 
@@ -19,108 +19,114 @@ jupyter notebook examples/
 
 ## Notebook Categories
 
-### Getting Started
+### Basic Automation & Project Data (100s)
 
-Foundational notebooks for setting up projects and extracting example data.
-
-| Notebook | Description | Source |
-|----------|-------------|--------|
-| Using RasExamples | Download and extract HEC-RAS example projects from the official distribution | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/00_Using_RasExamples.ipynb) |
-| Project Initialization | Initialize projects and explore their components (plans, geometry, flows) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/01_project_initialization.ipynb) |
-
-### File Operations
-
-Work with plan files, geometry files, unsteady flow files, and their parameters.
+Core library functionality: project initialization, plan operations, and execution modes.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Plan and Geometry Operations | Clone and modify plan and geometry files programmatically | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/02_plan_and_geometry_operations.ipynb) |
-| Unsteady Flow Operations | Extract and modify boundary conditions in unsteady flow files | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/03_unsteady_flow_operations.ipynb) |
-| Multiple Project Operations | Work with multiple HEC-RAS projects simultaneously | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/04_multiple_project_operations.ipynb) |
-| Plan Parameter Operations | Retrieve and update plan parameters (simulation window, cores, etc.) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/09_plan_parameter_operations.ipynb) |
-| Plaintext Geometry Parsing | Parse and modify geometry files directly (cross sections, Manning's n) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/20_plaintext_geometry_operations.ipynb) |
+| Using RasExamples | Download and extract HEC-RAS example projects | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/100_using_ras_examples.ipynb) |
+| Project Initialization | Initialize projects and explore components | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/101_project_initialization.ipynb) |
+| Multiple Project Operations | Work with multiple projects simultaneously | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/102_multiple_project_operations.ipynb) |
+| Plan and Geometry Operations | Clone and modify plan and geometry files | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_plan_and_geometry_operations.ipynb) |
+| Plan Parameter Operations | Retrieve and update plan parameters | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/104_plan_parameter_operations.ipynb) |
+| Single Plan Execution | Execute a single plan with options | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) |
+| Executing Plan Sets | Specify and execute sets of plans | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/111_executing_plan_sets.ipynb) |
+| Sequential Plan Execution | Run plans in sequence (test mode) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/112_sequential_plan_execution.ipynb) |
+| Parallel Execution | Run plans in parallel across workers | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/113_parallel_execution.ipynb) |
+| Win32COM Automation | Direct HEC-RAS automation via Win32COM | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/120_automating_ras_with_win32com.ipynb) |
+| Legacy HECRASController | RasControl for HEC-RAS 3.x-5.x | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/121_legacy_hecrascontroller_and_rascontrol.ipynb) |
 
-### Execution Modes
+### Geometry Parsing & Operations (200s)
 
-Different approaches for running HEC-RAS simulations.
+Work with geometry files: parsing, modification, and repair.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Single Plan Execution | Execute a single plan with options (cores, preprocessor, destination) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/05_single_plan_execution.ipynb) |
-| Executing Plan Sets | Different ways to specify and execute sets of plans | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/06_executing_plan_sets.ipynb) |
-| Sequential Plan Execution | Run plans in sequence using test mode | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/07_sequential_plan_execution.ipynb) |
-| Parallel Execution | Run plans in parallel across worker folders | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/08_parallel_execution.ipynb) |
-| Remote Execution (PsExec) | Distributed execution across remote machines via PsExec | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/23_remote_execution_psexec.ipynb) |
+| Plaintext Geometry Operations | Parse and modify geometry files directly | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/200_plaintext_geometry_operations.ipynb) |
+| Fixit Blocked Obstructions | Detect and fix overlapping blocked obstructions | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/210_fixit_blocked_obstructions.ipynb) |
 
-### HDF Data Extraction
+### Boundary Conditions (300s)
+
+Work with unsteady/steady flow files, DSS data, and boundary conditions.
+
+| Notebook | Description | Source |
+|----------|-------------|--------|
+| Unsteady Flow Operations | Extract and modify BC tables in .uXX files | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/300_unsteady_flow_operations.ipynb) |
+| DSS Boundary Extraction | Read HEC-DSS boundary condition time series | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/310_dss_boundary_extraction.ipynb) |
+| DSS Path Validation | Validate DSS pathnames and availability | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/311_validating_dss_paths.ipynb) |
+| 1D Boundary Visualization | Visualize 1D boundary conditions in RASMapper | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/320_1d_boundary_condition_visualization.ipynb) |
+
+### HDF Data Operations (400s)
 
 Extract and analyze results from HEC-RAS HDF output files.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| 1D HDF Data Extraction | Extract 1D cross-section time series data and maximum values | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/10_1d_hdf_data_extraction.ipynb) |
-| 2D HDF Data Extraction | Extract 2D mesh data including cells, faces, and time series | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/11_2d_hdf_data_extraction.ipynb) |
-| Pipes and Pumps | Extract pipe network and pump station data from HDF files | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/12_2d_hdf_data_extraction%20pipes%20and%20pumps.ipynb) |
-| 2D Face Data Extraction | Detailed face data extraction for flow analysis | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/13_2d_detail_face_data_extraction.ipynb) |
-| Fluvial-Pluvial Delineation | Classify flooding as fluvial (riverine) or pluvial (rainfall) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/14_fluvial_pluvial_delineation.ipynb) |
+| 1D HDF Data Extraction | 1D cross-section time series and maxima | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/400_1d_hdf_data_extraction.ipynb) |
+| Steady Flow Analysis | Extract steady state results | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/401_steady_flow_analysis.ipynb) |
+| 2D HDF Data Extraction | 2D mesh cells, faces, time series | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/410_2d_hdf_data_extraction.ipynb) |
+| Pipes and Pumps | Pipe networks and pump stations | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/411_2d_hdf_pipes_and_pumps.ipynb) |
+| 2D Face Data Extraction | Detailed face data for flow analysis | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/412_2d_detail_face_data_extraction.ipynb) |
+| Breach Results Extraction | Dam breach time series and statistics | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/420_breach_results_extraction.ipynb) |
 
-### Analysis & Results
+### Remote Plan Execution (500s)
 
-Steady flow analysis, dam breach results, and legacy interface access.
-
-| Notebook | Description | Source |
-|----------|-------------|--------|
-| Steady Flow Analysis | Extract and analyze steady state results from HDF files | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/19_steady_flow_analysis.ipynb) |
-| Dam Breach Results | Extract dam breach time series and summary statistics | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/18_breach_results_extraction.ipynb) |
-| HECRASController Profiles | Use the legacy COM interface (RasControl) for profile extraction | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/17_extracting_profiles_with_hecrascontroller%20and%20RasControl.ipynb) |
-| DSS Boundary Extraction | Read HEC-DSS files for boundary condition time series | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/22_dss_boundary_extraction.ipynb) |
-
-### Mapping & Visualization
-
-Generate maps and export raster results.
+Distributed execution across remote machines.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Stored Map Generation | Generate stored maps from RASMapper configurations | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/15_stored_map_generation.ipynb) |
-| RASMapper Raster Exports | Export raster results using RASMapper automation | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/21_rasmap_raster_exports.ipynb) |
-| Programmatic Result Mapping | Create flood maps programmatically from HDF results | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/25_programmatic_result_mapping.ipynb) |
+| Remote Execution (PsExec) | Windows remote execution via PsExec | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/500_remote_execution_psexec.ipynb) |
 
-### Automation
+### Advanced Data Analysis (600s)
 
-Automate HEC-RAS with COM interfaces and precipitation data.
+Mapping, visualization, and advanced spatial analysis.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Win32COM Automation | Direct HEC-RAS automation using the Win32COM interface | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/16_automating_ras_with_win32com.ipynb) |
-| AORC Precipitation | Retrieve AORC gridded precipitation data for model input | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/24_aorc_precipitation.ipynb) |
+| Floodplain Mapping GUI | RASMapper GUI automation (legacy) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/600_floodplain_mapping_gui.ipynb) |
+| Floodplain Mapping RasProcess | RasProcess CLI (recommended) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_floodplain_mapping_rasprocess.ipynb) |
+| Floodplain Mapping Python GIS | Pure Python mesh rasterization | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/602_floodplain_mapping_python_gis.ipynb) |
+| Fluvial-Pluvial Delineation | Classify flooding mechanism | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_fluvial_pluvial_delineation.ipynb) |
+| Map Layer Validation | Validate RASMapper layers | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) |
 
-### Geometry Repair
+### Sensitivity & Benchmarking (700s)
 
-Detect and fix common geometry issues.
-
-| Notebook | Description | Source |
-|----------|-------------|--------|
-| Fixit Blocked Obstructions | Automatically detect and fix overlapping blocked obstructions | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/27_fixit_blocked_obstructions.ipynb) |
-
-### Sensitivity & Benchmarking
-
-Performance testing and sensitivity analysis workflows.
+Performance testing, version comparison, and parameter sensitivity.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Core Sensitivity Testing | Test how CPU core count affects computation time | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/101_Core_Sensitivity.ipynb) |
-| Version Benchmarking (6.1-6.6) | Compare performance across HEC-RAS versions | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/102_benchmarking_versions_6.1_to_6.6.ipynb) |
-| Manning's n Bulk Analysis | Bulk sensitivity analysis for Manning's n values | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/105_mannings_sensitivity_bulk_analysis.ipynb) |
-| Manning's n Multi-Interval | Multi-interval Manning's n sensitivity testing | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/106_mannings_sensitivity_multi-interval.ipynb) |
+| Core Sensitivity Testing | Runtime vs core count experiments | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/700_core_sensitivity.ipynb) |
+| Version Benchmarking (6.1-6.6) | Cross-version performance comparison | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/701_benchmarking_versions_6.1_to_6.6.ipynb) |
+| Manning's n Bulk Analysis | Bulk Manning's n sensitivity | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/710_mannings_sensitivity_bulk_analysis.ipynb) |
+| Manning's n Multi-Interval | Multi-interval sensitivity testing | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/711_mannings_sensitivity_multi_interval.ipynb) |
+| Atlas 14 AEP Events | Generate AEP storms from Atlas 14 | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/720_atlas14_aep_events.ipynb) |
+| Atlas 14 Caching Demo | Atlas 14 data caching | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/721_atlas14_caching_demo.ipynb) |
+| Atlas 14 Multi-Project | Run Atlas 14 across multiple projects | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/722_atlas14_multi_project.ipynb) |
 
-### Advanced Workflows
+### Quality Assurance (800s)
 
-Complex workflows combining multiple features.
+Model validation, QA checks, and certification workflows.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Atlas 14 AEP Events | Generate AEP storm events from NOAA Atlas 14 data | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_Running_AEP_Events_from_Atlas_14.ipynb) |
-| Atlas 14 Multi-Project | Run Atlas 14 AEP events across multiple projects | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/104_Atlas14_AEP_Multi_Project.ipynb) |
+| RasCheck Validation | Core RasCheck validation suite | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/800_quality_assurance_rascheck.ipynb) |
+| Advanced Structure Validation | Structure-specific validation | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/801_advanced_structure_validation.ipynb) |
+| Custom Workflows & Standards | Custom QA workflows | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/802_custom_workflows_and_standards.ipynb) |
+
+### External Data Integrations (900s)
+
+Integration with external data sources: precipitation, gauges, etc.
+
+| Notebook | Description | Source |
+|----------|-------------|--------|
+| AORC Precipitation | Retrieve AORC gridded precipitation | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/900_aorc_precipitation.ipynb) |
+| AORC Precipitation Catalog | Comprehensive AORC catalog ops | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/901_aorc_precipitation_catalog.ipynb) |
+| USGS Gauge Catalog | Generate gauge catalogs | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/910_usgs_gauge_catalog.ipynb) |
+| USGS Gauge Data Integration | Integrate gauge data with models | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/911_usgs_gauge_data_integration.ipynb) |
+| USGS Real-Time Monitoring | Real-time gauge monitoring | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/912_usgs_real_time_monitoring.ipynb) |
+| BC from Live Gauge | Generate BCs from live data | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/913_bc_generation_from_live_gauge.ipynb) |
+| Model Validation with USGS | Validate results against gauges | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_model_validation_with_usgs.ipynb) |
 
 ## Using Notebooks as Templates
 
@@ -155,3 +161,7 @@ These notebooks serve dual purposes:
 2. **Functional Tests**: Verify library behavior with real HEC-RAS projects
 
 This approach reduces LLM hallucinations by providing concrete, executable examples.
+
+## Numbering Scheme
+
+See [NUMBERING_SCHEME.md](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/NUMBERING_SCHEME.md) for the complete category-based numbering system and guidelines for adding new notebooks.
