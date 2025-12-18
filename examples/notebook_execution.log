@@ -1,1 +1,0 @@
-Starting notebook execution... echo Time: %date% %time% jupyter nbconvert --to notebook --execute --inplace 15_stored_map_generation.ipynb --ExecutePreprocessor.timeout=1800 echo Exit code: %errorlevel%
