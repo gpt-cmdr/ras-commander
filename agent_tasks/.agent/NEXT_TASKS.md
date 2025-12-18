@@ -6,72 +6,118 @@
 
 ---
 
-## Current State
+## Current State (as of 2025-12-17 after v0.87.6)
 
-### Successfully Deployed
-- ✅ ras-commander v0.87.6 on PyPI (timezone fix for notebook 422)
+### Successfully Completed ✅
+- ✅ ras-commander v0.87.6 deployed to PyPI
 - ✅ Test environment updated to v0.87.6
-- ✅ Notebook 101 path fix (suffix="101")
-- ✅ Notebook 422 timezone fix verified working
+- ✅ Notebook 101 path fix (suffix="101") - TIMEOUT EXPECTED (15-30 min HEC-RAS)
+- ✅ Notebook 300 API fix (TransitionCoefficientThresholds attributes) - NOW PASSING
+- ✅ Notebook 422 timezone fix verified working - TIMEOUT EXPECTED (infinite monitoring loop)
+- ✅ Notebooks 420, 423 Path import fixes
+- ✅ Notebooks 16, 17 COM automation fixes
+- ✅ Notebooks 200 Path import fixed
+- ✅ All changes committed to git (commit ca5e77f)
 
-### Remaining Issues
+### Test Results Summary
+- **Total Notebooks**: 46
+- **Passing**: 38 (83%)
+- **Blocked/Timeout**: 5 (11%)
+  - 101: Expected timeout (benchmarking)
+  - 200: Missing M3 model data
+  - 400: Expected timeout (storm simulations)
+  - 422: Expected timeout (infinite monitoring)
+  - 15a: GUI required
+- **Fixes Applied**: 18 notebooks
+
+### Remaining Issue (Only 1)
 
 **Notebook 200** (RasFixit Blocked Obstructions):
-- Path import bug fixed
+- Path import bug FIXED ✅
 - Missing A120-00-00 HCFCD M3 model (not in RasExamples)
 - **Solution**: M3Model class available in ras-commander for downloading HCFCD models
-
-**Notebook 300** (Quality Assurance RasCheck):
-- API mismatch: Notebook expects `defaults.transitions.structure_contraction`
-- Library has different attribute names in `TransitionCoefficientThresholds`
-- **Solution**: Check actual API and update notebook cells
-
-**Notebooks 101, 400, 422** (Expected Timeouts):
-- Code is correct
-- Timeout during long-running operations (benchmarking, simulations, monitoring)
-- Not fixable - these are intentional long-running operations
+- **Challenge**: A120-00-00 project ID unclear - need to identify which M3 model letter contains it
 
 ---
 
-## Task 1: Fix Notebook 300 (API Mismatch)
+## Task 1: Fix Notebook 300 (API Mismatch) ✅ COMPLETED
 
-### Objective
-Update notebook 300 to use correct TransitionCoefficientThresholds attribute names
+### Status: ✅ COMPLETED (2025-12-17)
 
-### Steps
+### What Was Done
 
-1. **Investigate actual API**:
-   - Read `ras_commander/check/thresholds.py`
-   - Find `TransitionCoefficientThresholds` class definition
-   - Document actual attribute names
+1. **Investigated actual API**:
+   - Read `ras_commander/check/thresholds.py` (lines 46-70)
+   - Found `TransitionCoefficientThresholds` class definition
+   - Actual attributes use `_max` suffix and `regular_` prefix
 
-2. **Read notebook 300 failing cell**:
-   - Cell 21 (In[21]) expects:
-     - `defaults.transitions.structure_contraction`
-     - `defaults.transitions.structure_expansion`
-     - `defaults.transitions.normal_contraction`
-     - `defaults.transitions.normal_expansion`
+2. **Fixed notebook Cell 35**:
+   - Changed `structure_contraction` → `structure_contraction_max`
+   - Changed `structure_expansion` → `structure_expansion_max`
+   - Changed `normal_contraction` → `regular_contraction_max`
+   - Changed `normal_expansion` → `regular_expansion_max`
 
-3. **Fix notebook**:
-   - Update Cell 21 to use correct attribute names
-   - Test with local source (USE_LOCAL_SOURCE=True) first
-   - Retest with pip package (USE_LOCAL_SOURCE=False)
+3. **Updated toggle cell**:
+   - Set USE_LOCAL_SOURCE = False (test with pip package)
+   - Removed warning about check module (now included in v0.87.6)
 
-4. **Verify fix**:
+4. **Tested**:
    - Run: `pytest --nbmake examples/300_quality_assurance_rascheck.ipynb`
-   - Should pass without AttributeError
+   - **Result**: ✅ PASSED in 9.97s
 
-### Expected Outcome
-Notebook 300 passes without errors, displays threshold values correctly
+### Outcome
+✅ Notebook 300 now passes without errors, displays threshold values correctly
 
 ---
 
-## Task 2: Fix Notebook 200 (M3Model Integration)
+## Task 2: Fix Notebook 200 (M3Model Integration) ✅ COMPLETED
+
+### Status: ✅ COMPLETED (2025-12-17)
 
 ### Objective
 Redesign notebook 200 to download A120-00-00 model using M3Model class
 
-### Research Questions
+### What Was Done
+
+1. **Web Research**:
+   - Searched "HCFCD A120-00-00 M3 model watershed"
+   - Confirmed A120-00-00 is in Clear Creek watershed (HCFCD unit numbering: "A" prefix)
+   - M3Model.MODELS['A'] = 'Clear Creek'
+
+2. **Downloaded and Verified**:
+   - Extracted M3 Model 'A': `M3Model.extract_model('A')`
+   - Found A120-00-00.zip in `m3_models/Clear Creek/HEC-RAS/`
+   - Extracted project successfully, verified .prj file exists
+
+3. **Updated Notebook Cell 4**:
+   - Replaced hardcoded path with M3Model workflow:
+     ```python
+     m3_path = M3Model.extract_model('A')
+     a120_zip = m3_path / "HEC-RAS" / "A120-00-00.zip"
+     a120_folder = m3_path / "HEC-RAS" / "A120-00-00"
+     # Extract ZIP if needed, set paths
+     ```
+   - Handles extraction automatically
+   - Sets project_folder and geom_file dynamically
+
+4. **Tested**:
+   - Run: `pytest --nbmake examples/200_fixit_blocked_obstructions.ipynb`
+   - **Result**: ✅ PASSED in 14.18s
+   - All RasFixit operations complete successfully
+
+5. **Updated Documentation**:
+   - QAQC.md: Notebook 200 status → PASS (14.18s)
+   - QAQC.md: Statistics → 39/46 passing (85%), 4 blocked (9%)
+
+6. **Committed**: Commit fbc03cb
+   - Comprehensive commit message
+   - Documented web research findings
+   - Technical details about M3 model structure
+
+### Outcome
+✅ Notebook 200 now passes reliably with automated M3Model download
+
+### Original Research Questions (for reference)
 1. **Which M3 model contains A120-00-00?**
    - Check M3Model.MODELS dictionary (letter codes A-W)
    - A120-00-00 is a model ID, not a watershed name
@@ -141,76 +187,40 @@ Notebook 200 runs successfully with accessible test data
 
 ---
 
-## Task 4: Version Control
+## Task 4: Version Control ✅ COMPLETED
 
-### Steps
+### Status: ✅ COMPLETED (2025-12-17)
 
-1. **Stage changes**:
-   ```bash
-   git add setup.py
-   git add ras_commander/__init__.py
-   git add ras_commander/usgs/real_time.py
-   git add examples/101_Core_Sensitivity.ipynb
-   git add examples/420_usgs_gauge_catalog.ipynb
-   git add examples/423_bc_generation_from_live_gauge.ipynb
-   git add agent_tasks/Notebook_Testing_and_QAQC.md
-   ```
+### What Was Done
 
-2. **Commit**:
-   ```bash
-   git commit -m "Release v0.87.6: Fix USGS real-time timezone handling
+1. **Staged changes**: 11 files
+   - setup.py, ras_commander/__init__.py, ras_commander/usgs/real_time.py
+   - examples/300_quality_assurance_rascheck.ipynb (API fix)
+   - examples/420_usgs_gauge_catalog.ipynb, examples/423_bc_generation_from_live_gauge.ipynb
+   - examples/200_fixit_blocked_obstructions.ipynb (Path import fix)
+   - examples/16_automating_ras_with_win32com.ipynb, examples/17_legacy_*.ipynb
+   - agent_tasks/Notebook_Testing_and_QAQC.md
+   - agent_tasks/.agent/NEXT_TASKS.md (new)
 
-   - Fix timezone bug in usgs/real_time.py (tz-naive → tz-aware)
-   - Fix notebook 101 path (suffix parameter)
-   - Fix notebooks 420, 423 Path imports
-   - Update notebook testing QAQC tracking
-   - Deploy to PyPI as v0.87.6"
-   ```
+2. **Committed**: Commit ca5e77f
+   - Comprehensive commit message describing all fixes
+   - Library fixes: timezone handling
+   - Notebook fixes: API mismatch, Path imports, initialization
+   - Testing updates: Complete QAQC tracking
 
-3. **Optional - Push to GitHub**:
-   ```bash
-   git push origin main
-   ```
+3. **Push to GitHub**: ⏳ PENDING
+   - Branch ahead of origin/main by 26 commits
+   - Ready to push when user desires
 
 ---
 
-## Task 5: Fix Notebook 300 API Mismatch (Immediate)
+## Task 5: Fix Notebook 300 API Mismatch ✅ COMPLETED
 
-### Detailed Implementation
+### Status: ✅ COMPLETED (2025-12-17)
 
-**File**: `examples/300_quality_assurance_rascheck.ipynb`
-**Cell**: 21 (In[21])
-**Error**: `AttributeError: 'TransitionCoefficientThresholds' object has no attribute 'structure_contraction'`
+**Duplicate of Task 1** - See Task 1 for complete details
 
-**Action Plan**:
-
-1. **Read thresholds.py** to find actual attribute names:
-   ```python
-   Read("ras_commander/check/thresholds.py")
-   # Look for TransitionCoefficientThresholds class
-   ```
-
-2. **Likely fix patterns**:
-   ```python
-   # Current (BROKEN):
-   defaults.transitions.structure_contraction
-   defaults.transitions.structure_expansion
-
-   # Possible fixes:
-   defaults.transitions.contraction  # Without 'structure_' prefix
-   defaults.transitions.expansion
-   # OR
-   defaults.transition_structure.contraction  # Different nesting
-   ```
-
-3. **Update notebook cell 21**:
-   - Use NotebookEdit to replace attribute references
-   - Or edit the .ipynb JSON directly
-
-4. **Test immediately**:
-   ```bash
-   pytest --nbmake examples/300_quality_assurance_rascheck.ipynb
-   ```
+**Result**: Notebook 300 now passing in 9.97s
 
 ---
 
@@ -240,12 +250,15 @@ Start with Approach 1 (web research) to avoid downloading 20+ models
 
 ---
 
-## Priority Order
+## Priority Order (Updated After All Tasks Complete)
 
-1. **HIGHEST**: Fix notebook 300 API mismatch (< 30 min, immediate result)
-2. **HIGH**: Commit and push v0.87.6 changes (version control best practice)
-3. **MEDIUM**: Investigate notebook 200 M3Model solution (may take time)
-4. **LOW**: Update notebook 101, 400, 422 to document expected timeouts
+1. ✅ **COMPLETED**: Fix notebook 300 API mismatch (Task 1)
+2. ✅ **COMPLETED**: Fix notebook 200 M3Model integration (Task 2)
+3. ✅ **COMPLETED**: Commit v0.87.6 changes (Task 4)
+4. ✅ **COMPLETED**: Commit notebook 200 fix (fbc03cb)
+5. **ALL PRIORITY TASKS COMPLETE**
+6. **OPTIONAL**: Push to GitHub (27 commits ahead of origin/main)
+7. **OPTIONAL**: Documentation updates for timeout notebooks
 
 ---
 
@@ -278,11 +291,13 @@ Start with Approach 1 (web research) to avoid downloading 20+ models
 
 **Notebooks**:
 - `examples/101_Core_Sensitivity.ipynb` - Already has suffix="101" (no change needed)
+- `examples/300_quality_assurance_rascheck.ipynb` - API fix (Cell 35), toggle cell update
+- `examples/200_fixit_blocked_obstructions.ipynb` - M3Model integration (Cell 4)
 - `examples/420_usgs_gauge_catalog.ipynb` - Path import + suffix fixes (previous session)
 - `examples/423_bc_generation_from_live_gauge.ipynb` - Path import + suffix fixes (previous session)
 
 **Documentation**:
-- `agent_tasks/Notebook_Testing_and_QAQC.md` - Comprehensive test results
+- `agent_tasks/Notebook_Testing_and_QAQC.md` - Test results: 39/46 passing (85%)
 
 **Built Artifacts**:
 - `dist/ras_commander-0.87.6-py3-none-any.whl`
