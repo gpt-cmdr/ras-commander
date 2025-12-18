@@ -7,6 +7,8 @@ on:
     paths:
       - 'docs/**'
       - 'ras_commander/**'
+      - '.claude/**'
+      - 'scripts/generate_cognitive_docs.py'
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
   workflow_dispatch:  # Allow manual trigger
@@ -52,6 +54,10 @@ jobs:
         run: |
           rm -rf docs/notebooks
           cp -r examples docs/notebooks
+
+      - name: Generate cognitive infrastructure docs
+        run: |
+          python scripts/generate_cognitive_docs.py
 
       - name: Build documentation
         run: |

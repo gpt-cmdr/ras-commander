@@ -204,6 +204,11 @@ nav:
     - HDF Structure: reference/hdf-structure.md
     - HDF Writing Guide: reference/hdf-writing-guide.md
     - Quick Reference: reference/quick-reference.md
+  - Cognitive Infrastructure:
+    - Overview: cognitive-infrastructure/index.md
+    - Agents: cognitive-infrastructure/agents.md
+    - Skills: cognitive-infrastructure/skills.md
+    - Commands: cognitive-infrastructure/commands.md
   - LLM Forward Development:
     - Overview: development/llm-development.md
     - Agent Infrastructure: development/agent-infrastructure.md

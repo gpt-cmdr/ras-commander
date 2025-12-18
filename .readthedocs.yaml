@@ -10,6 +10,7 @@ build:
   jobs:
     pre_build:
       - cp -r examples docs/notebooks
+      - python scripts/generate_cognitive_docs.py
 
 mkdocs:
   configuration: mkdocs.yml
