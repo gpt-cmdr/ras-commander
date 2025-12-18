@@ -155,7 +155,7 @@ run_*.py
 test_*.py
 monitor_*.py
 cayce_*.py
-generate_*.py
+ai_tools/generate_*.py  # Only ignore AI tool generators, not scripts/
 
 # Temporary output files
 temp_*.txt
