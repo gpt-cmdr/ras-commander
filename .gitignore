@@ -117,6 +117,10 @@ examples/m3_models/
 /site
 use-deepseek-reasoner.bat
 
+# Notebook test scripts (temporary development scripts)
+run_notebook_test.bat
+run_notebook_test.ps1
+
 # Agent coordination system - ignore archived/completed work
 agent_tasks/.old/
 agent_tasks/tasks/*/
