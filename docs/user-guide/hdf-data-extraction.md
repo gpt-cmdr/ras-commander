@@ -113,23 +113,181 @@ wse_xs = xsec_results['Water_Surface'].sel(cross_section=xs_name)
 
 ## Plan-Level Results
 
+Plan-level results contain critical information for verifying simulation success and diagnosing issues. These methods are essential for automated workflows and quality control.
+
+### Compute Messages (Error Checking)
+
+The compute messages contain the full HEC-RAS computation log. **This is the primary source for detecting runtime errors:**
+
 ```python
 from ras_commander import HdfResultsPlan
 
-# Runtime statistics
-runtime = HdfResultsPlan.get_runtime_data(hdf_path)
-print(runtime)
-
-# Volume accounting
-volume = HdfResultsPlan.get_volume_accounting(hdf_path)
-print(volume)
-
-# Computation messages
+# Get computation messages
 messages = HdfResultsPlan.get_compute_messages(hdf_path)
-print(messages)
 
-# Computation options used
-options = HdfResultsPlan.get_compute_options(hdf_path)
+if messages:
+    # Check for errors
+    error_keywords = ['ERROR', 'FAILED', 'UNSTABLE', 'ABORTED']
+    has_errors = any(kw in messages.upper() for kw in error_keywords)
+
+    if has_errors:
+        print("ERRORS DETECTED:")
+        for line in messages.split('\n'):
+            if any(kw in line.upper() for kw in error_keywords):
+                print(f"  {line}")
+    else:
+        print("Run completed without errors")
+
+    # Check for warnings
+    if 'WARNING' in messages.upper():
+        print("\nWarnings found - review compute messages")
+else:
+    print("No compute messages - run may not have completed")
+```
+
+**Common error patterns to look for:**
+- `"ERROR"` - General computation errors
+- `"FAILED"` - Component failures
+- `"UNSTABLE"` - Numerical instability
+- `"ABORTED"` - Run terminated early
+
+### Volume Accounting (Mass Balance)
+
+Volume accounting verifies mass conservation in the simulation. Large imbalances indicate numerical issues:
+
+```python
+from ras_commander import HdfResultsPlan
+
+volume = HdfResultsPlan.get_volume_accounting(hdf_path)
+
+if volume is not None:
+    print("Volume Accounting:")
+    print(volume.T)  # Transpose for readability
+
+    # Volume accounting attributes may include:
+    # - Boundary Conditions In/Out
+    # - Precipitation In
+    # - Infiltration Out
+    # - Storage Area volumes
+    # - SA/2D In/Out
+    # - Cumulative error percentage
+else:
+    print("No volume accounting - check if run completed successfully")
+```
+
+### Unsteady Results Information
+
+Check that unsteady results were properly generated:
+
+```python
+from ras_commander import HdfResultsPlan
+
+# Basic unsteady attributes
+try:
+    info = HdfResultsPlan.get_unsteady_info(hdf_path)
+    print("Unsteady Info:")
+    print(info.T)
+except KeyError:
+    print("No unsteady results found")
+
+# Detailed unsteady summary
+try:
+    summary = HdfResultsPlan.get_unsteady_summary(hdf_path)
+    print("\nUnsteady Summary:")
+    print(summary.T)
+except KeyError:
+    print("No unsteady summary available")
+```
+
+### Runtime Statistics
+
+Monitor computation performance:
+
+```python
+from ras_commander import HdfResultsPlan
+
+runtime = HdfResultsPlan.get_runtime_data(hdf_path)
+
+if runtime is not None:
+    print("Runtime Statistics:")
+    print(f"  Plan: {runtime['Plan Name'].iloc[0]}")
+    print(f"  File: {runtime['File Name'].iloc[0]}")
+    print(f"  Simulation Start: {runtime['Simulation Start Time'].iloc[0]}")
+    print(f"  Simulation End: {runtime['Simulation End Time'].iloc[0]}")
+    print(f"  Simulation Duration: {runtime['Simulation Time (hr)'].iloc[0]:.2f} hr")
+    print(f"  Total Compute Time: {runtime['Complete Process (hr)'].iloc[0]:.4f} hr")
+    print(f"  Compute Speed: {runtime['Complete Process Speed (hr/hr)'].iloc[0]:.0f}x realtime")
+
+    # Process breakdown
+    if runtime['Unsteady Flow Computations (hr)'].iloc[0] != 'N/A':
+        print(f"  Geometry Processing: {runtime['Completing Geometry (hr)'].iloc[0]:.4f} hr")
+        print(f"  Unsteady Compute: {runtime['Unsteady Flow Computations (hr)'].iloc[0]:.4f} hr")
+```
+
+### Complete Verification Function
+
+Combine all checks into a reusable verification function:
+
+```python
+from ras_commander import HdfResultsPlan
+
+def verify_hdf_results(hdf_path_or_plan):
+    """
+    Comprehensive verification of HDF results.
+
+    Returns dict with verification status and details.
+    """
+    result = {
+        'valid': False,
+        'has_compute_msgs': False,
+        'has_errors': False,
+        'has_volume_accounting': False,
+        'has_unsteady_results': False,
+        'runtime_hours': None,
+        'errors': []
+    }
+
+    # 1. Check compute messages
+    msgs = HdfResultsPlan.get_compute_messages(hdf_path_or_plan)
+    if msgs:
+        result['has_compute_msgs'] = True
+        error_kw = ['ERROR', 'FAILED', 'UNSTABLE', 'ABORTED']
+        if any(kw in msgs.upper() for kw in error_kw):
+            result['has_errors'] = True
+            for line in msgs.split('\n'):
+                if any(kw in line.upper() for kw in error_kw):
+                    result['errors'].append(line.strip())
+
+    # 2. Check volume accounting
+    volume = HdfResultsPlan.get_volume_accounting(hdf_path_or_plan)
+    result['has_volume_accounting'] = volume is not None
+
+    # 3. Check unsteady results
+    try:
+        HdfResultsPlan.get_unsteady_summary(hdf_path_or_plan)
+        result['has_unsteady_results'] = True
+    except:
+        pass
+
+    # 4. Get runtime
+    runtime = HdfResultsPlan.get_runtime_data(hdf_path_or_plan)
+    if runtime is not None:
+        result['runtime_hours'] = runtime['Complete Process (hr)'].iloc[0]
+
+    # Determine overall validity
+    result['valid'] = (
+        result['has_compute_msgs'] and
+        not result['has_errors'] and
+        result['has_volume_accounting']
+    )
+
+    return result
+
+# Usage
+status = verify_hdf_results("01")
+print(f"Valid: {status['valid']}")
+if status['errors']:
+    print(f"Errors: {status['errors']}")
 ```
 
 ## Mesh Geometry
