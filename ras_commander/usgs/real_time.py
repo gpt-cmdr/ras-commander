@@ -65,7 +65,7 @@ import os
 from pathlib import Path
 from typing import Optional, Union, Dict, Tuple, List, Callable
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import time
 
 # Standard imports always needed
@@ -223,8 +223,8 @@ class RasUsgsRealTime:
                     if pd.notna(qual_val):
                         qualifiers.append(qual_val)
 
-            # Calculate age of data
-            age_minutes = (datetime.now() - latest_datetime).total_seconds() / 60
+            # Calculate age of data (use timezone-aware datetime for comparison)
+            age_minutes = (datetime.now(timezone.utc) - latest_datetime).total_seconds() / 60
 
             result = {
                 'site_id': site_id,
