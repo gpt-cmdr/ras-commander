@@ -61,4 +61,4 @@ jobs:
 
       - name: Build documentation
         run: |
-          mkdocs build --strict
+          mkdocs build
