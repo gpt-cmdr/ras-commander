@@ -14,15 +14,21 @@ class CustomBuildPy(build_py):
                 pycache_dir.rmdir()      # Delete the empty directory
                 print(f"Cleaned up: {pycache_dir}")
 
-        # Run the summary_knowledge_bases.py script
-        script_path = Path(__file__).parent / 'ai_tools' / 'generate_llm_knowledge_bases.py'
-        try:
-            subprocess.run(['python', str(script_path)], check=True)
-        except subprocess.CalledProcessError:
-            print("Warning: Knowledge base generation script failed, continuing with build")
-        except FileNotFoundError:
-            print("Warning: Knowledge base generation script not found, continuing with build")
-        
+        # Skip knowledge base generation on ReadTheDocs (causes build timeout)
+        # and in CI environments where it's not needed
+        import os
+        if os.environ.get('READTHEDOCS') or os.environ.get('CI'):
+            print("Skipping knowledge base generation (docs/CI build detected)")
+        else:
+            # Run the summary_knowledge_bases.py script
+            script_path = Path(__file__).parent / 'ai_tools' / 'generate_llm_knowledge_bases.py'
+            try:
+                subprocess.run(['python', str(script_path)], check=True)
+            except subprocess.CalledProcessError:
+                print("Warning: Knowledge base generation script failed, continuing with build")
+            except FileNotFoundError:
+                print("Warning: Knowledge base generation script not found, continuing with build")
+
         # Continue with the regular build process
         super().run()
 

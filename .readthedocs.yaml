@@ -9,7 +9,12 @@ build:
     python: "3.11"
   jobs:
     pre_build:
-      - cp -r examples docs/notebooks
+      # Create notebooks directory and copy ONLY .ipynb files (not the 432MB zip!)
+      - mkdir -p docs/notebooks
+      - cp examples/*.ipynb docs/notebooks/
+      - cp examples/README.md docs/notebooks/ || true
+      - cp examples/AGENTS.md docs/notebooks/ || true
+      # Generate cognitive infrastructure docs
       - python .claude/scripts/generate_cognitive_docs.py
 
 mkdocs:
