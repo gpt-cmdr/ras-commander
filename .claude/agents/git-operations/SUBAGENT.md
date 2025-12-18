@@ -248,6 +248,82 @@ if [[ $BRANCH == "main" ]] || [[ $BRANCH == "master" ]]; then
 fi
 ```
 
+## Branch Policy: Clean Main, Dev Tracks Development Files
+
+### Policy Overview
+
+**Main branch** = Clean user-facing codebase
+**Dev branch** = Includes development coordination files
+
+This ensures users who clone/sync main get a clean workspace without active development task files.
+
+### Development-Only Files (Untracked on Main)
+
+**agent_tasks/**:
+- `.agent/` - Session state (STATE.md, PROGRESS.md, BACKLOG.md, LEARNINGS.md)
+- `*.md` - Active task files (except README.md)
+- `api-consistency-auditor/` - Subproject files
+
+**.claude/outputs/**:
+- All session outputs from agents
+- Temporary analysis files
+- Notebook runner outputs
+
+### Files Tracked on Main (Helpful for Contributors)
+
+- `agent_tasks/README.md` - Explains memory system
+- `agent_tasks/.gitignore` - Local file patterns
+- `agent_tasks/*/README.md` - Subproject documentation
+
+### Gitignore Enforcement
+
+The `.gitignore` on main prevents re-adding dev files:
+```gitignore
+# Agent coordination - dev files untracked on main
+agent_tasks/.agent/
+agent_tasks/*.md
+!agent_tasks/README.md
+agent_tasks/api-consistency-auditor/
+/.claude/outputs
+```
+
+### Workflow: Development on Dev Branch
+
+```bash
+# 1. Create/switch to dev branch for development work
+git checkout dev  # or: git checkout -b dev
+
+# 2. Make changes, agent_tasks/ and .claude/outputs/ are tracked here
+git add agent_tasks/.agent/STATE.md
+git commit -m "Update session state"
+
+# 3. When ready to release, merge dev to main
+# IMPORTANT: Dev files stay on dev, don't pollute main
+git checkout main
+git merge dev --no-commit
+git reset HEAD agent_tasks/  # Remove dev files from merge
+git reset HEAD .claude/outputs/
+git commit -m "Merge feature from dev (excluding dev files)"
+```
+
+### Why This Matters
+
+1. **Users get clean workspace**: `git clone` gives production-ready code
+2. **No session pollution**: Users don't see your STATE.md, PROGRESS.md
+3. **Collaboration friendly**: Other devs start fresh, not from your session state
+4. **Dev continuity**: Your dev branch retains full task coordination
+
+### Quick Check: Is Main Clean?
+
+```bash
+# Should return 0 files for these directories
+git ls-files agent_tasks/.agent/ | wc -l  # Should be 0
+git ls-files .claude/outputs/ | wc -l     # Should be 0
+
+# README files should exist
+git ls-files agent_tasks/README.md        # Should exist
+```
+
 ## Documentation Build Verification
 
 ### Critical Pre-Push Check (Prevents Build Failures)
