@@ -610,8 +610,10 @@ When invoked as `/my-command`, the file contents become the prompt.
 def main():
     """Main entry point for documentation generation."""
     # Find repository root (where .claude directory is)
-    script_dir = Path(__file__).parent
-    repo_root = script_dir.parent
+    # Script is at .claude/scripts/generate_cognitive_docs.py
+    # So repo_root is two levels up
+    script_dir = Path(__file__).parent  # .claude/scripts/
+    repo_root = script_dir.parent.parent  # repo root
 
     claude_dir = repo_root / '.claude'
     docs_dir = repo_root / 'docs' / 'cognitive-infrastructure'
