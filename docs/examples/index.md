@@ -43,7 +43,8 @@ Work with geometry files: parsing, modification, and repair.
 
 | Notebook | Description | Source |
 |----------|-------------|--------|
-| Plaintext Geometry Operations | Parse and modify geometry files directly | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/200_plaintext_geometry_operations.ipynb) |
+| 1D Plaintext Geometry | Parse and modify 1D geometry: cross sections, HTAB, lateral structures | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/201_1d_plaintext_geometry.ipynb) |
+| 2D Plaintext Geometry | Parse and modify 2D geometry: storage areas, SA/2D connections, dam breach | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/202_2d_plaintext_geometry.ipynb) |
 | Fixit Blocked Obstructions | Detect and fix overlapping blocked obstructions | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/210_fixit_blocked_obstructions.ipynb) |
 
 ### Boundary Conditions (300s)

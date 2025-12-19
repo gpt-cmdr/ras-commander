@@ -75,10 +75,15 @@ How agents should use notebooks
 
 ## 200s: Geometry Parsing & Operations
 
-200_plaintext_geometry_operations.ipynb
-- Focus: Parse and modify geometry files directly (cross sections, Manning's n).
-- Functions: RasGeometry (ras_commander/RasGeometry.py), RasGeo (ras_commander/RasGeo.py).
-- Pattern: Read raw geometry text, parse fixed-width fields, modify values, write back.
+201_1d_plaintext_geometry.ipynb
+- Focus: Parse and modify 1D geometry: cross sections, HTAB, lateral structures.
+- Functions: RasGeometry (cross sections, bank stations), HdfHydraulicTables (property tables), GeomLateral (lateral structures).
+- Pattern: Read raw geometry text, parse fixed-width fields, modify values, write back with automatic backup.
+
+202_2d_plaintext_geometry.ipynb
+- Focus: Parse and modify 2D geometry: storage areas, SA/2D connections, dam breach.
+- Functions: RasGeometry (storage areas, connections), get_connection_weir_profile, get_connection_gates.
+- Pattern: Extract elevation-volume curves, dam crest profiles, gate configurations for dam breach analysis.
 
 210_fixit_blocked_obstructions.ipynb
 - Focus: Automatically detect and fix overlapping blocked obstructions.

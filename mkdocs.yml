@@ -146,7 +146,8 @@ nav:
       - Win32COM Automation: notebooks/120_automating_ras_with_win32com.ipynb
       - Legacy HECRASController: notebooks/121_legacy_hecrascontroller_and_rascontrol.ipynb
     - Geometry Parsing & Operations (200s):
-      - Plaintext Geometry Operations: notebooks/200_plaintext_geometry_operations.ipynb
+      - 1D Plaintext Geometry: notebooks/201_1d_plaintext_geometry.ipynb
+      - 2D Plaintext Geometry: notebooks/202_2d_plaintext_geometry.ipynb
       - Fixit Blocked Obstructions: notebooks/210_fixit_blocked_obstructions.ipynb
     - Boundary Conditions (300s):
       - Unsteady Flow Operations: notebooks/300_unsteady_flow_operations.ipynb
