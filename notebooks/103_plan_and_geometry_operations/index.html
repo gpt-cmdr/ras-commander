@@ -4642,8 +4642,44 @@
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">#!pip install ras-commander</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># This installs ras-commander and all dependencies</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================# DEVELOPMENT MODE TOGGLE# =============================================================================USE_LOCAL_SOURCE = False  # &lt;-- TOGGLE THIS# Import Path (needed for both modes)from pathlib import Pathimport sysif USE_LOCAL_SOURCE:    local_path = str(Path.cwd().parent)    if local_path not in sys.path:        sys.path.insert(0, local_path)    print(f&quot;📁 LOCAL SOURCE MODE: Loading from {local_path}/ras_commander&quot;)else:    print(&quot;📦 PIP PACKAGE MODE: Loading installed ras-commander&quot;)# Import ras-commanderfrom ras_commander import HdfResultsPlan, RasCmdr, RasExamples, RasGeo, RasPlan, init_ras_project, ras# Additional importsimport osimport pandas as pdfrom IPython import displayfrom datetime import datetime# Verify which version loadedimport ras_commanderprint(f&quot;✓ Loaded: {ras_commander.__file__}&quot;)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Import Path (needed for both modes)</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">local_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">if</span> <span class="n">local_path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">:</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">local_path</span><span class="p">)</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;📁 LOCAL SOURCE MODE: Loading from </span><span class="si">{</span><span class="n">local_path</span><span class="si">}</span><span class="s2">/ras_commander&quot;</span><span class="p">)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;📦 PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># Import ras-commander</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1"># Additional imports</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="kn">from</span><span class="w"> </span><span class="nn">IPython</span><span class="w"> </span><span class="kn">import</span> <span class="n">display</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="c1"># Verify which version loaded</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
+
+
+2025-12-20 14:04:09 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+
+
+✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>Before running this notebook, ensure you have:</p>
 <ol>
@@ -4691,11 +4727,33 @@
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to: </span><span class="si">{</span><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">absolute</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Outputs will be saved to: C:\GH\ras-commander\examples\_outputs\103_plan_and_geometry_operations
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Extract specific projects we&#39;ll use in this tutorial</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># This will download them if not present and extract them to the example_projects folder</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">bald_eagle_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="s2">&quot;Balde Eagle Creek&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;103&quot;</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+
+
+2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+
+
+2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+
+
+2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+
+
+2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_103&#39;
+
+
+2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
+
+
+C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
+</code></pre></div>
 <h2 id="project-initialization">Project Initialization<a class="headerlink" href="#project-initialization" title="Permanent link">&para;</a></h2>
 <p>The first step is to initialize the HEC-RAS project. This is done using the <code>init_ras_project()</code> function, which takes the project folder path and HEC-RAS version as parameters.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
@@ -4705,6 +4763,108 @@
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">HEC-RAS Project Plan Data (plan_df):&quot;</span><span class="p">)</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
+
+
+Initialized HEC-RAS project: BaldEagle
+
+HEC-RAS Project Plan Data (plan_df):
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>unsteady_number</th>
+      <th>geometry_number</th>
+      <th>Plan Title</th>
+      <th>Program Version</th>
+      <th>Short Identifier</th>
+      <th>Simulation Date</th>
+      <th>Computation Interval</th>
+      <th>Mapping Interval</th>
+      <th>Run HTab</th>
+      <th>...</th>
+      <th>PS Cores</th>
+      <th>DSS File</th>
+      <th>Friction Slope Method</th>
+      <th>HDF_Results_Path</th>
+      <th>Geom File</th>
+      <th>Geom Path</th>
+      <th>Flow File</th>
+      <th>Flow Path</th>
+      <th>full_path</th>
+      <th>flow_type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>01</td>
+      <td>02</td>
+      <td>01</td>
+      <td>Unsteady with Bridges and Dam</td>
+      <td>5.00</td>
+      <td>UnsteadyFlow</td>
+      <td>18FEB1999,0000,24FEB1999,0500</td>
+      <td>2MIN</td>
+      <td>1HOUR</td>
+      <td>1</td>
+      <td>...</td>
+      <td>None</td>
+      <td>dss</td>
+      <td>2</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>02</td>
+      <td>None</td>
+      <td>01</td>
+      <td>Steady Flow Run</td>
+      <td>NaN</td>
+      <td>SteadyRun</td>
+      <td>02/18/1999,0000,02/24/1999,0500</td>
+      <td>2MIN</td>
+      <td>NaN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>None</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>Steady</td>
+    </tr>
+  </tbody>
+</table>
+<p>2 rows × 27 columns</p>
+</div>
+
 <h2 id="understanding-plan-and-geometry-operations-in-hec-ras">Understanding Plan and Geometry Operations in HEC-RAS<a class="headerlink" href="#understanding-plan-and-geometry-operations-in-hec-ras" title="Permanent link">&para;</a></h2>
 <p>Before diving into the operations, let's understand what plan and geometry files are in HEC-RAS:</p>
 <ul>
@@ -4743,6 +4903,150 @@
 </span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry file: </span><span class="si">{</span><span class="n">new_plan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Geom File&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File path: </span><span class="si">{</span><span class="n">new_plan</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 03
+
+
+2025-12-20 14:04:10 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
+
+
+New plan created: 03
+
+Updated plan files:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>unsteady_number</th>
+      <th>geometry_number</th>
+      <th>Plan Title</th>
+      <th>Program Version</th>
+      <th>Short Identifier</th>
+      <th>Simulation Date</th>
+      <th>Computation Interval</th>
+      <th>Mapping Interval</th>
+      <th>Run HTab</th>
+      <th>...</th>
+      <th>UNET D2 Cores</th>
+      <th>PS Cores</th>
+      <th>DSS File</th>
+      <th>Friction Slope Method</th>
+      <th>HDF_Results_Path</th>
+      <th>Geom File</th>
+      <th>Geom Path</th>
+      <th>Flow File</th>
+      <th>Flow Path</th>
+      <th>full_path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>01</td>
+      <td>02</td>
+      <td>01</td>
+      <td>Unsteady with Bridges and Dam</td>
+      <td>5.00</td>
+      <td>UnsteadyFlow</td>
+      <td>18FEB1999,0000,24FEB1999,0500</td>
+      <td>2MIN</td>
+      <td>1HOUR</td>
+      <td>1</td>
+      <td>...</td>
+      <td>0.0</td>
+      <td>None</td>
+      <td>dss</td>
+      <td>2</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>02</td>
+      <td>None</td>
+      <td>01</td>
+      <td>Steady Flow Run</td>
+      <td>NaN</td>
+      <td>SteadyRun</td>
+      <td>02/18/1999,0000,02/24/1999,0500</td>
+      <td>2MIN</td>
+      <td>NaN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>NaN</td>
+      <td>None</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>03</td>
+      <td>02</td>
+      <td>01</td>
+      <td>Unsteady with Bridges and Dam</td>
+      <td>5.00</td>
+      <td>Combined Test Plan</td>
+      <td>18FEB1999,0000,24FEB1999,0500</td>
+      <td>2MIN</td>
+      <td>1HOUR</td>
+      <td>1</td>
+      <td>...</td>
+      <td>0.0</td>
+      <td>None</td>
+      <td>dss</td>
+      <td>2</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+  </tbody>
+</table>
+<p>3 rows × 26 columns</p>
+</div>
+
+<div class="language-text highlight"><pre><span></span><code>New plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+New plan details:
+Plan number: 03
+Description: No description
+Short Identifier: Combined Test Plan
+Geometry file: 01
+File path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+</code></pre></div>
 <h3 id="verification-plan-cloning">Verification: Plan Cloning<a class="headerlink" href="#verification-plan-cloning" title="Permanent link">&para;</a></h3>
 <p><strong>Success Criteria</strong>:
 - New plan file created in project folder (check <code>ras.plan_df</code>)
@@ -4781,6 +5085,15 @@
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan title: </span><span class="si">{</span><span class="n">current_title</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan shortid: </span><span class="si">{</span><span class="n">current_shortid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan
+
+
+Current plan title: Unsteady with Bridges and Dam
+Current plan shortid: Combined Test Plan
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Update the title and shortid to append &quot; clonedplan&quot;</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">new_title</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">current_title</span><span class="si">}</span><span class="s2"> clonedplan&quot;</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">new_shortid</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">current_shortid</span><span class="si">}</span><span class="s2"> clonedplan&quot;</span>
@@ -4791,6 +5104,33 @@
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Updated plan title: </span><span class="si">{</span><span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_title</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Updated plan shortid: </span><span class="si">{</span><span class="n">RasPlan</span><span class="o">.</span><span class="n">get_shortid</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated Plan Title in plan file to: Unsteady with Bridges and Dam clonedplan
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - WARNING - Short Identifier too long (24 char max). Truncating: Combined Test Plan clonedplan
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated Short Identifier in plan file to: Combined Test Plan clone
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam clonedplan
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan clone
+
+
+
+Updated plan title: Unsteady with Bridges and Dam clonedplan
+
+
+Updated plan shortid: Combined Test Plan clone
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Get the current plan title and shortid again to confirm the changes</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">current_title</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_title</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">current_shortid</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_shortid</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span>
@@ -4798,6 +5138,15 @@
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan title: </span><span class="si">{</span><span class="n">current_title</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan shortid: </span><span class="si">{</span><span class="n">current_shortid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam clonedplan
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan clone
+
+
+Current plan title: Unsteady with Bridges and Dam clonedplan
+Current plan shortid: Combined Test Plan clone
+</code></pre></div>
 <p>Now let's clone a geometry file. This allows us to make modifications to a geometry without affecting the original.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Clone geometry &quot;01&quot; to create a new geometry file</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">new_geom_number</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_geom</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
@@ -4819,6 +5168,74 @@
 </span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File path: </span><span class="si">{</span><span class="n">new_geom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;full_path&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Not available&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HDF path: </span><span class="si">{</span><span class="n">new_geom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hdf_path&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g01.hdf to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02.hdf
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 02
+
+
+New geometry created: 02
+
+Updated geometry files:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>geom_file</th>
+      <th>geom_number</th>
+      <th>full_path</th>
+      <th>hdf_path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>g01</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>g02</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Found geometry path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
+
+
+
+New geometry file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
+
+New geometry details:
+Geometry number: 02
+Geometry file: Not available
+File path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
+HDF path: None
+</code></pre></div>
 <p>Let's also clone an unsteady flow file to complete our new simulation setup.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Clone unsteady flow &quot;02&quot; to create a new unsteady flow file</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">new_unsteady_number</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_unsteady</span><span class="p">(</span><span class="s2">&quot;02&quot;</span><span class="p">)</span>
@@ -4835,6 +5252,94 @@
 </span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File path: </span><span class="si">{</span><span class="n">new_unsteady</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flow Title: </span><span class="si">{</span><span class="n">new_unsteady</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Flow Title&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Not available&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u02 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 01
+
+
+2025-12-20 14:04:10 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
+
+
+New unsteady flow created: 01
+
+Updated unsteady flow files:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>unsteady_number</th>
+      <th>full_path</th>
+      <th>Flow Title</th>
+      <th>Program Version</th>
+      <th>Use Restart</th>
+      <th>Precipitation Mode</th>
+      <th>Wind Mode</th>
+      <th>Met BC=Precipitation|Mode</th>
+      <th>Met BC=Evapotranspiration|Mode</th>
+      <th>Met BC=Precipitation|Expanded View</th>
+      <th>Met BC=Precipitation|Constant Units</th>
+      <th>Met BC=Precipitation|Gridded Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>Flow Hydrograph 2</td>
+      <td>6.30</td>
+      <td>0</td>
+      <td>Disable</td>
+      <td>No Wind Forces</td>
+      <td>None</td>
+      <td>None</td>
+      <td>0</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>Flow Hydrograph 2</td>
+      <td>6.30</td>
+      <td>0</td>
+      <td>Disable</td>
+      <td>No Wind Forces</td>
+      <td>None</td>
+      <td>None</td>
+      <td>0</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><pre><span></span><code>New unsteady flow details:
+Unsteady number: 01
+File path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
+Flow Title: Flow Hydrograph 2
+</code></pre></div>
 <h2 id="associating-files-and-setting-parameters">Associating Files and Setting Parameters<a class="headerlink" href="#associating-files-and-setting-parameters" title="Permanent link">&para;</a></h2>
 <p>Now that we have cloned our plan, geometry, and unsteady flow files, we need to associate them with each other and set various parameters.</p>
 <h3 id="setting-geometry-for-a-plan">Setting Geometry for a Plan<a class="headerlink" href="#setting-geometry-for-a-plan" title="Permanent link">&para;</a></h3>
@@ -4849,12 +5354,27 @@
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">updated_plan</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">new_plan_number</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Verified that plan </span><span class="si">{</span><span class="n">new_plan_number</span><span class="si">}</span><span class="s2"> now uses geometry file: </span><span class="si">{</span><span class="n">updated_plan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Geom File&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g02 for plan 03
+
+
+2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Geometry for plan 03 set to 02
+
+
+Updated geometry for plan 03 to geometry 02
+
+
+Plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+Verified that plan 03 now uses geometry file: g02
+</code></pre></div>
 <h3 id="setting-unsteady-flow-for-a-plan">Setting Unsteady Flow for a Plan<a class="headerlink" href="#setting-unsteady-flow-for-a-plan" title="Permanent link">&para;</a></h3>
 <p>Similarly, let's associate our new unsteady flow file with our plan:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Set unsteady flow for the cloned plan</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">set_unsteady</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">,</span> <span class="n">new_unsteady_number</span><span class="p">)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Updated unsteady flow for plan </span><span class="si">{</span><span class="n">new_plan_number</span><span class="si">}</span><span class="s2"> to unsteady flow </span><span class="si">{</span><span class="n">new_unsteady_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Updated unsteady flow for plan 03 to unsteady flow 01
+</code></pre></div>
 <h3 id="clearing-geometry-preprocessor-files">Clearing Geometry Preprocessor Files<a class="headerlink" href="#clearing-geometry-preprocessor-files" title="Permanent link">&para;</a></h3>
 <p>When working with geometry files, it's important to clear the preprocessor files to ensure clean results. These files (with <code>.c*</code> extension) contain computed hydraulic properties that should be recomputed when the geometry changes.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Clear geometry preprocessor files for the cloned plan</span>
@@ -4866,6 +5386,18 @@
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="n">geom_preprocessor_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_path</span><span class="p">)</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="n">geom_preprocessor_suffix</span><span class="p">)</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Preprocessor file exists after clearing: </span><span class="si">{</span><span class="n">geom_preprocessor_file</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+
+
+Cleared geometry preprocessor files for plan 03
+Preprocessor file exists after clearing: False
+</code></pre></div>
 <h3 id="setting-computation-parameters">Setting Computation Parameters<a class="headerlink" href="#setting-computation-parameters" title="Permanent link">&para;</a></h3>
 <p>Let's set the computation parameters for our plan:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Set the number of cores to use for the computation</span>
@@ -4889,6 +5421,32 @@
 </span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Run HTab: </span><span class="si">{</span><span class="n">run_htab_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- UNET Use Existing IB Tables: </span><span class="si">{</span><span class="n">ib_tables_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+Updated number of cores for plan 03 to 2
+
+
+
+Verified that UNET D1 Cores is set to: 2
+
+
+2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+Updated geometry preprocessor options for plan 03
+- Run HTab: -1 (Force recomputation of geometry tables)
+- Use Existing IB Tables: -1 (Force recomputation of interpolation/boundary tables)
+
+
+
+Verified setting values:
+- Run HTab: -1
+- UNET Use Existing IB Tables: -1
+</code></pre></div>
 <h3 id="updating-simulation-parameters">Updating Simulation Parameters<a class="headerlink" href="#updating-simulation-parameters" title="Permanent link">&para;</a></h3>
 <p>Now, let's update various simulation parameters for our plan:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># 1. Update simulation date</span>
@@ -4900,10 +5458,19 @@
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Start Date: </span><span class="si">{</span><span class="n">start_date</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- End Date: </span><span class="si">{</span><span class="n">end_date</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+Updated simulation date for plan 03:
+- Start Date: 2023-01-01 00:00:00
+- End Date: 2023-01-05 23:59:00
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verify the update</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">sim_date</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">,</span> <span class="s2">&quot;Simulation Date&quot;</span><span class="p">)</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Verified Simulation Date value: </span><span class="si">{</span><span class="n">sim_date</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Verified Simulation Date value: 01JAN2023,0000,05JAN2023,2359
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># 2. Update plan intervals</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">update_plan_intervals</span><span class="p">(</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">new_plan_number</span><span class="p">,</span>
@@ -4923,6 +5490,18 @@
 </span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Computation Interval: </span><span class="si">{</span><span class="n">comp_interval</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Mapping Interval: </span><span class="si">{</span><span class="n">mapping_interval</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+
+Updated plan intervals for plan 03:
+- Computation Interval: 1MIN
+- Output Interval: 15MIN
+- Mapping Interval: 30MIN
+Verified interval values:
+- Computation Interval: 1MIN
+- Mapping Interval: 30MIN
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># 3. Update run flags</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">update_run_flags</span><span class="p">(</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">new_plan_number</span><span class="p">,</span>
@@ -4937,6 +5516,16 @@
 </span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Post Processor: True&quot;</span><span class="p">)</span>
 </span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Floodplain Mapping: True&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03 (flags modified: 4)
+
+
+
+Updated run flags for plan 03:
+- Geometry Preprocessor: True
+- Unsteady Flow Simulation: True
+- Post Processor: True
+- Floodplain Mapping: True
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Verify the updates</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">run_htab</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">,</span> <span class="s2">&quot;Run HTab&quot;</span><span class="p">)</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">run_unet</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">,</span> <span class="s2">&quot;Run UNet&quot;</span><span class="p">)</span>
@@ -4953,6 +5542,20 @@
 </span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="n">current_description</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">read_plan_description</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span>
 </span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan description:</span><span class="se">\n</span><span class="si">{</span><span class="n">current_description</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:11 - ras_commander.RasPlan - WARNING - Unknown key: Run UNet. Valid keys are: Geom File, DSS File, Computation Interval, UNET D2 Name, Run Sediment, UNET D1 Cores, Run UNET, Program Version, Flow File, Description, Short Identifier, UNET 1D Methodology, Simulation Date, Mapping Interval, Run RASMapper, Run HTab, Run WQNET, UNET D2 Cores, Friction Slope Method, PS Cores, UNET Use Existing IB Tables, UNET D2 Solver Type, Plan Title, Run Post Process, Plan File
+ Add more keys and explanations in get_plan_value() as needed.
+
+
+2025-12-20 14:04:11 - ras_commander.RasPlan - WARNING - No description found in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+Verified run flag values:
+- Run HTab (Geometry Preprocessor): -1
+- Run UNet (Unsteady Flow): -1
+
+Updated description for plan 03
+Current plan description:
+</code></pre></div>
 <h2 id="computing-the-plan">Computing the Plan<a class="headerlink" href="#computing-the-plan" title="Permanent link">&para;</a></h2>
 <p>Now that we have set up all the parameters, let's compute the plan using RasCmdr.compute_plan():</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Compute the plan with our configured settings</span>
@@ -4965,6 +5568,38 @@
 </span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to compute plan </span><span class="si">{</span><span class="n">new_plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
+
+
+2025-12-20 14:04:11 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:11 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
+2025-12-20 14:04:11 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+
+
+2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03
+
+
+2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03&quot;
+
+
+Computing plan 03...
+
+
+2025-12-20 14:05:50 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+
+
+2025-12-20 14:05:50 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 99.89 seconds
+
+
+Plan 03 computed successfully
+</code></pre></div>
 <h2 id="verifying-results">Verifying Results<a class="headerlink" href="#verifying-results" title="Permanent link">&para;</a></h2>
 <p>After computation, we should check if results were written correctly:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Refresh the plan entries to ensure we have the latest data</span>
@@ -4990,6 +5625,126 @@
 </span><span id="__span-23-21"><a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a><span class="n">plan_hdf_info</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]]</span>
 </span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">plan_hdf_info</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>HDF entries for the project:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>unsteady_number</th>
+      <th>geometry_number</th>
+      <th>Plan Title</th>
+      <th>Program Version</th>
+      <th>Short Identifier</th>
+      <th>Simulation Date</th>
+      <th>Computation Interval</th>
+      <th>Mapping Interval</th>
+      <th>Run HTab</th>
+      <th>...</th>
+      <th>PS Cores</th>
+      <th>DSS File</th>
+      <th>Friction Slope Method</th>
+      <th>description</th>
+      <th>HDF_Results_Path</th>
+      <th>Geom File</th>
+      <th>Geom Path</th>
+      <th>Flow File</th>
+      <th>Flow Path</th>
+      <th>full_path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>2</th>
+      <td>03</td>
+      <td>01</td>
+      <td>02</td>
+      <td>Unsteady with Bridges and Dam clonedplan</td>
+      <td>5.00</td>
+      <td>Combined Test Plan clone</td>
+      <td>01JAN2023,0000,05JAN2023,2359</td>
+      <td>1MIN</td>
+      <td>30MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>None</td>
+      <td>dss</td>
+      <td>2</td>
+      <td>Combined plan with modified geometry and unste...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>02</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>01</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+  </tbody>
+</table>
+<p>1 rows × 27 columns</p>
+</div>
+
+<div class="language-text highlight"><pre><span></span><code>Plan 03 has a valid HDF results file:
+HDF Path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
+
+All plan entries with their HDF paths:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>HDF_Results_Path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>01</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>02</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>03</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <p>If the plan was computed successfully, we can examine the runtime data and volume accounting from the HDF results:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Get computation runtime data from HDF</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Checking computation runtime data...&quot;</span><span class="p">)</span>
@@ -5030,6 +5785,86 @@
 </span><span id="__span-24-37"><a id="__codelineno-24-37" name="__codelineno-24-37" href="#__codelineno-24-37"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-24-38"><a id="__codelineno-24-38" name="__codelineno-24-38" href="#__codelineno-24-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No volume accounting data found. This may indicate the simulation didn&#39;t complete successfully.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
+
+
+2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagle.p03.hdf
+
+
+2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady with Bridges and Dam clonedplan
+
+
+2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 119.98333333333333
+
+
+Checking computation runtime data...
+
+Simulation Runtime Statistics:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Plan Name</th>
+      <th>File Name</th>
+      <th>Simulation Start Time</th>
+      <th>Simulation End Time</th>
+      <th>Simulation Duration (s)</th>
+      <th>Simulation Time (hr)</th>
+      <th>Completing Geometry (hr)</th>
+      <th>Preprocessing Geometry (hr)</th>
+      <th>Completing Event Conditions (hr)</th>
+      <th>Unsteady Flow Computations (hr)</th>
+      <th>Complete Process (hr)</th>
+      <th>Unsteady Flow Speed (hr/hr)</th>
+      <th>Complete Process Speed (hr/hr)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>Unsteady with Bridges and Dam clonedplan</td>
+      <td>BaldEagle.p03.hdf</td>
+      <td>2023-01-01</td>
+      <td>2023-01-05 23:59:00</td>
+      <td>431940.0</td>
+      <td>119.983333</td>
+      <td>N/A</td>
+      <td>0.023108</td>
+      <td>N/A</td>
+      <td>0.001307</td>
+      <td>0.027227</td>
+      <td>91823.979592</td>
+      <td>4406.831538</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
+
+
+
+Simulation Duration: 431940.00 seconds
+Computation Time: 0.02723 hours
+Computation Speed: 4406.83 (simulation hours/compute hours)
+
+Checking volume accounting...
+</code></pre></div>
 <h2 id="hec-ras-plan-file-structure-reference">HEC-RAS Plan File Structure Reference<a class="headerlink" href="#hec-ras-plan-file-structure-reference" title="Permanent link">&para;</a></h2>
 <p>Understanding plan file structure helps debug cloning operations:</p>
 <h3 id="plan-file-p-components">Plan File (.p##) Components<a class="headerlink" href="#plan-file-p-components" title="Permanent link">&para;</a></h3>
@@ -5140,7 +5975,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 18:47:34 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 19:23:26 UTC">December 20, 2025</span>
   </span>
 
     
@@ -5150,7 +5985,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 18:47:34 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 19:23:26 UTC">December 20, 2025</span>
   </span>
 
     
