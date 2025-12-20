@@ -3136,6 +3136,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="AORC Dataset Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#llm-forward-approach-for-precipitation-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Forward Approach for Precipitation Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#noaa-aorc-data-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NOAA AORC Data Standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-aorc-precipitation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use AORC Precipitation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4737,6 +4776,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="AORC Dataset Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#llm-forward-approach-for-precipitation-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Forward Approach for Precipitation Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#noaa-aorc-data-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NOAA AORC Data Standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-aorc-precipitation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use AORC Precipitation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4900,6 +4978,70 @@
 <li><strong>Format</strong>: Cloud-optimized Zarr on AWS S3</li>
 <li><strong>Access</strong>: Anonymous (no authentication required)</li>
 </ul>
+<h3 id="llm-forward-approach-for-precipitation-data">LLM Forward Approach for Precipitation Data<a class="headerlink" href="#llm-forward-approach-for-precipitation-data" title="Permanent link">&para;</a></h3>
+<p>This notebook demonstrates <strong>LLM Forward</strong> principles for external precipitation data integration:</p>
+<ol>
+<li><strong>Data Provenance</strong>: All AORC data includes:</li>
+<li>NASA/NOAA source metadata (grid resolution, version)</li>
+<li>Retrieval timestamp and data coverage period</li>
+<li>
+<p>Storm identification criteria (inter-event hours, minimum depth)</p>
+</li>
+<li>
+<p><strong>Visual Verification</strong>: Every step produces reviewable outputs:</p>
+</li>
+<li>NetCDF files (inspect in Panoply or ncview)</li>
+<li>Storm hyetographs (plot in Excel/Python)</li>
+<li>
+<p>Spatial precipitation grids (visualize distribution)</p>
+</li>
+<li>
+<p><strong>Multiple Review Pathways</strong>:</p>
+</li>
+<li>Engineering review (verify storm depths vs regional IDF curves)</li>
+<li>Visual inspection (plot storm catalog, spatial patterns)</li>
+<li>
+<p>Data quality checks (grid coverage, missing values)</p>
+</li>
+<li>
+<p><strong>Self-Documenting</strong>: Standard folder structure preserves analysis</p>
+</li>
+<li><code>Precipitation/storm_catalog.csv</code> lists all identified events</li>
+<li>Individual NetCDF files preserve raw AORC data</li>
+<li>Hyetograph CSVs enable HEC-HMS/HEC-RAS integration</li>
+</ol>
+<h3 id="noaa-aorc-data-standards">NOAA AORC Data Standards<a class="headerlink" href="#noaa-aorc-data-standards" title="Permanent link">&para;</a></h3>
+<p><strong>Analysis of Record for Calibration (AORC)</strong> (<a href="https://hydrology.nws.noaa.gov/aorc-historic/">NOAA documentation</a>):</p>
+<ul>
+<li><strong>Spatial Resolution</strong>: 4 km grid (CONUS coverage)</li>
+<li><strong>Temporal Resolution</strong>: Hourly (1979-present)</li>
+<li><strong>Data Source</strong>: Stage IV radar + gauge analysis (multi-sensor product)</li>
+<li><strong>Quality Control</strong>: NOAA/NWS operational QC procedures</li>
+</ul>
+<p><strong>Data Quality Considerations</strong>:
+- AORC represents best-available gridded precipitation
+- Grid cell size (4 km) may not capture small-scale convective events
+- Hourly resolution appropriate for watershed response times &gt;2 hours
+- Consider comparing to local rain gauges for calibration events</p>
+<h3 id="when-to-use-aorc-precipitation">When to Use AORC Precipitation<a class="headerlink" href="#when-to-use-aorc-precipitation" title="Permanent link">&para;</a></h3>
+<p><strong>Model Calibration</strong> (historical events):
+- Identify significant storm events from AORC catalog
+- Extract spatial/temporal precipitation distribution
+- Use as model input for calibration runs
+- Compare simulated vs observed hydrographs (see notebook 914)</p>
+<p><strong>Continuous Simulation</strong> (long-term hydrology):
+- Download multi-year AORC data (1979-present)
+- Generate hyetographs for each storm event
+- Run HEC-RAS in continuous mode
+- Analyze flood frequency statistics</p>
+<p><strong>Regional IDF Curve Validation</strong>:
+- Compare AORC storm depths to Atlas 14 (NOAA point estimates)
+- Verify spatial averaging effects (4 km grid vs point)
+- Document differences in engineering analysis</p>
+<p><strong>NOT Recommended For</strong>:
+- Small watersheds &lt;1 sq mi (use point rain gauges)
+- Sub-hourly rainfall analysis (use 5-min gauges)
+- Real-time flood forecasting (use radar nowcasts)</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Install dependencies (uncomment if needed)</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># !pip install ras-commander[precip]  # Includes xarray, zarr, s3fs, netCDF4, rioxarray</span>
 </span></code></pre></div>
@@ -5606,7 +5748,7 @@ Each year gets its own project folder with full precipitation data export.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -5616,7 +5758,7 @@ Each year gets its own project folder with full precipitation data export.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     

@@ -1988,6 +1988,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-youll-learn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What You'll Learn
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#llm-forward-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Forward Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#parameters" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4757,6 +4807,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-youll-learn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What You'll Learn
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#llm-forward-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Forward Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#parameters" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4976,6 +5076,26 @@
 
 
 <h1 id="unsteady-flow-operations">Unsteady Flow Operations<a class="headerlink" href="#unsteady-flow-operations" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This notebook demonstrates reading and manipulating <strong>unsteady flow files</strong> (<code>.u##</code> format). These define time-varying boundary conditions and simulation parameters.</p>
+<h3 id="what-youll-learn">What You'll Learn<a class="headerlink" href="#what-youll-learn" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Parse unsteady flow file structure</li>
+<li>Extract boundary condition time series</li>
+<li>Modify initial condition lines</li>
+<li>Update simulation parameters</li>
+</ul>
+<h3 id="llm-forward-approach">LLM Forward Approach<a class="headerlink" href="#llm-forward-approach" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Verification</strong>: Compare to HEC-RAS GUI</li>
+<li><strong>Audit Trail</strong>: Save modified flow files</li>
+<li><strong>Reproducibility</strong>: Document parameter changes</li>
+</ul>
+<h3 id="reference-documentation">Reference Documentation<a class="headerlink" href="#reference-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx">HEC-RAS User's Manual, Chapter 7: Entering Flow Data</a></li>
+<li><a href="https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx">HEC-RAS Hydraulic Reference Manual</a></li>
+</ul>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
@@ -6130,7 +6250,7 @@ Detailed look at table &#39;Flow Hydrograph=&#39;:
   Mean value: 15726.35
   First 10 values: [1075.53, 1301.64, 1676.94, 2199.12, 2864.95, 3670.34, 4610.32, 5679.08, 6870.05, 8175.88]
 </code></pre></div>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_29_1.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_30_1.png" /></p>
 <h2 id="step-7-modifying-flow-tables">Step 7: Modifying Flow Tables<a class="headerlink" href="#step-7-modifying-flow-tables" title="Permanent link">&para;</a></h2>
 <p>Now let's demonstrate how to modify a flow table and write it back to the unsteady flow file. For this example, we'll scale all the values in a table by a factor.</p>
 <h4 id="scaling-existing-values-down-by-a-075-scale-factor">Scaling existing values down by a 0.75 scale factor<a class="headerlink" href="#scaling-existing-values-down-by-a-075-scale-factor" title="Permanent link">&para;</a></h4>
@@ -6238,7 +6358,7 @@ Verified updated table statistics:
 </span><span id="__span-20-28"><a id="__codelineno-20-28" name="__codelineno-20-28" href="#__codelineno-20-28"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-20-29"><a id="__codelineno-20-29" name="__codelineno-20-29" href="#__codelineno-20-29"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No flow hydrograph tables found in the unsteady flow file.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_33_0.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_34_0.png" /></p>
 <div class="language-text highlight"><pre><span></span><code>Updated flow hydrograph statistics:
   Number of values: 159
   Min flow: 0.0 cfs
@@ -7395,11 +7515,11 @@ Flow:
 Plan 1:
 [2000.     1273.8193 1607.1132 2109.992  2746.2964]
 </code></pre></div>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_37_1.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_37_2.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_37_3.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_37_4.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_37_5.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_38_1.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_38_2.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_38_3.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_38_4.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_38_5.png" /></p>
 <h2 id="step-8-applying-the-updated-unsteady-flow-to-a-new-plan">Step 8: Applying the Updated Unsteady Flow to a New Plan<a class="headerlink" href="#step-8-applying-the-updated-unsteady-flow-to-a-new-plan" title="Permanent link">&para;</a></h2>
 <p>Now that we've modified an unsteady flow file, let's create a plan that uses it, and compute the results.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Clone an existing plan</span>
@@ -9286,11 +9406,11 @@ Plan 1:
 Plan 2:
 [2000.      953.5375 1222.7786 1576.9309 2062.2295]
 </code></pre></div>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_55_1.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_55_2.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_55_3.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_55_4.png" /></p>
-<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_55_5.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_56_1.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_56_2.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_56_3.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_56_4.png" /></p>
+<p><img alt="png" src="../300_unsteady_flow_operations_files/300_unsteady_flow_operations_56_5.png" /></p>
 <h2 id="summary-of-unsteady-flow-operations">Summary of Unsteady Flow Operations<a class="headerlink" href="#summary-of-unsteady-flow-operations" title="Permanent link">&para;</a></h2>
 <p>In this notebook, we've covered the following unsteady flow operations using RAS Commander:</p>
 <ol>
@@ -9346,7 +9466,7 @@ Plan 2:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:21 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -9356,7 +9476,7 @@ Plan 2:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:21 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     

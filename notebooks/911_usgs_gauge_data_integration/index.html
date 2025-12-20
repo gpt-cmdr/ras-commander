@@ -3198,6 +3198,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="1. Setup and Imports">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#usgs-data-integration-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        USGS Data Integration Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4793,6 +4810,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="1. Setup and Imports">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#usgs-data-integration-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        USGS Data Integration Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -5083,6 +5117,23 @@
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Loading ras-commander from local dev copy
 </code></pre></div>
+<h3 id="usgs-data-integration-verification">USGS Data Integration Verification<a class="headerlink" href="#usgs-data-integration-verification" title="Permanent link">&para;</a></h3>
+<p><strong>After retrieving USGS data</strong>:</p>
+<ul>
+<li>[ ] Data quality codes reviewed (prefer 'A' approved over 'P' provisional)</li>
+<li>[ ] Time series gaps identified and documented (&lt;10% missing typical)</li>
+<li>[ ] Gauge drainage area comparable to model watershed (ratio &lt;10:1)</li>
+<li>[ ] Period of record includes calibration/validation events</li>
+</ul>
+<p><strong>Data Quality Flags</strong> (<a href="https://waterservices.usgs.gov/">USGS NWIS</a>):
+- <strong>A</strong>: Approved (quality-assured, use directly)
+- <strong>P</strong>: Provisional (verify before submittal)
+- <strong>e</strong>: Estimated (note in documentation)
+- <strong>Ice</strong>: Ice-affected (consider excluding from calibration)</p>
+<p><strong>References</strong>:
+- <a href="https://waterservices.usgs.gov/">USGS NWIS Web Services</a>
+- <a href="https://waterdata.usgs.gov/nwis">USGS Water Data for the Nation</a>
+- <a href="https://help.waterdata.usgs.gov/codes-and-parameters">USGS Data Quality Codes</a></p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
@@ -5888,7 +5939,7 @@ Min flow: 378 cfs
 </span><span id="__span-17-26"><a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-17-27"><a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_24_0.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_25_0.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Now retrieve data from the downstream gauge for validation</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">downstream_site</span> <span class="o">=</span> <span class="n">target_gauges</span><span class="p">[</span><span class="s1">&#39;downstream&#39;</span><span class="p">][</span><span class="s1">&#39;site_id&#39;</span><span class="p">]</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
@@ -5969,7 +6020,7 @@ No downstream flow data available for this period
 </span><span id="__span-19-34"><a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No flow data available for plotting&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_26_0.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_27_0.png" /></p>
 <h2 id="5-retrieve-stage-data">5. Retrieve Stage Data<a class="headerlink" href="#5-retrieve-stage-data" title="Permanent link">&para;</a></h2>
 <p>Stage (gage height) data is useful for setting initial water surface elevations.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Retrieve stage data from upstream gauge</span>
@@ -6051,7 +6102,7 @@ Stage range: 0.48 to 8.07 ft
 </span><span id="__span-21-35"><a id="__codelineno-21-35" name="__codelineno-21-35" href="#__codelineno-21-35"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-21-36"><a id="__codelineno-21-36" name="__codelineno-21-36" href="#__codelineno-21-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No data available for plotting&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_29_0.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_30_0.png" /></p>
 <h2 id="6-initial-conditions-from-usgs-data">6. Initial Conditions from USGS Data<a class="headerlink" href="#6-initial-conditions-from-usgs-data" title="Permanent link">&para;</a></h2>
 <p>Now we'll use the USGS gauge data to set initial conditions for a HEC-RAS simulation.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Define simulation start time (when we want initial conditions)</span>
@@ -6934,7 +6985,7 @@ This is approximately 4.5 observations per hour
 
 Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_data_quality_dashboard.png
 </code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_56_2.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_57_2.png" /></p>
 <h3 id="92-publication-quality-event-hydrograph">9.2 Publication-Quality Event Hydrograph<a class="headerlink" href="#92-publication-quality-event-hydrograph" title="Permanent link">&para;</a></h3>
 <p>Professional hydrograph with dual axes (flow and stage), peak annotations, initial condition marker, and comprehensive event statistics.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># =============================================================================</span>
@@ -7065,7 +7116,7 @@ Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integra
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_hydrograph.png
 </code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_58_1.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_59_1.png" /></p>
 <h3 id="93-stage-discharge-rating-curve">9.3 Stage-Discharge Rating Curve<a class="headerlink" href="#93-stage-discharge-rating-curve" title="Permanent link">&para;</a></h3>
 <p>Rating curve analysis showing the stage-discharge relationship with power law fit and time-colored scatter points to identify hysteresis effects.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># =============================================================================</span>
@@ -7168,7 +7219,7 @@ Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integra
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_rating_curve.png
 </code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_60_1.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_61_1.png" /></p>
 <h3 id="94-summary-statistics-dashboard">9.4 Summary Statistics Dashboard<a class="headerlink" href="#94-summary-statistics-dashboard" title="Permanent link">&para;</a></h3>
 <p>Comprehensive single-page summary suitable for engineering reports, including statistics tables, mini hydrograph, distribution plots, and data quality metrics.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># =============================================================================</span>
@@ -7360,7 +7411,7 @@ Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integra
 
 Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_summary_dashboard.png
 </code></pre></div>
-<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_62_2.png" /></p>
+<p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_63_2.png" /></p>
 <h3 id="95-qaqc-visualization-summary">9.5 QAQC Visualization Summary<a class="headerlink" href="#95-qaqc-visualization-summary" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="c1"># QAQC VISUALIZATION SUMMARY</span>
@@ -7437,7 +7488,7 @@ QAQC Visualization Complete - Figures ready for engineering reports
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -7447,7 +7498,7 @@ QAQC Visualization Complete - Figures ready for engineering reports
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     

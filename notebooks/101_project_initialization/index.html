@@ -1494,6 +1494,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-youll-learn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What You'll Learn
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#related-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Notebooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-concept-the-ras-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concept: The RAS Object
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#parameters" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4619,6 +4669,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-youll-learn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What You'll Learn
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#related-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Notebooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-concept-the-ras-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concept: The RAS Object
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#parameters" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4736,6 +4836,34 @@
 
 ✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<p>Before running this notebook, ensure you have:</p>
+<ol>
+<li><strong>ras-commander installed</strong>: <code>pip install ras-commander</code></li>
+<li><strong>Python 3.10+</strong>: Check with <code>python --version</code></li>
+<li><strong>HEC-RAS 6.3+</strong> (optional for viewing projects, not required for initialization)</li>
+<li><strong>Disk Space</strong>: ~500 MB for example projects</li>
+</ol>
+<h3 id="what-youll-learn">What You'll Learn<a class="headerlink" href="#what-youll-learn" title="Permanent link">&para;</a></h3>
+<p>This notebook demonstrates the core project initialization workflow in ras-commander:</p>
+<ul>
+<li><strong>Global vs Custom Objects</strong>: When to use the global <code>ras</code> object vs creating <code>RasPrj()</code> instances</li>
+<li><strong>Project Structure</strong>: Understanding plan_df, geom_df, boundaries_df DataFrames</li>
+<li><strong>File Path Management</strong>: How ras-commander tracks project files</li>
+<li><strong>Multiple Projects</strong>: Managing several HEC-RAS projects simultaneously</li>
+</ul>
+<h3 id="related-notebooks">Related Notebooks<a class="headerlink" href="#related-notebooks" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>100_using_ras_examples.ipynb</strong> - Extract example projects first</li>
+<li><strong>102_multiple_project_operations.ipynb</strong> - Advanced multi-project patterns</li>
+<li><strong>110_single_plan_execution.ipynb</strong> - Execute initialized projects</li>
+</ul>
+<h3 id="key-concept-the-ras-object">Key Concept: The RAS Object<a class="headerlink" href="#key-concept-the-ras-object" title="Permanent link">&para;</a></h3>
+<p>The <code>ras</code> object (or custom <code>RasPrj()</code> instances) is the <strong>central data structure</strong> in ras-commander:
+- Stores project metadata (plans, geometries, boundaries)
+- Tracks file paths and relationships
+- Provides DataFrame-based API for data access</p>
+<p><strong>Design Philosophy</strong>: Use the global <code>ras</code> object for single-project workflows. Create custom <code>RasPrj()</code> instances for multi-project scenarios.</p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
@@ -4905,22 +5033,59 @@ Path C:\GH\ras-commander\examples\example_projects_01_project_initialization\Mun
 
 The global &#39;ras&#39; object is now initialized with the BaldEagle project
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Find the .prj file in the Bald Eagle Creek folder</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">prj_file</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.prj&quot;</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found .prj file: </span><span class="si">{</span><span class="n">prj_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File name: </span><span class="si">{</span><span class="n">prj_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Initialize using the .prj file path directly (NEW FEATURE!)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># This works exactly the same as passing the folder path</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">prj_file</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Successfully initialized project using .prj file path!&quot;</span><span class="p">)</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project name: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PRJ file: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">prj_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Verify both methods produce identical results</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Both folder path and .prj file path initialization methods produce the same result!&quot;</span><span class="p">)</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ The project folder is automatically extracted from the .prj file&#39;s parent directory&quot;</span><span class="p">)</span>
+<h3 id="verification-project-initialization">Verification: Project Initialization<a class="headerlink" href="#verification-project-initialization" title="Permanent link">&para;</a></h3>
+<p><strong>Success Criteria</strong>:
+- ✓ <code>ras</code> object populated (no errors during initialization)
+- ✓ <code>ras.plan_df</code> contains plan metadata (at least 1 row)
+- ✓ <code>ras.geom_df</code> contains geometry files (at least 1 row)
+- ✓ <code>ras.prj_file</code> points to valid <code>.prj</code> file</p>
+<p><strong>What to Check</strong>:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verify initialization succeeded</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">assert</span> <span class="n">ras</span><span class="o">.</span><span class="n">prj_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Project file not found&quot;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;No plans detected&quot;</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;No geometry files detected&quot;</span>
+</span></code></pre></div></p>
+<p><strong>Visual Inspection</strong>:
+- Open <code>ras.prj_file</code> in HEC-RAS GUI
+- Confirm project loads without errors
+- Check that plan titles match <code>ras.plan_df['plan_title']</code></p>
+<p><strong>Audit Trail</strong>:
+The initialization process logs:
+- Project folder scanned
+- <code>.prj</code> file parsed
+- Plans/geometries discovered
+- File paths validated</p>
+<h3 id="understanding-the-dataframes">Understanding the DataFrames<a class="headerlink" href="#understanding-the-dataframes" title="Permanent link">&para;</a></h3>
+<p>The <code>ras</code> object provides three key DataFrames:</p>
+<p><strong>plan_df</strong>: Plan metadata
+- <code>plan_number</code>: Plan ID (e.g., "01", "02")
+- <code>plan_title</code>: Descriptive name
+- <code>geom_file</code>: Associated geometry file
+- <code>flow_file</code>: Flow file (.f##)
+- <code>hdf_path</code>: Results file location (.p##.hdf)</p>
+<p><strong>geom_df</strong>: Geometry file metadata
+- <code>file_path</code>: Full path to .g## file
+- <code>river_reach</code>: River/reach names parsed from file</p>
+<p><strong>boundaries_df</strong>: Boundary condition metadata (when applicable)
+- Upstream/downstream boundary types
+- DSS file associations
+- Time series references</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Find the .prj file in the Bald Eagle Creek folder</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">prj_file</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.prj&quot;</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found .prj file: </span><span class="si">{</span><span class="n">prj_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File name: </span><span class="si">{</span><span class="n">prj_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Initialize using the .prj file path directly (NEW FEATURE!)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># This works exactly the same as passing the folder path</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">prj_file</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Successfully initialized project using .prj file path!&quot;</span><span class="p">)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project name: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PRJ file: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">prj_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># Verify both methods produce identical results</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Both folder path and .prj file path initialization methods produce the same result!&quot;</span><span class="p">)</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ The project folder is automatically extracted from the .prj file&#39;s parent directory&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>2025-12-15 12:08:25 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_01_project_initialization\Balde Eagle Creek\BaldEagle.rasmap
 
@@ -4948,8 +5113,8 @@ PRJ file: C:\GH\ras-commander\examples\example_projects_01_project_initializatio
 3. Extracts the parent folder and uses it as the project folder
 4. Optimizes initialization by passing the .prj file directly (avoids re-searching)</p>
 <p>Let's see this in action:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Explore the global ras object with our utility function</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">print_ras_object_data</span><span class="p">(</span><span class="n">ras</span><span class="p">,</span> <span class="s2">&quot;Global RAS Object (Bald Eagle Creek)&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Explore the global ras object with our utility function</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">print_ras_object_data</span><span class="p">(</span><span class="n">ras</span><span class="p">,</span> <span class="s2">&quot;Global RAS Object (Bald Eagle Creek)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Global RAS Object (Bald Eagle Creek) Data:
 ==================================================
@@ -5407,24 +5572,24 @@ Plan Files DataFrame (ras.plan_df):
 <li><code>get_boundary_conditions()</code>: Get boundary condition details</li>
 </ol>
 <p>Let's see how to access specific information from these components:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Get the first plan&#39;s details</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">first_plan</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First plan number: </span><span class="si">{</span><span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan path: </span><span class="si">{</span><span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="c1"># Get the geometry file for this plan</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">geom_id</span> <span class="o">=</span> <span class="n">first_plan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Geom File&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="k">if</span> <span class="n">geom_id</span><span class="p">:</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>        <span class="n">geom_info</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">geom_id</span><span class="p">]</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">geom_info</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry file: </span><span class="si">{</span><span class="n">geom_info</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>    <span class="c1"># Get the HDF results file for this plan (if exists)</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="k">if</span> <span class="s1">&#39;HDF_Results_Path&#39;</span> <span class="ow">in</span> <span class="n">first_plan</span> <span class="ow">and</span> <span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]:</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results file: </span><span class="si">{</span><span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No plans found in the project.&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Get the first plan&#39;s details</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">first_plan</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First plan number: </span><span class="si">{</span><span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan path: </span><span class="si">{</span><span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="c1"># Get the geometry file for this plan</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="n">geom_id</span> <span class="o">=</span> <span class="n">first_plan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Geom File&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="k">if</span> <span class="n">geom_id</span><span class="p">:</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>        <span class="n">geom_info</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">geom_id</span><span class="p">]</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">geom_info</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry file: </span><span class="si">{</span><span class="n">geom_info</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>    <span class="c1"># Get the HDF results file for this plan (if exists)</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>    <span class="k">if</span> <span class="s1">&#39;HDF_Results_Path&#39;</span> <span class="ow">in</span> <span class="n">first_plan</span> <span class="ow">and</span> <span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]:</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results file: </span><span class="si">{</span><span class="n">first_plan</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No plans found in the project.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>First plan number: 01
 Plan path: C:\GH\ras-commander\examples\example_projects_01_project_initialization\Balde Eagle Creek\BaldEagle.p01
@@ -5432,8 +5597,8 @@ Geometry file: C:\GH\ras-commander\examples\example_projects_01_project_initiali
 </code></pre></div>
 <h3 id="working-with-boundary-conditions">Working with Boundary Conditions<a class="headerlink" href="#working-with-boundary-conditions" title="Permanent link">&para;</a></h3>
 <p>Boundary conditions define the inputs and outputs of your model. Let's see how to access boundary condition information:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># View the boundary conditions DataFrame</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span> 
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># View the boundary conditions DataFrame</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span> 
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -5564,20 +5729,20 @@ Geometry file: C:\GH\ras-commander\examples\example_projects_01_project_initiali
 <li>Requires saving the return value from <code>init_ras_project()</code></li>
 </ul>
 <p>Let's initialize multiple projects with custom RAS objects:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Initialize multiple project instances with custom RAS objects</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Note: This also updates the global &#39;ras&#39; object each time, but we&#39;ll use the custom instances</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Parameters remain the same as before</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">multi_2d_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">multi_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">multi_2d_project</span><span class="p">)</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Multi2D project initialized with its own RAS object&quot;</span><span class="p">)</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">muncie_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">muncie_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">muncie_project</span><span class="p">)</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Muncie project initialized with its own RAS object&quot;</span><span class="p">)</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># Note that the global &#39;ras&#39; object now points to the Muncie project</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1"># The global &#39;ras&#39; object gets overwritten every time a project is initialized ,</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Global &#39;ras&#39; object now points to: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2"> since it was the last one initialized.  Avoid the global object when using multiple projects.&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Initialize multiple project instances with custom RAS objects</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># Note: This also updates the global &#39;ras&#39; object each time, but we&#39;ll use the custom instances</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Parameters remain the same as before</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">multi_2d_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">multi_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">multi_2d_project</span><span class="p">)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Multi2D project initialized with its own RAS object&quot;</span><span class="p">)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">muncie_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">muncie_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">muncie_project</span><span class="p">)</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Muncie project initialized with its own RAS object&quot;</span><span class="p">)</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="c1"># Note that the global &#39;ras&#39; object now points to the Muncie project</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># The global &#39;ras&#39; object gets overwritten every time a project is initialized ,</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Global &#39;ras&#39; object now points to: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2"> since it was the last one initialized.  Avoid the global object when using multiple projects.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>2025-12-15 12:08:25 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_01_project_initialization\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
 
@@ -5600,7 +5765,7 @@ Global &#39;ras&#39; object now points to: BaldEagle since it was the last one i
 - <code>muncie_project</code>: Our custom object for the Muncie project
 - <code>ras</code>: The global object (which now points to Muncie)</p>
 <p>Let's examine the Multi2D project:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -5913,8 +6078,8 @@ Global &#39;ras&#39; object now points to: BaldEagle since it was the last one i
 <p>11 rows × 30 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Examine the Multi2D project</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">print_ras_object_data</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="p">,</span> <span class="s2">&quot;Multi2D Project&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Examine the Multi2D project</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">print_ras_object_data</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="p">,</span> <span class="s2">&quot;Multi2D Project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Multi2D Project Data:
 ==================================================
@@ -7982,8 +8147,8 @@ Plan Files DataFrame (ras.plan_df):
 <p>51 rows × 29 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Examine the Muncie project</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">print_ras_object_data</span><span class="p">(</span><span class="n">muncie_project</span><span class="p">,</span> <span class="s2">&quot;Muncie Project&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Examine the Muncie project</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">print_ras_object_data</span><span class="p">(</span><span class="n">muncie_project</span><span class="p">,</span> <span class="s2">&quot;Muncie Project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Muncie Project Data:
 ==================================================
@@ -8432,20 +8597,20 @@ Plan Files DataFrame (ras.plan_df):
 
 <h3 id="comparing-projects">Comparing Projects<a class="headerlink" href="#comparing-projects" title="Permanent link">&para;</a></h3>
 <p>Let's compare some key metrics of the two projects:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Create a comparison table of the two projects</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">comparison_data</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="s1">&#39;Project Name&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">project_name</span><span class="p">,</span> <span class="n">muncie_project</span><span class="o">.</span><span class="n">project_name</span><span class="p">],</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="s1">&#39;Number of Plans&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)],</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="s1">&#39;Number of Geometries&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">geom_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)],</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="s1">&#39;Number of Flow Files&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">flow_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">flow_df</span><span class="p">)],</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="s1">&#39;Number of Unsteady Files&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)],</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="s1">&#39;Number of Boundary Conditions&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="p">,</span> <span class="s1">&#39;boundaries_df&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span> 
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>                                     <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">muncie_project</span><span class="p">,</span> <span class="s1">&#39;boundaries_df&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span><span class="p">],</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>    <span class="s1">&#39;HDF Results Available&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="p">}</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="n">comparison_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">comparison_data</span><span class="p">)</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">comparison_df</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Create a comparison table of the two projects</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">comparison_data</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="s1">&#39;Project Name&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">project_name</span><span class="p">,</span> <span class="n">muncie_project</span><span class="o">.</span><span class="n">project_name</span><span class="p">],</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="s1">&#39;Number of Plans&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)],</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="s1">&#39;Number of Geometries&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">geom_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)],</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="s1">&#39;Number of Flow Files&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">flow_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">flow_df</span><span class="p">)],</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    <span class="s1">&#39;Number of Unsteady Files&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)],</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="s1">&#39;Number of Boundary Conditions&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="p">,</span> <span class="s1">&#39;boundaries_df&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span> 
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>                                     <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">muncie_project</span><span class="p">,</span> <span class="s1">&#39;boundaries_df&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span><span class="p">],</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="s1">&#39;HDF Results Available&#39;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">muncie_project</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="p">}</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="n">comparison_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">comparison_data</span><span class="p">)</span>
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">comparison_df</span><span class="p">)</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -8553,11 +8718,11 @@ Plan Files DataFrame (ras.plan_df):
 <h2 id="discovering-plan-outputs">Discovering Plan Outputs<a class="headerlink" href="#discovering-plan-outputs" title="Permanent link">&para;</a></h2>
 <p>After running HEC-RAS plans, you can discover what results are available:</p>
 <h3 id="hdf-result-files">HDF Result Files<a class="headerlink" href="#hdf-result-files" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Get HDF results info from plan_df</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]]</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Or use get_hdf_entries() for detailed HDF information</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">ras</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Get HDF results info from plan_df</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]]</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Or use get_hdf_entries() for detailed HDF information</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">ras</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">()</span>
 </span></code></pre></div>
 <h3 id="available-output-discovery-methods">Available Output Discovery Methods<a class="headerlink" href="#available-output-discovery-methods" title="Permanent link">&para;</a></h3>
 <ul>
@@ -8567,6 +8732,84 @@ Plan Files DataFrame (ras.plan_df):
 <li><strong><code>RasMap.get_results_raster(plan_number, variable_name)</code></strong> - Get specific raster path</li>
 </ul>
 <p>These discovery methods help you understand what outputs are available before extracting data.</p>
+<h2 id="hec-ras-project-structure-reference">HEC-RAS Project Structure Reference<a class="headerlink" href="#hec-ras-project-structure-reference" title="Permanent link">&para;</a></h2>
+<p>Understanding HEC-RAS file organization helps interpret <code>ras</code> object structure:</p>
+<h3 id="core-files">Core Files<a class="headerlink" href="#core-files" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Extension</th>
+<th>Purpose</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.prj</code></td>
+<td>Project master file</td>
+<td><code>Muncie.prj</code></td>
+</tr>
+<tr>
+<td><code>.g##</code></td>
+<td>Geometry file</td>
+<td><code>Muncie.g01</code></td>
+</tr>
+<tr>
+<td><code>.p##</code></td>
+<td>Plan file</td>
+<td><code>Muncie.p01</code></td>
+</tr>
+<tr>
+<td><code>.f##</code></td>
+<td>Flow file</td>
+<td><code>Muncie.f01</code></td>
+</tr>
+<tr>
+<td><code>.u##</code></td>
+<td>Unsteady flow file</td>
+<td><code>Muncie.u01</code></td>
+</tr>
+<tr>
+<td><code>.p##.hdf</code></td>
+<td>Results (HEC-RAS 5+)</td>
+<td><code>Muncie.p01.hdf</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="hec-documentation">HEC Documentation<a class="headerlink" href="#hec-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>HEC-RAS User's Manual</strong>: https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx</li>
+<li>Chapter 3: Project Window and File Management</li>
+<li>Chapter 4: Geometry Data</li>
+<li><strong>File Format Specifications</strong>: Available in Technical Reference Manual</li>
+</ul>
+<h3 id="llm-forward-reviewable-initialization">LLM Forward: Reviewable Initialization<a class="headerlink" href="#llm-forward-reviewable-initialization" title="Permanent link">&para;</a></h3>
+<p>The <code>ras</code> object structure enables <strong>multi-level review</strong>:</p>
+<ol>
+<li><strong>Code Review</strong>: Inspect <code>ras.plan_df</code> to verify correct plans loaded</li>
+<li><strong>Visual Review</strong>: Open project in HEC-RAS GUI</li>
+<li><strong>Data Review</strong>: Export <code>ras.plan_df.to_csv()</code> for audit trail</li>
+</ol>
+<p>Example audit trail:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Save project structure for documentation</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">audit_data</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="s1">&#39;project_file&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">prj_file</span><span class="p">),</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="s1">&#39;num_plans&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">),</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="s1">&#39;num_geometries&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">),</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>    <span class="s1">&#39;plans&#39;</span><span class="p">:</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;geom_file&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s1">&#39;records&#39;</span><span class="p">)</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="p">}</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="c1"># Export to JSON for audit trail</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;project_initialization_audit.json&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>    <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">audit_data</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
+</span></code></pre></div></p>
+<p>This audit trail enables:
+- <strong>Reproducibility</strong>: Exact project state documented
+- <strong>Traceability</strong>: Know what was initialized when
+- <strong>Review</strong>: Non-programmers can verify correct project loaded</p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <p>Now that you understand the basics of project initialization in RAS Commander, you can explore more advanced topics:</p>
 <ol>
@@ -8599,7 +8842,7 @@ Plan Files DataFrame (ras.plan_df):
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:21 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -8609,7 +8852,7 @@ Plan Files DataFrame (ras.plan_df):
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:21 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     

@@ -4657,44 +4657,79 @@
 </span></code></pre></div>
 <h1 id="mannings-n-sensitivity-analysis-multi-interval-approach">Manning's n Sensitivity Analysis: Multi-Interval Approach<a class="headerlink" href="#mannings-n-sensitivity-analysis-multi-interval-approach" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>This notebook demonstrates advanced Manning's n sensitivity analysis for HEC-RAS 2D models using the <code>ras-commander</code> library. It provides two complementary approaches to assess the impact of roughness parameter variations on model results:</p>
-<ol>
-<li><strong>Base Override Sensitivity</strong>: Varies Manning's n values for individual land cover types in the base mesh roughness</li>
-<li><strong>Regional Override Sensitivity</strong>: Varies Manning's n values for land cover types within defined calibration regions</li>
-</ol>
-<h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
+<p>This notebook demonstrates <strong>regional Manning's n sensitivity analysis</strong> for HEC-RAS 2D models with multiple roughness zones. This approach isolates the influence of individual regions rather than varying all parameters simultaneously.</p>
+<h3 id="sensitivity-analysis-methodology">Sensitivity Analysis Methodology<a class="headerlink" href="#sensitivity-analysis-methodology" title="Permanent link">&para;</a></h3>
+<p><strong>One-at-a-Time (OAT) Method</strong>:
+1. Establish baseline Manning's n values for all regions
+2. Vary ONE region at a time while holding others constant
+3. Measure water surface elevation change at point of interest
+4. Calculate sensitivity metric: ΔWS E/ Δn for each region
+5. Rank regions by sensitivity to prioritize calibration efforts</p>
+<p><strong>Why Multi-Interval?</strong></p>
 <ul>
-<li><strong>Literature-Based Ranges</strong>: Uses documented Manning's n ranges for various land cover types</li>
-<li><strong>Intelligent Filtering</strong>: Automatically identifies significant land uses based on area coverage thresholds</li>
-<li><strong>Multi-Interval Testing</strong>: Tests multiple Manning's n values at specified intervals within the literature range</li>
-<li><strong>Parallel Execution</strong>: Efficiently runs multiple scenarios using HEC-RAS parallel computing</li>
-<li><strong>Comprehensive Visualization</strong>: Generates sensitivity plots and time series comparisons</li>
-<li><strong>Automated Reporting</strong>: Creates CSV summaries and exports results for further analysis</li>
+<li><strong>Individual Attribution</strong>: Isolates effect of each specific region</li>
+<li><strong>Calibration Strategy</strong>: Identifies which regions need refinement</li>
+<li><strong>Data Prioritization</strong>: Focuses field surveys on high-sensitivity areas</li>
+<li><strong>Interaction Detection</strong>: Reveals if regions have coupled effects</li>
 </ul>
-<h2 id="notebook-structure">Notebook Structure<a class="headerlink" href="#notebook-structure" title="Permanent link">&para;</a></h2>
-<h3 id="part-1-setup-and-configuration">Part 1: Setup and Configuration<a class="headerlink" href="#part-1-setup-and-configuration" title="Permanent link">&para;</a></h3>
+<h3 id="llm-forward-principle-professional-judgment">LLM Forward Principle: Professional Judgment<a class="headerlink" href="#llm-forward-principle-professional-judgment" title="Permanent link">&para;</a></h3>
+<p>Manning's n calibration requires engineering expertise:
+- <strong>Physical Realism</strong>: Parameters must match actual land cover
+- <strong>Observational Data</strong>: Calibrate to measured water surfaces when available
+- <strong>Parameter Bounds</strong>: Stay within physically defensible ranges
+- <strong>Model Purpose</strong>: Calibration rigor depends on decision stakes</p>
+<h3 id="expected-sensitivity-patterns">Expected Sensitivity Patterns<a class="headerlink" href="#expected-sensitivity-patterns" title="Permanent link">&para;</a></h3>
+<p><strong>High Sensitivity Regions</strong>:
+- <strong>Main channel</strong>: Direct impact on conveyance
+- <strong>Floodplain upstream of POI</strong>: Large area, significant storage/conveyance
+- <strong>Constrictions</strong>: Bottlenecks amplify roughness effects</p>
+<p><strong>Low Sensitivity Regions</strong>:
+- <strong>Isolated floodplain pockets</strong>: Limited hydraulic connectivity
+- <strong>High-ground areas</strong>: Rarely inundated
+- <strong>Downstream of POI</strong>: Backwater effects minimal for subcritical flow</p>
+<h3 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h3>
+<p>For sensitivity analysis in hydraulic modeling:
+- <a href="https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx">HEC-RAS User Manual, Chapter 11: Model Calibration</a>
+- <a href="https://ascelibrary.org/">ASCE Task Committee on Calibration: Guidelines</a></p>
+<p>For Manning's n uncertainty bounds:
+- <a href="https://www.amazon.com/Open-Channel-Hydraulics-Ven-Chow/dp/1932846182">Chow (1959) Open-Channel Hydraulics, Table 5-6</a>
+- <a href="https://pubs.er.usgs.gov/publication/wsp2339">Arcement &amp; Schneider (1989) USGS WSP 2339: Roughness in Natural Channels</a></p>
+<p>For advanced sensitivity methods:
+- <a href="https://onlinelibrary.wiley.com/doi/book/10.1002/9780470725184">Saltelli et al. (2008) Global Sensitivity Analysis</a>
+- <a href="https://www.sciencedirect.com/science/article/pii/S0022169410006335">Sobol Indices for hydraulic models</a></p>
+<h3 id="workflow-overview">Workflow Overview<a class="headerlink" href="#workflow-overview" title="Permanent link">&para;</a></h3>
+<p><strong>Part 1: Setup and Configuration</strong>
+- Extract project and initialize ras-commander
+- Define Manning's n baseline and variation ranges</p>
+<p><strong>Part 2: Base Override Sensitivity</strong>
+- Test global Manning's n scaling (all regions varied proportionally)
+- Establishes overall model sensitivity to roughness</p>
+<p><strong>Part 3: Regional Override Sensitivity</strong>
+- Test individual Manning's n regions (one at a time)
+- Identifies most influential zones for calibration focus</p>
+<h3 id="interpretation-guidance">Interpretation Guidance<a class="headerlink" href="#interpretation-guidance" title="Permanent link">&para;</a></h3>
+<p><strong>Sensitivity Metrics</strong>:
+- <strong>Absolute Sensitivity</strong>: ΔWSE (ft) / Δn (dimensionless)
+  - Example: 0.5 ft/0.01 = 50 ft change per unit Manning's n change</p>
 <ul>
-<li>Environment setup and imports</li>
-<li>Manning's n range definitions</li>
-<li>Helper functions for sensitivity analysis</li>
+<li><strong>Relative Sensitivity (Elasticity)</strong>: (ΔWSE/WSE) / (Δn/n)</li>
+<li>
+<p>Normalized, allows comparison across different parameter ranges</p>
+</li>
+<li>
+<p><strong>Variance Contribution</strong>: Fraction of total output variance explained by parameter</p>
+</li>
 </ul>
-<h3 id="part-2-base-override-sensitivity-analysis">Part 2: Base Override Sensitivity Analysis<a class="headerlink" href="#part-2-base-override-sensitivity-analysis" title="Permanent link">&para;</a></h3>
+<p><strong>Typical Values</strong>:
+- <strong>High sensitivity</strong>: &gt;1 ft WSE change for ±20% Manning's n variation
+- <strong>Moderate sensitivity</strong>: 0.1-1 ft WSE change
+- <strong>Low sensitivity</strong>: &lt;0.1 ft WSE change</p>
+<h3 id="common-pitfalls">Common Pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Analysis of land cover statistics for the entire 2D mesh</li>
-<li>Sensitivity testing by varying individual land cover Manning's n values</li>
-<li>Results extraction and visualization</li>
-</ul>
-<h3 id="part-3-regional-override-sensitivity-analysis">Part 3: Regional Override Sensitivity Analysis<a class="headerlink" href="#part-3-regional-override-sensitivity-analysis" title="Permanent link">&para;</a></h3>
-<ul>
-<li>Focus on specific calibration regions within the mesh</li>
-<li>Analysis of main channel or other regional overrides</li>
-<li>Targeted sensitivity testing for regional parameters</li>
-</ul>
-<h2 id="navigation-tips">Navigation Tips<a class="headerlink" href="#navigation-tips" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Use the table of contents or search for "# Part" to jump between major sections</li>
-<li>Each analysis section includes execution examples with the BaldEagleCrkMulti2D sample project</li>
-<li>Results are displayed with both plots and summary tables for easy interpretation</li>
+<li><strong>Ignoring Parameter Correlation</strong>: Manning's n values may be physically correlated (e.g., seasonal vegetation)</li>
+<li><strong>Extrapolating Beyond Bounds</strong>: Sensitivity is local - nonlinear beyond tested range</li>
+<li><strong>Confounding Effects</strong>: Other parameters (bathymetry, boundary conditions) may mask roughness effects</li>
+<li><strong>Calibration Overfitting</strong>: Don't over-calibrate to single event - validate with independent data</li>
 </ul>
 <h5 id="optional-code-cell-for-developmenttesting-mode-local-copy">Optional Code Cell For Development/Testing Mode (Local Copy)<a class="headerlink" href="#optional-code-cell-for-developmenttesting-mode-local-copy" title="Permanent link">&para;</a></h5>
 <h5 id="uncomment-and-run-this-cell-instead-of-the-pip-cell-above">Uncomment and run this cell instead of the pip cell above<a class="headerlink" href="#uncomment-and-run-this-cell-instead-of-the-pip-cell-above" title="Permanent link">&para;</a></h5>
@@ -4713,7 +4748,7 @@
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading ras-commander from local dev copy&quot;</span><span class="p">)</span>
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 </span></code></pre></div>
-<h1 id="part-1-setup-and-configuration_1">Part 1: Setup and Configuration<a class="headerlink" href="#part-1-setup-and-configuration_1" title="Permanent link">&para;</a></h1>
+<h1 id="part-1-setup-and-configuration">Part 1: Setup and Configuration<a class="headerlink" href="#part-1-setup-and-configuration" title="Permanent link">&para;</a></h1>
 <h2 id="important-note-on-dataframe-column-naming">Important Note on DataFrame Column Naming<a class="headerlink" href="#important-note-on-dataframe-column-naming" title="Permanent link">&para;</a></h2>
 <p><strong>Column Naming Convention in ras-commander:</strong></p>
 <p>The <code>ras-commander</code> library uses simplified column names in DataFrames for Manning's n values:</p>
@@ -5014,7 +5049,7 @@
 </span><span id="__span-6-147"><a id="__codelineno-6-147" name="__codelineno-6-147" href="#__codelineno-6-147"></a>        <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-6-148"><a id="__codelineno-6-148" name="__codelineno-6-148" href="#__codelineno-6-148"></a>            <span class="k">return</span> <span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;region_name&#39;</span><span class="p">,</span> <span class="s1">&#39;geometry&#39;</span><span class="p">])</span>
 </span></code></pre></div>
-<h1 id="part-2-base-override-sensitivity-analysis_1">Part 2: Base Override Sensitivity Analysis<a class="headerlink" href="#part-2-base-override-sensitivity-analysis_1" title="Permanent link">&para;</a></h1>
+<h1 id="part-2-base-override-sensitivity-analysis">Part 2: Base Override Sensitivity Analysis<a class="headerlink" href="#part-2-base-override-sensitivity-analysis" title="Permanent link">&para;</a></h1>
 <h2 id="overview_1">Overview<a class="headerlink" href="#overview_1" title="Permanent link">&para;</a></h2>
 <p>Base override sensitivity analysis varies Manning's n values for individual land cover types across the entire 2D mesh area. This approach is appropriate when:
 - Evaluating the impact of global land cover roughness changes
@@ -5708,7 +5743,7 @@ KeyboardInterrupt:
 - Does increasing roughness always increase water levels (as expected)?
 - Are there threshold effects or inflection points?</p>
 <hr />
-<h1 id="part-3-regional-override-sensitivity-analysis_1">Part 3: Regional Override Sensitivity Analysis<a class="headerlink" href="#part-3-regional-override-sensitivity-analysis_1" title="Permanent link">&para;</a></h1>
+<h1 id="part-3-regional-override-sensitivity-analysis">Part 3: Regional Override Sensitivity Analysis<a class="headerlink" href="#part-3-regional-override-sensitivity-analysis" title="Permanent link">&para;</a></h1>
 <h2 id="overview_2">Overview<a class="headerlink" href="#overview_2" title="Permanent link">&para;</a></h2>
 <p>Regional override sensitivity analysis focuses on Manning's n variations within specific calibration regions of the model. This approach is appropriate when:
 - Calibrating main channel roughness separately from floodplain
@@ -6537,7 +6572,7 @@ This notebook demonstrates the regional sensitivity methodology using the BaldEa
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -6547,7 +6582,7 @@ This notebook demonstrates the regional sensitivity methodology using the BaldEa
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     

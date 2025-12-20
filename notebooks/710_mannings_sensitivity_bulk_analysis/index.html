@@ -4533,8 +4533,55 @@
 
 
 <h1 id="mannings-n-bulk-analysis">Manning's n Bulk Analysis<a class="headerlink" href="#mannings-n-bulk-analysis" title="Permanent link">&para;</a></h1>
-<h1 id="mannings-bulk-sensitivity-analysis">Mannings Bulk Sensitivity Analysis<a class="headerlink" href="#mannings-bulk-sensitivity-analysis" title="Permanent link">&para;</a></h1>
-<p>This notebook provides tools for efficiently analyzing the sensitivity of HEC-RAS models to changing Mannings roughness coefficient values. The main function <code>autoras_mannings_bulk_sensitivity</code> automates the creation, execution, and comparison of model runs with different Mannings n values based on recommended ranges from literature.</p>
+<h1 id="mannings-n-bulk-sensitivity-analysis">Manning's n Bulk Sensitivity Analysis<a class="headerlink" href="#mannings-n-bulk-sensitivity-analysis" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This notebook demonstrates <strong>bulk Manning's n sensitivity analysis</strong> for HEC-RAS 2D models with spatially variable roughness. Understanding Manning's n sensitivity is critical for:</p>
+<ul>
+<li><strong>Model Calibration</strong>: Identifying which roughness zones have greatest impact on results</li>
+<li><strong>Uncertainty Quantification</strong>: Bounding model predictions based on parameter uncertainty</li>
+<li><strong>Data Collection Prioritization</strong>: Focusing field surveys on high-sensitivity areas</li>
+<li><strong>Regulatory Compliance</strong>: Documenting calibration process for permit applications</li>
+</ul>
+<h3 id="what-this-notebook-does">What This Notebook Does<a class="headerlink" href="#what-this-notebook-does" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Extracts a 2D project with Manning's n regions</li>
+<li>Defines parameter ranges for each roughness zone</li>
+<li>Systematically varies Manning's n values (bulk modification)</li>
+<li>Executes HEC-RAS for each parameter combination</li>
+<li>Extracts results at point of interest</li>
+<li>Quantifies sensitivity metrics (elasticity, variance contribution)</li>
+</ol>
+<h3 id="llm-forward-principle-multi-level-verifiability">LLM Forward Principle: Multi-Level Verifiability<a class="headerlink" href="#llm-forward-principle-multi-level-verifiability" title="Permanent link">&para;</a></h3>
+<p>This analysis produces:
+- <strong>Parameter Matrix</strong>: CSV of all tested Manning's n combinations
+- <strong>Results Table</strong>: Water surface elevations for each scenario
+- <strong>Sensitivity Metrics</strong>: Quantitative measures of parameter influence
+- <strong>Visualizations</strong>: Tornado diagrams, sensitivity curves
+- <strong>HEC-RAS Projects</strong>: Reviewable in GUI for each scenario</p>
+<h3 id="mannings-n-physical-context">Manning's n Physical Context<a class="headerlink" href="#mannings-n-physical-context" title="Permanent link">&para;</a></h3>
+<p><strong>Typical Ranges by Land Cover</strong>:
+- <strong>Paved surfaces</strong>: 0.010 - 0.015
+- <strong>Mowed grass</strong>: 0.020 - 0.035
+- <strong>Pasture/crops</strong>: 0.030 - 0.050
+- <strong>Brush/scrub</strong>: 0.050 - 0.120
+- <strong>Forest/woodland</strong>: 0.080 - 0.200</p>
+<p><strong>Uncertainty Bounds</strong>:
+- Well-characterized: ±20% variation
+- Poorly-characterized: ±50% variation or more</p>
+<h3 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h3>
+<p>For Manning's n selection guidance:
+- <a href="https://www.amazon.com/Open-Channel-Hydraulics-Ven-Chow/dp/1932846182">Chow (1959) Open-Channel Hydraulics: Table 5-6</a>
+- <a href="https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx">HEC-RAS 2D User Manual: Section 3.7 - Manning's n Values</a>
+- <a href="https://pubs.usgs.gov/twri/twri3-a1/">USGS TWI 3-A1: Roughness Characteristics of Natural Channels</a></p>
+<p>For sensitivity analysis methodology:
+- <a href="https://ascelibrary.org/">ASCE Manual 110: Sedimentation Engineering - Calibration Guidance</a>
+- <a href="https://onlinelibrary.wiley.com/doi/book/10.1002/9780470725184">Saltelli et al. (2008) Global Sensitivity Analysis: The Primer</a></p>
+<h3 id="analysis-approach">Analysis Approach<a class="headerlink" href="#analysis-approach" title="Permanent link">&para;</a></h3>
+<p><strong>One-at-a-Time (OAT) Sensitivity</strong>:
+- Vary one Manning's n region while holding others constant
+- Identify most influential parameters
+- Computationally efficient (N parameters = N+1 runs)</p>
+<p><strong>Note</strong>: This bulk approach modifies ALL Manning's n values simultaneously. For individual region sensitivity, see notebook 711 (Multi-Interval).</p>
 <h2 id="import-libraries-and-setup-ras-commander">Import Libraries and Setup ras-commander<a class="headerlink" href="#import-libraries-and-setup-ras-commander" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="err">!</span><span class="n">pip</span> <span class="n">install</span> <span class="n">seaborn</span>
 </span></code></pre></div>
@@ -5635,7 +5682,7 @@ Bar chart saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-p
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -5645,7 +5692,7 @@ Bar chart saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-p
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     

@@ -2566,6 +2566,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Comparison with Other Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-gis-mapping-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python GIS Mapping Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#professional-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Professional Context
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2576,6 +2615,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validation-against-hec-ras-native-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Against HEC-RAS Native Mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-assurance-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality Assurance Checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4976,6 +5043,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Comparison with Other Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-gis-mapping-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python GIS Mapping Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#professional-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Professional Context
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4986,6 +5092,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validation-against-hec-ras-native-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Against HEC-RAS Native Mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-assurance-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality Assurance Checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -5433,6 +5567,34 @@
 </table>
 <p>* <strong>Python-GIS Accuracy</strong>: Matches HEC-RAS to 0.01' (1 cm) for <strong>2D horizontal interpolation</strong> (see validation section below). 99.93% pixel count match with RASMapper, RMSE 0.000000 where both valid. Limitations: 2D mesh only (no 1D support yet), horizontal interpolation only.</p>
 <p><strong>Recommendation</strong>: Use this method for cloud deployments or when HEC-RAS is not available.</p>
+<h3 id="python-gis-mapping-approach">Python GIS Mapping Approach<a class="headerlink" href="#python-gis-mapping-approach" title="Permanent link">&para;</a></h3>
+<p>This notebook demonstrates <strong>pure Python GIS workflows</strong> for floodplain mapping using:
+- <code>rasterio</code> for raster processing
+- <code>geopandas</code> for vector operations
+- <code>rasterstats</code> for zonal statistics
+- Custom interpolation algorithms</p>
+<p><strong>Advantages</strong>:
+- ✓ Full control over mapping algorithms
+- ✓ No dependency on HEC-RAS GUI or RasProcess
+- ✓ Integration with Python GIS ecosystem
+- ✓ Custom visualization and analysis</p>
+<p><strong>Trade-offs</strong>:
+- More complex implementation than using RAS Mapper
+- Results may differ slightly from HEC-RAS native mapping
+- Requires GIS expertise to validate outputs</p>
+<h3 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="https://rasterio.readthedocs.io/">rasterio documentation</a></li>
+<li><a href="https://geopandas.org/">geopandas documentation</a></li>
+<li><a href="https://www.fema.gov/flood-maps/tools-resources/engineering-library">FEMA Guidance for Flood Risk Analysis</a></li>
+</ul>
+<h3 id="professional-context">Professional Context<a class="headerlink" href="#professional-context" title="Permanent link">&para;</a></h3>
+<p>Python GIS mapping is suitable for:
+- Research and analysis (not regulatory mapping without validation)
+- Custom workflows not supported by RAS Mapper
+- Integration with other Python-based models
+- Exploration of alternative mapping algorithms</p>
+<p><strong>For regulatory mapping</strong>: Use HEC-RAS native tools (RAS Mapper or RasProcess) or validate Python outputs against HEC-RAS results.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Python data science stack (geopandas, rasterio, h5py)</li>
@@ -5473,53 +5635,98 @@
 
 ✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
+<h3 id="validation-against-hec-ras-native-mapping">Validation Against HEC-RAS Native Mapping<a class="headerlink" href="#validation-against-hec-ras-native-mapping" title="Permanent link">&para;</a></h3>
+<p><strong>Critical Validation Steps</strong>:</p>
+<ol>
+<li><strong>Compare with RAS Mapper Outputs</strong></li>
+<li>Run same scenario through RAS Mapper</li>
+<li>Calculate difference rasters: <code>python_output - ras_mapper_output</code></li>
+<li>
+<p>Acceptable difference: Typically &lt; 0.1 ft for depth/WSE</p>
+</li>
+<li>
+<p><strong>Check Interpolation Accuracy</strong></p>
+</li>
+<li>Verify water surface follows terrain slope</li>
+<li>Check cross-section alignment</li>
+<li>
+<p>Validate against known high-water marks (if available)</p>
+</li>
+<li>
+<p><strong>Boundary Condition Consistency</strong></p>
+</li>
+<li>Inundation extent should match hydraulic constraints</li>
+<li>No flow outside channel/2D area</li>
+<li>
+<p>Check for unrealistic isolated wet cells</p>
+</li>
+<li>
+<p><strong>CRS and Spatial Alignment</strong>
+   <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Verify CRS matches</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;terrain.tif&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">terrain</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;depth_python.tif&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">depth</span><span class="p">:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="k">assert</span> <span class="n">terrain</span><span class="o">.</span><span class="n">crs</span> <span class="o">==</span> <span class="n">depth</span><span class="o">.</span><span class="n">crs</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="k">assert</span> <span class="n">terrain</span><span class="o">.</span><span class="n">transform</span> <span class="o">==</span> <span class="n">depth</span><span class="o">.</span><span class="n">transform</span>
+</span></code></pre></div></p>
+</li>
+</ol>
+<h3 id="quality-assurance-checklist">Quality Assurance Checklist<a class="headerlink" href="#quality-assurance-checklist" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Outputs compared with RAS Mapper (differences documented)</li>
+<li>[ ] Interpolation method validated for use case</li>
+<li>[ ] Spatial reference verified</li>
+<li>[ ] Value ranges checked (no negative depths)</li>
+<li>[ ] Visual inspection in GIS software</li>
+<li>[ ] Professional engineer review if used for decision-making</li>
+</ul>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Project Configuration</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>           <span class="c1"># Example project to extract</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Output Configuration</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">OUTPUTS_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;_outputs&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;602_floodplain_mapping_python_gis&quot;</span>  <span class="c1"># Artifacts saved here</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># HDF Analysis Settings</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;06&quot;</span>                       <span class="c1"># Plan number (for HDF file path)</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">TIME_INDEX</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>                   <span class="c1"># Time step index (-1 = last)</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">PROFILE</span> <span class="o">=</span> <span class="s2">&quot;Max&quot;</span>                   <span class="c1"># Profile name for steady analysis</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># Create output directory</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to: </span><span class="si">{</span><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">absolute</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># =============================================================================</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Project Configuration</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>           <span class="c1"># Example project to extract</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Output Configuration</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">OUTPUTS_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;_outputs&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;602_floodplain_mapping_python_gis&quot;</span>  <span class="c1"># Artifacts saved here</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># HDF Analysis Settings</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;06&quot;</span>                       <span class="c1"># Plan number (for HDF file path)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">TIME_INDEX</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>                   <span class="c1"># Time step index (-1 = last)</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">PROFILE</span> <span class="o">=</span> <span class="s2">&quot;Max&quot;</span>                   <span class="c1"># Profile name for steady analysis</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># Create output directory</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to: </span><span class="si">{</span><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">absolute</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="step-1-initialize-project">Step 1: Initialize Project<a class="headerlink" href="#step-1-initialize-project" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Extract example project and rename with suffix for non-blocking parallel testing</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">base_project_name</span> <span class="o">=</span> <span class="n">PROJECT_NAME</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">suffix</span> <span class="o">=</span> <span class="s2">&quot;_MAPPING_WITH_PYTHON&quot;</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">project_name_with_suffix</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_project_name</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Extract to default location</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">extracted_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">base_project_name</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;example_projects_15_c_floodplain_mapping_python_gis&quot;</span><span class="p">)</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Rename folder to include suffix (for non-blocking parallel notebook testing)</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">extracted_path</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">project_name_with_suffix</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">if</span> <span class="n">project_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">project_path</span><span class="p">)</span>  <span class="c1"># Remove existing suffixed folder if present</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">extracted_path</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">project_path</span><span class="p">)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Renamed: </span><span class="si">{</span><span class="n">extracted_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">project_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Initialize project</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Extract example project and rename with suffix for non-blocking parallel testing</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">base_project_name</span> <span class="o">=</span> <span class="n">PROJECT_NAME</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">suffix</span> <span class="o">=</span> <span class="s2">&quot;_MAPPING_WITH_PYTHON&quot;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">project_name_with_suffix</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_project_name</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Extract to default location</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">extracted_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">base_project_name</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;example_projects_15_c_floodplain_mapping_python_gis&quot;</span><span class="p">)</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Rename folder to include suffix (for non-blocking parallel notebook testing)</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">extracted_path</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">project_name_with_suffix</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="k">if</span> <span class="n">project_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">project_path</span><span class="p">)</span>  <span class="c1"># Remove existing suffixed folder if present</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">extracted_path</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">project_path</span><span class="p">)</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Renamed: </span><span class="si">{</span><span class="n">extracted_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">project_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Initialize project</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>2025-12-16 22:35:25 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
 
@@ -5550,15 +5757,15 @@ Folder: C:\GH\ras-commander\examples\example_projects_15_c_floodplain_mapping_py
 </code></pre></div>
 <h2 id="step-2-compute-plan-if-needed">Step 2: Compute Plan (if needed)<a class="headerlink" href="#step-2-compute-plan-if-needed" title="Permanent link">&para;</a></h2>
 <p><strong>Note</strong>: This is the only step requiring HEC-RAS. After computation, the rest is pure Python.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check if plan 06 has HDF results</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p06.hdf&quot;</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">hdf_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing plan 06 (requires HEC-RAS)...&quot;</span><span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">PLAN</span><span class="p">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan 06 already computed&quot;</span><span class="p">)</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✅ From this point forward, no HEC-RAS required!&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check if plan 06 has HDF results</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p06.hdf&quot;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">hdf_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing plan 06 (requires HEC-RAS)...&quot;</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">PLAN</span><span class="p">)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan 06 already computed&quot;</span><span class="p">)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✅ From this point forward, no HEC-RAS required!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>2025-12-16 22:35:27 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_15_c_floodplain_mapping_python_gis\BaldEagleCrkMulti2D_MAPPING_WITH_PYTHON
 
@@ -5588,21 +5795,21 @@ Computing plan 06 (requires HEC-RAS)...
 <h3 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h3>
 <p>⚠️ <strong>2D Mesh Only</strong>: Does not support 1D cross section results</p>
 <p>⚠️ <strong>Horizontal Interpolation Only</strong>: Sloped mode is approximate</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Generate WSE, Depth, Velocity rasters</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating rasters via Python-GIS method...&quot;</span><span class="p">)</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This may take 15-20 seconds.</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="n">PLAN</span><span class="p">,</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">,</span> <span class="s2">&quot;Depth&quot;</span><span class="p">,</span> <span class="s2">&quot;Velocity&quot;</span><span class="p">],</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">terrain_path</span><span class="o">=</span><span class="s2">&quot;Terrain/Terrain50.vrt&quot;</span><span class="p">,</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Uses plan Short Identifier folder</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">interpolation_method</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generated files:&quot;</span><span class="p">)</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">for</span> <span class="n">variable</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">outputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">variable</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Generate WSE, Depth, Velocity rasters</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating rasters via Python-GIS method...&quot;</span><span class="p">)</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This may take 15-20 seconds.</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="n">PLAN</span><span class="p">,</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">,</span> <span class="s2">&quot;Depth&quot;</span><span class="p">,</span> <span class="s2">&quot;Velocity&quot;</span><span class="p">],</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">terrain_path</span><span class="o">=</span><span class="s2">&quot;Terrain/Terrain50.vrt&quot;</span><span class="p">,</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Uses plan Short Identifier folder</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">interpolation_method</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="p">)</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generated files:&quot;</span><span class="p">)</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">for</span> <span class="n">variable</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">outputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">variable</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>2025-12-16 22:41:36 - ras_commander.rasmap - INFO - Loading mesh geometry from C:\GH\ras-commander\examples\example_projects_15_c_floodplain_mapping_python_gis\BaldEagleCrkMulti2D_MAPPING_WITH_PYTHON\BaldEagleDamBrk.g09.hdf
 
@@ -5786,46 +5993,46 @@ Generated files:
   Velocity: velocity_max.tif
 </code></pre></div>
 <h2 id="step-4-visualize-results">Step 4: Visualize Results<a class="headerlink" href="#step-4-visualize-results" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Plot WSE</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">if</span> <span class="s2">&quot;WSE&quot;</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;terrain&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Maximum Water Surface Elevation (Python-GIS)&#39;</span><span class="p">)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Resolution: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bounds: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">bounds</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Plot WSE</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">if</span> <span class="s2">&quot;WSE&quot;</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;terrain&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Maximum Water Surface Elevation (Python-GIS)&#39;</span><span class="p">)</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Resolution: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bounds: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">bounds</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><img alt="png" src="../602_floodplain_mapping_python_gis_files/602_floodplain_mapping_python_gis_12_0.png" /></p>
+<p><img alt="png" src="../602_floodplain_mapping_python_gis_files/602_floodplain_mapping_python_gis_14_0.png" /></p>
 <div class="language-text highlight"><pre><span></span><code>CRS: EPSG:2271
 Resolution: (28.2522560249665, 28.2522560249665)
 Bounds: BoundingBox(left=1834327.1955903, bottom=162919.32811291626, right=2149848.390877126, top=414872.9473435675)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Plot Depth</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">if</span> <span class="s2">&quot;Depth&quot;</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">:</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="s2">&quot;Depth&quot;</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;Blues&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Maximum Depth (Python-GIS)&#39;</span><span class="p">)</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Plot Depth</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">if</span> <span class="s2">&quot;Depth&quot;</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="s2">&quot;Depth&quot;</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;Blues&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Maximum Depth (Python-GIS)&#39;</span><span class="p">)</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<p><img alt="png" src="../602_floodplain_mapping_python_gis_files/602_floodplain_mapping_python_gis_13_0.png" /></p>
+<p><img alt="png" src="../602_floodplain_mapping_python_gis_files/602_floodplain_mapping_python_gis_15_0.png" /></p>
 <h2 id="step-5-batch-processing">Step 5: Batch Processing<a class="headerlink" href="#step-5-batch-processing" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Process multiple plans</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">plan_numbers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">PLAN</span><span class="p">]</span>  <span class="c1"># Plans with HDF results</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">for</span> <span class="n">plan_num</span> <span class="ow">in</span> <span class="n">plan_numbers</span><span class="p">:</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">hdf</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">.hdf&quot;</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="k">if</span> <span class="n">hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Processing Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            <span class="n">plan_number</span><span class="o">=</span><span class="n">plan_num</span><span class="p">,</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>            <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">],</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>            <span class="n">output_dir</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;python_gis_plan_</span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>        <span class="p">)</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated: </span><span class="si">{</span><span class="n">outputs</span><span class="p">[</span><span class="s1">&#39;WSE&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Process multiple plans</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">plan_numbers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">PLAN</span><span class="p">]</span>  <span class="c1"># Plans with HDF results</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">for</span> <span class="n">plan_num</span> <span class="ow">in</span> <span class="n">plan_numbers</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">hdf</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">.hdf&quot;</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="k">if</span> <span class="n">hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Processing Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        <span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>            <span class="n">plan_number</span><span class="o">=</span><span class="n">plan_num</span><span class="p">,</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>            <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">],</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>            <span class="n">output_dir</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;python_gis_plan_</span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="p">)</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated: </span><span class="si">{</span><span class="n">outputs</span><span class="p">[</span><span class="s1">&#39;WSE&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>2025-12-16 22:42:21 - ras_commander.rasmap - INFO - Loading mesh geometry from C:\GH\ras-commander\examples\example_projects_15_c_floodplain_mapping_python_gis\BaldEagleCrkMulti2D_MAPPING_WITH_PYTHON\BaldEagleDamBrk.g09.hdf
 
@@ -5950,12 +6157,12 @@ Processing Plan 06...
 <p>The Python-GIS method performs <strong>mesh cell rasterization</strong> using the following algorithm:</p>
 <h3 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h3>
 <h4 id="1-extract-mesh-geometry-from-geometry-hdf">1. Extract Mesh Geometry (from geometry HDF)<a class="headerlink" href="#1-extract-mesh-geometry-from-geometry-hdf" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">cell_polygons</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_polygons</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Returns: GeoDataFrame with Polygon geometries for each cell</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">cell_polygons</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_polygons</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">)</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># Returns: GeoDataFrame with Polygon geometries for each cell</span>
 </span></code></pre></div>
 <h4 id="2-extract-results-from-plan-hdf">2. Extract Results (from plan HDF)<a class="headerlink" href="#2-extract-results-from-plan-hdf" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">max_ws</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_max_ws</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">)</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># Returns: Array of maximum WSE values per cell</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">max_ws</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_max_ws</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Returns: Array of maximum WSE values per cell</span>
 </span></code></pre></div>
 <h4 id="3-horizontal-interpolation">3. Horizontal Interpolation<a class="headerlink" href="#3-horizontal-interpolation" title="Permanent link">&para;</a></h4>
 <ul>
@@ -5964,8 +6171,8 @@ Processing Plan 06...
 <li>No variation within cell boundaries</li>
 <li>Matches RASMapper's "Horizontal" rendering mode</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">shapes</span> <span class="o">=</span> <span class="p">[(</span><span class="n">geom</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">wse</span><span class="p">))</span> <span class="k">for</span> <span class="n">geom</span><span class="p">,</span> <span class="n">wse</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cell_polygons</span><span class="p">,</span> <span class="n">wse_values</span><span class="p">)]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">raster</span> <span class="o">=</span> <span class="n">rasterize</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">out_shape</span><span class="o">=</span><span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span> <span class="n">transform</span><span class="o">=</span><span class="n">transform</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">shapes</span> <span class="o">=</span> <span class="p">[(</span><span class="n">geom</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">wse</span><span class="p">))</span> <span class="k">for</span> <span class="n">geom</span><span class="p">,</span> <span class="n">wse</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cell_polygons</span><span class="p">,</span> <span class="n">wse_values</span><span class="p">)]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">raster</span> <span class="o">=</span> <span class="n">rasterize</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">out_shape</span><span class="o">=</span><span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span> <span class="n">transform</span><span class="o">=</span><span class="n">transform</span><span class="p">)</span>
 </span></code></pre></div>
 <h4 id="4-wet-cell-filtering">4. Wet Cell Filtering<a class="headerlink" href="#4-wet-cell-filtering" title="Permanent link">&para;</a></h4>
 <ul>
@@ -5973,8 +6180,8 @@ Processing Plan 06...
 <li>Dry cells remain as NoData</li>
 <li>Matches RASMapper behavior</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">depth</span> <span class="o">=</span> <span class="n">wse_raster</span> <span class="o">-</span> <span class="n">terrain_raster</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">wse_raster</span><span class="p">[</span><span class="n">depth</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">depth</span> <span class="o">=</span> <span class="n">wse_raster</span> <span class="o">-</span> <span class="n">terrain_raster</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">wse_raster</span><span class="p">[</span><span class="n">depth</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
 </span></code></pre></div>
 <h4 id="5-mesh-boundary-clipping">5. Mesh Boundary Clipping<a class="headerlink" href="#5-mesh-boundary-clipping" title="Permanent link">&para;</a></h4>
 <ul>
@@ -6040,34 +6247,34 @@ Processing Plan 06...
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="issue-no-mesh-cell-polygons-found">Issue: "No mesh cell polygons found"<a class="headerlink" href="#issue-no-mesh-cell-polygons-found" title="Permanent link">&para;</a></h3>
 <p><strong>Solution</strong>: Verify project has 2D mesh areas. Check geometry HDF:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfMesh</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.g01.hdf&quot;</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">polygons</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_polygons</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">)</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">polygons</span><span class="p">)</span><span class="si">}</span><span class="s2"> cells&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfMesh</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.g01.hdf&quot;</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">polygons</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_polygons</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">polygons</span><span class="p">)</span><span class="si">}</span><span class="s2"> cells&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <h3 id="issue-terrain_path-required-for-depth">Issue: "terrain_path required for Depth"<a class="headerlink" href="#issue-terrain_path-required-for-depth" title="Permanent link">&para;</a></h3>
 <p><strong>Solution</strong>: Provide terrain path or let auto-detection work:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Option 1: Explicit path</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;06&quot;</span><span class="p">,</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Depth&quot;</span><span class="p">],</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">terrain_path</span><span class="o">=</span><span class="s2">&quot;Terrain/Terrain.tif&quot;</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="p">)</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># Option 2: Auto-detection from .rasmap</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;06&quot;</span><span class="p">,</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Depth&quot;</span><span class="p">]</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="p">)</span>  <span class="c1"># Will attempt to find terrain in project</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Option 1: Explicit path</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;06&quot;</span><span class="p">,</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Depth&quot;</span><span class="p">],</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="n">terrain_path</span><span class="o">=</span><span class="s2">&quot;Terrain/Terrain.tif&quot;</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="p">)</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Option 2: Auto-detection from .rasmap</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;06&quot;</span><span class="p">,</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Depth&quot;</span><span class="p">]</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="p">)</span>  <span class="c1"># Will attempt to find terrain in project</span>
 </span></code></pre></div></p>
 <h3 id="issue-memory-error-with-large-mesh">Issue: Memory error with large mesh<a class="headerlink" href="#issue-memory-error-with-large-mesh" title="Permanent link">&para;</a></h3>
 <p><strong>Solution</strong>: Process variables individually:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Instead of all at once</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">,</span> <span class="s2">&quot;Depth&quot;</span><span class="p">,</span> <span class="s2">&quot;Velocity&quot;</span><span class="p">]:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>        <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;06&quot;</span><span class="p">,</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>        <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Instead of all at once</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;WSE&quot;</span><span class="p">,</span> <span class="s2">&quot;Depth&quot;</span><span class="p">,</span> <span class="s2">&quot;Velocity&quot;</span><span class="p">]:</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="n">outputs</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">map_ras_results</span><span class="p">(</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>        <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;06&quot;</span><span class="p">,</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>        <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="p">)</span>
 </span></code></pre></div></p>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated:</p>
@@ -6114,7 +6321,7 @@ Processing Plan 06...
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
@@ -6124,7 +6331,7 @@ Processing Plan 06...
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 12:57:22 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
   </span>
 
     
