@@ -5475,7 +5475,7 @@
 <div class="admonition info">
 <p class="admonition-title">Auto-Generated</p>
 <p>This page is automatically generated from <code>.claude/agents/</code> directory.
-Last updated: 2025-12-20 13:05</p>
+Last updated: 2025-12-20 13:34</p>
 </div>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>ras-commander includes <strong>27 agents</strong> organized into specialized categories:</p>
@@ -5521,248 +5521,167 @@ Last updated: 2025-12-20 13:05</p>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob, Write, Edit</p>
 <p>Enforces ras-commander API consistency patterns through static analysis guidance. Detects violations: missing @staticmethod, @log_call, incorrect parameter naming, inflexible path typing, classes with <strong>init</strong> that should be static. Use for: API review, pattern enforcement, violation detection, f...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/api-consistency-auditor.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/api-consistency-auditor.md">View Source</a></p>
 <hr />
 <h3 id="geometry-parser">geometry-parser<a class="headerlink" href="#geometry-parser" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/geom</code></p>
 <p><strong>Tools</strong>: Read, Edit, Grep, Glob</p>
 <p>Parses and modifies HEC-RAS plain text geometry files (.g##) using ras_commander.geom subpackage (9 modules). Handles 1D cross sections, storage areas, lateral structures, SA/2D connections, inline weirs, bridges, culverts, and 2D Manning's n land cover tables. Use when parsing geometry files, ex...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/geometry-parser/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/geometry-parser/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="hdf-analyst">hdf-analyst<a class="headerlink" href="#hdf-analyst" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/hdf</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob, Bash</p>
 <p>Analyzes HEC-RAS HDF5 files (.p##.hdf, .g##.hdf) using ras_commander.hdf subpackage (18 classes). Extracts mesh results, cross section data, structure geometry, and steady/unsteady time series. Use when working with HDF files, extracting results, analyzing water surface elevations, velocities, de...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/hdf-analyst/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/hdf-analyst/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="precipitation-specialist">precipitation-specialist<a class="headerlink" href="#precipitation-specialist" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/precip</code></p>
 <p><strong>Tools</strong>: Read, Write, Bash, Glob, Grep</p>
 <p>Integrates precipitation data into HEC-RAS/HMS models using AORC (historical calibration) and NOAA Atlas 14 (design storms). Handles spatial averaging, temporal distributions (SCS Type II), areal reduction factors, and DSS export. Use when working with precipitation data, design storms, AORC retr...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/precipitation-specialist/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/precipitation-specialist/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="quality-assurance">quality-assurance<a class="headerlink" href="#quality-assurance" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/check</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Bash, Glob, +1 more</p>
 <p>Performs automated quality assurance using RasCheck (5 check types) and RasFixit (geometry repair). Validates Manning's n, cross sections, structures, floodways, and profiles against FEMA/USACE standards. Repairs blocked obstructions using elevation envelope algorithm. Use when validating models,...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/quality-assurance/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/quality-assurance/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="ras-commander-api-expert">ras-commander-api-expert<a class="headerlink" href="#ras-commander-api-expert" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Read, Write, Grep, Glob, Task</p>
 <p>Expert in ras-commander API, dataframe structures, and integration patterns. Spawns explore subagents to search the large/sprawling library codebase. Knows RasPrj dataframe columns (plan_df, geom_df, flow_df, etc.) and return formats from all functions. Use when integrating with ras-commander, un...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/ras-commander-api-expert.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/ras-commander-api-expert.md">View Source</a></p>
 <hr />
 <h3 id="remote-executor">remote-executor<a class="headerlink" href="#remote-executor" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/remote</code></p>
 <p><strong>Tools</strong>: </p>
 <p>Remote and distributed HEC-RAS execution via PsExec, Docker, and cloud workers. Handles worker configuration, session management, network shares, and distributed compute. <strong>CRITICAL</strong>: HEC-RAS requires session_id=2 (desktop session), NOT system_account. Primary sources: ras_commander/remote/AGENT...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/remote-executor/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/remote-executor/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="remote-executor_1">remote-executor<a class="headerlink" href="#remote-executor_1" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/remote</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Bash, Grep, Glob</p>
 <p>Expert in distributed HEC-RAS execution across local, remote (PsExec, SSH, Docker), and cloud workers (AWS, Azure, Slurm). Manages worker initialization, queue scheduling, and result aggregation for parallel HEC-RAS computations. Use when setting up remote workers, configuring distributed computa...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/remote-executor.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/remote-executor.md">View Source</a></p>
 <hr />
 <h3 id="usgs-integrator">usgs-integrator<a class="headerlink" href="#usgs-integrator" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>ras_commander/usgs</code></p>
 <p><strong>Tools</strong>: Read, Write, Bash</p>
 <p>Integrates USGS NWIS gauge data with HEC-RAS models (14 modules). Handles spatial discovery, data retrieval, gauge matching, time series processing, boundary condition generation, initial conditions, real-time monitoring, and model validation. Use when working with USGS data, generating boundarie...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/usgs-integrator/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/usgs-integrator/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="win32com-automation-expert">win32com-automation-expert<a class="headerlink" href="#win32com-automation-expert" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob, Edit, Bash</p>
 <p>HEC-RAS Win32COM and GUI automation expert for HECRASController COM interface and pywin32-based GUI manipulation. Covers both documented COM API and low-level GUI automation for features without COM support. Triggers: "win32com", "HECRASController", "COM interface", "pywin32", "GUI automation", "...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/win32com-automation-expert.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/win32com-automation-expert.md">View Source</a></p>
 <hr />
 <h2 id="knowledge-management-opus">Knowledge Management (Opus)<a class="headerlink" href="#knowledge-management-opus" title="Permanent link">&para;</a></h2>
 <h3 id="hierarchical-knowledge-agent-skill-memory-curator">hierarchical-knowledge-agent-skill-memory-curator<a class="headerlink" href="#hierarchical-knowledge-agent-skill-memory-curator" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>opus</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Grep, Glob, Bash</p>
 <p>Expert in Claude's hierarchical memory framework, skills architecture, agent memory systems, and knowledge organization. Manages CLAUDE.md hierarchy, agent_tasks/ memory system, creates skills, defines agents, and maintains documentation structure. Understands relationship between persistent know...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md">View Source</a></p>
 <hr />
 <h2 id="utility-agents-sonnet">Utility Agents (Sonnet)<a class="headerlink" href="#utility-agents-sonnet" title="Permanent link">&para;</a></h2>
 <h3 id="documentation-generator">documentation-generator<a class="headerlink" href="#documentation-generator" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>examples</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Bash, Glob, +1 more</p>
 <p>Creates and maintains example notebooks, API documentation, and mkdocs content. Specializes in Jupyter notebook authoring with RasExamples pattern, mkdocs deployment configuration (GitHub Pages and ReadTheDocs), and documentation standards. Use when creating tutorials, examples, notebook document...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/documentation-generator/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/documentation-generator/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="example-notebook-librarian">example-notebook-librarian<a class="headerlink" href="#example-notebook-librarian" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>examples</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Bash, Grep, +1 more</p>
 <p>Expert librarian for ras-commander’s example notebooks in examples/*.ipynb. Maintains notebook conventions, helps users author new notebooks using proven patterns, and autonomously QA/QC’s the example suite as a functional test harness (run → review → fix → document). Uses notebook-runner to exec...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/example-notebook-librarian.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/example-notebook-librarian.md">View Source</a></p>
 <hr />
 <h3 id="git-operations">git-operations<a class="headerlink" href="#git-operations" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Bash, Read, Write, AskUserQuestion</p>
 <p>Handles git operations including commit preparation, pull request creation, git worktree management, and documentation build verification. Use when preparing commits with proper formatting, creating pull requests with gh CLI, setting up isolated git worktrees for feature development, or verifying...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/git-operations/SUBAGENT.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/git-operations/SUBAGENT.md">View Source</a></p>
 <hr />
 <h3 id="hec-hms-documentation-scout">hec-hms-documentation-scout<a class="headerlink" href="#hec-hms-documentation-scout" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>haiku</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Read, Write, WebFetch, Grep</p>
 <p>Retrieves and summarizes official HEC-HMS documentation from www.hec.usace.army.mil to ground-truth HMS↔RAS linked workflows, Atlas/TP-40 discussions, and user-facing notebook guidance. Produces short, link-rich “ground truth” notes with key quotes and version context. Use when users mention: HEC...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/hec-hms-documentation-scout.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/hec-hms-documentation-scout.md">View Source</a></p>
 <hr />
 <h3 id="notebook-runner">notebook-runner<a class="headerlink" href="#notebook-runner" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Bash, Grep, +1 more</p>
 <p>Runs and troubleshoots Jupyter notebooks (.ipynb) as repeatable tests and executable documentation. Specializes in nbmake/pytest execution, nbconvert fallbacks, capturing run artifacts (logs, executed notebooks), and producing small “output digests” for downstream review. Use when users say: run ...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/notebook-runner.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/notebook-runner.md">View Source</a></p>
 <hr />
 <h3 id="python-environment-manager">python-environment-manager<a class="headerlink" href="#python-environment-manager" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Bash, Read, Write, Grep, Glob</p>
 <p>Automated setup and management of Python environments for ras-commander. Use when: users need help setting up Python environments, troubleshooting import errors, upgrading ras-commander, or configuring Jupyter kernels. Trigger phrases: "set up environment", "install ras-commander", "conda create"...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/python-environment-manager.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/python-environment-manager.md">View Source</a></p>
 <hr />
 <h2 id="review-agents-haiku">Review Agents (Haiku)<a class="headerlink" href="#review-agents-haiku" title="Permanent link">&para;</a></h2>
 <h3 id="claude-code-guide">claude-code-guide<a class="headerlink" href="#claude-code-guide" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>haiku</code> | <strong>Working Directory</strong>: <code>.</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, WebFetch, Grep, Glob</p>
 <p>Expert in Claude Code best practices, configuration, and official Anthropic documentation. Consults official docs for skills creation, memory hierarchy (CLAUDE.md, .claude/rules/), imports, path-specific rules, and Claude Code configuration. Use when implementing Claude Code features, creating sk...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/claude-code-guide.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/claude-code-guide.md">View Source</a></p>
 <hr />
 <h3 id="conversation-index-scanner">conversation-index-scanner<a class="headerlink" href="#conversation-index-scanner" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>haiku</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob</p>
 <p>Fast scanner for Claude Code conversation history index. Use for quick analysis of history.jsonl to extract prompts, projects, and activity patterns. Triggers: "scan history", "list conversations", "prompt frequency", "project activity"</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/conversation-index-scanner.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/conversation-index-scanner.md">View Source</a></p>
 <hr />
 <h3 id="notebook-anomaly-spotter">notebook-anomaly-spotter<a class="headerlink" href="#notebook-anomaly-spotter" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>haiku</code> | <strong>Working Directory</strong>: <code>working/notebook_runs</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob</p>
 <p>Fast reviewer for condensed notebook output digests (audit.md / audit.json). Flags “unexpected behavior” signals even when no exception is raised: empty results, missing expected artifacts, suspicious NaNs/zeros, path leakage, and warnings that indicate degraded correctness. Use as a downstream r...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/notebook-anomaly-spotter.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/notebook-anomaly-spotter.md">View Source</a></p>
 <hr />
 <h3 id="notebook-output-auditor">notebook-output-auditor<a class="headerlink" href="#notebook-output-auditor" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>haiku</code> | <strong>Working Directory</strong>: <code>working/notebook_runs</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob</p>
 <p>Fast reviewer for condensed notebook output digests (audit.md / audit.json). Finds exceptions, tracebacks, stderr, and failing cells; reports exact cell indices and likely root causes. Use as a downstream reviewer for notebook-runner and example-notebook-librarian when notebooks are large.</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/notebook-output-auditor.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/notebook-output-auditor.md">View Source</a></p>
 <hr />
 <h3 id="slash-command-finder">slash-command-finder<a class="headerlink" href="#slash-command-finder" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>haiku</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep</p>
 <p>Identifies repetitive patterns in user prompts that could become slash commands. Use to find automation opportunities in conversation history. Triggers: "find commands", "slash command candidates", "repetitive patterns", "automation opportunities"</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/slash-command-finder.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/slash-command-finder.md">View Source</a></p>
 <hr />
 <h2 id="analysis-agents">Analysis Agents<a class="headerlink" href="#analysis-agents" title="Permanent link">&para;</a></h2>
 <h3 id="best-practice-extractor">best-practice-extractor<a class="headerlink" href="#best-practice-extractor" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob</p>
 <p>Extracts best practices and successful strategies from conversation history. Use to identify patterns worth documenting and formalizing. Triggers: "find best practices", "successful patterns", "what works", "extract lessons"</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/best-practice-extractor.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/best-practice-extractor.md">View Source</a></p>
 <hr />
 <h3 id="blocker-detector">blocker-detector<a class="headerlink" href="#blocker-detector" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob</p>
 <p>Detects recurring blockers and their resolutions in conversation history. Use to identify common issues and prevention strategies. Triggers: "find blockers", "identify issues", "recurring problems", "troubleshooting patterns"</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/blocker-detector.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/blocker-detector.md">View Source</a></p>
 <hr />
 <h3 id="conversation-deep-researcher">conversation-deep-researcher<a class="headerlink" href="#conversation-deep-researcher" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>opus</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob, Task</p>
 <p>Expert-level deep analysis of conversation history for strategic insights. Use for complex synthesis, cross-conversation analysis, and strategic recommendations. Triggers: "deep analysis", "strategic insights", "expert review", "synthesize learnings"</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/conversation-deep-researcher.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/conversation-deep-researcher.md">View Source</a></p>
 <hr />
 <h3 id="conversation-insights-orchestrator">conversation-insights-orchestrator<a class="headerlink" href="#conversation-insights-orchestrator" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>root</code></p>
 <p><strong>Tools</strong>: Read, Grep, Glob, Bash, Task, +1 more</p>
 <p>Orchestrates conversation history analysis by coordinating specialized sub-agents. Use when analyzing Claude Code conversation history for insights, patterns, and recommendations. Triggers: "analyze conversations", "conversation insights", "learn from history", "extract patterns", "find slash com...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/conversation-insights-orchestrator.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/conversation-insights-orchestrator.md">View Source</a></p>
 <hr />
 <h3 id="hecras-code-archaeologist">hecras-code-archaeologist<a class="headerlink" href="#hecras-code-archaeologist" title="Permanent link">&para;</a></h3>
 <p><strong>Model</strong>: <code>sonnet</code> | <strong>Working Directory</strong>: <code>workspace/code-archaeology</code></p>
 <p><strong>Tools</strong>: Read, Write, Edit, Bash, Grep, +1 more</p>
 <p>HEC-RAS code archaeology agent for reverse engineering .NET assemblies, understanding internal algorithms, and documenting undocumented behavior. Triggers: "analyze assembly", "decompile", "code archaeology", "internal algorithm", "understand HEC-RAS [feature]", "find algorithm for", "investigate...</p>
-<details class="note">
-<summary>Source File</summary>
-<p><code>.claude/agents/hecras-code-archaeologist.md</code></p>
-</details>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"/></svg></span> <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/agents/hecras-code-archaeologist.md">View Source</a></p>
 <hr />
 <h2 id="agent-invocation">Agent Invocation<a class="headerlink" href="#agent-invocation" title="Permanent link">&para;</a></h2>
 <h3 id="from-orchestrator">From Orchestrator<a class="headerlink" href="#from-orchestrator" title="Permanent link">&para;</a></h3>
@@ -5832,7 +5751,7 @@ Last updated: 2025-12-20 13:05</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:34:08 UTC">December 20, 2025</span>
   </span>
 
     
@@ -5842,7 +5761,7 @@ Last updated: 2025-12-20 13:05</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:05:04 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 13:34:08 UTC">December 20, 2025</span>
   </span>
 
     
