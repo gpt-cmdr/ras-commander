@@ -18,6 +18,16 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+# GitHub repository base URL for linking to source files
+GITHUB_REPO_URL = "https://github.com/gpt-cmdr/ras-commander/blob/main"
+
+
+def github_link(path: str) -> str:
+    """Generate a GitHub link for a file path."""
+    # Ensure forward slashes for URL
+    path_str = str(path).replace('\\', '/')
+    return f"{GITHUB_REPO_URL}/{path_str}"
+
 
 def extract_yaml_frontmatter(content: str) -> Tuple[Optional[dict], str]:
     """Extract YAML frontmatter and remaining content from markdown."""
@@ -231,8 +241,7 @@ ras-commander includes **{len(agents)} agents** organized into specialized categ
 
 {description}
 
-??? note "Source File"
-    `{agent['path']}`
+:material-github: [View Source]({github_link(agent['path'])})
 
 ---
 
@@ -351,8 +360,7 @@ Skills are **lightweight navigators** that:
 
 {description}
 
-??? note "Source File"
-    `{skill['path']}`
+:material-github: [View Source]({github_link(skill['path'])})
 
 ---
 
@@ -487,8 +495,7 @@ Commands enable:
 
 {first_para}
 
-??? note "Source File"
-    `{cmd['path']}`
+:material-github: [View Source]({github_link(cmd['path'])})
 
 ---
 
@@ -507,8 +514,7 @@ Commands enable:
 
 {first_para}
 
-??? note "Source File"
-    `{cmd['path']}`
+:material-github: [View Source]({github_link(cmd['path'])})
 
 ---
 
@@ -527,8 +533,7 @@ Commands enable:
 
 {first_para}
 
-??? note "Source File"
-    `{cmd['path']}`
+:material-github: [View Source]({github_link(cmd['path'])})
 
 ---
 
