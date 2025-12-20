@@ -5350,6 +5350,14 @@
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+
+
+2025-12-20 13:43:40 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+
+
+✓ Loaded: C:\Users\billk_clb\anaconda3\Lib\site-packages\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>Before running this notebook, ensure you have:</p>
 <ol>
@@ -5403,6 +5411,8 @@
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to: </span><span class="si">{</span><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">absolute</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Outputs will be saved to: C:\GH\ras-commander\examples\_outputs\102_multiple_project_operations
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check system resources</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">cpu_count</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">(</span><span class="n">logical</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">physical_cpu_count</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">(</span><span class="n">logical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -5418,11 +5428,11 @@
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>System Resources:
 - 8 physical CPU cores (8 logical cores)
-- 13.4 GB available memory
+- 11.8 GB available memory
 For multiple HEC-RAS projects, a good rule of thumb is:
 - Assign 2-4 cores per project
 - Allocate at least 2-4 GB of RAM per project
-Based on your system, you could reasonably run 4 projects simultaneously.
+Based on your system, you could reasonably run 3 projects simultaneously.
 </code></pre></div>
 <h2 id="understanding-multiple-ras-project-management">Understanding Multiple RAS Project Management<a class="headerlink" href="#understanding-multiple-ras-project-management" title="Permanent link">&para;</a></h2>
 <p>When working with multiple HEC-RAS projects in RAS Commander, there are two important concepts to understand:</p>
@@ -5469,33 +5479,42 @@ Based on your system, you could reasonably run 4 projects simultaneously.
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- </span><span class="si">{</span><span class="n">bald_eagle_compute_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- </span><span class="si">{</span><span class="n">muncie_compute_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-11-17 13:31:42 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\Example_Projects_6_6.zip
 
 
-2025-11-17 13:31:42 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39;
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 
 
-2025-11-17 13:31:42 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 
 
-2025-11-17 13:31:42 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
 
 
-2025-11-17 13:31:42 - ras_commander.RasExamples - INFO - Extracting project &#39;Muncie&#39;
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_04&#39;
 
 
-Removed existing example projects directory: C:\GH\ras-commander\examples\example_projects
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04
 
 
-2025-11-17 13:31:43 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Muncie&#39; to C:\GH\ras-commander\examples\example_projects\Muncie
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+
+
+2025-12-20 13:43:41 - ras_commander.RasExamples - INFO - Extracting project &#39;Muncie&#39; as &#39;Muncie_04&#39;
+
+
+2025-12-20 13:43:42 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Muncie&#39; to C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04
 
 
 Extracted projects to:
-- C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek
-- C:\GH\ras-commander\examples\example_projects\Muncie
+- C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04
+- C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04
 
 Bald Eagle Creek project exists: True
 Muncie project exists: True
+Computation folders will be created at:
+- C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle
+- C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie
 </code></pre></div>
 <h2 id="step-1-initialize-multiple-projects">Step 1: Initialize Multiple Projects<a class="headerlink" href="#step-1-initialize-multiple-projects" title="Permanent link">&para;</a></h2>
 <p>Let's initialize both HEC-RAS projects. Instead of using the global <code>ras</code> object, we'll create separate RAS objects for each project.</p>
@@ -5515,16 +5534,10 @@ Muncie project exists: True
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available plans in Muncie project:&quot;</span><span class="p">)</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">muncie_ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 13:43:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.rasmap
 
 
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.rasmap
-
-
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.rasmap
-
-
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.rasmap
+2025-12-20 13:43:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.rasmap
 
 
 Initialized Bald Eagle Creek project: BaldEagle
@@ -5592,10 +5605,10 @@ Available plans in Bald Eagle Creek project:
       <td>2</td>
       <td>None</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>02</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5616,10 +5629,10 @@ Available plans in Bald Eagle Creek project:
       <td>1</td>
       <td>None</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>02</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>Steady</td>
     </tr>
   </tbody>
@@ -5689,10 +5702,10 @@ Available plans in Bald Eagle Creek project:
       <td>NaN</td>
       <td>None</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5713,10 +5726,10 @@ Available plans in Bald Eagle Creek project:
       <td>2D Interior Area</td>
       <td>None</td>
       <td>02</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5737,10 +5750,10 @@ Available plans in Bald Eagle Creek project:
       <td>2D Interior Area</td>
       <td>None</td>
       <td>04</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>Unsteady</td>
     </tr>
   </tbody>
@@ -5766,33 +5779,31 @@ Available plans in Bald Eagle Creek project:
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">muncie_ras</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">muncie_ras</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>  <span class="c1"># Refresh the plan dataframe</span>
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">muncie_ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.p01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.p03
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p01 to C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.p03
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 03
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 03
 
 
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.rasmap
+2025-12-20 13:43:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.rasmap
 
 
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.p01 to C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.p02
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.p01 to C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.p02
+
+
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.p02
+
+
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 02
+
+
+2025-12-20 13:43:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.rasmap
 
 
 Created new plan 03 in Bald Eagle Creek project
-
-
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.p02
-
-
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 02
-
-
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.rasmap
-
-
 Created new plan 02 in Muncie project
 
 Updated plans in Bald Eagle Creek project:
@@ -5858,10 +5869,10 @@ Updated plans in Bald Eagle Creek project:
       <td>2</td>
       <td>None</td>
       <td>01</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>02</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
     <tr>
       <th>1</th>
@@ -5882,10 +5893,10 @@ Updated plans in Bald Eagle Creek project:
       <td>1</td>
       <td>None</td>
       <td>01</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>02</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
     <tr>
       <th>2</th>
@@ -5906,10 +5917,10 @@ Updated plans in Bald Eagle Creek project:
       <td>2</td>
       <td>None</td>
       <td>01</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>02</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
   </tbody>
 </table>
@@ -5979,10 +5990,10 @@ Updated plans in Bald Eagle Creek project:
       <td>NaN</td>
       <td>None</td>
       <td>01</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
     <tr>
       <th>1</th>
@@ -6003,10 +6014,10 @@ Updated plans in Bald Eagle Creek project:
       <td>2D Interior Area</td>
       <td>None</td>
       <td>02</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
     <tr>
       <th>2</th>
@@ -6027,10 +6038,10 @@ Updated plans in Bald Eagle Creek project:
       <td>2D Interior Area</td>
       <td>None</td>
       <td>04</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
     <tr>
       <th>3</th>
@@ -6051,10 +6062,10 @@ Updated plans in Bald Eagle Creek project:
       <td>NaN</td>
       <td>None</td>
       <td>01</td>
-      <td>None</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
       <td>01</td>
-      <td>None</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
+      <td>C:\Users\billk_clb\anaconda3\Lib\site-packages...</td>
     </tr>
   </tbody>
 </table>
@@ -6095,34 +6106,34 @@ Updated plans in Bald Eagle Creek project:
 </span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="p">)</span>
 </span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Successfully configured Muncie plan&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-11-17 13:31:43 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g01 for plan 03
-
-
-2025-11-17 13:31:43 - ras_commander.RasPlan - INFO - Geometry for plan 03 set to 01
-
-
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.p03
-
-
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.p03
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 13:43:42 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g01 for plan 03
 
 
 Configuring Bald Eagle Creek plan:
 
 
-2025-11-17 13:31:43 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek\BaldEagle.p03
+2025-12-20 13:43:42 - ras_commander.RasPlan - INFO - Geometry for plan 03 set to 01
 
 
-2025-11-17 13:31:43 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g01 for plan 02
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasPlan - INFO - Geometry for plan 02 set to 01
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.p02
+2025-12-20 13:43:42 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.p02
+2025-12-20 13:43:42 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g01 for plan 02
+
+
+2025-12-20 13:43:42 - ras_commander.RasPlan - INFO - Geometry for plan 02 set to 01
+
+
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.p02
+
+
+2025-12-20 13:43:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.p02
 
 
 Successfully configured Bald Eagle Creek plan
@@ -6130,7 +6141,7 @@ Successfully configured Bald Eagle Creek plan
 Configuring Muncie plan:
 
 
-2025-11-17 13:31:43 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\GH\ras-commander\examples\example_projects\Muncie\Muncie.p02
+2025-12-20 13:43:42 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.p02
 
 
 Successfully configured Muncie plan
@@ -6147,8 +6158,8 @@ Successfully configured Muncie plan
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created compute folder: </span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Created compute folder: C:\GH\ras-commander\examples\example_projects\compute_bald_eagle
-Created compute folder: C:\GH\ras-commander\examples\example_projects\compute_muncie
+<div class="language-text highlight"><pre><span></span><code>Created compute folder: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle
+Created compute folder: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie
 </code></pre></div>
 <h2 id="step-5-define-project-execution-function">Step 5: Define Project Execution Function<a class="headerlink" href="#step-5-define-project-execution-function" title="Permanent link">&para;</a></h2>
 <p>Let's define a function to execute plans for each project, which we can run in parallel. This function will handle plan execution, timing, and provide detailed status updates.</p>
@@ -6279,90 +6290,88 @@ The parallel execution should complete in approximately the time of the longest 
 </span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>
 </span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">All executions complete!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek
+<div class="language-text highlight"><pre><span></span><code>2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04
+
+
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\Muncie_04
 
 
 Executing plans for both projects in parallel...
 This may take several minutes...
 Starting execution of plan 03 for Bald Eagle Creek...
-
-
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Muncie
-
-
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\GH\ras-commander\examples\example_projects\compute_bald_eagle
-
-
 Starting execution of plan 02 for Muncie...
 
 
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_bald_eagle\BaldEagle.rasmap
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle
 
 
-2025-11-17 13:31:43 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\compute_bald_eagle\BaldEagle.p03
+2025-12-20 13:43:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle\BaldEagle.rasmap
 
 
-2025-11-17 13:31:43 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\compute_bald_eagle\BaldEagle.p03
+2025-12-20 13:43:42 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.
+2025-12-20 13:43:42 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle\BaldEagle.p03
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03
+2025-12-20 13:43:42 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_bald_eagle\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_bald_eagle\BaldEagle.p03&quot;
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\GH\ras-commander\examples\example_projects\compute_muncie
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle\BaldEagle.prj&quot; &quot;C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle\BaldEagle.p03&quot;
 
 
-2025-11-17 13:31:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_muncie\Muncie.rasmap
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie
 
 
-2025-11-17 13:31:43 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\compute_muncie\Muncie.p02
+2025-12-20 13:43:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie\Muncie.rasmap
 
 
-2025-11-17 13:31:43 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\compute_muncie\Muncie.p02
+2025-12-20 13:43:42 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie\Muncie.p02
 
 
-2025-11-17 13:31:43 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.
+2025-12-20 13:43:42 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie\Muncie.p02
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 02
+2025-12-20 13:43:42 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 02
 
 
-2025-11-17 13:31:43 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_muncie\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_muncie\Muncie.p02&quot;
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
 
 
-2025-11-17 13:32:03 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+2025-12-20 13:43:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie\Muncie.p02&quot;
 
 
-2025-11-17 13:32:03 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 20.20 seconds
+2025-12-20 13:44:07 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
 
 
-2025-11-17 13:32:03 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_muncie\Muncie.rasmap
+2025-12-20 13:44:07 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 25.38 seconds
 
 
-Completed execution of plan 02 for Muncie in 20.37 seconds
+2025-12-20 13:44:07 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_muncie\Muncie.rasmap
 
 
-2025-11-17 13:33:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+Completed execution of plan 02 for Muncie in 25.51 seconds
 
 
-2025-11-17 13:33:41 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 117.87 seconds
+2025-12-20 13:45:53 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
 
 
-2025-11-17 13:33:41 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_bald_eagle\BaldEagle.rasmap
+2025-12-20 13:45:53 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 131.43 seconds
 
 
-Completed execution of plan 03 for Bald Eagle Creek in 117.97 seconds
+2025-12-20 13:45:53 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\Lib\site-packages\examples\example_projects\compute_bald_eagle\BaldEagle.rasmap
+
+
+Completed execution of plan 03 for Bald Eagle Creek in 131.48 seconds
 
 All executions complete!
 </code></pre></div>
@@ -6440,16 +6449,16 @@ All executions complete!
       <td>Muncie</td>
       <td>02</td>
       <td>True</td>
-      <td>20.365752</td>
-      <td>3.857758</td>
+      <td>25.507698</td>
+      <td>3.857849</td>
     </tr>
     <tr>
       <th>1</th>
       <td>Bald Eagle Creek</td>
       <td>03</td>
       <td>True</td>
-      <td>117.969050</td>
-      <td>11.529761</td>
+      <td>131.483196</td>
+      <td>11.529844</td>
     </tr>
   </tbody>
 </table>
@@ -6690,7 +6699,7 @@ All executions complete!
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 19:23:26 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 20:33:30 UTC">December 20, 2025</span>
   </span>
 
     
@@ -6700,7 +6709,7 @@ All executions complete!
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 19:23:26 UTC">December 20, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 20, 2025 20:33:30 UTC">December 20, 2025</span>
   </span>
 
     
