@@ -316,6 +316,134 @@ check_run_success("01")
 
 See [Workflows and Patterns](workflows-and-patterns.md#verifying-run-success) for more detailed verification patterns including batch verification.
 
+## Detailed Compute Message Logging
+
+Monitor HEC-RAS execution in real-time with stream callbacks. This provides live feedback during computation and enables automated error detection.
+
+### Stream Callbacks
+
+The `stream_callback` parameter accepts callback objects for real-time monitoring:
+
+```python
+from ras_commander import RasCmdr
+from ras_commander.callbacks import ConsoleCallback
+
+# Monitor execution with console output
+success = RasCmdr.compute_plan(
+    "01",
+    stream_callback=ConsoleCallback(verbose=True)
+)
+```
+
+### Available Callbacks
+
+```python
+from ras_commander.callbacks import (
+    ConsoleCallback,      # Print to console
+    FileLoggerCallback,   # Log to file
+    ProgressBarCallback,  # Show progress bar (requires tqdm)
+    SynchronizedCallback  # Thread-safe wrapper for parallel execution
+)
+
+# Console callback
+RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))
+
+# File logger callback
+RasCmdr.compute_plan("01", stream_callback=FileLoggerCallback("run.log"))
+
+# Progress bar (requires: pip install tqdm)
+RasCmdr.compute_plan("01", stream_callback=ProgressBarCallback())
+```
+
+### Custom Callbacks
+
+Create custom callbacks for specialized monitoring:
+
+```python
+from ras_commander.callbacks import ExecutionCallback
+
+class ErrorDetectionCallback(ExecutionCallback):
+    """Callback that stops execution on first error."""
+
+    def on_exec_message(self, message):
+        # Check for error keywords
+        if any(kw in message.upper() for kw in ['ERROR', 'FAILED', 'UNSTABLE']):
+            print(f"❌ ERROR DETECTED: {message}")
+            # Could raise exception, send alert, etc.
+        elif 'warning' in message.lower():
+            print(f"⚠ WARNING: {message}")
+        else:
+            # Normal message
+            print(f"ℹ {message}")
+
+# Use custom callback
+RasCmdr.compute_plan("01", stream_callback=ErrorDetectionCallback())
+```
+
+### Callback Methods
+
+Custom callbacks can implement these methods:
+
+```python
+class MyCallback(ExecutionCallback):
+    def on_start(self, plan_number):
+        """Called when execution starts."""
+        print(f"Starting plan {plan_number}")
+
+    def on_exec_message(self, message):
+        """Called for each HEC-RAS message during execution."""
+        print(f"HEC-RAS: {message}")
+
+    def on_complete(self, success):
+        """Called when execution completes."""
+        if success:
+            print("✓ Execution completed successfully")
+        else:
+            print("✗ Execution failed")
+
+    def on_error(self, error):
+        """Called if exception occurs."""
+        print(f"Exception: {error}")
+```
+
+### Parallel Execution with Callbacks
+
+Use `SynchronizedCallback` wrapper for thread-safe logging:
+
+```python
+from ras_commander.callbacks import ConsoleCallback, SynchronizedCallback
+
+# Wrap callback for thread safety
+safe_callback = SynchronizedCallback(ConsoleCallback(verbose=True))
+
+# Use with parallel execution
+results = RasCmdr.compute_parallel(
+    plan_number=["01", "02", "03"],
+    max_workers=3,
+    stream_callback=safe_callback  # Thread-safe logging
+)
+```
+
+### Post-Execution Message Review
+
+Review compute messages after execution completes:
+
+```python
+from ras_commander import HdfResultsPlan
+
+# Get all compute messages
+msgs = HdfResultsPlan.get_compute_messages("01")
+
+# Parse for specific information
+for line in msgs.split('\n'):
+    if 'time step' in line.lower():
+        print(line)  # Timestep information
+    elif 'iterations' in line.lower():
+        print(line)  # Iteration counts
+    elif 'error' in line.lower():
+        print(f"⚠ {line}")  # Errors
+```
+
 ## Error Handling
 
 ```python

@@ -122,6 +122,9 @@ nav:
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md
     - Dam Breach Analysis: user-guide/dam-breach-analysis.md
     - DSS Operations: user-guide/dss-operations.md
+    - USGS Gauge Data Retrieval: user-guide/usgs-gauge-data.md
+    - Gridded Historic Precipitation: user-guide/gridded-precipitation.md
+    - Project File Validation: user-guide/project-file-validation.md
     - Quality Assurance (RasCheck):
       - Overview: user-guide/quality-assurance.md
       - NT Check (Manning's n): user-guide/quality-assurance/nt-check.md
