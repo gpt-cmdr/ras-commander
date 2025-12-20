@@ -1,15 +1,15 @@
-# MkDocs Configuration - Critical Platform Differences
+# MkDocs Configuration - Unified Build Approach
 
 **Context**: Documentation build for GitHub Pages and ReadTheDocs
 **Priority**: Critical - incorrect config breaks deployment
 **Auto-loads**: Yes (all code)
 **Path-Specific**: Relevant to documentation builds
 
-## Critical Issue: ReadTheDocs Strips Symlinks
+## Overview: Pre-Converted Markdown Approach
 
-**THE PROBLEM**:
+Both documentation platforms now use the **same unified approach**: pre-convert notebooks to markdown before MkDocs build. This is ~30x faster than using mkdocs-jupyter and ensures consistency.
 
-ReadTheDocs uses `rsync --safe-links` during deployment, which **removes symbolic links for security**. Symlinks work during build but content is **NOT uploaded** to the live site.
+**Key insight**: `mkdocs-jupyter` plugin is slow with many notebooks. Pre-converting with `nbconvert` in batch mode is much faster.
 
 ## Dual-Platform Deployment
 
@@ -17,160 +17,117 @@ ras-commander documentation deploys to TWO platforms:
 
 1. **GitHub Pages**: https://gpt-cmdr.github.io/ras-commander/
    - Build: `.github/workflows/docs.yml`
-   - **Symlinks OK**: GitHub Actions preserves symlinks
 
 2. **ReadTheDocs**: https://ras-commander.readthedocs.io
    - Build: `.readthedocs.yaml`
-   - **Symlinks STRIPPED**: Must use `cp` instead of `ln -s`
 
-## Notebook Integration Pattern
+**Both now use identical notebook handling** via `.claude/scripts/prepare_notebooks_for_docs.py`.
 
-### The Challenge
+## How the Unified Approach Works
 
-Example notebooks are in `examples/` but need to appear in `docs/notebooks/` for MkDocs.
+### The Pre-Conversion Script
 
-**Options**:
-1. **Symlink**: `ln -s ../examples docs/notebooks` (fast, but ReadTheDocs strips)
-2. **Copy**: `cp -r examples docs/notebooks` (works on ReadTheDocs)
+**File**: `.claude/scripts/prepare_notebooks_for_docs.py`
 
-### GitHub Actions (Symlinks Work)
+**What it does**:
+1. Converts all `examples/*.ipynb` → `docs/notebooks/*.md` using `nbconvert`
+2. Updates `mkdocs.yml` at build time:
+   - Changes `.ipynb` references to `.md` in navigation
+   - Comments out `mkdocs-jupyter` plugin (not needed for .md files)
+
+**Script is run during build, not committed changes**:
+- `mkdocs.yml` remains unchanged in git (references `.ipynb`)
+- Script modifies `mkdocs.yml` temporarily during build
+- Generated markdown files are not committed
+
+### GitHub Actions Configuration
 
 **File**: `.github/workflows/docs.yml`
 
 ```yaml
-name: Build Documentation
+- name: Prepare notebooks for docs
+  run: |
+    # Pre-convert notebooks to markdown (30x faster than mkdocs-jupyter)
+    python .claude/scripts/prepare_notebooks_for_docs.py
+    # Copy supporting files
+    cp examples/README.md docs/notebooks/ || true
+    cp examples/AGENTS.md docs/notebooks/ || true
 
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          pip install mkdocs mkdocs-material mkdocs-jupyter
-
-      - name: Create notebooks symlink
-        run: ln -s ../examples docs/notebooks  # ✅ Works on GitHub Pages
-
-      - name: Build and deploy
-        run: mkdocs gh-deploy --force
+- name: Build and deploy documentation
+  run: |
+    mkdocs gh-deploy --force
 ```
 
-### ReadTheDocs (MUST Use Copy)
+**Triggers**: Builds on changes to:
+- `docs/**`
+- `examples/**` (notebook changes)
+- `ras_commander/**`
+- `.claude/**`
+- `mkdocs.yml`
+- `.github/workflows/docs.yml`
+
+### ReadTheDocs Configuration
 
 **File**: `.readthedocs.yaml`
 
 ```yaml
-version: 2
-
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.10"
+    python: "3.11"
   jobs:
     pre_build:
-      # ✅ MUST use cp, NOT ln -s (symlinks get stripped!)
-      - cp -r examples docs/notebooks
-
-mkdocs:
-  configuration: mkdocs.yml
-
-python:
-  install:
-    - method: pip
-      path: .
+      # Pre-convert notebooks to markdown (30x faster than mkdocs-jupyter)
+      - python .claude/scripts/prepare_notebooks_for_docs.py
+      # Copy supporting files
+      - cp examples/README.md docs/notebooks/ || true
+      - cp examples/AGENTS.md docs/notebooks/ || true
 ```
-
-**Why `pre_build`**: Runs before MkDocs build, creates notebooks directory
-
-**Why `cp` not `ln -s`**: ReadTheDocs strips symlinks during rsync
 
 ## Git Ignore Pattern
 
-**.gitignore Entry**:
+**`.gitignore` Entry**:
 ```gitignore
 # Ignore docs/notebooks/ (generated from examples during build)
 docs/notebooks/
 ```
 
-**Why**: `docs/notebooks/` is created during build (either symlink or copy), should not be committed
+**Why**: `docs/notebooks/` is generated at build time, should not be committed.
 
-## Validation Configuration
+## Requirements
 
-### Handling AGENTS.md Links
-
-**Problem**: AGENTS.md files contain relative links to Python source files:
-```markdown
-- See `../ras_commander/core.py` for implementation
+**`docs/requirements-docs.txt`** includes:
+```
+# For notebook pre-conversion to markdown (30x faster than mkdocs-jupyter)
+nbconvert>=7.0.0
+jupyter>=1.0.0
 ```
 
-These links work in repository but may not validate during doc build.
+**Note**: `mkdocs-jupyter` is NOT required - it's disabled at build time.
 
-**Solution**: Configure MkDocs validation to be permissive
+## mkdocs.yml Configuration
 
-**mkdocs.yml**:
-```yaml
-validation:
-  links:
-    unrecognized_links: info  # ✅ Logs warnings, doesn't fail build
-```
+The `mkdocs.yml` file in git still references `.ipynb` files and includes the `mkdocs-jupyter` plugin:
 
-**Alternative Levels**:
-- `ignore`: Silent (not recommended)
-- `info`: Log warning, continue build
-- `warn`: Log warning, continue build
-- `error`: Fail build (default, strict)
-
-**Why `info`**: Balances validation with flexibility for AGENTS.md cross-references
-
-## mkdocs-jupyter Configuration
-
-### Plugin Settings
-
-**mkdocs.yml**:
 ```yaml
 plugins:
   - search
-  - mkdocs-jupyter:
-      include_source: true          # Show source code in notebooks
-      execute: false                # DON'T run notebooks during build
-      include: ["notebooks/*.ipynb"]  # Which notebooks to include
-      ignore: ["notebooks/example_projects/**"]  # Ignore extracted projects
-      ignore_h1_titles: true        # Use nav titles, not notebook H1
+  - mkdocs-jupyter:  # Disabled at build time by script
+      include_source: true
+      execute: false
+      include: ["notebooks/*.ipynb"]
+      ignore_h1_titles: true
+
+nav:
+  - Example Notebooks:
+    - Using RasExamples: notebooks/100_using_ras_examples.ipynb  # Changed to .md at build
 ```
 
-### Key Settings Explained
+**At build time**, the script:
+1. Comments out `mkdocs-jupyter` plugin
+2. Changes all `.ipynb` → `.md` in nav
 
-**include_source: true**:
-- Shows source code cells in documentation
-- Users can see and copy code
-
-**execute: false**:
-- **Critical**: Don't run notebooks during build
-- Notebooks may require HEC-RAS installed
-- Execution can be slow and fail in CI
-
-**include**:
-- Glob pattern for notebooks to process
-- `notebooks/*.ipynb` matches all top-level notebooks
-
-**ignore**:
-- Exclude subdirectories (e.g., extracted example projects)
-- Prevents processing thousands of files
-
-**ignore_h1_titles: true**:
-- Use navigation titles from mkdocs.yml
-- Ignore H1 from notebook (may be redundant)
+This keeps the source `mkdocs.yml` clean and maintainable while still working with the pre-conversion approach.
 
 ## Notebook Title Requirements
 
@@ -178,118 +135,57 @@ plugins:
 
 **Requirement**: Each notebook MUST have markdown cell with H1 heading as first cell
 
-**Example** (`01_basic_usage.ipynb` first cell):
+**Example** (`100_using_ras_examples.ipynb` first cell):
 ```markdown
-# Basic Usage of ras-commander
+# Using RasExamples
 
-This notebook demonstrates basic usage...
+This notebook demonstrates how to work with example projects...
 ```
 
 **Why Required**:
-- mkdocs-jupyter uses H1 for page title
-- Missing H1 causes title to be filename
-- H1 provides context in documentation
+- `nbconvert` preserves H1 as markdown heading
+- Provides page title in documentation
+- H1 provides context for readers
 
-### Nav Title vs Notebook H1
+## Validation Configuration
 
-**With `ignore_h1_titles: false`** (default):
-- Documentation uses H1 from notebook
-
-**With `ignore_h1_titles: true`** (recommended):
-- Documentation uses title from mkdocs.yml nav
-- Allows shorter nav titles
-- More control over documentation structure
-
-**mkdocs.yml nav example**:
+**mkdocs.yml**:
 ```yaml
-nav:
-  - Home: index.md
-  - Examples:
-    - Basic Usage: notebooks/01_basic_usage.ipynb  # ← This title used
-    - Advanced: notebooks/02_advanced.ipynb
+validation:
+  links:
+    unrecognized_links: info  # Logs warnings, doesn't fail build
 ```
 
-## Platform-Specific Differences Summary
+This allows AGENTS.md files with relative links to source code without breaking builds.
+
+## Platform Comparison
 
 | Aspect | GitHub Pages | ReadTheDocs |
 |--------|--------------|-------------|
-| **Notebooks** | Symlink (`ln -s`) | Copy (`cp -r`) |
 | **Build File** | `.github/workflows/docs.yml` | `.readthedocs.yaml` |
-| **Symlink Support** | ✅ Yes | ❌ No (stripped) |
+| **Notebook Handling** | Pre-convert to .md | Pre-convert to .md |
+| **Script Used** | `prepare_notebooks_for_docs.py` | `prepare_notebooks_for_docs.py` |
 | **Build Trigger** | Push to main | Push + PR |
-| **Build Time** | ~2-3 min | ~3-5 min |
-| **Caching** | Limited | Good |
+| **Deployment** | `mkdocs gh-deploy` | ReadTheDocs native |
 
-## Common Pitfalls
+## Agent/Automation Guidelines
 
-### ❌ Using Symlinks in ReadTheDocs
+### No Markdown Maintenance Needed
 
-**Problem**:
-```yaml
-# .readthedocs.yaml
-build:
-  jobs:
-    pre_build:
-      - ln -s ../examples docs/notebooks  # ❌ WRONG!
-```
+Since markdown is **generated at build time**:
+- ✅ Update notebooks in `examples/` normally
+- ✅ Commit `.ipynb` changes
+- ✅ Push triggers doc rebuild
+- ✅ Markdown regenerated automatically
+- ❌ Don't commit anything to `docs/notebooks/`
+- ❌ Don't manually maintain markdown copies
 
-**Result**: Symlink created during build, but stripped during deployment. Live site has no notebooks!
+### When Updating Notebooks
 
-**Solution**:
-```yaml
-build:
-  jobs:
-    pre_build:
-      - cp -r examples docs/notebooks  # ✅ CORRECT
-```
-
-### ❌ Committing docs/notebooks/
-
-**Problem**: `docs/notebooks/` committed to git
-
-**Result**:
-- Repository bloat (notebooks duplicated)
-- Sync issues (examples/ and docs/notebooks/ out of sync)
-- Merge conflicts
-
-**Solution**: Add to `.gitignore`:
-```gitignore
-docs/notebooks/
-```
-
-### ❌ Forgetting H1 in Notebooks
-
-**Problem**: Notebook missing H1 title in first cell
-
-**Result**: Documentation page title is filename ("01_basic_usage")
-
-**Solution**: Always include H1 markdown cell first:
-```markdown
-# Descriptive Title
-
-Brief introduction...
-```
-
-### ❌ Using execute: true
-
-**Problem**:
-```yaml
-plugins:
-  - mkdocs-jupyter:
-      execute: true  # ❌ WRONG!
-```
-
-**Result**:
-- Build fails if HEC-RAS not installed
-- Slow builds (notebooks execute every time)
-- Non-deterministic (execution may fail randomly)
-
-**Solution**:
-```yaml
-plugins:
-  - mkdocs-jupyter:
-      execute: false  # ✅ CORRECT
-```
+1. Edit the `.ipynb` file in `examples/`
+2. Commit and push
+3. GitHub Actions / ReadTheDocs rebuild docs
+4. Fresh markdown generated from current notebooks
 
 ## Testing Configuration
 
@@ -299,105 +195,118 @@ plugins:
 # Clean previous build
 rm -rf docs/notebooks/ site/
 
-# Copy notebooks (simulate ReadTheDocs)
-cp -r examples docs/notebooks
+# Run the conversion script (modifies mkdocs.yml temporarily)
+python .claude/scripts/prepare_notebooks_for_docs.py
 
 # Build docs
 mkdocs build
 
 # Serve locally
 mkdocs serve
+
+# IMPORTANT: Restore mkdocs.yml after testing
+git checkout mkdocs.yml
 ```
 
-### GitHub Pages Test
+### Verify Conversion Works
 
 ```bash
-# Push to test branch
-git push origin my-branch
+# Run script and check output
+python .claude/scripts/prepare_notebooks_for_docs.py
 
-# Check GitHub Actions
-# Visit: https://github.com/user/repo/actions
+# Should show:
+# - "Converting 47 notebooks to markdown..."
+# - "Created 47 markdown files"
+# - "Updated mkdocs.yml"
 
-# If successful, merge to main for deployment
+# Check generated files
+ls docs/notebooks/*.md | head -10
 ```
 
-### ReadTheDocs Test
+## Common Pitfalls
 
-**Trigger**: Push or create Pull Request
+### ❌ Committing docs/notebooks/
 
-**Monitor**: https://readthedocs.org/projects/ras-commander/builds/
+**Problem**: Generated markdown committed to git
 
-**Check**:
-1. Build log shows `cp -r examples docs/notebooks`
-2. Build succeeds
-3. Live site has notebooks visible
+**Result**:
+- Repository bloat
+- Sync issues between examples/ and docs/notebooks/
+- Merge conflicts
+
+**Solution**: Ensure `docs/notebooks/` is in `.gitignore`
+
+### ❌ Committing Modified mkdocs.yml
+
+**Problem**: Running script locally modifies `mkdocs.yml`, then committing
+
+**Result**:
+- mkdocs.yml has .md references instead of .ipynb
+- Script fails on next run (can't find .ipynb references)
+
+**Solution**: Always restore after local testing:
+```bash
+git checkout mkdocs.yml
+```
+
+### ❌ Forgetting H1 in Notebooks
+
+**Problem**: Notebook missing H1 title in first cell
+
+**Result**: Documentation page has poor title (filename)
+
+**Solution**: Always include H1 markdown cell first:
+```markdown
+# Descriptive Title
+
+Brief introduction...
+```
 
 ## Debugging
 
-### Notebooks Missing on ReadTheDocs
+### Build Fails on Missing Notebooks
+
+**Symptom**: MkDocs can't find `notebooks/XXX.md`
 
 **Check**:
-1. `.readthedocs.yaml` uses `cp` not `ln -s`?
-2. `pre_build` step executes?
-3. Build log shows notebooks copied?
-4. `mkdocs.yml` includes notebooks in nav?
+1. Did `prepare_notebooks_for_docs.py` run?
+2. Are notebooks present in `examples/`?
+3. Does notebook filename match nav entry?
 
-**Debug**: Check ReadTheDocs build log for errors
+### Notebooks Not Updating
 
-### Notebooks Missing on GitHub Pages
+**Symptom**: Documentation shows old notebook content
 
 **Check**:
-1. `.github/workflows/docs.yml` creates symlink?
-2. Workflow succeeds?
-3. `gh-pages` branch has notebooks?
+1. Did you push notebook changes?
+2. Did build trigger? (check Actions/ReadTheDocs)
+3. Is there caching? Try manual rebuild
 
-**Debug**: Check GitHub Actions log
+### Script Errors
 
-### Validation Errors
+**Symptom**: `prepare_notebooks_for_docs.py` fails
 
-**Symptom**: Build fails with "unrecognized links"
+**Check**:
+1. Is `nbconvert` installed? (`pip install nbconvert jupyter`)
+2. Are notebooks valid? (try opening in Jupyter)
+3. Check script output for specific errors
 
-**Fix**: Update mkdocs.yml:
-```yaml
-validation:
-  links:
-    unrecognized_links: info  # More permissive
-```
+## Performance Comparison
 
-## Best Practices
-
-### ✅ Keep Configs in Sync
-
-**Both configs should**:
-- Install same dependencies
-- Build from same mkdocs.yml
-- Only differ in notebook handling (symlink vs copy)
-
-### ✅ Test Both Platforms
-
-Before merging:
-1. Test GitHub Pages build (create test branch)
-2. Test ReadTheDocs build (create PR)
-3. Verify notebooks appear on both sites
-
-### ✅ Document Platform Differences
-
-**In README.md or CONTRIBUTING.md**:
-```markdown
-## Documentation Builds
-
-- **GitHub Pages**: Uses symlinks (.github/workflows/docs.yml)
-- **ReadTheDocs**: Uses copy (.readthedocs.yaml)
-
-NEVER use symlinks in .readthedocs.yaml - they get stripped!
-```
+| Approach | Build Time (47 notebooks) | Notes |
+|----------|---------------------------|-------|
+| **mkdocs-jupyter** | ~5-10 minutes | Processes each notebook individually |
+| **Pre-conversion** | ~15-30 seconds | Batch nbconvert + plain markdown |
+| **Improvement** | **~20-30x faster** | Significant CI/CD savings |
 
 ## See Also
 
 - **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md`
-- **GitHub Workflows**: `.github/workflows/` directory
+- **Conversion Script**: `.claude/scripts/prepare_notebooks_for_docs.py`
+- **GitHub Workflow**: `.github/workflows/docs.yml`
+- **ReadTheDocs Config**: `.readthedocs.yaml`
 - **MkDocs Config**: `mkdocs.yml` in root
 
 ---
 
-**Key Takeaway**: ReadTheDocs STRIPS symlinks. Always use `cp -r` in `.readthedocs.yaml`, never `ln -s`. Keep `.github/workflows/docs.yml` and `.readthedocs.yaml` in sync except for notebook handling.
+**Key Takeaway**: Both platforms use `prepare_notebooks_for_docs.py` to pre-convert notebooks to markdown before build. This is ~30x faster than mkdocs-jupyter. Notebooks are edited in `examples/`, markdown is generated at build time, nothing in `docs/notebooks/` should be committed.

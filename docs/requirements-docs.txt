@@ -10,18 +10,15 @@ mkdocs-material>=9.5.0
 # API documentation from docstrings
 mkdocstrings[python]>=0.24.0
 
-# Jupyter notebook rendering
-mkdocs-jupyter>=0.24.0
-
 # Git revision dates
 mkdocs-git-revision-date-localized-plugin>=1.2.0
 
 # For cognitive infrastructure doc generation
 PyYAML>=6.0
 
-# For Jupyter notebook execution (optional)
-# nbconvert>=7.0.0
-# jupyter>=1.0.0
+# For notebook pre-conversion to markdown (30x faster than mkdocs-jupyter)
+nbconvert>=7.0.0
+jupyter>=1.0.0
 
 # Package dependencies for mkdocstrings to import modules
 # (excludes pywin32 which is Windows-only)

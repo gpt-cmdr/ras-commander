@@ -9,9 +9,10 @@ build:
     python: "3.11"
   jobs:
     pre_build:
-      # Create notebooks directory and copy ONLY .ipynb files (not the 432MB zip!)
-      - mkdir -p docs/notebooks
-      - cp examples/*.ipynb docs/notebooks/
+      # Pre-convert notebooks to markdown (30x faster than mkdocs-jupyter)
+      # This script converts .ipynb -> .md and updates mkdocs.yml accordingly
+      - python .claude/scripts/prepare_notebooks_for_docs.py
+      # Copy supporting files
       - cp examples/README.md docs/notebooks/ || true
       - cp examples/AGENTS.md docs/notebooks/ || true
       # Generate cognitive infrastructure docs
