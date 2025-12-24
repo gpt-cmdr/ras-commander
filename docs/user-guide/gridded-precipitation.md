@@ -685,17 +685,6 @@ Reconstruct a specific historical flood event:
 5. **Validate results** against observed flows/stages
 6. **Calibrate roughness** if needed
 
-### Continuous Simulation
-
-Run HEC-RAS for extended periods (weeks to months):
-
-1. **Retrieve AORC** record for simulation period
-2. **Use hourly data** (HEC-RAS interpolates to computational timestep)
-3. **Export to DSS**
-4. **Configure HEC-RAS** for continuous run
-5. **Execute with sufficient cores** (long runtime)
-6. **Extract statistics** (peak events, exceedance curves)
-
 ### Climate Analysis
 
 Analyze precipitation patterns and trends:
