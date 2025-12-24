@@ -142,35 +142,45 @@ avg_precip = PrecipAorc.spatial_average(aorc_grid, watershed="02070010")
 
 ### Grid Resampling
 
-Aggregate AORC grid to coarser resolution:
+Adjust AORC grid resolution for specific workflows:
 
 ```python
-# Resample from 4 km to 10 km grid
-coarse_grid = PrecipAorc.resample_grid(
+# Resample from 4 km to 2 km grid (finer resolution)
+fine_grid = PrecipAorc.resample_grid(
     aorc_data,
-    target_resolution_km=10  # Coarsen grid
+    target_resolution_km=2  # Interpolate to finer grid
 )
 
 # Useful for:
-# - Faster processing of large watersheds
-# - Matching HEC-RAS 2D mesh resolution
-# - Reducing data volume
+# - Smoother spatial gradients for visualization
+# - Matching other raster datasets for comparison
+# - Reducing file count (coarser grids = fewer files)
 ```
+
+**Note**: HEC-RAS 2D mesh cells are typically 10-500 meters, much finer than AORC's native 4 km resolution. HEC-RAS interpolates precipitation internally to mesh cells during simulation—you do not need to match mesh resolution.
 
 ## Temporal Processing
 
-### Aggregation to Model Timestep
+### Using Hourly Data for HEC-RAS
 
-Match AORC hourly data to HEC-RAS computational interval:
+AORC provides hourly precipitation, which is appropriate for most HEC-RAS modeling:
 
 ```python
-# Aggregate to 1-hour (no change, already hourly)
+# Use hourly data directly (AORC native interval)
 hourly = PrecipAorc.aggregate_to_interval(avg_precip, interval="1HR")
+```
 
-# Aggregate to 6-hour
+**For HEC-RAS modeling**: Use hourly data. HEC-RAS computational timesteps are typically seconds to minutes—the model linearly interpolates hourly precipitation to each computational timestep internally.
+
+### Aggregation for Statistical Analysis
+
+Longer intervals are useful for storm statistics and trend analysis (not modeling):
+
+```python
+# Aggregate to 6-hour (for storm statistics)
 six_hour = PrecipAorc.aggregate_to_interval(avg_precip, interval="6HR")
 
-# Aggregate to daily
+# Aggregate to daily (for annual totals, climate trends)
 daily = PrecipAorc.aggregate_to_interval(avg_precip, interval="1DAY")
 ```
 
@@ -271,20 +281,15 @@ aorc_grid = PrecipAorc.retrieve_aorc_data(
     return_grid=True  # Keep spatial structure
 )
 
-# 2. Resample to HEC-RAS mesh resolution
-ras_grid = PrecipAorc.resample_grid(
-    aorc_grid,
-    target_resolution_km=2.0  # Match 2D mesh cell size
-)
-
-# 3. Export to GDAL Raster format (HEC-RAS compatible)
+# 2. Export to GDAL Raster format (HEC-RAS compatible)
+# HEC-RAS will interpolate the 4 km grid to mesh cells internally
 PrecipAorc.export_to_gdal_raster(
-    ras_grid,
+    aorc_grid,
     output_folder="C:/Projects/MyModel/precipitation",
     format="GeoTIFF"  # or "HFA" for ERDAS Imagine
 )
 
-# 4. Configure unsteady file for gridded precipitation
+# 3. Configure unsteady file for gridded precipitation
 from ras_commander import RasUnsteady
 
 RasUnsteady.set_gridded_precipitation(
@@ -293,6 +298,8 @@ RasUnsteady.set_gridded_precipitation(
     start_datetime="2018-05-15 00:00"
 )
 ```
+
+**Note**: You do not need to resample AORC grids to match mesh cell size. HEC-RAS internally interpolates gridded precipitation data to 2D mesh cells during simulation.
 
 ## Model Calibration Workflow
 
@@ -495,34 +502,36 @@ Run HEC-RAS with continuous precipitation record:
 ```python
 from ras_commander import init_ras_project, RasCmdr
 from ras_commander.precip import PrecipAorc
+from ras_commander.usgs import RasUsgsFileIo
 
-# 1. Retrieve multi-year AORC data
+# 1. Retrieve multi-year AORC data (hourly)
 continuous_precip = PrecipAorc.retrieve_aorc_data(
     watershed="02070010",
-    start_date="2015-01-01",
-    end_date="2020-12-31",  # 6 years
+    start_date="2020-01-01",
+    end_date="2020-12-31",  # 1 year example
     spatial_average=True,
     cache_dir="C:/AORC_Cache"  # Cache for reuse
 )
 
-# 2. Aggregate to daily (for long-term simulation)
-daily_precip = PrecipAorc.aggregate_to_interval(
+# 2. Keep hourly resolution for HEC-RAS
+hourly_precip = PrecipAorc.aggregate_to_interval(
     continuous_precip,
-    interval="1DAY"
+    interval="1HR"
 )
 
 # 3. Export to DSS
-from ras_commander.usgs import RasUsgsFileIo
 RasUsgsFileIo.export_to_dss(
-    daily_precip,
-    dss_file="aorc_2015_2020.dss",
-    pathname="//BASIN/PRECIP/AORC//1DAY/OBS/"
+    hourly_precip,
+    dss_file="aorc_2020.dss",
+    pathname="//BASIN/PRECIP/AORC//1HOUR/OBS/"
 )
 
-# 4. Run continuous simulation
+# 4. Run simulation
 init_ras_project("C:/Projects/Continuous", "6.6")
-RasCmdr.compute_plan("01", num_cores=8)  # Long run
+RasCmdr.compute_plan("01", num_cores=8)
 ```
+
+**Note**: Use hourly data for HEC-RAS simulations. Daily aggregation loses storm intensity patterns and is only appropriate for precipitation statistics.
 
 ### Storm Comparison Analysis
 
@@ -678,10 +687,10 @@ Reconstruct a specific historical flood event:
 
 ### Continuous Simulation
 
-Run HEC-RAS for extended periods (months to years):
+Run HEC-RAS for extended periods (weeks to months):
 
-1. **Retrieve multi-year AORC** record
-2. **Aggregate to appropriate interval** (daily for long periods)
+1. **Retrieve AORC** record for simulation period
+2. **Use hourly data** (HEC-RAS interpolates to computational timestep)
 3. **Export to DSS**
 4. **Configure HEC-RAS** for continuous run
 5. **Execute with sufficient cores** (long runtime)
