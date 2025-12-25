@@ -4,7 +4,7 @@ model: sonnet
 tools: [Read, Grep, Glob]
 working_directory: C:\GH\ras-commander
 description: |
-  Research docs_old/feature_dev_notes/gauge_data_import/ to identify USGS gauge
+  Research feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ to identify USGS gauge
   integration workflows for migration to ras_agents/usgs-integrator-agent/.
 
   CRITICAL SECURITY: Perform mandatory security audit before migration:
@@ -23,7 +23,7 @@ description: |
 
 ## Mission
 
-Research `docs_old/feature_dev_notes/gauge_data_import/` to:
+Research `feature_dev_notes/Subagents_Under_Construction/gauge_data_import/` to:
 1. Catalog all content (files, directories, sizes)
 2. **MANDATORY SECURITY AUDIT** - scan for sensitive information
 3. **CHECK FOR REDUNDANCY** - compare against ras_commander/usgs/ (already production-ready)
@@ -36,17 +36,17 @@ Research `docs_old/feature_dev_notes/gauge_data_import/` to:
 
 **List all directories**:
 ```bash
-find docs_old/feature_dev_notes/gauge_data_import/ -type d 2>/dev/null
+find feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ -type d 2>/dev/null
 ```
 
 **List all files with sizes**:
 ```bash
-find docs_old/feature_dev_notes/gauge_data_import/ -type f -exec ls -lh {} \; 2>/dev/null
+find feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ -type f -exec ls -lh {} \; 2>/dev/null
 ```
 
 **Count by file type**:
 ```bash
-find docs_old/feature_dev_notes/gauge_data_import/ -type f 2>/dev/null | grep -o '\.[^.]*$' | sort | uniq -c
+find feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ -type f 2>/dev/null | grep -o '\.[^.]*$' | sort | uniq -c
 ```
 
 ### 2. Check for Redundancy (IMPORTANT)
@@ -77,22 +77,22 @@ ls -lh examples/*usgs*
 
 **Scan for USGS site IDs** (may identify client projects):
 ```bash
-grep -r -E "[0-9]{8,10}" docs_old/feature_dev_notes/gauge_data_import/ 2>/dev/null | head -10
+grep -r -E "[0-9]{8,10}" feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ 2>/dev/null | head -10
 ```
 
 **Scan for file paths**:
 ```bash
-grep -r -E "(C:\\\\|D:\\\\|/Users/|/home/)" docs_old/feature_dev_notes/gauge_data_import/ 2>/dev/null
+grep -r -E "(C:\\\\|D:\\\\|/Users/|/home/)" feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ 2>/dev/null
 ```
 
 **Scan for credentials**:
 ```bash
-grep -r -i -E "(password|passwd|api[_-]?key|token|secret)" docs_old/feature_dev_notes/gauge_data_import/ 2>/dev/null
+grep -r -i -E "(password|passwd|api[_-]?key|token|secret)" feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ 2>/dev/null
 ```
 
 **Scan for client data**:
 ```bash
-grep -r -i -E "(client|project[_-]name|proprietary)" docs_old/feature_dev_notes/gauge_data_import/ 2>/dev/null
+grep -r -i -E "(client|project[_-]name|proprietary)" feature_dev_notes/Subagents_Under_Construction/gauge_data_import/ 2>/dev/null
 ```
 
 **ACTION IF FOUND**:
@@ -141,7 +141,7 @@ Create comprehensive report at `planning_docs/usgs-integrator_MIGRATION_FINDINGS
 # USGS Integrator Migration Findings
 
 **Date**: [date]
-**Source**: docs_old/feature_dev_notes/gauge_data_import/
+**Source**: feature_dev_notes/Subagents_Under_Construction/gauge_data_import/
 **Destination**: ras_agents/usgs-integrator-agent/ (or SKIP if redundant)
 
 ## Content Summary

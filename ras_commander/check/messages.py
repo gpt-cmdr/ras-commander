@@ -25,6 +25,7 @@ class MessageType(Enum):
     STRUCCHECK = "STRUCCHECK"
     FWCHECK = "FWCHECK"
     PROFILESCHECK = "PROFILESCHECK"
+    UNSTEADYCHECK = "UNSTEADYCHECK"  # Unsteady flow validation messages
 
 
 # Message catalog dictionary
@@ -1909,6 +1910,206 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "message": "Computation may not have converged for {profile} at RS {station}",
         "help_text": "Check computation messages for convergence issues.",
         "type": MessageType.PROFILESCHECK
+    },
+
+    # =========================================================================
+    # UNSTEADY FLOW CHECK MESSAGES (US_*)
+    # =========================================================================
+
+    # Mass Balance Messages (US_MB_*)
+    "US_MB_01": {
+        "message": "Volume error ({error_pct:.2f}%) exceeds warning threshold ({threshold}%)",
+        "help_text": "Volume conservation error is elevated. Review boundary conditions, mesh quality, "
+                     "and time step settings. Small volume errors (<1%) are typically acceptable.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_MB_02": {
+        "message": "Volume error ({error_pct:.2f}%) exceeds error threshold ({threshold}%)",
+        "help_text": "Significant mass balance error detected. Model results may be unreliable. "
+                     "Check for boundary condition issues, inadequate mesh resolution, or time step problems.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_MB_03": {
+        "message": "Inflow-outflow discrepancy: inflow={inflow:.1f}, outflow={outflow:.1f}, difference={diff:.1f} ({pct:.1f}%)",
+        "help_text": "Total inflow and outflow volumes do not balance. Review boundary conditions and storage.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_MB_INFO": {
+        "message": "Volume accounting data not available in this plan",
+        "help_text": "Volume accounting is not present in the HDF file. This is normal for some model types.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_MB_PASS": {
+        "message": "Mass balance check passed - volume error within acceptable limits",
+        "help_text": "Volume conservation is acceptable for this simulation.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Computation Warning Messages (US_CW_*)
+    "US_CW_01": {
+        "message": "HEC-RAS computation warning: {warning_text}",
+        "help_text": "A warning was generated during HEC-RAS computation. Review the message for details.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_CW_02": {
+        "message": "HEC-RAS computation error: {error_text}",
+        "help_text": "An error occurred during HEC-RAS computation. Results may be incomplete or invalid.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_CW_03": {
+        "message": "Solution convergence warning detected in computation log",
+        "help_text": "HEC-RAS reported convergence issues. Check iteration settings and time step.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_CW_PASS": {
+        "message": "No HEC-RAS computation warnings or errors detected",
+        "help_text": "Computation completed without warnings or errors.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Performance Messages (US_PE_*)
+    "US_PE_01": {
+        "message": "Runtime performance: {compute_time} for {sim_duration} simulation ({speed:.1f}x real-time)",
+        "help_text": "Informational message about computation performance.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PE_02": {
+        "message": "Slow computation detected: {speed:.2f}x real-time (expected >1x)",
+        "help_text": "Simulation ran slower than real-time. Consider coarsening mesh or increasing time step.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PE_INFO": {
+        "message": "Runtime performance data available",
+        "help_text": "Runtime statistics are present in the HDF file.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Iteration/Stability Messages (US_IT_*)
+    "US_IT_01": {
+        "message": "Maximum iterations ({max_iter}) at mesh {mesh_name} cell {cell_id} exceeds warning threshold ({threshold})",
+        "help_text": "High iteration counts indicate solver stress. Consider reducing time step or refining geometry.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_IT_02": {
+        "message": "Maximum iterations ({max_iter}) exceeds error threshold ({threshold}) at mesh {mesh_name}",
+        "help_text": "Very high iteration counts indicate potential numerical instability. "
+                     "Review mesh quality, boundary conditions, and time step settings.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_IT_03": {
+        "message": "Consistently high iterations (avg {avg_iter:.1f}) in mesh {mesh_name} - solver under stress",
+        "help_text": "Average iterations across the simulation are elevated, indicating sustained solver difficulty.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_IT_INFO": {
+        "message": "2D mesh iteration data available for stability check",
+        "help_text": "Iteration count data is present for analysis.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Water Surface Error Messages (US_WS_*)
+    "US_WS_01": {
+        "message": "Water surface error ({ws_err:.3f} ft) exceeds threshold ({threshold} ft) at mesh {mesh_name}",
+        "help_text": "Large water surface errors indicate numerical convergence problems. "
+                     "Consider refining mesh or adjusting solver parameters.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_WS_INFO": {
+        "message": "Water surface error data available",
+        "help_text": "Water surface error metrics are present in the HDF file.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Courant Number Messages (US_CO_*)
+    "US_CO_01": {
+        "message": "Courant number ({courant:.2f}) exceeds warning threshold ({threshold}) at mesh {mesh_name}",
+        "help_text": "High Courant numbers may cause numerical instability. Consider reducing time step.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_CO_02": {
+        "message": "Courant number ({courant:.2f}) exceeds error threshold ({threshold}) - likely instability",
+        "help_text": "Very high Courant numbers typically cause instability. Reduce time step significantly.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Peak Value Messages (US_PK_*)
+    "US_PK_01": {
+        "message": "Maximum WSE ({max_wse:.2f} ft) exceeds cross section extent at {location}",
+        "help_text": "Water surface exceeded the cross section boundary. Extend cross section geometry.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PK_02": {
+        "message": "Maximum velocity ({max_vel:.1f} ft/s) exceeds warning threshold ({threshold} ft/s) at {location}",
+        "help_text": "High velocities may cause erosion. Review channel protection requirements.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PK_03": {
+        "message": "Maximum velocity ({max_vel:.1f} ft/s) exceeds error threshold ({threshold} ft/s) at {location}",
+        "help_text": "Extreme velocities detected. Results may be unreliable. Check model geometry and inputs.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PK_04": {
+        "message": "Peak flow ({peak_flow:.1f} cfs) at boundary location {location} - potential reflection",
+        "help_text": "Peak flow occurs at a boundary. Check for wave reflection or boundary condition issues.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PK_INFO": {
+        "message": "1D cross section time series data available for peak validation",
+        "help_text": "Time series data is present for peak value analysis.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_PK_PASS": {
+        "message": "Peak validation check completed (velocity threshold: {threshold} ft/s)",
+        "help_text": "Peak value validation completed successfully.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # 2D Mesh Quality Messages (US_2D_*)
+    "US_2D_01": {
+        "message": "Cell area ({area:.0f} sq ft) below minimum threshold ({threshold} sq ft) in mesh {mesh_name}",
+        "help_text": "Very small cells increase computation time without proportional benefit. "
+                     "Consider coarsening mesh in this area.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_2D_02": {
+        "message": "Cell area ({area:.0f} sq ft) exceeds maximum threshold ({threshold} sq ft) in mesh {mesh_name}",
+        "help_text": "Large cells may miss important hydraulic features. Consider refining mesh.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_2D_03": {
+        "message": "Cell aspect ratio ({ratio:.1f}) exceeds maximum ({threshold}) in mesh {mesh_name}",
+        "help_text": "High aspect ratio cells can cause numerical issues. Consider more uniform cell sizing.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_2D_04": {
+        "message": "Maximum face velocity ({vel:.1f} ft/s) exceeds threshold at mesh {mesh_name}",
+        "help_text": "High face velocities may indicate flow concentration or mesh quality issues.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_2D_INFO": {
+        "message": "2D mesh quality check completed (detailed validation pending)",
+        "help_text": "Mesh quality check has been run.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # General Stability Messages (US_ST_*)
+    "US_ST_PASS": {
+        "message": "Stability check completed (detailed validation pending)",
+        "help_text": "Stability analysis has been run.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+
+    # Information Messages (US_INFO_*)
+    "US_INFO_01": {
+        "message": "No 2D flow areas found - 2D stability and mesh quality checks skipped",
+        "help_text": "This is a 1D-only unsteady model. 2D-specific checks are not applicable.",
+        "type": MessageType.UNSTEADYCHECK
+    },
+    "US_INFO_02": {
+        "message": "Floodway analysis is not applicable to unsteady flow simulations",
+        "help_text": "Floodway analysis requires discrete steady-state profiles. "
+                     "For unsteady models, compare baseline vs modified scenarios instead.",
+        "type": MessageType.UNSTEADYCHECK
     },
 }
 

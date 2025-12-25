@@ -24,11 +24,11 @@ description: |
   - Catalog generation workflow
 
 **WORKING EXAMPLES**:
-- `examples/421_usgs_gauge_data_integration.ipynb` - Complete workflow (discovery → validation)
-- `examples/422_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
-- `examples/423_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
-- `examples/424_model_validation_with_usgs.ipynb` - Model validation workflow
-- `examples/420_usgs_gauge_catalog.ipynb` - Catalog generation (v0.89.0+)
+- `examples/911_usgs_gauge_data_integration.ipynb` - Complete workflow (discovery → validation)
+- `examples/912_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
+- `examples/913_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
+- `examples/914_model_validation_with_usgs.ipynb` - Model validation workflow
+- `examples/910_usgs_gauge_catalog.ipynb` - Catalog generation (v0.89.0+)
 
 **CODE DOCSTRINGS**:
 - All classes have comprehensive docstrings with examples
@@ -149,19 +149,19 @@ matches = GaugeMatcher.auto_match_gauges(
 
 ### Pattern 1: Boundary Condition Generation
 **See**: `ras_commander/usgs/CLAUDE.md` → "Complete Workflow" section → Stage 5
-**Example**: `examples/423_bc_generation_from_live_gauge.ipynb`
+**Example**: `examples/913_bc_generation_from_live_gauge.ipynb`
 
 ### Pattern 2: Model Validation
 **See**: `ras_commander/usgs/CLAUDE.md` → "Complete Workflow" section → Stage 6
-**Example**: `examples/424_model_validation_with_usgs.ipynb`
+**Example**: `examples/914_model_validation_with_usgs.ipynb`
 
 ### Pattern 3: Real-Time Monitoring
 **See**: `ras_commander/usgs/CLAUDE.md` → "Real-Time Workflows" section
-**Example**: `examples/422_usgs_real_time_monitoring.ipynb`
+**Example**: `examples/912_usgs_real_time_monitoring.ipynb`
 
 ### Pattern 4: Gauge Catalog Generation
 **See**: `ras_commander/usgs/CLAUDE.md` → "Complete Workflow" section → Stage 7
-**Example**: `examples/420_usgs_gauge_catalog.ipynb`
+**Example**: `examples/910_usgs_gauge_catalog.ipynb`
 
 ## Troubleshooting Guide
 
@@ -177,7 +177,7 @@ ModuleNotFoundError: No module named 'dataretrieval'
 2. Verify project coordinate system
 3. Check if project bounds are correct
 
-**See**: `examples/421_usgs_*.ipynb` for spatial discovery debugging
+**See**: `examples/911_usgs_*.ipynb` for spatial discovery debugging
 
 ### Data Gaps
 **Tools**:
@@ -192,7 +192,7 @@ ModuleNotFoundError: No module named 'dataretrieval'
 2. Use `validate_boundary_format()` to check format
 3. Review fixed-width format requirements
 
-**See**: `examples/423_bc_*.ipynb` for boundary generation debugging
+**See**: `examples/913_bc_*.ipynb` for boundary generation debugging
 
 ### Poor Validation Metrics (NSE < 0.5)
 **Investigate**:
@@ -201,7 +201,7 @@ ModuleNotFoundError: No module named 'dataretrieval'
 3. Gauge location vs model feature match
 4. Timing alignment
 
-**See**: `examples/424_*.ipynb` for validation workflow
+**See**: `examples/914_*.ipynb` for validation workflow
 
 ## Dependencies
 
@@ -234,7 +234,7 @@ print(deps)  # {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
   - Similar interpretation to NSE
   - Components: correlation, bias ratio, variability ratio
 
-**For detailed interpretation**: See `examples/424_model_validation_with_usgs.ipynb`
+**For detailed interpretation**: See `examples/914_model_validation_with_usgs.ipynb`
 
 ## Key Features
 

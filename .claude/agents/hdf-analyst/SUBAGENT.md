@@ -47,15 +47,15 @@ Expert in HEC-RAS HDF5 file operations using the `ras_commander.hdf` subpackage.
 ### Workflow Examples (Notebooks in `examples/`)
 
 **Unsteady Flow Results**:
-- `10_1d_hdf_data_extraction.ipynb` - 1D cross section time series
-- `11_2d_hdf_data_extraction.ipynb` - 2D mesh results, envelopes, spatial queries
-- `12_2d_hdf_data_extraction pipes and pumps.ipynb` - Infrastructure networks
+- `400_1d_hdf_data_extraction.ipynb` - 1D cross section time series
+- `410_2d_hdf_data_extraction.ipynb` - 2D mesh results, envelopes, spatial queries
+- `411_2d_hdf_pipes_and_pumps.ipynb` - Infrastructure networks
 
 **Steady Flow Results**:
-- `19_steady_flow_analysis.ipynb` - Steady state profiles, water surface elevations
+- `401_steady_flow_analysis.ipynb` - Steady state profiles, water surface elevations
 
 **Dam Breach Results**:
-- `18_breach_results_extraction.ipynb` - Breach time series, geometry evolution, summary statistics
+- `420_breach_results_extraction.ipynb` - Breach time series, geometry evolution, summary statistics
 
 ### API Reference (Source Code)
 
@@ -140,17 +140,17 @@ Read ras_commander/hdf/HdfMesh.py  # Check imports at top vs inside methods
 ## Common Tasks
 
 ### Task: Extract Unsteady 2D Mesh Results
-**Primary Source**: `examples/11_2d_hdf_data_extraction.ipynb`
+**Primary Source**: `examples/410_2d_hdf_data_extraction.ipynb`
 **Classes**: HdfResultsMesh, HdfMesh
 **Key Methods**: `get_mesh_max_ws()`, `get_mesh_timeseries()`, `get_mesh_cell_polygons()`
 
 ### Task: Extract Steady Flow Profiles
-**Primary Source**: `examples/19_steady_flow_analysis.ipynb`
+**Primary Source**: `examples/401_steady_flow_analysis.ipynb`
 **Classes**: HdfResultsPlan
 **Key Methods**: `is_steady_plan()`, `get_steady_profile_names()`, `get_steady_wse()`
 
 ### Task: Extract Dam Breach Results
-**Primary Source**: `examples/18_breach_results_extraction.ipynb`
+**Primary Source**: `examples/420_breach_results_extraction.ipynb`
 **Classes**: HdfResultsBreach
 **Key Methods**: `get_breach_timeseries()`, `get_breach_summary()`, `get_breaching_variables()`
 
@@ -160,12 +160,12 @@ Read ras_commander/hdf/HdfMesh.py  # Check imports at top vs inside methods
 **Key Methods**: `get_xs_htab()` - Returns area, conveyance, wetted perimeter vs elevation
 
 ### Task: Query Mesh Cells Spatially
-**Primary Source**: `examples/11_2d_hdf_data_extraction.ipynb`
+**Primary Source**: `examples/410_2d_hdf_data_extraction.ipynb`
 **Classes**: HdfMesh
 **Key Methods**: `find_nearest_cell()`, `find_nearest_face()`, `get_faces_along_profile_line()`
 
 ### Task: Extract Pipe/Pump Infrastructure
-**Primary Source**: `examples/12_2d_hdf_data_extraction pipes and pumps.ipynb`
+**Primary Source**: `examples/411_2d_hdf_pipes_and_pumps.ipynb`
 **Classes**: HdfPipe, HdfPump
 **Key Methods**: `get_pipe_timeseries()`, `get_pump_timeseries()`
 

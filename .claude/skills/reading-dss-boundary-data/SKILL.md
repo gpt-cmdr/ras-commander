@@ -53,7 +53,7 @@ Read this for:
 **Why this is authoritative**: Written by maintainers, updated with code changes, read by developers working on the module.
 
 ### 2. Complete Workflow Example
-**Location**: `C:\GH\ras-commander\examples\22_dss_boundary_extraction.ipynb`
+**Location**: `C:\GH\ras-commander\examples\310_dss_boundary_extraction.ipynb`
 
 Read this for:
 - Step-by-step extraction workflow
@@ -289,7 +289,7 @@ except RuntimeError as e:
 **Always prefer primary sources**:
 
 1. **Module architecture**: `ras_commander/dss/AGENTS.md`
-2. **Complete workflow**: `examples/22_dss_boundary_extraction.ipynb`
+2. **Complete workflow**: `examples/310_dss_boundary_extraction.ipynb`
 3. **API details**: `ras_commander/dss/RasDss.py` docstrings
 
 ## Key Takeaways
@@ -300,7 +300,7 @@ except RuntimeError as e:
 4. **One-Call Extraction**: `extract_boundary_timeseries()` handles all DSS data
 5. **Metadata Preserved**: Units, pathname, interval in `df.attrs`
 6. **V6 and V7**: Both DSS versions supported
-7. **Primary Sources**: Always read AGENTS.md and notebook 22 for authoritative guidance
+7. **Primary Sources**: Always read AGENTS.md and notebook 310 for authoritative guidance
 
 ## Version History
 

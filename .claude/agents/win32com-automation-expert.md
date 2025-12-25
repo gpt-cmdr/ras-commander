@@ -21,8 +21,8 @@ description: |
   Primary sources:
   - ras_commander/RasControl.py - HECRASController wrapper
   - ras_commander/RasGuiAutomation.py - Win32 GUI automation
-  - examples/16_automating_ras_with_win32com.ipynb - Direct COM tutorial
-  - examples/17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb - RasControl patterns
+  - examples/120_automating_ras_with_win32com.ipynb - Direct COM tutorial
+  - examples/121_legacy_hecrascontroller_and_rascontrol.ipynb - RasControl patterns
   - docs/user-guide/legacy-com-interface.md - COM documentation
 ---
 
@@ -56,8 +56,8 @@ Provide expertise on automating HEC-RAS using:
   - `open_rasmapper()` - Launch RASMapper (no COM available)
 
 **Tutorial Notebooks**:
-- `examples/16_automating_ras_with_win32com.ipynb` - Direct COM usage
-- `examples/17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb` - RasControl patterns
+- `examples/120_automating_ras_with_win32com.ipynb` - Direct COM usage
+- `examples/121_legacy_hecrascontroller_and_rascontrol.ipynb` - RasControl patterns
 
 **User Guide**:
 - `docs/user-guide/legacy-com-interface.md` - COM interface documentation

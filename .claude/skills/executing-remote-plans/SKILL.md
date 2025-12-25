@@ -16,8 +16,8 @@ Execute HEC-RAS plans across multiple remote machines using distributed workers.
 
 > **PRIMARY SOURCES**: This skill is a lightweight navigator. For complete details, see:
 > - `ras_commander/remote/AGENTS.md` - Coding conventions, architecture
-> - `examples/23_remote_execution_psexec.ipynb` - Complete PsExec workflow
-> - `docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md` - Machine setup
+> - `.claude/rules/hec-ras/remote.md` - Machine setup (Group Policy, Registry, session_id)
+> - `examples/500_remote_execution_psexec.ipynb` - Complete PsExec workflow
 
 ## Quick Start
 
@@ -377,18 +377,18 @@ See `ras_commander/remote/AGENTS.md` lines 58-68 for lazy loading pattern.
    - Worker implementation pattern
    - Adding new workers
 
-2. **`examples/23_remote_execution_psexec.ipynb`**
+2. **`examples/500_remote_execution_psexec.ipynb`**
    - Complete PsExec workflow
    - Session ID determination
    - Network share setup
    - Error handling and debugging
 
-3. **`docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md`**
-   - Step-by-step remote machine setup
+3. **`.claude/rules/hec-ras/remote.md`**
+   - Critical configuration requirements
    - Group Policy configuration
    - Registry key setup
    - Troubleshooting common issues
-   - Network share creation
+   - Session ID determination
 
 ## See Also
 

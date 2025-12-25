@@ -30,6 +30,7 @@ from .RasControl import RasControl
 from .rasmap import RasMap
 from .RasProcess import RasProcess
 from .RasGuiAutomation import RasGuiAutomation
+from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
 
 # Geometry handling - imported from geom subpackage
@@ -97,7 +98,7 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'RasGuiAutomation', 'HdfFluvialPluvial',
+    'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',

@@ -36,17 +36,16 @@ All comprehensive documentation exists in primary source files. This subagent is
 - Culvert shape codes (1=Circular, 2=Box, etc.)
 
 ### Complete API Reference
-**Location:** `docs_old/geometry file parsing/api-geom.md`
-- Comprehensive API documentation for all geometry parsing functions
-- Detailed method signatures with parameters and return types
-- Usage examples for each method
-- Implementation notes and technical patterns
+**Location:** `ras_commander/geom/*.py` source files with docstrings
+- All geometry methods have comprehensive docstrings with examples
+- Read source code directly for authoritative API documentation
+- Each module (GeomCrossSection, GeomBridge, etc.) is self-documented
 
 ### Working Examples
 **Locations:**
-- `examples/20_plaintext_geometry_operations.ipynb` - Main geometry operations
-- `examples/02_plan_and_geometry_operations.ipynb` - Plan integration
-- `docs_old/geometry file parsing/example_notebooks/02_complete_geometry_operations.ipynb` - Development examples
+- `examples/201_1d_plaintext_geometry.ipynb` - Main 1D geometry operations
+- `examples/202_2d_plaintext_geometry.ipynb` - 2D geometry operations
+- `examples/103_plan_and_geometry_operations.ipynb` - Plan integration
 
 ### Source Code with Docstrings
 **Location:** `ras_commander/geom/`
@@ -74,10 +73,10 @@ All source files contain comprehensive docstrings with examples.
    - Unknown/complex → Read `ras_commander/geom/AGENTS.md` for module guide
 
 2. **Check the API reference:**
-   - Read `docs_old/geometry file parsing/api-geom.md` for complete method signatures
+   - Read source code docstrings in `ras_commander/geom/*.py` for method signatures
 
 3. **Review working examples:**
-   - `examples/20_plaintext_geometry_operations.ipynb` shows real usage patterns
+   - `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb` show real usage patterns
 
 4. **Read implementation notes:**
    - `ras_commander/geom/AGENTS.md` for critical patterns (bank stations, 450 point limit, etc.)
@@ -168,11 +167,11 @@ GeomCrossSection.set_station_elevation(
 )
 ```
 
-See `examples/20_plaintext_geometry_operations.ipynb` for more workflow examples.
+See `examples/201_1d_plaintext_geometry.ipynb` for more workflow examples.
 
 ## API Quick Reference
 
-**For complete API documentation, read:** `docs_old/geometry file parsing/api-geom.md`
+**For complete API documentation:** Read source docstrings in `ras_commander/geom/*.py`
 
 **Core Functions:**
 - `GeomCrossSection.get_cross_sections()` - List all cross sections
@@ -214,9 +213,9 @@ Migration period: Old classes work but log deprecation warnings.
 
 **For implementation details:** Read `ras_commander/geom/AGENTS.md`
 
-**For complete API reference:** Read `docs_old/geometry file parsing/api-geom.md`
+**For complete API reference:** Read source docstrings in `ras_commander/geom/*.py`
 
-**For working examples:** Read `examples/20_plaintext_geometry_operations.ipynb`
+**For working examples:** Read `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb`
 
 **For method details:** Read source code docstrings in `ras_commander/geom/`
 

@@ -4,7 +4,7 @@ model: sonnet
 tools: [Read, Grep, Glob]
 working_directory: C:\GH\ras-commander
 description: |
-  Research docs_old/feature_dev_notes/1D_Floodplain_Mapping/ to identify geometry
+  Research feature_dev_notes/1D_Floodplain_Mapping/ to identify geometry
   parsing and floodplain mapping algorithms for migration to ras_agents/geometry-parser-agent/.
 
   CRITICAL SECURITY: Perform mandatory security audit before migration:
@@ -25,7 +25,7 @@ description: |
 
 ## Mission
 
-Research `docs_old/feature_dev_notes/1D_Floodplain_Mapping/` to:
+Research `feature_dev_notes/1D_Floodplain_Mapping/` to:
 1. Catalog all content (files, directories, sizes)
 2. **MANDATORY SECURITY AUDIT** - scan for client projects, proprietary data
 3. Categorize content (CRITICAL vs USEFUL vs EXCLUDE)
@@ -37,39 +37,39 @@ Research `docs_old/feature_dev_notes/1D_Floodplain_Mapping/` to:
 
 **List all directories**:
 ```bash
-find docs_old/feature_dev_notes/1D_Floodplain_Mapping/ -type d 2>/dev/null
+find feature_dev_notes/1D_Floodplain_Mapping/ -type d 2>/dev/null
 ```
 
 **List all files with sizes**:
 ```bash
-find docs_old/feature_dev_notes/1D_Floodplain_Mapping/ -type f -exec ls -lh {} \; 2>/dev/null
+find feature_dev_notes/1D_Floodplain_Mapping/ -type f -exec ls -lh {} \; 2>/dev/null
 ```
 
 **Count by file type**:
 ```bash
-find docs_old/feature_dev_notes/1D_Floodplain_Mapping/ -type f 2>/dev/null | grep -o '\.[^.]*$' | sort | uniq -c
+find feature_dev_notes/1D_Floodplain_Mapping/ -type f 2>/dev/null | grep -o '\.[^.]*$' | sort | uniq -c
 ```
 
 ### 2. Security Audit (MANDATORY)
 
 **Scan for HEC-RAS project files** (may be client data):
 ```bash
-find docs_old/feature_dev_notes/1D_Floodplain_Mapping/ -type f \( -name "*.prj" -o -name "*.g??" -o -name "*.p??" -o -name "*.hdf" \) 2>/dev/null | head -20
+find feature_dev_notes/1D_Floodplain_Mapping/ -type f \( -name "*.prj" -o -name "*.g??" -o -name "*.p??" -o -name "*.hdf" \) 2>/dev/null | head -20
 ```
 
 **Scan for project names** (may identify clients):
 ```bash
-grep -r -i -E "(client|project)" docs_old/feature_dev_notes/1D_Floodplain_Mapping/ 2>/dev/null | grep -v "example" | head -10
+grep -r -i -E "(client|project)" feature_dev_notes/1D_Floodplain_Mapping/ 2>/dev/null | grep -v "example" | head -10
 ```
 
 **Scan for file paths**:
 ```bash
-grep -r -E "(C:\\\\|D:\\\\|/Users/|/home/)" docs_old/feature_dev_notes/1D_Floodplain_Mapping/ 2>/dev/null
+grep -r -E "(C:\\\\|D:\\\\|/Users/|/home/)" feature_dev_notes/1D_Floodplain_Mapping/ 2>/dev/null
 ```
 
 **Scan for proprietary methods**:
 ```bash
-grep -r -i "proprietary" docs_old/feature_dev_notes/1D_Floodplain_Mapping/ 2>/dev/null
+grep -r -i "proprietary" feature_dev_notes/1D_Floodplain_Mapping/ 2>/dev/null
 ```
 
 **ACTION IF FOUND**:
@@ -115,7 +115,7 @@ Create comprehensive report at `planning_docs/geometry-parser_MIGRATION_FINDINGS
 # Geometry Parser Migration Findings
 
 **Date**: [date]
-**Source**: docs_old/feature_dev_notes/1D_Floodplain_Mapping/
+**Source**: feature_dev_notes/1D_Floodplain_Mapping/
 **Destination**: ras_agents/geometry-parser-agent/
 
 ## Content Summary

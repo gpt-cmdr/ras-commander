@@ -49,8 +49,8 @@
    - JSON configuration format
    - End-to-end workflow
 
-3. **C:\GH\ras-commander\docs_old\feature_dev_notes\RasRemote\REMOTE_WORKER_SETUP_GUIDE.md** (1,036 lines)
-   - Complete setup instructions
+3. **`.claude/rules/hec-ras/remote.md`** (authoritative setup guide)
+   - Critical configuration requirements
    - Group Policy configuration
    - Troubleshooting with root cause analysis
 
@@ -111,7 +111,7 @@ The CRITICAL session_id=2 warning is still prominent:
 All primary sources verified to exist:
 - ✓ ras_commander/remote/AGENTS.md (6.4 KB)
 - ✓ examples/23_remote_execution_psexec.ipynb (25 KB)
-- ✓ docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md (27 KB)
+- ✓ .claude/rules/hec-ras/remote.md (authoritative setup guide)
 
 ## Usage Pattern
 

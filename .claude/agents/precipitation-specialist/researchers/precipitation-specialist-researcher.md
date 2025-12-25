@@ -4,7 +4,7 @@ model: sonnet
 tools: [Read, Grep, Glob]
 working_directory: C:\GH\ras-commander
 description: |
-  Research docs_old/feature_dev_notes/National Water Model/ to identify critical
+  Research feature_dev_notes/National Water Model/ to identify critical
   precipitation and AORC workflows for migration to ras_agents/precipitation-specialist-agent/.
 
   CRITICAL SECURITY: Perform mandatory security audit before migration:
@@ -26,7 +26,7 @@ description: |
 
 ## Mission
 
-Research `docs_old/feature_dev_notes/National Water Model/` to:
+Research `feature_dev_notes/National Water Model/` to:
 1. Catalog all content (files, directories, sizes)
 2. **MANDATORY SECURITY AUDIT** - scan for sensitive information
 3. Categorize content (CRITICAL vs USEFUL vs EXCLUDE)
@@ -38,39 +38,39 @@ Research `docs_old/feature_dev_notes/National Water Model/` to:
 
 **List all directories**:
 ```bash
-find docs_old/feature_dev_notes/National\ Water\ Model/ -type d
+find feature_dev_notes/National\ Water\ Model/ -type d
 ```
 
 **List all files with sizes**:
 ```bash
-find docs_old/feature_dev_notes/National\ Water\ Model/ -type f -exec ls -lh {} \;
+find feature_dev_notes/National\ Water\ Model/ -type f -exec ls -lh {} \;
 ```
 
 **Count by file type**:
 ```bash
-find docs_old/feature_dev_notes/National\ Water\ Model/ -type f | grep -o '\.[^.]*$' | sort | uniq -c
+find feature_dev_notes/National\ Water\ Model/ -type f | grep -o '\.[^.]*$' | sort | uniq -c
 ```
 
 ### 2. Security Audit (MANDATORY)
 
 **Scan for API keys**:
 ```bash
-grep -r -i -E "(api[_-]?key|apikey|api_secret|access[_-]?token)" docs_old/feature_dev_notes/National\ Water\ Model/
+grep -r -i -E "(api[_-]?key|apikey|api_secret|access[_-]?token)" feature_dev_notes/National\ Water\ Model/
 ```
 
 **Scan for credentials**:
 ```bash
-grep -r -i -E "(password|passwd|credential|secret|token)" docs_old/feature_dev_notes/National\ Water\ Model/
+grep -r -i -E "(password|passwd|credential|secret|token)" feature_dev_notes/National\ Water\ Model/
 ```
 
 **Scan for file paths**:
 ```bash
-grep -r -E "(C:\\\\|D:\\\\|/Users/|/home/)" docs_old/feature_dev_notes/National\ Water\ Model/
+grep -r -E "(C:\\\\|D:\\\\|/Users/|/home/)" feature_dev_notes/National\ Water\ Model/
 ```
 
 **Scan for client data**:
 ```bash
-grep -r -i -E "(client|project[_-]name|proprietary)" docs_old/feature_dev_notes/National\ Water\ Model/
+grep -r -i -E "(client|project[_-]name|proprietary)" feature_dev_notes/National\ Water\ Model/
 ```
 
 **ACTION IF FOUND**:
@@ -117,7 +117,7 @@ Create comprehensive report at `planning_docs/precipitation-specialist_MIGRATION
 # Precipitation Specialist Migration Findings
 
 **Date**: [date]
-**Source**: docs_old/feature_dev_notes/National Water Model/
+**Source**: feature_dev_notes/National Water Model/
 **Destination**: ras_agents/precipitation-specialist-agent/
 
 ## Content Summary

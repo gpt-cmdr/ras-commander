@@ -355,8 +355,8 @@ Before completing documentation tasks:
 - `docs/requirements-docs.txt` - Documentation dependencies
 
 **Example Notebooks**:
-- `examples/00_Using_RasExamples.ipynb` - RasExamples pattern reference
-- `examples/01_project_initialization.ipynb` - Standard notebook structure
+- `examples/100_using_ras_examples.ipynb` - RasExamples pattern reference
+- `examples/101_project_initialization.ipynb` - Standard notebook structure
 
 ## Debugging
 

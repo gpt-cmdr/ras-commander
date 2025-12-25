@@ -67,12 +67,12 @@ This is the AUTHORITATIVE source for all RasFixit information:
 **When working with RasFixit**: Always read fixit/AGENTS.md first.
 
 ### Example Notebooks
-**RasFixit Workflow**: `examples/200_fixit_blocked_obstructions.ipynb` (203 KB)
+**RasFixit Workflow**: `examples/210_fixit_blocked_obstructions.ipynb` (203 KB)
 - Complete repair workflow demonstration
 - Before/after visualization
 - Integration with RasCheck
 
-**RasCheck Workflow**: `examples/300_quality_assurance_rascheck.ipynb` (24 KB)
+**RasCheck Workflow**: `examples/800_quality_assurance_rascheck.ipynb` (24 KB)
 - All 5 check types demonstrated
 - Custom threshold configuration
 - Report generation examples
@@ -312,13 +312,13 @@ RasCheck implements validation from:
 
 1. **Is this a CHECK request?**
    - Read `ras_commander/check/CLAUDE.md` for complete API
-   - Check examples: `examples/300_quality_assurance_rascheck.ipynb`
+   - Check examples: `examples/800_quality_assurance_rascheck.ipynb`
    - Use `RasCheck.run_all_checks()` or specific check methods
    - Generate appropriate report format
 
 2. **Is this a FIX request?**
    - Read `ras_commander/fixit/AGENTS.md` for complete algorithm details
-   - Check examples: `examples/200_fixit_blocked_obstructions.ipynb`
+   - Check examples: `examples/210_fixit_blocked_obstructions.ipynb`
    - Use `RasFixit.fix_blocked_obstructions()` with `visualize=True`
    - Remember: Professional review required, 0.02-unit gap is CRITICAL
 
@@ -333,8 +333,8 @@ RasCheck implements validation from:
 
 - **RasCheck Complete Docs**: `ras_commander/check/CLAUDE.md` (262 lines)
 - **RasFixit Complete Docs**: `ras_commander/fixit/AGENTS.md` (119 lines)
-- **RasFixit Workflow**: `examples/200_fixit_blocked_obstructions.ipynb`
-- **RasCheck Workflow**: `examples/300_quality_assurance_rascheck.ipynb`
+- **RasFixit Workflow**: `examples/210_fixit_blocked_obstructions.ipynb`
+- **RasCheck Workflow**: `examples/800_quality_assurance_rascheck.ipynb`
 - **Testing Patterns**: `.claude/rules/testing/tdd-approach.md`
 - **Parent Library**: `ras_commander/CLAUDE.md`
 
@@ -343,6 +343,6 @@ RasCheck implements validation from:
 This subagent is a **navigator to primary sources**. The complete documentation lives in:
 1. `ras_commander/check/CLAUDE.md` - All RasCheck details
 2. `ras_commander/fixit/AGENTS.md` - All RasFixit details
-3. Example notebooks 200 and 300 - Complete workflows
+3. Example notebooks 210 and 800 - Complete workflows
 
 **Always read the primary sources before implementing quality assurance features.**

@@ -6,6 +6,8 @@ This subpackage provides automated quality assurance checks for HEC-RAS models f
 
 RasCheck implements comprehensive validation checks to identify common modeling issues before submission or peer review. It helps ensure models meet professional standards for hydraulic & hydrologic analysis.
 
+**Supports Both Steady and Unsteady Flow**: RasCheck auto-detects the flow type from the plan HDF file and runs appropriate validation checks.
+
 ## Module Organization
 
 The check subpackage contains 5 modules organized by function:
@@ -58,8 +60,35 @@ The check subpackage contains 5 modules organized by function:
   - Energy slope reasonableness
 
 **Run All Checks**:
-- `run_all_checks()` - Execute complete validation suite
+- `run_all()` - Execute complete validation suite (auto-detects steady vs unsteady)
 - Returns comprehensive report with all findings
+
+**Unsteady Flow Checks**:
+- `check_unsteady_mass_balance()` - Volume conservation validation
+  - Volume error percentage against thresholds (1% warning, 5% error default)
+  - Inflow/outflow balance verification
+  - Storage change validation
+- `check_unsteady_computation()` - HEC-RAS warning/error analysis
+  - Parses computation messages for warnings and errors
+  - Detects convergence issues
+  - Runtime performance metrics
+- `check_unsteady_peaks()` - Peak value validation for 1D results
+  - Maximum velocity thresholds (15 ft/s warning, 25 ft/s error)
+  - Maximum WSE validation
+  - Time series peak analysis
+- `check_unsteady_stability()` - 2D stability and convergence (when 2D present)
+  - Maximum iteration counts (20 warning, 40 error default)
+  - Average iteration analysis (solver stress)
+  - Water surface error validation
+- `check_mesh_quality()` - 2D mesh quality (when 2D present)
+  - Cell area validation (100-50,000 sq ft default range)
+  - Aspect ratio checks (max 10:1 default)
+  - Face velocity analysis
+
+**Flow Type Detection**:
+- Auto-detects steady vs unsteady from HDF file structure
+- Returns `FlowType.STEADY`, `FlowType.UNSTEADY`, or `FlowType.GEOMETRY_ONLY`
+- Geometry-only checks (NT) work for all flow types
 
 ### messages.py (Validation Messages)
 
@@ -151,28 +180,81 @@ from ras_commander.check import (
 
 ## Usage Patterns
 
-### Run All Checks
+### Run All Checks (Auto-Detects Flow Type)
 
-Complete validation suite:
+Complete validation suite with auto-detection:
+```python
+from ras_commander.check import RasCheck, FlowType
+
+# Auto-detects steady or unsteady flow
+results = RasCheck.run_all("01")
+
+# Check what flow type was detected
+print(f"Flow type: {results.flow_type}")  # FlowType.STEADY or FlowType.UNSTEADY
+
+# Get error count
+print(f"Errors: {results.get_error_count()}")
+
+# Generate HTML report
+results.to_html("validation_report.html")
+```
+
+### Steady Flow Example
+
+For steady flow plans with multiple profiles:
 ```python
 from ras_commander.check import RasCheck
 
-# Run all checks with default thresholds
-results = RasCheck.run_all_checks("C:/Projects/MyModel")
+# Run with specific profiles and floodway
+results = RasCheck.run_all("01",
+    profiles=['10yr', '50yr', '100yr', 'Floodway'],
+    floodway_profile='Floodway',
+    surcharge=1.0
+)
 
-# Generate summary report
-print(results.summary())
+# Flow type will be FlowType.STEADY
+print(results.flow_type)
+```
+
+### Unsteady Flow Example
+
+For unsteady flow plans (1D or 2D):
+```python
+from ras_commander.check import RasCheck
+
+# Auto-detects unsteady, runs appropriate checks
+results = RasCheck.run_all("01")
+
+# Check results
+print(f"Flow type: {results.flow_type}")  # FlowType.UNSTEADY
+
+# Review mass balance
+if results.mass_balance_summary is not None:
+    print(results.mass_balance_summary)
+
+# Review peaks
+if results.peaks_summary is not None:
+    print(results.peaks_summary[['cross_section', 'max_velocity', 'max_wse']])
+
+# Check for 2D stability issues
+if results.stability_summary is not None:
+    print(results.stability_summary)
 ```
 
 ### Run Specific Check
 
 Individual check execution:
 ```python
-# NT Check only
-nt_results = RasCheck.nt_check("C:/Projects/MyModel")
+# NT Check only (works for both steady and unsteady)
+from ras_commander import init_ras_project
+init_ras_project("C:/Projects/MyModel", "6.6")
+nt_results = RasCheck.check_nt(geom_hdf)
 
-# XS Check only
-xs_results = RasCheck.xs_check("C:/Projects/MyModel")
+# Unsteady-specific checks
+mass_balance = RasCheck.check_unsteady_mass_balance("01")
+peaks = RasCheck.check_unsteady_peaks("01", geom_hdf)
+stability = RasCheck.check_unsteady_stability("01")  # 2D only
+mesh = RasCheck.check_mesh_quality("01", geom_hdf)    # 2D only
 ```
 
 ### Custom Thresholds

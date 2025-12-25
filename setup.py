@@ -79,6 +79,8 @@ setup(
             'azure-identity>=1.14',
             'azure-mgmt-compute>=30.0',
         ],
+        # GUI automation and screenshot capture (Windows only)
+        'gui': ['Pillow>=9.0'],
     })
 
 """

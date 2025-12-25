@@ -28,37 +28,39 @@
 
 ## Overview
 
-RasCheck provides automated quality assurance validation for HEC-RAS 6.x **steady flow** models. It performs comprehensive checks based on FEMA guidelines, HEC-RAS best practices, and the original cHECk-RAS methodology.
+RasCheck provides automated quality assurance validation for HEC-RAS 6.x models. It performs comprehensive checks based on FEMA guidelines, HEC-RAS best practices, and the original cHECk-RAS methodology.
+
+**Flow Type Support**: RasCheck automatically detects whether a plan is steady flow or unsteady flow and runs appropriate validation checks for each type.
 
 ### Key Features
 
-- **Automated validation** of Manning's n values, transition coefficients, and cross sections
-- **Structure checks** for bridges, culverts, and inline weirs
-- **Floodway analysis** validation with state-specific surcharge limits
-- **Multiple profile comparison** for discharge ordering and WSE consistency
+- **Auto-detection** of steady vs unsteady flow from plan HDF structure
+- **Steady flow validation**: Manning's n values, transition coefficients, cross sections, structures, floodway analysis, profile comparison
+- **Unsteady flow validation**: Mass balance, computation warnings, peak values (WSE/velocity), stability/convergence (2D), mesh quality (2D)
 - **HTML report generation** with detailed messages and recommendations
 - **Customizable thresholds** for project-specific requirements
 
 ## Quick Start
 
+### Steady Flow Example
+
 ```python
-from ras_commander import init_ras_project, RasPrj
-from ras_commander.check import RasCheck, RasCheckReport, ReportMetadata
+from ras_commander import init_ras_project
+from ras_commander.check import RasCheck
 
 # Initialize project
-ras = RasPrj()
-init_ras_project(r"C:\Projects\MyRAS", "6.6", ras_object=ras)
+init_ras_project(r"C:\Projects\MySteadyModel", "6.6")
 
-# Run all checks on a plan
+# Run all checks on a steady flow plan
 results = RasCheck.run_all(
     plan="01",
     profiles=['10yr', '50yr', '100yr', 'Floodway'],
     floodway_profile='Floodway',
-    surcharge=1.0,
-    ras_object=ras
+    surcharge=1.0
 )
 
 # View summary
+print(f"Flow type: {results.flow_type}")  # FlowType.STEADY
 print(f"Errors: {results.get_error_count()}")
 print(f"Warnings: {results.get_warning_count()}")
 
@@ -66,9 +68,42 @@ print(f"Warnings: {results.get_warning_count()}")
 results.to_html("validation_report.html")
 ```
 
+### Unsteady Flow Example
+
+```python
+from ras_commander import init_ras_project
+from ras_commander.check import RasCheck
+
+# Initialize project
+init_ras_project(r"C:\Projects\MyUnsteadyModel", "6.6")
+
+# Run all checks - auto-detects unsteady flow
+results = RasCheck.run_all(plan="01")
+
+# View summary
+print(f"Flow type: {results.flow_type}")  # FlowType.UNSTEADY
+print(f"Errors: {results.get_error_count()}")
+
+# Check mass balance
+if results.mass_balance_summary is not None:
+    print("\nMass Balance:")
+    print(results.mass_balance_summary)
+
+# Check peaks
+if results.peaks_summary is not None:
+    print("\nTop 5 peak velocities:")
+    top_vels = results.peaks_summary.nlargest(5, 'max_velocity')
+    print(top_vels[['cross_section', 'max_velocity', 'max_wse']])
+
+# Generate HTML report
+results.to_html("unsteady_validation_report.html")
+```
+
 ## Check Categories
 
-RasCheck performs five main categories of validation:
+### Steady Flow Checks
+
+RasCheck performs five main categories of validation for steady flow:
 
 | Check Type | Description | Key Validations |
 |------------|-------------|-----------------|
@@ -77,6 +112,19 @@ RasCheck performs five main categories of validation:
 | **Structure Check** | Bridge/Culvert/Weir | Section distances, flow types, loss coefficients |
 | **Floodway Check** | Floodway Analysis | Surcharge limits, encroachment methods, discharge matching |
 | **Profiles Check** | Profile Consistency | WSE ordering, discharge continuity, regime transitions |
+
+### Unsteady Flow Checks
+
+RasCheck performs five main categories of validation for unsteady flow:
+
+| Check Type | Description | Key Validations |
+|------------|-------------|-----------------|
+| **NT Check** | Manning's n and Transitions | Same geometry-only checks as steady flow |
+| **Mass Balance** | Volume Conservation | Volume error %, inflow/outflow balance |
+| **Computation** | HEC-RAS Messages | Warnings, errors, convergence issues |
+| **Peaks** | Maximum Value Validation | Peak WSE, peak velocity thresholds (1D) |
+| **Stability** | Convergence Analysis | Iteration counts, WS errors (2D only) |
+| **Mesh Quality** | 2D Mesh Validation | Cell areas, aspect ratios, face velocities (2D only) |
 
 ## Running Individual Checks
 
@@ -259,9 +307,16 @@ For comprehensive documentation of all validation checks and message IDs:
 
 ## Limitations
 
-!!! note "Steady Flow Only"
-    RasCheck currently supports **steady flow** models only. Unsteady flow validation
-    is not implemented.
+!!! info "Both Steady and Unsteady Flow Supported"
+    RasCheck now supports both **steady flow** and **unsteady flow** models. Flow type
+    is automatically detected and appropriate validation checks are run.
+
+    **Steady Flow Checks**: Manning's n, cross sections, structures, floodway, profiles
+
+    **Unsteady Flow Checks**: Manning's n, mass balance, computation warnings, peak values,
+    stability/convergence, 2D mesh quality
+
+    **Not Applicable to Unsteady**: Floodway analysis (steady-state concept)
 
 - Only validates HEC-RAS 6.x models with HDF output
 - Requires computed plan results (not geometry-only)

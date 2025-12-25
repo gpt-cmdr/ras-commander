@@ -4,8 +4,8 @@ description: >
   Remote and distributed HEC-RAS execution via PsExec, Docker, and cloud workers.
   Handles worker configuration, session management, network shares, and distributed compute.
   **CRITICAL**: HEC-RAS requires session_id=2 (desktop session), NOT system_account.
-  Primary sources: ras_commander/remote/AGENTS.md (patterns), examples/23_remote_execution_psexec.ipynb (workflow),
-  docs_old/feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md (setup).
+  Primary sources: ras_commander/remote/AGENTS.md (patterns), examples/500_remote_execution_psexec.ipynb (workflow),
+  .claude/rules/hec-ras/remote.md (critical setup requirements).
 model: sonnet
 working_directory: ras_commander/remote
 ---
@@ -37,7 +37,7 @@ This subagent is a **lightweight navigator**. For detailed information, consult 
 **Use for**: Coding patterns, module architecture, worker development
 
 ### 2. Complete Workflow Example
-**File**: `C:\GH\ras-commander\examples\23_remote_execution_psexec.ipynb`
+**File**: `C:\GH\ras-commander\examples\500_remote_execution_psexec.ipynb`
 
 **Contains**:
 - Part 1: Setup and imports
@@ -50,13 +50,13 @@ This subagent is a **lightweight navigator**. For detailed information, consult 
 **Use for**: End-to-end workflows, JSON configuration format, testing patterns
 
 ### 3. Setup Instructions
-**File**: `C:\GH\ras-commander\docs_old\feature_dev_notes\RasRemote\REMOTE_WORKER_SETUP_GUIDE.md` (1,036 lines)
+**File**: `.claude/rules/hec-ras/remote.md` (authoritative setup guide)
 
 **Contains**:
-- Complete PsExec worker setup (9 steps)
-- Group Policy configuration (screenshots, PowerShell commands)
-- Registry key configuration
-- Network share creation
+- Critical configuration requirements
+- Group Policy configuration
+- Registry key configuration (`LocalAccountTokenFilterPolicy=1`)
+- Remote Registry service requirements
 - Session ID determination procedure
 - Docker worker setup (images, SSH keys)
 - Troubleshooting guide with root cause analysis
@@ -329,7 +329,7 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 
 ## Testing
 
-**Notebook**: `C:\GH\ras-commander\examples\23_remote_execution_psexec.ipynb`
+**Notebook**: `C:\GH\ras-commander\examples\500_remote_execution_psexec.ipynb`
 
 **Test sequence**:
 1. Part 2: Local parallel (baseline, no remote setup needed)
@@ -357,7 +357,7 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 - Docker image building
 - Production security hardening
 
-**When to read 23_remote_execution_psexec.ipynb**:
+**When to read 500_remote_execution_psexec.ipynb**:
 - End-to-end workflow example
 - JSON configuration format
 - Testing worker setup
@@ -396,13 +396,12 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 
 ## Related Documentation
 
-- **Implementation**: `C:\GH\ras-commander\ras_commander\remote\AGENTS.md`
-- **Setup Guide**: `C:\GH\ras-commander\docs_old\feature_dev_notes\RasRemote\REMOTE_WORKER_SETUP_GUIDE.md`
-- **Workflow Example**: `C:\GH\ras-commander\examples\23_remote_execution_psexec.ipynb`
-- **Critical Config**: `.claude\rules\hec-ras\remote.md` (session ID requirements)
+- **Implementation**: `ras_commander/remote/AGENTS.md`
+- **Setup Guide**: `.claude/rules/hec-ras/remote.md` (critical configuration)
+- **Workflow Example**: `examples/500_remote_execution_psexec.ipynb`
 
 ---
 
-**Last Updated**: 2025-12-11
+**Last Updated**: 2025-12-24
 **Total Lines**: ~390 (target: 300-400)
-**Primary Sources**: 3 files (AGENTS.md, notebook, SETUP_GUIDE.md)
+**Primary Sources**: 3 files (AGENTS.md, notebook, remote.md rule)

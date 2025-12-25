@@ -60,18 +60,16 @@ Delegate tasks containing these trigger phrases:
 - All module organization and API overview
 
 ### 2. Working Example Notebooks
-**`examples/24_aorc_precipitation.ipynb`** - Complete AORC demonstration
+**`examples/900_aorc_precipitation.ipynb`** - Complete AORC demonstration
 - Project setup and bounds calculation
 - Storm catalog generation
 - Precipitation download and export
 - Plan creation with HDF precipitation
 - Parallel execution example
 
-**`examples/103_Running_AEP_Events_from_Atlas_14.ipynb`** - Atlas 14 single project
-(Note: Check if this file exists; may be in planning or development)
+**`examples/720_atlas14_aep_events.ipynb`** - Atlas 14 single project
 
-**`examples/104_Atlas14_AEP_Multi_Project.ipynb`** - Atlas 14 batch processing
-(Note: Check if this file exists; may be in planning or development)
+**`examples/722_atlas14_multi_project.ipynb`** - Atlas 14 batch processing
 
 ### 3. Code Implementation
 **Module Files** (in `ras_commander/precip/`):
@@ -207,7 +205,7 @@ When a user requests precipitation work:
 
 1. **Read Primary Source First**: Open `ras_commander/precip/CLAUDE.md` and locate relevant workflow section
 2. **Use Exact Workflow**: Follow the documented steps exactly (do NOT improvise)
-3. **Reference Examples**: Point to `examples/24_aorc_precipitation.ipynb` for AORC or Atlas 14 notebooks for design storms
+3. **Reference Examples**: Point to `examples/900_aorc_precipitation.ipynb` for AORC or `examples/720_atlas14_aep_events.ipynb` / `examples/722_atlas14_multi_project.ipynb` for design storms
 4. **Check Code**: Only read `PrecipAorc.py` or `StormGenerator.py` if API clarification needed
 5. **Report Back**: Summarize results with references to source documentation
 

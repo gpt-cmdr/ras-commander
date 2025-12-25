@@ -259,7 +259,7 @@ conda activate RasCommander
 pip install ras-commander==1.2.3
 
 # Run problematic notebook
-jupyter notebook examples/18_breach_results_extraction.ipynb
+jupyter notebook examples/420_breach_results_extraction.ipynb
 
 # Set USE_LOCAL_SOURCE = False, run notebook
 # Reproduce error
@@ -271,7 +271,7 @@ conda activate rascmdr_local
 vim ras_commander/hdf/breach.py
 
 # Test fix with local source
-jupyter notebook examples/18_breach_results_extraction.ipynb
+jupyter notebook examples/420_breach_results_extraction.ipynb
 # Set USE_LOCAL_SOURCE = True
 # Run notebook - verify fix works
 ```

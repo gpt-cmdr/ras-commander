@@ -13,9 +13,9 @@ Claude Code skill for working with AORC historical precipitation and NOAA Atlas 
 
 All detailed workflows and API documentation live in:
 - `ras_commander/precip/CLAUDE.md` - Complete API reference (329 lines)
-- `examples/24_aorc_precipitation.ipynb` - AORC workflow demonstration
-- `examples/103_Running_AEP_Events_from_Atlas_14.ipynb` - Atlas 14 workflow
-- `examples/104_Atlas14_AEP_Multi_Project.ipynb` - Multi-project batch processing
+- `examples/900_aorc_precipitation.ipynb` - AORC workflow demonstration
+- `examples/720_atlas14_aep_events.ipynb` - Atlas 14 workflow
+- `examples/722_atlas14_multi_project.ipynb` - Multi-project batch processing
 
 ## Trigger Keywords
 

@@ -331,7 +331,7 @@ When a user asks about HEC-RAS result extraction:
 **When to Use**: User needs HEC-RAS result extraction guidance
 **Primary Sources**:
 - Architecture: `ras_commander/hdf/AGENTS.md`
-- Workflows: `examples/10_1d_hdf_data_extraction.ipynb`, `examples/11_2d_hdf_data_extraction.ipynb`, `examples/19_steady_flow_analysis.ipynb`, `examples/18_breach_results_extraction.ipynb`
+- Workflows: `examples/400_1d_hdf_data_extraction.ipynb`, `examples/410_2d_hdf_data_extraction.ipynb`, `examples/401_steady_flow_analysis.ipynb`, `examples/420_breach_results_extraction.ipynb`
 - API Details: Code docstrings in `ras_commander/hdf/*.py`
 
 **Key Principle**: Point to authoritative sources, don't replicate them.

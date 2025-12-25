@@ -81,7 +81,7 @@ reading-dss-boundary-data/
 When Claude Code reads this skill, it will:
 1. Read SKILL.md for quick reference
 2. Be directed to read `dss/AGENTS.md` for architecture
-3. Be directed to read `examples/22_dss_boundary_extraction.ipynb` for workflow
+3. Be directed to read `examples/310_dss_boundary_extraction.ipynb` for workflow
 4. Have immediate access to code snippets for common operations
 
 This keeps the skill lightweight while providing access to complete, authoritative documentation.

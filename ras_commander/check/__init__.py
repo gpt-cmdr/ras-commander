@@ -1,5 +1,5 @@
 """
-RasCheck - Quality Assurance Validation for HEC-RAS Steady Flow Models.
+RasCheck - Quality Assurance Validation for HEC-RAS Models.
 
 NOTE: This is an UNOFFICIAL Python implementation inspired by the FEMA cHECk-RAS tool.
 It is part of the ras-commander library and is NOT affiliated with or endorsed by FEMA.
@@ -7,27 +7,43 @@ The original cHECk-RAS is a Windows application developed for FEMA's National Fl
 Insurance Program. This implementation provides similar functionality using modern
 HDF-based data access for HEC-RAS 6.x models.
 
-This subpackage provides comprehensive validation of HEC-RAS 6.x steady flow models.
+This subpackage provides comprehensive validation of HEC-RAS 6.x models for both
+steady flow and unsteady flow simulations. Flow type is auto-detected.
+
+Steady Flow Checks:
+    - NT Check: Manning's n values and transition coefficients
+    - XS Check: Cross section spacing, ineffective flow, reach lengths
+    - Structure Check: Bridge, culvert, and inline weir validation
+    - Floodway Check: Surcharge and discharge matching
+    - Profiles Check: Multiple profile comparison
+
+Unsteady Flow Checks:
+    - NT Check: Manning's n values (geometry-only, shared)
+    - Mass Balance Check: Volume conservation
+    - Computation Check: HEC-RAS warnings and performance
+    - Peaks Check: Maximum WSE and velocity validation
+    - Stability Check: Iteration counts and convergence (2D)
+    - Mesh Quality Check: Cell areas and aspect ratios (2D)
 
 Modules:
-    RasCheck: Main class with check methods (check_nt, check_xs, check_structures, etc.)
-    thresholds: Validation threshold constants (Manning's n, transitions, etc.)
+    RasCheck: Main class with check methods
+    thresholds: Validation threshold constants
     messages: Message catalog with standardized validation messages
     report: HTML and CSV report generation
 
 Example:
-    >>> from ras_commander.check import RasCheck, Severity, RasCheckReport
+    >>> from ras_commander.check import RasCheck, FlowType
     >>>
-    >>> # Run NT checks on geometry
-    >>> results = RasCheck.check_nt(geom_hdf)
+    >>> # Auto-detects steady or unsteady flow
+    >>> results = RasCheck.run_all("01")
+    >>> print(f"Flow type: {results.flow_type}")  # FlowType.STEADY or FlowType.UNSTEADY
     >>> print(f"Errors: {results.get_error_count()}")
     >>>
     >>> # Generate HTML report
-    >>> report = RasCheckReport(results)
-    >>> report.generate_html("validation_report.html")
+    >>> results.to_html("validation_report.html")
 """
 
-from .RasCheck import RasCheck, CheckResults, CheckMessage, Severity
+from .RasCheck import RasCheck, CheckResults, CheckMessage, Severity, FlowType
 from .thresholds import (
     ValidationThresholds,
     get_default_thresholds,
@@ -55,6 +71,7 @@ __all__ = [
     'CheckResults',
     'CheckMessage',
     'Severity',
+    'FlowType',
     # Thresholds
     'ValidationThresholds',
     'get_default_thresholds',

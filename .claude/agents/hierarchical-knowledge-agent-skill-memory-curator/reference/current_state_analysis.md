@@ -169,7 +169,7 @@ Each feature folder is self-contained with unique guidance.
 
 5. **Feature development consolidation**:
    - Audit 94 markdown files in feature_dev_notes/
-   - Archive obsolete/completed to docs_old/
+   - Archive obsolete/completed to `.old/`
    - Cluster related documents
 
 ## Quantitative Health Metrics

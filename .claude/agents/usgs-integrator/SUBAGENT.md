@@ -40,11 +40,11 @@ This subagent is a **lightweight navigator** to the USGS integration documentati
 ### 2. Example Notebooks (DEMONSTRATIONS)
 
 **Primary workflows**:
-- `examples/421_usgs_gauge_data_integration.ipynb` - Complete end-to-end workflow
-- `examples/422_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
-- `examples/423_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
-- `examples/424_model_validation_with_usgs.ipynb` - Model validation workflow
-- `examples/420_usgs_gauge_catalog.ipynb` - Catalog generation (v0.89.0+)
+- `examples/911_usgs_gauge_data_integration.ipynb` - Complete end-to-end workflow
+- `examples/912_usgs_real_time_monitoring.ipynb` - Real-time monitoring examples
+- `examples/913_bc_generation_from_live_gauge.ipynb` - Boundary condition generation
+- `examples/914_model_validation_with_usgs.ipynb` - Model validation workflow
+- `examples/910_usgs_gauge_catalog.ipynb` - Catalog generation (v0.89.0+)
 
 **When to use**: For working examples and jupyter-based demonstrations
 

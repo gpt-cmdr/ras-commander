@@ -257,7 +257,7 @@ compute_parallel_remote(
 - Registry and service setup
 - Network share permissions
 
-**examples/23_remote_execution_psexec.ipynb** - Working example:
+**examples/500_remote_execution_psexec.ipynb** - Working example:
 - Complete PsExec worker setup
 - End-to-end remote execution workflow
 - Troubleshooting common issues
@@ -351,7 +351,7 @@ def check_docker_dependencies():
 3. **Check `reference/worker-configuration.md`** for detailed setup steps
 4. **Use `reference/common-issues.md`** for troubleshooting workflows
 5. **Consult `ras_commander/remote/AGENTS.md`** for implementation details
-6. **Point to `examples/23_remote_execution_psexec.ipynb`** for working examples
+6. **Point to `examples/500_remote_execution_psexec.ipynb`** for working examples
 
 ## Success Criteria
 

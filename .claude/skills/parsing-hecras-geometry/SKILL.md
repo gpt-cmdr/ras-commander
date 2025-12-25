@@ -16,7 +16,7 @@ description: |
 
 **Primary Sources (navigate to these for details)**:
 - **Implementation guide**: `ras_commander/geom/AGENTS.md` (parsing algorithms, API reference)
-- **Working examples**: `examples/20_plaintext_geometry_operations.ipynb` (comprehensive demonstrations)
+- **Working examples**: `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb` (comprehensive demonstrations)
 
 This skill provides quick-reference patterns for common tasks. For implementation details, parsing algorithms, and complete API documentation, see the primary sources above.
 
@@ -353,7 +353,7 @@ if len(df) > 450:
    - Culvert shape codes table
    - Deprecated class mappings
 
-2. **`examples/20_plaintext_geometry_operations.ipynb`**
+2. **`examples/201_1d_plaintext_geometry.ipynb`** and **`examples/202_2d_plaintext_geometry.ipynb`**
    - Working code demonstrations for all modules
    - Real HEC-RAS project examples
    - Output visualizations

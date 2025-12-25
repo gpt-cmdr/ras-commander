@@ -45,7 +45,7 @@ Minimum artifacts:
 ### Mode A: Pytest + nbmake (preferred)
 
 Run a single notebook:
-- `pytest --nbmake examples/01_project_initialization.ipynb -vv`
+- `pytest --nbmake examples/101_project_initialization.ipynb -vv`
 
 Run all example notebooks:
 - `pytest --nbmake examples/*.ipynb -vv`

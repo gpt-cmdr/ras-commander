@@ -275,6 +275,46 @@ class GeometryThresholds:
     warn_xs_points: int = 450  # Warn before hitting limit
 
 
+@dataclass
+class UnsteadyThresholds:
+    """
+    Thresholds for unsteady flow validation.
+
+    Based on:
+    - HEC-RAS Unsteady Flow Modeling manual
+    - 2D Modeling best practices
+    - Numerical stability requirements
+    """
+    # Iteration thresholds (solver convergence)
+    max_iterations_warning: int = 20   # Warn if max iter exceeds this
+    max_iterations_error: int = 40     # Error if max iter exceeds this
+    avg_iterations_warning: float = 8.0  # High average indicates solver stress
+
+    # Mass balance thresholds (volume conservation)
+    volume_error_warning_pct: float = 1.0   # 1% volume error warning
+    volume_error_error_pct: float = 5.0     # 5% volume error is ERROR
+
+    # Water surface error thresholds
+    ws_error_max_ft: float = 0.1  # Max acceptable WS error per cell
+
+    # Velocity thresholds (same as steady but for peak values)
+    max_velocity_warning_fps: float = 15.0  # Warning for erosion concern
+    max_velocity_error_fps: float = 25.0    # Error for extreme velocity
+
+    # Time step adequacy thresholds
+    min_output_interval_hrs: float = 0.25   # 15 minutes minimum output interval
+    min_warmup_hrs: float = 1.0             # 1 hour minimum warmup period
+
+    # 2D mesh quality thresholds
+    min_cell_area_sqft: float = 100.0       # Minimum cell area
+    max_cell_area_sqft: float = 50000.0     # Maximum cell area
+    max_aspect_ratio: float = 10.0          # Max cell aspect ratio (length/width)
+
+    # Courant number thresholds (stability)
+    courant_max_warning: float = 2.0   # HEC-RAS typically stable < 1
+    courant_max_error: float = 5.0     # High Courant likely causes instability
+
+
 # ============================================================================
 # Default Threshold Instance
 # ============================================================================
@@ -285,6 +325,7 @@ class ValidationThresholds:
     Complete set of validation thresholds.
 
     Provides default values that can be overridden for specific projects.
+    Includes thresholds for both steady and unsteady flow validation.
     """
     mannings_n: ManningsNThresholds = field(default_factory=ManningsNThresholds)
     transitions: TransitionCoefficientThresholds = field(default_factory=TransitionCoefficientThresholds)
@@ -293,6 +334,7 @@ class ValidationThresholds:
     floodway: FloodwayThresholds = field(default_factory=FloodwayThresholds)
     profiles: ProfileThresholds = field(default_factory=ProfileThresholds)
     geometry: GeometryThresholds = field(default_factory=GeometryThresholds)
+    unsteady: UnsteadyThresholds = field(default_factory=UnsteadyThresholds)
 
 
 # Global default thresholds instance
@@ -434,6 +476,21 @@ THRESHOLD_DOCUMENTATION = {
             'velocity_max_fps': "Maximum reasonable velocity",
             'froude_subcritical_max': "Maximum Froude for subcritical flow"
         }
+    },
+    'unsteady': {
+        'description': "Unsteady flow validation thresholds",
+        'source': "HEC-RAS Unsteady Flow Manual, 2D Modeling Best Practices",
+        'fields': {
+            'max_iterations_warning': "Warning threshold for max iterations",
+            'max_iterations_error': "Error threshold for max iterations",
+            'volume_error_warning_pct': "Volume error warning percentage",
+            'volume_error_error_pct': "Volume error error percentage",
+            'ws_error_max_ft': "Maximum water surface error",
+            'max_velocity_warning_fps': "Maximum velocity warning",
+            'min_cell_area_sqft': "Minimum 2D cell area",
+            'max_cell_area_sqft': "Maximum 2D cell area",
+            'max_aspect_ratio': "Maximum cell aspect ratio"
+        }
     }
 }
 
@@ -526,5 +583,18 @@ def validate_thresholds(thresholds: ValidationThresholds) -> list:
     p = thresholds.profiles
     if p.velocity_max_fps <= p.velocity_min_fps:
         errors.append("velocity_max must be greater than velocity_min")
+
+    # Unsteady checks
+    u = thresholds.unsteady
+    if u.max_iterations_warning >= u.max_iterations_error:
+        errors.append("max_iterations_warning must be less than max_iterations_error")
+    if u.volume_error_warning_pct >= u.volume_error_error_pct:
+        errors.append("volume_error_warning_pct must be less than volume_error_error_pct")
+    if u.min_cell_area_sqft >= u.max_cell_area_sqft:
+        errors.append("min_cell_area_sqft must be less than max_cell_area_sqft")
+    if u.max_aspect_ratio <= 1.0:
+        errors.append("max_aspect_ratio must be greater than 1.0")
+    if u.ws_error_max_ft <= 0:
+        errors.append("ws_error_max_ft must be positive")
 
     return errors

@@ -40,13 +40,13 @@ RasCmdr.compute_test_mode(["01", "02"])
 ### 2. Working Examples (Jupyter Notebooks)
 
 **Core execution notebooks**:
-- `examples/05_single_plan_execution.ipynb` - Complete single plan workflow
-- `examples/06_executing_plan_sets.ipynb` - Plan sets and batch processing
-- `examples/07_sequential_plan_execution.ipynb` - Test mode execution
-- `examples/08_parallel_execution.ipynb` - Parallel execution with performance analysis
+- `examples/110_single_plan_execution.ipynb` - Complete single plan workflow
+- `examples/111_executing_plan_sets.ipynb` - Plan sets and batch processing
+- `examples/112_sequential_plan_execution.ipynb` - Test mode execution
+- `examples/113_parallel_execution.ipynb` - Parallel execution with performance analysis
 
 **Advanced workflows**:
-- `examples/23_remote_execution_psexec.ipynb` - Distributed execution
+- `examples/500_remote_execution_psexec.ipynb` - Distributed execution
 - Real-time monitoring examples (search for `stream_callback` usage)
 
 ### 3. Code Documentation (Docstrings)

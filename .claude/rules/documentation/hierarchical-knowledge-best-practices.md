@@ -324,7 +324,7 @@ Common Workflows:
 
 ```
 .claude/skills/reading-dss-boundary-data/examples/read-catalog.py (120 lines)
-# Complete workflow duplicating examples/22_dss_boundary_extraction.ipynb
+# Complete workflow duplicating examples/310_dss_boundary_extraction.ipynb
 from ras_commander import RasDss, RasExamples
 path = RasExamples.extract_project("BaldEagleCrkMulti2D")
 [... 100+ lines duplicating notebook]
@@ -335,7 +335,7 @@ path = RasExamples.extract_project("BaldEagleCrkMulti2D")
 ```
 .claude/skills/reading-dss-boundary-data/SKILL.md (322 lines)
 Working Examples:
-- examples/22_dss_boundary_extraction.ipynb - Complete workflow with:
+- examples/310_dss_boundary_extraction.ipynb - Complete workflow with:
   - Project extraction
   - Catalog reading
   - Boundary extraction

@@ -363,7 +363,7 @@ pytest tests/test_execution.py
 pytest --nbmake examples/*.ipynb
 
 # Test specific notebook
-pytest --nbmake examples/01_project_initialization.ipynb
+pytest --nbmake examples/101_project_initialization.ipynb
 ```
 
 ### Run with Coverage

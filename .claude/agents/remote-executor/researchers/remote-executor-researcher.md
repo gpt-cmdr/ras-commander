@@ -4,7 +4,7 @@ model: sonnet
 tools: [Read, Grep, Glob]
 working_directory: C:/GH/ras-commander
 description: |
-  Research docs_old/feature_dev_notes/RasRemote/ to identify critical remote
+  Research .old/docs_old/feature_dev_notes/RasRemote/ to identify critical remote
   execution content for migration to ras_agents/remote-executor-agent/.
   Search assigned directories, extract key patterns, document findings.
 
@@ -15,11 +15,11 @@ description: |
 # Remote Executor Feature Dev Notes Researcher
 
 ## Mission
-Review docs_old/feature_dev_notes/RasRemote/ and identify critical reference
+Review .old/docs_old/feature_dev_notes/RasRemote/ and identify critical reference
 content for migration to ras_agents/remote-executor-agent/.
 
 ## Assigned Directories
-- docs_old/feature_dev_notes/RasRemote/ (verified exists, 27KB REMOTE_WORKER_SETUP_GUIDE.md)
+- .old/docs_old/feature_dev_notes/RasRemote/ (verified exists, 27KB REMOTE_WORKER_SETUP_GUIDE.md)
 - feature_dev_notes/parallel run agent/ (if exists)
 - feature_dev_notes/workflow_orchestration/ (if exists)
 
@@ -106,7 +106,7 @@ ras_agents/remote-executor-agent/
 **AGENT.md should**:
 - Point to reference/ folder for complete setup guide
 - Point to `.claude/rules/hec-ras/remote.md` for critical config rules
-- Point to `examples/23_remote_execution_psexec.ipynb` for working example
+- Point to `examples/500_remote_execution_psexec.ipynb` for working example
 - Include quick reference for common patterns (minimal duplication)
 - Preserve critical warnings (session_id, Group Policy) prominently
 
@@ -120,7 +120,7 @@ ras_agents/remote-executor-agent/
 
 **Created**: [DATE]
 **Researcher**: remote-executor-researcher
-**Source**: docs_old/feature_dev_notes/RasRemote/
+**Source**: .old/docs_old/feature_dev_notes/RasRemote/
 
 ## Executive Summary
 [What was found, why migration is critical]

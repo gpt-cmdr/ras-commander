@@ -33,7 +33,7 @@ Contains:
 **THIS IS THE PRIMARY DOCUMENTATION** - use it for all detailed questions.
 
 ### 2. AORC Demonstration Notebook
-**`examples/24_aorc_precipitation.ipynb`**
+**`examples/900_aorc_precipitation.ipynb`**
 
 Live working example showing:
 - AORC data retrieval from cloud storage
@@ -43,7 +43,7 @@ Live working example showing:
 - Integration with HEC-RAS unsteady flow files
 
 ### 3. Atlas 14 Single-Project Workflow
-**`examples/103_Running_AEP_Events_from_Atlas_14.ipynb`**
+**`examples/720_atlas14_aep_events.ipynb`**
 
 Complete design storm workflow:
 - Query Atlas 14 precipitation frequency values
@@ -53,7 +53,7 @@ Complete design storm workflow:
 - Batch execution and results processing
 
 ### 4. Atlas 14 Multi-Project Batch Processing
-**`examples/104_Atlas14_AEP_Multi_Project.ipynb`**
+**`examples/722_atlas14_multi_project.ipynb`**
 
 Advanced batch processing:
 - Process multiple HEC-RAS projects simultaneously
@@ -252,7 +252,7 @@ catalog = PrecipAorc.get_storm_catalog(
 # total_depth_in, peak_intensity_in_hr, duration_hours, rank
 ```
 
-**Complete workflow**: See `examples/24_aorc_precipitation.ipynb`
+**Complete workflow**: See `examples/900_aorc_precipitation.ipynb`
 
 ### Atlas 14 Multi-Event Suite
 ```python
@@ -281,7 +281,7 @@ for aep in aep_events:
     StormGenerator.export_to_dss(hyetograph, dss_file)
 ```
 
-**Complete multi-project workflow**: See `examples/104_Atlas14_AEP_Multi_Project.ipynb`
+**Complete multi-project workflow**: See `examples/722_atlas14_multi_project.ipynb`
 
 ## Dependencies
 
@@ -311,13 +311,13 @@ pip install xarray rasterio geopandas pydsstools
 → Read `ras_commander/precip/CLAUDE.md` (329 lines, complete API reference)
 
 ### AORC Workflow Example
-→ Open `examples/24_aorc_precipitation.ipynb` (live working code)
+→ Open `examples/900_aorc_precipitation.ipynb` (live working code)
 
 ### Atlas 14 Single Project
-→ Open `examples/103_Running_AEP_Events_from_Atlas_14.ipynb`
+→ Open `examples/720_atlas14_aep_events.ipynb`
 
 ### Atlas 14 Multi-Project Batch
-→ Open `examples/104_Atlas14_AEP_Multi_Project.ipynb`
+→ Open `examples/722_atlas14_multi_project.ipynb`
 
 ### Method Signatures and Parameters
 → Read `ras_commander/precip/CLAUDE.md` "Module Organization" section
@@ -356,9 +356,9 @@ pip install xarray rasterio geopandas pydsstools
 - `ras_commander/precip/CLAUDE.md` - Complete precipitation API reference (PRIMARY SOURCE)
 - `ras_commander/CLAUDE.md` - Parent library context
 - `ras_commander/dss/AGENTS.md` - DSS file operations
-- `examples/24_aorc_precipitation.ipynb` - AORC demonstration
-- `examples/103_Running_AEP_Events_from_Atlas_14.ipynb` - Atlas 14 single project
-- `examples/104_Atlas14_AEP_Multi_Project.ipynb` - Atlas 14 multi-project
+- `examples/900_aorc_precipitation.ipynb` - AORC demonstration
+- `examples/720_atlas14_aep_events.ipynb` - Atlas 14 single project
+- `examples/722_atlas14_multi_project.ipynb` - Atlas 14 multi-project
 
 **Related Components**:
 - `ras_commander.RasUnsteady` - Unsteady flow file management

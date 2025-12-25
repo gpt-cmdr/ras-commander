@@ -375,7 +375,7 @@ compute_parallel_remote(
 
 - **Remote Subpackage**: `ras_commander/remote/AGENTS.md` - Complete remote execution documentation
 - **Worker Setup Guide**: `feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md`
-- **Example Notebook**: `examples/23_remote_execution_psexec.ipynb`
+- **Example Notebook**: `examples/500_remote_execution_psexec.ipynb`
 
 ---
 
