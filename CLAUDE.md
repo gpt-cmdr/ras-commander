@@ -211,9 +211,13 @@ See `.claude/rules/python/`:
 ### HEC-RAS Domain Knowledge
 
 See `.claude/rules/hec-ras/`:
-- **remote.md** - CRITICAL: session_id=2, Group Policy, Registry config
 - **execution.md** - RasCmdr.compute_plan(), parallel modes
-- More domain files to be added (hdf-files.md, geometry.md, etc.)
+- **remote.md** - CRITICAL: session_id=2, Group Policy, Registry config
+- **hdf-files.md** - HDF results extraction, steady vs unsteady detection
+- **geometry.md** - Fixed-width parsing, bank stations, 450-point limit
+- **dss-files.md** - DSS pathname validation, lazy-loaded Java bridge
+- **usgs.md** - USGS gauge discovery, data retrieval, boundary generation
+- **precipitation.md** - AORC historic data, Atlas 14 design storms
 
 ### Testing & Documentation
 
