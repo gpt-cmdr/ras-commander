@@ -5158,13 +5158,6 @@
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Core Sensitivity Settings</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;03&quot;</span>                           <span class="c1"># Plan to test (Plan 03 has 2D mesh)</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">NUM_WORKERS</span> <span class="o">=</span> <span class="mi">4</span>                       <span class="c1"># Maximum cores to test (will test 1 to NUM_WORKERS)</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Output Configuration</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">OUTPUTS_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;_outputs&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;700_core_sensitivity&quot;</span>  <span class="c1"># Artifacts saved here</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Create output directory</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to: </span><span class="si">{</span><span class="n">OUTPUTS_DIR</span><span class="o">.</span><span class="n">absolute</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="expected-results-and-interpretation">Expected Results and Interpretation<a class="headerlink" href="#expected-results-and-interpretation" title="Permanent link">&para;</a></h2>
 <h3 id="performance-metrics">Performance Metrics<a class="headerlink" href="#performance-metrics" title="Permanent link">&para;</a></h3>
@@ -5210,120 +5203,53 @@
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;101&quot;</span><span class="p">)</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Use Path.cwd() to get the current working directory in a Jupyter Notebook</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Step 2: Initialize the RAS Project Folder using init_ras_project (from ras_commander)</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Step 3: Initialize a DataFrame to store execution results</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Step 4: Run sensitivity analysis for Plan 03 with core counts 1-8</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="n">PLAN</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running sensitivity analysis for Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="c1"># Clear geompre files before running the plan</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="n">plan_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_path</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">(</span><span class="n">plan_path</span><span class="p">)</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="k">for</span> <span class="n">cores</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_WORKERS</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running with </span><span class="si">{</span><span class="n">cores</span><span class="si">}</span><span class="s2"> core(s)&quot;</span><span class="p">)</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>    <span class="c1"># Set core count for this plan</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>    <span class="n">RasPlan</span><span class="o">.</span><span class="n">set_num_cores</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">cores</span><span class="p">)</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="c1"># Time the execution of the plan</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>    <span class="n">execution_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>    <span class="c1"># Store the results</span>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>        <span class="s2">&quot;plan_number&quot;</span><span class="p">:</span> <span class="n">plan_number</span><span class="p">,</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>        <span class="s2">&quot;cores&quot;</span><span class="p">:</span> <span class="n">cores</span><span class="p">,</span>
-</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>        <span class="s2">&quot;execution_time&quot;</span><span class="p">:</span> <span class="n">execution_time</span>
-</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>    <span class="p">})</span>
-</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a>
-</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Execution time: </span><span class="si">{</span><span class="n">execution_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Create outputs subdirectory within project folder</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">outputs_dir</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="s2">&quot;outputs&quot;</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">outputs_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Step 2: Initialize the RAS Project Folder using init_ras_project (from ras_commander)</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># Step 3: Initialize a DataFrame to store execution results</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># Step 4: Run sensitivity analysis for Plan 03 with core counts 1-8</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="n">PLAN</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running sensitivity analysis for Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="c1"># Clear geompre files before running the plan</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="n">plan_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_path</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">(</span><span class="n">plan_path</span><span class="p">)</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="k">for</span> <span class="n">cores</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_WORKERS</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running with </span><span class="si">{</span><span class="n">cores</span><span class="si">}</span><span class="s2"> core(s)&quot;</span><span class="p">)</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>    <span class="c1"># Set core count for this plan</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="n">RasPlan</span><span class="o">.</span><span class="n">set_num_cores</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">cores</span><span class="p">)</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>    <span class="c1"># Time the execution of the plan</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>    <span class="n">execution_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>    <span class="c1"># Store the results</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>        <span class="s2">&quot;plan_number&quot;</span><span class="p">:</span> <span class="n">plan_number</span><span class="p">,</span>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>        <span class="s2">&quot;cores&quot;</span><span class="p">:</span> <span class="n">cores</span><span class="p">,</span>
+</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a>        <span class="s2">&quot;execution_time&quot;</span><span class="p">:</span> <span class="n">execution_time</span>
+</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>    <span class="p">})</span>
 </span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>
-</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Sensitivity analysis complete&quot;</span><span class="p">)</span>
+</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Execution time: </span><span class="si">{</span><span class="n">execution_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
 </span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>
-</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="c1"># Step 5: Convert results into a DataFrame</span>
-</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="n">results_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
-</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>
-</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="c1"># Optionally, save the results to a CSV file</span>
-</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="n">results_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s2">&quot;core_sensitivity_results.csv&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Sensitivity analysis complete&quot;</span><span class="p">)</span>
+</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>
+</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="c1"># Step 5: Convert results into a DataFrame</span>
+</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="n">results_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a>
+</span><span id="__span-2-53"><a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="c1"># Save results to project outputs folder</span>
+</span><span id="__span-2-54"><a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="n">results_csv_path</span> <span class="o">=</span> <span class="n">outputs_dir</span> <span class="o">/</span> <span class="s2">&quot;core_sensitivity_results.csv&quot;</span>
+</span><span id="__span-2-55"><a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="n">results_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">results_csv_path</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-2-56"><a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results saved to: </span><span class="si">{</span><span class="n">results_csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - Found zip file: d:\GitHub\ras-commander\examples\Example_Projects_6_6.zip
-2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39;
-2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - Project &#39;BaldEagleCrkMulti2D&#39; already exists. Deleting existing folder...
-2025-04-09 08:50:59 - ras_commander.RasExamples - INFO - Existing folder for project &#39;BaldEagleCrkMulti2D&#39; has been deleted.
-2025-04-09 08:51:01 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D
-2025-04-09 08:51:01 - ras_commander.RasPrj - INFO - Initializing global &#39;ras&#39; object via init_ras_project function.
-2025-04-09 08:51:01 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
-2025-04-09 08:51:01 - ras_commander.RasPrj - INFO - Project initialized. ras_object project folder: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D
-2025-04-09 08:51:01 - ras_commander.RasGeo - INFO - Clearing geometry preprocessor file for single plan: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 08:51:01 - ras_commander.RasGeo - WARNING - No geometry preprocessor file found for: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 08:51:01 - ras_commander.RasGeo - INFO - Geometry dataframe updated successfully.
-2025-04-09 08:51:01 - ras_commander.RasUtils - INFO - Constructed plan file path: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 08:51:01 - ras_commander.RasUtils - INFO - Successfully updated file: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 08:51:02 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D
-2025-04-09 08:51:02 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-04-09 08:51:02 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;D:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.prj&quot; &quot;d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03&quot;
-
-
-Running sensitivity analysis for Plan 03
-Running with 1 core(s)
-
-
-2025-04-09 08:58:06 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-04-09 08:58:06 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 424.31 seconds
-2025-04-09 08:58:06 - ras_commander.RasUtils - INFO - Constructed plan file path: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 08:58:06 - ras_commander.RasUtils - INFO - Successfully updated file: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 08:58:06 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D
-2025-04-09 08:58:06 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-04-09 08:58:06 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;D:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.prj&quot; &quot;d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03&quot;
-
-
-Execution time: 424.34 seconds
-Running with 2 core(s)
-
-
-2025-04-09 09:02:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-04-09 09:02:18 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 252.47 seconds
-2025-04-09 09:02:18 - ras_commander.RasUtils - INFO - Constructed plan file path: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 09:02:18 - ras_commander.RasUtils - INFO - Successfully updated file: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 09:02:18 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D
-2025-04-09 09:02:18 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-04-09 09:02:18 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;D:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.prj&quot; &quot;d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03&quot;
-
-
-Execution time: 252.53 seconds
-Running with 3 core(s)
-
-
-2025-04-09 09:06:39 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-04-09 09:06:39 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 260.34 seconds
-2025-04-09 09:06:39 - ras_commander.RasUtils - INFO - Constructed plan file path: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 09:06:39 - ras_commander.RasUtils - INFO - Successfully updated file: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03
-2025-04-09 09:06:39 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D
-2025-04-09 09:06:39 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-04-09 09:06:39 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;D:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.prj&quot; &quot;d:\GitHub\ras-commander\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03&quot;
-
-
-Execution time: 260.38 seconds
-Running with 4 core(s)
-
-
-2025-04-09 09:10:55 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-04-09 09:10:55 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 256.51 seconds
-
-
-Execution time: 256.55 seconds
-Sensitivity analysis complete
-</code></pre></div>
 <p>NOTES FOR REVISIONS:
 - Use HDF compute summary to show the time for each preprocesS/unsteady compute/postprocess step. 
 - First, run preprocessor and then toggle options to only run unsteady compute and postprocess. 
@@ -5365,89 +5291,35 @@ Sensitivity analysis complete
 3. <strong>Hardware specs</strong>: CPU model, RAM, OS, HEC-RAS version
 4. <strong>Model specs</strong>: Mesh cells, computation nodes, simulation duration
 5. <strong>Recommendation</strong>: Optimal core count for production runs</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Optionally, load the results from a CSV file</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">results_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">&quot;core_sensitivity_results.csv&quot;</span><span class="p">)</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Display the results dataframe for verification</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;results_df DataFrame (time is in seconds):&quot;</span><span class="p">)</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">display</span><span class="p">(</span><span class="n">results_df</span><span class="p">)</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Step 6: Calculate unit runtime (based on 1 core execution time)</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;unit_runtime&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">results_df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">&#39;plan_number&#39;</span><span class="p">)[</span><span class="s1">&#39;execution_time&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">/</span> <span class="n">x</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Get the project name from the ras object</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">project_name</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_name</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1"># Step 7: Plot a line chart for unit runtime vs. cores for each plan</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="k">for</span> <span class="n">plan</span> <span class="ow">in</span> <span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">():</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">plan_data</span> <span class="o">=</span> <span class="n">results_df</span><span class="p">[</span><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan</span><span class="p">]</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">plan_data</span><span class="p">[</span><span class="s1">&#39;cores&#39;</span><span class="p">],</span> <span class="n">plan_data</span><span class="p">[</span><span class="s1">&#39;unit_runtime&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Number of Cores&quot;</span><span class="p">)</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Unit Runtime (Relative to 1 Core)&quot;</span><span class="p">)</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">project_name</span><span class="si">}</span><span class="s2"> (HEC Example Project)</span><span class="se">\n</span><span class="s2">Core Count Sensitivity Analysis&quot;</span><span class="p">)</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;Plan Number&quot;</span><span class="p">)</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="n">plt</span><span class="o">.</span><span class="n">vlines</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">],</span> <span class="n">ymin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ymax</span><span class="o">=</span><span class="mf">1.2</span><span class="p">,</span> <span class="n">linestyles</span><span class="o">=</span><span class="s1">&#39;dotted&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">xaxis</span><span class="o">.</span><span class="n">set_major_locator</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">MultipleLocator</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Load the results from the project outputs folder</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">results_csv_path</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="s2">&quot;outputs&quot;</span> <span class="o">/</span> <span class="s2">&quot;core_sensitivity_results.csv&quot;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">results_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">results_csv_path</span><span class="p">)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Display the results dataframe for verification</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;results_df DataFrame (time is in seconds):&quot;</span><span class="p">)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">display</span><span class="p">(</span><span class="n">results_df</span><span class="p">)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># Step 6: Calculate unit runtime (based on 1 core execution time)</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;unit_runtime&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">results_df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">&#39;plan_number&#39;</span><span class="p">)[</span><span class="s1">&#39;execution_time&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">/</span> <span class="n">x</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># Get the project name from the ras object</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">project_name</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_name</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1"># Step 7: Plot a line chart for unit runtime vs. cores for each plan</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="k">for</span> <span class="n">plan</span> <span class="ow">in</span> <span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">():</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="n">plan_data</span> <span class="o">=</span> <span class="n">results_df</span><span class="p">[</span><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan</span><span class="p">]</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">plan_data</span><span class="p">[</span><span class="s1">&#39;cores&#39;</span><span class="p">],</span> <span class="n">plan_data</span><span class="p">[</span><span class="s1">&#39;unit_runtime&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Number of Cores&quot;</span><span class="p">)</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Unit Runtime (Relative to 1 Core)&quot;</span><span class="p">)</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">project_name</span><span class="si">}</span><span class="s2"> (HEC Example Project)</span><span class="se">\n</span><span class="s2">Core Count Sensitivity Analysis&quot;</span><span class="p">)</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;Plan Number&quot;</span><span class="p">)</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="n">plt</span><span class="o">.</span><span class="n">vlines</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">],</span> <span class="n">ymin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ymax</span><span class="o">=</span><span class="mf">1.2</span><span class="p">,</span> <span class="n">linestyles</span><span class="o">=</span><span class="s1">&#39;dotted&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">xaxis</span><span class="o">.</span><span class="n">set_major_locator</span><span class="p">(</span><span class="n">plt</span><span class="o">.</span><span class="n">MultipleLocator</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>results_df DataFrame (time is in seconds):
-</code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>plan_number</th>
-      <th>cores</th>
-      <th>execution_time</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>3</td>
-      <td>1</td>
-      <td>424.342272</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>3</td>
-      <td>2</td>
-      <td>252.529661</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>3</td>
-      <td>3</td>
-      <td>260.380589</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>3</td>
-      <td>4</td>
-      <td>256.551776</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<p><img alt="png" src="../700_core_sensitivity_files/700_core_sensitivity_8_2.png" /></p>
 
 
 
@@ -5470,7 +5342,7 @@ Sensitivity analysis complete
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 00:47:37 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
   </span>
 
     
@@ -5480,7 +5352,7 @@ Sensitivity analysis complete
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 00:47:37 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
   </span>
 
     

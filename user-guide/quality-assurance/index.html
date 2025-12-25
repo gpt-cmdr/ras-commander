@@ -1255,6 +1255,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#steady-flow-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steady Flow Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsteady-flow-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsteady Flow Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1265,6 +1293,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Check Categories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#steady-flow-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steady Flow Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsteady-flow-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsteady Flow Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4914,6 +4970,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#steady-flow-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steady Flow Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsteady-flow-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsteady Flow Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4924,6 +5008,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Check Categories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#steady-flow-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steady Flow Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsteady-flow-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsteady Flow Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -5131,42 +5243,71 @@ validated by a qualified engineer. This tool does not replace professional engin
 judgment or official FEMA review processes.</p>
 </div>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>RasCheck provides automated quality assurance validation for HEC-RAS 6.x <strong>steady flow</strong> models. It performs comprehensive checks based on FEMA guidelines, HEC-RAS best practices, and the original cHECk-RAS methodology.</p>
+<p>RasCheck provides automated quality assurance validation for HEC-RAS 6.x models. It performs comprehensive checks based on FEMA guidelines, HEC-RAS best practices, and the original cHECk-RAS methodology.</p>
+<p><strong>Flow Type Support</strong>: RasCheck automatically detects whether a plan is steady flow or unsteady flow and runs appropriate validation checks for each type.</p>
 <h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Automated validation</strong> of Manning's n values, transition coefficients, and cross sections</li>
-<li><strong>Structure checks</strong> for bridges, culverts, and inline weirs</li>
-<li><strong>Floodway analysis</strong> validation with state-specific surcharge limits</li>
-<li><strong>Multiple profile comparison</strong> for discharge ordering and WSE consistency</li>
+<li><strong>Auto-detection</strong> of steady vs unsteady flow from plan HDF structure</li>
+<li><strong>Steady flow validation</strong>: Manning's n values, transition coefficients, cross sections, structures, floodway analysis, profile comparison</li>
+<li><strong>Unsteady flow validation</strong>: Mass balance, computation warnings, peak values (WSE/velocity), stability/convergence (2D), mesh quality (2D)</li>
 <li><strong>HTML report generation</strong> with detailed messages and recommendations</li>
 <li><strong>Customizable thresholds</strong> for project-specific requirements</li>
 </ul>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasPrj</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheck</span><span class="p">,</span> <span class="n">RasCheckReport</span><span class="p">,</span> <span class="n">ReportMetadata</span>
+<h3 id="steady-flow-example">Steady Flow Example<a class="headerlink" href="#steady-flow-example" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheck</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Initialize project</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;C:\Projects\MyRAS&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Run all checks on a plan</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">run_all</span><span class="p">(</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">plan</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;10yr&#39;</span><span class="p">,</span> <span class="s1">&#39;50yr&#39;</span><span class="p">,</span> <span class="s1">&#39;100yr&#39;</span><span class="p">,</span> <span class="s1">&#39;Floodway&#39;</span><span class="p">],</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">floodway_profile</span><span class="o">=</span><span class="s1">&#39;Floodway&#39;</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">surcharge</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># View summary</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Errors: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">get_error_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warnings: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">get_warning_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># Generate HTML report</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="n">results</span><span class="o">.</span><span class="n">to_html</span><span class="p">(</span><span class="s2">&quot;validation_report.html&quot;</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;C:\Projects\MySteadyModel&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Run all checks on a steady flow plan</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">run_all</span><span class="p">(</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">plan</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;10yr&#39;</span><span class="p">,</span> <span class="s1">&#39;50yr&#39;</span><span class="p">,</span> <span class="s1">&#39;100yr&#39;</span><span class="p">,</span> <span class="s1">&#39;Floodway&#39;</span><span class="p">],</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">floodway_profile</span><span class="o">=</span><span class="s1">&#39;Floodway&#39;</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">surcharge</span><span class="o">=</span><span class="mf">1.0</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># View summary</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flow type: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">flow_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># FlowType.STEADY</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Errors: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">get_error_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warnings: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">get_warning_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1"># Generate HTML report</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">results</span><span class="o">.</span><span class="n">to_html</span><span class="p">(</span><span class="s2">&quot;validation_report.html&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="unsteady-flow-example">Unsteady Flow Example<a class="headerlink" href="#unsteady-flow-example" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheck</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Initialize project</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;C:\Projects\MyUnsteadyModel&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Run all checks - auto-detects unsteady flow</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">run_all</span><span class="p">(</span><span class="n">plan</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># View summary</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flow type: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">flow_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># FlowType.UNSTEADY</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Errors: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">get_error_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Check mass balance</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="k">if</span> <span class="n">results</span><span class="o">.</span><span class="n">mass_balance_summary</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mass Balance:&quot;</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">mass_balance_summary</span><span class="p">)</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Check peaks</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="k">if</span> <span class="n">results</span><span class="o">.</span><span class="n">peaks_summary</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Top 5 peak velocities:&quot;</span><span class="p">)</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">top_vels</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">peaks_summary</span><span class="o">.</span><span class="n">nlargest</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;max_velocity&#39;</span><span class="p">)</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">top_vels</span><span class="p">[[</span><span class="s1">&#39;cross_section&#39;</span><span class="p">,</span> <span class="s1">&#39;max_velocity&#39;</span><span class="p">,</span> <span class="s1">&#39;max_wse&#39;</span><span class="p">]])</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="c1"># Generate HTML report</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="n">results</span><span class="o">.</span><span class="n">to_html</span><span class="p">(</span><span class="s2">&quot;unsteady_validation_report.html&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="check-categories">Check Categories<a class="headerlink" href="#check-categories" title="Permanent link">&para;</a></h2>
-<p>RasCheck performs five main categories of validation:</p>
+<h3 id="steady-flow-checks">Steady Flow Checks<a class="headerlink" href="#steady-flow-checks" title="Permanent link">&para;</a></h3>
+<p>RasCheck performs five main categories of validation for steady flow:</p>
 <table>
 <thead>
 <tr>
@@ -5203,120 +5344,163 @@ judgment or official FEMA review processes.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="unsteady-flow-checks">Unsteady Flow Checks<a class="headerlink" href="#unsteady-flow-checks" title="Permanent link">&para;</a></h3>
+<p>RasCheck performs five main categories of validation for unsteady flow:</p>
+<table>
+<thead>
+<tr>
+<th>Check Type</th>
+<th>Description</th>
+<th>Key Validations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>NT Check</strong></td>
+<td>Manning's n and Transitions</td>
+<td>Same geometry-only checks as steady flow</td>
+</tr>
+<tr>
+<td><strong>Mass Balance</strong></td>
+<td>Volume Conservation</td>
+<td>Volume error %, inflow/outflow balance</td>
+</tr>
+<tr>
+<td><strong>Computation</strong></td>
+<td>HEC-RAS Messages</td>
+<td>Warnings, errors, convergence issues</td>
+</tr>
+<tr>
+<td><strong>Peaks</strong></td>
+<td>Maximum Value Validation</td>
+<td>Peak WSE, peak velocity thresholds (1D)</td>
+</tr>
+<tr>
+<td><strong>Stability</strong></td>
+<td>Convergence Analysis</td>
+<td>Iteration counts, WS errors (2D only)</td>
+</tr>
+<tr>
+<td><strong>Mesh Quality</strong></td>
+<td>2D Mesh Validation</td>
+<td>Cell areas, aspect ratios, face velocities (2D only)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="running-individual-checks">Running Individual Checks<a class="headerlink" href="#running-individual-checks" title="Permanent link">&para;</a></h2>
 <p>You can run specific checks independently:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheck</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Get HDF paths</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;MyProject.p01.hdf&quot;</span><span class="p">)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;MyProject.g01.hdf&quot;</span><span class="p">)</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Run NT check only (Manning&#39;s n and transitions)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">nt_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_nt</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">)</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># Run XS check (cross sections)</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">xs_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_xs</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">,</span> <span class="n">geom_hdf</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;100yr&#39;</span><span class="p">])</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Run structure check</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">struct_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_structures</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">,</span> <span class="n">geom_hdf</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;100yr&#39;</span><span class="p">])</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Run floodway check</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">fw_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_floodways</span><span class="p">(</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">plan_hdf</span><span class="p">,</span> <span class="n">geom_hdf</span><span class="p">,</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="n">base_profile</span><span class="o">=</span><span class="s1">&#39;100yr&#39;</span><span class="p">,</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">floodway_profile</span><span class="o">=</span><span class="s1">&#39;Floodway&#39;</span><span class="p">,</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">surcharge</span><span class="o">=</span><span class="mf">1.0</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="p">)</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="c1"># Run profiles check</span>
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="n">profiles_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_profiles</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;10yr&#39;</span><span class="p">,</span> <span class="s1">&#39;50yr&#39;</span><span class="p">,</span> <span class="s1">&#39;100yr&#39;</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheck</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Get HDF paths</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;MyProject.p01.hdf&quot;</span><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;MyProject.g01.hdf&quot;</span><span class="p">)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Run NT check only (Manning&#39;s n and transitions)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">nt_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_nt</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">)</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Run XS check (cross sections)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">xs_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_xs</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">,</span> <span class="n">geom_hdf</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;100yr&#39;</span><span class="p">])</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># Run structure check</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">struct_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_structures</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">,</span> <span class="n">geom_hdf</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;100yr&#39;</span><span class="p">])</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="c1"># Run floodway check</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">fw_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_floodways</span><span class="p">(</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="n">plan_hdf</span><span class="p">,</span> <span class="n">geom_hdf</span><span class="p">,</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>    <span class="n">base_profile</span><span class="o">=</span><span class="s1">&#39;100yr&#39;</span><span class="p">,</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>    <span class="n">floodway_profile</span><span class="o">=</span><span class="s1">&#39;Floodway&#39;</span><span class="p">,</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="n">surcharge</span><span class="o">=</span><span class="mf">1.0</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="p">)</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="c1"># Run profiles check</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="n">profiles_results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">check_profiles</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;10yr&#39;</span><span class="p">,</span> <span class="s1">&#39;50yr&#39;</span><span class="p">,</span> <span class="s1">&#39;100yr&#39;</span><span class="p">])</span>
 </span></code></pre></div>
 <h2 id="customizing-thresholds">Customizing Thresholds<a class="headerlink" href="#customizing-thresholds" title="Permanent link">&para;</a></h2>
 <p>RasCheck uses configurable thresholds that can be customized for project requirements:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_thresholds</span><span class="p">,</span> <span class="n">create_custom_thresholds</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Get default thresholds</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">thresholds</span> <span class="o">=</span> <span class="n">get_default_thresholds</span><span class="p">()</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># View default Manning&#39;s n ranges</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Overbank n range: </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">overbank_min</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">overbank_max</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Channel n range: </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">channel_min</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">channel_max</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Create custom thresholds</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">custom</span> <span class="o">=</span> <span class="n">create_custom_thresholds</span><span class="p">({</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="s1">&#39;mannings_n.overbank_max&#39;</span><span class="p">:</span> <span class="mf">0.150</span><span class="p">,</span>  <span class="c1"># Stricter overbank maximum</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="s1">&#39;floodway.surcharge_max_ft&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>  <span class="c1"># More restrictive surcharge (e.g., Minnesota)</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="p">})</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Run checks with custom thresholds</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">run_all</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">thresholds</span><span class="o">=</span><span class="n">custom</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_thresholds</span><span class="p">,</span> <span class="n">create_custom_thresholds</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Get default thresholds</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">thresholds</span> <span class="o">=</span> <span class="n">get_default_thresholds</span><span class="p">()</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># View default Manning&#39;s n ranges</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Overbank n range: </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">overbank_min</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">overbank_max</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Channel n range: </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">channel_min</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">thresholds</span><span class="o">.</span><span class="n">mannings_n</span><span class="o">.</span><span class="n">channel_max</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Create custom thresholds</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">custom</span> <span class="o">=</span> <span class="n">create_custom_thresholds</span><span class="p">({</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="s1">&#39;mannings_n.overbank_max&#39;</span><span class="p">:</span> <span class="mf">0.150</span><span class="p">,</span>  <span class="c1"># Stricter overbank maximum</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="s1">&#39;floodway.surcharge_max_ft&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>  <span class="c1"># More restrictive surcharge (e.g., Minnesota)</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="p">})</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Run checks with custom thresholds</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasCheck</span><span class="o">.</span><span class="n">run_all</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">thresholds</span><span class="o">=</span><span class="n">custom</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="state-specific-surcharge-limits">State-Specific Surcharge Limits<a class="headerlink" href="#state-specific-surcharge-limits" title="Permanent link">&para;</a></h3>
 <p>RasCheck includes built-in state-specific floodway surcharge limits:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_state_surcharge_limit</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Get state-specific limits</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;TX&#39;</span><span class="p">))</span>  <span class="c1"># 1.0 ft (FEMA default)</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;MN&#39;</span><span class="p">))</span>  <span class="c1"># 0.5 ft (Minnesota)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;NJ&#39;</span><span class="p">))</span>  <span class="c1"># 0.2 ft (New Jersey)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;IL&#39;</span><span class="p">))</span>  <span class="c1"># 0.1 ft (Illinois)</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;WI&#39;</span><span class="p">))</span>  <span class="c1"># 0.01 ft (Wisconsin - near zero rise)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_state_surcharge_limit</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Get state-specific limits</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;TX&#39;</span><span class="p">))</span>  <span class="c1"># 1.0 ft (FEMA default)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;MN&#39;</span><span class="p">))</span>  <span class="c1"># 0.5 ft (Minnesota)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;NJ&#39;</span><span class="p">))</span>  <span class="c1"># 0.2 ft (New Jersey)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;IL&#39;</span><span class="p">))</span>  <span class="c1"># 0.1 ft (Illinois)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">get_state_surcharge_limit</span><span class="p">(</span><span class="s1">&#39;WI&#39;</span><span class="p">))</span>  <span class="c1"># 0.01 ft (Wisconsin - near zero rise)</span>
 </span></code></pre></div>
 <h2 id="working-with-results">Working with Results<a class="headerlink" href="#working-with-results" title="Permanent link">&para;</a></h2>
 <h3 id="filtering-messages">Filtering Messages<a class="headerlink" href="#filtering-messages" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">Severity</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Filter by severity</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_severity</span><span class="p">(</span><span class="n">Severity</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">warnings</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_severity</span><span class="p">(</span><span class="n">Severity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Filter by check type</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">nt_messages</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_check_type</span><span class="p">(</span><span class="s2">&quot;NT&quot;</span><span class="p">)</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">xs_messages</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_check_type</span><span class="p">(</span><span class="s2">&quot;XS&quot;</span><span class="p">)</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Filter by station</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">station_msgs</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_station</span><span class="p">(</span><span class="s2">&quot;1500&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">Severity</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Filter by severity</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_severity</span><span class="p">(</span><span class="n">Severity</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">warnings</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_severity</span><span class="p">(</span><span class="n">Severity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Filter by check type</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">nt_messages</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_check_type</span><span class="p">(</span><span class="s2">&quot;NT&quot;</span><span class="p">)</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">xs_messages</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_check_type</span><span class="p">(</span><span class="s2">&quot;XS&quot;</span><span class="p">)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Filter by station</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">station_msgs</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">filter_by_station</span><span class="p">(</span><span class="s2">&quot;1500&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="converting-to-dataframe">Converting to DataFrame<a class="headerlink" href="#converting-to-dataframe" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Get all messages as DataFrame</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">()</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Group by check type</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">&#39;check_type&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">summary</span><span class="p">)</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Filter for specific message IDs</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">overbank_issues</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;message_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;NT_RC&#39;</span><span class="p">)]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Get all messages as DataFrame</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">()</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Group by check type</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">&#39;check_type&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">summary</span><span class="p">)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Filter for specific message IDs</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">overbank_issues</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;message_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;NT_RC&#39;</span><span class="p">)]</span>
 </span></code></pre></div>
 <h3 id="generating-reports">Generating Reports<a class="headerlink" href="#generating-reports" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheckReport</span><span class="p">,</span> <span class="n">ReportMetadata</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Create metadata for report</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">metadata</span> <span class="o">=</span> <span class="n">ReportMetadata</span><span class="p">(</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">project_name</span><span class="o">=</span><span class="s2">&quot;Sample River Study&quot;</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">plan_name</span><span class="o">=</span><span class="s2">&quot;Existing Conditions&quot;</span><span class="p">,</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">profiles_checked</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;10yr&#39;</span><span class="p">,</span> <span class="s1">&#39;50yr&#39;</span><span class="p">,</span> <span class="s1">&#39;100yr&#39;</span><span class="p">,</span> <span class="s1">&#39;Floodway&#39;</span><span class="p">],</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">base_flood_profile</span><span class="o">=</span><span class="s1">&#39;100yr&#39;</span><span class="p">,</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">floodway_profile</span><span class="o">=</span><span class="s1">&#39;Floodway&#39;</span><span class="p">,</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">surcharge_limit</span><span class="o">=</span><span class="mf">1.0</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="p">)</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Generate HTML report</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">report</span> <span class="o">=</span> <span class="n">RasCheckReport</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">report</span><span class="o">.</span><span class="n">generate_html</span><span class="p">(</span><span class="s2">&quot;detailed_report.html&quot;</span><span class="p">)</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1"># Export to CSV for further analysis</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">report</span><span class="o">.</span><span class="n">export_csv</span><span class="p">(</span><span class="s2">&quot;messages.csv&quot;</span><span class="p">)</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="c1"># Get summary statistics</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">get_summary</span><span class="p">()</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Passed: </span><span class="si">{</span><span class="n">summary</span><span class="p">[</span><span class="s1">&#39;passed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;By check type: </span><span class="si">{</span><span class="n">summary</span><span class="p">[</span><span class="s1">&#39;by_check_type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCheckReport</span><span class="p">,</span> <span class="n">ReportMetadata</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Create metadata for report</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">metadata</span> <span class="o">=</span> <span class="n">ReportMetadata</span><span class="p">(</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">project_name</span><span class="o">=</span><span class="s2">&quot;Sample River Study&quot;</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">plan_name</span><span class="o">=</span><span class="s2">&quot;Existing Conditions&quot;</span><span class="p">,</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">profiles_checked</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;10yr&#39;</span><span class="p">,</span> <span class="s1">&#39;50yr&#39;</span><span class="p">,</span> <span class="s1">&#39;100yr&#39;</span><span class="p">,</span> <span class="s1">&#39;Floodway&#39;</span><span class="p">],</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">base_flood_profile</span><span class="o">=</span><span class="s1">&#39;100yr&#39;</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">floodway_profile</span><span class="o">=</span><span class="s1">&#39;Floodway&#39;</span><span class="p">,</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">surcharge_limit</span><span class="o">=</span><span class="mf">1.0</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Generate HTML report</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">report</span> <span class="o">=</span> <span class="n">RasCheckReport</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">report</span><span class="o">.</span><span class="n">generate_html</span><span class="p">(</span><span class="s2">&quot;detailed_report.html&quot;</span><span class="p">)</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Export to CSV for further analysis</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">report</span><span class="o">.</span><span class="n">export_csv</span><span class="p">(</span><span class="s2">&quot;messages.csv&quot;</span><span class="p">)</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="c1"># Get summary statistics</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">get_summary</span><span class="p">()</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Passed: </span><span class="si">{</span><span class="n">summary</span><span class="p">[</span><span class="s1">&#39;passed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;By check type: </span><span class="si">{</span><span class="n">summary</span><span class="p">[</span><span class="s1">&#39;by_check_type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="message-id-format">Message ID Format<a class="headerlink" href="#message-id-format" title="Permanent link">&para;</a></h2>
 <p>RasCheck uses standardized message IDs following the original cHECk-RAS format:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>{CHECK_TYPE}_{CATEGORY}_{NUMBER}{SUFFIX}
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>{CHECK_TYPE}_{CATEGORY}_{NUMBER}{SUFFIX}
 </span></code></pre></div>
 <p><strong>Components:</strong></p>
 <table>
@@ -5414,10 +5598,14 @@ judgment or official FEMA review processes.</p>
 </tbody>
 </table>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
-<div class="admonition note">
-<p class="admonition-title">Steady Flow Only</p>
-<p>RasCheck currently supports <strong>steady flow</strong> models only. Unsteady flow validation
-is not implemented.</p>
+<div class="admonition info">
+<p class="admonition-title">Both Steady and Unsteady Flow Supported</p>
+<p>RasCheck now supports both <strong>steady flow</strong> and <strong>unsteady flow</strong> models. Flow type
+is automatically detected and appropriate validation checks are run.</p>
+<p><strong>Steady Flow Checks</strong>: Manning's n, cross sections, structures, floodway, profiles</p>
+<p><strong>Unsteady Flow Checks</strong>: Manning's n, mass balance, computation warnings, peak values,
+stability/convergence, 2D mesh quality</p>
+<p><strong>Not Applicable to Unsteady</strong>: Floodway analysis (steady-state concept)</p>
 </div>
 <ul>
 <li>Only validates HEC-RAS 6.x models with HDF output</li>
@@ -5465,7 +5653,7 @@ is not implemented.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 18, 2025 12:51:48 UTC">December 18, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 12:36:29 UTC">December 25, 2025</span>
   </span>
 
     
