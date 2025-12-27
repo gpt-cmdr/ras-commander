@@ -60,8 +60,10 @@ setup(
         'shapely',
         'rasterstats',
         'rtree',
+        'fsspec>=2023.0.0',  # Required for Atlas14Grid remote HTTP access
         'pywin32>=227; sys_platform == "win32"',    # Required for RasControl COM interface (Windows only)
         'psutil>=5.6.6',   # Required for RasControl process management
+        'hms-commander>=0.1.0',  # Atlas 14 hyetograph generation with proven HMS equivalence
     ],
     extras_require={
         # Remote execution backends (PsExec worker has no extra deps)

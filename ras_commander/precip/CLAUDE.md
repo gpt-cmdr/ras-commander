@@ -8,7 +8,7 @@ The precip subpackage automates precipitation data retrieval, processing, and fo
 
 ## Module Organization
 
-The precip subpackage contains 3 modules organized by data source:
+The precip subpackage contains 5 modules organized by data source:
 
 ### PrecipAorc.py (AORC Data Integration)
 
@@ -76,16 +76,146 @@ The precip subpackage contains 3 modules organized by data source:
 - Automatic region detection by lat/lon
 - Hawaii and Puerto Rico supported
 
+### Atlas14Storm (HMS-Equivalent - from hms-commander)
+
+**Atlas14Storm** - HMS-equivalent hyetograph generation (imported from hms-commander):
+
+**Key Distinction from StormGenerator**:
+- **Atlas14Storm**: Matches HEC-HMS "Specified Pattern" at **10^-6 precision**
+- **StormGenerator**: Uses Alternating Block Method, **NOT HMS-equivalent**
+
+**Choose Atlas14Storm** for:
+- HMS-equivalent workflows
+- Official NOAA Atlas 14 temporal distributions
+- Workflows requiring proven depth conservation
+
+**Choose StormGenerator** for:
+- Flexible peak positioning (0-100%)
+- Non-HMS workflows
+- Custom DDF data sources
+
+**Usage**:
+```python
+from ras_commander.precip import Atlas14Storm, ATLAS14_AVAILABLE
+
+if ATLAS14_AVAILABLE:
+    # Generate HMS-equivalent hyetograph
+    hyeto = Atlas14Storm.generate_hyetograph(
+        total_depth_inches=17.9,
+        state="tx",
+        region=3,
+        aep_percent=1.0,
+        quartile="All Cases"
+    )
+    print(f"Total depth: {hyeto.sum():.6f} inches")  # Exact: 17.900000
+```
+
+**Quartile Options**:
+- "First Quartile", "Second Quartile", "Third Quartile", "Fourth Quartile", "All Cases"
+
+**Dependency**: Requires `hms-commander>=0.1.0` (installed automatically with ras-commander)
+
+### Atlas14Grid.py (Gridded PFE Access)
+
+**Atlas14Grid** - Remote access to NOAA Atlas 14 CONUS grids:
+
+**Key Feature**: Downloads only data within project extent via HTTP byte-range requests (99.9% data reduction compared to full state downloads).
+
+**Data Access**:
+- `get_pfe_for_bounds()` - Get precipitation frequency for a bounding box
+- `get_pfe_from_project()` - Get PFE using HEC-RAS project extent
+- `get_point_pfe()` - Get PFE for a single point (quick lookup)
+
+**Integration with HEC-RAS**:
+- Automatic extent extraction from 2D flow areas or project bounds
+- `extent_source` parameter: "2d_flow_area" (default) or "project_extent"
+- Buffer percentage for extent expansion
+
+**Data Specifications**:
+- **Coverage**: CONUS (24°N-50°N, -125°W to -66°W)
+- **Resolution**: ~0.0083° (~830m)
+- **Durations**: 1, 2, 3, 6, 12, 24, 48, 72, 96, 168 hours
+- **Return Periods**: 2, 5, 10, 25, 50, 100, 200, 500, 1000 years
+- **Units**: inches (raw values × 0.01 scale factor)
+
+**Usage**:
+```python
+from ras_commander.precip import Atlas14Grid
+
+# Get PFE for HEC-RAS project
+pfe = Atlas14Grid.get_pfe_from_project(
+    geom_hdf="MyProject.g01.hdf",
+    extent_source="2d_flow_area",
+    durations=[6, 12, 24],
+    return_periods=[10, 50, 100]
+)
+
+# Access data
+print(f"100-yr 24-hr max: {pfe['pfe_24hr'][:,:,5].max():.2f} inches")
+```
+
+### Atlas14Variance.py (Variance Analysis)
+
+**Atlas14Variance** - Spatial variance analysis for precipitation:
+
+**Purpose**: Assess whether uniform rainfall assumptions are appropriate for rain-on-grid modeling.
+
+**Analysis Methods**:
+- `analyze()` - Full variance analysis across durations/return periods
+- `analyze_quick()` - Quick check for single representative event
+- `calculate_stats()` - Calculate min/max/mean/range for array
+- `is_uniform_rainfall_appropriate()` - Decision support
+
+**Report Generation**:
+- `generate_report()` - Export CSV and plots for engineering review
+
+**Variance Metrics**:
+- `variance_denominator='min'`: range_pct = (max - min) / min × 100
+- `variance_denominator='max'`: range_pct = (max - min) / max × 100
+- `variance_denominator='mean'`: range_pct = (max - min) / mean × 100
+
+**Usage**:
+```python
+from ras_commander.precip import Atlas14Variance
+
+# Full variance analysis
+results = Atlas14Variance.analyze(
+    geom_hdf="MyProject.g01.hdf",
+    durations=[6, 12, 24],
+    return_periods=[10, 25, 50, 100]
+)
+
+# Check if uniform rainfall is appropriate
+ok, msg = Atlas14Variance.is_uniform_rainfall_appropriate(results, threshold_pct=10.0)
+print(msg)
+```
+
+**Guidance**:
+- Range percentage > 10% suggests spatially variable rainfall should be considered
+- Larger model domains typically show higher variance
+- 100-year, 24-hour is a common representative event for quick checks
+
 ### __init__.py (Package Interface)
 
 **Public API**:
 ```python
 from ras_commander.precip import PrecipAorc, StormGenerator
 
+# Gridded PFE access and variance analysis
+from ras_commander.precip import Atlas14Grid, Atlas14Variance
+
+# HMS-equivalent Atlas 14 (from hms-commander)
+from ras_commander.precip import Atlas14Storm, Atlas14Config, ATLAS14_AVAILABLE
+
 # Convenience imports
 from ras_commander.precip import (
     PrecipAorc,
-    StormGenerator
+    StormGenerator,
+    Atlas14Grid,       # Remote access to NOAA Atlas 14 CONUS grids
+    Atlas14Variance,   # Spatial variance analysis for precipitation
+    Atlas14Storm,      # HMS-equivalent temporal distributions
+    Atlas14Config,     # Configuration dataclass
+    ATLAS14_AVAILABLE  # Boolean flag for availability check
 )
 ```
 
@@ -328,17 +458,27 @@ pip install xarray rasterio geopandas pydsstools
 ### NOAA Atlas 14
 - **Provider**: NOAA National Weather Service
 - **Access**: NOAA HDSC Precipitation Frequency Data Server (PFDS)
-- **Format**: JSON API response
+- **Format**: JSON API response (point), NetCDF (gridded CONUS)
 - **Coverage**: CONUS, Hawaii, Puerto Rico
 - **Documentation**: https://hdsc.nws.noaa.gov/pfds/
+
+### Atlas 14 CONUS NetCDF (for Atlas14Grid)
+- **Provider**: NOAA HDSC
+- **Access**: HTTP with byte-range requests (remote spatial subsetting)
+- **URL**: `https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/NOAA_Atlas_14_CONUS.nc`
+- **Format**: HDF5-based NetCDF-4 (320 MB total, chunked for efficient access)
+- **Coverage**: CONUS only (24°N-50°N, -125°W to -66°W)
+- **Resolution**: ~0.0083° (~830m)
+- **Data**: 10 durations (1-168 hr), 9 return periods (2-1000 yr)
 
 ## Example Notebooks
 
 Complete workflow demonstrations:
 
-- `examples/24_aorc_precipitation.ipynb` - AORC retrieval and processing
-- `examples/103_Running_AEP_Events_from_Atlas_14.ipynb` - Single-project Atlas 14 workflow
-- `examples/104_Atlas14_AEP_Multi_Project.ipynb` - Batch processing multiple projects
+- `examples/900_aorc_precipitation.ipynb` - AORC retrieval and processing
+- `examples/720_atlas14_aep_events.ipynb` - Single-project Atlas 14 workflow
+- `examples/722_atlas14_multi_project.ipynb` - Batch processing multiple projects
+- `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis for uniform rainfall assessment
 
 ## Common Use Cases
 
@@ -363,6 +503,22 @@ Complete workflow demonstrations:
 4. Batch run HEC-RAS models
 5. Generate flood frequency curves
 
+### Spatial Variance Analysis
+1. Load HEC-RAS geometry HDF file
+2. Extract 2D flow area extent
+3. Download Atlas 14 grid data for extent
+4. Calculate variance statistics (min/max/mean/range)
+5. Determine if uniform rainfall is appropriate
+
+```python
+from ras_commander.precip import Atlas14Variance
+
+# Quick check for 100-yr 24-hr
+stats = Atlas14Variance.analyze_quick("MyProject.g01.hdf")
+if stats['range_pct'] > 10:
+    print("Consider spatially variable rainfall")
+```
+
 ## Performance
 
 ### AORC Data Retrieval
@@ -374,6 +530,103 @@ Complete workflow demonstrations:
 - **Speed**: < 5 seconds per query (API access)
 - **Rate Limiting**: NOAA PFDS has request limits (respect usage guidelines)
 - **Caching**: Automatic caching of API responses
+
+### Atlas 14 Grid Access
+- **Speed**: ~5-15 seconds for typical project extent (HTTP range requests)
+- **Data Transfer**: ~250 KB for 1°×1° extent (vs 50-100 MB for full state ZIPs)
+- **Efficiency**: 99.9% reduction compared to downloading full state datasets
+- **Caching**: Coordinate arrays cached in memory after first load
+
+## Atlas 14 Grid Workflow
+
+Complete workflow for spatial variance analysis:
+
+### 1. Check If Analysis is Needed
+
+Quick variance check to see if spatial analysis is warranted:
+
+```python
+from ras_commander.precip import Atlas14Variance
+
+# Quick check for representative event (100-yr, 24-hr)
+stats = Atlas14Variance.analyze_quick(
+    geom_hdf="MyProject.g01.hdf",
+    duration=24,
+    return_period=100
+)
+
+print(f"Range: {stats['range_pct']:.1f}%")
+
+if stats['range_pct'] > 10:
+    print("⚠️ High variance - consider spatially variable rainfall")
+else:
+    print("✓ Uniform rainfall likely appropriate")
+```
+
+### 2. Full Variance Analysis
+
+If quick check shows variance, run comprehensive analysis:
+
+```python
+from ras_commander.precip import Atlas14Variance
+
+# Analyze across multiple events
+results = Atlas14Variance.analyze(
+    geom_hdf="MyProject.g01.hdf",
+    durations=[6, 12, 24, 48],
+    return_periods=[10, 25, 50, 100, 500],
+    extent_source="2d_flow_area",  # Use 2D flow area extents
+    variance_denominator='min',
+    output_dir="Atlas14_Variance_Report"
+)
+
+# Review results
+print(results[['duration_hr', 'return_period_yr', 'min_inches', 'max_inches', 'range_pct']])
+```
+
+### 3. Generate Report
+
+Export results with visualizations:
+
+```python
+# Generate comprehensive report
+report_dir = Atlas14Variance.generate_report(
+    results_df=results,
+    output_dir="Atlas14_Variance_Report",
+    project_name="My Project",
+    include_plots=True
+)
+
+# Files created:
+# - variance_statistics.csv (detailed results)
+# - variance_summary.csv (summary by mesh area)
+# - variance_by_duration.png (plot)
+# - variance_heatmap.png (plot)
+```
+
+### 4. Access Raw Grid Data
+
+For custom analysis or export to HEC-RAS:
+
+```python
+from ras_commander.precip import Atlas14Grid
+
+# Get grid data for project extent
+pfe = Atlas14Grid.get_pfe_from_project(
+    geom_hdf="MyProject.g01.hdf",
+    extent_source="2d_flow_area",
+    durations=[24],
+    return_periods=[100]
+)
+
+# Access data arrays
+lat = pfe['lat']
+lon = pfe['lon']
+data_100yr_24hr = pfe['pfe_24hr'][:, :, 5]  # 100-yr is index 5
+
+# Export to GeoTIFF or NetCDF for HEC-RAS import
+# (future feature)
+```
 
 ## See Also
 

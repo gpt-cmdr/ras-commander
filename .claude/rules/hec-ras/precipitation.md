@@ -10,33 +10,57 @@
 
 ## Overview
 
-ras-commander supports two precipitation data sources:
+ras-commander supports multiple precipitation data sources and hyetograph generation methods:
 
 1. **AORC** (Analysis of Record for Calibration) - Historic gridded precipitation
 2. **Atlas 14** - NOAA design storm frequencies (AEP events)
+3. **Atlas14Storm** (from hms-commander) - HMS-equivalent hyetograph generation
 
 ## Precipitation Classes
 
 | Class | Purpose |
 |-------|---------|
-| `RasPrecipAorc` | AORC data download and processing |
-| `RasPrecipAtlas14` | Atlas 14 point frequency data |
-| `RasPrecipUtils` | Precipitation utilities |
+| `PrecipAorc` | AORC data download and processing |
+| `StormGenerator` | Alternating Block Method (flexible peak, NOT HMS-equivalent) |
+| `Atlas14Storm` | HMS-equivalent temporal distributions (10^-6 precision) |
+| `Atlas14Grid` | Remote access to NOAA Atlas 14 CONUS grids (HTTP range requests) |
+| `Atlas14Variance` | Spatial variance analysis for uniform rainfall assessment |
+
+## HMS-Equivalent Hyetograph Generation
+
+**Atlas14Storm** (imported from hms-commander) provides HMS-equivalent hyetograph generation:
+
+```python
+from ras_commander.precip import Atlas14Storm, ATLAS14_AVAILABLE
+
+if ATLAS14_AVAILABLE:
+    hyeto = Atlas14Storm.generate_hyetograph(
+        total_depth_inches=17.9,
+        state="tx",
+        region=3,
+        aep_percent=1.0,
+        quartile="All Cases"
+    )
+    # Depth conservation: exact at 10^-6 precision
+```
+
+**Choose Atlas14Storm** for HMS-equivalent workflows.
+**Choose StormGenerator** for flexible peak positioning (0-100%).
 
 ## AORC Workflow (Historic Data)
 
 ```python
-from ras_commander.precip import RasPrecipAorc
+from ras_commander.precip import PrecipAorc
 
 # Download AORC data for model domain
-aorc_data = RasPrecipAorc.download_for_domain(
+aorc_data = PrecipAorc.download_for_domain(
     domain_polygon,
     start_date="2020-01-01",
     end_date="2020-01-10"
 )
 
 # Generate HEC-RAS precipitation input
-RasPrecipAorc.generate_ras_precip(
+PrecipAorc.generate_ras_precip(
     aorc_data,
     output_dss="precipitation.dss"
 )
@@ -50,20 +74,14 @@ RasPrecipAorc.generate_ras_precip(
 ## Atlas 14 Workflow (Design Storms)
 
 ```python
-from ras_commander.precip import RasPrecipAtlas14
+from ras_commander.precip import StormGenerator
 
-# Get design storm for location
-design_storm = RasPrecipAtlas14.get_point_frequency(
-    latitude=40.0,
-    longitude=-86.0,
-    duration="24H",
-    aep=0.01  # 1% AEP (100-year)
-)
-
-# Generate HEC-RAS precipitation
-RasPrecipAtlas14.generate_ras_precip(
-    design_storm,
-    output_dss="atlas14.dss"
+# Download DDF data and generate hyetograph
+gen = StormGenerator.download_from_coordinates(40.0, -86.0)
+hyeto = gen.generate_hyetograph(
+    ari=100,  # 100-year event
+    duration_hours=24,
+    position_percent=50  # Peak at 50%
 )
 ```
 
@@ -83,17 +101,42 @@ RasPrecipAtlas14.generate_ras_precip(
 | 0.01 | 100-year | 1% annual chance |
 | 0.002 | 500-year | 0.2% annual chance |
 
+## Atlas 14 Grid Workflow (Spatial Variance Analysis)
+
+**New in v0.87.6**: Assess whether uniform rainfall is appropriate for rain-on-grid modeling:
+
+```python
+from ras_commander.precip import Atlas14Variance
+
+# Quick variance check (100-yr, 24-hr)
+stats = Atlas14Variance.analyze_quick("MyProject.g01.hdf")
+
+if stats['range_pct'] > 10:
+    print("⚠️ Consider spatially variable rainfall")
+else:
+    print("✓ Uniform rainfall appropriate")
+```
+
+**Key Feature**: Downloads only data within project extent via HTTP byte-range requests (99.9% data reduction vs full state datasets).
+
+**Extent Options**:
+- `extent_source="2d_flow_area"` - Use 2D flow area perimeters (recommended)
+- `extent_source="project_extent"` - Use full project bounds
+
+**Performance**: ~5-15 seconds for typical extent, ~250 KB data transfer.
+
 ## Internet Dependency
 
-Both AORC and Atlas 14 require internet access:
+AORC and Atlas 14 require internet access:
 - AORC downloads from AWS/NOAA servers
 - Atlas 14 queries NOAA Point Precipitation Frequency
+- Atlas14Grid accesses NOAA CONUS NetCDF via HTTP
 
 Handle offline scenarios:
 
 ```python
 try:
-    data = RasPrecipAtlas14.get_point_frequency(lat, lon, duration, aep)
+    data = StormGenerator.download_from_coordinates(lat, lon)
 except requests.ConnectionError:
     logger.warning("NOAA service unavailable")
     # Use cached data or fail gracefully
@@ -106,8 +149,9 @@ except requests.ConnectionError:
   - `examples/900_aorc_precipitation.ipynb` - AORC workflow
   - `examples/720_atlas14_aep_events.ipynb` - Atlas 14 workflow
   - `examples/722_atlas14_multi_project.ipynb` - Batch processing
+  - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis
 - **Skill**: `.claude/skills/analyzing-aorc-precipitation/SKILL.md`
 
 ---
 
-**Key Takeaway**: AORC for historic events, Atlas 14 for design storms. Both require internet access. AEP = 1/return period.
+**Key Takeaway**: Use Atlas14Storm for HMS-equivalent hyetographs, StormGenerator for flexible peak positioning, Atlas14Grid for spatial variance analysis, AORC for historic events. Range % > 10% suggests spatially variable rainfall. AEP = 1/return period.
