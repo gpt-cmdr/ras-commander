@@ -181,6 +181,7 @@ nav:
       - Atlas 14 AEP Events: notebooks/720_atlas14_aep_events.ipynb
       - Atlas 14 Caching Demo: notebooks/721_atlas14_caching_demo.ipynb
       - Atlas 14 Multi-Project: notebooks/722_atlas14_multi_project.ipynb
+      - Atlas 14 Spatial Variance: notebooks/725_atlas14_spatial_variance.ipynb
     - Quality Assurance (800s):
       - RasCheck Validation: notebooks/800_quality_assurance_rascheck.ipynb
       - Advanced Structure Validation: notebooks/801_advanced_structure_validation.ipynb
