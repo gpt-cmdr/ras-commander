@@ -58,6 +58,14 @@ from .Atlas14Grid import Atlas14Grid
 
 logger = get_logger(__name__)
 
+# Check for pygeohydro availability (HUC12 boundary download)
+try:
+    from pygeohydro import WBD
+    PYGEOHYDRO_AVAILABLE = True
+except ImportError:
+    PYGEOHYDRO_AVAILABLE = False
+    WBD = None
+
 
 class Atlas14Variance:
     """
@@ -157,12 +165,80 @@ class Atlas14Variance:
 
     @staticmethod
     @log_call
+    def _get_huc12_boundary(
+        center_lat: float,
+        center_lon: float
+    ) -> 'gpd.GeoDataFrame':
+        """
+        Download HUC12 watershed boundary containing a point.
+
+        Args:
+            center_lat: Latitude of center point (decimal degrees)
+            center_lon: Longitude of center point (decimal degrees)
+
+        Returns:
+            GeoDataFrame with HUC12 boundary polygon in WGS84
+
+        Raises:
+            ImportError: If pynhd not installed
+            ValueError: If no HUC12 found at location
+        """
+        if not PYGEOHYDRO_AVAILABLE:
+            raise ImportError(
+                "HUC12 boundary download requires 'pygeohydro'. "
+                "Install with: pip install pygeohydro"
+            )
+
+        from shapely.geometry import Point
+
+        logger.info(
+            f"Downloading HUC12 boundary for point ({center_lat:.4f}, {center_lon:.4f})"
+        )
+
+        try:
+            # Create point geometry
+            point = Point(center_lon, center_lat)
+
+            # Query HUC12 using pygeohydro WBD
+            wbd = WBD("huc12")
+
+            # Get HUC12 containing the point
+            huc_gdf = wbd.bygeom(point, geo_crs="EPSG:4326")
+
+            if huc_gdf.empty:
+                raise ValueError(
+                    f"No HUC12 found at location ({center_lat}, {center_lon}). "
+                    "Point may be outside CONUS or in water body."
+                )
+
+            # Ensure WGS84
+            if huc_gdf.crs != "EPSG:4326":
+                huc_gdf = huc_gdf.to_crs("EPSG:4326")
+
+            # Get HUC12 code and name
+            huc12_code = huc_gdf.iloc[0].get('huc12', 'Unknown')
+            huc12_name = huc_gdf.iloc[0].get('name', 'Unknown')
+
+            logger.info(f"Found HUC12: {huc12_code} ({huc12_name})")
+
+            # Add readable name column
+            huc_gdf['mesh_name'] = f"HUC12-{huc12_code}"
+
+            return huc_gdf
+
+        except Exception as e:
+            logger.error(f"Failed to download HUC12 boundary: {e}")
+            raise
+
+    @staticmethod
+    @log_call
     def analyze(
         geom_hdf: Union[str, Path],
         durations: Optional[List[int]] = None,
         return_periods: Optional[List[int]] = None,
         extent_source: Literal["2d_flow_area", "project_extent"] = "2d_flow_area",
         mesh_area_names: Optional[List[str]] = None,
+        use_huc12_boundary: bool = False,
         buffer_percent: float = 10.0,
         variance_denominator: Literal['min', 'max', 'mean'] = 'min',
         output_dir: Optional[Union[str, Path]] = None,
@@ -186,6 +262,10 @@ class Atlas14Variance:
                 - "project_extent": Analyze within full project extent
             mesh_area_names: Optional list of specific 2D area names to analyze.
                             If None, analyzes all 2D areas.
+            use_huc12_boundary: If True, uses HUC12 watershed boundary instead
+                               of 2D flow area. Finds HUC12 containing the center
+                               point of the 2D flow area(s) and downloads from NHDPlus.
+                               Requires pynhd package. (default: False)
             buffer_percent: Buffer around extent for data download (default 10%)
             variance_denominator: Denominator for range percentage ('min', 'max', 'mean')
             output_dir: Optional directory for saving results (CSV, plots)
@@ -276,6 +356,36 @@ class Atlas14Variance:
         # Ensure WGS84 for analysis
         if mesh_areas.crs is not None and mesh_areas.crs != "EPSG:4326":
             mesh_areas = mesh_areas.to_crs("EPSG:4326")
+
+        # Replace with HUC12 boundary if requested
+        if use_huc12_boundary:
+            logger.info("HUC12 boundary requested - finding watershed from 2D flow area center")
+
+            if mesh_areas.empty:
+                raise ValueError(
+                    "Cannot use HUC12 boundary: no 2D flow areas found. "
+                    "Set use_huc12_boundary=False or ensure project has 2D areas."
+                )
+
+            # Get center of first mesh area (or union if multiple)
+            if len(mesh_areas) > 1:
+                logger.info(f"Multiple mesh areas found ({len(mesh_areas)}), using union center")
+                union_geom = mesh_areas.union_all()
+                center = union_geom.centroid
+            else:
+                center = mesh_areas.iloc[0].geometry.centroid
+
+            center_lon = center.x
+            center_lat = center.y
+
+            logger.info(f"2D flow area center: ({center_lat:.4f}, {center_lon:.4f})")
+
+            # Download HUC12 boundary
+            huc12_gdf = Atlas14Variance._get_huc12_boundary(center_lat, center_lon)
+
+            # Replace mesh_areas with HUC12 boundary
+            mesh_areas = huc12_gdf
+            logger.info(f"Using HUC12 boundary: {huc12_gdf.iloc[0]['mesh_name']}")
 
         # Build coordinate arrays for masking
         lat = pfe_data['lat']
@@ -378,7 +488,8 @@ class Atlas14Variance:
     def analyze_quick(
         geom_hdf: Union[str, Path],
         duration: int = 24,
-        return_period: int = 100
+        return_period: int = 100,
+        use_huc12_boundary: bool = False
     ) -> Dict[str, float]:
         """
         Quick variance check for a single duration/return period.
@@ -390,6 +501,8 @@ class Atlas14Variance:
             geom_hdf: Path to HEC-RAS geometry HDF file
             duration: Storm duration in hours (default 24)
             return_period: Return period in years (default 100)
+            use_huc12_boundary: If True, uses HUC12 watershed boundary instead
+                               of 2D flow area (default: False)
 
         Returns:
             Dictionary with min, max, mean, range, range_pct values
@@ -398,11 +511,18 @@ class Atlas14Variance:
             >>> stats = Atlas14Variance.analyze_quick("MyProject.g01.hdf")
             >>> if stats['range_pct'] > 10:
             ...     print("Consider spatially variable rainfall")
+            >>>
+            >>> # Or use HUC12 watershed
+            >>> stats = Atlas14Variance.analyze_quick(
+            ...     "MyProject.g01.hdf",
+            ...     use_huc12_boundary=True
+            ... )
         """
         df = Atlas14Variance.analyze(
             geom_hdf=geom_hdf,
             durations=[duration],
-            return_periods=[return_period]
+            return_periods=[return_period],
+            use_huc12_boundary=use_huc12_boundary
         )
 
         if df.empty:

@@ -252,6 +252,30 @@ Controls which geometry is used for extent extraction:
   - Includes 1D and storage areas
   - Larger extent = more data downloaded
 
+### use_huc12_boundary
+
+Controls whether to use HUC12 watershed instead of 2D flow area:
+
+- **`False`** (default)
+  - Uses 2D flow area perimeters or project extent
+  - Fastest analysis (smaller area)
+
+- **`True`**
+  - Finds HUC12 watershed containing center of 2D flow area
+  - Downloads HUC12 boundary from NHDPlus
+  - Analyzes full contributing watershed
+  - Typically higher variance (larger extent)
+  - Requires `pygeohydro` package
+
+**Example**:
+```python
+# Analyze using HUC12 watershed
+results = Atlas14Variance.analyze(
+    geom_hdf="MyProject.g01.hdf",
+    use_huc12_boundary=True
+)
+```
+
 ### variance_denominator
 
 Controls how range percentage is calculated:

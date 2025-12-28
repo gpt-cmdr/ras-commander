@@ -195,6 +195,22 @@ print(msg)
 - Larger model domains typically show higher variance
 - 100-year, 24-hour is a common representative event for quick checks
 
+**HUC12 Watershed Option** (use_huc12_boundary=True):
+- Analyzes within full HUC12 watershed instead of 2D flow area
+- Finds HUC12 containing center of 2D flow area
+- Downloads from NHDPlus using pygeohydro
+- Typically shows higher variance than 2D area (larger extent)
+- Useful for watershed-scale precipitation assessment
+
+**Example**:
+```python
+# Analyze HUC12 watershed instead of 2D flow area
+results = Atlas14Variance.analyze(
+    geom_hdf="MyProject.g01.hdf",
+    use_huc12_boundary=True  # Uses HUC12 watershed
+)
+```
+
 ### __init__.py (Package Interface)
 
 **Public API**:

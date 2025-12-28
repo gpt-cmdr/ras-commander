@@ -79,10 +79,16 @@ Example (Atlas14Grid - Spatial PFE):
 Example (Atlas14Variance - Assess Uniformity):
     >>> from ras_commander.precip import Atlas14Variance
     >>>
-    >>> # Check if uniform rainfall is appropriate
+    >>> # Check if uniform rainfall is appropriate (using 2D flow area)
     >>> results = Atlas14Variance.analyze("MyProject.g01.hdf")
     >>> ok, msg = Atlas14Variance.is_uniform_rainfall_appropriate(results)
     >>> print(msg)
+    >>>
+    >>> # Or analyze using HUC12 watershed boundary
+    >>> results = Atlas14Variance.analyze(
+    ...     "MyProject.g01.hdf",
+    ...     use_huc12_boundary=True
+    ... )
 
 Example (AORC - Historical Data):
     >>> from ras_commander import HdfProject
@@ -113,6 +119,7 @@ Dependencies:
     - fsspec>=2023.0.0 (for Atlas14Grid remote access)
     - h5py>=3.0.0 (for Atlas14Grid)
     - geopandas>=0.12.0 (for Atlas14Variance)
+    - pygeohydro (optional, for HUC12 watershed boundaries in Atlas14Variance)
 """
 
 from .PrecipAorc import PrecipAorc

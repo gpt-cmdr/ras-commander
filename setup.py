@@ -83,6 +83,8 @@ setup(
         ],
         # GUI automation and screenshot capture (Windows only)
         'gui': ['Pillow>=9.0'],
+        # Precipitation enhancements
+        'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
     })
 
 """
