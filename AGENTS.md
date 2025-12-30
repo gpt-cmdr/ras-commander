@@ -94,5 +94,74 @@
 - Update documentation when APIs change; keep diffs focused and consistent.
 
 **HEC Commander (companion repo)**
-- Apply this `AGENTS.md` standard there as well. Remove outdated custom GPT files. Republishing as standardized CLB agents can follow separately. This repo’s `AGENTS.md` is self-sufficient for Ras Commander.
+- Apply this `AGENTS.md` standard there as well. Remove outdated custom GPT files. Republishing as standardized CLB agents can follow separately. This repo's `AGENTS.md` is self-sufficient for Ras Commander.
 
+---
+
+## Claude Code Agent Framework
+
+This repository follows **Claude Code's** hierarchical knowledge structure for agents, rules, and skills. Non-Claude agents should import the corresponding `CLAUDE.md` files for detailed context.
+
+### Directory Structure
+
+```
+ras-commander/
+├── CLAUDE.md                    # Root-level strategic guidance (IMPORT THIS)
+├── AGENTS.md                    # This file - agent-agnostic guidance
+├── .claude/                     # Claude Code configuration
+│   ├── agents/                  # Specialist subagent definitions
+│   │   └── {name}/SUBAGENT.md   # Subagent configuration files
+│   ├── skills/                  # Workflow skill definitions
+│   │   └── {name}/SKILL.md      # Skill configuration files
+│   ├── rules/                   # Auto-loaded topic-specific rules
+│   │   ├── python/              # Python coding patterns
+│   │   ├── hec-ras/             # HEC-RAS domain knowledge
+│   │   ├── testing/             # Testing approaches
+│   │   ├── validation/          # Validation framework
+│   │   └── documentation/       # Documentation standards
+│   ├── commands/                # Custom slash commands
+│   └── outputs/                 # Subagent output files
+├── ras_commander/               # Library code
+│   ├── CLAUDE.md                # Library-level guidance
+│   ├── AGENTS.md                # Library API reference
+│   └── {subpackage}/            # Subpackages (usgs, hdf, etc.)
+│       ├── CLAUDE.md            # Subpackage workflows
+│       └── AGENTS.md            # Subpackage-specific guidance
+├── examples/                    # Example notebooks
+│   └── AGENTS.md                # Notebook index for agents
+└── feature_dev_notes/           # Experimental features
+    └── CLAUDE.md                # Feature development guidance
+```
+
+### Key Paths for Non-Claude Agents
+
+**Strategic Context** (read first):
+- `CLAUDE.md` - Root strategic guidance, platform context, development philosophy
+
+**Coding Rules** (topic-specific):
+- `.claude/rules/python/` - Static classes, decorators, path handling, naming
+- `.claude/rules/hec-ras/` - Execution, geometry, HDF, DSS, remote, USGS
+- `.claude/rules/testing/` - TDD approach, environment management
+- `.claude/rules/validation/` - Validation framework patterns
+
+**Specialist Agents** (task-specific):
+- `.claude/agents/` - Subagent definitions for HDF analysis, geometry parsing, etc.
+
+**Workflow Skills** (domain workflows):
+- `.claude/skills/` - Skills for DSS reading, USGS integration, precipitation analysis
+
+**Library API**:
+- `ras_commander/CLAUDE.md` - Library-level workflows
+- `ras_commander/AGENTS.md` - API patterns and class reference
+- `ras_commander/{subpackage}/CLAUDE.md` - Subpackage-specific workflows
+
+### Pattern for CLAUDE.md Files
+
+Each `CLAUDE.md` file contains domain-specific guidance that should be imported by agents:
+
+- **Root CLAUDE.md**: Platform context (Windows), LLM Forward philosophy, orchestrator pattern
+- **Library CLAUDE.md**: Core execution classes, multiple projects workflow
+- **Subpackage CLAUDE.md**: Subpackage-specific workflows (USGS, HDF, DSS, etc.)
+- **Feature CLAUDE.md**: Experimental feature development context
+
+**Non-Claude agents**: When you encounter a `CLAUDE.md` file, import it to get the detailed context for that directory. Each `AGENTS.md` in a subdirectory will reference its corresponding `CLAUDE.md`.

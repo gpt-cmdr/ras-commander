@@ -243,6 +243,7 @@ See `.claude/rules/validation/`:
 - `HdfResultsPlan` - Extract results from HDF files
 - `RasGeometry` - Parse geometry files (cross sections, storage, structures)
 - `RasUsgsCore` - USGS gauge data integration
+- `RasEbfeModels` - eBFE/BLE model organization (fixes broken FEMA delivery format)
 - See **static-classes.md** for complete list and patterns
 
 **Instantiated classes** (exceptions to static pattern):
@@ -380,6 +381,7 @@ ras-commander/
 │   ├── remote/             # Remote execution workers
 │   │   └── AGENTS.md       # Remote-specific guidance
 │   ├── usgs/               # USGS gauge integration
+│   ├── terrain/            # Terrain HDF creation (NEW)
 │   └── ...
 ├── .claude/                # Claude Code framework
 │   ├── rules/              # Auto-loaded topic rules
@@ -481,6 +483,28 @@ if not report.is_valid:
 # Validate terrain layer
 if not RasMap.is_valid_layer(terrain_file):
     raise ValueError("Invalid terrain layer")
+```
+
+**Working with eBFE/BLE models** (fixes broken FEMA delivery format):
+```python
+from ras_commander.ebfe_models import RasEbfeModels
+
+# eBFE models are fundamentally broken - separated folders, wrong paths, GUI error popups
+# RasEbfeModels.organize_*() applies 3 critical fixes automatically:
+#   1. Moves Output/ HDF files INTO project folders (access pre-run results)
+#   2. Moves Terrain/ INTO project folders (.rasmap references work)
+#   3. Corrects ALL paths to relative references (no GUI popups)
+
+# Organize Upper Guadalupe (55 GB, 4 cascaded models)
+organized = RasEbfeModels.organize_upper_guadalupe(source, validate_dss=True)
+
+# Result: Runnable HEC-RAS model - tested in GUI, opens without errors
+init_ras_project(organized / "RAS Model/UPGU1", "6.5")
+# ✓ No "DSS path needs correction" dialog
+# ✓ Terrain loads correctly
+# ✓ 41 GB pre-run results accessible
+
+# See docs/ebfe_models.md for complete documentation
 ```
 
 ### Common Pitfalls

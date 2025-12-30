@@ -86,9 +86,11 @@ ras-commander_logo.png
 nul
 examples/example_projects.csv
 
-# Ignore remote worker credentials
+# Ignore remote worker credentials and API keys
 examples/RemoteWorkers.json
 RemoteWorkers.json
+examples/usgs_api_key.txt
+usgs_api_key.txt
 /troubleshooting
 
 # Ignore ai_tools old docs, LLM knowledge bases, and docker build artifacts

@@ -85,6 +85,17 @@ RASMapper Data Integration
 - Terrain, soil, and land cover HDF paths
 - Profile line paths
 
+Model Discovery & Download (NEW - Experimental)
+- Unified catalog for discovering HEC-RAS models from 25+ documented public sources
+- Federal sources: USGS ScienceBase (implemented), FEMA BLE (planned)
+- State sources: Virginia VFRIS, Wisconsin DNR, North Carolina FRIS (planned)
+- County sources: Henrico VA, Harris County TX M3 (planned)
+- Note: USACE official examples already available via `RasExamples` class
+- Advanced filtering: location, type, tags, spatial extent, file size, dates
+- Automatic download and extraction with validation
+- See `examples/600_discovering_hecras_models_from_usgs.ipynb` for usage
+- Requires: `pip install sciencebasepy` for USGS access
+
 Manning's n Coefficient Management
 - Base Manning's n table extraction and modification
 - Regional overrides for spatially-varied roughness
