@@ -20,7 +20,28 @@ Classes:
 Key Plan File Methods:
     - list_breach_structures_plan(): List breach structures in plan file
     - read_breach_block(): Parse breach parameters from plan
-    - update_breach_block(): Modify breach parameters in plan
+    - update_breach_block(): Modify breach parameters in plan (supports DLBreach Method 9)
+    - create_breach_block(): Create new breach block for a structure
+    - set_breach_geom(): Update individual breach geometry parameters
+
+DLBreach (Method 9) Support:
+    Physics-based erosion modeling using soil properties. Supported parameters:
+    - dlb_methods: 7-value list of method flags
+    - dlb_soil_type: Soil type index (0-7)
+    - dlb_soil_properties: 7-value list of erosion parameters
+    - dlb_core_soil_type, dlb_cover_option, dlb_cover_soil_properties
+    - dlb_breach_direction: Breach direction flag
+
+    Advanced parameters:
+    - user_growth_flag: User-defined growth ratio flag (-1 or 1)
+    - user_growth_ratio: Growth ratio value
+    - mass_wasting_option: Mass wasting model (0-2)
+
+BreachBlock Getter Methods:
+    - get_dlb_methods(), get_dlb_soil_type(), get_dlb_soil_properties()
+    - get_dlb_core_soil_type(), get_dlb_cover_option(), get_dlb_cover_soil_properties()
+    - get_dlb_breach_direction(), get_breach_method()
+    - get_user_growth_flag(), get_user_growth_ratio(), get_mass_wasting_option()
 
 For HDF Results Extraction, see HdfResultsBreach:
     - HdfResultsBreach.get_breach_timeseries(): Extract time series
@@ -56,7 +77,10 @@ class RasBreach:
     Key Functionality:
     - List breach structures defined in plan files
     - Read breach parameters (method, geometry, timing, etc.)
+    - Create new breach blocks for structures
     - Modify breach parameters (activation, progression, geometry)
+    - Support DLBreach (Method 9) physics-based erosion modeling
+    - Support advanced parameters (user growth ratio, mass wasting)
     - Create backups before modification
     - Validate CRLF line endings for HEC-RAS compatibility
 
@@ -72,8 +96,24 @@ class RasBreach:
         >>> params = RasBreach.read_breach_block("02", "Dam")
         >>> print(f"Active: {params['is_active']}")
         >>>
-        >>> # Modify parameters
+        >>> # Create new breach block
+        >>> RasBreach.create_breach_block("02", "New_Dam", river="Big River", reach="Upper")
+        >>>
+        >>> # Modify parameters (traditional methods)
         >>> RasBreach.update_breach_block("02", "Dam", method=1)
+        >>>
+        >>> # Configure DLBreach (Method 9) with soil properties
+        >>> RasBreach.update_breach_block("02", "Dam",
+        ...                               method=9,
+        ...                               dlb_methods=[9, 0, 0, 0, 0, 0, 0],
+        ...                               dlb_soil_type=3,  # Clay
+        ...                               dlb_soil_properties=[0.3, 0, 0, 0, 0, 0, 0])
+        >>>
+        >>> # Set advanced parameters
+        >>> RasBreach.update_breach_block("02", "Dam",
+        ...                               user_growth_flag=-1,
+        ...                               user_growth_ratio=1.0,
+        ...                               mass_wasting_option=0)
         >>>
         >>> # For HDF results extraction, use HdfResultsBreach:
         >>> timeseries = HdfResultsBreach.get_breach_timeseries("02", "Dam")
@@ -162,6 +202,148 @@ class RasBreach:
                 'values': self.values.copy(),
                 'table_rows': self.table_rows.copy(),
             }
+
+        # ======================================================================
+        # DLBreach Getter Methods (Method 9)
+        # ======================================================================
+
+        def get_dlb_methods(self) -> List[str]:
+            """
+            Parse DLBreach Methods from plan file.
+
+            Returns
+            -------
+            List[str]
+                List of 7 DLBreach method values, or empty list if not set.
+            """
+            raw = self.values.get("DLBreach Methods", "")
+            if not raw:
+                return []
+            return [x.strip() for x in raw.split(",")]
+
+        def get_dlb_soil_type(self) -> str:
+            """
+            Get DLBreach SoilType.
+
+            Returns
+            -------
+            str
+                Soil type value (0-7), or empty string if not set.
+            """
+            return self.values.get("DLBreach SoilType", "").strip()
+
+        def get_dlb_soil_properties(self) -> List[str]:
+            """
+            Parse DLBreach Soil Properties from plan file.
+
+            Returns
+            -------
+            List[str]
+                List of 7 soil property values, or empty list if not set.
+            """
+            raw = self.values.get("DLBreach Soil Properties", "")
+            if not raw:
+                return []
+            return [x.strip() for x in raw.split(",")]
+
+        def get_dlb_core_soil_type(self) -> str:
+            """
+            Get DLBreach Core SoilType.
+
+            Returns
+            -------
+            str
+                Core soil type value, or empty string if not set.
+            """
+            return self.values.get("DLBreach Core SoilType", "").strip()
+
+        def get_dlb_cover_option(self) -> str:
+            """
+            Get DLBreach Cover Option.
+
+            Returns
+            -------
+            str
+                Cover option value, or empty string if not set.
+            """
+            return self.values.get("DLBreach Cover Option", "").strip()
+
+        def get_dlb_cover_soil_properties(self) -> List[str]:
+            """
+            Parse DLBreach Cover Soil Properties from plan file.
+
+            Returns
+            -------
+            List[str]
+                List of 7 cover soil property values, or empty list if not set.
+            """
+            raw = self.values.get("DLBreach Cover Soil Properties", "")
+            if not raw:
+                return []
+            return [x.strip() for x in raw.split(",")]
+
+        def get_dlb_breach_direction(self) -> str:
+            """
+            Get DLBreach Breach Direction.
+
+            Returns
+            -------
+            str
+                Breach direction value, or empty string if not set.
+            """
+            return self.values.get("DLBreach Breach Direction", "").strip()
+
+        # ======================================================================
+        # Advanced Parameter Getter Methods
+        # ======================================================================
+
+        def get_user_growth_flag(self) -> Optional[int]:
+            """
+            Get Breach Use User Defined Growth Ratio flag.
+
+            Returns
+            -------
+            Optional[int]
+                Growth flag value (-1 or 1), or None if not set.
+            """
+            raw = self.values.get("Breach Use User Defined Growth Ratio", "").strip()
+            return int(raw) if raw else None
+
+        def get_user_growth_ratio(self) -> Optional[float]:
+            """
+            Get Breach User Defined Growth Ratio value.
+
+            Returns
+            -------
+            Optional[float]
+                Growth ratio value, or None if not set.
+            """
+            raw = self.values.get("Breach User Defined Growth Ratio", "").strip()
+            return float(raw) if raw else None
+
+        def get_mass_wasting_option(self) -> Optional[int]:
+            """
+            Get Mass Wasting Options value.
+
+            Returns
+            -------
+            Optional[int]
+                Mass wasting option (0-2), or None if not set.
+            """
+            raw = self.values.get("Mass Wasting Options", "").strip()
+            return int(raw) if raw else None
+
+        def get_breach_method(self) -> Optional[int]:
+            """
+            Get Breach Method value.
+
+            Returns
+            -------
+            Optional[int]
+                Breach method (0-9), or None if not set.
+            """
+            raw = self.values.get("Breach Method", "").strip()
+            return int(raw) if raw else None
 
         def to_lines(self) -> List[str]:
             """Serialize breach block back to plan file format."""
@@ -368,6 +550,18 @@ class RasBreach:
         downcutting_pairs: List[Tuple[float, float]] = None,
         widening_pairs: List[Tuple[float, float]] = None,
         calculator_data: List = None,
+        # DLBreach parameters (Method 9)
+        dlb_methods: Optional[List] = None,
+        dlb_soil_type: Optional[Union[str, int]] = None,
+        dlb_soil_properties: Optional[List] = None,
+        dlb_core_soil_type: Optional[Union[str, int]] = None,
+        dlb_cover_option: Optional[Union[str, int]] = None,
+        dlb_cover_soil_properties: Optional[List] = None,
+        dlb_breach_direction: Optional[Union[str, int]] = None,
+        # Advanced parameters
+        user_growth_flag: Optional[int] = None,
+        user_growth_ratio: Optional[float] = None,
+        mass_wasting_option: Optional[int] = None,
         create_backup: bool = True,
         ras_object=None
     ) -> Dict:
@@ -385,7 +579,7 @@ class RasBreach:
         is_active : bool, optional
             Set breach activation status (True/False)
         method : int, optional
-            Breach calculation method (0-7)
+            Breach calculation method (0-9, where 9 is DLBreach)
         geom_values : List, optional
             Breach geometry values: [center_station, final_width, final_elev,
             left_slope, right_slope, weir_coef, formation_time]
@@ -401,6 +595,26 @@ class RasBreach:
             Time/width pairs for physical breach widening
         calculator_data : List, optional
             Breach calculator heuristic inputs
+        dlb_methods : List, optional
+            DLBreach Methods (7 values, first is primary method 0-9)
+        dlb_soil_type : Union[str, int], optional
+            DLBreach SoilType (0-7)
+        dlb_soil_properties : List, optional
+            DLBreach Soil Properties (7 erosion parameter values)
+        dlb_core_soil_type : Union[str, int], optional
+            DLBreach Core SoilType
+        dlb_cover_option : Union[str, int], optional
+            DLBreach Cover Option
+        dlb_cover_soil_properties : List, optional
+            DLBreach Cover Soil Properties (7 values)
+        dlb_breach_direction : Union[str, int], optional
+            DLBreach Breach Direction
+        user_growth_flag : int, optional
+            User-defined growth flag (-1 or 1)
+        user_growth_ratio : float, optional
+            User-defined growth ratio (dimensionless)
+        mass_wasting_option : int, optional
+            Mass wasting model option (0-2)
         create_backup : bool, default True
             Create backup file before modification
         ras_object : RasPrj, optional
@@ -426,10 +640,23 @@ class RasBreach:
         ...                               progression_mode=1,
         ...                               progression_pairs=progression)
 
+        >>> # Configure DLBreach (Method 9) with soil properties
+        >>> RasBreach.update_breach_block("02", "Dam",
+        ...                               method=9,
+        ...                               dlb_methods=[9, 0, 0, 0, 0, 0, 0],
+        ...                               dlb_soil_type=3,  # Clay
+        ...                               dlb_soil_properties=[0.3, 0, 0, 0, 0, 0, 0])
+
+        >>> # Set advanced parameters
+        >>> RasBreach.update_breach_block("02", "Dam",
+        ...                               user_growth_flag=-1,
+        ...                               user_growth_ratio=1.0,
+        ...                               mass_wasting_option=0)
+
         Raises
         ------
         ValueError
-            If structure not found in plan file
+            If structure not found in plan file, or if dlb_methods doesn't have 7 values
         RuntimeError
             If CRLF line endings not preserved (HEC-RAS incompatibility)
 
@@ -444,6 +671,7 @@ class RasBreach:
         -----
         Based on TNTech Dam Breach Dashboard breach_io.py implementation.
         Adapted to ras-commander conventions with plan-number support.
+        DLBreach (Method 9) provides physics-based erosion modeling using soil properties.
         """
         from .RasUtils import RasUtils
 
@@ -500,6 +728,46 @@ class RasBreach:
                 RasBreach._set_table_pairs(block, "Simplified Physical Breach Widening", widening_pairs)
             if calculator_data is not None:
                 block.values["Breach Calculator Data"] = RasBreach._format_csv(calculator_data)
+
+            # Apply DLBreach parameters (Method 9)
+            if dlb_methods is not None:
+                if len(dlb_methods) != 7:
+                    raise ValueError(f"dlb_methods must have exactly 7 values, got {len(dlb_methods)}")
+                RasBreach._ensure_key_in_order(block, "DLBreach Methods")
+                block.values["DLBreach Methods"] = RasBreach._format_csv(dlb_methods)
+            if dlb_soil_type is not None:
+                RasBreach._ensure_key_in_order(block, "DLBreach SoilType")
+                block.values["DLBreach SoilType"] = RasBreach._format_scalar(dlb_soil_type)
+            if dlb_soil_properties is not None:
+                if len(dlb_soil_properties) != 7:
+                    raise ValueError(f"dlb_soil_properties must have exactly 7 values, got {len(dlb_soil_properties)}")
+                RasBreach._ensure_key_in_order(block, "DLBreach Soil Properties")
+                block.values["DLBreach Soil Properties"] = RasBreach._format_csv(dlb_soil_properties)
+            if dlb_core_soil_type is not None:
+                RasBreach._ensure_key_in_order(block, "DLBreach Core SoilType")
+                block.values["DLBreach Core SoilType"] = RasBreach._format_scalar(dlb_core_soil_type)
+            if dlb_cover_option is not None:
+                RasBreach._ensure_key_in_order(block, "DLBreach Cover Option")
+                block.values["DLBreach Cover Option"] = RasBreach._format_scalar(dlb_cover_option)
+            if dlb_cover_soil_properties is not None:
+                if len(dlb_cover_soil_properties) != 7:
+                    raise ValueError(f"dlb_cover_soil_properties must have exactly 7 values, got {len(dlb_cover_soil_properties)}")
+                RasBreach._ensure_key_in_order(block, "DLBreach Cover Soil Properties")
+                block.values["DLBreach Cover Soil Properties"] = RasBreach._format_csv(dlb_cover_soil_properties)
+            if dlb_breach_direction is not None:
+                RasBreach._ensure_key_in_order(block, "DLBreach Breach Direction")
+                block.values["DLBreach Breach Direction"] = RasBreach._format_scalar(dlb_breach_direction)
+
+            # Apply advanced parameters
+            if user_growth_flag is not None:
+                RasBreach._ensure_key_in_order(block, "Breach Use User Defined Growth Ratio")
+                block.values["Breach Use User Defined Growth Ratio"] = str(int(user_growth_flag))
+            if user_growth_ratio is not None:
+                RasBreach._ensure_key_in_order(block, "Breach User Defined Growth Ratio")
+                block.values["Breach User Defined Growth Ratio"] = str(user_growth_ratio)
+            if mass_wasting_option is not None:
+                RasBreach._ensure_key_in_order(block, "Mass Wasting Options")
+                block.values["Mass Wasting Options"] = RasBreach._format_scalar(mass_wasting_option)
 
             # Replace block lines in file
             new_block_lines = block.to_lines()
@@ -691,6 +959,208 @@ class RasBreach:
             logger.error(f"Error setting breach geometry: {e}")
             raise
 
+    @staticmethod
+    @log_call
+    def create_breach_block(
+        plan_input: Union[str, int, Path],
+        structure_name: str,
+        *,
+        river: str = "",
+        reach: str = "",
+        station: str = "",
+        is_active: bool = True,
+        create_backup: bool = True,
+        ras_object=None
+    ) -> Dict:
+        """
+        Create a new breach block for a structure in the plan file.
+
+        Creates a minimal breach block with default parameters that can be
+        customized using update_breach_block() after creation.
+
+        **CRITICAL**: Creates backup before modification. Uses CRLF line endings for HEC-RAS compatibility.
+
+        Parameters
+        ----------
+        plan_input : Union[str, int, Path]
+            Plan number (e.g., "02", 2) or path to HEC-RAS plan file
+        structure_name : str
+            Name of breach structure (must match structure name in geometry file)
+        river : str, optional
+            River name (default: empty string)
+        reach : str, optional
+            Reach name (default: empty string)
+        station : str, optional
+            River station (default: empty string)
+        is_active : bool, default True
+            Initial breach activation status
+        create_backup : bool, default True
+            Create backup file before modification
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows
+
+        Returns
+        -------
+        Dict
+            Created breach block as dictionary with default parameters
+
+        Examples
+        --------
+        >>> # Create new breach block
+        >>> RasBreach.create_breach_block("02", "New_Dam")
+        >>>
+        >>> # Create with location info
+        >>> RasBreach.create_breach_block("02", "Dam",
+        ...                               river="Big River",
+        ...                               reach="Upper",
+        ...                               station="5000")
+        >>>
+        >>> # Create and then configure
+        >>> RasBreach.create_breach_block("02", "Dam")
+        >>> RasBreach.update_breach_block("02", "Dam",
+        ...                               method=9,
+        ...                               dlb_methods=[9, 0, 0, 0, 0, 0, 0],
+        ...                               dlb_soil_type=3)
+
+        Raises
+        ------
+        ValueError
+            If structure already has a breach block in the plan file
+        RuntimeError
+            If CRLF line endings not preserved (HEC-RAS incompatibility)
+
+        Warnings
+        --------
+        - Modifies plan file in-place
+        - Backup created in same directory with timestamp
+        - HEC-RAS must be closed before modification
+        - Validates CRLF line endings after write
+
+        Notes
+        -----
+        Creates a minimal breach block with:
+        - Method 0 (user-specified breach geometry)
+        - Empty geometry values (must be set via update_breach_block or set_breach_geom)
+        - Empty start conditions
+        - Empty breach progression
+
+        The block is inserted after the last existing breach block in the file,
+        or at the end if no breach blocks exist.
+        """
+        from .RasUtils import RasUtils
+
+        ras_obj = ras_object or ras
+
+        try:
+            # Handle plan number or path input
+            if isinstance(plan_input, Path):
+                plan_path = plan_input
+            elif isinstance(plan_input, str):
+                # Check if it's a file path
+                test_path = Path(plan_input)
+                if test_path.exists():
+                    plan_path = test_path
+                else:
+                    # It's a plan number
+                    ras_obj.check_initialized()
+                    plan_number = RasUtils.normalize_ras_number(plan_input)
+                    plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
+            elif isinstance(plan_input, int):
+                # It's a plan number
+                ras_obj.check_initialized()
+                plan_number = RasUtils.normalize_ras_number(plan_input)
+                plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
+            else:
+                raise ValueError(f"Invalid plan_input type: {type(plan_input)}")
+
+            if not plan_path.exists():
+                raise FileNotFoundError(f"Plan file not found: {plan_path}")
+
+            # Read all lines and parse existing breach blocks
+            lines = plan_path.read_text().splitlines()
+            blocks = RasBreach._parse_breach_blocks(lines)
+
+            # Check if structure already has a breach block
+            existing = RasBreach._find_block_by_structure(blocks, structure_name)
+            if existing is not None:
+                raise ValueError(
+                    f"Structure '{structure_name}' already has a breach block in {plan_path.name}. "
+                    "Use update_breach_block() to modify existing blocks."
+                )
+
+            # Build Breach Loc line
+            river_padded = river.rjust(16) if river else "".rjust(16)
+            reach_padded = reach.rjust(16) if reach else "".rjust(16)
+            station_padded = station.rjust(8) if station else "".rjust(8)
+            active_flag = "True" if is_active else "False"
+            structure_padded = structure_name.ljust(16)
+            breach_loc = f"{river_padded},{reach_padded},{station_padded},{active_flag},{structure_padded}"
+
+            # Build minimal breach block lines (Method 0 default)
+            new_block_lines = [
+                f"Breach Loc={breach_loc}",
+                "Breach Method= 0",
+                "Breach Geom= 0, 0, 0, 0, 0, True, 2.6, 0, 1, 0",
+                "Breach Start= 0,",
+                "Breach Progression= 0",
+                "Breach Calculator Data= 0, 0, 0, 0, 0, 0, 0",
+                "",  # Trailing blank line
+            ]
+
+            # Find insertion point (after last existing breach block)
+            if blocks:
+                # Insert after the last breach block
+                last_block = blocks[-1]
+                insert_idx = last_block.end_index
+            else:
+                # No existing breach blocks - find a good location
+                # Look for common plan file sections to insert before
+                insert_idx = len(lines)  # Default to end of file
+                for i, line in enumerate(lines):
+                    # Insert before these typical end-of-file sections
+                    if line.startswith("IC Time=") or line.startswith("Met Data") or line.startswith("Sim Duration"):
+                        insert_idx = i
+                        break
+
+            # Insert the new block
+            for i, block_line in enumerate(new_block_lines):
+                lines.insert(insert_idx + i, block_line)
+
+            # Create backup
+            if create_backup:
+                RasBreach._create_backup(plan_path)
+
+            # Write with CRLF line endings (CRITICAL for HEC-RAS)
+            if lines and not lines[-1].endswith("\n"):
+                output = "\r\n".join(lines) + "\r\n"
+            else:
+                output = "\r\n".join(lines)
+
+            # Use open() with newline='' to preserve CRLF
+            with open(plan_path, 'w', encoding='utf-8', newline='') as f:
+                f.write(output)
+
+            # Validate CRLF preservation
+            if not RasBreach._validate_crlf(plan_path):
+                raise RuntimeError(
+                    f"CRITICAL: Failed to preserve CRLF line endings in {plan_path}. "
+                    "HEC-RAS will not be able to open this project."
+                )
+
+            logger.info(f"Created breach block for {structure_name} in {plan_path.name}")
+
+            # Re-read to return the created block
+            updated_blocks = RasBreach._read_breach_blocks_internal(plan_path)
+            created_block = RasBreach._find_block_by_structure(updated_blocks, structure_name)
+            if created_block is None:
+                raise RuntimeError(f"Failed to verify created breach block for {structure_name}")
+
+            return created_block.to_dict()
+
+        except Exception as e:
+            logger.error(f"Error creating breach block: {e}")
+            raise
+
     # ==========================================================================
     # INTERNAL HELPER METHODS
     # ==========================================================================
@@ -868,6 +1338,64 @@ class RasBreach:
             else:
                 formatted.append(str(item))
         return ",".join(formatted)
+
+    @staticmethod
+    def _format_scalar(value: Union[str, float, int, bool, None]) -> str:
+        """
+        Format scalar value for plan file.
+
+        HEC-RAS plan files typically have a leading space before scalar values
+        for alignment (e.g., "DLBreach SoilType= 3").
+
+        Parameters
+        ----------
+        value : Union[str, float, int, bool, None]
+            Value to format
+
+        Returns
+        -------
+        str
+            Formatted value with leading space for alignment
+        """
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return " True" if value else " False"
+        if isinstance(value, (int, float)):
+            return f" {value}"
+        return f" {value}"
+
+    @staticmethod
+    def _ensure_key_in_order(block: "RasBreach.BreachBlock", key: str) -> None:
+        """
+        Ensure a key exists in the order list for serialization.
+
+        When adding new parameters (like DLBreach) that don't exist in the
+        original file, we need to add them to the order list so they get
+        serialized in to_lines().
+
+        Parameters
+        ----------
+        block : RasBreach.BreachBlock
+            Breach block to modify
+        key : str
+            Key to add to order list if not present
+        """
+        # Check if key already exists in order
+        for kind, existing_key in block.order:
+            if kind == "line" and existing_key == key:
+                return  # Already exists
+
+        # Find insertion point - before trailing blanks
+        insert_idx = len(block.order)
+        for i in range(len(block.order) - 1, -1, -1):
+            kind, _ = block.order[i]
+            if kind == "blank":
+                insert_idx = i
+            else:
+                break
+
+        block.order.insert(insert_idx, ("line", key))
 
     @staticmethod
     def _create_backup(plan_path: Path) -> None:
