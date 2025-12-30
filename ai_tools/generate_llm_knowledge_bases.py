@@ -79,15 +79,17 @@ import json
 # Folders to exclude from knowledge base generation
 OMIT_FOLDERS = [
     # Version control and CI/CD
-    ".git", ".github", "working",".claude",
+    ".git", ".github", "working", ".claude",
     # Python artifacts
     "__pycache__", ".pytest_cache", ".conda",
     # Build outputs
     "build", "dist", "ras_commander.egg-info",
     # Virtual environments (all variants)
     "venv", ".venv", "env", ".env", "conda-env",
+    ".venv-py312", ".venv-py311", ".venv-py310",
+    "site-packages", "Lib", "Scripts", "Include",
     # IDE and editor folders
-    ".vscode", ".idea", ".claude", ".cursor",
+    ".vscode", ".idea", ".cursor",
     # Logs and temporary files
     "logs", "log_folder", "temp", "tmp",
     # Deprecated/internal tooling
@@ -103,16 +105,41 @@ OMIT_FOLDERS = [
     "workspace", "projects", "my_projects", "test_projects",
     # Specific project folders to exclude
     "Bald Eagle Creek", "misc",
-    # Development and research folders (exclude from knowledge bases)
+    # Development and research folders
     "feature_dev_notes", "research",
+    # Old/deprecated content
+    ".old", "old", "deprecated",
+    # Cache directories
+    "cache", "usgs3dep",
+    # Model/data folders
+    "m3_models", "gauge_data", "hyetographs",
+    # Terrain and GIS output folders
+    "Terrain", "Output", "python_gis_plan_06",
+    # Pip package metadata
+    "dist-info",
 ]
 OMIT_FILES = [
+    # Compiled Python
     ".pyc", ".pyo", ".pyd", ".dll", ".so", ".dylib", ".exe",
+    # Scripts and logs
     ".bat", ".sh", ".log", ".tmp", ".bak", ".swp",
-    ".DS_Store", "Thumbs.db", "example_projects.zip",
-    "Example_Projects_6_6.zip", "example_projects.ipynb", "11_Using_RasExamples.ipynb", 
+    # OS files
+    ".DS_Store", "Thumbs.db",
+    # Large example data
+    "example_projects.zip", "Example_Projects_6_6.zip", "Example_Projects_6_5.zip",
+    "example_projects.ipynb", "11_Using_RasExamples.ipynb",
     "future_dev_roadmap.ipynb", "structures_attributes.csv", "example_projects.csv",
-    ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".avi", ".mov", ".mp3", ".wav", ".m4a", ".m4v", ".ogg", ".webm"
+    # Images
+    ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    # Video/audio
+    ".mp4", ".avi", ".mov", ".mp3", ".wav", ".m4a", ".m4v", ".ogg", ".webm",
+    # Binary/archive files
+    ".zip", ".tar", ".gz", ".7z", ".rar",
+    ".sqlite", ".db", ".sqlite3",
+    ".hdf", ".hdf5", ".h5", ".nc",
+    ".tif", ".tiff", ".geotiff",
+    ".shp", ".shx", ".dbf", ".prj", ".cpg",
+    ".gpkg", ".gdb", ".dss",
 ]
 SUMMARY_OUTPUT_DIR = "llm_knowledge_bases"
 SCRIPT_NAME = Path(__file__).name
