@@ -3657,95 +3657,109 @@ class RasCheck:
 
         # =====================================================================
         # Starting WSE Method Validation Checks
+        # NOTE: Only applicable to unsteady flow plans. For steady flow,
+        # boundary conditions are per-profile and stored in the .f## file,
+        # not in the HDF. The "starting WSE" concept applies to unsteady
+        # flow initial conditions at simulation start time.
         # =====================================================================
         from ..hdf.HdfPlan import HdfPlan
 
-        try:
-            # Get starting WSE method from plan HDF
-            wse_method_info = HdfPlan.get_starting_wse_method(plan_hdf)
-            method = wse_method_info.get('method', 'Unknown')
+        # Detect flow type - only run starting WSE checks for unsteady plans
+        flow_type = RasCheck._detect_flow_type(plan_hdf)
 
-            # PF_IC_01: Known WSE validation
-            if 'Known' in method:
-                known_wse = wse_method_info.get('wse', None)
-                if known_wse is not None:
-                    # Check if known WSE is reasonable (not too high or too low)
-                    if known_wse < -100 or known_wse > 10000:
-                        msg = CheckMessage(
-                            message_id="PF_IC_01",
-                            severity=Severity.WARNING,
-                            check_type="PROFILES",
-                            message=f"Known WSE ({known_wse:.2f} ft) may be unreasonable for starting water surface",
-                            help_text="Known WSE should be within realistic elevation range for the project area.",
-                            value=known_wse
-                        )
-                        messages.append(msg)
+        # Skip starting WSE validation for steady flow plans
+        if flow_type == FlowType.STEADY:
+            logger.debug("Skipping starting WSE validation for steady flow plan (BCs are per-profile in .f## file)")
+        elif flow_type == FlowType.GEOMETRY_ONLY:
+            logger.debug("Skipping starting WSE validation for geometry-only plan (no results)")
+        else:
+            # Unsteady flow - run starting WSE validation
+            try:
+                # Get starting WSE method from plan HDF
+                wse_method_info = HdfPlan.get_starting_wse_method(plan_hdf)
+                method = wse_method_info.get('method', 'Unknown')
 
-            # PF_IC_02: Normal depth slope reasonableness
-            elif 'Normal' in method:
-                slope = wse_method_info.get('slope', None)
-                if slope is not None:
-                    # Check if slope is reasonable (typical range: 0.0001 to 0.1)
-                    if abs(slope) < 0.0001:
-                        msg = CheckMessage(
-                            message_id="PF_IC_02",
-                            severity=Severity.WARNING,
-                            check_type="PROFILES",
-                            message=f"Normal depth slope ({slope:.6f}) may be too flat for convergence",
-                            help_text="Very flat slopes (< 0.0001) may cause convergence issues. Verify slope is appropriate for channel.",
-                            value=abs(slope),
-                            threshold="0.0001"
-                        )
-                        messages.append(msg)
-                    elif abs(slope) > 0.1:
-                        msg = CheckMessage(
-                            message_id="PF_IC_02",
-                            severity=Severity.WARNING,
-                            check_type="PROFILES",
-                            message=f"Normal depth slope ({slope:.6f}) may be too steep",
-                            help_text="Very steep slopes (> 0.1) are unusual. Verify slope is appropriate for channel.",
-                            value=abs(slope),
-                            threshold="0.1"
-                        )
-                        messages.append(msg)
+                # PF_IC_01: Known WSE validation
+                if 'Known' in method:
+                    known_wse = wse_method_info.get('wse', None)
+                    if known_wse is not None:
+                        # Check if known WSE is reasonable (not too high or too low)
+                        if known_wse < -100 or known_wse > 10000:
+                            msg = CheckMessage(
+                                message_id="PF_IC_01",
+                                severity=Severity.WARNING,
+                                check_type="PROFILES",
+                                message=f"Known WSE ({known_wse:.2f} ft) may be unreasonable for starting water surface",
+                                help_text="Known WSE should be within realistic elevation range for the project area.",
+                                value=known_wse
+                            )
+                            messages.append(msg)
 
-            # PF_IC_03: Critical depth applicability
-            elif 'Critical' in method:
-                # Check if critical depth is appropriate (INFO message)
-                msg = CheckMessage(
-                    message_id="PF_IC_03",
-                    severity=Severity.INFO,
-                    check_type="PROFILES",
-                    message="Critical depth used for starting water surface - appropriate for steep slopes and supercritical flow",
-                    help_text="Critical depth is appropriate when Froude number > 1.0 (supercritical flow). Verify flow regime is supercritical."
-                )
-                messages.append(msg)
+                # PF_IC_02: Normal depth slope reasonableness
+                elif 'Normal' in method:
+                    slope = wse_method_info.get('slope', None)
+                    if slope is not None:
+                        # Check if slope is reasonable (typical range: 0.0001 to 0.1)
+                        if abs(slope) < 0.0001:
+                            msg = CheckMessage(
+                                message_id="PF_IC_02",
+                                severity=Severity.WARNING,
+                                check_type="PROFILES",
+                                message=f"Normal depth slope ({slope:.6f}) may be too flat for convergence",
+                                help_text="Very flat slopes (< 0.0001) may cause convergence issues. Verify slope is appropriate for channel.",
+                                value=abs(slope),
+                                threshold="0.0001"
+                            )
+                            messages.append(msg)
+                        elif abs(slope) > 0.1:
+                            msg = CheckMessage(
+                                message_id="PF_IC_02",
+                                severity=Severity.WARNING,
+                                check_type="PROFILES",
+                                message=f"Normal depth slope ({slope:.6f}) may be too steep",
+                                help_text="Very steep slopes (> 0.1) are unusual. Verify slope is appropriate for channel.",
+                                value=abs(slope),
+                                threshold="0.1"
+                            )
+                            messages.append(msg)
 
-            # PF_IC_04: Energy grade line method verification
-            elif 'EGL' in method or 'Energy' in method:
-                # Check if EGL slope line method is used (INFO message)
-                msg = CheckMessage(
-                    message_id="PF_IC_04",
-                    severity=Severity.INFO,
-                    check_type="PROFILES",
-                    message="Energy grade line slope method used for starting water surface",
-                    help_text="EGL slope method is appropriate for gradually varied flow. Verify energy slope is reasonable."
-                )
-                messages.append(msg)
+                # PF_IC_03: Critical depth applicability
+                elif 'Critical' in method:
+                    # Check if critical depth is appropriate (INFO message)
+                    msg = CheckMessage(
+                        message_id="PF_IC_03",
+                        severity=Severity.INFO,
+                        check_type="PROFILES",
+                        message="Critical depth used for starting water surface - appropriate for steep slopes and supercritical flow",
+                        help_text="Critical depth is appropriate when Froude number > 1.0 (supercritical flow). Verify flow regime is supercritical."
+                    )
+                    messages.append(msg)
 
-            # If method is Unknown or Error, add warning
-            elif method in ['Unknown', 'Error']:
-                msg = CheckMessage(
-                    message_id="PF_IC_00",
-                    severity=Severity.WARNING,
-                    check_type="PROFILES",
-                    message=f"Starting WSE method could not be determined: {wse_method_info.get('note', 'Unknown reason')}",
-                    help_text="Verify boundary condition method is properly defined in plan file."
-                )
-                messages.append(msg)
+                # PF_IC_04: Energy grade line method verification
+                elif 'EGL' in method or 'Energy' in method:
+                    # Check if EGL slope line method is used (INFO message)
+                    msg = CheckMessage(
+                        message_id="PF_IC_04",
+                        severity=Severity.INFO,
+                        check_type="PROFILES",
+                        message="Energy grade line slope method used for starting water surface",
+                        help_text="EGL slope method is appropriate for gradually varied flow. Verify energy slope is reasonable."
+                    )
+                    messages.append(msg)
 
-        except Exception as e:
-            logger.debug(f"Could not validate starting WSE method: {e}")
+                # If method is Unknown or Error, add warning
+                elif method in ['Unknown', 'Error']:
+                    msg = CheckMessage(
+                        message_id="PF_IC_00",
+                        severity=Severity.WARNING,
+                        check_type="PROFILES",
+                        message=f"Starting WSE method could not be determined: {wse_method_info.get('note', 'Unknown reason')}",
+                        help_text="Verify boundary condition method is properly defined in plan file."
+                    )
+                    messages.append(msg)
+
+            except Exception as e:
+                logger.debug(f"Could not validate starting WSE method: {e}")
 
         results.messages = messages
         if summary_data:
@@ -7512,7 +7526,16 @@ class RasCheck:
         plan: Union[str, Path],
         ras_obj
     ) -> Tuple[Path, Path]:
-        """Resolve plan and geometry HDF paths from plan identifier."""
+        """
+        Resolve plan and geometry HDF paths from plan identifier.
+
+        HEC-RAS 6.x stores geometry data in plan HDF files, so geometry HDF
+        is optional. Falls back to plan HDF if geometry HDF doesn't exist.
+
+        Returns:
+            Tuple of (plan_hdf_path, geom_hdf_path)
+            Note: geom_hdf_path may equal plan_hdf_path if no separate geometry HDF exists
+        """
         if isinstance(plan, str) and len(plan) <= 3:
             # Plan number format (e.g., "01")
             matching = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan]
@@ -7522,8 +7545,9 @@ class RasCheck:
             plan_hdf = Path(plan_row['HDF_Results_Path'])
             geom_path = plan_row['Geom Path']
             # Get geometry HDF from geometry file path
+            # Pattern: Muncie.g01 -> Muncie.g01.hdf (append .hdf, don't replace suffix)
             geom_base = Path(str(geom_path))
-            geom_hdf = geom_base.with_suffix('.hdf')
+            geom_hdf = geom_base.parent / f"{geom_base.name}.hdf"
         else:
             plan_hdf = Path(plan)
             # Derive geometry HDF from plan HDF name
@@ -7534,6 +7558,12 @@ class RasCheck:
             else:
                 geom_stem = plan_stem
             geom_hdf = plan_hdf.parent / f"{geom_stem}.hdf"
+
+        # Fall back to plan HDF if geometry HDF doesn't exist
+        # HEC-RAS 6.x plan HDF files contain geometry data
+        if not geom_hdf.exists():
+            logger.debug(f"Geometry HDF not found at {geom_hdf}, using plan HDF for geometry data")
+            geom_hdf = plan_hdf
 
         return plan_hdf, geom_hdf
 
