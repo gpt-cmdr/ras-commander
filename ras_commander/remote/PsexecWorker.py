@@ -327,6 +327,8 @@ def execute_psexec_plan(
     ras_obj,
     num_cores: int,
     clear_geompre: bool,
+    force_geompre: bool = False,
+    force_rerun: bool = False,
     sub_worker_id: int = 1,
     autoclean: bool = True
 ) -> bool:
@@ -334,6 +336,7 @@ def execute_psexec_plan(
     Execute a plan on a PsExec worker.
 
     Execution flow:
+    0. Check if results are current (skip if so, unless force_rerun=True)
     1. Authenticate to network share (if credentials provided)
     2. Create temporary worker folder in network share
     3. Copy project to worker folder
@@ -348,7 +351,9 @@ def execute_psexec_plan(
         plan_number: Plan number to execute
         ras_obj: RAS project object
         num_cores: Number of cores
-        clear_geompre: Clear geompre files
+        clear_geompre: Clear geompre files (.c## only)
+        force_geompre: Force full geometry reprocessing (clears .g##.hdf AND .c##)
+        force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for parallel execution (default 1)
         autoclean: Delete temporary worker folder after execution (default True).
                    Set to False for debugging to preserve worker folders.
@@ -361,7 +366,23 @@ def execute_psexec_plan(
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
 
-    # Step 0: Authenticate to network share
+    # Step 0a: Check if results are current (skip if so, unless force_rerun=True)
+    if not force_rerun:
+        from ..RasCurrency import RasCurrency
+        is_current, reason = RasCurrency.are_plan_results_current(plan_number, ras_obj)
+        if is_current:
+            logger.info(f"Skipping remote execution of plan {plan_number}: {reason}")
+            return True
+        else:
+            logger.debug(f"Plan {plan_number} needs execution: {reason}")
+
+    # Step 0b: Handle force_geompre (before copying to remote)
+    if force_geompre:
+        from ..RasCurrency import RasCurrency
+        RasCurrency.clear_geom_hdf(plan_number, ras_obj)
+        logger.info(f"Cleared geometry HDF for plan {plan_number} before remote execution")
+
+    # Step 1: Authenticate to network share
     if worker.credentials:
         auth_success = authenticate_network_share(
             worker.share_path,

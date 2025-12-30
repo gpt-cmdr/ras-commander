@@ -48,6 +48,8 @@ def compute_parallel_remote(
     ras_object=None,
     num_cores: int = 4,
     clear_geompre: bool = False,
+    force_geompre: bool = False,
+    force_rerun: bool = False,
     max_concurrent: Optional[int] = None,
     autoclean: bool = True
 ) -> Dict[str, ExecutionResult]:
@@ -62,7 +64,10 @@ def compute_parallel_remote(
         workers: List of initialized worker objects (from init_ras_worker)
         ras_object: RasPrj object for the project. If None, uses global ras.
         num_cores: Number of cores to allocate per plan execution
-        clear_geompre: Clear geometry preprocessor files before execution
+        clear_geompre: Clear geometry preprocessor files (.c## files) before execution
+        force_geompre: Force full geometry reprocessing (clears both .g##.hdf AND .c## files)
+        force_rerun: Force execution even if results are current. When False (default),
+            checks file modification times and skips if results are current.
         max_concurrent: Maximum concurrent executions (default: sum of all worker slots)
         autoclean: Delete temporary worker folders after execution (default True).
                    Set to False for debugging to preserve worker folders.
@@ -161,6 +166,8 @@ def compute_parallel_remote(
                 ras_object=ras_object,
                 num_cores=num_cores,
                 clear_geompre=clear_geompre,
+                force_geompre=force_geompre,
+                force_rerun=force_rerun,
                 sub_worker_id=sub_worker_id,
                 autoclean=autoclean
             )
@@ -206,6 +213,8 @@ def _execute_single_plan(
     ras_object,
     num_cores: int,
     clear_geompre: bool,
+    force_geompre: bool,
+    force_rerun: bool,
     sub_worker_id: int,
     autoclean: bool = True
 ) -> ExecutionResult:
@@ -220,7 +229,9 @@ def _execute_single_plan(
         plan_number: Plan number to execute
         ras_object: RAS project object
         num_cores: Number of cores
-        clear_geompre: Clear geompre files
+        clear_geompre: Clear geompre files (.c## only)
+        force_geompre: Force full geometry reprocessing (clears .g##.hdf AND .c##)
+        force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for multi-slot workers
         autoclean: Delete temporary worker folder after execution
 
@@ -244,6 +255,8 @@ def _execute_single_plan(
                 ras_obj=ras_object,
                 num_cores=num_cores,
                 clear_geompre=clear_geompre,
+                force_geompre=force_geompre,
+                force_rerun=force_rerun,
                 sub_worker_id=sub_worker_id,
                 autoclean=autoclean
             )
@@ -263,6 +276,8 @@ def _execute_single_plan(
                 ras_obj=ras_object,
                 num_cores=num_cores,
                 clear_geompre=clear_geompre,
+                force_geompre=force_geompre,
+                force_rerun=force_rerun,
                 sub_worker_id=sub_worker_id,
                 autoclean=autoclean
             )

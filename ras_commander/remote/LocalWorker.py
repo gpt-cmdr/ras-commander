@@ -130,6 +130,8 @@ def execute_local_plan(
     ras_obj,
     num_cores: int,
     clear_geompre: bool,
+    force_geompre: bool = False,
+    force_rerun: bool = False,
     sub_worker_id: int = 1,
     autoclean: bool = True
 ) -> bool:
@@ -148,7 +150,9 @@ def execute_local_plan(
         plan_number: Plan number to execute
         ras_obj: RAS project object
         num_cores: Number of cores
-        clear_geompre: Clear geompre files
+        clear_geompre: Clear geompre files (.c## only)
+        force_geompre: Force full geometry reprocessing (clears .g##.hdf AND .c##)
+        force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for parallel execution (default 1)
         autoclean: Delete temporary worker folder after execution (default True)
 
@@ -195,6 +199,8 @@ def execute_local_plan(
             plan_number=plan_number,
             ras_object=temp_ras,
             clear_geompre=clear_geompre,
+            force_geompre=force_geompre,
+            force_rerun=force_rerun,
             num_cores=num_cores
         )
 
