@@ -205,9 +205,9 @@ class HdfStruc:
 
                 # Process Profile Data based on Table Info
                 if not profile_data.empty and not table_info.empty:
-                    # Assuming 'Centerline Profile (Index)' and 'Centerline Profile (Count)' are in 'Table Info'
-                    if ('Centerline Profile (Index)' in table_info.columns and
-                        'Centerline Profile (Count)' in table_info.columns):
+                    # Only process if merge succeeded and columns exist in struct_gdf
+                    if ('Centerline Profile (Index)' in struct_gdf.columns and
+                        'Centerline Profile (Count)' in struct_gdf.columns):
                         struct_gdf['Profile_Data'] = struct_gdf.apply(
                             lambda row: [
                                 {'Station': float(profile_data.iloc[i, 0]),

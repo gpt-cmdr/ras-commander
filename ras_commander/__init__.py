@@ -24,14 +24,19 @@ from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpacka
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
+from .ebfe_models import RasEbfeModels
 from .M3Model import M3Model
 from .RasCmdr import RasCmdr
+from .RasCurrency import RasCurrency
 from .RasControl import RasControl
-from .rasmap import RasMap
+from .RasMap import RasMap
 from .RasProcess import RasProcess
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
+
+# Validation framework - core validation infrastructure
+from .validation_base import ValidationSeverity, ValidationResult, ValidationReport
 
 # Geometry handling - imported from geom subpackage
 from .geom import (
@@ -47,7 +52,7 @@ from .hdf import (
     HdfResultsPlan, HdfResultsMesh, HdfResultsXsec, HdfResultsBreach,
     HdfPipe, HdfPump, HdfInfiltration,
     HdfPlot, HdfResultsPlot,
-    HdfFluvialPluvial,
+    HdfFluvialPluvial, HdfBenefitAreas,
     HdfProject,
 )
 
@@ -76,8 +81,11 @@ _FIXIT_EXPORTS = {
     'RasFixit', 'FixResults', 'FixMessage', 'FixAction', 'BlockedObstruction',
 }
 
+# Terrain module - HEC-RAS terrain creation and manipulation
+_TERRAIN_EXPORTS = {'RasTerrain'}
+
 def __getattr__(name):
-    """Lazy load remote execution, DSS, check, and fixit components on first access."""
+    """Lazy load remote execution, DSS, check, fixit, and terrain components on first access."""
     if name in _REMOTE_EXPORTS:
         from . import remote
         return getattr(remote, name)
@@ -90,6 +98,9 @@ def __getattr__(name):
     if name in _FIXIT_EXPORTS:
         from . import fixit
         return getattr(fixit, name)
+    if name in _TERRAIN_EXPORTS:
+        from . import terrain
+        return getattr(terrain, name)
     raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
 
 
@@ -98,7 +109,7 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
@@ -125,6 +136,9 @@ __all__ = [
     # Fixit module - Automated geometry repair (lazy loaded)
     'RasFixit', 'FixResults', 'FixMessage', 'FixAction', 'BlockedObstruction',
 
+    # Terrain module - HEC-RAS terrain creation (lazy loaded)
+    'RasTerrain',
+
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
@@ -136,4 +150,7 @@ __all__ = [
 
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
+
+    # Validation framework
+    'ValidationSeverity', 'ValidationResult', 'ValidationReport',
 ]

@@ -173,7 +173,7 @@ class RasPrj:
         # Load RASMapper data if available
         try:
             # Import here to avoid circular imports
-            from .rasmap import RasMap
+            from .RasMap import RasMap
             self.rasmap_df = RasMap.initialize_rasmap_df(self)
         except ImportError:
             logger.warning("RasMap module not available. RASMapper data will not be loaded.")

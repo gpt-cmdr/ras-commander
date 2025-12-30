@@ -30,7 +30,7 @@ from datetime import datetime
 import shutil
 
 from .RasPrj import ras
-from .rasmap import RasMap
+from .RasMap import RasMap
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call

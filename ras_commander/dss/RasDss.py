@@ -175,20 +175,21 @@ class RasDss:
 
     @staticmethod
     @log_call
-    def get_catalog(dss_file: Union[str, Path]) -> List[str]:
+    def get_catalog(dss_file: Union[str, Path]) -> pd.DataFrame:
         """
-        Get list of all data paths in DSS file.
+        Get catalog of all data paths in DSS file.
 
         Args:
             dss_file: Path to DSS file
 
         Returns:
-            List of DSS path strings
+            DataFrame with 'pathname' column containing all DSS pathnames
 
         Example:
-            paths = RasDss.get_catalog("sample.dss")
-            for path in paths:
-                print(path)
+            catalog = RasDss.get_catalog("sample.dss")
+            print(f"Found {len(catalog)} pathnames")
+            for pathname in catalog['pathname']:
+                print(pathname)
         """
         # Configure JVM (must be before first jnius import)
         RasDss._configure_jvm()
@@ -212,7 +213,8 @@ class RasDss:
             for i in range(catalog_vector.size()):
                 paths.append(str(catalog_vector.get(i)))
 
-            return paths
+            # Return as DataFrame for easier manipulation
+            return pd.DataFrame({'pathname': paths})
 
         finally:
             dss.done()

@@ -142,6 +142,8 @@ class RasCmdr:
         dest_folder=None,
         ras_object=None,
         clear_geompre=False,
+        force_geompre: bool = False,
+        force_rerun: bool = False,
         num_cores=None,
         overwrite_dest=False,
         skip_existing: bool = False,
@@ -163,8 +165,13 @@ class RasCmdr:
                 If None, computation occurs in the original project folder, modifying the original project.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
                 Useful when working with multiple projects simultaneously.
-            clear_geompre (bool, optional): Whether to clear geometry preprocessor files. Defaults to False.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files). Defaults to False.
                 Set to True when geometry has been modified to force recomputation of preprocessor files.
+            force_geompre (bool, optional): Force full geometry reprocessing (clears both .g##.hdf AND .c## files).
+                Defaults to False. Use when geometry HDF needs complete regeneration.
+            force_rerun (bool, optional): Force execution even if results are current. Defaults to False.
+                When False (default), checks file modification times and skips if results are current.
+                When True, always executes regardless of result currency.
             num_cores (int, optional): Number of cores to use for the plan execution.
                 If None, the current setting in the plan file is not changed.
                 Generally, 2-4 cores provides good performance for most models.
@@ -276,12 +283,23 @@ class RasCmdr:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 return False
 
-            # Check if results already exist and skip if requested
-            if skip_existing:
-                hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                if RasCmdr._verify_completion(hdf_path):
-                    logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
-                    return True
+            # Smart execution skip logic (unless force_rerun)
+            if not force_rerun:
+                if skip_existing:
+                    # Original simple check (backward compatible)
+                    hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
+                    if RasCmdr._verify_completion(hdf_path):
+                        logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
+                        return True
+                else:
+                    # Smart skip: check file modification times
+                    from .RasCurrency import RasCurrency
+                    is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
+                    if is_current:
+                        logger.info(f"Skipping plan {plan_number}: {reason}")
+                        return True
+                    else:
+                        logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
             # Enable .bco monitoring if callback provided
             bco_monitor = None
@@ -305,8 +323,18 @@ class RasCmdr:
             if stream_callback and hasattr(stream_callback, 'on_prep_start'):
                 stream_callback.on_prep_start(str(plan_number))
 
-            # Clear geometry preprocessor files if requested
-            if clear_geompre:
+            # Handle geometry preprocessor clearing
+            if force_geompre:
+                # Force full geometry reprocessing (clears both .g##.hdf AND .c## files)
+                from .RasCurrency import RasCurrency
+                try:
+                    RasCurrency.clear_geom_hdf(plan_number, compute_ras)
+                    RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
+                    logger.info(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
+                except Exception as e:
+                    logger.error(f"Error force-clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
+            elif clear_geompre:
+                # Original behavior - only clear .c## files
                 try:
                     RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
                     logger.info(f"Cleared geometry preprocessor files for plan: {plan_number}")
@@ -421,6 +449,8 @@ class RasCmdr:
         max_workers: int = 2,
         num_cores: int = 2,
         clear_geompre: bool = False,
+        force_geompre: bool = False,
+        force_rerun: bool = False,
         ras_object: Optional['RasPrj'] = None,
         dest_folder: Union[str, Path, None] = None,
         overwrite_dest: bool = False,
@@ -447,8 +477,12 @@ class RasCmdr:
             num_cores (int): Number of cores to use per plan computation.
                 Controls computational resources allocated to each individual HEC-RAS instance.
                 For parallel execution, 2-4 cores per worker often provides the best balance.
-            clear_geompre (bool): Whether to clear geometry preprocessor files before computation.
+            clear_geompre (bool): Whether to clear geometry preprocessor files (.c## files) before computation.
                 Set to True when geometry has been modified to force recomputation.
+            force_geompre (bool): Force full geometry reprocessing (clears both .g##.hdf AND .c## files).
+                Defaults to False. Use when geometry HDF needs complete regeneration.
+            force_rerun (bool): Force execution even if results are current. Defaults to False.
+                When False (default), checks file modification times and skips if results are current.
             ras_object (Optional[RasPrj]): RAS project object. If None, uses global 'ras' instance.
                 Useful when working with multiple projects simultaneously.
             dest_folder (Union[str, Path, None]): Destination folder for computed results.
@@ -618,6 +652,8 @@ class RasCmdr:
                         plan_num,
                         ras_object=worker_ras_objects[worker_id],
                         clear_geompre=clear_geompre,
+                        force_geompre=force_geompre,
+                        force_rerun=force_rerun,
                         num_cores=num_cores,
                         verify=verify
                     )
@@ -717,6 +753,8 @@ class RasCmdr:
         plan_number: Union[str, Number, List[Union[str, Number]], None] = None,
         dest_folder_suffix="[Test]",
         clear_geompre=False,
+        force_geompre: bool = False,
+        force_rerun: bool = False,
         num_cores=None,
         ras_object=None,
         overwrite_dest=False,
@@ -737,9 +775,13 @@ class RasCmdr:
             dest_folder_suffix (str, optional): Suffix to append to the test folder name.
                 Defaults to "[Test]".
                 The test folder is always created in the project folder's parent directory.
-            clear_geompre (bool, optional): Whether to clear geometry preprocessor files.
+            clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files).
                 Defaults to False.
                 Set to True when geometry has been modified to force recomputation.
+            force_geompre (bool, optional): Force full geometry reprocessing (clears both .g##.hdf AND .c## files).
+                Defaults to False. Use when geometry HDF needs complete regeneration.
+            force_rerun (bool, optional): Force execution even if results are current. Defaults to False.
+                When False (default), checks file modification times and skips if results are current.
             num_cores (int, optional): Number of cores to use for each plan.
                 If None, the current setting in the plan file is not changed. Default is None.
                 For sequential execution, 4-8 cores often provides good performance.
@@ -897,6 +939,8 @@ class RasCmdr:
                         current_plan_number,
                         ras_object=compute_ras,
                         clear_geompre=clear_geompre,
+                        force_geompre=force_geompre,
+                        force_rerun=force_rerun,
                         num_cores=num_cores,
                         skip_existing=skip_existing,
                         verify=verify
