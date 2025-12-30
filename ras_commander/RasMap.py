@@ -33,6 +33,7 @@ List of Functions in RasMap:
 - set_water_surface_render_mode(): Set the water surface rendering mode (horizontal or sloped)
 - get_water_surface_render_mode(): Get the current water surface rendering mode
 - map_ras_results(): Generate raster maps from HDF results using programmatic interpolation
+- add_terrain_layer(): Add terrain layer to RASMapper configuration
 """
 
 import os
@@ -3397,3 +3398,175 @@ class RasMap:
         """
         report = RasMap.check_layer(rasmap_path, layer_name, layer_type)
         return all(result.passed for result in report.results)
+
+    @staticmethod
+    @log_call
+    def add_terrain_layer(
+        terrain_hdf: Union[str, Path],
+        rasmap_path: Union[str, Path],
+        layer_name: str = "Terrain",
+        projection_prj: Optional[Union[str, Path]] = None,
+        ras_object=None
+    ) -> None:
+        """
+        Add terrain layer to RASMapper configuration.
+
+        After creating terrain with RasTerrain.create_terrain_hdf(),
+        register it in project's .rasmap file. This method creates the
+        required XML structure in the Terrains section.
+
+        Args:
+            terrain_hdf: Path to terrain HDF file (e.g., "./Terrain/MyTerrain.hdf")
+            rasmap_path: Path to .rasmap file to modify
+            layer_name: Display name for terrain layer (default: "Terrain")
+            projection_prj: Path to ESRI PRJ file. If provided, updates
+                RASProjectionFilename element. Default: None (keeps existing).
+            ras_object: Optional RasPrj object instance (default: global ras).
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If rasmap_path or terrain_hdf does not exist.
+            ValueError: If rasmap file is not valid XML.
+
+        Example:
+            >>> from ras_commander import RasMap
+            >>>
+            >>> # After creating terrain HDF
+            >>> RasMap.add_terrain_layer(
+            ...     terrain_hdf="./Terrain/Terrain50.hdf",
+            ...     rasmap_path="./Project.rasmap",
+            ...     layer_name="Terrain50"
+            ... )
+            >>>
+            >>> # With projection file
+            >>> RasMap.add_terrain_layer(
+            ...     terrain_hdf="./Terrain/NewTerrain.hdf",
+            ...     rasmap_path="./Project.rasmap",
+            ...     layer_name="NewTerrain",
+            ...     projection_prj="./Terrain/Projection.prj"
+            ... )
+
+        Notes:
+            - Creates Terrains section if it doesn't exist
+            - Generates XML structure compatible with HEC-RAS 6.x:
+              <Terrains Checked="True" Expanded="True">
+                <Layer Name="{layer_name}" Type="TerrainLayer" Checked="True"
+                       Filename=".\\Terrain\\{name}.hdf">
+                  <ResampleMethod>near</ResampleMethod>
+                  <Surface On="True" />
+                </Layer>
+              </Terrains>
+            - Calculates relative path from .rasmap to terrain HDF
+            - If layer with same name exists, it will be replaced
+        """
+        rasmap_path = Path(rasmap_path)
+        terrain_hdf = Path(terrain_hdf)
+
+        # Validate files exist
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f"RASMapper file not found: {rasmap_path}")
+
+        if not terrain_hdf.exists():
+            raise FileNotFoundError(f"Terrain HDF file not found: {terrain_hdf}")
+
+        if projection_prj is not None:
+            projection_prj = Path(projection_prj)
+            if not projection_prj.exists():
+                raise FileNotFoundError(f"Projection PRJ file not found: {projection_prj}")
+
+        # Parse existing rasmap
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            raise ValueError(f"Error parsing .rasmap XML: {e}")
+
+        # Calculate relative path from rasmap to terrain HDF
+        rasmap_dir = rasmap_path.parent.resolve()
+        terrain_hdf_resolved = terrain_hdf.resolve()
+
+        try:
+            # Calculate relative path
+            rel_path = terrain_hdf_resolved.relative_to(rasmap_dir)
+            # Format as Windows-style relative path with .\ prefix
+            rel_path_str = ".\\" + str(rel_path).replace("/", "\\")
+        except ValueError:
+            # If terrain is not relative to rasmap dir, use absolute path
+            logger.warning(
+                f"Terrain HDF is not under rasmap directory. Using absolute path."
+            )
+            rel_path_str = str(terrain_hdf_resolved).replace("/", "\\")
+
+        # Find or create Terrains section
+        terrains = root.find("Terrains")
+        if terrains is None:
+            # Create Terrains section - insert after common elements
+            terrains = ET.Element("Terrains")
+            terrains.set("Checked", "True")
+            terrains.set("Expanded", "True")
+
+            # Find appropriate insertion point (after Results if exists, else after Geometries)
+            insert_index = 0
+            for i, child in enumerate(root):
+                if child.tag in ["Results", "Geometries", "EventConditions"]:
+                    insert_index = i + 1
+            root.insert(insert_index, terrains)
+            logger.info("Created new Terrains section in .rasmap file")
+
+        # Check for existing layer with same name and remove it
+        existing_layer = None
+        for layer in terrains.findall("Layer"):
+            if layer.get("Name") == layer_name:
+                existing_layer = layer
+                break
+
+        if existing_layer is not None:
+            terrains.remove(existing_layer)
+            logger.info(f"Replaced existing terrain layer: {layer_name}")
+
+        # Create terrain layer element
+        layer = ET.SubElement(terrains, "Layer")
+        layer.set("Name", layer_name)
+        layer.set("Type", "TerrainLayer")
+        layer.set("Checked", "True")
+        layer.set("Filename", rel_path_str)
+
+        # Add default settings (matching HEC-RAS 6.x format)
+        resample = ET.SubElement(layer, "ResampleMethod")
+        resample.text = "near"
+
+        surface = ET.SubElement(layer, "Surface")
+        surface.set("On", "True")
+
+        # Update projection reference if provided
+        if projection_prj is not None:
+            try:
+                prj_rel_path = projection_prj.resolve().relative_to(rasmap_dir)
+                prj_rel_path_str = ".\\" + str(prj_rel_path).replace("/", "\\")
+            except ValueError:
+                prj_rel_path_str = str(projection_prj.resolve()).replace("/", "\\")
+
+            # Find or create RASProjectionFilename element
+            proj_elem = root.find("RASProjectionFilename")
+            if proj_elem is None:
+                # Insert after Version element
+                proj_elem = ET.Element("RASProjectionFilename")
+                version_elem = root.find("Version")
+                if version_elem is not None:
+                    insert_idx = list(root).index(version_elem) + 1
+                else:
+                    insert_idx = 0
+                root.insert(insert_idx, proj_elem)
+
+            proj_elem.set("Filename", prj_rel_path_str)
+            logger.info(f"Updated projection reference: {prj_rel_path_str}")
+
+        # Write updated rasmap file
+        # Use a custom write to preserve XML formatting
+        tree.write(rasmap_path, encoding='utf-8', xml_declaration=False)
+
+        logger.info(
+            f"Added terrain layer '{layer_name}' to .rasmap file: {rel_path_str}"
+        )
