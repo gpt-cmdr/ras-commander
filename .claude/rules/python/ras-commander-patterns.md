@@ -258,13 +258,89 @@ results = sensitivity_analysis(
 )
 ```
 
+## Multi-Plan Comparison Pattern
+
+### The Challenge
+
+**First implementation**: `HdfBenefitAreas.identify_benefit_areas()` is the first library function that compares TWO HDF files.
+
+**Problem**: Standard `@standardize_input` decorator only handles single parameter. For comparing two plans, need custom input standardization.
+
+### The Pattern
+
+**Create custom `_standardize_hdf_input()` helper** that handles three input types:
+
+```python
+@staticmethod
+def _standardize_hdf_input(
+    hdf_input: Union[str, Path],
+    label: str,
+    ras_object: Any
+) -> Path:
+    """
+    Standardize HDF input to Path object.
+
+    Handles:
+    1. Plan number (e.g., "01") - resolve via ras_object
+    2. HDF filename (e.g., "plan.p01.hdf") - join with ras_object.folder
+    3. Full path - use directly
+    """
+    input_str = str(hdf_input)
+
+    # Case 1: Full path (contains separators)
+    if '/' in input_str or '\\' in input_str:
+        return Path(hdf_input)
+
+    # Case 2: HDF filename (ends with .hdf)
+    if input_str.endswith('.hdf'):
+        if ras_object is None or not hasattr(ras_object, 'folder'):
+            raise ValueError(f"Need initialized project for filename '{input_str}'")
+        return Path(ras_object.folder) / input_str
+
+    # Case 3: Plan number
+    plan_number = input_str.lstrip('p')
+    hdfs = HdfUtils.resolve_hdf_paths(
+        ras_object.folder, plan_number, ras_object=ras_object
+    )
+    return Path(hdfs['plan'])
+```
+
+**Usage in multi-plan functions**:
+```python
+def compare_plans(existing_hdf_path, proposed_hdf_path, ras_object=None):
+    _ras = ras_object if ras_object is not None else ras
+
+    # Standardize both inputs
+    existing_path = _standardize_hdf_input(existing_hdf_path, "existing", _ras)
+    proposed_path = _standardize_hdf_input(proposed_hdf_path, "proposed", _ras)
+
+    # Validate existence
+    if not existing_path.exists():
+        raise FileNotFoundError(f"Existing HDF not found: {existing_path}")
+
+    # Proceed with comparison...
+```
+
+### Reusability
+
+**Other functions that could use this pattern**:
+- Scenario comparison: `compare_scenarios(baseline, alternative, ...)`
+- Sensitivity analysis: `compare_sensitivity(base_params, varied_params, ...)`
+- Calibration validation: `compare_calibration(uncalibrated, calibrated, ...)`
+- Event comparison: `compare_events(event_100yr, event_500yr, ...)`
+
+### Reference Implementation
+
+**Example**: `ras_commander/hdf/HdfBenefitAreas.py:260-357` (`_standardize_hdf_input()` method)
+
 ## See Also
 
 - **Static Classes**: `.claude/rules/python/static-classes.md` - Why most classes don't need instantiation
 - **Path Handling**: `.claude/rules/python/path-handling.md` - pathlib.Path patterns
 - **Testing Approach**: `.claude/rules/testing/tdd-approach.md` - RasExamples usage in tests
 - **Library Context**: `ras_commander/CLAUDE.md` - Multiple projects workflow
+- **Multi-Plan Comparison**: `ras_commander/hdf/HdfBenefitAreas.py` - First implementation example
 
 ---
 
-**Key Takeaway**: When creating local `ras` objects, ALWAYS pass them via `ras_object` parameter to downstream calls. Use `suffix` parameter with RasExamples.extract_project() and capture return value.
+**Key Takeaway**: When creating local `ras` objects, ALWAYS pass them via `ras_object` parameter to downstream calls. Use `suffix` parameter with RasExamples.extract_project() and capture return value. For multi-plan comparisons, use custom input standardization helper.
