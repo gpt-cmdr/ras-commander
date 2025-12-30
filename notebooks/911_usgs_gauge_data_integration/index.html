@@ -2937,6 +2937,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5227,7 +5255,8 @@
 </span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Loading ras-commander from local dev copy
+<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h3 id="usgs-data-integration-verification">USGS Data Integration Verification<a class="headerlink" href="#usgs-data-integration-verification" title="Permanent link">&para;</a></h3>
 <p><strong>After retrieving USGS data</strong>:</p>
@@ -5254,7 +5283,7 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Project Configuration</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Muncie&quot;</span>           <span class="c1"># Example project to extract</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>           <span class="c1"># Example project to extract</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># USGS Configuration</span>
@@ -5265,53 +5294,45 @@
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to project folder after extraction.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Outputs will be saved to project folder after extraction.
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Install dataretrieval if not available (uncomment to install)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># !pip install dataretrieval</span>
 </span></code></pre></div>
 <h2 id="2-extract-example-projects">2. Extract Example Projects<a class="headerlink" href="#2-extract-example-projects" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;911&quot;</span>  <span class="c1"># Notebook identifier</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Extract the Bald Eagle Creek example projects</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">extracted_paths</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">([</span><span class="s2">&quot;Balde Eagle Creek&quot;</span><span class="p">,</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span><span class="p">],</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">bald_eagle_2d_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">([</span><span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span><span class="p">],</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">bald_eagle_1d_path</span> <span class="o">=</span> <span class="n">extracted_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">bald_eagle_2d_path</span> <span class="o">=</span> <span class="n">extracted_paths</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;1D Model path: </span><span class="si">{</span><span class="n">bald_eagle_1d_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;2D Model path: </span><span class="si">{</span><span class="n">bald_eagle_2d_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;2D Model path: </span><span class="si">{</span><span class="n">bald_eagle_2d_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
-2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39;
-2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - Folder &#39;Balde Eagle Creek&#39; already exists. Deleting existing folder...
-2025-12-14 21:31:10 - ras_commander.RasExamples - INFO - Existing folder &#39;Balde Eagle Creek&#39; has been deleted.
-2025-12-14 21:31:11 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek
-2025-12-14 21:31:11 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-14 21:31:11 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39;
-2025-12-14 21:31:11 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D&#39; already exists. Deleting existing folder...
-2025-12-14 21:31:11 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D&#39; has been deleted.
-2025-12-14 21:31:12 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\BaldEagleCrkMulti2D
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:44 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2025-12-29 06:54:44 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_911&#39;
+2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_911&#39; already exists. Deleting existing folder...
+2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_911&#39; has been deleted.
+2025-12-29 06:54:46 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911
 
 
-1D Model path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek
-2D Model path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\BaldEagleCrkMulti2D
+2D Model path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Initialize the 1D project</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_1d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plans: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady files: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:12 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:46 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
 
 
-Project: BaldEagle
-Plans: 2
-Geometries: 1
-Unsteady files: 1
+Project: BaldEagleDamBrk
+Plans: 11
+Geometries: 10
+Unsteady files: 10
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># View plan information</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;Simulation Date&#39;</span><span class="p">,</span> <span class="s1">&#39;Computation Interval&#39;</span><span class="p">]]</span>
@@ -5343,17 +5364,80 @@ Unsteady files: 1
   <tbody>
     <tr>
       <th>0</th>
-      <td>01</td>
-      <td>Unsteady with Bridges and Dam</td>
-      <td>18FEB1999,0000,24FEB1999,0500</td>
-      <td>2MIN</td>
+      <td>13</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
     </tr>
     <tr>
       <th>1</th>
+      <td>15</td>
+      <td>1d-2D Dambreak Refined Grid</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td>2D to 1D No Dam</td>
+      <td>01JAN1999,1200,06JAN1999,1200</td>
+      <td>1MIN</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td>2D to 2D Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td>SA to 2D Dam Break Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td>Single 2D Area - Internal Dam Structure</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td>SA to 2D Area Conn - 2D Levee Structure</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>7</th>
       <td>02</td>
-      <td>Steady Flow Run</td>
-      <td>02/18/1999,0000,02/24/1999,0500</td>
-      <td>2MIN</td>
+      <td>SA to Detailed 2D Breach</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>10SEC</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td>Single 2D area with Bridges FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td>Gridded Precip - Infiltration</td>
+      <td>09SEP2018,0000,14SEP2018,0000</td>
+      <td>20SEC</td>
     </tr>
   </tbody>
 </table>
@@ -5389,23 +5473,359 @@ Unsteady files: 1
   <tbody>
     <tr>
       <th>0</th>
-      <td>Bald Eagle</td>
-      <td>Loc Hav</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
       <td>Flow Hydrograph</td>
       <td>1HOUR</td>
     </tr>
     <tr>
       <th>1</th>
-      <td>Bald Eagle</td>
-      <td>Loc Hav</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
       <td>Gate Opening</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>2</th>
-      <td>Bald Eagle</td>
-      <td>Loc Hav</td>
-      <td>Rating Curve</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td></td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Flow Hydrograph</td>
+      <td>15MIN</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>36</th>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>37</th>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>38</th>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>39</th>
+      <td></td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>40</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>41</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>42</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>43</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>44</th>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>45</th>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>46</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>47</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>48</th>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>49</th>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>50</th>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
       <td>NaN</td>
     </tr>
   </tbody>
@@ -5415,15 +5835,15 @@ Unsteady files: 1
 <h2 id="3-discover-usgs-gauges-in-project-area">3. Discover USGS Gauges in Project Area<a class="headerlink" href="#3-discover-usgs-gauges-in-project-area" title="Permanent link">&para;</a></h2>
 <p>We'll use the project's geographic bounds to find nearby USGS stream gauges.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Find the geometry HDF file to get project bounds</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">geom_hdf_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">bald_eagle_1d_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.g*.hdf&quot;</span><span class="p">))</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">geom_hdf_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.g*.hdf&quot;</span><span class="p">))</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found geometry HDF files: </span><span class="si">{</span><span class="n">geom_hdf_files</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">if</span> <span class="n">geom_hdf_files</span><span class="p">:</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">geom_hdf_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Found geometry HDF files: [WindowsPath(&#39;c:/GH/ras-commander/examples/example_projects_421_usgs_gauge_data_integration/Balde Eagle Creek/BaldEagle.g01.hdf&#39;)]
-Using: BaldEagle.g01.hdf
+<div class="language-text highlight"><pre><span></span><code>Found geometry HDF files: [WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g01.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g02.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g03.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g06.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g08.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g09.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g10.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g11.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g12.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g13.hdf&#39;)]
+Using: BaldEagleDamBrk.g01.hdf
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Get project bounds in lat/lon (WGS84)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Note: The Bald Eagle Creek example project doesn&#39;t have a CRS defined in the geometry HDF,</span>
@@ -5452,54 +5872,33 @@ Using: BaldEagle.g01.hdf
 </span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  East:  </span><span class="si">{</span><span class="n">east</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  North: </span><span class="si">{</span><span class="n">north</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Found 178 cross sections
-2025-12-14 21:31:12 - ras_commander.hdf.HdfXsec - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfXsec - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
- was checked and no projection attribute found2. No RASMapper projection file found
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-2025-12-14 21:31:12 - ras_commander.hdf.HdfXsec - INFO - Extracted 1 river centerlines
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Found 1 river centerlines
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
-2025-12-14 21:31:12 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.g01.hdf
- was checked and no projection attribute found2. No RASMapper projection file found
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Original extent: (1967609.38, 288126.34, 2065322.25, 353446.47)
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - INFO - Buffered extent (50% x, 50% y): (1943181.16, 271796.31, 2089750.47, 369776.50)
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - WARNING - No CRS defined and no project_crs provided. Cannot transform to WGS84.
-2025-12-14 21:31:12 - ras_commander.hdf.HdfProject - WARNING - Original bounds (no CRS): W=1943181.162500, S=271796.307500, E=2089750.467500, N=369776.502500
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\Terrain\Projection.prj
+2025-12-29 06:54:46 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Found 1 2D flow areas
+2025-12-29 06:54:46 - ras_commander.hdf.HdfXsec - ERROR - Error processing cross-section data: &#39;Unable to synchronously open object (component not found)&#39;
+2025-12-29 06:54:46 - ras_commander.hdf.HdfXsec - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfXsec - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+2025-12-29 06:54:46 - ras_commander.hdf.HdfXsec - WARNING - No river centerlines found in geometry file
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Original extent: (2000930.70, 320392.94, 2084790.14, 371007.58)
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Buffered extent (50% x, 50% y): (1979965.84, 307739.28, 2105755.00, 383661.24)
+2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - WGS84 bounds: W=-77.708454, S=41.010214, E=-77.251087, N=41.219666
 
 
-Note: Bounds appear to be in projected coordinates, not lat/lon
-
-Using known bounds for Lock Haven, PA / Bald Eagle Creek area:
-  West:  -77.600000
-  South: 40.900000
-  East:  -77.300000
-  North: 41.150000
+Project Bounds (WGS84):
+  West:  -77.708454
+  South: 41.010214
+  East:  -77.251087
+  North: 41.219666
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Query USGS for stream gauges in the project area</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataretrieval</span><span class="w"> </span><span class="kn">import</span> <span class="n">waterdata</span>
@@ -5512,10 +5911,10 @@ Using known bounds for Lock Haven, PA / Bald Eagle Creek area:
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">gauges_df</span><span class="p">)</span><span class="si">}</span><span class="s2"> USGS stream gauges in the project area&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:12 - dataretrieval.waterdata.utils - INFO - Requesting: https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items?site_type_code=ST&amp;skipGeometry=False&amp;limit=10000&amp;bbox=-77.6%2C40.9%2C-77.3%2C41.15
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:46 - dataretrieval.waterdata.utils - INFO - Requesting: https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items?site_type_code=ST&amp;skipGeometry=False&amp;limit=10000&amp;bbox=-77.70845429969587%2C41.010213686900734%2C-77.25108651903035%2C41.219666334258264
 
 
-Found 30 USGS stream gauges in the project area
+Found 25 USGS stream gauges in the project area
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Display gauge information</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">gauges_df</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
@@ -5560,153 +5959,128 @@ Found 30 USGS stream gauges in the project area
   <tbody>
     <tr>
       <th>0</th>
+      <td>USGS-01545680</td>
+      <td>Tangascootack Creek near Lock Haven, PA</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>USGS-01545700</td>
+      <td>Queens Run near Lock Haven, PA</td>
+    </tr>
+    <tr>
+      <th>2</th>
       <td>USGS-01545800</td>
       <td>WB Susquehanna River at Lock Haven, PA</td>
     </tr>
     <tr>
-      <th>1</th>
+      <th>3</th>
+      <td>USGS-01547450</td>
+      <td>Bald Eagle Creek at Howard, PA</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>USGS-01547500</td>
+      <td>Bald Eagle Creek at Blanchard, PA</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>USGS-01547600</td>
+      <td>Romola Branch near Howard, PA</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>USGS-01547700</td>
+      <td>Marsh Creek at Blanchard, PA</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>USGS-01547950</td>
+      <td>Beech Creek at Monument, PA</td>
+    </tr>
+    <tr>
+      <th>8</th>
       <td>USGS-01547980</td>
       <td>Beech Creek at Beech Creek, PA</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>9</th>
       <td>USGS-01547990</td>
       <td>Beech Creek near Beech Creek, PA</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>10</th>
       <td>USGS-01548000</td>
       <td>Bald Eagle Creek at Beech Creek Station, PA</td>
     </tr>
     <tr>
-      <th>4</th>
+      <th>11</th>
       <td>USGS-01548005</td>
       <td>Bald Eagle Creek near Beech Creek Station, PA</td>
     </tr>
     <tr>
-      <th>5</th>
+      <th>12</th>
       <td>USGS-01548010</td>
       <td>Bald Eagle Creek near Mill Hall, PA</td>
     </tr>
     <tr>
-      <th>6</th>
+      <th>13</th>
       <td>USGS-015480177</td>
       <td>Mill Creek at Loganton, PA</td>
     </tr>
     <tr>
-      <th>7</th>
+      <th>14</th>
       <td>USGS-01548018</td>
       <td>Fishing CReek at Loganton, PA</td>
     </tr>
     <tr>
-      <th>8</th>
-      <td>USGS-01548020</td>
-      <td>Bull Run near Loganton, PA</td>
-    </tr>
-    <tr>
-      <th>9</th>
+      <th>15</th>
       <td>USGS-015480202</td>
       <td>Bull Run at Winter Road near Loganton, PA</td>
     </tr>
     <tr>
-      <th>10</th>
-      <td>USGS-01548021</td>
-      <td>Unnamed trib (Greenburr Gap Run)nr Logan Mills,PA</td>
-    </tr>
-    <tr>
-      <th>11</th>
-      <td>USGS-01548022</td>
-      <td>Fishing Creek at Logan Mills, PA</td>
-    </tr>
-    <tr>
-      <th>12</th>
-      <td>USGS-015480225</td>
-      <td>Unnamed trib (Wolf Gap Run) at Logan Mills, PA</td>
-    </tr>
-    <tr>
-      <th>13</th>
-      <td>USGS-01548023</td>
-      <td>Unnamed tr (Schreckengast Gp Rn) nr Logan Mill...</td>
-    </tr>
-    <tr>
-      <th>14</th>
-      <td>USGS-01548024</td>
-      <td>Fishing Creek at Tylersville, PA</td>
-    </tr>
-    <tr>
-      <th>15</th>
-      <td>USGS-01548025</td>
-      <td>Unnamed trib ( Bletz Hollow) near Tylersville, PA</td>
-    </tr>
-    <tr>
       <th>16</th>
-      <td>USGS-01548029</td>
-      <td>Unnamed trib (Conway Gap) near Lamar, PA</td>
-    </tr>
-    <tr>
-      <th>17</th>
-      <td>USGS-01548030</td>
-      <td>Fishing Creek near Lamar, PA</td>
-    </tr>
-    <tr>
-      <th>18</th>
-      <td>USGS-01548031</td>
-      <td>Unnamed trib (Little Kettle Cr) near Lamar, PA</td>
-    </tr>
-    <tr>
-      <th>19</th>
-      <td>USGS-01548032</td>
-      <td>Unnamed Trib (Big Kettle Run) near Tylersville...</td>
-    </tr>
-    <tr>
-      <th>20</th>
-      <td>USGS-01548038</td>
-      <td>Fishing Creek near Nittany, PA</td>
-    </tr>
-    <tr>
-      <th>21</th>
-      <td>USGS-01548050</td>
-      <td>Little Fishing Creek near Hublersburg, PA</td>
-    </tr>
-    <tr>
-      <th>22</th>
       <td>USGS-01548075</td>
       <td>Fishing Creek near Cedar Springs, PA</td>
     </tr>
     <tr>
-      <th>23</th>
+      <th>17</th>
       <td>USGS-01548077</td>
       <td>Cedar Run at Cedar Springs near Mill Hall, PA</td>
     </tr>
     <tr>
-      <th>24</th>
+      <th>18</th>
       <td>USGS-01548079</td>
       <td>Fishing Creek at Main St. at Mill Hall, PA</td>
     </tr>
     <tr>
-      <th>25</th>
+      <th>19</th>
       <td>USGS-01548080</td>
       <td>Fishing Creek at Mill Hall, PA</td>
     </tr>
     <tr>
-      <th>26</th>
+      <th>20</th>
       <td>USGS-01548085</td>
       <td>Bald Eagle Creek at Castanea, PA</td>
     </tr>
     <tr>
-      <th>27</th>
+      <th>21</th>
       <td>USGS-01548090</td>
       <td>McElhattan Creek near Lock Haven, PA</td>
     </tr>
     <tr>
-      <th>28</th>
-      <td>USGS-01554665</td>
-      <td>Elk Creek at Spring Bank near Millheim, PA</td>
+      <th>22</th>
+      <td>USGS-01548095</td>
+      <td>Chatham Run near 220 Bridge at Charlton, PA</td>
     </tr>
     <tr>
-      <th>29</th>
-      <td>USGS-405505077284901</td>
-      <td>Elk Creek near Millheim, PA</td>
+      <th>23</th>
+      <td>USGS-01548097</td>
+      <td>West Branch Susquehanna River near Avis, PA</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>USGS-01549740</td>
+      <td>Pine Creek near Jersey Shore, PA</td>
     </tr>
   </tbody>
 </table>
@@ -6276,7 +6650,7 @@ Stage range: 0.48 to 8.07 ft
 </span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady files: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:16 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
 
 
 Project: BaldEagleDamBrk
@@ -6380,7 +6754,7 @@ Unsteady files: 10
 </span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>        <span class="k">if</span> <span class="n">uf</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;.u&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">uf</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.hdf&#39;</span><span class="p">):</span>
 </span><span id="__span-27-17"><a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">uf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:16 - ras_commander.usgs.initial_conditions - INFO - Parsed 7 initial condition entries from BaldEagleDamBrk.u07
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.usgs.initial_conditions - INFO - Parsed 7 initial condition entries from BaldEagleDamBrk.u07
 
 
 Found 7 initial conditions in BaldEagleDamBrk.u07
@@ -6490,7 +6864,7 @@ Found 7 initial conditions in BaldEagleDamBrk.u07
 </span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No initial conditions defined in this file.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:16 - ras_commander.usgs.initial_conditions - INFO - Parsed 1 initial condition entries from BaldEagleDamBrk.u01
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.usgs.initial_conditions - INFO - Parsed 1 initial condition entries from BaldEagleDamBrk.u01
 
 
 Found 1 initial conditions in BaldEagleDamBrk.u01
@@ -6587,7 +6961,7 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 <h2 id="7-summary-and-data-cache">7. Summary and Data Cache<a class="headerlink" href="#7-summary-and-data-cache" title="Permanent link">&para;</a></h2>
 <p>Let's summarize what we've retrieved and cache the data for future use.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Create gauge_data directory</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">gauge_data_dir</span> <span class="o">=</span> <span class="n">bald_eagle_1d_path</span> <span class="o">/</span> <span class="s1">&#39;gauge_data&#39;</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">gauge_data_dir</span> <span class="o">=</span> <span class="n">bald_eagle_2d_path</span> <span class="o">/</span> <span class="s1">&#39;gauge_data&#39;</span>
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="n">gauge_data_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>
 </span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="n">raw_dir</span> <span class="o">=</span> <span class="n">gauge_data_dir</span> <span class="o">/</span> <span class="s1">&#39;raw&#39;</span>
@@ -6595,7 +6969,7 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 </span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>
 </span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Gauge data directory: </span><span class="si">{</span><span class="n">gauge_data_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Gauge data directory: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data
+<div class="language-text highlight"><pre><span></span><code>Gauge data directory: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Save the retrieved data (if available)</span>
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="n">start_str</span> <span class="o">=</span> <span class="n">event_start</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y%m</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
@@ -6637,7 +7011,7 @@ Saved: USGS-01547200_20110905_20110913_stage.csv
 </span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Event: </span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Period: </span><span class="si">{</span><span class="n">event_start</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">event_end</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-33-7"><a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-33-8"><a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Location: </span><span class="si">{</span><span class="n">bald_eagle_1d_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-33-8"><a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Location: </span><span class="si">{</span><span class="n">bald_eagle_2d_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-33-9"><a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">USGS Gauges Used:&quot;</span><span class="p">)</span>
 </span><span id="__span-33-10"><a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a>
 </span><span id="__span-33-11"><a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">upstream_flow</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
@@ -6669,8 +7043,8 @@ USGS GAUGE DATA INTEGRATION - SUMMARY
 Event: Tropical_Storm_Lee_2011
 Period: 2011-09-05 00:00:00 to 2011-09-13 00:00:00
 
-Project: BaldEagle
-Location: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek
+Project: BaldEagleDamBrk
+Location: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911
 
 USGS Gauges Used:
   Upstream:   USGS-01547200 (864 flow obs, 864 stage obs) [instantaneous]
@@ -6681,19 +7055,19 @@ Initial Condition at 2011-09-06 00:00:00:
   Flow:  870 cfs
   Stage: 1.54 ft
 
-Data saved to: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data
+Data saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data
 ======================================================================
 </code></pre></div>
 <h2 id="8-view-plan-simulation-dates">8. View Plan Simulation Dates<a class="headerlink" href="#8-view-plan-simulation-dates" title="Permanent link">&para;</a></h2>
 <p>Let's check the existing plan simulation dates to understand how to align USGS data with the simulation window.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Switch back to 1D project</span>
-</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_1d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>
 </span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># View plan simulation dates</span>
 </span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan Simulation Dates:&quot;</span><span class="p">)</span>
 </span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;Simulation Date&#39;</span><span class="p">,</span> <span class="s1">&#39;Computation Interval&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-14 21:31:16 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:55:18 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
 
 
 Plan Simulation Dates:
@@ -6725,17 +7099,80 @@ Plan Simulation Dates:
   <tbody>
     <tr>
       <th>0</th>
-      <td>01</td>
-      <td>Unsteady with Bridges and Dam</td>
-      <td>18FEB1999,0000,24FEB1999,0500</td>
-      <td>2MIN</td>
+      <td>13</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
     </tr>
     <tr>
       <th>1</th>
+      <td>15</td>
+      <td>1d-2D Dambreak Refined Grid</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td>2D to 1D No Dam</td>
+      <td>01JAN1999,1200,06JAN1999,1200</td>
+      <td>1MIN</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td>2D to 2D Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td>SA to 2D Dam Break Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td>Single 2D Area - Internal Dam Structure</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td>SA to 2D Area Conn - 2D Levee Structure</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+    </tr>
+    <tr>
+      <th>7</th>
       <td>02</td>
-      <td>Steady Flow Run</td>
-      <td>02/18/1999,0000,02/24/1999,0500</td>
-      <td>2MIN</td>
+      <td>SA to Detailed 2D Breach</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>10SEC</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td>Single 2D area with Bridges FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td>Gridded Precip - Infiltration</td>
+      <td>09SEP2018,0000,14SEP2018,0000</td>
+      <td>20SEC</td>
     </tr>
   </tbody>
 </table>
@@ -6748,7 +7185,7 @@ Plan Simulation Dates:
 </span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="c1"># HEC-RAS format: DDMONYYYY,HHMM,DDMONYYYY,HHMM</span>
 </span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="c1"># Example: 18FEB1999,0000,24FEB1999,0500</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Current simulation date string: 18FEB1999,0000,24FEB1999,0500
+<div class="language-text highlight"><pre><span></span><code>Current simulation date string: 01JAN1999,1200,04JAN1999,1200
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Check boundary condition intervals</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Boundary Condition Intervals:&quot;</span><span class="p">)</span>
@@ -6782,20 +7219,308 @@ Plan Simulation Dates:
   <tbody>
     <tr>
       <th>0</th>
-      <td>Bald Eagle</td>
+      <td>Bald Eagle Cr.</td>
       <td>Flow Hydrograph</td>
       <td>1HOUR</td>
     </tr>
     <tr>
       <th>1</th>
-      <td>Bald Eagle</td>
+      <td>Bald Eagle Cr.</td>
       <td>Gate Opening</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>2</th>
-      <td>Bald Eagle</td>
-      <td>Rating Curve</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Flow Hydrograph</td>
+      <td>15MIN</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>Bald Eagle Cr.</td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>36</th>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>37</th>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>38</th>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>39</th>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>40</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>41</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>42</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>43</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>44</th>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>45</th>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>46</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>47</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>48</th>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+    </tr>
+    <tr>
+      <th>49</th>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>50</th>
+      <td></td>
+      <td>Gate Opening</td>
       <td>NaN</td>
     </tr>
   </tbody>
@@ -6935,7 +7660,7 @@ This is approximately 4.5 observations per hour
 <div class="language-text highlight"><pre><span></span><code>QAQC Visualization configuration loaded
   - Figure DPI: 150.0
   - Color palette: 10 colors defined
-  - Output directory: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots
+  - Output directory: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots
 </code></pre></div>
 <h3 id="91-data-quality-dashboard">9.1 Data Quality Dashboard<a class="headerlink" href="#91-data-quality-dashboard" title="Permanent link">&para;</a></h3>
 <p>A 4-panel dashboard for comprehensive data quality assessment:
@@ -7087,11 +7812,11 @@ This is approximately 4.5 observations per hour
 </span><span id="__span-40-142"><a id="__codelineno-40-142" name="__codelineno-40-142" href="#__codelineno-40-142"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">plots_dir</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s1">_data_quality_dashboard.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-40-143"><a id="__codelineno-40-143" name="__codelineno-40-143" href="#__codelineno-40-143"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_1460\2916896244.py:109: FutureWarning: &#39;H&#39; is deprecated and will be removed in a future version, please use &#39;h&#39; instead.
+<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_298804\2916896244.py:109: FutureWarning: &#39;H&#39; is deprecated and will be removed in a future version, please use &#39;h&#39; instead.
   date_range = pd.date_range(upstream_flow[&#39;datetime&#39;].min(),
 
 
-Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_data_quality_dashboard.png
+Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_data_quality_dashboard.png
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_57_2.png" /></p>
 <h3 id="92-publication-quality-event-hydrograph">9.2 Publication-Quality Event Hydrograph<a class="headerlink" href="#92-publication-quality-event-hydrograph" title="Permanent link">&para;</a></h3>
@@ -7222,7 +7947,7 @@ Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integra
 </span><span id="__span-41-124"><a id="__codelineno-41-124" name="__codelineno-41-124" href="#__codelineno-41-124"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">plots_dir</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s1">_hydrograph.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-41-125"><a id="__codelineno-41-125" name="__codelineno-41-125" href="#__codelineno-41-125"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_hydrograph.png
+<div class="language-text highlight"><pre><span></span><code>Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_hydrograph.png
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_59_1.png" /></p>
 <h3 id="93-stage-discharge-rating-curve">9.3 Stage-Discharge Rating Curve<a class="headerlink" href="#93-stage-discharge-rating-curve" title="Permanent link">&para;</a></h3>
@@ -7325,7 +8050,7 @@ Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integra
 </span><span id="__span-42-96"><a id="__codelineno-42-96" name="__codelineno-42-96" href="#__codelineno-42-96"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-42-97"><a id="__codelineno-42-97" name="__codelineno-42-97" href="#__codelineno-42-97"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Stage data not available for rating curve analysis&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_rating_curve.png
+<div class="language-text highlight"><pre><span></span><code>Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_rating_curve.png
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_61_1.png" /></p>
 <h3 id="94-summary-statistics-dashboard">9.4 Summary Statistics Dashboard<a class="headerlink" href="#94-summary-statistics-dashboard" title="Permanent link">&para;</a></h3>
@@ -7513,11 +8238,11 @@ Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integra
 </span><span id="__span-43-181"><a id="__codelineno-43-181" name="__codelineno-43-181" href="#__codelineno-43-181"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">plots_dir</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s1">_summary_dashboard.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-43-182"><a id="__codelineno-43-182" name="__codelineno-43-182" href="#__codelineno-43-182"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_1460\1197353514.py:120: MatplotlibDeprecationWarning: The &#39;labels&#39; parameter of boxplot() has been renamed &#39;tick_labels&#39; since Matplotlib 3.9; support for the old name will be dropped in 3.11.
+<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_298804\1197353514.py:120: MatplotlibDeprecationWarning: The &#39;labels&#39; parameter of boxplot() has been renamed &#39;tick_labels&#39; since Matplotlib 3.9; support for the old name will be dropped in 3.11.
   bp = ax_box.boxplot(box_data, labels=labels, patch_artist=True)
 
 
-Saved: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots\Tropical_Storm_Lee_2011_summary_dashboard.png
+Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_summary_dashboard.png
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_63_2.png" /></p>
 <h3 id="95-qaqc-visualization-summary">9.5 QAQC Visualization Summary<a class="headerlink" href="#95-qaqc-visualization-summary" title="Permanent link">&para;</a></h3>
@@ -7562,7 +8287,7 @@ Generated Figures:
   [D1] Rating Curve - Stage-discharge with power law fit
   [E1] Summary Dashboard - Comprehensive statistics for reports
 
-Output Directory: c:\GH\ras-commander\examples\example_projects_421_usgs_gauge_data_integration\Balde Eagle Creek\gauge_data\plots
+Output Directory: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots
 
 Figure Files:
   - Tropical_Storm_Lee_2011_data_quality_dashboard.png
@@ -7596,7 +8321,7 @@ QAQC Visualization Complete - Figures ready for engineering reports
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -7606,7 +8331,7 @@ QAQC Visualization Complete - Figures ready for engineering reports
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     

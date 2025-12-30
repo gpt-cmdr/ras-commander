@@ -3144,6 +3144,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5050,6 +5078,9 @@
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+✓ Loaded: c:\GH\ras-commander\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
@@ -5096,6 +5127,28 @@
 </span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project folder: </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry file exists: </span><span class="si">{</span><span class="n">geom_file</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:42:03 - ras_commander.M3Model - INFO - ----- M3Model Extracting Model -----
+2025-12-28 22:42:03 - ras_commander.M3Model - INFO - Extracting model &#39;A&#39; - Clear Creek
+2025-12-28 22:42:03 - ras_commander.M3Model - INFO - Downloading from: https://files.m3models.org/modellibrary/A_Clear_FEMA_Effective.zip?effectivedate=2022-05-05%2005:00
+2025-12-28 22:42:03 - ras_commander.M3Model - INFO - Size: 0.03 GB
+
+
+Extracting M3 Model &#39;A&#39; (Clear Creek)...
+
+
+Downloading A: 100%|██████████| 25.7M/25.7M [00:02&lt;00:00, 9.18MiB/s]
+2025-12-28 22:42:07 - ras_commander.M3Model - INFO - Downloaded to c:\GH\ras-commander\examples\m3_models\A_Clear_FEMA_Effective.zip
+2025-12-28 22:42:07 - ras_commander.M3Model - INFO - Extracting to c:\GH\ras-commander\examples\m3_models\Clear Creek...
+2025-12-28 22:42:07 - ras_commander.M3Model - INFO - Successfully extracted model &#39;A&#39; to c:\GH\ras-commander\examples\m3_models\Clear Creek
+
+
+✓ M3 Model extracted to: c:\GH\ras-commander\examples\m3_models\Clear Creek
+Extracting A120-00-00 project...
+✓ Project extracted to: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00
+
+Project folder: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00
+Geometry file exists: True
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Detect overlaps without modifying the file</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasFixit</span><span class="o">.</span><span class="n">detect_obstruction_overlaps</span><span class="p">(</span><span class="n">geom_file</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -5187,22 +5240,22 @@ Fixed Obstructions (6) - using max elevation envelope:
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup Created: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Visualizations: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-09 23:41:11 - ras_commander.fixit.RasFixit - INFO - Created backup: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00_00_test_copy.g01.backup_20251209_234111
-2025-12-09 23:41:11 - ras_commander.fixit.RasFixit - INFO - Saving visualizations to: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:42:08 - ras_commander.fixit.RasFixit - INFO - Created backup: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01.backup_20251228_224208
+2025-12-28 22:42:08 - ras_commander.fixit.RasFixit - INFO - Saving visualizations to: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
 
 
 Created working copy: A120_00_00_test_copy.g01
 
 
-2025-12-09 23:41:15 - ras_commander.fixit.RasFixit - INFO - Fixed 15 cross sections in A120_00_00_test_copy.g01
+2025-12-28 22:42:13 - ras_commander.fixit.RasFixit - INFO - Fixed 15 cross sections in A120_00_00_test_copy.g01
 
 
 
 === Fix Results ===
 Cross Sections Checked: 91
 Cross Sections Fixed: 15
-Backup Created: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00_00_test_copy.g01.backup_20251209_234111
-Visualizations: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
+Backup Created: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01.backup_20251228_224208
+Visualizations: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
 </code></pre></div>
 <h2 id="5-review-fix-results">5. Review Fix Results<a class="headerlink" href="#5-review-fix-results" title="Permanent link">&para;</a></h2>
 <p>The <code>FixResults</code> object contains detailed information about every fix applied. Let's examine it.</p>
@@ -5234,7 +5287,7 @@ Visualizations: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Fix report exported to: </span><span class="si">{</span><span class="n">csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Fix report exported to: c:\GH\ras-commander\examples\example_projects\A120-00-00\obstruction_fix_report.csv
+<div class="language-text highlight"><pre><span></span><code>Fix report exported to: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\obstruction_fix_report.csv
 </code></pre></div>
 <h2 id="6-view-visualizations">6. View Visualizations<a class="headerlink" href="#6-view-visualizations" title="Permanent link">&para;</a></h2>
 <p>The PNG visualizations show before/after comparisons for each fixed cross section. They are critical for engineering review.</p>
@@ -5264,7 +5317,7 @@ Visualizations: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00
 </span></code></pre></div>
 <p><img alt="png" src="../210_fixit_blocked_obstructions_files/210_fixit_blocked_obstructions_16_0.png" /></p>
 <div class="language-text highlight"><pre><span></span><code>Total visualizations generated: 15
-Location: c:\GH\ras-commander\examples\example_projects\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
+Location: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Display all visualizations (optional - may be slow for many cross sections)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">show_all</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to True to view all</span>
@@ -5414,7 +5467,7 @@ Usage: auto_fix_workflow(&#39;compute.log&#39;, &#39;path/to/project&#39;)
 </span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cleanup skipped. Set cleanup=True to remove test files.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Removed: A120_00_00_test_copy.g01
-Removed backup: A120_00_00_test_copy.g01.backup_20251209_234111
+Removed backup: A120_00_00_test_copy.g01.backup_20251228_224208
 Removed visualization folder: A120_00_00_test_copy_g01_Obstructions_Fixed
 Removed: obstruction_fix_report.csv
 
@@ -5473,7 +5526,7 @@ Cleanup complete!
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -5483,7 +5536,7 @@ Cleanup complete!
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     

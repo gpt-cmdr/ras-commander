@@ -2947,6 +2947,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4690,7 +4718,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
@@ -4714,10 +4742,8 @@
 </span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-
-
-✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+✓ Loaded: c:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
@@ -4727,13 +4753,13 @@
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Project Configuration</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Muncie&quot;</span>           <span class="c1"># Example project to extract</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>  <span class="c1"># Example project with DSS boundary conditions</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>                    <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Execution Settings</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;01&quot;</span>                       <span class="c1"># Plan number to execute</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">NUM_CORES</span> <span class="o">=</span> <span class="mi">4</span>                     <span class="c1"># CPU cores for 2D computation</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">RUN_SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;run&quot;</span>                <span class="c1"># Suffix for run folder (e.g., Muncie_run)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;07&quot;</span>                            <span class="c1"># Plan number with DSS boundaries</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">NUM_CORES</span> <span class="o">=</span> <span class="mi">4</span>                          <span class="c1"># CPU cores for 2D computation</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">RUN_SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;310&quot;</span>                     <span class="c1"># Suffix for run folder</span>
 </span></code></pre></div>
 <h1 id="dss-boundary-condition-extraction">DSS Boundary Condition Extraction<a class="headerlink" href="#dss-boundary-condition-extraction" title="Permanent link">&para;</a></h1>
 <p>This notebook demonstrates how to extract DSS (Data Storage System) boundary condition data from HEC-RAS projects using ras-commander.</p>
@@ -4745,35 +4771,27 @@
 <li>Automatic boundary condition extraction</li>
 <li>Plotting DSS boundary data</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="err">!</span><span class="n">pip</span> <span class="n">install</span> <span class="n">pyjnius</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># DSS operations require pyjnius which should be installed automatically</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Uncomment below if you need to install it manually:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># !pip install pyjnius</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Requirement already satisfied: pyjnius in c:\users\billk_clb\anaconda3\lib\site-packages (1.7.0)
-</code></pre></div>
 <h2 id="step-1-extract-example-project">Step 1: Extract Example Project<a class="headerlink" href="#step-1-extract-example-project" title="Permanent link">&para;</a></h2>
 <p>Extract the Bald Eagle Creek Multi-2D example project which contains DSS boundary conditions.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract BaldEagleCrkMulti2D example project</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;310&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract example project with DSS boundary conditions</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">RUN_SUFFIX</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project extracted to: </span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 13:55:17 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:40:29 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-12-28 22:40:29 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-28 22:40:29 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-28 22:40:29 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-28 22:40:29 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_310&#39;
+2025-12-28 22:40:29 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_310&#39; already exists. Deleting existing folder...
+2025-12-28 22:40:30 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_310&#39; has been deleted.
+2025-12-28 22:40:32 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_310
 
 
-2025-12-16 13:55:17 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-
-
-2025-12-16 13:55:17 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-
-
-2025-12-16 13:55:17 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-
-
-2025-12-16 13:55:17 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39;
-
-
-2025-12-16 13:55:18 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to c:\GH\ras-commander\examples\example_projects_22_dss_boundary_extraction\BaldEagleCrkMulti2D
-
-
-Project extracted to: c:\GH\ras-commander\examples\example_projects_22_dss_boundary_extraction\BaldEagleCrkMulti2D
+Project extracted to: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_310
 </code></pre></div>
 <h2 id="step-2-initialize-project">Step 2: Initialize Project<a class="headerlink" href="#step-2-initialize-project" title="Permanent link">&para;</a></h2>
 <p>Initialize the HEC-RAS project to access boundary condition data.</p>
@@ -4784,7 +4802,7 @@ Project extracted to: c:\GH\ras-commander\examples\example_projects_22_dss_bound
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plans: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 13:55:18 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_22_dss_boundary_extraction\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:40:32 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_310\BaldEagleDamBrk.rasmap
 
 
 
@@ -4794,26 +4812,34 @@ Boundaries: 51
 </code></pre></div>
 <h2 id="step-3-examine-boundary-conditions">Step 3: Examine Boundary Conditions<a class="headerlink" href="#step-3-examine-boundary-conditions" title="Permanent link">&para;</a></h2>
 <p>View boundary conditions and identify which are defined by DSS files.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Show boundaries for plan 07</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plan_07_boundaries</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;07&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Show boundaries for the plan with DSS data</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plan_boundaries</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">PLAN</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan 07 has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">plan_07_boundaries</span><span class="p">)</span><span class="si">}</span><span class="s2"> boundary conditions</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2"> has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">plan_boundaries</span><span class="p">)</span><span class="si">}</span><span class="s2"> boundary conditions</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Show DSS-defined boundaries</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">dss_boundaries</span> <span class="o">=</span> <span class="n">plan_07_boundaries</span><span class="p">[</span><span class="n">plan_07_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">]</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Show DSS-defined boundaries (handle string &#39;True&#39; values)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">dss_boundaries</span> <span class="o">=</span> <span class="n">plan_boundaries</span><span class="p">[</span><span class="n">plan_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">]</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DSS-defined boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dss_boundaries</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Display key columns</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">display_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;boundary_condition_number&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;Use DSS&#39;</span><span class="p">,</span> <span class="s1">&#39;DSS File&#39;</span><span class="p">,</span> <span class="s1">&#39;DSS Path&#39;</span><span class="p">]</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="nb">print</span><span class="p">(</span><span class="n">dss_boundaries</span><span class="p">[</span><span class="n">display_cols</span><span class="p">]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Display key columns if DSS boundaries exist</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dss_boundaries</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">display_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;boundary_condition_number&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;Use DSS&#39;</span><span class="p">,</span> <span class="s1">&#39;DSS File&#39;</span><span class="p">,</span> <span class="s1">&#39;DSS Path&#39;</span><span class="p">]</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">dss_boundaries</span><span class="p">[</span><span class="n">display_cols</span><span class="p">]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No DSS boundaries found for this plan.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Plan 07 has 10 boundary conditions
 
-DSS-defined boundaries: 0
+DSS-defined boundaries: 7
 
-Empty DataFrame
-Columns: [boundary_condition_number, bc_type, Use DSS, DSS File, DSS Path]
-Index: []
+   boundary_condition_number                            bc_type Use DSS              DSS File                                                       DSS Path
+0                          1                    Flow Hydrograph    True  Bald_Eagle_Creek.dss            //BALD EAGLE 40/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+2                          3          Lateral Inflow Hydrograph    True  Bald_Eagle_Creek.dss            //FISHING CREEK/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+4                          5  Uniform Lateral Inflow Hydrograph    True  Bald_Eagle_Creek.dss          //RESERVOIR LOCAL/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+5                          6  Uniform Lateral Inflow Hydrograph    True  Bald_Eagle_Creek.dss  //LOCAL DOWNSTREAM OF DAM/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+6                          7          Lateral Inflow Hydrograph    True  Bald_Eagle_Creek.dss              //MARSH CREEK/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+7                          8          Lateral Inflow Hydrograph    True  Bald_Eagle_Creek.dss         //BEECH CREEK FLOW/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+8                          9  Uniform Lateral Inflow Hydrograph    True  Bald_Eagle_Creek.dss         //BALD EAGLE LOCAL/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
 </code></pre></div>
 <h2 id="step-4-inspect-dss-file">Step 4: Inspect DSS File<a class="headerlink" href="#step-4-inspect-dss-file" title="Permanent link">&para;</a></h2>
 <p>Examine what's in the DSS file before extracting data.</p>
@@ -4838,8 +4864,6 @@ Index: []
 <div class="language-text highlight"><pre><span></span><code>Configuring Java VM for DSS operations...
   Found Java: C:\Program Files\Java\jre1.8.0_471
 [OK] Java VM configured
-
-
 DSS File: Bald_Eagle_Creek.dss
 Size: 29.27 MB
 Total paths: 1270
@@ -4902,9 +4926,177 @@ First 10 paths:
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <th>0</th>
+      <td>07</td>
+      <td>1</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>137520</td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>07</td>
+      <td>3</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>28519</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>07</td>
+      <td>5</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>136948</td>
+      <td>82303</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>07</td>
+      <td>6</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>80720</td>
+      <td>67130</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>07</td>
+      <td>7</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>76865</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>07</td>
+      <td>8</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>67130</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>07</td>
+      <td>9</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>66041</td>
+      <td>1</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
   </tbody>
 </table>
-<p>0 rows × 29 columns</p>
+<p>7 rows × 29 columns</p>
 </div>
 
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dss_boundaries</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
@@ -4929,12 +5121,126 @@ First 10 paths:
 </span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>
 </span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Last 5 rows:&quot;</span><span class="p">)</span>
 </span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>    <span class="n">display</span><span class="p">(</span><span class="n">df_ts</span><span class="o">.</span><span class="n">tail</span><span class="p">())</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No DSS boundaries to extract - run previous cells first.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Boundary Type: Flow Hydrograph
+DSS Path: //BALD EAGLE 40/FLOW/01JAN1999/15MIN/RUN:PMF-EVENT/
+
+Extracted 673 data points
+Date range: 1999-01-01 00:00:00 to 1999-01-08 00:00:00
+Value range: 719.78 to 193738.20
+Units: CFS
+
+First 5 rows:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>value</th>
+    </tr>
+    <tr>
+      <th>datetime</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>1999-01-01 00:00:00</th>
+      <td>804.059996</td>
+    </tr>
+    <tr>
+      <th>1999-01-01 00:15:00</th>
+      <td>804.055225</td>
+    </tr>
+    <tr>
+      <th>1999-01-01 00:30:00</th>
+      <td>803.989415</td>
+    </tr>
+    <tr>
+      <th>1999-01-01 00:45:00</th>
+      <td>803.618691</td>
+    </tr>
+    <tr>
+      <th>1999-01-01 01:00:00</th>
+      <td>802.505521</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><pre><span></span><code>Last 5 rows:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>value</th>
+    </tr>
+    <tr>
+      <th>datetime</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>1999-01-07 23:00:00</th>
+      <td>3747.890234</td>
+    </tr>
+    <tr>
+      <th>1999-01-07 23:15:00</th>
+      <td>3733.991294</td>
+    </tr>
+    <tr>
+      <th>1999-01-07 23:30:00</th>
+      <td>3720.143897</td>
+    </tr>
+    <tr>
+      <th>1999-01-07 23:45:00</th>
+      <td>3706.347853</td>
+    </tr>
+    <tr>
+      <th>1999-01-08 00:00:00</th>
+      <td>3692.602971</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <h2 id="step-6-plot-time-series">Step 6: Plot Time Series<a class="headerlink" href="#step-6-plot-time-series" title="Permanent link">&para;</a></h2>
 <p>Visualize the extracted DSS boundary condition data.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Extract all DSS boundary time series for plan 07</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Extract all DSS boundary time series for the plan</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">enhanced_boundaries</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">extract_boundary_timeseries</span><span class="p">(</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">plan_07_boundaries</span><span class="p">,</span> 
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">plan_boundaries</span><span class="p">,</span> 
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">)</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
@@ -4943,7 +5249,7 @@ First 10 paths:
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Count DSS-defined boundaries (handle string &#39;True&#39;)</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">dss_count</span> <span class="o">=</span> <span class="p">((</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">dss_count</span> <span class="o">=</span> <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DSS-defined: </span><span class="si">{</span><span class="n">dss_count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="c1"># Show extracted data summary</span>
@@ -4951,7 +5257,7 @@ First 10 paths:
 </span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">enhanced_boundaries</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
 </span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>    <span class="c1"># Check if DSS boundary (handle string &#39;True&#39;)</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>    <span class="n">is_dss</span> <span class="o">=</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">)</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>    <span class="n">is_dss</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span>
 </span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>    <span class="k">if</span> <span class="n">is_dss</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span>
 </span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
@@ -4961,31 +5267,15 @@ First 10 paths:
 </span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Date range: </span><span class="si">{</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Value range: </span><span class="si">{</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;units&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Found 7 DSS-defined boundaries
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 0: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 2: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 4: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 5: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 6: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 7: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Row 8: Extracted 673 points from Bald_Eagle_Creek.dss
-
-
-2025-12-16 13:55:19 - ras_commander.dss.RasDss - INFO - Extraction complete: 7 success, 0 failed
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Found 7 DSS-defined boundaries
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 0: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 2: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 4: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 5: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 6: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 7: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Row 8: Extracted 673 points from Bald_Eagle_Creek.dss
+2025-12-28 22:40:32 - ras_commander.dss.RasDss - INFO - Extraction complete: 7 success, 0 failed
 
 
 
@@ -5051,27 +5341,25 @@ Uniform Lateral Inflow Hydrograph:
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Boundary Definition Summary:&quot;</span><span class="p">)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Handle both string and boolean &#39;Use DSS&#39; values</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Handle string &#39;True&#39;/&#39;False&#39; values</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">manual_bc</span> <span class="o">=</span> <span class="n">enhanced_boundaries</span><span class="p">[</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">False</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;False&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">())</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;True&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">())</span>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="p">]</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">dss_bc</span> <span class="o">=</span> <span class="n">enhanced_boundaries</span><span class="p">[</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">)</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="p">]</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Manual boundaries (defined in .u## file): </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">manual_bc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">manual_bc</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Types:&quot;</span><span class="p">)</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>    <span class="k">for</span> <span class="n">bc_type</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">manual_bc</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    - </span><span class="si">{</span><span class="n">bc_type</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DSS boundaries (defined in DSS file): </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dss_bc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dss_bc</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Types:&quot;</span><span class="p">)</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>    <span class="k">for</span> <span class="n">bc_type</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">dss_bc</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    - </span><span class="si">{</span><span class="n">bc_type</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>
-</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">dss_bc</span> <span class="o">=</span> <span class="n">enhanced_boundaries</span><span class="p">[</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">]</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Manual boundaries (defined in .u## file): </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">manual_bc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">manual_bc</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Types:&quot;</span><span class="p">)</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>    <span class="k">for</span> <span class="n">bc_type</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">manual_bc</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    - </span><span class="si">{</span><span class="n">bc_type</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DSS boundaries (defined in DSS file): </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dss_bc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dss_bc</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Types:&quot;</span><span class="p">)</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>    <span class="k">for</span> <span class="n">bc_type</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">dss_bc</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    - </span><span class="si">{</span><span class="n">bc_type</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">enhanced_boundaries</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Boundary Definition Summary:
 ================================================================================
@@ -5138,7 +5426,7 @@ Total boundaries: 10
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Add summary statistics for DSS boundaries</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">enhanced_boundaries</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">is_dss</span> <span class="o">=</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">is_dss</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="k">if</span> <span class="n">is_dss</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>        <span class="n">export_df</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="s1">&#39;dss_points&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
@@ -5157,12 +5445,10 @@ Total boundaries: 10
 </span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DSS Boundary Statistics:&quot;</span><span class="p">)</span>
 </span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>
 </span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="c1"># Filter for DSS boundaries</span>
-</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="n">dss_summary</span> <span class="o">=</span> <span class="n">export_df</span><span class="p">[</span>
-</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a>    <span class="p">(</span><span class="n">export_df</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">export_df</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">)</span>
-</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="p">][</span><span class="n">available_cols</span><span class="p">]</span>
-</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="n">display</span><span class="p">(</span><span class="n">dss_summary</span><span class="p">)</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="n">dss_summary</span> <span class="o">=</span> <span class="n">export_df</span><span class="p">[</span><span class="n">export_df</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span><span class="p">][</span><span class="n">available_cols</span><span class="p">]</span>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="n">display</span><span class="p">(</span><span class="n">dss_summary</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Exported to: c:\GH\ras-commander\examples\example_projects_22_dss_boundary_extraction\BaldEagleCrkMulti2D\boundaries_with_dss_summary.csv
+<div class="language-text highlight"><pre><span></span><code>Exported to: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_310\boundaries_with_dss_summary.csv
 
 DSS Boundary Statistics:
 </code></pre></div>
@@ -5262,60 +5548,27 @@ DSS Boundary Statistics:
 
 <h2 id="step-10-export-boundary-data">Step 10: Export Boundary Data<a class="headerlink" href="#step-10-export-boundary-data" title="Permanent link">&para;</a></h2>
 <p>Save extracted boundary condition data for further analysis.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Export to CSV (without the DataFrame column)</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">export_df</span> <span class="o">=</span> <span class="n">enhanced_boundaries</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Add summary statistics for DSS boundaries</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">enhanced_boundaries</span><span class="p">[</span><span class="n">enhanced_boundaries</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">]</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>        <span class="n">export_df</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="s1">&#39;dss_points&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>        <span class="n">export_df</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="s1">&#39;dss_mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>        <span class="n">export_df</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="s1">&#39;dss_max&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>        <span class="n">export_df</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="s1">&#39;dss_min&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1"># Save</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="n">output_file</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="s2">&quot;boundaries_with_dss_summary.csv&quot;</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="n">export_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported to: </span><span class="si">{</span><span class="n">output_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="c1"># Show summary</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="n">dss_summary_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;Use DSS&#39;</span><span class="p">,</span> <span class="s1">&#39;dss_points&#39;</span><span class="p">,</span> <span class="s1">&#39;dss_mean&#39;</span><span class="p">,</span> <span class="s1">&#39;dss_max&#39;</span><span class="p">,</span> <span class="s1">&#39;dss_min&#39;</span><span class="p">]</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="n">available_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">dss_summary_cols</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">export_df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DSS Boundary Statistics:&quot;</span><span class="p">)</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="n">display</span><span class="p">(</span><span class="n">export_df</span><span class="p">[</span><span class="n">export_df</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="kc">True</span><span class="p">][</span><span class="n">available_cols</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Export individual DSS time series to CSV files</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dss_bc</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">enhanced_boundaries</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>        <span class="n">is_dss</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;Use DSS&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;True&#39;</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>        <span class="k">if</span> <span class="n">is_dss</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>            <span class="n">df</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;dss_timeseries&#39;</span><span class="p">]</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>            <span class="n">bc_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;boundary_condition_number&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>            <span class="n">ts_file</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bc_name</span><span class="si">}</span><span class="s2">_timeseries.csv&quot;</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>            <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">ts_file</span><span class="p">)</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported: </span><span class="si">{</span><span class="n">ts_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No DSS boundaries to export.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Exported to: c:\GH\ras-commander\examples\example_projects_22_dss_boundary_extraction\BaldEagleCrkMulti2D\boundaries_with_dss_summary.csv
-
-DSS Boundary Statistics:
+<div class="language-text highlight"><pre><span></span><code>Exported: Flow_Hydrograph_1_timeseries.csv
+Exported: Lateral_Inflow_Hydrograph_3_timeseries.csv
+Exported: Uniform_Lateral_Inflow_Hydrograph_5_timeseries.csv
+Exported: Uniform_Lateral_Inflow_Hydrograph_6_timeseries.csv
+Exported: Lateral_Inflow_Hydrograph_7_timeseries.csv
+Exported: Lateral_Inflow_Hydrograph_8_timeseries.csv
+Exported: Uniform_Lateral_Inflow_Hydrograph_9_timeseries.csv
 </code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>bc_type</th>
-      <th>Use DSS</th>
-    </tr>
-  </thead>
-  <tbody>
-  </tbody>
-</table>
-</div>
-
 <h2 id="step-11-access-individual-dss-time-series">Step 11: Access Individual DSS Time Series<a class="headerlink" href="#step-11-access-individual-dss-time-series" title="Permanent link">&para;</a></h2>
 <p>Access extracted data from the enhanced boundaries_df.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Access specific boundary by index</span>
@@ -5357,7 +5610,7 @@ Metadata:
   units: CFS
   type: INST-VAL
   interval: 15
-  dss_file: C:\GH\ras-commander\examples\example_projects_22_dss_boundary_extraction\BaldEagleCrkMulti2D\Bald_Eagle_Creek.dss
+  dss_file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_310\Bald_Eagle_Creek.dss
 </code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated:
@@ -5402,7 +5655,7 @@ Metadata:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -5412,7 +5665,7 @@ Metadata:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     

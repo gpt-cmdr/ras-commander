@@ -3045,6 +3045,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4878,20 +4906,18 @@
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;📦 PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Import ras-commander (all for remote execution utilities)</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Import ras-commander core functionality</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1"># Verify which version loaded</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1"># Import remote execution functions (lazy loaded)</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_workers_from_json</span><span class="p">,</span> <span class="n">compute_parallel_remote</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="c1"># Verify which version loaded</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-
-
-2025-12-15 20:51:37 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
-
-
-✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
+✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
@@ -4912,6 +4938,8 @@
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Configuration: </span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2"> project, RAS </span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Configuration: BaldEagleCrkMulti2D project, RAS 6.6
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Extract example project for testing</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;500&quot;</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project extracted to: </span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -4921,36 +4949,18 @@
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Available plans: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_500&#39;
+2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_500&#39; already exists. Deleting existing folder...
+2025-12-29 06:06:33 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_500&#39; has been deleted.
+2025-12-29 06:06:36 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500
+2025-12-29 06:06:36 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.rasmap
 
 
-2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-
-
-2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-
-
-2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-
-
-2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39;
-
-
-2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D&#39; already exists. Deleting existing folder...
-
-
-2025-12-15 20:51:41 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D&#39; has been deleted.
-
-
-2025-12-15 20:51:44 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D
-
-
-Project extracted to: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D
-
-
-2025-12-15 20:51:44 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
-
-
+Project extracted to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500
 
 Project: BaldEagleDamBrk
 Available plans: [&#39;13&#39;, &#39;15&#39;, &#39;17&#39;, &#39;18&#39;, &#39;19&#39;, &#39;03&#39;, &#39;04&#39;, &#39;02&#39;, &#39;01&#39;, &#39;05&#39;, &#39;06&#39;]
@@ -4986,136 +4996,58 @@ Configuration: 2 cores x 3 workers
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution complete in </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> seconds (</span><span class="si">{</span><span class="n">elapsed</span><span class="o">/</span><span class="mi">60</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> minutes)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 20:51:44 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;03&#39;, &#39;04&#39;, &#39;06&#39;]
-
-
-2025-12-15 20:51:44 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 3
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:06:36 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;03&#39;, &#39;04&#39;, &#39;06&#39;]
+2025-12-29 06:06:36 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 3
 
 
 Starting LOCAL parallel execution of 3 plans...
 ======================================================================
 
 
-2025-12-15 20:51:44 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]
-
-
-2025-12-15 20:51:45 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 20:51:45 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]
-
-
-2025-12-15 20:51:45 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 20:51:45 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]
-
-
-2025-12-15 20:51:45 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 20:51:45 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]
-
-
-2025-12-15 20:51:45 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]
-
-
-2025-12-15 20:51:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]\BaldEagleDamBrk.p04
-
-
-2025-12-15 20:51:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]\BaldEagleDamBrk.p04
-
-
-2025-12-15 20:51:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]\BaldEagleDamBrk.p03
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]
-
-
-2025-12-15 20:51:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]\BaldEagleDamBrk.p03
-
-
-2025-12-15 20:51:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]\BaldEagleDamBrk.p06
-
-
-2025-12-15 20:51:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]\BaldEagleDamBrk.p06
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 04
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 2]\BaldEagleDamBrk.p04&quot;
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 1]\BaldEagleDamBrk.p03&quot;
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 20:51:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Worker 3]\BaldEagleDamBrk.p06&quot;
-
-
-2025-12-15 21:09:33 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-
-
-2025-12-15 21:09:33 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 1067.53 seconds
-
-
-2025-12-15 21:09:33 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 1: Successful
-
-
-2025-12-15 21:09:36 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
-
-
-2025-12-15 21:09:36 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 1070.33 seconds
-
-
-2025-12-15 21:09:36 - ras_commander.RasCmdr - INFO - Plan 04 executed in worker 2: Successful
-
-
-2025-12-15 21:10:31 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
-
-
-2025-12-15 21:10:31 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 1125.75 seconds
-
-
-2025-12-15 21:10:31 - ras_commander.RasCmdr - INFO - Plan 06 executed in worker 3: Successful
-
-
-2025-12-15 21:10:31 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Computed]
-
-
-2025-12-15 21:10:40 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Computed]\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 21:10:40 - ras_commander.RasCmdr - INFO - 
+2025-12-29 06:06:36 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]
+2025-12-29 06:06:36 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]\BaldEagleDamBrk.rasmap
+2025-12-29 06:06:36 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]
+2025-12-29 06:06:36 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]\BaldEagleDamBrk.rasmap
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]
+2025-12-29 06:06:37 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]\BaldEagleDamBrk.rasmap
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]
+2025-12-29 06:06:37 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]\BaldEagleDamBrk.p03
+2025-12-29 06:06:37 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]\BaldEagleDamBrk.p03
+2025-12-29 06:06:37 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]\BaldEagleDamBrk.p04
+2025-12-29 06:06:37 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]\BaldEagleDamBrk.p04
+2025-12-29 06:06:37 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]\BaldEagleDamBrk.p06
+2025-12-29 06:06:37 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]\BaldEagleDamBrk.p06
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 1]\BaldEagleDamBrk.p03&quot;
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 04
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 2]\BaldEagleDamBrk.p04&quot;
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 06:06:37 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Worker 3]\BaldEagleDamBrk.p06&quot;
+2025-12-29 06:18:56 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+2025-12-29 06:18:56 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 739.49 seconds
+2025-12-29 06:18:56 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 1: Successful
+2025-12-29 06:19:40 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
+2025-12-29 06:19:40 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 782.92 seconds
+2025-12-29 06:19:40 - ras_commander.RasCmdr - INFO - Plan 04 executed in worker 2: Successful
+2025-12-29 06:21:24 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+2025-12-29 06:21:24 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 886.93 seconds
+2025-12-29 06:21:24 - ras_commander.RasCmdr - INFO - Plan 06 executed in worker 3: Successful
+2025-12-29 06:21:24 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Computed]
+2025-12-29 06:21:32 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Computed]\BaldEagleDamBrk.rasmap
+2025-12-29 06:21:32 - ras_commander.RasCmdr - INFO - 
 Execution Results:
-
-
-2025-12-15 21:10:40 - ras_commander.RasCmdr - INFO - Plan 03: Successful
-
-
-2025-12-15 21:10:40 - ras_commander.RasCmdr - INFO - Plan 04: Successful
-
-
-2025-12-15 21:10:40 - ras_commander.RasCmdr - INFO - Plan 06: Successful
+2025-12-29 06:21:32 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+2025-12-29 06:21:32 - ras_commander.RasCmdr - INFO - Plan 04: Successful
+2025-12-29 06:21:32 - ras_commander.RasCmdr - INFO - Plan 06: Successful
 
 
 
-Execution complete in 1135.5 seconds (18.9 minutes)
+Execution complete in 896.1 seconds (14.9 minutes)
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;LOCAL Execution Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">70</span><span class="p">)</span>
@@ -5137,7 +5069,7 @@ Execution complete in 1135.5 seconds (18.9 minutes)
   Plan 06: SUCCESS
 
 Summary: 3/3 plans succeeded
-Results folder: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D [Computed]
+Results folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500 [Computed]
 </code></pre></div>
 <hr />
 <h1 id="part-3-remote-execution-setup">Part 3: Remote Execution Setup<a class="headerlink" href="#part-3-remote-execution-setup" title="Permanent link">&para;</a></h1>
@@ -5241,117 +5173,41 @@ Results folder: C:\GH\ras-commander\examples\example_projects_23_remote_executio
 </span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Remote workers not available - configure RemoteWorkers.json first&quot;</span><span class="p">)</span>
 </span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="n">workers</span> <span class="o">=</span> <span class="p">[]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 21:10:40 - ras_commander.remote.RasWorker - INFO - Initializing psexec worker
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO - Initializing PsExec worker for 192.168.3.8
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO - PsExec worker configured:
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   Hostname: 192.168.3.8
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   Share path: \\192.168.3.8\RasRemote
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   Worker folder: C:\RasRemote
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   User: .\bill
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   System account: False
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   Session ID: 2
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   Process Priority: low
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - INFO -   Queue Priority: 1
-
-
-2025-12-15 21:10:40 - ras_commander.remote.PsexecWorker - WARNING - Validation deferred - share access and remote execution will be tested during actual plan execution
-
-
-2025-12-15 21:10:40 - ras_commander.remote.RasWorker - INFO - Loaded worker: CLB-04 (psexec)
-
-
-2025-12-15 21:10:40 - ras_commander.remote.RasWorker - INFO - Initializing local worker
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO - Initializing local worker
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO - Local worker configured:
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO -   Worker folder: C:\RasRemote
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO -   RAS Exe: C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO -   Process Priority: low
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO -   Queue Priority: 0
-
-
-2025-12-15 21:10:40 - ras_commander.remote.LocalWorker - INFO -   Parallel Capacity: 4 plans simultaneously
-
-
-2025-12-15 21:10:40 - ras_commander.remote.RasWorker - INFO - Loaded worker: Local Compute (local)
-
-
-2025-12-15 21:10:40 - ras_commander.remote.RasWorker - INFO - Initializing docker worker
-
-
-2025-12-15 21:10:40 - ras_commander.remote.DockerWorker - INFO - Using system ssh client for Docker connection
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO - Docker daemon connected: ssh://bill@192.168.3.8
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO - Docker image found: hecras:6.6
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO - DockerWorker initialized:
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO -   Image: hecras:6.6
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO -   Host: ssh://bill@192.168.3.8
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO -   Preprocess on host: True
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO -   Max parallel plans: 1
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO -   Timeout: 60 minutes
-
-
-2025-12-15 21:10:41 - ras_commander.remote.DockerWorker - INFO -   SSH client: system
-
-
-2025-12-15 21:10:41 - ras_commander.remote.RasWorker - INFO - Loaded worker: CLB-04 Docker 6.6 (docker)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.RasWorker - INFO - Loaded 3 workers from RemoteWorkers.json
-
-
-Loaded 3 worker(s):
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:21:32 - ras_commander.remote.RasWorker - INFO - Initializing psexec worker
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO - Initializing PsExec worker for 192.168.3.8
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO - PsExec worker configured:
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   Hostname: 192.168.3.8
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   Share path: \\192.168.3.8\RasRemote
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   Worker folder: C:\RasRemote
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   User: .\bill
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   System account: False
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   Session ID: 2
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   Process Priority: low
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - INFO -   Queue Priority: 1
+2025-12-29 06:21:32 - ras_commander.remote.PsexecWorker - WARNING - Validation deferred - share access and remote execution will be tested during actual plan execution
+2025-12-29 06:21:32 - ras_commander.remote.RasWorker - INFO - Loaded worker: CLB-04 (psexec)
+2025-12-29 06:21:32 - ras_commander.remote.RasWorker - INFO - Initializing local worker
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Initializing local worker
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Local worker configured:
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO -   Worker folder: C:\RasRemote
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO -   RAS Exe: C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO -   Process Priority: low
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO -   Queue Priority: 0
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO -   Parallel Capacity: 4 plans simultaneously
+2025-12-29 06:21:32 - ras_commander.remote.RasWorker - INFO - Loaded worker: Local Compute (local)
+2025-12-29 06:21:32 - ras_commander.remote.RasWorker - INFO - Initializing docker worker
+2025-12-29 06:21:32 - ras_commander.remote.DockerWorker - INFO - Using system ssh client for Docker connection
+2025-12-29 06:21:32 - ras_commander.remote.RasWorker - ERROR - Failed to initialize worker &#39;CLB-04 Docker 6.6&#39;: SSH connection failed - paramiko issue: Install paramiko package to enable ssh:// support
+Install paramiko: pip install paramiko
+Or set use_ssh_client=True in your worker config
+2025-12-29 06:21:32 - ras_commander.remote.RasWorker - INFO - Loaded 2 workers from RemoteWorkers.json
+
+
+Loaded 2 worker(s):
   - CLB-04 (psexec)
     Parallel Capacity: 4 plans
   - Local Compute (local)
     Parallel Capacity: 4 plans
-  - CLB-04 Docker 6.6 (docker)
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Configuration for remote execution</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">REMOTE_PLANS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;03&quot;</span><span class="p">,</span> <span class="s2">&quot;04&quot;</span><span class="p">,</span> <span class="s2">&quot;06&quot;</span><span class="p">]</span>  <span class="c1"># Plans to execute remotely</span>
@@ -5361,7 +5217,7 @@ Loaded 3 worker(s):
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Workers available: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">workers</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Plans to execute: [&#39;03&#39;, &#39;04&#39;, &#39;06&#39;]
-Workers available: 3
+Workers available: 2
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Execute plans on REMOTE workers</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">if</span> <span class="n">workers</span><span class="p">:</span>
@@ -5386,175 +5242,71 @@ Workers available: 3
 </span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Configure RemoteWorkers.json to enable remote execution.&quot;</span><span class="p">)</span>
 </span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>    <span class="n">remote_results</span> <span class="o">=</span> <span class="p">{}</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 21:10:41 - ras_commander.remote.Execution - INFO - Starting distributed execution of 3 plans across 3 workers
-
-
-2025-12-15 21:10:41 - ras_commander.remote.Execution - INFO - Total worker slots available: 9
-
-
-2025-12-15 21:10:41 - ras_commander.remote.Execution - INFO - Submitting plan 03 to worker Local Compute (sub-worker #1)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.LocalWorker - INFO - Starting local execution of plan 03 (sub-worker #1)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.Execution - INFO - Submitting plan 04 to worker Local Compute (sub-worker #2)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.LocalWorker - INFO - Copying project to C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80
-
-
-2025-12-15 21:10:41 - ras_commander.remote.LocalWorker - INFO - Starting local execution of plan 04 (sub-worker #2)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.Execution - INFO - Submitting plan 06 to worker Local Compute (sub-worker #3)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.LocalWorker - INFO - Copying project to C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444
-
-
-2025-12-15 21:10:41 - ras_commander.remote.LocalWorker - INFO - Starting local execution of plan 06 (sub-worker #3)
-
-
-2025-12-15 21:10:41 - ras_commander.remote.LocalWorker - INFO - Copying project to C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:21:32 - ras_commander.remote.Execution - INFO - Starting distributed execution of 3 plans across 2 workers
 
 
 Starting REMOTE execution of 3 plans...
-Using 3 worker(s)
+Using 2 worker(s)
 ======================================================================
 
 
-2025-12-15 21:10:42 - ras_commander.remote.LocalWorker - INFO - Initializing project in worker folder
-
-
-2025-12-15 21:10:42 - ras_commander.remote.LocalWorker - INFO - Initializing project in worker folder
-
-
-2025-12-15 21:10:42 - ras_commander.remote.LocalWorker - INFO - Initializing project in worker folder
-
-
-2025-12-15 21:10:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 21:10:42 - ras_commander.remote.LocalWorker - INFO - Executing plan 06 with RasCmdr.compute_plan()
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk
-
-
-2025-12-15 21:10:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk\BaldEagleDamBrk.p06
-
-
-2025-12-15 21:10:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk\BaldEagleDamBrk.p06
-
-
-2025-12-15 21:10:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 21:10:42 - ras_commander.remote.LocalWorker - INFO - Executing plan 04 with RasCmdr.compute_plan()
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 06
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk\BaldEagleDamBrk.prj&quot; &quot;C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk\BaldEagleDamBrk.p06&quot;
-
-
-2025-12-15 21:10:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk\BaldEagleDamBrk.p04
-
-
-2025-12-15 21:10:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk\BaldEagleDamBrk.rasmap
-
-
-2025-12-15 21:10:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk\BaldEagleDamBrk.p04
-
-
-2025-12-15 21:10:42 - ras_commander.remote.LocalWorker - INFO - Executing plan 03 with RasCmdr.compute_plan()
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk
-
-
-2025-12-15 21:10:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk\BaldEagleDamBrk.p03
-
-
-2025-12-15 21:10:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk\BaldEagleDamBrk.p03
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 04
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk\BaldEagleDamBrk.prj&quot; &quot;C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk\BaldEagleDamBrk.p04&quot;
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 03
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 21:10:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk\BaldEagleDamBrk.prj&quot; &quot;C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk\BaldEagleDamBrk.p03&quot;
-
-
-2025-12-15 21:24:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-
-
-2025-12-15 21:24:18 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 816.12 seconds
-
-
-2025-12-15 21:24:18 - ras_commander.remote.LocalWorker - INFO - HDF file created successfully: C:\RasRemote\BaldEagleDamBrk_03_SW1_97945f80\BaldEagleDamBrk\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:24:18 - ras_commander.remote.LocalWorker - INFO - Copied results to C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:24:19 - ras_commander.remote.Execution - INFO - Plan 03 completed successfully (817.2s)
-
-
-2025-12-15 21:25:06 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
-
-
-2025-12-15 21:25:06 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 864.00 seconds
-
-
-2025-12-15 21:25:06 - ras_commander.remote.LocalWorker - INFO - HDF file created successfully: C:\RasRemote\BaldEagleDamBrk_06_SW3_1702a787\BaldEagleDamBrk\BaldEagleDamBrk.p06.hdf
-
-
-2025-12-15 21:25:06 - ras_commander.remote.LocalWorker - INFO - Copied results to C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p06.hdf
-
-
-2025-12-15 21:25:06 - ras_commander.remote.Execution - INFO - Plan 06 completed successfully (865.1s)
-
-
-2025-12-15 21:25:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
-
-
-2025-12-15 21:25:18 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 875.94 seconds
-
-
-2025-12-15 21:25:18 - ras_commander.remote.LocalWorker - INFO - HDF file created successfully: C:\RasRemote\BaldEagleDamBrk_04_SW2_95624444\BaldEagleDamBrk\BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.remote.LocalWorker - INFO - Copied results to C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.remote.Execution - INFO - Plan 04 completed successfully (876.9s)
-
-
-2025-12-15 21:25:18 - ras_commander.remote.Execution - INFO - Distributed execution complete: 3 succeeded, 0 failed
-
-
-
-Execution complete in 876.9 seconds (14.6 minutes)
+2025-12-29 06:21:32 - ras_commander.remote.Execution - INFO - Total worker slots available: 8
+2025-12-29 06:21:32 - ras_commander.remote.Execution - INFO - Submitting plan 03 to worker Local Compute (sub-worker #1)
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Starting local execution of plan 03 (sub-worker #1)
+2025-12-29 06:21:32 - ras_commander.remote.Execution - INFO - Submitting plan 04 to worker Local Compute (sub-worker #2)
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Copying project to C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Starting local execution of plan 04 (sub-worker #2)
+2025-12-29 06:21:32 - ras_commander.remote.Execution - INFO - Submitting plan 06 to worker Local Compute (sub-worker #3)
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Copying project to C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Starting local execution of plan 06 (sub-worker #3)
+2025-12-29 06:21:32 - ras_commander.remote.LocalWorker - INFO - Copying project to C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc
+2025-12-29 06:21:33 - ras_commander.remote.LocalWorker - INFO - Initializing project in worker folder
+2025-12-29 06:21:33 - ras_commander.remote.LocalWorker - INFO - Initializing project in worker folder
+2025-12-29 06:21:33 - ras_commander.remote.LocalWorker - INFO - Initializing project in worker folder
+2025-12-29 06:21:33 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk\BaldEagleDamBrk.rasmap
+2025-12-29 06:21:33 - ras_commander.remote.LocalWorker - INFO - Executing plan 04 with RasCmdr.compute_plan()
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk
+2025-12-29 06:21:33 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk\BaldEagleDamBrk.rasmap
+2025-12-29 06:21:33 - ras_commander.remote.LocalWorker - INFO - Executing plan 06 with RasCmdr.compute_plan()
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk
+2025-12-29 06:21:33 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk\BaldEagleDamBrk.p04
+2025-12-29 06:21:33 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk\BaldEagleDamBrk.p06
+2025-12-29 06:21:33 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk\BaldEagleDamBrk.rasmap
+2025-12-29 06:21:33 - ras_commander.RasUtils - INFO - Successfully updated file: C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk\BaldEagleDamBrk.p04
+2025-12-29 06:21:33 - ras_commander.remote.LocalWorker - INFO - Executing plan 03 with RasCmdr.compute_plan()
+2025-12-29 06:21:33 - ras_commander.RasUtils - INFO - Successfully updated file: C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk\BaldEagleDamBrk.p06
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk
+2025-12-29 06:21:33 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk\BaldEagleDamBrk.p03
+2025-12-29 06:21:33 - ras_commander.RasUtils - INFO - Successfully updated file: C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk\BaldEagleDamBrk.p03
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 06
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 04
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk\BaldEagleDamBrk.prj&quot; &quot;C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk\BaldEagleDamBrk.p06&quot;
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk\BaldEagleDamBrk.prj&quot; &quot;C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk\BaldEagleDamBrk.p04&quot;
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 03
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 06:21:33 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk\BaldEagleDamBrk.prj&quot; &quot;C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk\BaldEagleDamBrk.p03&quot;
+2025-12-29 06:33:52 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+2025-12-29 06:33:52 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 739.05 seconds
+2025-12-29 06:33:52 - ras_commander.remote.LocalWorker - INFO - HDF file created successfully: C:\RasRemote\BaldEagleDamBrk_03_SW1_140a1b33\BaldEagleDamBrk\BaldEagleDamBrk.p03.hdf
+2025-12-29 06:33:52 - ras_commander.remote.LocalWorker - INFO - Copied results to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p03.hdf
+2025-12-29 06:33:52 - ras_commander.remote.Execution - INFO - Plan 03 completed successfully (740.1s)
+2025-12-29 06:35:39 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+2025-12-29 06:35:39 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 846.07 seconds
+2025-12-29 06:35:39 - ras_commander.remote.LocalWorker - INFO - HDF file created successfully: C:\RasRemote\BaldEagleDamBrk_06_SW3_3875b0bc\BaldEagleDamBrk\BaldEagleDamBrk.p06.hdf
+2025-12-29 06:35:40 - ras_commander.remote.LocalWorker - INFO - Copied results to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p06.hdf
+2025-12-29 06:35:40 - ras_commander.remote.Execution - INFO - Plan 06 completed successfully (847.6s)
+2025-12-29 06:36:13 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
+2025-12-29 06:36:13 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 879.50 seconds
+2025-12-29 06:36:13 - ras_commander.remote.LocalWorker - INFO - HDF file created successfully: C:\RasRemote\BaldEagleDamBrk_04_SW2_4b9689d9\BaldEagleDamBrk\BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.remote.LocalWorker - INFO - Copied results to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.remote.Execution - INFO - Plan 04 completed successfully (880.5s)
+2025-12-29 06:36:13 - ras_commander.remote.Execution - INFO - Distributed execution complete: 3 succeeded, 0 failed
+
+
+
+Execution complete in 880.6 seconds (14.7 minutes)
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Display remote execution results</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">if</span> <span class="n">remote_results</span><span class="p">:</span>
@@ -5575,12 +5327,12 @@ Execution complete in 876.9 seconds (14.6 minutes)
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>REMOTE Execution Results:
 ======================================================================
-  Plan 03: SUCCESS (817.2s)
-    HDF Path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf
-  Plan 06: SUCCESS (865.1s)
-    HDF Path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p06.hdf
-  Plan 04: SUCCESS (876.9s)
-    HDF Path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p04.hdf
+  Plan 03: SUCCESS (740.1s)
+    HDF Path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p03.hdf
+  Plan 06: SUCCESS (847.6s)
+    HDF Path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p06.hdf
+  Plan 04: SUCCESS (880.5s)
+    HDF Path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p04.hdf
 
 Summary: 3/3 plans succeeded
 </code></pre></div>
@@ -5650,58 +5402,24 @@ Summary: 3/3 plans succeeded
 </span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Plan </span><span class="si">{</span><span class="n">plan_num</span><span class="si">}</span><span class="s2">: HDF not found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2013 characters from HDF
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1667 characters from HDF
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p04.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p06.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p06.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p06.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1694 characters from HDF
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p06.hdf
-
-
-2025-12-15 21:25:18 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_23_remote_execution_psexec\BaldEagleCrkMulti2D\BaldEagleDamBrk.p06.hdf
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p03.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p03.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2013 characters from HDF
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p03.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p03.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1667 characters from HDF
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p04.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p06.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p06.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p06.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1694 characters from HDF
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p06.hdf
+2025-12-29 06:36:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_500\BaldEagleDamBrk.p06.hdf
 
 
 Result Verification:
@@ -5713,7 +5431,7 @@ Plan 03:
   Volume Error: 0.0187%
 
 Plan 04:
-  HDF Size: 81.74 MB
+  HDF Size: 81.73 MB
   Status: SUCCESS
   Volume Error: 0.0007%
 
@@ -5801,87 +5519,75 @@ Plan 06:
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>CLEANUP PREVIEW (dry_run=True):
 Share: \\192.168.3.8\RasRemote\
-  Folders: 42
-  [WOULD DELETE] BaldEagleDamBrk_04_SW2_1eb53001 (0.0 MB)
-
-
-  [WOULD DELETE] BaldEagleDamBrk_07_SW1_f740858d (342.1 MB)
-
-
-  [WOULD DELETE] BaldEagleDamBrk_08_SW2_70594014 (342.1 MB)
-
-
-  [WOULD DELETE] BaldEagleDamBrk_09_SW3_ad6b5bfb (342.1 MB)
-
-
-  [WOULD DELETE] BaldEagleDamBrk_10_SW4_b3bc32e6 (342.1 MB)
-  [WOULD DELETE] docker (0.0 MB)
-  [WOULD DELETE] docker-builds (0.0 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_3de1ec02 (456.2 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_5a90bd88 (574.4 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_5b00f282 (574.4 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_87b65e71 (574.3 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_a81a8524 (574.4 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_b8ad058f (574.4 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_c808b701 (575.4 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_e9545117 (574.4 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p03_sw1_f6147736 (574.4 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p04_sw1_838f712b (791.0 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p04_sw1_91094e01 (355.0 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p04_sw1_96236c8b (794.3 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p04_sw1_aaf7134c (790.9 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p04_sw1_abc564a4 (631.2 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p04_sw1_f9a505f9 (790.9 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p06_sw1_2f8aba07 (915.2 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p06_sw1_5861e33f (1666.3 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p06_sw1_614375e3 (2877.4 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p06_sw1_65d667e2 (2929.6 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p06_sw1_690c1887 (2929.6 MB)
-
-
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p06_sw1_f15855af (2929.5 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p13_sw1_e283fe6e (1789.3 MB)
-  [WOULD DELETE] ras_docker_BaldEagleDamBrk_p15_sw1_e0423956 (247.6 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_3eed65fe (68.3 MB)
-
-
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_64e1d6b4 (68.3 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_6e207aef (65.1 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_8e32baee (60.8 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_8eb45209 (76.7 MB)
-
-
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_a2603a11 (55.8 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_a2ee2508 (65.1 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_a3e45f57 (65.1 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_a70d3004 (49.4 MB)
-
-
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_b5d7969b (81.7 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_ded0a52f (68.3 MB)
-  [WOULD DELETE] ras_docker_Muncie_p01_sw1_fa628206 (68.3 MB)
+  Folders: 68
+  [WOULD DELETE] BaldEagleDamBrk_10_SW1_0d970906 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_10_SW1_f8ae583e (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_11_SW2_2cf5ce15 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_11_SW2_d5d823d6 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_12_SW3_d4137c14 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_14_SW4_3996e252 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_16_SW1_9b4d5e9a (338.8 MB)
+  [WOULD DELETE] BaldEagleDamBrk_16_SW1_d575be09 (337.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_20_SW2_ab6c8c81 (337.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_20_SW2_ba9a2113 (338.8 MB)
+  [WOULD DELETE] BaldEagleDamBrk_21_SW3_21f0530e (338.8 MB)
+  [WOULD DELETE] BaldEagleDamBrk_21_SW3_add187ed (337.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_26_SW1_99b240c3 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_26_SW1_a7f83eac (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_27_SW2_026418cc (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_28_SW3_17e1732c (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_29_SW4_8403544b (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_30_SW1_29ffb670 (382.2 MB)
+  [WOULD DELETE] BaldEagleDamBrk_30_SW1_53c64908 (382.8 MB)
+  [WOULD DELETE] BaldEagleDamBrk_30_SW2_81a63748 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_31_SW2_394a1bf2 (404.4 MB)
+  [WOULD DELETE] BaldEagleDamBrk_31_SW2_b849d80f (404.7 MB)
+  [WOULD DELETE] BaldEagleDamBrk_31_SW3_e510864f (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_32_SW3_6c9eab59 (404.7 MB)
+  [WOULD DELETE] BaldEagleDamBrk_33_SW1_56d064a4 (999.5 MB)
+  [WOULD DELETE] BaldEagleDamBrk_41_SW1_a030ff99 (470.5 MB)
+  [WOULD DELETE] BaldEagleDamBrk_41_SW2_d75d8ba5 (999.5 MB)
+  [WOULD DELETE] BaldEagleDamBrk_42_SW2_7c486261 (470.5 MB)
+  [WOULD DELETE] BaldEagleDamBrk_42_SW3_fdf7a788 (1021.4 MB)
+  [WOULD DELETE] BaldEagleDamBrk_43_SW1_effffbcb (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_43_SW3_cfcab381 (470.5 MB)
+  [WOULD DELETE] BaldEagleDamBrk_52_SW1_ab3d9dc3 (536.4 MB)
+  [WOULD DELETE] BaldEagleDamBrk_53_SW2_ada27d20 (536.4 MB)
+  [WOULD DELETE] BaldEagleDamBrk_54_SW3_6c1c609d (569.3 MB)
+  [WOULD DELETE] BaldEagleDamBrk_55_SW2_0c32ab97 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_63_SW1_a1e21c29 (624.3 MB)
+  [WOULD DELETE] BaldEagleDamBrk_64_SW2_b9e688d6 (624.3 MB)
+  [WOULD DELETE] BaldEagleDamBrk_65_SW1_3bc76323 (1076.5 MB)
+  [WOULD DELETE] BaldEagleDamBrk_65_SW3_cb298229 (635.3 MB)
+  [WOULD DELETE] BaldEagleDamBrk_66_SW2_1d4d8c15 (1098.4 MB)
+  [WOULD DELETE] BaldEagleDamBrk_66_SW3_61d29707 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_74_SW1_15b0bfe5 (712.6 MB)
+  [WOULD DELETE] BaldEagleDamBrk_74_SW3_f448b71b (1109.4 MB)
+  [WOULD DELETE] BaldEagleDamBrk_74_SW4_bebceae4 (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_75_SW1_8a2c5203 (1186.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_75_SW2_56a85889 (712.6 MB)
+  [WOULD DELETE] BaldEagleDamBrk_76_SW3_f10c8ea4 (712.6 MB)
+  [WOULD DELETE] BaldEagleDamBrk_85_SW1_2a5c8640 (811.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_86_SW1_e496bdaa (0.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_86_SW2_07f64699 (811.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_87_SW3_70d098a3 (811.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_96_SW1_883c66a2 (845.0 MB)
+  [WOULD DELETE] BaldEagleDamBrk_97_SW1_239e5970 (1175.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_97_SW2_aa5d6216 (1186.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_97_SW2_c2165a4a (867.1 MB)
+  [WOULD DELETE] BaldEagleDamBrk_98_SW2_cb8d96b7 (1175.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_98_SW3_013d7b6b (1186.9 MB)
+  [WOULD DELETE] BaldEagleDamBrk_98_SW3_194ec703 (878.2 MB)
+  [WOULD DELETE] BaldEagleDamBrk_99_SW3_4568cd3b (1175.9 MB)
+  [WOULD DELETE] Scott_County_New_07_SW1_3e06a454 (762.3 MB)
+  [WOULD DELETE] Scott_County_New_07_SW1_49e0cb37 (856.4 MB)
+  [WOULD DELETE] Scott_County_New_08_SW2_b3465c28 (762.3 MB)
+  [WOULD DELETE] Scott_County_New_08_SW2_c5b972ad (856.4 MB)
+  [WOULD DELETE] Scott_County_New_09_SW3_79cd56a2 (762.3 MB)
+  [WOULD DELETE] Scott_County_New_09_SW3_ec684b0b (856.4 MB)
+  [WOULD DELETE] Scott_County_New_10_SW4_d00e1ba4 (762.3 MB)
+  [WOULD DELETE] Scott_County_New_10_SW4_f124653c (856.2 MB)
+  [WOULD DELETE] Scott_County_New_12_SW2_de2827f0 (762.3 MB)
 Set dry_run=False to actually delete folders.
 </code></pre></div>
 <hr />
@@ -5964,7 +5670,7 @@ Set dry_run=False to actually delete folders.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -5974,7 +5680,7 @@ Set dry_run=False to actually delete folders.
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     

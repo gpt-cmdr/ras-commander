@@ -2947,6 +2947,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4700,13 +4728,8 @@
 </span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
-
-
-2025-12-20 14:04:09 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
-
-
-✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
+<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+✓ Loaded: c:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>Before running this notebook, ensure you have:</p>
@@ -4753,22 +4776,12 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">bald_eagle_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="s2">&quot;Balde Eagle Creek&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;103&quot;</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
-
-
-2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-
-
-2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-
-
-2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-
-
-2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_103&#39;
-
-
-2025-12-20 14:04:10 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2025-12-28 21:58:26 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-28 21:58:26 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-28 21:58:26 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-28 21:58:26 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_103&#39;
+2025-12-28 21:58:26 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
 
 
 C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
@@ -4782,7 +4795,7 @@ C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">HEC-RAS Project Plan Data (plan_df):&quot;</span><span class="p">)</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
 
 
 Initialized HEC-RAS project: BaldEagle
@@ -4922,16 +4935,10 @@ HEC-RAS Project Plan Data (plan_df):
 </span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry file: </span><span class="si">{</span><span class="n">new_plan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Geom File&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File path: </span><span class="si">{</span><span class="n">new_plan</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 03
-
-
-2025-12-20 14:04:10 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 03
+2025-12-28 21:58:26 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
 
 
 New plan created: 03
@@ -5104,10 +5111,8 @@ File path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\B
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan title: </span><span class="si">{</span><span class="n">current_title</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan shortid: </span><span class="si">{</span><span class="n">current_shortid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan
 
 
 Current plan title: Unsteady with Bridges and Dam
@@ -5123,31 +5128,17 @@ Current plan shortid: Combined Test Plan
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Updated plan title: </span><span class="si">{</span><span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_title</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Updated plan shortid: </span><span class="si">{</span><span class="n">RasPlan</span><span class="o">.</span><span class="n">get_shortid</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated Plan Title in plan file to: Unsteady with Bridges and Dam clonedplan
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - WARNING - Short Identifier too long (24 char max). Truncating: Combined Test Plan clonedplan
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated Short Identifier in plan file to: Combined Test Plan clone
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam clonedplan
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan clone
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Updated Plan Title in plan file to: Unsteady with Bridges and Dam clonedplan
+2025-12-28 21:58:26 - ras_commander.RasPlan - WARNING - Short Identifier too long (24 char max). Truncating: Combined Test Plan clonedplan
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Updated Short Identifier in plan file to: Combined Test Plan clone
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam clonedplan
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan clone
 
 
 
 Updated plan title: Unsteady with Bridges and Dam clonedplan
-
-
 Updated plan shortid: Combined Test Plan clone
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Get the current plan title and shortid again to confirm the changes</span>
@@ -5157,10 +5148,8 @@ Updated plan shortid: Combined Test Plan clone
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan title: </span><span class="si">{</span><span class="n">current_title</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan shortid: </span><span class="si">{</span><span class="n">current_shortid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam clonedplan
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan clone
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Retrieved Plan Title: Unsteady with Bridges and Dam clonedplan
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Retrieved Short Identifier: Combined Test Plan clone
 
 
 Current plan title: Unsteady with Bridges and Dam clonedplan
@@ -5187,13 +5176,9 @@ Current plan shortid: Combined Test Plan clone
 </span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File path: </span><span class="si">{</span><span class="n">new_geom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;full_path&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Not available&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HDF path: </span><span class="si">{</span><span class="n">new_geom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hdf_path&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g01.hdf to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02.hdf
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 02
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g01 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g01.hdf to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02.hdf
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 02
 
 
 New geometry created: 02
@@ -5243,7 +5228,7 @@ Updated geometry files:
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Found geometry path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Found geometry path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.g02
 
 
 
@@ -5271,16 +5256,10 @@ HDF path: None
 </span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File path: </span><span class="si">{</span><span class="n">new_unsteady</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flow Title: </span><span class="si">{</span><span class="n">new_unsteady</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Flow Title&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Not available&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u02 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 01
-
-
-2025-12-20 14:04:10 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u02 to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.u01
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 01
+2025-12-28 21:58:26 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.rasmap
 
 
 New unsteady flow created: 01
@@ -5373,15 +5352,11 @@ Flow Title: Flow Hydrograph 2
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">updated_plan</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">new_plan_number</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Verified that plan </span><span class="si">{</span><span class="n">new_plan_number</span><span class="si">}</span><span class="s2"> now uses geometry file: </span><span class="si">{</span><span class="n">updated_plan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Geom File&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g02 for plan 03
-
-
-2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Geometry for plan 03 set to 02
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g02 for plan 03
+2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Geometry for plan 03 set to 02
 
 
 Updated geometry for plan 03 to geometry 02
-
-
 Plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
 
 Verified that plan 03 now uses geometry file: g02
@@ -5405,13 +5380,9 @@ Verified that plan 03 now uses geometry file: g02
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="n">geom_preprocessor_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_path</span><span class="p">)</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="n">geom_preprocessor_suffix</span><span class="p">)</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Preprocessor file exists after clearing: </span><span class="si">{</span><span class="n">geom_preprocessor_file</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
 
 
 Cleared geometry preprocessor files for plan 03
@@ -5440,27 +5411,17 @@ Preprocessor file exists after clearing: False
 </span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Run HTab: </span><span class="si">{</span><span class="n">run_htab_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- UNET Use Existing IB Tables: </span><span class="si">{</span><span class="n">ib_tables_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Constructed plan file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
 
 
 Updated number of cores for plan 03 to 2
 
-
-
 Verified that UNET D1 Cores is set to: 2
-
-
-2025-12-20 14:04:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
 Updated geometry preprocessor options for plan 03
 - Run HTab: -1 (Force recomputation of geometry tables)
 - Use Existing IB Tables: -1 (Force recomputation of interpolation/boundary tables)
-
-
 
 Verified setting values:
 - Run HTab: -1
@@ -5477,7 +5438,7 @@ Verified setting values:
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Start Date: </span><span class="si">{</span><span class="n">start_date</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- End Date: </span><span class="si">{</span><span class="n">end_date</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
 
 
 Updated simulation date for plan 03:
@@ -5509,7 +5470,7 @@ Updated simulation date for plan 03:
 </span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Computation Interval: </span><span class="si">{</span><span class="n">comp_interval</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Mapping Interval: </span><span class="si">{</span><span class="n">mapping_interval</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Successfully updated intervals in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
 
 
 
@@ -5535,7 +5496,7 @@ Verified interval values:
 </span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Post Processor: True&quot;</span><span class="p">)</span>
 </span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Floodplain Mapping: True&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:10 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03 (flags modified: 4)
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03 (flags modified: 4)
 
 
 
@@ -5561,16 +5522,18 @@ Updated run flags for plan 03:
 </span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="n">current_description</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">read_plan_description</span><span class="p">(</span><span class="n">new_plan_number</span><span class="p">)</span>
 </span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current plan description:</span><span class="se">\n</span><span class="si">{</span><span class="n">current_description</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:11 - ras_commander.RasPlan - WARNING - Unknown key: Run UNet. Valid keys are: Geom File, DSS File, Computation Interval, UNET D2 Name, Run Sediment, UNET D1 Cores, Run UNET, Program Version, Flow File, Description, Short Identifier, UNET 1D Methodology, Simulation Date, Mapping Interval, Run RASMapper, Run HTab, Run WQNET, UNET D2 Cores, Friction Slope Method, PS Cores, UNET Use Existing IB Tables, UNET D2 Solver Type, Plan Title, Run Post Process, Plan File
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:26 - ras_commander.RasPlan - WARNING - Unknown key: Run UNet. Valid keys are: Description, Run HTab, UNET D2 Solver Type, Plan Title, Run WQNET, Run RASMapper, Geom File, Run UNET, UNET Use Existing IB Tables, UNET D2 Name, Plan File, PS Cores, Friction Slope Method, UNET D1 Cores, Program Version, Mapping Interval, Run Sediment, DSS File, Computation Interval, Short Identifier, UNET D2 Cores, Simulation Date, Run Post Process, Flow File, UNET 1D Methodology
  Add more keys and explanations in get_plan_value() as needed.
-
-
-2025-12-20 14:04:11 - ras_commander.RasPlan - WARNING - No description found in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
 
 
 Verified run flag values:
 - Run HTab (Geometry Preprocessor): -1
 - Run UNet (Unsteady Flow): -1
+
+
+2025-12-28 21:58:27 - ras_commander.RasPlan - WARNING - No description found in plan file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+
+
 
 Updated description for plan 03
 Current plan description:
@@ -5587,34 +5550,20 @@ Current plan description:
 </span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to compute plan </span><span class="si">{</span><span class="n">new_plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
-
-
-2025-12-20 14:04:11 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:11 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
-
-
-2025-12-20 14:04:11 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
-
-
-2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03
-
-
-2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-20 14:04:11 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03&quot;
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 21:58:27 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103
+2025-12-28 21:58:27 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:27 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03
+2025-12-28 21:58:27 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+2025-12-28 21:58:27 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 03
+2025-12-28 21:58:27 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-28 21:58:27 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03&quot;
 
 
 Computing plan 03...
 
 
-2025-12-20 14:05:50 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-
-
-2025-12-20 14:05:50 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 99.89 seconds
+2025-12-28 22:00:36 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+2025-12-28 22:00:36 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 129.90 seconds
 
 
 Plan 03 computed successfully
@@ -5804,16 +5753,10 @@ All plan entries with their HDF paths:
 </span><span id="__span-24-37"><a id="__codelineno-24-37" name="__codelineno-24-37" href="#__codelineno-24-37"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-24-38"><a id="__codelineno-24-38" name="__codelineno-24-38" href="#__codelineno-24-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No volume accounting data found. This may indicate the simulation didn&#39;t complete successfully.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
-
-
-2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagle.p03.hdf
-
-
-2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady with Bridges and Dam clonedplan
-
-
-2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 119.98333333333333
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:00:37 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
+2025-12-28 22:00:37 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagle.p03.hdf
+2025-12-28 22:00:37 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady with Bridges and Dam clonedplan
+2025-12-28 22:00:37 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 119.98333333333333
 
 
 Checking computation runtime data...
@@ -5863,24 +5806,24 @@ Simulation Runtime Statistics:
       <td>431940.0</td>
       <td>119.983333</td>
       <td>N/A</td>
-      <td>0.023108</td>
+      <td>0.030625</td>
       <td>N/A</td>
-      <td>0.001307</td>
-      <td>0.027227</td>
-      <td>91823.979592</td>
-      <td>4406.831538</td>
+      <td>0.001524</td>
+      <td>0.035391</td>
+      <td>78749.316317</td>
+      <td>3390.237585</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>2025-12-20 14:05:50 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:00:37 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_103\BaldEagle.p03.hdf
 
 
 
 Simulation Duration: 431940.00 seconds
-Computation Time: 0.02723 hours
-Computation Speed: 4406.83 (simulation hours/compute hours)
+Computation Time: 0.03539 hours
+Computation Speed: 3390.24 (simulation hours/compute hours)
 
 Checking volume accounting...
 </code></pre></div>
@@ -5994,7 +5937,7 @@ Checking volume accounting...
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -6004,7 +5947,7 @@ Checking volume accounting...
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     

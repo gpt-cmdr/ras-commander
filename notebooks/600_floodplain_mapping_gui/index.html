@@ -3416,6 +3416,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5660,6 +5688,9 @@
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
@@ -5678,6 +5709,8 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Configuration set: Project=</span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2">, Plan=</span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2">, Profile=</span><span class="si">{</span><span class="n">PROFILE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Configuration set: Project=BaldEagleCrkMulti2D, Plan=06, Profile=Max
+</code></pre></div>
 <h2 id="step-1-initialize-project">Step 1: Initialize Project<a class="headerlink" href="#step-1-initialize-project" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Extract example project</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;600&quot;</span><span class="p">)</span>
@@ -5688,6 +5721,18 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_600&#39;
+2025-12-29 00:18:24 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600
+2025-12-29 00:18:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap
+
+
+Project: BaldEagleDamBrk
+Folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600
+</code></pre></div>
 <h2 id="step-2-pre-requisite-check-rasmap-compatibility">Step 2: Pre-requisite - Check .rasmap Compatibility<a class="headerlink" href="#step-2-pre-requisite-check-rasmap-compatibility" title="Permanent link">&para;</a></h2>
 <p><strong>IMPORTANT</strong>: For HEC-RAS 5.0.7 projects running in 6.x, the <code>.rasmap</code> file must be upgraded to 6.x format.</p>
 <p>The <code>postprocess_stored_maps()</code> function now automatically detects this and provides instructions if manual intervention is needed.</p>
@@ -5702,6 +5747,20 @@
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan 06 already computed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600
+2025-12-29 00:18:24 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06
+2025-12-29 00:18:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06
+2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
+2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06&quot;
+
+
+Computing plan 06...
+
+
+2025-12-29 00:27:19 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+2025-12-29 00:27:19 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 535.36 seconds
+</code></pre></div>
 <h2 id="step-4-generate-maps-via-gui-automation">Step 4: Generate Maps via GUI Automation<a class="headerlink" href="#step-4-generate-maps-via-gui-automation" title="Permanent link">&para;</a></h2>
 <h3 id="how-this-works">How This Works<a class="headerlink" href="#how-this-works" title="Permanent link">&para;</a></h3>
 <p>The <code>postprocess_stored_maps()</code> function performs GUI automation:</p>
@@ -5754,6 +5813,58 @@
 </span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">❌ Failed to generate stored maps&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Extracted terrain names: [&#39;Terrain50&#39;]
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Checking .rasmap compatibility...
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - .rasmap file is already compatible (version 2.0.0)
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - .rasmap compatibility check passed: Already compatible (version 2.0.0)
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Backing up plan file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06.storedmap.bak
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Updating plan run flags for floodplain mapping for plan 06...
+2025-12-29 00:27:19 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06 (flags modified: 4)
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Backing up rasmap file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap.storedmap.bak
+2025-12-29 00:27:19 - ras_commander.rasmap - WARNING - Could not find RASResults layer for plan ending in &#39;.p06.hdf&#39; in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Filtered terrains, keeping only &#39;Terrain50&#39;.
+2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Using GUI automation to run floodplain mapping...
+2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - Setting current plan to 06 in project file...
+2025-12-29 00:27:19 - ras_commander.RasPrj - INFO - Set current plan to p06 in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.prj
+2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - Current plan set to 06 in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.prj
+2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - Opening HEC-RAS...
+2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - HEC-RAS opened with Process ID: 171544
+
+
+Available terrains: [&#39;Terrain50&#39;]
+Using terrain: Terrain50
+
+============================================================
+GUI AUTOMATION STARTING
+HEC-RAS will open automatically.
+Please monitor the window and close HEC-RAS when done.
+============================================================
+
+
+
+2025-12-29 00:27:20 - ras_commander.RasGuiAutomation - INFO - Found &#39;already running&#39; dialog - clicking Yes to continue
+2025-12-29 00:27:20 - ras_commander.RasGuiAutomation - INFO - Clicked button: &amp;Yes
+2025-12-29 00:27:20 - ras_commander.RasGuiAutomation - INFO - Clicked &#39;Yes&#39; button on already running dialog
+2025-12-29 00:27:21 - ras_commander.RasGuiAutomation - INFO - Waiting for HEC-RAS main window...
+2025-12-29 00:27:23 - ras_commander.RasGuiAutomation - INFO - Found HEC-RAS main window: HEC-RAS 6.6
+2025-12-29 00:27:24 - ras_commander.RasGuiAutomation - INFO - Clicking &#39;Run &gt; Unsteady Flow Analysis&#39; menu...
+2025-12-29 00:27:24 - ras_commander.RasGuiAutomation - INFO - Clicked menu item ID: 47
+2025-12-29 00:27:26 - ras_commander.RasGuiAutomation - INFO - Looking for Unsteady Flow Analysis dialog...
+2025-12-29 00:27:26 - ras_commander.RasGuiAutomation - INFO - Found Unsteady Flow Analysis dialog
+2025-12-29 00:27:26 - ras_commander.RasGuiAutomation - INFO - Looking for Compute button...
+2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - WARNING - Could not find Compute button - trying keyboard shortcut as fallback...
+2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - INFO - Sent Enter key via win32api
+2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - INFO - Waiting for user to close HEC-RAS...
+2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - INFO - Please monitor plan 06 execution and close HEC-RAS when complete
+2025-12-29 00:27:45 - ras_commander.RasGuiAutomation - INFO - HEC-RAS has been closed
+2025-12-29 00:27:45 - ras_commander.rasmap - INFO - Floodplain mapping computation successful.
+2025-12-29 00:27:45 - ras_commander.rasmap - INFO - Restoring original plan file from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06.storedmap.bak
+2025-12-29 00:27:45 - ras_commander.rasmap - INFO - Restoring original rasmap file from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap.storedmap.bak
+
+
+
+✅ Successfully generated stored maps via GUI automation
+</code></pre></div>
 <h2 id="step-5-visualize-results">Step 5: Visualize Results<a class="headerlink" href="#step-5-visualize-results" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Find the output directory</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">plan_info</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;06&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -5778,6 +5889,8 @@
 </span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Depth map not found at: </span><span class="si">{</span><span class="n">depth_map_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Depth map not found at: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\Grid Precip Infiltration\Depth (Max).vrt
+</code></pre></div>
 <h2 id="technical-explanation-win32-com-automation">Technical Explanation: Win32 COM Automation<a class="headerlink" href="#technical-explanation-win32-com-automation" title="Permanent link">&para;</a></h2>
 <h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h3>
 <p>The GUI automation method uses <strong>Win32 COM API</strong> to control the HEC-RAS application programmatically.</p>
@@ -5974,7 +6087,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -5984,7 +6097,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     

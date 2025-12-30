@@ -3267,6 +3267,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../725_atlas14_spatial_variance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlas 14 Spatial Variance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5291,12 +5319,7 @@
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-
-
-2025-12-15 14:34:39 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
-
-
-✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
+✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>Before running this notebook, ensure you have:</p>
@@ -5375,25 +5398,15 @@
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">bald_eagle_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="s2">&quot;Balde Eagle Creek&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;07&quot;</span><span class="p">)</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracted project to: </span><span class="si">{</span><span class="n">bald_eagle_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 14:34:40 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:37:03 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2025-12-28 22:37:03 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-28 22:37:03 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-28 22:37:03 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-28 22:37:03 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_07&#39;
+2025-12-28 22:37:03 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07
 
 
-2025-12-15 14:34:40 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-
-
-2025-12-15 14:34:40 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-
-
-2025-12-15 14:34:40 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-
-
-2025-12-15 14:34:40 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_07&#39;
-
-
-2025-12-15 14:34:40 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07
-
-
-Extracted project to: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07
+Extracted project to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># define examples_dir as parent of bald_eagle_path</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">examples_dir</span> <span class="o">=</span> <span class="n">bald_eagle_path</span><span class="o">.</span><span class="n">parent</span>
@@ -5411,7 +5424,7 @@ Extracted project to: C:\GH\ras-commander\examples\example_projects\Balde Eagle 
 </span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removing existing test folder: </span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Examples directory set to: C:\GH\ras-commander\examples\example_projects
+<div class="language-text highlight"><pre><span></span><code>Examples directory set to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects
 </code></pre></div>
 <h2 id="understanding-sequential-execution-in-hec-ras">Understanding Sequential Execution in HEC-RAS<a class="headerlink" href="#understanding-sequential-execution-in-hec-ras" title="Permanent link">&para;</a></h2>
 <p>HEC-RAS simulations can be executed in several ways:</p>
@@ -5444,7 +5457,7 @@ Extracted project to: C:\GH\ras-commander\examples\example_projects\Balde Eagle 
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">plan_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="n">plan_count</span><span class="si">}</span><span class="s2"> plans in the project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 14:34:40 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:37:03 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07\BaldEagle.rasmap
 
 
 Initialized HEC-RAS project: BaldEagle
@@ -5511,10 +5524,10 @@ HEC-RAS Project Plan Data:
       <td>2</td>
       <td>None</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
       <td>02</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5535,10 +5548,10 @@ HEC-RAS Project Plan Data:
       <td>1</td>
       <td>None</td>
       <td>01</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
       <td>02</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
-      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
       <td>Steady</td>
     </tr>
   </tbody>
@@ -5605,93 +5618,43 @@ HEC-RAS Project Plan Data:
 </span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">results_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Starting the compute_test_mode...
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Creating the test folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]...
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Copied project folder to compute folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]
-
-
-2025-12-15 14:34:40 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.rasmap
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Initialized RAS project in compute folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.prj
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Getting plan entries...
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Retrieved plan entries successfully.
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Running selected plans sequentially...
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 14:34:40 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.p01&quot;
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Starting the compute_test_mode...
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Creating the test folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]...
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Copied project folder to compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]
+2025-12-28 22:37:03 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.rasmap
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Initialized RAS project in compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.prj
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Getting plan entries...
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Retrieved plan entries successfully.
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Running selected plans sequentially...
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-28 22:37:03 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.p01&quot;
 
 
 Executing all plans sequentially...
 This may take several minutes...
 
 
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
-
-
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 95.36 seconds
-
-
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - Successfully computed plan 01
-
-
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 95.37 seconds
-
-
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]
-
-
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 14:36:16 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.p02&quot;
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 4.05 seconds
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Successfully computed plan 02
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 4.06 seconds
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - All selected plans have been executed.
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - compute_test_mode completed.
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - 
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 128.86 seconds
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - Successfully computed plan 01
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 128.88 seconds
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-28 22:39:12 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [AllSequential]\BaldEagle.p02&quot;
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 5.54 seconds
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Successfully computed plan 02
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 5.56 seconds
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - All selected plans have been executed.
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - compute_test_mode completed.
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - 
 Execution Results:
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Plan 02: Successful
 
 
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Plan 01: Successful
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Plan 02: Successful
-
-
-Sequential execution of all plans completed in 99.48 seconds
+Sequential execution of all plans completed in 134.49 seconds
 
 Execution Results:
 </code></pre></div>
@@ -5787,7 +5750,7 @@ Execution Results:
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">test_folder</span> <span class="o">=</span> <span class="n">bald_eagle_path</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;Balde Eagle Creek [AllSequential]&quot;</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">test_folder</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>WindowsPath(&#39;C:/GH/ras-commander/examples/example_projects/Balde Eagle Creek [AllSequential]&#39;)
+<div class="language-text highlight"><pre><span></span><code>WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/Balde Eagle Creek [AllSequential]&#39;)
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Create test folder if it doesn&#39;t exist using pathlib</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">test_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -5846,10 +5809,10 @@ Execution Results:
 </span><span id="__span-11-55"><a id="__codelineno-11-55" name="__codelineno-11-55" href="#__codelineno-11-55"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-11-56"><a id="__codelineno-11-56" name="__codelineno-11-56" href="#__codelineno-11-56"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Test folder not found: </span><span class="si">{</span><span class="n">test_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 14:36:20 - ras_commander.RasPrj - ERROR - No HEC-RAS project file found in C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek [AllSequential]
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:39:18 - ras_commander.RasPrj - ERROR - No HEC-RAS project file found in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek [AllSequential]
 
 
-Test folder exists: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek [AllSequential]
+Test folder exists: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek [AllSequential]
 
 Key files in test folder:
 Plan files:
@@ -5857,7 +5820,7 @@ Plan files:
 HDF files:
 
 No geometry preprocessor files found
-Error initializing test folder as a RAS project: No HEC-RAS project file found in C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek [AllSequential]. Please check the path and try again.
+Error initializing test folder as a RAS project: No HEC-RAS project file found in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek [AllSequential]. Please check the path and try again.
 </code></pre></div>
 <h2 id="step-4-sequential-execution-of-specific-plans">Step 4: Sequential Execution of Specific Plans<a class="headerlink" href="#step-4-sequential-execution-of-specific-plans" title="Permanent link">&para;</a></h2>
 <p>Now, let's execute only specific plans in the project. We'll select plans "01" and "02" and run them sequentially with the <code>clear_geompre</code> option set to True.</p>
@@ -5899,52 +5862,22 @@ Error initializing test folder as a RAS project: No HEC-RAS project file found i
 </span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-12-37"><a id="__codelineno-12-37" name="__codelineno-12-37" href="#__codelineno-12-37"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">results_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Starting the compute_test_mode...
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Creating the test folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]...
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Copied project folder to compute folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]
-
-
-2025-12-15 14:36:20 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.rasmap
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Initialized RAS project in compute folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.prj
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Getting plan entries...
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Retrieved plan entries successfully.
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;, &#39;02&#39;]
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Running selected plans sequentially...
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]
-
-
-2025-12-15 14:36:20 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p01
-
-
-2025-12-15 14:36:20 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p01
-
-
-2025-12-15 14:36:20 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 01
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 14:36:20 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p01&quot;
+<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Starting the compute_test_mode...
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Creating the test folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]...
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Copied project folder to compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]
+2025-12-28 22:39:18 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.rasmap
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Initialized RAS project in compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.prj
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Getting plan entries...
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Retrieved plan entries successfully.
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;, &#39;02&#39;]
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Running selected plans sequentially...
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]
+2025-12-28 22:39:18 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p01
+2025-12-28 22:39:18 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p01
+2025-12-28 22:39:18 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 01
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-28 22:39:18 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p01&quot;
 
 
 Executing specific plans sequentially with clearing geometry preprocessor files...
@@ -5952,68 +5885,30 @@ This may take several minutes...
 Selected plans: 01, 02
 
 
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 94.05 seconds
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Successfully computed plan 01
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 94.06 seconds
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]
-
-
-2025-12-15 14:37:54 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p02
-
-
-2025-12-15 14:37:54 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p02
-
-
-2025-12-15 14:37:54 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 02
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-15 14:37:54 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p02&quot;
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 4.34 seconds
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - Successfully computed plan 02
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 4.35 seconds
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - All selected plans have been executed.
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - compute_test_mode completed.
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - 
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 118.96 seconds
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Successfully computed plan 01
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 118.99 seconds
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]
+2025-12-28 22:41:17 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p02
+2025-12-28 22:41:17 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p02
+2025-12-28 22:41:17 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 02
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-28 22:41:17 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_07 [SpecificSequentialClearGeompre]\BaldEagle.p02&quot;
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 5.94 seconds
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - Successfully computed plan 02
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 5.96 seconds
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - All selected plans have been executed.
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - compute_test_mode completed.
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - 
 Execution Results:
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+2025-12-28 22:41:23 - ras_commander.RasCmdr - INFO - Plan 02: Successful
 
 
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - Plan 01: Successful
-
-
-2025-12-15 14:37:58 - ras_commander.RasCmdr - INFO - Plan 02: Successful
-
-
-Sequential execution of specific plans completed in 98.47 seconds
+Sequential execution of specific plans completed in 125.05 seconds
 
 Execution Results:
 </code></pre></div>
@@ -6209,7 +6104,7 @@ Execution Results:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
@@ -6219,7 +6114,7 @@ Execution Results:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 25, 2025 20:12:04 UTC">December 25, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:07:27 UTC">December 30, 2025</span>
   </span>
 
     
