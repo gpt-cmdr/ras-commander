@@ -35,6 +35,7 @@ Visualization:
 
 Analysis:
     - HdfFluvialPluvial: Fluvial-pluvial boundary analysis
+    - HdfBenefitAreas: Benefit/rise area analysis (2D plan comparison)
 
 Lazy Loading:
     Heavy dependencies (geopandas, xarray, shapely, matplotlib, scipy) are
@@ -80,6 +81,7 @@ from .HdfResultsPlot import HdfResultsPlot
 
 # Analysis classes
 from .HdfFluvialPluvial import HdfFluvialPluvial
+from .HdfBenefitAreas import HdfBenefitAreas
 
 # Project-level classes
 from .HdfProject import HdfProject
@@ -96,7 +98,7 @@ __all__ = [
     # Visualization
     'HdfPlot', 'HdfResultsPlot',
     # Analysis
-    'HdfFluvialPluvial',
+    'HdfFluvialPluvial', 'HdfBenefitAreas',
     # Project-level
     'HdfProject',
 ]
