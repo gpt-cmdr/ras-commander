@@ -104,6 +104,7 @@ Example:
 # Import and expose public API from core module
 from .core import (
     RasUsgsCore,
+    configure_rate_limit,
 )
 
 # Import and expose public API from spatial module
@@ -336,6 +337,7 @@ __all__ = [
     'configure_api_key',  # DEPRECATED
     'check_api_key',
     'get_rate_limit_info',
+    'configure_rate_limit',
     # Utility functions
     'check_dependencies',
 ]

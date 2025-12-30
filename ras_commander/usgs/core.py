@@ -66,6 +66,60 @@ from ..Decorators import log_call
 
 logger = logging.getLogger(__name__)
 
+# Module-level rate limiter for USGS API requests
+# Default: 2 requests per second with burst of 10 (conservative)
+# This helps prevent hitting API limits during sequential calls
+_module_rate_limiter = None
+_rate_limit_enabled = True  # Can be disabled for testing
+_default_rps = 2.0  # Requests per second (conservative default)
+
+def _get_rate_limiter():
+    """Get or create the module-level rate limiter."""
+    global _module_rate_limiter
+    if _module_rate_limiter is None and _rate_limit_enabled:
+        from .rate_limiter import UsgsRateLimiter
+        _module_rate_limiter = UsgsRateLimiter(
+            requests_per_second=_default_rps,
+            burst_size=10
+        )
+        logger.debug(f"Initialized module rate limiter: {_default_rps} req/sec")
+    return _module_rate_limiter
+
+def _apply_rate_limit():
+    """Apply rate limiting before making an API request."""
+    limiter = _get_rate_limiter()
+    if limiter:
+        limiter.wait_if_needed()
+
+def configure_rate_limit(requests_per_second: float = 2.0, enabled: bool = True):
+    """
+    Configure the module-level rate limiter for USGS API requests.
+
+    Parameters
+    ----------
+    requests_per_second : float, default 2.0
+        Maximum requests per second (conservative default).
+        - 2.0 = very conservative (recommended for batch operations)
+        - 5.0 = moderate (USGS recommendation without API key)
+        - 10.0 = aggressive (recommended only with API key)
+    enabled : bool, default True
+        Whether to enable rate limiting. Set to False to disable.
+
+    Example
+    -------
+    >>> from ras_commander.usgs.core import configure_rate_limit
+    >>> configure_rate_limit(requests_per_second=5.0)  # Increase rate
+    >>> configure_rate_limit(enabled=False)  # Disable rate limiting
+    """
+    global _module_rate_limiter, _rate_limit_enabled, _default_rps
+    _rate_limit_enabled = enabled
+    _default_rps = requests_per_second
+    _module_rate_limiter = None  # Reset to create new limiter with new settings
+    if enabled:
+        logger.info(f"Rate limiting configured: {requests_per_second} requests/sec")
+    else:
+        logger.info("Rate limiting disabled")
+
 
 class RasUsgsCore:
     """
@@ -182,6 +236,9 @@ class RasUsgsCore:
             end_datetime = end_datetime.strftime("%Y-%m-%d")
 
         try:
+            # Apply rate limiting before API request
+            _apply_rate_limit()
+
             if data_type.lower() == 'iv':
                 # Instantaneous values
                 data_df, metadata = nwis.get_iv(
@@ -299,6 +356,9 @@ class RasUsgsCore:
             end_datetime = end_datetime.strftime("%Y-%m-%d")
 
         try:
+            # Apply rate limiting before API request
+            _apply_rate_limit()
+
             if data_type.lower() == 'iv':
                 # Instantaneous values
                 data_df, metadata = nwis.get_iv(
@@ -401,6 +461,9 @@ class RasUsgsCore:
         logger.info(f"Retrieving metadata for site {site_id}")
 
         try:
+            # Apply rate limiting before API request
+            _apply_rate_limit()
+
             # Get site information
             # Note: dataretrieval 1.1.0+ returns tuple (DataFrame, metadata_dict)
             result = nwis.get_info(sites=site_id)
@@ -431,6 +494,9 @@ class RasUsgsCore:
 
             # Get available parameters by querying data availability
             try:
+                # Apply rate limiting before API request
+                _apply_rate_limit()
+
                 # Query what data is available (without downloading full dataset)
                 availability = nwis.what_sites(
                     sites=site_id,
@@ -531,6 +597,9 @@ class RasUsgsCore:
             end_datetime = end_datetime.strftime("%Y-%m-%d")
 
         try:
+            # Apply rate limiting before API request
+            _apply_rate_limit()
+
             # Try to get a small sample of data to verify availability
             # Get just first day to minimize data transfer
             test_df, metadata = nwis.get_iv(

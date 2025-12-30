@@ -434,17 +434,27 @@ class RasUsgsRealTime:
 
         try:
             # Determine start time for refresh
+            # Use pandas Timestamp (UTC) for consistent datetime handling
+            now_utc = pd.Timestamp.now(tz='UTC')
+
             if cached_df is not None and not cached_df.empty:
                 # Get last timestamp from cache
                 last_cached = cached_df['datetime'].max()
-                start_date = last_cached
+                # Convert to pandas Timestamp if needed
+                if isinstance(last_cached, pd.Timestamp):
+                    start_date = last_cached
+                else:
+                    start_date = pd.Timestamp(last_cached)
+                # Ensure timezone-aware
+                if start_date.tz is None:
+                    start_date = start_date.tz_localize('UTC')
                 logger.info(f"Refreshing {parameter} data since {last_cached}")
             else:
                 # No cache, get last max_age_hours
-                start_date = datetime.now() - timedelta(hours=max_age_hours)
+                start_date = now_utc - pd.Timedelta(hours=max_age_hours)
                 logger.info(f"No cache, retrieving last {max_age_hours} hours")
 
-            end_date = datetime.now()
+            end_date = now_utc
 
             # Retrieve new data
             # Note: Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS) for USGS API compatibility
@@ -478,8 +488,18 @@ class RasUsgsRealTime:
                 combined_df = combined_df.sort_values('datetime').reset_index(drop=True)
 
                 # Trim old data based on max_age_hours
-                cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
-                combined_df = combined_df[combined_df['datetime'] >= cutoff_time].reset_index(drop=True)
+                # Use pandas Timestamp for reliable comparison with datetime64 columns
+                cutoff_time = pd.Timestamp.now(tz='UTC') - pd.Timedelta(hours=max_age_hours)
+                datetime_col = combined_df['datetime']
+                # Handle both timezone-aware and naive datetime columns
+                try:
+                    if datetime_col.dt.tz is None:
+                        # Column is timezone-naive, make cutoff naive too
+                        cutoff_time = cutoff_time.tz_localize(None)
+                except (AttributeError, TypeError):
+                    # If .dt accessor fails, try direct comparison
+                    pass
+                combined_df = combined_df[datetime_col >= cutoff_time].reset_index(drop=True)
 
                 # Update metadata
                 combined_df.attrs['site_id'] = site_id

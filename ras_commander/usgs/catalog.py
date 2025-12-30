@@ -398,7 +398,7 @@ class UsgsGaugeCatalog:
                                 logger.debug(f"Gauge {site_id}: Saved {len(data_df)} {param} records")
 
                                 # Calculate completeness
-                                completeness = _calculate_completeness(data_df, start_date, end_date)
+                                completeness = _calculate_completeness(data_df, start_datetime, end_datetime)
                                 gaps = _detect_gaps(data_df)
 
                                 data_availability[param] = {
@@ -719,7 +719,8 @@ class UsgsGaugeCatalog:
         ras_object: RasPrj = None,
         catalog_folder: Optional[Union[str, Path]] = None,
         parameters: List[str] = None,
-        rate_limit_rps: float = 5.0
+        rate_limit_rps: float = 5.0,
+        api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Refresh existing catalog with latest data.
@@ -738,6 +739,11 @@ class UsgsGaugeCatalog:
         rate_limit_rps : float, default 5.0
             Rate limit in requests per second (5.0 = conservative, 10.0 = moderate)
             Set to 0 to disable rate limiting. USGS recommends 5-10 req/sec sustained.
+        api_key : str, optional
+            USGS API key for higher rate limits (default: None).
+            Without API key: 5 req/sec recommended (default rate_limit_rps=5.0)
+            With API key: 10 req/sec recommended (set rate_limit_rps=10.0)
+            Get free key at: https://api.waterdata.usgs.gov/signup/
 
         Returns
         -------
@@ -777,6 +783,16 @@ class UsgsGaugeCatalog:
                 )
         else:
             catalog_folder = Path(catalog_folder)
+
+        # Temporarily set API key if provided (restores original state at end)
+        original_api_key = os.environ.get("API_USGS_PAT")
+        if api_key is not None:
+            os.environ["API_USGS_PAT"] = api_key
+            logger.info("Using provided API key for USGS requests")
+        elif original_api_key:
+            logger.info("Using API key from environment for USGS requests")
+        else:
+            logger.info(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
 
         logger.info(f"Updating gauge catalog: {len(catalog_df)} gauges")
 
@@ -894,6 +910,12 @@ class UsgsGaugeCatalog:
         }
 
         logger.info(f"Catalog update complete: {gauges_updated} updated, {gauges_failed} failed")
+
+        # Restore original API key state
+        if original_api_key is not None:
+            os.environ["API_USGS_PAT"] = original_api_key
+        elif "API_USGS_PAT" in os.environ:
+            del os.environ["API_USGS_PAT"]
 
         return summary
 
