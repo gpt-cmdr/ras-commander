@@ -6,7 +6,7 @@
 
 RAS Commander is a Python library for automating HEC-RAS operations, providing a set of tools to interact with HEC-RAS project files, execute simulations, and manage project data. This library was initially conceptualized in the Australian Water School course "AI Tools for Modelling Innovation", and subsequently expanded to cover much of the basic functionality of the HECRASController COM32 interface using open-source python libraries and extent python tooling to the 6.x series of HEC-RAS.  This library uses a Test Driven Development strategy, leveraging the publicly-available HEC-RAS Example projects to create repeatable demonstration examples.  The "Commmander" moniker is inspired by the "Command Line is All You Need" approach to HEC-RAS automation that was first implemented in the HEC-Commander Tools repository.  
 
-**December 2025 Update:** RAS Commander now supports a fully agentic engineering experience using CLI coding agents and agent SDK's to extend library functions and assist H&H engineers with common modeling tasks such as importing external data, performing QAQC reviews, validating project file paths, AEP and historic storm modeling, maintaining modeling logs, and long term task planning and execution using the [LLM Forward Approach](https://clbengineering.com/insights).  
+**December 2025 Update:** RAS Commander now supports a fully agentic engineering experience using CLI coding agents and agent SDK's to extend library functions and assist H&H engineers with common modeling tasks such as importing external data, performing QAQC reviews, validating project file paths, AEP and historic storm modeling, or any of the other functionality supported by, or imminently extendable from existing functions, in composable long form agentic workflows.  Agents are instructed to work with humans in the loop: demonstrating their steps, maintaining modeling logs, and creating reproducible deliverables that can be externally verified directly in the HEC-RAS GUI.  Long term memory is arranged in a heirarchical knowledge structure with progressive disclosure. Agents, skills, rules and cognitive memory systems are included to assist the user with solidifying LLM-written code into deterministic workflows in a continual learning looop, along with a file-based memory system to assist with long term task planning and execution across many conversations and subagents. 
 
 ## LLM Forward Engineering
 
@@ -641,5 +641,6 @@ This software is released under the MIT license.
 
 For questions, suggestions, or support, please contact:  
 William Katzenmeyer, P.E., C.F.M. - heccommander@gmail.com
+
 
 
