@@ -119,12 +119,33 @@ use-deepseek-reasoner.bat
 run_notebook_test.bat
 run_notebook_test.ps1
 
-# Agent coordination system - entirely untracked on main
-# Users cloning main get clean workspace; dev branch tracks these for development
-agent_tasks/
+# Agent coordination system - scaffolding tracked, user state ignored
+# Users cloning main get clean templates; their local state is untracked
+
+# Track scaffolding files:
+#   agent_tasks/README.md
+#   agent_tasks/.agent/CONSTITUTION.md
+#   agent_tasks/.agent/*.template.md
+#   agent_tasks/tasks/.gitkeep
+#   agent_tasks/.old/.gitkeep
+
+# Ignore user-specific state files (use templates to create these)
+agent_tasks/.agent/STATE.md
+agent_tasks/.agent/BACKLOG.md
+agent_tasks/.agent/PROGRESS.md
+agent_tasks/.agent/LEARNINGS.md
+agent_tasks/.agent/.old/
+
+# Ignore user task content (but keep directory structure via .gitkeep)
+agent_tasks/tasks/*/
+agent_tasks/.old/*/
+
+# Ignore any research/work folders users create
+agent_tasks/ras-commander-api-research/
 
 # Archive directories (includes moved ras_agents/, ras_skills/, planning_docs/)
-.old/
+# Note: agent_tasks/.old/ is handled separately above (keeps .gitkeep, ignores contents)
+/.old/
 .claude/outputs/
 
 # Temporary test scripts (task-specific)
