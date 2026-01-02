@@ -1,275 +1,66 @@
 ---
-description: 
-globs: 
+description: RAS Commander development guidance
+globs:
 alwaysApply: true
 ---
-RAS Commander (ras-commander) Coding Assistant
+# RAS Commander - Cursor Rules
 
-Overview
-This Assistant helps you write Python code for HEC-RAS projects using the RAS Commander library (ras_commander). It automates tasks like project initialization, file manipulation (plans, geometry, flow), simulation execution (single, parallel, sequential), and HDF data extraction/analysis.
+This file provides navigation to authoritative documentation. **Do not duplicate content here.**
 
-Core Concepts: RasPrj Objects (global ras or custom instances), init_ras_project, File Handling (pathlib.Path), Data Management (ras.plan_df, etc.), Execution Modes (RasCmdr), Utility Functions (RasUtils), HDF Data Access (Hdf* classes), Example Projects (RasExamples).
+## Primary Sources (Read These)
 
-Decorators
-The library uses these common decorators:
+### Strategic Guidance
+- **`CLAUDE.md`** (root) - Project overview, architecture, development principles
+- **`AGENTS.md`** (root) - Library overview and capabilities
 
-@log_call: Automatically logs function entry/exit points at the DEBUG level. Applied to most public methods.
+### Topic-Specific Rules (Auto-Load in Claude Code)
+Located in `.claude/rules/`:
 
-@standardize_input(file_type='plan_hdf'|'geom_hdf'): Used primarily in Hdf* classes. It takes various inputs (path string, Path object, plan/geom number as str or int, h5py.File object) and ensures the decorated function receives a validated pathlib.Path object to the correct HDF file. Uses the ras_object context to resolve numbers. file_type specifies whether to look for plan results (.p*.hdf) or geometry (.g*.hdf) files when resolving numbers.
+**Python Patterns** (`.claude/rules/python/`):
+- `static-classes.md` - No instantiation pattern (RasCmdr, Hdf*, Ras*)
+- `decorators.md` - @log_call, @staticmethod, @standardize_input
+- `path-handling.md` - pathlib.Path for all operations
+- `error-handling.md` - LoggingConfig, exception patterns
+- `naming-conventions.md` - snake_case, PascalCase, abbreviations
+- `import-patterns.md` - Flexible imports for dev vs installed
 
-Classes, Functions and Arguments
-(Note: ras_object is an optional argument for most functions operating on project context; defaults to the global ras instance if not provided when using custom instances.)
+**HEC-RAS Domain** (`.claude/rules/hec-ras/`):
+- `execution.md` - RasCmdr.compute_plan(), parallel modes
+- `remote.md` - session_id=2, Group Policy requirements
+- `hdf-files.md` - Results extraction, steady vs unsteady
+- `geometry.md` - Fixed-width parsing, bank stations
+- `dss-files.md` - Boundary conditions, Java bridge
+- `usgs.md` - Gauge discovery, data retrieval
+- `precipitation.md` - AORC, Atlas 14
 
-1. RasPrj Class (Manages Project State)
+**Testing & Documentation** (`.claude/rules/testing/`, `.claude/rules/documentation/`):
+- `tdd-approach.md` - Test with real HEC-RAS projects
+- `environment-management.md` - uv for agents, Anaconda for notebooks
+- `notebook-standards.md` - H1 title required
+- `mkdocs-config.md` - Build configuration
 
-Function Name	@log_call	Arguments
-initialize	X	project_folder, ras_exe_path, suppress_logging
-check_initialized	X	
-find_ras_prj (static)	X	folder_path
-get_project_name	X	
-get_prj_entries	X	entry_type
-get_plan_entries	X	
-get_flow_entries	X	
-get_unsteady_entries	X	
-get_geom_entries	X	
-get_hdf_entries	X	
-print_data	X	
-get_plan_value (static)	X	plan_number_or_path, key, ras_object
-get_boundary_conditions	X	
-2. RasPlan Class (Plan File Operations)
+### Subpackage Context
+Each subpackage has scoped guidance:
+- `ras_commander/AGENTS.md` - Library API patterns
+- `ras_commander/hdf/AGENTS.md` - HDF operations
+- `ras_commander/usgs/CLAUDE.md` - USGS workflows
+- `ras_commander/remote/AGENTS.md` - Remote execution
+- `examples/AGENTS.md` - Notebook index
 
-Function Name	@log_call	Arguments
-set_geom (static)	X	plan_number, new_geom, ras_object
-set_steady (static)	X	plan_number, new_steady_flow_number, ras_object
-set_unsteady (static)	X	plan_number, new_unsteady_flow_number, ras_object
-set_num_cores (static)	X	plan_number_or_path, num_cores, ras_object
-get_results_path (static)	X	plan_number, ras_object
-get_plan_path (static)	X	plan_number, ras_object
-get_flow_path (static)	X	flow_number, ras_object
-get_unsteady_path (static)	X	unsteady_number, ras_object
-get_geom_path (static)	X	geom_number, ras_object
-clone_plan (static)	X	template_plan, new_plan_shortid, ras_object
-clone_unsteady (static)	X	template_unsteady, ras_object
-clone_steady (static)	X	template_flow, ras_object
-clone_geom (static)	X	template_geom, ras_object
-get_next_number (static)	X	existing_numbers
-get_plan_value (static)	X	plan_number_or_path, key, ras_object
-update_run_flags (static)	X	plan_number_or_path, geometry_preprocessor, unsteady_flow_simulation, run_sediment, post_processor, floodplain_mapping, ras_object
-update_plan_intervals (static)	X	plan_number_or_path, computation_interval, output_interval, instantaneous_interval, mapping_interval, ras_object
-update_plan_description(static)	X	plan_number_or_path, description, ras_object
-read_plan_description (static)	X	plan_number_or_path, ras_object
-update_simulation_date(static)	X	plan_number_or_path, start_date, end_date, ras_object
-get_shortid (static)	X	plan_number_or_path, ras_object
-set_shortid (static)	X	plan_number_or_path, new_shortid, ras_object
-get_plan_title (static)	X	plan_number_or_path, ras_object
-set_plan_title (static)	X	plan_number_or_path, new_title, ras_object
-3. RasGeo Class (Geometry File Operations)
+## Quick Reference
 
-Function Name	@log_call	Arguments
-clear_geompre_files (static)	X	plan_files=None, ras_object
-4. RasUnsteady Class (Unsteady Flow File Operations)
+### Core Pattern
+```python
+# Static classes - call directly, no instantiation
+from ras_commander import RasCmdr, init_ras_project
+init_ras_project("/path/to/project", "6.5")
+RasCmdr.compute_plan("01")  # Not RasCmdr().compute_plan()
+```
 
-Function Name	@log_call	Arguments
-update_flow_title (static)	X	unsteady_file, new_title, ras_object
-update_restart_settings (static)	X	unsteady_file, use_restart, restart_filename, ras_object
-extract_boundary_and_tables (static)	X	unsteady_file, ras_object
-print_boundaries_and_tables (static)	X	boundaries_df
-identify_tables (static)	X	lines
-parse_fixed_width_table (static)	X	lines, start, end
-extract_tables (static)	X	unsteady_file, ras_object
-write_table_to_file (static)	X	unsteady_file, table_name, df, start_line, ras_object
-5. RasCmdr Class (Simulation Execution)
+### Key Principles
+1. Use `pathlib.Path` for all file operations
+2. Test with `RasExamples.extract_project()`, not mocks
+3. Use `@log_call` decorator on all public functions
+4. Static class pattern for most classes (exceptions: RasPrj, Workers, Callbacks)
 
-Function Name	@log_call	Arguments
-compute_plan (static)	X	plan_number, dest_folder, ras_object, clear_geompre, num_cores, overwrite_dest
-compute_parallel (static)	X	plan_number, max_workers, num_cores, clear_geompre, ras_object, dest_folder, overwrite_dest
-compute_test_mode (static)	X	plan_number, dest_folder_suffix, clear_geompre, num_cores, ras_object, overwrite_dest
-6. RasUtils Class (General Utilities)
-
-Function Name	@log_call	Arguments
-create_directory (static)	X	directory_path, ras_object
-find_files_by_extension (static)	X	extension, ras_object
-get_file_size (static)	X	file_path, ras_object
-get_file_modification_time (static)	X	file_path, ras_object
-get_plan_path (static)	X	current_plan_number_or_path, ras_object
-remove_with_retry (static)	X	path, max_attempts, initial_delay, is_folder, ras_object
-update_plan_file (static)	X	plan_number_or_path, file_type, entry_number, ras_object
-check_file_access (static)	X	file_path, mode
-convert_to_dataframe (static)	X	data_source, **kwargs
-save_to_excel (static)	X	dataframe, excel_path, **kwargs
-calculate_rmse (static)	X	observed_values, predicted_values, normalized
-calculate_percent_bias (static)	X	observed_values, predicted_values, as_percentage
-calculate_error_metrics (static)	X	observed_values, predicted_values
-update_file (static)	X	file_path, update_function, *args
-get_next_number (static)	X	existing_numbers
-clone_file (static)	X	template_path, new_path, update_function, *args
-update_project_file (static)	X	prj_file, file_type, new_num, ras_object
-decode_byte_strings (static)	X	dataframe
-perform_kdtree_query (static)	X	reference_points, query_points, max_distance
-find_nearest_neighbors (static)	X	points, max_distance
-consolidate_dataframe (static)	X	dataframe, group_by, pivot_columns, level, n_dimensional, aggregation_method
-find_nearest_value (static)	X	array, target_value
-horizontal_distance (static)	X	coord1, coord2
-7. HdfBase Class (Core HDF Operations)
-
-Function Name	@standardize_input	Arguments
-get_simulation_start_time (static)		hdf_file
-get_unsteady_timestamps (static)		hdf_file
-get_2d_flow_area_names_and_counts (static)	X (plan_hdf)	hdf_path
-get_projection (static)	X (plan_hdf)	hdf_path
-get_attrs (static)	X (plan_hdf)	hdf_file, attr_path
-get_dataset_info (static)	X (plan_hdf)	file_path, group_path
-get_polylines_from_parts (static)	X (plan_hdf)	hdf_path, path, info_name, parts_name, points_name
-print_attrs (static)		name, obj
-8. HdfBndry Class (Boundary Geometry from HDF)
-
-Function Name	@standardize_input	Arguments
-get_bc_lines (static)	X (plan_hdf)	hdf_path
-get_breaklines (static)	X (plan_hdf)	hdf_path
-get_refinement_regions (static)	X (plan_hdf)	hdf_path
-get_reference_lines (static)	X (plan_hdf)	hdf_path, mesh_name
-get_reference_points (static)	X (plan_hdf)	hdf_path, mesh_name
-9. HdfMesh Class (Mesh Geometry from HDF)
-
-Function Name	@standardize_input	Arguments
-get_mesh_area_names (static)	X (plan_hdf)	hdf_path
-get_mesh_areas (static)	X (geom_hdf)	hdf_path
-get_mesh_cell_polygons (static)	X (geom_hdf)	hdf_path
-get_mesh_cell_points (static)	X (plan_hdf)	hdf_path
-get_mesh_cell_faces (static)	X (plan_hdf)	hdf_path
-get_mesh_area_attributes (static)	X (geom_hdf)	hdf_path
-get_mesh_face_property_tables (static)	X (geom_hdf)	hdf_path
-get_mesh_cell_property_tables (static)	X (geom_hdf)	hdf_path
-10. HdfPlan Class (Plan Info from HDF)
-
-Function Name	@log_call	@standardize_input	Arguments
-get_plan_start_time (static)	X	X (plan_hdf)	hdf_path
-get_plan_end_time (static)	X	X (plan_hdf)	hdf_path
-get_plan_timestamps_list (static)	X	X (plan_hdf)	hdf_path
-get_plan_information (static)	X	X (plan_hdf)	hdf_path
-get_plan_parameters (static)	X	X (plan_hdf)	hdf_path
-get_plan_met_precip (static)	X	X (plan_hdf)	hdf_path
-get_geometry_information (static)	X	X (geom_hdf)	hdf_path
-11. HdfResultsMesh Class (Mesh Results from HDF)
-
-Function Name	@log_call	@standardize_input	Arguments
-get_mesh_summary (static)	X	X (plan_hdf)	hdf_path, var, round_to
-get_mesh_timeseries (static)	X	X (plan_hdf)	hdf_path, mesh_name, var, truncate
-get_mesh_faces_timeseries (static)	X	X (plan_hdf)	hdf_path, mesh_name
-get_mesh_cells_timeseries (static)	X	X (plan_hdf)	hdf_path, mesh_names, var, truncate, ras_object
-get_mesh_last_iter (static)	X	X (plan_hdf)	hdf_path
-get_mesh_max_ws (static)	X	X (plan_hdf)	hdf_path, round_to
-get_mesh_min_ws (static)	X	X (plan_hdf)	hdf_path, round_to
-get_mesh_max_face_v (static)	X	X (plan_hdf)	hdf_path, round_to
-get_mesh_min_face_v (static)	X	X (plan_hdf)	hdf_path, round_to
-get_mesh_max_ws_err (static)	X	X (plan_hdf)	hdf_path, round_to
-get_mesh_max_iter (static)	X	X (plan_hdf)	hdf_path, round_to
-12. HdfResultsPlan Class (Plan Results from HDF)
-
-Function Name	@log_call	@standardize_input	Arguments
-get_unsteady_info (static)	X	X (plan_hdf)	hdf_path
-get_unsteady_summary (static)	X	X (plan_hdf)	hdf_path
-get_volume_accounting (static)	X	X (plan_hdf)	hdf_path
-get_runtime_data (static)		X (plan_hdf)	hdf_path
-get_reference_timeseries (static)	X	X (plan_hdf)	hdf_path, reftype
-get_reference_summary (static)	X	X (plan_hdf)	hdf_path, reftype
-13. HdfResultsXsec Class (1D Results from HDF)
-
-Function Name	@log_call	@standardize_input	Arguments
-get_xsec_timeseries (static)	X	X (plan_hdf)	hdf_path
-get_ref_lines_timeseries (static)	X	X (plan_hdf)	hdf_path
-get_ref_points_timeseries (static)	X	X (plan_hdf)	hdf_path
-14. HdfStruc Class (Structure Geometry from HDF)
-
-Function Name	@log_call	@standardize_input	Arguments
-get_structures (static)	X	X (geom_hdf)	hdf_path, datetime_to_str
-get_geom_structures_attrs (static)	X	X (geom_hdf)	hdf_path
-15. HdfUtils Class (HDF Utilities)
-
-Function Name	@log_call	Arguments
-convert_ras_string (static)		value
-convert_ras_hdf_value (static)		value
-convert_df_datetimes_to_str (static)		df
-perform_kdtree_query (static)	X	reference_points, query_points, max_distance
-find_nearest_neighbors (static)	X	points, max_distance
-parse_ras_datetime_ms (static)	X	datetime_str
-convert_timesteps_to_datetimes (static)		timesteps, start_time, time_unit, round_to
-convert_hdf5_attrs_to_dict (static)		attrs, prefix
-parse_run_time_window (static)		window
-parse_ras_datetime (static)		datetime_str
-parse_ras_window_datetime (static)		datetime_str
-parse_duration (static)		duration_str
-decode_byte_strings (static)	X	dataframe
-consolidate_dataframe (static)	X	dataframe, group_by, ..., aggregation_method
-find_nearest_value (static)	X	array, target_value
-horizontal_distance (static)	X	coord1, coord2
-16. HdfXsec Class (1D Geometry from HDF)
-
-Function Name	@log_call	@standardize_input	Arguments
-get_cross_sections (static)	X		hdf_path, datetime_to_str, ras_object
-get_river_centerlines (static)	X	X (geom_hdf)	hdf_path, datetime_to_str
-get_river_stationing (static)	X		centerlines_gdf
-get_river_reaches (static)	X	X (geom_hdf)	hdf_path, datetime_to_str
-get_river_edge_lines (static)	X	X (geom_hdf)	hdf_path, datetime_to_str
-get_river_bank_lines (static)	X	X (geom_hdf)	hdf_path, datetime_to_str
-17. RasExamples Class (HEC-RAS Example Projects)
-
-Function Name	@log_call	Arguments
-__init__	X	
-get_example_projects (classmethod)	X	version_number
-list_categories (classmethod)		
-list_projects (classmethod)		category=None
-extract_project (classmethod)		project_names
-is_project_extracted (classmethod)		project_name
-clean_projects_directory (classmethod)		
-download_fema_ble_model (classmethod)	X	huc8, output_dir
-18. Standalone functions (Import directly from ras_commander)
-
-Function Name	@log_call	Arguments
-init_ras_project	X	ras_project_folder, ras_version, ras_object
-get_ras_exe	X	ras_version
-Coding Assistance Rules:
-Use standard Python libraries, especially pathlib for file paths. Prefer pathlib.Path over os.path.
-
-Use r-strings for paths (e.g., r"C:\path"), f-strings for formatted output.
-
-Include comments for complex logic. Use logging (logger.info, logger.debug, etc.) for runtime messages, not print().
-
-Follow PEP 8 style conventions (snake_case for functions/variables, PascalCase for classes).
-
-Implement clear error handling using try...except blocks and raise specific exceptions (ValueError, FileNotFoundError, etc.) when appropriate.
-
-Explain the purpose and key arguments of ras_commander functions used.
-
-When using ras_commander, decide whether to use the global ras object (after init_ras_project) or custom RasPrj instances. If using custom instances, always pass the instance via the ras_object parameter. Avoid mixing global and custom usage unintentionally.
-
-Highlight best practices for parallel (compute_parallel) vs. sequential (compute_test_mode) execution based on plan independence and resources. Recommend appropriate max_workers and num_cores.
-
-Suggest using RasExamples for testing or demonstrating code.
-
-Use Hdf* classes for HDF file reading/analysis. Remember the @standardize_input decorator simplifies path handling for these functions.
-
-Use type hints (typing module) for function arguments and return values in generated code.
-
-Apply the @log_call decorator to generated functions where appropriate for consistency.
-
-When providing code examples, ensure they are complete, runnable snippets where possible. Do not use ellipses (...) for missing code.
-
-When using decorators from the library, import them as from ras_commander import log_call, standardize_input.
-
-When using logging, get the logger via from ras_commander import get_logger; logger = get_logger(__name__).
-
-Use pd.concat instead of append for pandas DataFrames (pandas >= 2.0).
-
-When working with multiple projects, suggest using descriptive variable names for RasPrj instances (e.g., bald_eagle_proj) and separate output folders.
-
-Remind users that init_ras_project updates the global ras object even when initializing a custom object.
-
-Ensure correct HEC-RAS time interval strings ("1MIN", "10SEC", etc.) are used with RasPlan.update_plan_intervals.
-
-Use datetime objects for RasPlan.update_simulation_date.
-
-Remind users about clear_geompre=True or RasGeo.clear_geompre_files() after geometry modifications.
-
-
-Prefer Hdf* classes for reading HDF data over manual h5py operations unless necessary for very specific tasks not covered by the library.
+## See CLAUDE.md for Complete Documentation
