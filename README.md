@@ -30,13 +30,11 @@ This repository has several methods of interaction with Large Language Models an
 
 1. **[Claude Code Agentic Infrastructure](https://github.com/gpt-cmdr/ras-commander/tree/main/.claude)**: A comprehensive cognitive infrastructure built for [Anthropic's Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI tool. The `.claude/` directory contains specialized **agents** (domain experts for HDF analysis, geometry parsing, USGS integration, remote execution), **skills** (workflow templates for common tasks like plan execution and results extraction), **rules** (auto-loaded coding patterns and best practices), and **commands** (slash commands for common operations). The root `CLAUDE.md` provides strategic guidance while `AGENTS.md` files throughout the codebase offer scoped context. This hierarchical knowledge system enables Claude Code to understand ras-commander's static class patterns, HEC-RAS domain concepts, and testing approaches - making it an effective pair programming partner for hydraulic engineering automation. Just open the repository in Claude Code (`claude` in terminal) to leverage the full infrastructure.
 
-2. **[Purpose-Built Knowledge Base Summaries](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/llm_knowledge_bases)**: Up-to-date compilations of the documentation and codebase for use with large language models like Claude, ChatGPT, Gemini or Grok. Look in 'ai_tools/assistant_knowledge_bases/' in the repo.  The repo's codebase (without documentation and examples) has been curated to stay within the current ~200k context window limitations of frontier models, and for tasks that do not need an understanding of the underlying code, the Comprehensive Library Guide and any relevant examples from the example folder should be adequate context for leveraging the ras-commander API to complete tasks. 
+2. **[Third-Party AI Framework Support](https://github.com/gpt-cmdr/ras-commander/tree/main/.cursor/rules)**: The repository supports common AI coding frameworks including **Cursor IDE** (`.cursor/rules/`), **AGENTS.md standard** (scoped guidance files throughout codebase), and other LLM-assisted development tools. All framework configurations point to the authoritative `CLAUDE.md` and `.claude/rules/` documentation - no content duplication. Just open the repository in your preferred AI-assisted IDE to leverage the built-in context.
 
-3. **[Cursor IDE Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/.cursorrules)**: Custom rules(.cursor/rules) for the Cursor IDE to provide context-aware suggestions and documentation.  Just open the repository folder in Cursor to recognize these instructions.  You can create your own folders "/workspace/, "/projects/", or "my_projects/" as these are already in the .gitignore, and place your custom scripts there for your projects.  This will allow easy referencing of the ras-commander documents and individual repo files, the automatic loading of the .cursorrules file.  Alternatvely, download the github repo into your projects folder to easily load documents and use cursor rules files.
+3. **[Full Documentation on ReadTheDocs](https://ras-commander.readthedocs.io/)**: Comprehensive API documentation, user guides, and example notebooks. Includes installation guide, quick start, and detailed class references.
 
-4. **[RAS-Commander library as indexed by Deepwiki](https://deepwiki.com/gpt-cmdr/ras-commander)** An LLM-generated summary of the repostiory with diagrams and analysis of the library, as well as an integrated chat assistant with deep research.
-
-5. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: A specialized ChatGPT "GPT" with access to the ras-commander codebase and library, available for answering queries and providing code suggestions.   You can even upload your own plan, unsteady and HDF files to inspect and help determine how to automate your workflows or visualize your results.  _NOTE: GPT's are still quite limited by OpenAI's GPT frameworks and may not be useful for long conversations.  Code interpreter cannot run HEC-RAS but can [open and view smaller HDF files and projects for demonstration purposes](https://chatgpt.com/share/67e7cdb7-49e0-8010-bbac-61d2c54d473f)_
+4. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)** _(Deprecated - CLI agents preferred)_: This GPT is no longer actively maintained. For the best experience, use Claude Code or other CLI agents with the repository's built-in cognitive infrastructure.
 
 
 ## Background
@@ -54,6 +52,7 @@ If you've ever read the book "Breaking the HEC-RAS Code" by Chris Goodell, this 
 HEC-RAS Project Management & Execution
 - Multi-project handling with parallel and sequential execution
 - Command-line execution integration
+- **Smart execution skip** (NEW in v0.88.0) - automatic staleness detection, skips re-runs when results are current
 - Project folder management and organization
 - Multi-core processing optimization
 - Progress tracking and logging
@@ -304,6 +303,22 @@ for plan, success in results.items():
     print(f"Plan {plan}: {'Successful' if success else 'Failed'}")
 ```
 
+**Smart Execution Skip** (NEW in v0.88.0):
+```python
+# Default: Smart skip - automatically skips if results are current
+RasCmdr.compute_plan("01")  # Skips if HDF newer than inputs
+# Logs: "Skipping plan 01: Results are current (HDF newer than inputs)"
+
+# Force re-run even if current
+RasCmdr.compute_plan("01", force_rerun=True)  # Always executes
+
+# Force complete geometry reprocessing
+RasCmdr.compute_plan("01", force_geompre=True)  # Clears .g##.hdf + .c##
+
+# Efficiency: 10 plans, only 2 modified → 80% time savings
+RasCmdr.compute_parallel(["01", ..., "10"])  # Runs only modified plans
+```
+
 #### Legacy COM Interface Execution (HEC-RAS 3.x-6.x)
 
 **For older HEC-RAS versions**, use the RasControl class:
@@ -392,10 +407,12 @@ This is useful for comparing different river systems, running scenario analyses 
 
 ```
 ras_commander
-├── ai_tools
-│   └── [AI Knowledge Bases](https://github.com/gpt-cmdr/ras-commander/tree/main/ai_tools/llm_knowledge_bases)
+├── .claude/                # Claude Code cognitive infrastructure
+│   ├── agents/             # Domain specialist definitions
+│   ├── skills/             # Workflow templates
+│   └── rules/              # Auto-loaded coding patterns
 ├── examples
-│   └── [Examples Notebooks](https://github.com/gpt-cmdr/ras-commander/tree/main/ras_commander)
+│   └── [Example Notebooks](https://github.com/gpt-cmdr/ras-commander/tree/main/examples)
 ├── ras_commander
 │   ├── __init__.py
 │   ├── _version.py
