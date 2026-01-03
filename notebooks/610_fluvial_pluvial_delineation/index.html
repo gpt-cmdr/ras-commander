@@ -4945,15 +4945,13 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;📦 PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Import ras-commander</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfBase</span><span class="p">,</span> <span class="n">HdfMesh</span><span class="p">,</span> <span class="n">HdfResultsMesh</span><span class="p">,</span> <span class="n">HdfResultsPlot</span><span class="p">,</span> <span class="n">HdfUtils</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfBase</span><span class="p">,</span> <span class="n">HdfFluvialPluvial</span><span class="p">,</span> <span class="n">HdfMesh</span><span class="p">,</span> <span class="n">HdfResultsMesh</span><span class="p">,</span> <span class="n">HdfResultsPlot</span><span class="p">,</span> <span class="n">HdfUtils</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Verify which version loaded</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-
-
 ✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
@@ -5012,8 +5010,8 @@
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bald Eagle project initialized with folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Define the plan number to execute</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="n">plan_number</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Use the plan number from parameters</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="n">PLAN</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Update the run flags in the plan file</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">update_run_flags</span><span class="p">(</span>
@@ -5033,111 +5031,30 @@
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2"> execution failed for Bald Eagle.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 17:14:38 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-
-
-2025-12-16 17:14:38 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-
-
-2025-12-16 17:14:38 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-
-
-2025-12-16 17:14:38 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-
-
-2025-12-16 17:14:38 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_14&#39;
-
-
-2025-12-16 17:14:40 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14
-
-
-2025-12-16 17:14:40 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.rasmap
-
-
-2025-12-16 17:14:40 - root - INFO - Bald Eagle project initialized with folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14
-
-
-2025-12-16 17:14:41 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06 (flags modified: 4)
-
-
-2025-12-16 17:14:41 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14
-
-
-2025-12-16 17:14:41 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-16 17:14:41 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06&quot;
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_14&#39;
+2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_14&#39; already exists. Deleting existing folder...
+2025-12-30 15:11:39 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_14&#39; has been deleted.
+2025-12-30 15:11:41 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14
+2025-12-30 15:11:41 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.rasmap
+2025-12-30 15:11:41 - root - INFO - Bald Eagle project initialized with folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14
+2025-12-30 15:11:41 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06 (flags modified: 4)
+2025-12-30 15:11:41 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14
+2025-12-30 15:11:41 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-30 15:11:41 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06&quot;
 
 
 Executing Plan 06 for the Bald Eagle Creek project...
 
 
-
----------------------------------------------------------------------------
-
-KeyboardInterrupt                         Traceback (most recent call last)
-
-Cell In[4], line 28
-     25 # Execute Plan 06 using RasCmdr with skip_existing=True
-     26 # This will skip execution if HDF results already exist with &quot;Complete Process&quot;
-     27 print(f&quot;Executing Plan {plan_number} for the Bald Eagle Creek project...&quot;)
----&gt; 28 success_bald_eagle = RasCmdr.compute_plan(plan_number, skip_existing=True)
-     29 if success_bald_eagle:
-     30     print(f&quot;Plan {plan_number} executed successfully (or skipped - results exist).&quot;)
+2025-12-30 15:19:19 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+2025-12-30 15:19:19 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 458.56 seconds
 
 
-File c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\Decorators.py:16, in log_call.&lt;locals&gt;.wrapper(*args, **kwargs)
-     14 logger = logging.getLogger(func.__module__)
-     15 logger.debug(f&quot;Calling {func.__name__}&quot;)
----&gt; 16 result = func(*args, **kwargs)
-     17 logger.debug(f&quot;Finished {func.__name__}&quot;)
-     18 return result
-
-
-File c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\RasCmdr.py:364, in RasCmdr.compute_plan(plan_number, dest_folder, ras_object, clear_geompre, num_cores, overwrite_dest, skip_existing, verify, stream_callback)
-    360         raise subprocess.CalledProcessError(return_code, cmd)
-    362 else:
-    363     # Original behavior when no callback
---&gt; 364     subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
-    366 end_time = time.time()
-    367 run_time = end_time - start_time
-
-
-File c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\subprocess.py:556, in run(input, capture_output, timeout, check, *popenargs, **kwargs)
-    554 with Popen(*popenargs, **kwargs) as process:
-    555     try:
---&gt; 556         stdout, stderr = process.communicate(input, timeout=timeout)
-    557     except TimeoutExpired as exc:
-    558         process.kill()
-
-
-File c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\subprocess.py:1222, in Popen.communicate(self, input, timeout)
-   1219     endtime = None
-   1221 try:
--&gt; 1222     stdout, stderr = self._communicate(input, endtime, timeout)
-   1223 except KeyboardInterrupt:
-   1224     # https://bugs.python.org/issue25942
-   1225     # See the detailed comment in .wait().
-   1226     if timeout is not None:
-
-
-File c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\subprocess.py:1644, in Popen._communicate(self, input, endtime, orig_timeout)
-   1640 # Wait for the reader threads, or time out.  If we time out, the
-   1641 # threads remain reading and the fds left open in case the user
-   1642 # calls communicate again.
-   1643 if self.stdout is not None:
--&gt; 1644     self.stdout_thread.join(self._remaining_time(endtime))
-   1645     if self.stdout_thread.is_alive():
-   1646         raise TimeoutExpired(self.args, orig_timeout)
-
-
-File c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\threading.py:1094, in Thread.join(self, timeout)
-   1091 if timeout is not None:
-   1092     timeout = max(timeout, 0)
--&gt; 1094 self._handle.join(timeout)
-
-
-KeyboardInterrupt:
+Plan 06 executed successfully (or skipped - results exist).
 </code></pre></div>
 <h3 id="optional-use-your-own-project-instead">OPTIONAL: Use your own project instead<a class="headerlink" href="#optional-use-your-own-project-instead" title="Permanent link">&para;</a></h3>
 <p>your_project_path = Path(r"D:\yourprojectpath")</p>
@@ -5152,34 +5069,1919 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan DataFrame for bald_eagle project:&quot;</span><span class="p">)</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Plan DataFrame for bald_eagle project:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>unsteady_number</th>
+      <th>geometry_number</th>
+      <th>Plan Title</th>
+      <th>Program Version</th>
+      <th>Short Identifier</th>
+      <th>Simulation Date</th>
+      <th>Computation Interval</th>
+      <th>Mapping Interval</th>
+      <th>Run HTab</th>
+      <th>...</th>
+      <th>DSS File</th>
+      <th>Friction Slope Method</th>
+      <th>UNET D2 SolverType</th>
+      <th>UNET D2 Name</th>
+      <th>HDF_Results_Path</th>
+      <th>Geom File</th>
+      <th>Geom Path</th>
+      <th>Flow File</th>
+      <th>Flow Path</th>
+      <th>full_path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>13</td>
+      <td>07</td>
+      <td>06</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.10</td>
+      <td>PMF Multi 2D</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+      <td>30MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>193</td>
+      <td>None</td>
+      <td>06</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>07</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td>12</td>
+      <td>08</td>
+      <td>1d-2D Dambreak Refined Grid</td>
+      <td>5.10</td>
+      <td>1D-2D Refined Grid</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>08</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>12</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td>09</td>
+      <td>10</td>
+      <td>2D to 1D No Dam</td>
+      <td>5.00</td>
+      <td>2D to 1D No Dam</td>
+      <td>01JAN1999,1200,06JAN1999,1200</td>
+      <td>1MIN</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>Upstream2D</td>
+      <td>None</td>
+      <td>10</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>09</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td>10</td>
+      <td>11</td>
+      <td>2D to 2D Run</td>
+      <td>5.00</td>
+      <td>2D to 2D Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>11</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>10</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td>11</td>
+      <td>12</td>
+      <td>SA to 2D Dam Break Run</td>
+      <td>5.00</td>
+      <td>SA to 2D Dam Break</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>10MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>12</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>11</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td>13</td>
+      <td>09</td>
+      <td>Single 2D Area - Internal Dam Structure</td>
+      <td>5.04</td>
+      <td>Single 2D</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+      <td>10MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>09</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>13</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td>01</td>
+      <td>13</td>
+      <td>SA to 2D Area Conn - 2D Levee Structure</td>
+      <td>5.00</td>
+      <td>2D Levee Struc</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>13</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>02</td>
+      <td>01</td>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach</td>
+      <td>5.10</td>
+      <td>SA-2D Det Brch</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>10SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td>01</td>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach FEQ</td>
+      <td>5.03</td>
+      <td>SA-2D Det FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td>02</td>
+      <td>03</td>
+      <td>Single 2D area with Bridges FEQ</td>
+      <td>5.10</td>
+      <td>Single 2D Bridges FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+      <td>10MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>PARDISO (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>03</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>02</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td>03</td>
+      <td>09</td>
+      <td>Gridded Precip - Infiltration</td>
+      <td>6.00</td>
+      <td>Grid Precip Infiltration</td>
+      <td>09SEP2018,0000,14SEP2018,0000</td>
+      <td>20SEC</td>
+      <td>10MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>dss</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>09</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>03</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+  </tbody>
+</table>
+<p>11 rows × 29 columns</p>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Geometry DataFrame for the project:&quot;</span><span class="p">)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Geometry DataFrame for the project:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>geom_file</th>
+      <th>geom_number</th>
+      <th>full_path</th>
+      <th>hdf_path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>g06</td>
+      <td>06</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>g08</td>
+      <td>08</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>g10</td>
+      <td>10</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>g11</td>
+      <td>11</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>g12</td>
+      <td>12</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>g09</td>
+      <td>09</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>g13</td>
+      <td>13</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>g01</td>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>g03</td>
+      <td>03</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>g02</td>
+      <td>02</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Unsteady DataFrame for the project:&quot;</span><span class="p">)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Unsteady DataFrame for the project:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>unsteady_number</th>
+      <th>full_path</th>
+      <th>Flow Title</th>
+      <th>Program Version</th>
+      <th>Use Restart</th>
+      <th>Precipitation Mode</th>
+      <th>Wind Mode</th>
+      <th>Met BC=Precipitation|Mode</th>
+      <th>Met BC=Evapotranspiration|Mode</th>
+      <th>Met BC=Precipitation|Expanded View</th>
+      <th>Met BC=Precipitation|Constant Units</th>
+      <th>Met BC=Precipitation|Gridded Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>07</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>08</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>09</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>Upstream 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>10</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>1972 Flood Event - 2D to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>11</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>1972 Flood Event - SA to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>12</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>PMF for 1D - 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>13</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>Single 2D Area</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>01</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>1972 Flood Event - 2D Leve Structure</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>02</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>Single 2D Area with Bridges</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>03</td>
+      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>Gridded Precipitation</td>
+      <td>6.00</td>
+      <td>0</td>
+      <td>Enable</td>
+      <td>No Wind Forces</td>
+      <td>Gridded</td>
+      <td>None</td>
+      <td>-1</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Boundary Conditions DataFrame for the project:&quot;</span><span class="p">)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span> 
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Boundary Conditions DataFrame for the project:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>unsteady_number</th>
+      <th>boundary_condition_number</th>
+      <th>river_reach_name</th>
+      <th>river_station</th>
+      <th>storage_area_name</th>
+      <th>pump_station_name</th>
+      <th>bc_type</th>
+      <th>hydrograph_type</th>
+      <th>Interval</th>
+      <th>DSS File</th>
+      <th>...</th>
+      <th>Flow Title</th>
+      <th>Program Version</th>
+      <th>Use Restart</th>
+      <th>Precipitation Mode</th>
+      <th>Wind Mode</th>
+      <th>Met BC=Precipitation|Mode</th>
+      <th>Met BC=Evapotranspiration|Mode</th>
+      <th>Met BC=Precipitation|Expanded View</th>
+      <th>Met BC=Precipitation|Constant Units</th>
+      <th>Met BC=Precipitation|Gridded Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>07</td>
+      <td>1</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>137520</td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>07</td>
+      <td>2</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>81454</td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>07</td>
+      <td>3</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>28519</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>07</td>
+      <td>4</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>1</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>07</td>
+      <td>5</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>136948</td>
+      <td>82303</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>07</td>
+      <td>6</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>80720</td>
+      <td>67130</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>07</td>
+      <td>7</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>76865</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>07</td>
+      <td>8</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>67130</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>07</td>
+      <td>9</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>66041</td>
+      <td>1</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>07</td>
+      <td>10</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>-1867</td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>08</td>
+      <td>1</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>28519</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>08</td>
+      <td>2</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>1</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>08</td>
+      <td>3</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>80720</td>
+      <td>67130</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>08</td>
+      <td>4</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>76865</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>08</td>
+      <td>5</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>67130</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>08</td>
+      <td>6</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>66041</td>
+      <td>1</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>Uniform Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>08</td>
+      <td>7</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>-1867</td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td>08</td>
+      <td>8</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>08</td>
+      <td>9</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>81454</td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for Upstream 2D</td>
+      <td>4.20</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>09</td>
+      <td>1</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>28519</td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>Upstream 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>09</td>
+      <td>2</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>-1867</td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Upstream 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>09</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Upstream 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>10</td>
+      <td>1</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td>10</td>
+      <td>2</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>10</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>10</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>11</td>
+      <td>1</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - SA to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td>11</td>
+      <td>2</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - SA to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td>11</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - SA to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td>11</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - SA to 2D Run</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>12</td>
+      <td>1</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>137520</td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>15MIN</td>
+      <td>Bald_Eagle_Creek.dss</td>
+      <td>...</td>
+      <td>PMF for 1D - 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>12</td>
+      <td>2</td>
+      <td>Bald Eagle Cr.</td>
+      <td>Lock Haven</td>
+      <td>81454</td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for 1D - 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td>12</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for 1D - 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td>12</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>PMF for 1D - 2D</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td>13</td>
+      <td>1</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td>13</td>
+      <td>2</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>36</th>
+      <td>13</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>37</th>
+      <td>13</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area</td>
+      <td>5.00</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>38</th>
+      <td>01</td>
+      <td>1</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D Leve Structure</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>39</th>
+      <td>01</td>
+      <td>2</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>Lateral Inflow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D Leve Structure</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>40</th>
+      <td>01</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D Leve Structure</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>41</th>
+      <td>01</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1972 Flood Event - 2D Leve Structure</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>42</th>
+      <td>02</td>
+      <td>1</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area with Bridges</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>43</th>
+      <td>02</td>
+      <td>2</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area with Bridges</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>44</th>
+      <td>02</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area with Bridges</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>45</th>
+      <td>02</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area with Bridges</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>46</th>
+      <td>02</td>
+      <td>5</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Single 2D Area with Bridges</td>
+      <td>5.10</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>47</th>
+      <td>03</td>
+      <td>1</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Gridded Precipitation</td>
+      <td>6.00</td>
+      <td>0</td>
+      <td>Enable</td>
+      <td>No Wind Forces</td>
+      <td>Gridded</td>
+      <td>None</td>
+      <td>-1</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+    <tr>
+      <th>48</th>
+      <td>03</td>
+      <td>2</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Flow Hydrograph</td>
+      <td>Flow Hydrograph</td>
+      <td>1HOUR</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Gridded Precipitation</td>
+      <td>6.00</td>
+      <td>0</td>
+      <td>Enable</td>
+      <td>No Wind Forces</td>
+      <td>Gridded</td>
+      <td>None</td>
+      <td>-1</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+    <tr>
+      <th>49</th>
+      <td>03</td>
+      <td>3</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Normal Depth</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Gridded Precipitation</td>
+      <td>6.00</td>
+      <td>0</td>
+      <td>Enable</td>
+      <td>No Wind Forces</td>
+      <td>Gridded</td>
+      <td>None</td>
+      <td>-1</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+    <tr>
+      <th>50</th>
+      <td>03</td>
+      <td>4</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>Gate Opening</td>
+      <td>None</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>Gridded Precipitation</td>
+      <td>6.00</td>
+      <td>0</td>
+      <td>Enable</td>
+      <td>No Wind Forces</td>
+      <td>Gridded</td>
+      <td>None</td>
+      <td>-1</td>
+      <td>mm/hr</td>
+      <td>DSS</td>
+    </tr>
+  </tbody>
+</table>
+<p>51 rows × 29 columns</p>
+</div>
+
 <h1 id="find-paths-for-results-and-geometry-hdfs">Find Paths for Results and Geometry HDF's<a class="headerlink" href="#find-paths-for-results-and-geometry-hdfs" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="n">plan_number</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">plan_number</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Use the plan_number defined earlier</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using plan number: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Get the plan HDF path for the plan_number defined above</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">plan_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Using plan number: 06
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">plan_hdf_path</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\BaldEagleCrkMulti2D_14\\BaldEagleDamBrk.p06.hdf&#39;
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Get the geometry HDF path</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">geom_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;Geom Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">geom_hdf_path</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\BaldEagleCrkMulti2D_14\\BaldEagleDamBrk.g09.hdf&#39;
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Plan HDF path for Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">plan_hdf_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry HDF path for Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">geom_hdf_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Plan HDF path for Plan 06: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+Geometry HDF path for Plan 06: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+</code></pre></div>
 <h1 id="fluvial-pluvial-delineation-using-ras-commander">Fluvial Pluvial Delineation using RAS-Commander<a class="headerlink" href="#fluvial-pluvial-delineation-using-ras-commander" title="Permanent link">&para;</a></h1>
 <p>Using the Maximum WSE Results layer, which contains the maximum water surface and time stamp of the maximum water surface, mesh cell faces are categorized.  If the difference in time (delta_t) in hours is greater than the (user defined, default 12) duration specified, that mesh cell face is added to the fluvial-pluvial boundary dataset. </p>
 <p>This is meant to provide a draft fluvial-pluvial boundary for floodplain analysis, to the extent it can be derived directly from the HEC-RAS results files. </p>
@@ -5198,6 +7000,53 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># If you get an error here, you may have a pre-6.0 HDF.  Re-run in 6.x to generate a new results file</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:19 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:19 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:19 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
+2025-12-30 15:19:19 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:19 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:19 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:19 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:20 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 19597 rows of summary output data
+
+
+max_ws_df
+         mesh_name  cell_id  maximum_water_surface maximum_water_surface_time  \
+0      BaldEagleCr        0             704.054443        2018-09-10 18:00:00   
+1      BaldEagleCr        1             692.377991        2018-09-10 18:04:00   
+2      BaldEagleCr        2             671.183472        2018-09-10 18:13:20   
+3      BaldEagleCr        3             660.605469        2018-09-10 18:54:40   
+4      BaldEagleCr        4             660.586243        2018-09-10 18:55:20   
+...            ...      ...                    ...                        ...   
+19592  BaldEagleCr    19592               0.000000        2018-09-09 00:00:00   
+19593  BaldEagleCr    19593               0.000000        2018-09-09 00:00:00   
+19594  BaldEagleCr    19594               0.000000        2018-09-09 00:00:00   
+19595  BaldEagleCr    19595               0.000000        2018-09-09 00:00:00   
+19596  BaldEagleCr    19596               0.000000        2018-09-09 00:00:00
+
+                             geometry  
+0              POINT (2083000 370750)  
+1              POINT (2083250 370750)  
+2              POINT (2083500 370750)  
+3              POINT (2083750 370750)  
+4              POINT (2084000 370750)  
+...                               ...  
+19592  POINT (1978423.032 300718.897)  
+19593  POINT (1973389.375 297311.928)  
+19594   POINT (1968834.79 295808.861)  
+19595  POINT (1966130.942 291879.395)  
+19596   POINT (1969660.046 289673.23)
+
+[19597 rows x 5 columns]
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Call the function to plot</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">HdfResultsPlot</span><span class="o">.</span><span class="n">plot_results_max_wsel</span><span class="p">(</span><span class="n">max_ws_df</span><span class="p">)</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
@@ -5208,6 +7057,179 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">First few rows of the merged dataframe:&quot;</span><span class="p">)</span>
 </span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="n">max_ws_df</span>
 </span></code></pre></div>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_27_0.png" /></p>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_27_1.png" /></p>
+<div class="language-text highlight"><pre><span></span><code>Simulation Start Time: 2018-09-09 00:00:00
+Time Range: 120.0 hours
+
+Timing Statistics (hours since start):
+count    19597.000000
+mean        63.225596
+std         40.179660
+min          0.000000
+25%         34.000000
+50%         42.700000
+75%        115.677778
+max        120.000000
+Name: max_wsel_time, dtype: float64
+
+First few rows of the merged dataframe:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>mesh_name</th>
+      <th>cell_id</th>
+      <th>maximum_water_surface</th>
+      <th>maximum_water_surface_time</th>
+      <th>geometry</th>
+      <th>x</th>
+      <th>y</th>
+      <th>max_wsel_time</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>BaldEagleCr</td>
+      <td>0</td>
+      <td>704.054443</td>
+      <td>2018-09-10 18:00:00</td>
+      <td>POINT (2083000 370750)</td>
+      <td>2.083000e+06</td>
+      <td>370750.000000</td>
+      <td>2018-09-10 18:00:00</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>BaldEagleCr</td>
+      <td>1</td>
+      <td>692.377991</td>
+      <td>2018-09-10 18:04:00</td>
+      <td>POINT (2083250 370750)</td>
+      <td>2.083250e+06</td>
+      <td>370750.000000</td>
+      <td>2018-09-10 18:04:00</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>BaldEagleCr</td>
+      <td>2</td>
+      <td>671.183472</td>
+      <td>2018-09-10 18:13:20</td>
+      <td>POINT (2083500 370750)</td>
+      <td>2.083500e+06</td>
+      <td>370750.000000</td>
+      <td>2018-09-10 18:13:20</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>BaldEagleCr</td>
+      <td>3</td>
+      <td>660.605469</td>
+      <td>2018-09-10 18:54:40</td>
+      <td>POINT (2083750 370750)</td>
+      <td>2.083750e+06</td>
+      <td>370750.000000</td>
+      <td>2018-09-10 18:54:40</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>BaldEagleCr</td>
+      <td>4</td>
+      <td>660.586243</td>
+      <td>2018-09-10 18:55:20</td>
+      <td>POINT (2084000 370750)</td>
+      <td>2.084000e+06</td>
+      <td>370750.000000</td>
+      <td>2018-09-10 18:55:20</td>
+    </tr>
+    <tr>
+      <th>...</th>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+    </tr>
+    <tr>
+      <th>19592</th>
+      <td>BaldEagleCr</td>
+      <td>19592</td>
+      <td>0.000000</td>
+      <td>2018-09-09 00:00:00</td>
+      <td>POINT (1978423.032 300718.897)</td>
+      <td>1.978423e+06</td>
+      <td>300718.897016</td>
+      <td>2018-09-09 00:00:00</td>
+    </tr>
+    <tr>
+      <th>19593</th>
+      <td>BaldEagleCr</td>
+      <td>19593</td>
+      <td>0.000000</td>
+      <td>2018-09-09 00:00:00</td>
+      <td>POINT (1973389.375 297311.928)</td>
+      <td>1.973389e+06</td>
+      <td>297311.928472</td>
+      <td>2018-09-09 00:00:00</td>
+    </tr>
+    <tr>
+      <th>19594</th>
+      <td>BaldEagleCr</td>
+      <td>19594</td>
+      <td>0.000000</td>
+      <td>2018-09-09 00:00:00</td>
+      <td>POINT (1968834.79 295808.861)</td>
+      <td>1.968835e+06</td>
+      <td>295808.860743</td>
+      <td>2018-09-09 00:00:00</td>
+    </tr>
+    <tr>
+      <th>19595</th>
+      <td>BaldEagleCr</td>
+      <td>19595</td>
+      <td>0.000000</td>
+      <td>2018-09-09 00:00:00</td>
+      <td>POINT (1966130.942 291879.395)</td>
+      <td>1.966131e+06</td>
+      <td>291879.394946</td>
+      <td>2018-09-09 00:00:00</td>
+    </tr>
+    <tr>
+      <th>19596</th>
+      <td>BaldEagleCr</td>
+      <td>19596</td>
+      <td>0.000000</td>
+      <td>2018-09-09 00:00:00</td>
+      <td>POINT (1969660.046 289673.23)</td>
+      <td>1.969660e+06</td>
+      <td>289673.230118</td>
+      <td>2018-09-09 00:00:00</td>
+    </tr>
+  </tbody>
+</table>
+<p>19597 rows × 8 columns</p>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Use HdfUtils for extracting projection</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Extracting Projection from HDF&quot;</span><span class="p">)</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">projection</span> <span class="o">=</span> <span class="n">HdfBase</span><span class="o">.</span><span class="n">get_projection</span><span class="p">(</span><span class="n">hdf_path</span><span class="o">=</span><span class="n">geom_hdf_path</span><span class="p">)</span>
@@ -5216,6 +7238,16 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No projection information found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+
+
+
+Extracting Projection from HDF
+Projection: EPSG:2271
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Example: Extract Cell Polygons</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example 6: Extracting Cell Polygons&quot;</span><span class="p">)</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">cell_polygons_gdf</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_polygons</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
@@ -5224,6 +7256,29 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># Call the function to plot cell polygons</span>
 </span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1">#cell_polygons_gdf = HdfFluvialPluvial.plot_cell_polygons(cell_polygons_gdf, projection)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+
+
+
+Example 6: Extracting Cell Polygons
+
+
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:21 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.g09.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">geopandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gpd</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">shapely.geometry</span><span class="w"> </span><span class="kn">import</span> <span class="n">LineString</span><span class="p">,</span> <span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiLineString</span>
@@ -5235,6 +7290,50 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Example usage:</span>
 </span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="n">boundary_gdf</span> <span class="o">=</span> <span class="n">HdfFluvialPluvial</span><span class="o">.</span><span class="n">calculate_fluvial_pluvial_boundary</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">delta_t</span><span class="o">=</span><span class="mi">72</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:22 - ras_commander.hdf.HdfFluvialPluvial - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfFluvialPluvial - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfFluvialPluvial - INFO - Getting cell polygons from HDF file...
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:22 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfFluvialPluvial - INFO - Getting maximum water surface data from HDF file...
+2025-12-30 15:19:23 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
+2025-12-30 15:19:23 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:23 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:24 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 19597 rows of summary output data
+2025-12-30 15:19:24 - ras_commander.hdf.HdfFluvialPluvial - INFO - Converting maximum water surface timestamps...
+2025-12-30 15:19:24 - ras_commander.hdf.HdfFluvialPluvial - INFO - Processing cell adjacencies...
+2025-12-30 15:19:26 - ras_commander.hdf.HdfFluvialPluvial - INFO - Extracting cell times from maximum water surface data...
+2025-12-30 15:19:26 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identifying boundary edges...
+2025-12-30 15:19:26 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identified 3201 boundary edges using delta_t of 72 hours.
+2025-12-30 15:19:26 - ras_commander.hdf.HdfFluvialPluvial - INFO - Creating final GeoDataFrame for boundaries...
+2025-12-30 15:19:26 - ras_commander.hdf.HdfFluvialPluvial - INFO - Boundary line calculation completed successfully.
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Calculate statistics about the boundary line lengths</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">boundary_lengths</span> <span class="o">=</span> <span class="n">boundary_gdf</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">length</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
@@ -5248,6 +7347,23 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Boundary GeoDataFrame info:&quot;</span><span class="p">)</span>
 </span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="nb">print</span><span class="p">(</span><span class="n">boundary_gdf</span><span class="o">.</span><span class="n">info</span><span class="p">())</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Boundary line length statistics:
+Max length: 441.63
+Min length: 1.57
+Average length: 242.54
+Median length: 250.00
+
+Boundary GeoDataFrame info:
+&lt;class &#39;geopandas.geodataframe.GeoDataFrame&#39;&gt;
+RangeIndex: 3201 entries, 0 to 3200
+Data columns (total 1 columns):
+ #   Column    Non-Null Count  Dtype   
+---  ------    --------------  -----   
+ 0   geometry  3201 non-null   geometry
+dtypes: geometry(1)
+memory usage: 25.1 KB
+None
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Visualize the results</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">cell_polygons_gdf</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
@@ -5257,6 +7373,7 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Y Coordinate&#39;</span><span class="p">)</span>
 </span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_32_0.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">length_threshold</span> <span class="o">=</span> <span class="mi">3000</span> <span class="c1">#in same units as X and Y coordinates</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># Filter out boundary lines below the length threshold</span>
@@ -5274,9 +7391,58 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
 </span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_362752\1399630256.py:10: UserWarning: The GeoDataFrame you are attempting to plot is empty. Nothing has been displayed.
+  filtered_boundary_gdf.plot(ax=ax, color=&#39;red&#39;, linewidth=2, label=&#39;Valid Boundaries&#39;)
+</code></pre></div>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_33_1.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Example usage using Optional min_line_length argument:</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">boundary_gdf</span> <span class="o">=</span> <span class="n">HdfFluvialPluvial</span><span class="o">.</span><span class="n">calculate_fluvial_pluvial_boundary</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">delta_t</span><span class="o">=</span><span class="mi">72</span><span class="p">,</span> <span class="n">min_line_length</span><span class="o">=</span><span class="mi">3000</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:31 - ras_commander.hdf.HdfFluvialPluvial - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfFluvialPluvial - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfFluvialPluvial - INFO - Getting cell polygons from HDF file...
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfFluvialPluvial - INFO - Getting maximum water surface data from HDF file...
+2025-12-30 15:19:32 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
+2025-12-30 15:19:32 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:32 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:33 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:33 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 19597 rows of summary output data
+2025-12-30 15:19:33 - ras_commander.hdf.HdfFluvialPluvial - INFO - Converting maximum water surface timestamps...
+2025-12-30 15:19:33 - ras_commander.hdf.HdfFluvialPluvial - INFO - Processing cell adjacencies...
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Extracting cell times from maximum water surface data...
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identifying boundary edges...
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identified 3201 boundary edges using delta_t of 72 hours.
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - 3201 boundary line(s) shorter than 3000 units were dropped after filtering.
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Creating final GeoDataFrame for boundaries...
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Boundary line calculation completed successfully.
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># To get the classified flood zones as polygons:</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">flood_polygons_gdf</span> <span class="o">=</span> <span class="n">HdfFluvialPluvial</span><span class="o">.</span><span class="n">generate_fluvial_pluvial_polygons</span><span class="p">(</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="n">plan_hdf_path</span><span class="p">,</span> 
@@ -5302,6 +7468,54 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-25-23"><a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Y Coordinate&quot;</span><span class="p">)</span>
 </span><span id="__span-25-24"><a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfFluvialPluvial - INFO - Loading mesh and results data...
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:35 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
+2025-12-30 15:19:36 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:36 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:37 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 19597 rows of summary output data
+2025-12-30 15:19:37 - ras_commander.hdf.HdfFluvialPluvial - INFO - Processing cell adjacencies...
+2025-12-30 15:19:39 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identifying initial boundary seeds with delta_t = 10 hours...
+2025-12-30 15:19:39 - ras_commander.hdf.HdfFluvialPluvial - INFO - Starting iterative region growth with tolerance = 1.0 hours...
+Region Growing: 33iter [00:00, 67.06iter/s, Fluvial=0, Pluvial=0, Ambiguous=0]      
+2025-12-30 15:19:40 - ras_commander.hdf.HdfFluvialPluvial - INFO - Region growing completed in 33 iterations.
+2025-12-30 15:19:40 - ras_commander.hdf.HdfFluvialPluvial - INFO - Merging classifications with cell polygons...
+2025-12-30 15:19:40 - ras_commander.hdf.HdfFluvialPluvial - INFO - Dissolving polygons by classification...
+2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Applying minimum polygon area filter: 1000 acres
+2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Found 235 small fluvial and 140 small pluvial polygons to reclassify.
+2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Redissolved polygons after reclassification of small areas.
+2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Polygon generation completed successfully.
+</code></pre></div>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_35_1.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># To get the classified flood zones as polygons:</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">flood_polygons_gdf</span> <span class="o">=</span> <span class="n">HdfFluvialPluvial</span><span class="o">.</span><span class="n">generate_fluvial_pluvial_polygons</span><span class="p">(</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>    <span class="n">plan_hdf_path</span><span class="p">,</span> 
@@ -5327,6 +7541,54 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-26-23"><a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Y Coordinate&quot;</span><span class="p">)</span>
 </span><span id="__span-26-24"><a id="__codelineno-26-24" name="__codelineno-26-24" href="#__codelineno-26-24"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfFluvialPluvial - INFO - Loading mesh and results data...
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:41 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
+2025-12-30 15:19:42 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:42 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 19597 rows of summary output data
+2025-12-30 15:19:42 - ras_commander.hdf.HdfFluvialPluvial - INFO - Processing cell adjacencies...
+2025-12-30 15:19:45 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identifying initial boundary seeds with delta_t = 12 hours...
+2025-12-30 15:19:45 - ras_commander.hdf.HdfFluvialPluvial - INFO - Starting iterative region growth with tolerance = 1.0 hours...
+Region Growing: 37iter [00:00, 72.45iter/s, Fluvial=0, Pluvial=0, Ambiguous=0]      
+2025-12-30 15:19:46 - ras_commander.hdf.HdfFluvialPluvial - INFO - Region growing completed in 37 iterations.
+2025-12-30 15:19:46 - ras_commander.hdf.HdfFluvialPluvial - INFO - Merging classifications with cell polygons...
+2025-12-30 15:19:46 - ras_commander.hdf.HdfFluvialPluvial - INFO - Dissolving polygons by classification...
+2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Applying minimum polygon area filter: 200 acres
+2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Found 214 small fluvial and 96 small pluvial polygons to reclassify.
+2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Redissolved polygons after reclassification of small areas.
+2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Polygon generation completed successfully.
+</code></pre></div>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_36_1.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># To get the classified flood zones as polygons:</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">flood_polygons_gdf</span> <span class="o">=</span> <span class="n">HdfFluvialPluvial</span><span class="o">.</span><span class="n">generate_fluvial_pluvial_polygons</span><span class="p">(</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="n">plan_hdf_path</span><span class="p">,</span> 
@@ -5352,8 +7614,58 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-27-23"><a id="__codelineno-27-23" name="__codelineno-27-23" href="#__codelineno-27-23"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Y Coordinate&quot;</span><span class="p">)</span>
 </span><span id="__span-27-24"><a id="__codelineno-27-24" name="__codelineno-27-24" href="#__codelineno-27-24"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfFluvialPluvial - INFO - Loading mesh and results data...
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:47 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
+2025-12-30 15:19:48 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p06.hdf
+2025-12-30 15:19:48 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 19597 rows of summary output data
+2025-12-30 15:19:48 - ras_commander.hdf.HdfFluvialPluvial - INFO - Processing cell adjacencies...
+2025-12-30 15:19:51 - ras_commander.hdf.HdfFluvialPluvial - INFO - Identifying initial boundary seeds with delta_t = 14 hours...
+2025-12-30 15:19:51 - ras_commander.hdf.HdfFluvialPluvial - INFO - Starting iterative region growth with tolerance = 1.0 hours...
+Region Growing: 42iter [00:00, 88.07iter/s, Fluvial=0, Pluvial=0, Ambiguous=0]      
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Region growing completed in 42 iterations.
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Merging classifications with cell polygons...
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Dissolving polygons by classification...
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Applying minimum polygon area filter: 1000 acres
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Found 182 small fluvial and 69 small pluvial polygons to reclassify.
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Redissolved polygons after reclassification of small areas.
+2025-12-30 15:19:52 - ras_commander.hdf.HdfFluvialPluvial - INFO - Polygon generation completed successfully.
+</code></pre></div>
+<p><img alt="png" src="../610_fluvial_pluvial_delineation_files/610_fluvial_pluvial_delineation_37_1.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">flood_polygons_gdf</span><span class="o">.</span><span class="n">to_file</span><span class="p">(</span><span class="n">driver</span><span class="o">=</span><span class="s1">&#39;GeoJSON&#39;</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s1">&#39;flood_polygons.geojson&#39;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:53 - pyogrio._io - INFO - Created 3 records
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Create fluvial_pluvial_boundary subfolder in project directory</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">output_dir</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="s2">&quot;fluvial_pluvial_boundary&quot;</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">output_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -5362,6 +7674,11 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="c1"># Save to GeoJSON in output directory</span>
 </span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="n">boundary_gdf</span><span class="o">.</span><span class="n">to_file</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="s1">&#39;fluvial_pluvial_boundary.geojson&#39;</span><span class="p">,</span> <span class="n">driver</span><span class="o">=</span><span class="s1">&#39;GeoJSON&#39;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 15:19:53 - pyogrio._io - INFO - Created 0 records
+
+
+Output directory created/verified at: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_14\fluvial_pluvial_boundary
+</code></pre></div>
 
 
 
@@ -5384,7 +7701,7 @@ plan_number = "01"  # Plan number to use for this notebook </p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:24 UTC">January 3, 2026</span>
   </span>
 
     
@@ -5394,7 +7711,7 @@ plan_number = "01"  # Plan number to use for this notebook </p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:24 UTC">January 3, 2026</span>
   </span>
 
     

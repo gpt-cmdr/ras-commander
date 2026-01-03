@@ -5146,6 +5146,10 @@
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ All imports successful&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+✓ All imports successful
+</code></pre></div>
 <h3 id="boundary-condition-generation-verification">Boundary Condition Generation Verification<a class="headerlink" href="#boundary-condition-generation-verification" title="Permanent link">&para;</a></h3>
 <p><strong>After generating BC from gauge data</strong>:</p>
 <ul>
@@ -5186,6 +5190,8 @@
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parameters configured for notebook </span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Parameters configured for notebook 913
+</code></pre></div>
 <h2 id="1-initialize-project-and-identify-boundary-condition">1. Initialize Project and Identify Boundary Condition<a class="headerlink" href="#1-initialize-project-and-identify-boundary-condition" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Extract and initialize example project</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracting </span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2"> project...&quot;</span><span class="p">)</span>
@@ -5198,6 +5204,27 @@
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Boundary Conditions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:31:16 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2025-12-29 06:31:16 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2025-12-29 06:31:16 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2025-12-29 06:31:16 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2025-12-29 06:31:16 - ras_commander.RasExamples - INFO - Extracting project &#39;Muncie&#39; as &#39;Muncie_913&#39;
+
+
+Extracting Muncie project...
+
+
+2025-12-29 06:31:16 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Muncie&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_913
+2025-12-29 06:31:16 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_913\Muncie.rasmap
+
+
+Using: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_913
+
+Project initialized: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_913
+Plans: 3
+Geometries: 3
+Boundary Conditions: 2
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Identify the Flow Hydrograph BC</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">boundaries_df</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">flow_bc</span> <span class="o">=</span> <span class="n">boundaries_df</span><span class="p">[</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Flow Hydrograph&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -5210,6 +5237,14 @@
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Current hydrograph points: </span><span class="si">{</span><span class="n">flow_bc</span><span class="p">[</span><span class="s1">&#39;hydrograph_num_values&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Interval: </span><span class="si">{</span><span class="n">flow_bc</span><span class="p">[</span><span class="s1">&#39;Interval&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Target Boundary Condition:
+  Type: Flow Hydrograph
+  River/Reach: White
+  River Station: Muncie
+  Location: Lock Haven, PA (approximate)
+  Current hydrograph points: 65
+  Interval: 1HOUR
+</code></pre></div>
 <h2 id="2-query-upstream-gauge-data">2. Query Upstream Gauge Data<a class="headerlink" href="#2-query-upstream-gauge-data" title="Permanent link">&para;</a></h2>
 <p>We'll use <strong>USGS-01547200</strong> (Bald Eagle Creek at Milesburg, PA):
 - Located ~15 miles upstream of Lock Haven
@@ -5234,6 +5269,23 @@
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Note: Metadata query had issues: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using known values: USGS-</span><span class="si">{</span><span class="n">upstream_gauge</span><span class="si">}</span><span class="s2">, Milesburg, PA, 265 sq mi&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:31:16 - ras_commander.usgs.core - INFO - dataretrieval package loaded successfully
+2025-12-29 06:31:16 - ras_commander.usgs.core - INFO - Retrieving metadata for site 01547200
+
+
+Querying USGS gauge metadata...
+
+
+2025-12-29 06:31:17 - ras_commander.usgs.core - INFO - Retrieved metadata for Bald Eagle Creek bl Spring Creek at Milesburg, PA (drainage area: 265.0 sq mi)
+
+
+
+Gauge: USGS-01547200
+Name: Bald Eagle Creek bl Spring Creek at Milesburg, PA
+Location: (40.9431, -77.7864)
+Drainage Area: 265.0 sq mi
+State: 42
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Query recent flow data (last 7 days)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Querying recent flow data (last 7 days)...&quot;</span><span class="p">)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">hours_lookback</span> <span class="o">=</span> <span class="mi">168</span>  <span class="c1"># 7 days</span>
@@ -5252,6 +5304,27 @@
 </span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Peak: </span><span class="si">{</span><span class="n">recent_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Min: </span><span class="si">{</span><span class="n">recent_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:31:17 - ras_commander.usgs.real_time - INFO - dataretrieval package loaded for real-time operations
+2025-12-29 06:31:17 - ras_commander.usgs.real_time - INFO - Retrieving last 168 hours of flow data for site 01547200
+
+
+
+Querying recent flow data (last 7 days)...
+
+
+2025-12-29 06:31:17 - ras_commander.usgs.real_time - INFO - Retrieved 677 recent flow records for site 01547200
+
+
+
+Data retrieved: 677 records
+Time range: 2025-12-22 11:45:00+00:00 to 2025-12-29 11:00:00+00:00
+
+Flow statistics (at gauge):
+  Current: 269.0 cfs
+  Mean: 223.5 cfs
+  Peak: 276.0 cfs
+  Min: 196.0 cfs
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Visualize gauge data</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
@@ -5272,6 +5345,9 @@
 </span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Retrieved </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">recent_flow</span><span class="p">)</span><span class="si">}</span><span class="s2"> hourly flow values from upstream gauge&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<p><img alt="png" src="../913_bc_generation_from_live_gauge_files/913_bc_generation_from_live_gauge_12_0.png" /></p>
+<div class="language-text highlight"><pre><span></span><code>✓ Retrieved 677 hourly flow values from upstream gauge
+</code></pre></div>
 <h2 id="3-apply-drainage-area-scaling">3. Apply Drainage Area Scaling<a class="headerlink" href="#3-apply-drainage-area-scaling" title="Permanent link">&para;</a></h2>
 <p>The gauge is at 265 sq mi, but our BC location at Lock Haven has ~500 sq mi of drainage. We'll scale flows proportionally:</p>
 <p>$$Q_{BC} = Q_{gauge} \times \frac{A_{BC}}{A_{gauge}}$$</p>
@@ -5293,6 +5369,17 @@
 </span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Peak: </span><span class="si">{</span><span class="n">scaled_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
 </span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Min: </span><span class="si">{</span><span class="n">scaled_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Drainage Area Scaling:
+  Gauge drainage (Milesburg): 265 sq mi
+  BC drainage (Lock Haven): 500 sq mi
+  Scaling factor: 1.887
+
+Scaled flow statistics (at BC location):
+  Current: 507.5 cfs
+  Mean: 421.8 cfs
+  Peak: 520.8 cfs
+  Min: 369.8 cfs
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Visualize scaling effect</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
@@ -5318,6 +5405,9 @@
 </span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
 </span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Applied drainage area scaling (</span><span class="si">{</span><span class="n">gauge_drainage_sqmi</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">bc_drainage_sqmi</span><span class="si">}</span><span class="s2"> sq mi)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<p><img alt="png" src="../913_bc_generation_from_live_gauge_files/913_bc_generation_from_live_gauge_15_0.png" /></p>
+<div class="language-text highlight"><pre><span></span><code>✓ Applied drainage area scaling (265 → 500 sq mi)
+</code></pre></div>
 <h2 id="4-generate-flow-hydrograph-table">4. Generate Flow Hydrograph Table<a class="headerlink" href="#4-generate-flow-hydrograph-table" title="Permanent link">&para;</a></h2>
 <p>Convert the scaled flow data into HEC-RAS fixed-width format for the .u## file.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Generate HEC-RAS format hydrograph table</span>
@@ -5335,6 +5425,38 @@
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;...&quot;</span><span class="p">)</span>
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:31:18 - ras_commander.usgs.boundary_generation - INFO - Generated Flow Hydrograph table: 677 values, interval=1HOUR
+
+
+Generating flow hydrograph table...
+
+✓ Generated hydrograph table with 70 lines
+
+First 20 lines of HEC-RAS format:
+======================================================================
+Interval=1HOUR
+Flow Hydrograph= 677
+  441.51  437.74  437.74  437.74  432.08  426.42  426.42  420.75  420.75  420.75
+  420.75  426.42  432.08  432.08  432.08  426.42  426.42  426.42  432.08  432.08
+  432.08  432.08  432.08  437.74  447.17  447.17  452.83  458.49  475.47  475.47
+  464.15  452.83  447.17  447.17  441.51  447.17  452.83  452.83  447.17  447.17
+  452.83  452.83  458.49  464.15  469.81  469.81  469.81  469.81  475.47  475.47
+  475.47  475.47  475.47  481.13  481.13  488.68  488.68  488.68  494.34  494.34
+  494.34  488.68  494.34  501.89  501.89  501.89  507.55  515.09  515.09  515.09
+  515.09  515.09  520.75  515.09  515.09  515.09  515.09  507.55  501.89  494.34
+  501.89  501.89  494.34  488.68  488.68  488.68  488.68  481.13  475.47  475.47
+  475.47  469.81  464.15  464.15  458.49  458.49  458.49  452.83  447.17  447.17
+  447.17  441.51  441.51  447.17  441.51  447.17  452.83  452.83  447.17  447.17
+  441.51  441.51  437.74  441.51  441.51  441.51  441.51  441.51  437.74  437.74
+  437.74  437.74  441.51  441.51  437.74  437.74  437.74  432.08  432.08  426.42
+  426.42  432.08  432.08  426.42  426.42  432.08  432.08  432.08  432.08  432.08
+  432.08  432.08  432.08  437.74  437.74  437.74  441.51  441.51  447.17  447.17
+  447.17  447.17  441.51  437.74  437.74  437.74  437.74  437.74  437.74  437.74
+  437.74  441.51  437.74  437.74  441.51  437.74  432.08  432.08  437.74  432.08
+  426.42  432.08  426.42  426.42  426.42  426.42  432.08  437.74  441.51  447.17
+...
+======================================================================
+</code></pre></div>
 <h2 id="5-update-unsteady-file">5. Update Unsteady File<a class="headerlink" href="#5-update-unsteady-file" title="Permanent link">&para;</a></h2>
 <p>Write the new flow hydrograph to the model's unsteady flow file (.u02).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Create a working copy of the project</span>
@@ -5352,6 +5474,15 @@
 </span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">working_dir</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Reinitialized with working copy&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Created working copy: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek - Live BC
+
+
+2025-12-29 06:31:18 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek - Live BC\Muncie.rasmap
+
+
+
+✓ Reinitialized with working copy
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Update the boundary condition in the unsteady file</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">unsteady_file</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Updating unsteady file: </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="n">unsteady_file</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -5384,6 +5515,15 @@
 </span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✗ Error updating BC: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  This is expected if the function needs implementation&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Updating unsteady file: Muncie.u01
+
+Target BC:
+  River/Reach: White
+  Station: Muncie
+
+✗ Error updating BC: BoundaryGenerator.update_boundary_hydrograph() got an unexpected keyword argument &#39;bc_identifier&#39;
+  This is expected if the function needs implementation
+</code></pre></div>
 <h2 id="6-verify-and-run-model">6. Verify and Run Model<a class="headerlink" href="#6-verify-and-run-model" title="Permanent link">&para;</a></h2>
 <p>At this point, the model is ready to run with the new live-data-driven boundary condition.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verify the update by reading back the BC</span>
@@ -5405,6 +5545,19 @@
 </span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">⚠ Point count mismatch: expected </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">scaled_flow</span><span class="p">)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">flow_bc_updated</span><span class="p">[</span><span class="s1">&#39;hydrograph_num_values&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:31:18 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek - Live BC\Muncie.rasmap
+
+
+Verifying boundary condition update...
+
+Updated BC properties:
+  Type: Flow Hydrograph
+  River/Reach: White
+  Station: Muncie
+  Hydrograph points: 65
+
+⚠ Point count mismatch: expected 677, got 65
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># To run the model, uncomment the following:</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># from ras_commander import RasCmdr</span>
@@ -5420,6 +5573,9 @@
 </span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">To run the model, uncomment the code above.&quot;</span><span class="p">)</span>
 </span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The model is configured with live gauge data as the upstream BC.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>To run the model, uncomment the code above.
+The model is configured with live gauge data as the upstream BC.
+</code></pre></div>
 <h2 id="summary-operational-forecasting-workflow">Summary: Operational Forecasting Workflow<a class="headerlink" href="#summary-operational-forecasting-workflow" title="Permanent link">&para;</a></h2>
 <p>This example demonstrated the complete workflow for generating HEC-RAS boundary conditions from live USGS gauge data:</p>
 <h3 id="workflow-steps-completed">Workflow Steps Completed<a class="headerlink" href="#workflow-steps-completed" title="Permanent link">&para;</a></h3>
@@ -5468,7 +5624,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:24 UTC">January 3, 2026</span>
   </span>
 
     
@@ -5478,7 +5634,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:24 UTC">January 3, 2026</span>
   </span>
 
     

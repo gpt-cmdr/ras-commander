@@ -5459,6 +5459,14 @@
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
+
+
+2025-12-30 09:52:54 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+
+
+✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
@@ -5467,17 +5475,19 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Project Configuration</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Muncie&quot;</span>           <span class="c1"># Example project to extract</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;ConSpan Culvert&quot;</span>  <span class="c1"># Steady flow culvert project (fast execution ~10 sec)</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;801&quot;</span>                    <span class="c1"># Notebook identifier for project extraction</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># Execution Settings</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;01&quot;</span>                       <span class="c1"># Plan number to execute</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;01&quot;</span>                       <span class="c1"># Plan number to execute (will be updated based on available plans)</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">NUM_CORES</span> <span class="o">=</span> <span class="mi">4</span>                     <span class="c1"># CPU cores for 2D computation</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Note: All outputs are saved within the extracted project folder</span>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project will be extracted to: example_projects/</span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">/&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Project will be extracted to: example_projects/ConSpan Culvert_801/
+</code></pre></div>
 <h2 id="import-required-modules">Import Required Modules<a class="headerlink" href="#import-required-modules" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">RasExamples</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span>
@@ -5501,7 +5511,7 @@
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s1">&#39;display.width&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="extract-and-initialize-project">Extract and Initialize Project<a class="headerlink" href="#extract-and-initialize-project" title="Permanent link">&para;</a></h2>
-<p>We'll use the <strong>Bald Eagle Creek</strong> example which contains culverts and various structures.</p>
+<p>We'll use the <strong>ConSpan Culvert</strong> example which is a steady flow project with culvert structures. This project executes quickly (~10 seconds) making it ideal for automated testing.</p>
 <h3 id="verification-for-structure-validation">Verification for Structure Validation<a class="headerlink" href="#verification-for-structure-validation" title="Permanent link">&para;</a></h3>
 <p><strong>After running structure validation checks</strong>:</p>
 <ul>
@@ -5518,6 +5528,32 @@
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracted project to: </span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Extracting project &#39;ConSpan Culvert&#39; as &#39;ConSpan Culvert_801&#39;
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Folder &#39;ConSpan Culvert_801&#39; already exists. Deleting existing folder...
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Existing folder &#39;ConSpan Culvert_801&#39; has been deleted.
+
+
+2025-12-30 09:52:56 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;ConSpan Culvert&#39; to C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801
+
+
+Extracted project to: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Initialize the project</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialized project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -5526,34 +5562,137 @@
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available plans:&quot;</span><span class="p">)</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">display</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;flow_type&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Use the steady flow plan</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="s2">&quot;02&quot;</span>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:56 - ras_commander.RasPrj - INFO - No unsteady flow files found in the project.
+
+
+2025-12-30 09:52:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.rasmap
+
+
+Initialized project: ConSpan
+
+Available plans:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>Plan Title</th>
+      <th>flow_type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>01</td>
+      <td>ConSpan Culvert</td>
+      <td>Steady</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>02</td>
+      <td>Twin Circular Culverts</td>
+      <td>Steady</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Find a steady flow plan for structure validation</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">steady_plans</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;flow_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Steady&#39;</span><span class="p">]</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Execute the plan (skip if results already exist)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">success</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">skip_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">if</span> <span class="n">success</span><span class="p">:</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2"> ready for validation&quot;</span><span class="p">)</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✗ Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2"> execution failed&quot;</span><span class="p">)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">if</span> <span class="n">steady_plans</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️  No steady flow plans found - using first available plan&quot;</span><span class="p">)</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">plan_number</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="c1"># Use plan 02 if available, otherwise first steady plan</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="k">if</span> <span class="s1">&#39;02&#39;</span> <span class="ow">in</span> <span class="n">steady_plans</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">plan_number</span> <span class="o">=</span> <span class="s1">&#39;02&#39;</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>        <span class="n">plan_number</span> <span class="o">=</span> <span class="n">steady_plans</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Selected plan: </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">==</span><span class="n">plan_number</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;flow_type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Execute the plan (skip if results already exist)</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="n">success</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">skip_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="k">if</span> <span class="n">success</span><span class="p">:</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2"> ready for validation&quot;</span><span class="p">)</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✗ Plan </span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2"> execution failed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Get HDF paths</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plan_row</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_row</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">])</span>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:56 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801
+
+
+2025-12-30 09:52:56 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 09:52:56 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02&quot;
+
+
+Selected plan: 02 (Steady)
+Running Plan 02...
+
+
+2025-12-30 09:52:59 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+
+
+2025-12-30 09:52:59 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 2.82 seconds
+
+
+✓ Plan 02 ready for validation
+</code></pre></div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Get HDF paths with defensive checking</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DEBUG: Looking for plan &#39;</span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DEBUG: Available plan numbers: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Geometry HDF has .g##.hdf suffix (NOT .hdf replacing .g##)</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_row</span><span class="p">[</span><span class="s1">&#39;Geom Path&#39;</span><span class="p">])</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span><span class="p">)</span>  <span class="c1"># e.g., geometry.g01.hdf</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Filter for the plan</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">filtered_plans</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">]</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DEBUG: Filtered result shape: </span><span class="si">{</span><span class="n">filtered_plans</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan HDF: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geom HDF: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Verify files exist</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️  WARNING: Plan HDF not found: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">geom_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️  WARNING: Geom HDF not found: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Defensive check before accessing</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="k">if</span> <span class="n">filtered_plans</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>        <span class="sa">f</span><span class="s2">&quot;Plan &#39;</span><span class="si">{</span><span class="n">plan_number</span><span class="si">}</span><span class="s2">&#39; not found in project. &quot;</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>        <span class="sa">f</span><span class="s2">&quot;Available plans: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="p">)</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="n">plan_row</span> <span class="o">=</span> <span class="n">filtered_plans</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_row</span><span class="p">[</span><span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">])</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1"># Geometry HDF has .g##.hdf suffix (NOT .hdf replacing .g##)</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">plan_row</span><span class="p">[</span><span class="s1">&#39;Geom Path&#39;</span><span class="p">])</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span><span class="p">)</span>  <span class="c1"># e.g., geometry.g01.hdf</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan HDF: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geom HDF: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="c1"># Verify files exist</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️  WARNING: Plan HDF not found: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">geom_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️  WARNING: Geom HDF not found: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>DEBUG: Looking for plan &#39;02&#39;
+DEBUG: Available plan numbers: [&#39;01&#39;, &#39;02&#39;]
+DEBUG: Filtered result shape: (1, 21)
+Plan HDF: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+Geom HDF: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+</code></pre></div>
 <hr />
 <h2 id="part-1-culvert-hydraulics-extraction">Part 1: Culvert Hydraulics Extraction<a class="headerlink" href="#part-1-culvert-hydraulics-extraction" title="Permanent link">&para;</a></h2>
 <p>The new <code>HdfStruc.get_culvert_hydraulics()</code> function extracts comprehensive culvert data from geometry HDF files.</p>
@@ -5567,6 +5706,17 @@
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No culverts found in this project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - ERROR - Error reading culvert hydraulics from C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf: Cannot use .str.contains with values of inferred dtype &#39;bytes&#39;.
+
+
+No culverts found in this project
+</code></pre></div>
 <h3 id="culvert-hydraulics-data-fields">Culvert Hydraulics Data Fields<a class="headerlink" href="#culvert-hydraulics-data-fields" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -5639,6 +5789,8 @@
 </span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No culvert coefficient data available for visualization&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>No culvert coefficient data available for visualization
+</code></pre></div>
 <hr />
 <h2 id="part-2-culvert-validation-checks">Part 2: Culvert Validation Checks<a class="headerlink" href="#part-2-culvert-validation-checks" title="Permanent link">&para;</a></h2>
 <p>RasCheck now includes <strong>5 culvert validation checks</strong>:</p>
@@ -5690,6 +5842,55 @@
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Errors: </span><span class="si">{</span><span class="n">structure_results</span><span class="o">.</span><span class="n">get_error_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Warnings: </span><span class="si">{</span><span class="n">structure_results</span><span class="o">.</span><span class="n">get_warning_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Found 4 steady state profiles: [&#39;5 yr&#39;, &#39;10 yr&#39;, &#39;25 yr&#39;, &#39;50 yr&#39;]
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - WARNING - Dataset not found: Geometry/Structures/Bridge Coefficient Attributes
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+ was checked and no projection attribute found2. No RASMapper projection file found
+To fix this:
+1. Open RASMapper
+2. Click Map &gt; Set Projection
+3. Select an appropriate projection file or coordinate system
+4. Save the RASMapper project
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - WARNING - Bridge Coefficient Attributes missing or &#39;Structure ID&#39; not present.
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame.
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame with attributes.
+
+
+Profiles: [&#39;5 yr&#39;, &#39;10 yr&#39;, &#39;25 yr&#39;, &#39;50 yr&#39;]
+Structure Check Results:
+  Total Messages: 3
+  Errors: 0
+  Warnings: 3
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Filter for culvert-specific messages (CV_ prefix)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">culvert_msgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">msg</span> <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">structure_results</span><span class="o">.</span><span class="n">messages</span> <span class="k">if</span> <span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;CV_&#39;</span><span class="p">)]</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
@@ -5703,6 +5904,8 @@
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ No culvert validation issues found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>✓ No culvert validation issues found
+</code></pre></div>
 <h3 id="culvert-check-details">Culvert Check Details<a class="headerlink" href="#culvert-check-details" title="Permanent link">&para;</a></h3>
 <h4 id="cv_lf_01-entrance-loss-coefficient">CV_LF_01: Entrance Loss Coefficient<a class="headerlink" href="#cv_lf_01-entrance-loss-coefficient" title="Permanent link">&para;</a></h4>
 <p><strong>What it checks</strong>: Entrance loss coefficients (Ke) should be within FHWA guidelines (0.2 to 1.0)</p>
@@ -5730,6 +5933,23 @@
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">wse_method</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:59 - ras_commander.hdf.HdfPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfPlan - WARNING - Starting WSE method not found in C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfPlan - INFO - Successfully extracted starting WSE method: Unknown
+
+
+Starting Water Surface Elevation Method:
+==================================================
+  method: Unknown
+  note: Boundary condition method not found in HDF file
+</code></pre></div>
 <h3 id="starting-wse-methods-explained">Starting WSE Methods Explained<a class="headerlink" href="#starting-wse-methods-explained" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -5839,6 +6059,21 @@
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Warnings: </span><span class="si">{</span><span class="n">profile_results</span><span class="o">.</span><span class="n">get_warning_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Info: </span><span class="si">{</span><span class="nb">len</span><span class="p">([</span><span class="n">m</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">profile_results</span><span class="o">.</span><span class="n">messages</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">m</span><span class="o">.</span><span class="n">severity</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Severity</span><span class="o">.</span><span class="n">INFO</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 40 rows (4 profiles x 10 cross sections)
+
+
+Profile Check Results:
+  Total Messages: 127
+  Errors: 0
+  Warnings: 100
+  Info: 27
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Filter for starting WSE messages (PF_IC_ prefix)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">wse_msgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">msg</span> <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">profile_results</span><span class="o">.</span><span class="n">messages</span> <span class="k">if</span> <span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;PF_IC_&#39;</span><span class="p">)]</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
@@ -5852,6 +6087,8 @@
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ No starting WSE validation issues found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>✓ No starting WSE validation issues found
+</code></pre></div>
 <h3 id="starting-wse-check-details">Starting WSE Check Details<a class="headerlink" href="#starting-wse-check-details" title="Permanent link">&para;</a></h3>
 <h4 id="pf_ic_01-known-wse-range">PF_IC_01: Known WSE Range<a class="headerlink" href="#pf_ic_01-known-wse-range" title="Permanent link">&para;</a></h4>
 <p><strong>What it checks</strong>: Known WSE values should be within realistic range (-100 to 10,000 ft)</p>
@@ -5880,6 +6117,71 @@
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Warnings: </span><span class="si">{</span><span class="n">all_results</span><span class="o">.</span><span class="n">get_warning_count</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Info: </span><span class="si">{</span><span class="nb">len</span><span class="p">([</span><span class="n">m</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">all_results</span><span class="o">.</span><span class="n">messages</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">m</span><span class="o">.</span><span class="n">severity</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Severity</span><span class="o">.</span><span class="n">INFO</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:59 - ras_commander.check.RasCheck - INFO - Detected flow type: steady
+
+
+2025-12-30 09:52:59 - ras_commander.check.RasCheck - WARNING - Could not check structure transition coefficients: could not convert string to float: &#39;20.208*&#39;
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 40 rows (4 profiles x 10 cross sections)
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - WARNING - Dataset not found: Geometry/Structures/Bridge Coefficient Attributes
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.g02.hdf
+ was checked and no projection attribute found2. No RASMapper projection file found
+To fix this:
+1. Open RASMapper
+2. Click Map &gt; Set Projection
+3. Select an appropriate projection file or coordinate system
+4. Save the RASMapper project
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - WARNING - Bridge Coefficient Attributes missing or &#39;Structure ID&#39; not present.
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame.
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame with attributes.
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ConSpan.p02.hdf
+
+
+2025-12-30 09:52:59 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 40 rows (4 profiles x 10 cross sections)
+
+
+Complete Validation Results:
+==================================================
+  Total Messages: 168
+  Errors: 0
+  Warnings: 127
+  Info: 41
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Show new check coverage</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">new_check_ids</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;CV_LF_01&#39;</span><span class="p">,</span> <span class="s1">&#39;CV_LF_02&#39;</span><span class="p">,</span> <span class="s1">&#39;CV_CF_01&#39;</span><span class="p">,</span> <span class="s1">&#39;CV_CF_02&#39;</span><span class="p">,</span> <span class="s1">&#39;CV_TF_04&#39;</span><span class="p">,</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>                 <span class="s1">&#39;PF_IC_00&#39;</span><span class="p">,</span> <span class="s1">&#39;PF_IC_01&#39;</span><span class="p">,</span> <span class="s1">&#39;PF_IC_02&#39;</span><span class="p">,</span> <span class="s1">&#39;PF_IC_03&#39;</span><span class="p">,</span> <span class="s1">&#39;PF_IC_04&#39;</span><span class="p">]</span>
@@ -5895,6 +6197,9 @@
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>        <span class="n">count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">([</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">new_checks_found</span> <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">message_id</span> <span class="o">==</span> <span class="n">check_id</span><span class="p">])</span>
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">check_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2"> message(s)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>New Advanced Validation Checks (9 total):
+  Messages from new checks: 0
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Generate HTML report</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">report_path</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="s2">&quot;ras_checker&quot;</span> <span class="o">/</span> <span class="s2">&quot;advanced_validation_report.html&quot;</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">report_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -5908,6 +6213,12 @@
 </span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="n">output_path</span> <span class="o">=</span> <span class="n">all_results</span><span class="o">.</span><span class="n">to_html</span><span class="p">(</span><span class="n">report_path</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span><span class="p">)</span>
 </span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ HTML report generated: </span><span class="si">{</span><span class="n">output_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 09:52:59 - ras_commander.check.report - INFO - Generated HTML report: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ras_checker\advanced_validation_report.html
+
+
+
+✓ HTML report generated: C:\GH\ras-commander\examples\example_projects\ConSpan Culvert_801\ras_checker\advanced_validation_report.html
+</code></pre></div>
 <hr />
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the <strong>9 new validation checks</strong> added to RasCheck:</p>
@@ -5961,7 +6272,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:24 UTC">January 3, 2026</span>
   </span>
 
     
@@ -5971,7 +6282,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:24 UTC">January 3, 2026</span>
   </span>
 
     

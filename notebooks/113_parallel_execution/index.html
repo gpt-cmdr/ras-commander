@@ -5263,7 +5263,12 @@
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+
+
+2025-12-30 13:08:16 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+
+
+✓ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>Before running this notebook, ensure you have:</p>
@@ -5395,20 +5400,30 @@
 </span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate optimal number of workers based on physical cores and cores per worker.&quot;&quot;&quot;</span>
 </span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">physical_cores</span> <span class="o">/</span> <span class="n">cores_per_worker</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:47:01 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-2025-12-28 22:47:01 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-12-28 22:47:01 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-12-28 22:47:01 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-28 22:47:01 - ras_commander.RasExamples - INFO - Extracting project &#39;Muncie&#39; as &#39;Muncie_08&#39;
-2025-12-28 22:47:02 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Muncie&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_08
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:08:17 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
 
 
-Extracted project to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_08
+2025-12-30 13:08:17 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+
+
+2025-12-30 13:08:17 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+
+
+2025-12-30 13:08:17 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+
+
+2025-12-30 13:08:17 - ras_commander.RasExamples - INFO - Extracting project &#39;Muncie&#39; as &#39;Muncie_08&#39;
+
+
+2025-12-30 13:08:18 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Muncie&#39; to C:\GH\ras-commander\examples\example_projects\Muncie_08
+
+
+Extracted project to: C:\GH\ras-commander\examples\example_projects\Muncie_08
 
 Compute folders:
-  All plans: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel
-  Specific plans: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific
-  Dynamic workers: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic
+  All plans: C:\GH\ras-commander\examples\example_projects\compute_test_parallel
+  Specific plans: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific
+  Dynamic workers: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic
 
 System Resources:
   Physical cores: 8
@@ -5428,7 +5443,7 @@ System Resources:
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">plan_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">source_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="n">plan_count</span><span class="si">}</span><span class="s2"> plans in the project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:47:02 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_08\Muncie.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:08:18 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Muncie_08\Muncie.rasmap
 
 
 Initialized source project: Muncie
@@ -5495,10 +5510,10 @@ Available plans in the project:
       <td>NaN</td>
       <td>None</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5519,10 +5534,10 @@ Available plans in the project:
       <td>2D Interior Area</td>
       <td>None</td>
       <td>02</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5543,10 +5558,10 @@ Available plans in the project:
       <td>2D Interior Area</td>
       <td>None</td>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>Unsteady</td>
     </tr>
   </tbody>
@@ -5634,60 +5649,140 @@ Available plans in the project:
 </span><span id="__span-5-42"><a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-5-43"><a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">results_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel&#39; exists. Overwriting as per overwrite_dest=True.
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 3
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:08:18 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\GH\ras-commander\examples\example_projects\compute_test_parallel&#39; exists. Overwriting as per overwrite_dest=True.
 
 
 Executing all plans in parallel...
 This may take several minutes...
 Using 4 parallel workers, each with 1 cores
-Destination folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel
+Destination folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel
 
 
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]
-2025-12-28 22:47:02 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.rasmap
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]
-2025-12-28 22:47:02 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.rasmap
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]
-2025-12-28 22:47:02 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.rasmap
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]
-2025-12-28 22:47:02 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.p01
-2025-12-28 22:47:02 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.p03
-2025-12-28 22:47:02 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.p04
-2025-12-28 22:47:02 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.p01
-2025-12-28 22:47:02 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.p03
-2025-12-28 22:47:02 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.p04
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 01
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.p01&quot;
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 04
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.p04&quot;
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 03
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:47:02 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.p03&quot;
-2025-12-28 22:47:28 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
-2025-12-28 22:47:28 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 25.83 seconds
-2025-12-28 22:47:28 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
-2025-12-28 22:48:29 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-12-28 22:48:29 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 86.52 seconds
-2025-12-28 22:48:29 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
-2025-12-28 22:48:30 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
-2025-12-28 22:48:30 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 87.85 seconds
-2025-12-28 22:48:30 - ras_commander.RasCmdr - INFO - Plan 04 executed in worker 3: Successful
-2025-12-28 22:48:30 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel
-2025-12-28 22:48:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel\Muncie.rasmap
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - 
+2025-12-30 13:08:18 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\GH\ras-commander\examples\example_projects\compute_test_parallel
+
+
+2025-12-30 13:08:18 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 3
+
+
+2025-12-30 13:08:18 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]
+
+
+2025-12-30 13:08:18 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.rasmap
+
+
+2025-12-30 13:08:18 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]
+
+
+2025-12-30 13:08:19 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.rasmap
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]
+
+
+2025-12-30 13:08:19 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.rasmap
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]
+
+
+2025-12-30 13:08:19 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.p03
+
+
+2025-12-30 13:08:19 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:08:19 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.p03
+
+
+2025-12-30 13:08:19 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:08:19 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.p04
+
+
+2025-12-30 13:08:19 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.p04
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 03
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 2]\Muncie.p03&quot;
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 01
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 04
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 1]\Muncie.p01&quot;
+
+
+2025-12-30 13:08:19 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel [Worker 3]\Muncie.p04&quot;
+
+
+2025-12-30 13:08:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+
+
+2025-12-30 13:08:41 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 22.70 seconds
+
+
+2025-12-30 13:08:41 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
+
+
+2025-12-30 13:09:39 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+
+
+2025-12-30 13:09:39 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 80.59 seconds
+
+
+2025-12-30 13:09:39 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
+
+
+2025-12-30 13:09:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
+
+
+2025-12-30 13:09:41 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 82.34 seconds
+
+
+2025-12-30 13:09:41 - ras_commander.RasCmdr - INFO - Plan 04 executed in worker 3: Successful
+
+
+2025-12-30 13:09:41 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\GH\ras-commander\examples\example_projects\compute_test_parallel
+
+
+2025-12-30 13:09:48 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel\Muncie.rasmap
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - 
 Execution Results:
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Plan 01: Successful
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Plan 03: Successful
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Plan 04: Successful
 
 
-Parallel execution of all plans completed in 99.76 seconds
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Plan 04: Successful
+
+
+Parallel execution of all plans completed in 89.95 seconds
 
 Execution Results:
 </code></pre></div>
@@ -5828,7 +5923,7 @@ Execution Results:
 </span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>    <span class="n">file_size</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)</span>  <span class="c1"># Size in MB</span>
 </span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">file_size</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:48:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel\Muncie.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:09:48 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel\Muncie.rasmap
 
 
 Initialized compute project: Muncie
@@ -5893,12 +5988,12 @@ Plans in the compute folder:
       <td>1</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5917,12 +6012,12 @@ Plans in the compute folder:
       <td>1</td>
       <td>Pardiso (Direct)</td>
       <td>2D Interior Area</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>02</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>Unsteady</td>
     </tr>
     <tr>
@@ -5941,12 +6036,12 @@ Plans in the compute folder:
       <td>1</td>
       <td>Pardiso (Direct)</td>
       <td>2D Interior Area</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>Unsteady</td>
     </tr>
   </tbody>
@@ -5982,17 +6077,17 @@ Plans in the compute folder:
     <tr>
       <th>0</th>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
     <tr>
       <th>1</th>
       <td>03</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
     <tr>
       <th>2</th>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
   </tbody>
 </table>
@@ -6071,50 +6166,108 @@ Found 7 HDF files in the compute folder:
 </span><span id="__span-10-57"><a id="__codelineno-10-57" name="__codelineno-10-57" href="#__codelineno-10-57"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">specific_plans_with_results</span><span class="p">)</span><span class="si">}</span><span class="s2"> plans with results:&quot;</span><span class="p">)</span>
 </span><span id="__span-10-58"><a id="__codelineno-10-58" name="__codelineno-10-58" href="#__codelineno-10-58"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">specific_plans_with_results</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific&#39; exists. Overwriting as per overwrite_dest=True.
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;, &#39;03&#39;]
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 2
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific&#39; exists. Overwriting as per overwrite_dest=True.
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;, &#39;03&#39;]
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 2
 
 
 Executing specific plans in parallel...
 This may take several minutes...
 Selected plans: 01, 03
 Using 2 parallel workers, each with 2 cores
-Destination folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific
+Destination folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific
 
 
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]
-2025-12-28 22:48:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.rasmap
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]
-2025-12-28 22:48:42 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.rasmap
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]
-2025-12-28 22:48:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01
-2025-12-28 22:48:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01
-2025-12-28 22:48:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.p03
-2025-12-28 22:48:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.p03
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 01
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01&quot;
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:48:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.p03&quot;
-2025-12-28 22:49:04 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
-2025-12-28 22:49:04 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 21.70 seconds
-2025-12-28 22:49:04 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
-2025-12-28 22:49:53 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-12-28 22:49:53 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 71.40 seconds
-2025-12-28 22:49:53 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
-2025-12-28 22:49:53 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific
-2025-12-28 22:50:03 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific\Muncie.rasmap
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - 
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]
+
+
+2025-12-30 13:09:48 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.rasmap
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]
+
+
+2025-12-30 13:09:48 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.rasmap
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]
+
+
+2025-12-30 13:09:48 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:09:48 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.p03
+
+
+2025-12-30 13:09:48 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:09:48 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.p03
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 01
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 2]\Muncie.p03&quot;
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:09:48 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01&quot;
+
+
+2025-12-30 13:10:08 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+
+
+2025-12-30 13:10:08 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 20.07 seconds
+
+
+2025-12-30 13:10:08 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
+
+
+2025-12-30 13:10:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+
+
+2025-12-30 13:10:41 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 52.59 seconds
+
+
+2025-12-30 13:10:41 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
+
+
+2025-12-30 13:10:41 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific
+
+
+2025-12-30 13:10:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific\Muncie.rasmap
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - 
 Execution Results:
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Plan 01: Successful
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Plan 03: Successful
 
 
-Parallel execution of specific plans completed in 81.57 seconds
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+
+
+Parallel execution of specific plans completed in 57.40 seconds
 
 Execution Results:
 </code></pre></div>
@@ -6155,7 +6308,7 @@ Execution Results:
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:50:03 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_specific\Muncie.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:10:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific\Muncie.rasmap
 
 
 
@@ -6188,12 +6341,12 @@ Found 2 plans with results:
     <tr>
       <th>0</th>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
     <tr>
       <th>1</th>
       <td>03</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
   </tbody>
 </table>
@@ -6261,50 +6414,108 @@ Found 2 plans with results:
 </span><span id="__span-11-58"><a id="__codelineno-11-58" name="__codelineno-11-58" href="#__codelineno-11-58"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dynamic_plans_with_results</span><span class="p">)</span><span class="si">}</span><span class="s2"> plans with results:&quot;</span><span class="p">)</span>
 </span><span id="__span-11-59"><a id="__codelineno-11-59" name="__codelineno-11-59" href="#__codelineno-11-59"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">dynamic_plans_with_results</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic&#39; exists. Overwriting as per overwrite_dest=True.
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;, &#39;03&#39;]
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 2
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic&#39; exists. Overwriting as per overwrite_dest=True.
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;, &#39;03&#39;]
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 2
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]
+
+
+2025-12-30 13:10:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.rasmap
 
 
 Executing plans with dynamic worker allocation...
 This may take several minutes...
 System has 8 physical cores
 With 4 cores per worker, optimal worker count is 2
-Destination folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic
+Destination folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic
 
 
-2025-12-28 22:50:03 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]
-2025-12-28 22:50:03 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.rasmap
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]
-2025-12-28 22:50:04 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.rasmap
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]
-2025-12-28 22:50:04 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.p01
-2025-12-28 22:50:04 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.p03
-2025-12-28 22:50:04 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.p01
-2025-12-28 22:50:04 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.p03
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 01
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.p01&quot;
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 03
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-28 22:50:04 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.p03&quot;
-2025-12-28 22:50:26 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
-2025-12-28 22:50:26 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 21.98 seconds
-2025-12-28 22:50:26 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
-2025-12-28 22:51:53 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-2025-12-28 22:51:53 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 109.37 seconds
-2025-12-28 22:51:53 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
-2025-12-28 22:51:53 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic
-2025-12-28 22:51:57 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic\Muncie.rasmap
-2025-12-28 22:51:57 - ras_commander.RasCmdr - INFO - 
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]
+
+
+2025-12-30 13:10:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.rasmap
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]
+
+
+2025-12-30 13:10:45 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]
+
+
+2025-12-30 13:10:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:10:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.p03
+
+
+2025-12-30 13:10:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:10:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.p03
+
+
+2025-12-30 13:10:46 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 01
+
+
+2025-12-30 13:10:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:10:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 1]\Muncie.p01&quot;
+
+
+2025-12-30 13:10:46 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 03
+
+
+2025-12-30 13:10:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:10:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic [Worker 2]\Muncie.p03&quot;
+
+
+2025-12-30 13:11:06 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+
+
+2025-12-30 13:11:06 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 19.99 seconds
+
+
+2025-12-30 13:11:06 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
+
+
+2025-12-30 13:11:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+
+
+2025-12-30 13:11:41 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 55.20 seconds
+
+
+2025-12-30 13:11:41 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
+
+
+2025-12-30 13:11:41 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic
+
+
+2025-12-30 13:11:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic\Muncie.rasmap
+
+
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - 
 Execution Results:
-2025-12-28 22:51:57 - ras_commander.RasCmdr - INFO - Plan 01: Successful
-2025-12-28 22:51:57 - ras_commander.RasCmdr - INFO - Plan 03: Successful
 
 
-Parallel execution with dynamic worker allocation completed in 114.07 seconds
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+
+
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+
+
+Parallel execution with dynamic worker allocation completed in 59.90 seconds
 
 Execution Results:
 </code></pre></div>
@@ -6345,7 +6556,7 @@ Execution Results:
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 22:51:57 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_test_parallel_dynamic\Muncie.rasmap
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:11:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_dynamic\Muncie.rasmap
 
 
 
@@ -6378,12 +6589,12 @@ Found 2 plans with results:
     <tr>
       <th>0</th>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
     <tr>
       <th>1</th>
       <td>03</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
   </tbody>
 </table>
@@ -6473,92 +6684,126 @@ Found 2 plans with results:
 </span><span id="__span-12-80"><a id="__codelineno-12-80" name="__codelineno-12-80" href="#__codelineno-12-80"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
 <p><img alt="png" src="../113_parallel_execution_files/113_parallel_execution_23_0.png" /></p>
-<h2 id="parallel-execution-best-practices">Parallel Execution Best Practices<a class="headerlink" href="#parallel-execution-best-practices" title="Permanent link">&para;</a></h2>
-<h3 id="when-to-use-parallel-execution">When to Use Parallel Execution<a class="headerlink" href="#when-to-use-parallel-execution" title="Permanent link">&para;</a></h3>
-<p><strong>Ideal Use Cases</strong>:
-1. <strong>Multiple independent plans</strong>: No dependencies between plans
-2. <strong>Sensitivity analysis</strong>: Test many parameter combinations
-3. <strong>Scenario comparison</strong>: Run baseline + alternatives simultaneously
-4. <strong>Sufficient hardware</strong>: Enough cores to run plans concurrently</p>
-<p><strong>When NOT to Use</strong>:
-1. <strong>Sequential dependencies</strong>: Plan B needs results from Plan A
-2. <strong>Limited cores</strong>: Only 1-2 cores available (use sequential instead)
-3. <strong>Memory constraints</strong>: Each HEC-RAS instance uses RAM
-4. <strong>Shared resources</strong>: Plans write to same files (use worker folders!)</p>
-<h3 id="resource-management">Resource Management<a class="headerlink" href="#resource-management" title="Permanent link">&para;</a></h3>
-<p><strong>CPU Cores</strong>:
-- <strong>Physical cores</strong>: Use <code>psutil.cpu_count(logical=False)</code>
-- <strong>Logical cores</strong>: Use <code>psutil.cpu_count(logical=True)</code>
-- <strong>Recommendation</strong>: Start with physical cores, tune based on results</p>
-<p><strong>Memory (RAM)</strong>:
-- Each HEC-RAS instance uses 500 MB - 4 GB depending on model size
-- Leave ~25% RAM for operating system
-- Example: 16 GB RAM = ~12 GB usable = 3-4 concurrent large models</p>
-<p><strong>Disk I/O</strong>:
-- SSD strongly recommended for worker folders
-- Network drives can bottleneck performance
-- Consider RAM disk for temporary worker folders (advanced)</p>
-<h3 id="hec-documentation">HEC Documentation<a class="headerlink" href="#hec-documentation" title="Permanent link">&para;</a></h3>
-<ul>
-<li><strong>HEC-RAS 2D Manual - Appendix B</strong>: Computational performance and multi-threading
-  https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx</li>
-</ul>
-<h3 id="llm-forward-performance-documentation">LLM Forward: Performance Documentation<a class="headerlink" href="#llm-forward-performance-documentation" title="Permanent link">&para;</a></h3>
-<p>Create performance audit trail:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">document_parallel_performance</span><span class="p">(</span><span class="n">plans_executed</span><span class="p">,</span> <span class="n">workers_folder</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">performance_data</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="k">for</span> <span class="n">plan</span> <span class="ow">in</span> <span class="n">plans_executed</span><span class="p">:</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="n">worker_dir</span> <span class="o">=</span> <span class="n">workers_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;worker_</span><span class="si">{</span><span class="n">plan</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>        <span class="n">hdf_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">worker_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.hdf&quot;</span><span class="p">))</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Demonstrate force_rerun with parallel execution</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;FORCE RE-RUN WITH PARALLEL EXECUTION&quot;</span><span class="p">)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Forcing re-execution of all plans even though results are current...&quot;</span><span class="p">)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This will run HEC-RAS for all plans regardless of file modification times</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>        <span class="k">if</span> <span class="n">hdf_files</span><span class="p">:</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>            <span class="n">hdf_size</span> <span class="o">=</span> <span class="n">hdf_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">/</span> <span class="mf">1e6</span>  <span class="c1"># MB</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>            <span class="c1"># Extract execution time from HDF (if available)</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>            <span class="c1"># or use logged times</span>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>            <span class="n">performance_data</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>                <span class="s1">&#39;plan_number&#39;</span><span class="p">:</span> <span class="n">plan</span><span class="p">,</span>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>                <span class="s1">&#39;worker_folder&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">worker_dir</span><span class="p">),</span>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>                <span class="s1">&#39;hdf_size_mb&#39;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">hdf_size</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>                <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;completed&#39;</span>
-</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>            <span class="p">})</span>
-</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>            <span class="n">performance_data</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a>                <span class="s1">&#39;plan_number&#39;</span><span class="p">:</span> <span class="n">plan</span><span class="p">,</span>
-</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a>                <span class="s1">&#39;worker_folder&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">worker_dir</span><span class="p">),</span>
-</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a>                <span class="s1">&#39;hdf_size_mb&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a>                <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;failed&#39;</span>
-</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a>            <span class="p">})</span>
-</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a>
-</span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a>    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">performance_data</span><span class="p">)</span>
-</span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a>    <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-</span><span id="__span-13-32"><a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a>
-</span><span id="__span-13-33"><a id="__codelineno-13-33" name="__codelineno-13-33" href="#__codelineno-13-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Performance documented: </span><span class="si">{</span><span class="n">output_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-13-34"><a id="__codelineno-13-34" name="__codelineno-13-34" href="#__codelineno-13-34"></a>    <span class="k">return</span> <span class="n">df</span>
-</span><span id="__span-13-35"><a id="__codelineno-13-35" name="__codelineno-13-35" href="#__codelineno-13-35"></a>
-</span><span id="__span-13-36"><a id="__codelineno-13-36" name="__codelineno-13-36" href="#__codelineno-13-36"></a><span class="c1"># Usage</span>
-</span><span id="__span-13-37"><a id="__codelineno-13-37" name="__codelineno-13-37" href="#__codelineno-13-37"></a><span class="n">perf_df</span> <span class="o">=</span> <span class="n">document_parallel_performance</span><span class="p">(</span>
-</span><span id="__span-13-38"><a id="__codelineno-13-38" name="__codelineno-13-38" href="#__codelineno-13-38"></a>    <span class="p">[</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="s2">&quot;02&quot;</span><span class="p">,</span> <span class="s2">&quot;03&quot;</span><span class="p">],</span>
-</span><span id="__span-13-39"><a id="__codelineno-13-39" name="__codelineno-13-39" href="#__codelineno-13-39"></a>    <span class="n">workers_folder</span><span class="p">,</span>
-</span><span id="__span-13-40"><a id="__codelineno-13-40" name="__codelineno-13-40" href="#__codelineno-13-40"></a>    <span class="n">project_folder</span> <span class="o">/</span> <span class="s1">&#39;parallel_performance.csv&#39;</span>
-</span><span id="__span-13-41"><a id="__codelineno-13-41" name="__codelineno-13-41" href="#__codelineno-13-41"></a><span class="p">)</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Force re-run all plans</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="n">results_force</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_parallel</span><span class="p">(</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;01&quot;</span><span class="p">],</span>  <span class="c1"># Just run one plan to save time in demo</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>    <span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>    <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>    <span class="n">dest_folder</span><span class="o">=</span><span class="n">specific_compute_folder</span><span class="p">,</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>    <span class="n">overwrite_dest</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>    <span class="n">force_rerun</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Force execution regardless of currency</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">source_project</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="p">)</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="n">elapsed</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Forced parallel execution completed in </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="k">if</span> <span class="n">elapsed</span> <span class="o">&gt;</span> <span class="mf">15.0</span><span class="p">:</span>  <span class="c1"># If it took significant time, it actually ran</span>
+</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Plans actually executed (force_rerun=True worked)&quot;</span><span class="p">)</span>
+</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Currency checks were bypassed&quot;</span><span class="p">)</span>
+</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠ Execution was very fast - may have been skipped&quot;</span><span class="p">)</span>
+</span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a>
+</span><span id="__span-13-32"><a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a><span class="c1"># Display results</span>
+</span><span id="__span-13-33"><a id="__codelineno-13-33" name="__codelineno-13-33" href="#__codelineno-13-33"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
+</span><span id="__span-13-34"><a id="__codelineno-13-34" name="__codelineno-13-34" href="#__codelineno-13-34"></a><span class="k">for</span> <span class="n">plan</span><span class="p">,</span> <span class="n">success</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">results_force</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+</span><span id="__span-13-35"><a id="__codelineno-13-35" name="__codelineno-13-35" href="#__codelineno-13-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Plan </span><span class="si">{</span><span class="n">plan</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="s1">&#39;Success&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">success</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;Failed&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p>This enables:
-- <strong>Performance tracking</strong>: Compare execution times across runs
-- <strong>Resource planning</strong>: Estimate time for larger batches
-- <strong>Troubleshooting</strong>: Identify which plans fail consistently</p>
+<div class="language-text highlight"><pre><span></span><code>2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific&#39; exists. Overwriting as per overwrite_dest=True.
+
+
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific
+
+
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;01&#39;]
+
+
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 1 based on the number of plans to compute: 1
+
+
+2025-12-30 13:11:45 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]
+
+
+================================================================================
+FORCE RE-RUN WITH PARALLEL EXECUTION
+================================================================================
+
+Forcing re-execution of all plans even though results are current...
+This will run HEC-RAS for all plans regardless of file modification times
+
+
+
+2025-12-30 13:11:46 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.rasmap
+
+
+2025-12-30 13:11:46 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]
+
+
+2025-12-30 13:11:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:11:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01
+
+
+2025-12-30 13:11:46 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 01
+
+
+2025-12-30 13:11:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2025-12-30 13:11:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific [Worker 1]\Muncie.p01&quot;
+
+
+2025-12-30 13:12:03 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+
+
+2025-12-30 13:12:03 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 17.13 seconds
+
+
+2025-12-30 13:12:03 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
+
+
+2025-12-30 13:12:03 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific
+
+
+2025-12-30 13:12:05 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\compute_test_parallel_specific\Muncie.rasmap
+
+
+2025-12-30 13:12:05 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+
+
+2025-12-30 13:12:05 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+
+
+
+Forced parallel execution completed in 19.57 seconds
+✓ Plans actually executed (force_rerun=True worked)
+  Currency checks were bypassed
+
+Execution Results:
+  Plan 01: Success
+</code></pre></div>
 <h2 id="summary-of-parallel-plan-execution">Summary of Parallel Plan Execution<a class="headerlink" href="#summary-of-parallel-plan-execution" title="Permanent link">&para;</a></h2>
 <p>In this notebook, we've explored how to execute HEC-RAS plans in parallel using the RAS Commander library. Here's a summary of the key techniques we've covered:</p>
+<h3 id="core-techniques">Core Techniques<a class="headerlink" href="#core-techniques" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>Basic Parallel Execution</strong>: Using <code>RasCmdr.compute_parallel()</code> to run all plans in a project simultaneously</li>
 <li><strong>Selective Parallel Execution</strong>: Running only specific plans in parallel</li>
 <li><strong>Dynamic Worker Allocation</strong>: Determining the optimal number of workers based on available system resources</li>
 <li><strong>Performance Analysis</strong>: Comparing execution times for different parallel configurations</li>
-<li><strong>Advanced Parallel Workflows</strong>: Building complex workflows with parallel execution for sensitivity analysis</li>
+<li><strong>Smart Execution Skip</strong> (v0.88.0+): Automatically skip plans with current results</li>
 </ol>
 <h3 id="key-functions-used">Key Functions Used<a class="headerlink" href="#key-functions-used" title="Permanent link">&para;</a></h3>
 <ul>
@@ -6568,6 +6813,33 @@ Found 2 plans with results:
 <li><code>RasPlan.set_num_cores()</code>: Set the number of cores for a plan to use</li>
 <li><code>RasPlan.get_results_path()</code>: Get the path to the results file for a plan</li>
 </ul>
+<h3 id="new-parameters-v0880">New Parameters (v0.88.0+)<a class="headerlink" href="#new-parameters-v0880" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>force_rerun</code></td>
+<td><code>False</code></td>
+<td>Force all plans to execute even if results are current</td>
+</tr>
+<tr>
+<td><code>force_geompre</code></td>
+<td><code>False</code></td>
+<td>Force complete geometry reprocessing for all plans</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Smart Skip Benefits</strong>:
+- Automatically detects which plans need re-execution
+- Saves time by skipping plans with current results
+- Works transparently in parallel execution
+- Example: 10 plans, only 2 modified → 80% time savings</p>
 <h3 id="best-practices-for-parallel-execution">Best Practices for Parallel Execution<a class="headerlink" href="#best-practices-for-parallel-execution" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>Use Separate RAS Objects</strong>: Create and use separate RAS objects for different projects or folders</li>
@@ -6577,7 +6849,41 @@ Found 2 plans with results:
 <li><strong>Handle Overwrite Carefully</strong>: Use <code>overwrite_dest=True</code> for repeatable workflows, but be cautious about losing results</li>
 <li><strong>Monitor Performance</strong>: Track execution times and adjust your configuration for optimal performance</li>
 <li><strong>Match Workers to Plans</strong>: For best results, use one worker per plan when running a small number of plans</li>
+<li><strong>Leverage Smart Skip</strong>: Use default behavior for intelligent execution management</li>
+<li><strong>Use force_rerun selectively</strong>: Only when you truly need to bypass currency checks</li>
 </ol>
+<h3 id="execution-mode-comparison">Execution Mode Comparison<a class="headerlink" href="#execution-mode-comparison" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Method</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Single</strong></td>
+<td><code>compute_plan()</code></td>
+<td>One plan, full parameter control</td>
+</tr>
+<tr>
+<td><strong>Parallel</strong></td>
+<td><code>compute_parallel()</code></td>
+<td>Multiple independent plans, maximum throughput</td>
+</tr>
+<tr>
+<td><strong>Sequential</strong></td>
+<td><code>compute_test_mode()</code></td>
+<td>Multiple plans in order, debugging</td>
+</tr>
+<tr>
+<td><strong>Remote</strong></td>
+<td><code>compute_parallel_remote()</code></td>
+<td>Distributed across machines</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -6600,7 +6906,7 @@ Found 2 plans with results:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:23 UTC">January 3, 2026</span>
   </span>
 
     
@@ -6610,7 +6916,7 @@ Found 2 plans with results:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 30, 2025 15:20:07 UTC">December 30, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 3, 2026 16:27:23 UTC">January 3, 2026</span>
   </span>
 
     
