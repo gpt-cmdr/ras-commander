@@ -433,8 +433,9 @@ class RasCmdr:
             logger.critical(f"Error in compute_plan: {str(e)}")
             return False
         finally:
-            # Update the RAS object's dataframes
-            if ras_obj:
+            # Update the RAS object's dataframes ONLY if executing in original folder
+            # When dest_folder is used, the original project is unchanged
+            if ras_obj and dest_folder is None:
                 ras_obj.plan_df = ras_obj.get_plan_entries()
                 ras_obj.geom_df = ras_obj.get_geom_entries()
                 ras_obj.flow_df = ras_obj.get_flow_entries()

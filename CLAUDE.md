@@ -461,8 +461,14 @@ path = RasExamples.extract_project("Muncie")
 # Initialize
 init_ras_project(path, "6.5")
 
-# Execute plan
+# Execute plan (smart skip automatically detects if results are current)
 RasCmdr.compute_plan("01")
+
+# Re-run: Smart skip detects current results and skips execution
+RasCmdr.compute_plan("01")  # Logs: "Skipping plan 01: Results are current"
+
+# Force re-run even if current
+RasCmdr.compute_plan("01", force_rerun=True)  # Always executes
 
 # Extract results
 hdf = HdfResultsPlan(path / "Muncie.p01.hdf")

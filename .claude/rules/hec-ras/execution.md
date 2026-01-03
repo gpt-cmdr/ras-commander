@@ -22,9 +22,13 @@ RasCmdr.compute_plan(
     plan_number,              # Plan ID (string, e.g., "01")
     dest_folder=None,         # Optional computation folder
     ras_object=None,          # RasPrj object (default: global ras)
-    clear_geompre=False,      # Clear geometry preprocessor files
+    clear_geompre=False,      # Clear .c## preprocessor files
+    force_geompre=False,      # Force full geom reprocessing (.g##.hdf + .c##)
+    force_rerun=False,        # Force execution even if results current
     num_cores=None,           # Number of processing cores
     overwrite_dest=False,     # Overwrite existing destination
+    skip_existing=False,      # Simple existence check (legacy)
+    verify=False,             # Verify completion after execution
     stream_callback=None      # Real-time monitoring callback
 )
 ```
@@ -50,11 +54,16 @@ RasCmdr.compute_plan("01")
 ```python
 RasCmdr.compute_parallel(
     plans_to_run,             # List of plan numbers
+    max_workers=2,            # Number of parallel workers
+    num_cores=2,              # Cores per worker
     ras_object=None,
     clear_geompre=False,
-    num_cores=None,
+    force_geompre=False,      # New in v0.88.0
+    force_rerun=False,        # New in v0.88.0
+    dest_folder=None,
     overwrite_dest=False,
-    stream_callback=None
+    skip_existing=False,
+    verify=False
 )
 ```
 
@@ -80,10 +89,15 @@ RasCmdr.compute_parallel(["01", "02", "03"])
 ```python
 RasCmdr.compute_test_mode(
     plans_to_run,
+    dest_folder_suffix="[Test]",
     ras_object=None,
     clear_geompre=False,
+    force_geompre=False,      # New in v0.88.0
+    force_rerun=False,        # New in v0.88.0
     num_cores=None,
-    stream_callback=None
+    overwrite_dest=False,
+    skip_existing=False,
+    verify=False
 )
 ```
 
@@ -112,8 +126,12 @@ compute_parallel_remote(
     plans_to_run,
     workers,                  # List of worker objects
     ras_object=None,
+    num_cores=4,
     clear_geompre=False,
-    num_cores=None
+    force_geompre=False,      # New in v0.88.0
+    force_rerun=False,        # New in v0.88.0
+    max_concurrent=None,
+    autoclean=True
 )
 ```
 
@@ -185,23 +203,126 @@ RasCmdr.compute_plan("01", dest_folder=Path("/output/run1"))
 
 **Type**: Boolean
 **Default**: `False`
-**Purpose**: Clear geometry preprocessor files before execution
+**Purpose**: Clear geometry preprocessor binary files (.c## only) before execution
 
-**When True**: Deletes `.g##.hdf` files (forces geometry reprocessing)
+**When True**: Deletes `.c##` files (forces geometry recompilation)
 
 **Examples**:
 ```python
 # Keep preprocessed geometry (faster)
 RasCmdr.compute_plan("01", clear_geompre=False)
 
-# Force geometry reprocessing (slower, but ensures fresh)
+# Force geometry recompilation (slower, but ensures fresh)
 RasCmdr.compute_plan("01", clear_geompre=True)
 ```
 
 **Use Cases**:
-- ✅ `True`: Geometry was modified, need fresh preprocessing
+- ✅ `True`: Minor geometry edits, need recompilation
 - ✅ `True`: Troubleshooting geometry issues
 - ✅ `False`: Geometry unchanged, save time
+
+### force_geompre (New in v0.88.0)
+
+**Type**: Boolean
+**Default**: `False`
+**Purpose**: Force complete geometry reprocessing (clears both .g##.hdf AND .c## files)
+
+**When True**: Deletes both `.g##.hdf` (geometry HDF) and `.c##` (binary preprocessor)
+
+**Examples**:
+```python
+# Lightweight recompilation (only .c##)
+RasCmdr.compute_plan("01", clear_geompre=True)
+
+# Complete reprocessing (both .g##.hdf and .c##)
+RasCmdr.compute_plan("01", force_geompre=True)
+```
+
+**When to Use**:
+- ✅ Major geometry changes (new 2D mesh, modified structures)
+- ✅ Geometry HDF corruption suspected
+- ✅ Switching HEC-RAS versions
+- ✅ Complete geometry regeneration needed
+
+**Comparison to clear_geompre**:
+
+| Parameter | Deletes | Use Case |
+|-----------|---------|----------|
+| `clear_geompre=True` | `.c##` only | Minor geometry edits |
+| `force_geompre=True` | `.g##.hdf` + `.c##` | Major changes, corruption |
+
+### force_rerun (New in v0.88.0)
+
+**Type**: Boolean
+**Default**: `False`
+**Purpose**: Force execution even if results are current
+
+**When False (default)**: Smart skip - checks file modification times and skips if results are current
+**When True**: Always executes regardless of currency
+
+**Smart Skip Logic (default behavior)**:
+Results are skipped if ALL conditions met:
+1. Plan HDF exists AND contains "Complete Process"
+2. Plan HDF mtime > Plan file (.p##) mtime
+3. Plan HDF mtime > Geometry file (.g##) mtime
+4. Plan HDF mtime > Flow file (.u##/.f##) mtime
+
+**Examples**:
+```python
+# Smart skip (default) - skips if results are current
+RasCmdr.compute_plan("01")
+# Logs: "Skipping plan 01: Results are current (HDF newer than inputs)"
+
+# Force re-run even if current
+RasCmdr.compute_plan("01", force_rerun=True)
+# Executes HEC-RAS regardless of currency
+```
+
+**When to Use**:
+- ✅ `False` (default): Efficient batch processing, development iterations
+- ✅ `True`: Testing different HEC-RAS versions, reproducibility checks
+- ✅ `True`: Forcing fresh results for validation
+
+**Efficiency Example**:
+```python
+# Scenario: 10 plans, only 2 modified since last run
+RasCmdr.compute_parallel(["01", "02", ..., "10"])
+# Smart skip: Only runs 2 modified plans (80% time savings)
+
+# Force all to run
+RasCmdr.compute_parallel(["01", "02", ..., "10"], force_rerun=True)
+# Runs all 10 plans (no skipping)
+```
+
+### skip_existing
+
+**Type**: Boolean
+**Default**: `False`
+**Purpose**: Simple existence check (legacy parameter, use smart skip instead)
+
+**When True**: Skips if HDF exists and contains "Complete Process" (no timestamp checking)
+
+**Examples**:
+```python
+# Smart skip (recommended) - checks file modification times
+RasCmdr.compute_plan("01")  # force_rerun=False is default
+
+# Simple existence check (legacy)
+RasCmdr.compute_plan("01", skip_existing=True)
+```
+
+**Comparison**:
+
+| Feature | `skip_existing=True` | Smart Skip (default) |
+|---------|---------------------|----------------------|
+| Check HDF exists | ✓ | ✓ |
+| Check "Complete Process" | ✓ | ✓ |
+| Check file mtimes | ✗ | ✓ |
+| Detects stale results | ✗ | ✓ |
+
+**When to Use**:
+- ✅ `skip_existing=True`: File modification times unreliable (network shares, virtualization)
+- ✅ Smart skip (default): Most workflows, accurate staleness detection
 
 ### num_cores
 
@@ -337,8 +458,29 @@ for name, config in scenarios.items():
         config["plan"],
         dest_folder=config["dest"],
         clear_geompre=True,
-        num_cores=4
+        num_cores=4,
+        overwrite_dest=True
     )
+    # Smart skip automatically detects if scenario already run
+    # Only executes if plan/geometry/flow files changed
+```
+
+### Pattern: Efficient Re-runs with Smart Skip
+
+```python
+# First run: Execute all plans
+for plan in ["01", "02", "03"]:
+    RasCmdr.compute_plan(plan, dest_folder=f"/runs/plan_{plan}")
+
+# Modify only plan 02's geometry
+modify_geometry("02")
+
+# Re-run all: Only plan 02 executes (plans 01 and 03 skipped)
+for plan in ["01", "02", "03"]:
+    RasCmdr.compute_plan(plan, dest_folder=f"/runs/plan_{plan}", overwrite_dest=True)
+# Logs: "Skipping plan 01: Results are current"
+# Logs: "Skipping plan 03: Results are current"
+# Plan 02 executes (geometry file is newer than HDF)
 ```
 
 ### Pattern: Parallel Execution with Monitoring
@@ -413,6 +555,34 @@ else:
 
 ## Performance Optimization
 
+### Smart Execution Skip (New in v0.88.0)
+
+**Automatic skip when results are current** (default behavior):
+- Checks file modification times before execution
+- Skips execution if HDF is newer than all input files
+- Logs informative message: "Skipping plan 01: Results are current"
+
+**Time Savings Example**:
+```python
+# Scenario: 10 plans, only 2 modified since last run
+RasCmdr.compute_parallel(["01", ..., "10"])
+# Smart skip: Runs only 2 plans (~20 minutes)
+# Without skip: Runs all 10 plans (~100 minutes)
+# Time savings: 80 minutes (80% reduction)
+```
+
+**When Smart Skip Helps**:
+- ✅ Iterative development (re-running after small changes)
+- ✅ Resuming interrupted batch runs
+- ✅ Re-running analysis after fixing post-processing code
+- ✅ Testing different result extraction methods
+
+**Override Smart Skip**:
+```python
+# Always run regardless of currency
+RasCmdr.compute_plan("01", force_rerun=True)
+```
+
 ### Parallel vs Sequential
 
 **Use `compute_parallel()` when**:
@@ -427,13 +597,24 @@ else:
 
 ### Geometry Preprocessing
 
-**Reuse preprocessed geometry** (`clear_geompre=False`):
-- 2x-10x faster for 2D models
-- Only valid if geometry unchanged
+**Lightweight recompilation** (`clear_geompre=True`):
+- Clears `.c##` files only
+- 2x-5x faster than full reprocessing
+- Use for minor geometry edits
 
-**Force reprocessing** (`clear_geompre=True`):
-- Required after geometry modifications
+**Complete reprocessing** (`force_geompre=True`):
+- Clears both `.g##.hdf` and `.c##` files
+- Required after major geometry changes
 - Slower but ensures correctness
+
+**Smart selection**:
+```python
+# Minor edit (changed Manning's n)
+RasCmdr.compute_plan("01", clear_geompre=True)
+
+# Major change (new 2D mesh)
+RasCmdr.compute_plan("01", force_geompre=True)
+```
 
 ## Troubleshooting
 
@@ -470,4 +651,4 @@ else:
 
 ---
 
-**Key Takeaway**: Use `RasCmdr.compute_plan()` for single plans, `compute_parallel()` for multiple plans, and `compute_parallel_remote()` for distributed execution. Always pass plan numbers as strings ("01", not 1).
+**Key Takeaway**: Use `RasCmdr.compute_plan()` for single plans, `compute_parallel()` for multiple plans, and `compute_parallel_remote()` for distributed execution. Smart skip (default) automatically avoids re-running current results. Use `force_rerun=True` to override. Always pass plan numbers as strings ("01", not 1).

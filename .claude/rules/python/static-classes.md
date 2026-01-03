@@ -40,6 +40,7 @@ cmdr.compute_plan("01")
 
 **Core Execution**:
 - `RasCmdr` - HEC-RAS plan execution
+- `RasCurrency` - Execution currency checking (NEW in v0.88.0)
 - `RasControl` - Legacy COM interface (HEC-RAS 3.x-4.x)
 
 **File Operations**:
