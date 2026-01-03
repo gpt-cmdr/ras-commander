@@ -197,6 +197,14 @@ How agents should use notebooks
 - Functions: RasMap.check_layer (ras_commander/RasMap.py), RasMap.is_valid_layer (ras_commander/RasMap.py).
 - Pattern: Pre-flight validation for terrain and layer files; use ValidationReport for diagnostics.
 
+600_discovering_hecras_models_from_usgs.ipynb
+- Focus: Discover and download HEC-RAS models from USGS ScienceBase and other sources.
+- Functions: get_catalog (ras_commander/sources/catalog.py), UsgsScienceBase (ras_commander/sources/federal/usgs_sciencebase.py), ModelFilter (ras_commander/sources/base.py).
+- Pattern: Unified catalog for 25+ documented model sources (federal, state, county, academic). Search by location/type/tags, advanced filtering with spatial/temporal constraints, download with validation.
+- Notable cells: ModelMetadata structure, ModelFilter matching, source status checking, download with auto-extract.
+- Dependencies: sciencebasepy (pip install sciencebasepy) for USGS access.
+- Note: USGS ScienceBase may require authentication; other sources in development (FEMA BLE, Virginia VFRIS, etc.).
+
 ---
 
 ## 700s: Sensitivity & Benchmarking
@@ -236,6 +244,30 @@ How agents should use notebooks
 722_atlas14_multi_project.ipynb
 - Focus: Run Atlas 14 AEP events across multiple projects.
 - Pattern: Batch processing workflow for multiple HEC-RAS projects.
+
+723_atlas14_stormgenerator_validation.ipynb
+- Focus: Validate StormGenerator (Alternating Block Method) implementation.
+- Functions: StormGenerator.download_from_coordinates (ras_commander/precip/StormGenerator.py), StormGenerator.generate_hyetograph.
+- Pattern: Cross-validation against HMS-Commander alternating block implementation (~1% tolerance).
+- Note: For HMS-equivalent hyetographs see 724.
+
+724_atlas14_hms_equivalent_hyetographs.ipynb
+- Focus: Demonstrate Atlas14Storm HMS-equivalent hyetograph generation (10^-6 precision).
+- Functions: Atlas14Storm.generate_hyetograph (hms_commander/Atlas14Storm.py).
+- Pattern: Generate official NOAA temporal distribution hyetographs matching HEC-HMS exactly.
+- Notable: All 5 quartiles, multi-AEP suite, comparison with StormGenerator.
+
+723_atlas14_stormgenerator_validation.ipynb
+- Focus: Validate StormGenerator (Alternating Block Method) implementation.
+- Functions: StormGenerator.download_from_coordinates (ras_commander/precip/StormGenerator.py), StormGenerator.generate_hyetograph.
+- Pattern: Cross-validation against HMS-Commander alternating block implementation (~1% tolerance).
+- Note: For HMS-equivalent hyetographs see 724.
+
+724_atlas14_hms_equivalent_hyetographs.ipynb
+- Focus: Demonstrate Atlas14Storm HMS-equivalent hyetograph generation (10^-6 precision).
+- Functions: Atlas14Storm.generate_hyetograph (hms_commander/Atlas14Storm.py).
+- Pattern: Generate official NOAA temporal distribution hyetographs matching HEC-HMS exactly.
+- Notable: All 5 quartiles, multi-AEP suite, comparison with StormGenerator.
 
 ---
 

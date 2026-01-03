@@ -179,3 +179,27 @@ test_notebook*.ipynb
 
 # Cleanup scripts (can be regenerated)
 cleanup_temp_files.sh
+
+# Cache directories (local data caching)
+cache/
+examples/cache/
+
+# Working directories (temporary computation folders)
+working/
+
+# Temporary example outputs and test data
+examples/gauge_data/
+examples/python_gis_plan_06/
+examples/execution_log.txt
+
+# Development/debug scripts in examples
+examples/debug_*.py
+examples/explore_*.py
+examples/find_*.py
+examples/verify_*.py
+
+# Temporary source folders
+ras_commander/sources/
+
+# Claude Code workspace directories
+examples/.claude/
