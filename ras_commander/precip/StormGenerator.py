@@ -1,41 +1,52 @@
 """
-StormGenerator: Generate design storm hyetographs from NOAA Atlas 14 data.
+StormGenerator: Generate design storm hyetographs using the Alternating Block Method.
 
 This module provides utilities to generate design storm hyetographs using the
-Alternating Block Method from NOAA Atlas 14 precipitation frequency data.
+Alternating Block Method (Chow, Maidment, Mays 1988). The user specifies the
+total precipitation depth (from Atlas 14 or other source) and the temporal
+pattern is derived from DDF data.
 
-Two workflows are supported:
+**Key Features:**
+- Flexible peak positioning (0-100%)
+- User-specified total depth (NOT interpolated from DDF tables)
+- Alternating Block temporal distribution
+- Static class pattern (no instantiation required)
 
-**Workflow 1: Direct Download (Recommended)**
-Download precipitation data directly from NOAA without manual file downloads:
+**Basic Workflow (v0.88.0+):**
 
     >>> from ras_commander.precip import StormGenerator
     >>>
-    >>> # Download data for a location (lat, lon)
-    >>> gen = StormGenerator.download_from_coordinates(38.9, -77.0)
+    >>> # Download DDF data for temporal pattern (returns DataFrame)
+    >>> ddf_data = StormGenerator.download_from_coordinates(29.76, -95.37)
     >>>
-    >>> # Generate hyetograph
-    >>> hyetograph = gen.generate_hyetograph(ari=100, duration_hours=24)
-
-**Workflow 2: From CSV File**
-Use previously downloaded CSV files from the NOAA PFDS website:
-
-    >>> gen = StormGenerator('PF_Depth_English_Davis_CA.csv')
-    >>> hyetograph = gen.generate_hyetograph(ari=100, duration_hours=24)
+    >>> # Generate hyetograph with Atlas 14 total depth
+    >>> hyetograph = StormGenerator.generate_hyetograph(
+    ...     ddf_data=ddf_data,
+    ...     total_depth_inches=17.0,  # Atlas 14 value for Houston 100-yr 24-hr
+    ...     duration_hours=24,
+    ...     position_percent=50  # Peak at 50% (centered)
+    ... )
+    >>> print(f"Total: {hyetograph['cumulative_depth'].iloc[-1]:.6f} inches")
+    Total: 17.000000 inches
 
 **Batch Generation:**
 
-    >>> # Generate all combinations and save to files
-    >>> files = gen.generate_all(
-    ...     aep_events=[10, 50, 100],
-    ...     durations=[6, 12, 24],
-    ...     output_dir='hyetographs/'
-    ... )
+    >>> ddf_data = StormGenerator.download_from_coordinates(29.76, -95.37)
+    >>> events = {
+    ...     '100yr_24hr': {'total_depth_inches': 17.0, 'duration_hours': 24},
+    ...     '500yr_24hr': {'total_depth_inches': 21.5, 'duration_hours': 24},
+    ... }
+    >>> storms = StormGenerator.generate_all(ddf_data, events, output_dir='hyetographs/')
+
+**Note:** This method is NOT HMS-equivalent. For HMS-equivalent hyetographs,
+use Atlas14Storm, FrequencyStorm, or ScsTypeStorm from hms-commander.
+
+**Deprecation Notice:** Instance-based usage (e.g., gen = StormGenerator(...)) is
+deprecated as of v0.88.0 and will be removed in v0.89.0. Use static methods instead.
 
 References:
     - NOAA Atlas 14: https://hdsc.nws.noaa.gov/pfds/
-    - NOAA HDSC API: https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/cgi_readH5.py
-    - Alternating Block Method: Chow, Maidment, Mays (1988)
+    - Alternating Block Method: Chow, Maidment, Mays (1988), Applied Hydrology, Section 14.4
 """
 
 import ast
@@ -47,7 +58,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from ..LoggingConfig import get_logger
+from ..LoggingConfig import get_logger, log_call
 
 logger = get_logger(__name__)
 
@@ -56,21 +67,25 @@ class StormGenerator:
     """
     Generate AEP hyetographs from NOAA Atlas 14 precipitation frequency data.
 
-    This class provides methods to:
+    This class provides static methods to:
+    - Download NOAA Atlas 14 precipitation frequency data from the HDSC API
     - Load NOAA Atlas 14 precipitation frequency CSV files
     - Interpolate depths for arbitrary durations using log-log interpolation
     - Generate hyetographs using the Alternating Block Method
     - Save hyetographs in formats compatible with HEC-RAS
 
-    Attributes:
-        data (pd.DataFrame): The loaded precipitation frequency data
-        durations_hours (np.ndarray): Available durations in hours
-        ari_columns (List[str]): Available ARI column names
+    **Static Class Pattern (v0.88.0+):**
+    All methods are static - call directly without instantiation.
 
-    Example:
-        >>> gen = StormGenerator('Atlas14_data.csv')
-        >>> hyeto = gen.generate_hyetograph(100, 24, position_percent=50)
+    Example (New Static Pattern):
+        >>> ddf = StormGenerator.download_from_coordinates(29.76, -95.37)
+        >>> hyeto = StormGenerator.generate_hyetograph(ddf, 17.0, 24, position_percent=50)
         >>> hyeto.to_csv('100yr_24hr_hyetograph.csv', index=False)
+
+    Example (Deprecated Instance Pattern - will be removed in v0.89.0):
+        >>> gen = StormGenerator.download_from_coordinates(29.76, -95.37)  # Returns DataFrame now
+        >>> # OLD: hyeto = gen.generate_hyetograph(...)  # Instance method
+        >>> # NEW: hyeto = StormGenerator.generate_hyetograph(ddf, ...)  # Static method
     """
 
     # Duration parsing patterns for NOAA Atlas 14 format
@@ -83,45 +98,91 @@ class StormGenerator:
     # NOAA HDSC API endpoint for precipitation frequency data
     NOAA_API_URL = "https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/cgi_readH5.py"
 
-    # Standard durations in hours (matching NOAA Atlas 14 output order)
+    # NOAA API Response Structure Metadata
+    # The API returns unlabeled quantile arrays. These constants define the
+    # row (duration) and column (return period) mappings per the NOAA Atlas 14
+    # API specification. These are NOT arbitrary - they match the official
+    # NOAA Atlas 14 output structure.
+    #
+    # Source: NOAA HDSC API documentation
+    # https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/cgi_readH5.py
+
+    # Duration mapping (rows in quantiles array)
+    # API returns 19 durations in this exact order:
     # 5min, 10min, 15min, 30min, 60min, 2hr, 3hr, 6hr, 12hr, 24hr, 2day, 3day, 4day, 7day, 10day, 20day, 30day, 45day, 60day
     STANDARD_DURATIONS_HOURS = [
         5/60, 10/60, 15/60, 30/60, 1, 2, 3, 6, 12, 24,
         48, 72, 96, 168, 240, 480, 720, 1080, 1440
     ]
 
-    # Standard ARI values (return periods in years)
-    # NOAA Atlas 14 columns are ordered by AEP (50%, 20%, 10%, 4%, 2%, 1%, 0.5%, 0.2%, 0.1%, 0.05%)
-    # Standard AEP-to-ARI conversion: ARI = 1/AEP
-    # So columns correspond to: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year return periods
-    STANDARD_ARI_VALUES = ['2', '5', '10', '25', '50', '100', '200', '500', '1000', '2000']
+    # Return period mapping (columns in quantiles array)
+    # CRITICAL: PDS and AMS series have DIFFERENT column structures!
+    # - PDS (Partial Duration Series): 10 columns, includes 2-year (AEP 50%)
+    # - AMS (Annual Maximum Series): 9 columns, starts at 5-year (AEP 20%), NO 2-year!
+    #
+    # PDS AEP: 50%, 20%, 10%, 4%, 2%, 1%, 0.5%, 0.2%, 0.1%, 0.05%
+    # PDS ARI: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 years
+    #
+    # AMS AEP: 20%, 10%, 4%, 2%, 1%, 0.5%, 0.2%, 0.1%, 0.05%
+    # AMS ARI: 5, 10, 25, 50, 100, 200, 500, 1000, 2000 years (NO 2-year!)
+    STANDARD_ARI_VALUES_PDS = ['2', '5', '10', '25', '50', '100', '200', '500', '1000', '2000']
+    STANDARD_ARI_VALUES_AMS = ['5', '10', '25', '50', '100', '200', '500', '1000', '2000']
+
+    # Legacy alias for backwards compatibility (assumes PDS)
+    STANDARD_ARI_VALUES = STANDARD_ARI_VALUES_PDS
 
     def __init__(self, csv_file: Optional[Union[str, Path]] = None):
         """
-        Initialize StormGenerator.
+        DEPRECATED: StormGenerator is now static (v0.88.0).
+
+        Instance-based usage will be removed in v0.89.0. Use static methods instead:
+
+        OLD (deprecated):
+            gen = StormGenerator.download_from_coordinates(lat, lon)
+            hyeto = gen.generate_hyetograph(total_depth_inches=17.0, ...)
+
+        NEW (v0.88.0+):
+            ddf = StormGenerator.download_from_coordinates(lat, lon)
+            hyeto = StormGenerator.generate_hyetograph(ddf_data=ddf, total_depth_inches=17.0, ...)
 
         Args:
-            csv_file: Optional path to NOAA Atlas 14 CSV file.
-                     If provided, loads the data immediately.
+            csv_file: Optional path to NOAA Atlas 14 CSV file (deprecated).
         """
+        import warnings
+        warnings.warn(
+            "StormGenerator instance-based usage is deprecated and will be removed "
+            "in v0.89.0. Use static methods instead:\n"
+            "  OLD: gen = StormGenerator.download_from_coordinates(lat, lon)\n"
+            "       hyeto = gen.generate_hyetograph(total_depth_inches=17.0, ...)\n"
+            "  NEW: ddf = StormGenerator.download_from_coordinates(lat, lon)\n"
+            "       hyeto = StormGenerator.generate_hyetograph(ddf_data=ddf, "
+            "total_depth_inches=17.0, ...)",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        # Support legacy usage during deprecation period
         self.data: Optional[pd.DataFrame] = None
         self.durations_hours: Optional[np.ndarray] = None
         self.ari_columns: List[str] = []
+        self._api_metadata: Dict = {}
 
         if csv_file:
-            self.load_csv(csv_file)
+            # Load using static method
+            self.data = StormGenerator.load_csv(csv_file)
+            self.durations_hours = self.data['duration_hours'].values
+            self.ari_columns = [c for c in self.data.columns if c != 'duration_hours']
 
-    @classmethod
+    @staticmethod
+    @log_call
     def download_from_coordinates(
-        cls,
         lat: float,
         lon: float,
         data: str = 'depth',
         units: str = 'english',
-        series: str = 'pds',
+        series: str = 'ams',
         timeout: int = 30,
         project_folder: Optional[Union[str, Path]] = None
-    ) -> 'StormGenerator':
+    ) -> pd.DataFrame:
         """
         Download NOAA Atlas 14 precipitation frequency data for a location.
 
@@ -141,13 +202,16 @@ class StormGenerator:
             lon: Longitude in decimal degrees (negative for Western Hemisphere)
             data: Data type - 'depth' (inches/mm) or 'intensity' (in/hr or mm/hr)
             units: Unit system - 'english' or 'metric'
-            series: Time series type - 'pds' (partial duration) or 'ams' (annual maximum)
+            series: Time series type - 'ams' (annual maximum, default) or 'pds' (partial duration).
+                   AMS is the standard for engineering design and matches typical Atlas 14 tables.
+                   PDS values are lower for the same return period (especially < 10-year events).
             timeout: Request timeout in seconds
             project_folder: Optional path to project folder for caching. If provided,
                           data is cached to {project_folder}/NOAA_Atlas_14/
 
         Returns:
-            StormGenerator instance with data loaded and ready for hyetograph generation
+            pd.DataFrame: DDF data with 'duration_hours' column and ARI columns.
+                         DataFrame has .attrs['metadata'] containing API response metadata.
 
         Raises:
             ValueError: If coordinates are outside NOAA Atlas 14 coverage
@@ -156,15 +220,15 @@ class StormGenerator:
 
         Example:
             >>> # Download data for Washington, DC (no caching)
-            >>> gen = StormGenerator.download_from_coordinates(38.9, -77.0)
-            >>> hyeto = gen.generate_hyetograph(ari=100, duration_hours=24)
+            >>> ddf = StormGenerator.download_from_coordinates(38.9, -77.0)
+            >>> hyeto = StormGenerator.generate_hyetograph(ddf, total_depth_inches=10.0, duration_hours=24)
             >>>
             >>> # Download with caching (LLM Forward pattern)
-            >>> gen = StormGenerator.download_from_coordinates(
+            >>> ddf = StormGenerator.download_from_coordinates(
             ...     lat=38.9, lon=-77.0,
             ...     project_folder="/path/to/project"
             ... )
-            >>> # Data cached to /path/to/project/NOAA_Atlas_14/lat38.9_lon-77.0_depth_english_pds.json
+            >>> # Data cached to /path/to/project/NOAA_Atlas_14/lat38.9_lon-77.0_depth_english_ams.json
 
         Note:
             NOAA Atlas 14 coverage includes most of the contiguous United States,
@@ -173,7 +237,6 @@ class StormGenerator:
         """
         import urllib.request
         import urllib.error
-        import ast
         import json
 
         # Check for cached data if project_folder provided
@@ -192,13 +255,12 @@ class StormGenerator:
                     logger.info(f"Using cached Atlas 14 data for ({lat}, {lon})")
 
                     # Convert to DataFrame format
-                    instance = cls()
-                    instance._load_from_api_data(data_dict, units)
+                    df = StormGenerator._api_data_to_dataframe(data_dict, units)
 
                     region = data_dict.get('region', 'Unknown')
                     logger.info(f"Downloaded Atlas 14 data for region: {region}")
 
-                    return instance
+                    return df
                 except Exception as e:
                     logger.warning(f"Failed to load cache file, downloading fresh: {e}")
 
@@ -212,7 +274,7 @@ class StormGenerator:
             'series': series
         }
         query_string = '&'.join(f"{k}={v}" for k, v in params.items())
-        url = f"{cls.NOAA_API_URL}?{query_string}"
+        url = f"{StormGenerator.NOAA_API_URL}?{query_string}"
 
         logger.info(f"Downloading Atlas 14 data for ({lat}, {lon})...")
 
@@ -233,7 +295,7 @@ class StormGenerator:
         try:
             # The response is Python code with variable assignments
             # We need to extract the data safely
-            data_dict = cls._parse_noaa_response(content)
+            data_dict = StormGenerator._parse_noaa_response(content)
         except Exception as e:
             raise ValueError(f"Failed to parse NOAA API response: {e}")
 
@@ -255,13 +317,12 @@ class StormGenerator:
                 logger.warning(f"Failed to cache Atlas 14 data: {e}")
 
         # Convert to DataFrame format
-        instance = cls()
-        instance._load_from_api_data(data_dict, units)
+        df = StormGenerator._api_data_to_dataframe(data_dict, units)
 
         region = data_dict.get('region', 'Unknown')
         logger.info(f"Downloaded Atlas 14 data for region: {region}")
 
-        return instance
+        return df
 
     @staticmethod
     def _parse_noaa_response(content: str) -> Dict:
@@ -306,13 +367,27 @@ class StormGenerator:
 
         return result
 
-    def _load_from_api_data(self, data_dict: Dict, units: str) -> None:
+    @staticmethod
+    def _api_data_to_dataframe(data_dict: Dict, units: str) -> pd.DataFrame:
         """
-        Load precipitation data from parsed API response.
+        Convert parsed API response to DataFrame.
 
         Args:
             data_dict: Parsed dictionary from NOAA API
             units: Unit system used in request
+
+        Returns:
+            pd.DataFrame: DDF data with 'duration_hours' column and ARI columns.
+                         DataFrame has .attrs['metadata'] containing API response metadata.
+
+        Note:
+            The NOAA API returns unlabeled quantile arrays. Row/column mappings
+            come from STANDARD_DURATIONS_HOURS and STANDARD_ARI_VALUES_PDS/AMS,
+            which match the official NOAA Atlas 14 API structure specification.
+
+            CRITICAL: PDS and AMS series have DIFFERENT column structures!
+            - PDS: 10 columns [2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000] year
+            - AMS: 9 columns [5, 10, 25, 50, 100, 200, 500, 1000, 2000] year (NO 2-year!)
         """
         quantiles = data_dict.get('quantiles', [])
 
@@ -320,13 +395,106 @@ class StormGenerator:
             raise ValueError("No quantile data in API response")
 
         # Build DataFrame from quantiles array
-        # Rows are durations (19 standard), columns are return periods (10 standard)
+        # Rows are durations (19 standard), columns are return periods
+        num_durations = len(quantiles)
+        num_aris = len(quantiles[0]) if quantiles else 0
+
+        # Use standard durations (may be fewer rows if API returns subset)
+        durations = StormGenerator.STANDARD_DURATIONS_HOURS[:num_durations]
+
+        # CRITICAL: Select correct ARI column mapping based on series type
+        # The API response includes 'ser' field ('pds' or 'ams')
+        series = data_dict.get('ser', 'pds').lower()
+
+        if series == 'ams':
+            # AMS has 9 columns: 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year (NO 2-year!)
+            ari_cols = StormGenerator.STANDARD_ARI_VALUES_AMS[:num_aris]
+            logger.debug(f"Using AMS ARI mapping (9 columns, no 2-year): {ari_cols}")
+        else:
+            # PDS has 10 columns: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year
+            ari_cols = StormGenerator.STANDARD_ARI_VALUES_PDS[:num_aris]
+            logger.debug(f"Using PDS ARI mapping (10 columns): {ari_cols}")
+
+        # Create DataFrame
+        df_data = {'duration_hours': durations}
+        for i, ari in enumerate(ari_cols):
+            # Convert string values to float (cached JSON has strings)
+            values = []
+            for row in quantiles:
+                if i < len(row):
+                    val = row[i]
+                    # Convert string to float if needed
+                    if isinstance(val, str):
+                        try:
+                            val = float(val)
+                        except (ValueError, TypeError):
+                            val = np.nan
+                    values.append(val)
+                else:
+                    values.append(np.nan)
+            df_data[ari] = values
+
+        df = pd.DataFrame(df_data)
+
+        # Store metadata in DataFrame attrs (Pandas 1.0+ feature)
+        df.attrs['metadata'] = {
+            'lat': data_dict.get('lat'),
+            'lon': data_dict.get('lon'),
+            'region': data_dict.get('region'),
+            'units': units,
+            'series': series,  # 'pds' or 'ams'
+            'upper': data_dict.get('upper'),
+            'lower': data_dict.get('lower'),
+            'durations_hours': list(durations),
+            'ari_columns': ari_cols,
+        }
+
+        logger.debug(f"Loaded {num_durations} durations x {num_aris} ARIs from API")
+
+        return df
+
+    def _load_from_api_data(self, data_dict: Dict, units: str) -> None:
+        """
+        Load precipitation data from parsed API response.
+
+        Args:
+            data_dict: Parsed dictionary from NOAA API
+            units: Unit system used in request
+
+        Note:
+            The NOAA API returns unlabeled quantile arrays. Row/column mappings
+            come from STANDARD_DURATIONS_HOURS and STANDARD_ARI_VALUES_PDS/AMS,
+            which match the official NOAA Atlas 14 API structure specification.
+
+            CRITICAL: PDS and AMS series have DIFFERENT column structures!
+            - PDS: 10 columns [2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000] year
+            - AMS: 9 columns [5, 10, 25, 50, 100, 200, 500, 1000, 2000] year (NO 2-year!)
+        """
+        quantiles = data_dict.get('quantiles', [])
+
+        if not quantiles or len(quantiles) == 0:
+            raise ValueError("No quantile data in API response")
+
+        # Build DataFrame from quantiles array
+        # Rows are durations (19 standard), columns are return periods
         num_durations = len(quantiles)
         num_aris = len(quantiles[0]) if quantiles else 0
 
         # Use standard durations (may be fewer rows if API returns subset)
         durations = self.STANDARD_DURATIONS_HOURS[:num_durations]
-        ari_cols = self.STANDARD_ARI_VALUES[:num_aris]
+
+        # CRITICAL: Select correct ARI column mapping based on series type
+        # The API response includes 'ser' field ('pds' or 'ams')
+        series = data_dict.get('ser', 'pds').lower()
+
+        if series == 'ams':
+            # AMS has 9 columns: 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year (NO 2-year!)
+            ari_cols = self.STANDARD_ARI_VALUES_AMS[:num_aris]
+            logger.debug(f"Using AMS ARI mapping (9 columns, no 2-year): {ari_cols}")
+        else:
+            # PDS has 10 columns: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year
+            ari_cols = self.STANDARD_ARI_VALUES_PDS[:num_aris]
+            logger.debug(f"Using PDS ARI mapping (10 columns): {ari_cols}")
 
         # Create DataFrame
         df_data = {'duration_hours': durations}
@@ -351,12 +519,13 @@ class StormGenerator:
         self.durations_hours = np.array(durations)
         self.ari_columns = ari_cols
 
-        # Store metadata
+        # Store metadata (including series type for debugging)
         self._api_metadata = {
             'lat': data_dict.get('lat'),
             'lon': data_dict.get('lon'),
             'region': data_dict.get('region'),
             'units': units,
+            'series': series,  # 'pds' or 'ams'
             'upper': data_dict.get('upper'),
             'lower': data_dict.get('lower'),
         }
@@ -394,7 +563,9 @@ class StormGenerator:
 
         raise ValueError(f"Unrecognized duration format: '{duration_str}'")
 
-    def load_csv(self, csv_file: Union[str, Path]) -> pd.DataFrame:
+    @staticmethod
+    @log_call
+    def load_csv(csv_file: Union[str, Path]) -> pd.DataFrame:
         """
         Load NOAA Atlas 14 precipitation frequency CSV file.
 
@@ -406,13 +577,14 @@ class StormGenerator:
             csv_file: Path to the NOAA Atlas 14 CSV file
 
         Returns:
-            DataFrame with parsed precipitation data
+            pd.DataFrame: DDF data with 'duration_hours' column and ARI columns.
+                         DataFrame has .attrs['metadata'] containing file metadata.
 
         Example:
-            >>> gen = StormGenerator()
-            >>> data = gen.load_csv('PF_Depth_English.csv')
-            >>> print(data.columns.tolist())
+            >>> ddf = StormGenerator.load_csv('PF_Depth_English.csv')
+            >>> print(ddf.columns.tolist())
             ['duration_hours', '1', '2', '5', '10', '25', '50', '100', ...]
+            >>> hyeto = StormGenerator.generate_hyetograph(ddf, 17.0, 24)
         """
         csv_path = Path(csv_file)
         if not csv_path.exists():
@@ -425,34 +597,40 @@ class StormGenerator:
         duration_col = df.columns[0]
 
         # Parse durations
-        df['duration_hours'] = df[duration_col].apply(self.parse_duration)
+        df['duration_hours'] = df[duration_col].apply(StormGenerator.parse_duration)
 
         # Identify ARI columns (numeric column names)
-        self.ari_columns = []
+        ari_columns = []
         for col in df.columns[1:]:
             if col != 'duration_hours':
                 try:
                     # Try to parse as number (ARI value)
                     int(col)
-                    self.ari_columns.append(col)
+                    ari_columns.append(col)
                 except ValueError:
                     continue
 
         # Convert ARI columns to numeric, handling any text
-        for col in self.ari_columns:
+        for col in ari_columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
         # Sort by duration
         df = df.sort_values('duration_hours').reset_index(drop=True)
 
-        self.data = df
-        self.durations_hours = df['duration_hours'].values
+        # Store metadata in DataFrame attrs
+        df.attrs['metadata'] = {
+            'source': 'csv',
+            'file': str(csv_path),
+            'durations_hours': df['duration_hours'].values.tolist(),
+            'ari_columns': ari_columns,
+        }
 
-        logger.info(f"Loaded precipitation data: {len(df)} durations, ARIs: {self.ari_columns}")
+        logger.info(f"Loaded precipitation data: {len(df)} durations, ARIs: {ari_columns}")
 
         return df
 
-    def _get_time_increment(self, total_duration_hours: float) -> float:
+    @staticmethod
+    def _get_time_increment(total_duration_hours: float) -> float:
         """
         Determine appropriate time increment based on storm duration.
 
@@ -471,8 +649,9 @@ class StormGenerator:
         else:
             return 1.0  # 1 hour for longer storms
 
+    @staticmethod
     def interpolate_depths(
-        self,
+        ddf_data: pd.DataFrame,
         ari: int,
         total_duration_hours: float
     ) -> Tuple[np.ndarray, np.ndarray]:
@@ -483,6 +662,7 @@ class StormGenerator:
         up to the total storm duration.
 
         Args:
+            ddf_data: DDF DataFrame from download_from_coordinates() or load_csv()
             ari: Annual Recurrence Interval (e.g., 2, 10, 100)
             total_duration_hours: Total storm duration in hours
 
@@ -492,20 +672,21 @@ class StormGenerator:
         Raises:
             ValueError: If data not loaded or ARI not available
         """
-        if self.data is None:
-            raise ValueError("No data loaded. Call load_csv() first.")
+        if ddf_data is None or ddf_data.empty:
+            raise ValueError("No data provided. Pass DDF DataFrame from download_from_coordinates() or load_csv().")
 
         ari_str = str(ari)
-        if ari_str not in self.ari_columns:
-            raise ValueError(f"ARI {ari} not available. Available: {self.ari_columns}")
+        ari_columns = [c for c in ddf_data.columns if c != 'duration_hours']
+        if ari_str not in ari_columns:
+            raise ValueError(f"ARI {ari} not available. Available: {ari_columns}")
 
         # Get time increment
-        dt = self._get_time_increment(total_duration_hours)
+        dt = StormGenerator._get_time_increment(total_duration_hours)
         t_hours = np.arange(dt, total_duration_hours + dt, dt)
 
         # Get source data
-        source_durations = self.durations_hours
-        source_depths = self.data[ari_str].values
+        source_durations = ddf_data['duration_hours'].values
+        source_depths = ddf_data[ari_str].values
 
         # Remove any NaN values
         valid_mask = ~np.isnan(source_depths)
@@ -525,8 +706,8 @@ class StormGenerator:
 
         return D, t_hours
 
+    @staticmethod
     def compute_incremental_depths(
-        self,
         cumulative_depths: np.ndarray,
         time_hours: np.ndarray
     ) -> np.ndarray:
@@ -548,8 +729,8 @@ class StormGenerator:
 
         return incremental
 
+    @staticmethod
     def _assign_alternating_block(
-        self,
         sorted_depths: np.ndarray,
         max_depth: float,
         central_index: int,
@@ -607,21 +788,26 @@ class StormGenerator:
 
         return hyetograph
 
+    @staticmethod
+    @log_call
     def generate_hyetograph(
-        self,
-        ari: int,
+        ddf_data: pd.DataFrame,
+        total_depth_inches: float,
         duration_hours: float,
         position_percent: float = 50.0,
         method: str = 'alternating_block'
     ) -> pd.DataFrame:
         """
-        Generate a design storm hyetograph.
+        Generate a design storm hyetograph using the Alternating Block Method.
 
-        Uses the Alternating Block Method to create a hyetograph from
-        precipitation frequency data.
+        The temporal pattern is derived from the DDF data, then scaled to match
+        the user-specified total depth. This allows using Atlas 14 depths while
+        applying the Alternating Block temporal distribution.
 
         Args:
-            ari: Annual Recurrence Interval in years (e.g., 2, 10, 100)
+            ddf_data: DDF DataFrame from download_from_coordinates() or load_csv()
+            total_depth_inches: Total precipitation depth in inches. This should
+                              be the Atlas 14 value for the desired AEP and duration.
             duration_hours: Storm duration in hours
             position_percent: Peak position as percentage (0-100).
                             0 = early peak, 50 = centered, 100 = late peak
@@ -631,29 +817,47 @@ class StormGenerator:
         Returns:
             DataFrame with columns:
             - hour: Time in hours from storm start
-            - incremental_depth: Precipitation depth for this interval
-            - cumulative_depth: Cumulative precipitation depth
+            - incremental_depth: Precipitation depth for this interval (inches)
+            - cumulative_depth: Cumulative precipitation depth (inches)
 
         Example:
-            >>> gen = StormGenerator('Atlas14.csv')
-            >>> hyeto = gen.generate_hyetograph(100, 24, position_percent=50)
-            >>> print(hyeto.head())
-               hour  incremental_depth  cumulative_depth
-            0   1.0              0.123             0.123
-            1   2.0              0.156             0.279
-            ...
+            >>> ddf = StormGenerator.download_from_coordinates(29.76, -95.37)
+            >>> # Use Atlas 14 depth (17.0 inches for Houston 100-yr 24-hr)
+            >>> hyeto = StormGenerator.generate_hyetograph(
+            ...     ddf_data=ddf,
+            ...     total_depth_inches=17.0,
+            ...     duration_hours=24,
+            ...     position_percent=50
+            ... )
+            >>> print(f"Total: {hyeto['cumulative_depth'].iloc[-1]:.6f} inches")
+            Total: 17.000000 inches
+
+        Note:
+            The DDF data is used only for the temporal pattern (shape).
+            The actual depths are scaled to match total_depth_inches exactly.
         """
-        if self.data is None:
-            raise ValueError("No data loaded. Call load_csv() first.")
+        if ddf_data is None or ddf_data.empty:
+            raise ValueError("No data provided. Pass DDF DataFrame from download_from_coordinates() or load_csv().")
 
         if method != 'alternating_block':
             raise ValueError(f"Unknown method: {method}. Only 'alternating_block' is supported.")
 
-        # Interpolate depths
-        D, t_hours = self.interpolate_depths(ari, duration_hours)
+        if total_depth_inches <= 0:
+            raise ValueError(f"total_depth_inches must be positive, got {total_depth_inches}")
 
-        # Compute incremental depths
-        incremental = self.compute_incremental_depths(D, t_hours)
+        # Use the first available ARI column to get the temporal pattern
+        # The pattern shape is similar across ARIs, we just need the relative distribution
+        ari_columns = [c for c in ddf_data.columns if c != 'duration_hours']
+        if not ari_columns:
+            raise ValueError("No ARI columns available in data")
+
+        pattern_ari = int(ari_columns[0])
+
+        # Interpolate depths to get temporal pattern
+        D, t_hours = StormGenerator.interpolate_depths(ddf_data, pattern_ari, duration_hours)
+
+        # Compute incremental depths (this gives us the pattern)
+        incremental = StormGenerator.compute_incremental_depths(D, t_hours)
 
         # Get sorted depths (descending, excluding max)
         max_depth = incremental.max()
@@ -661,15 +865,20 @@ class StormGenerator:
         sorted_depths = np.sort(np.delete(incremental, max_idx))[::-1]
 
         # Calculate central index based on position_percent
-        # This matches HEC-HMS validated implementation: peak_index = int((peak_position/100) * num_intervals)
         num_intervals = len(t_hours)
         central_index = int((position_percent / 100.0) * num_intervals)
         central_index = max(0, min(central_index, num_intervals - 1))
 
         # Assign using alternating block
-        hyetograph = self._assign_alternating_block(
+        hyetograph = StormGenerator._assign_alternating_block(
             sorted_depths, max_depth, central_index, num_intervals
         )
+
+        # Scale the hyetograph to match total_depth_inches exactly
+        pattern_total = hyetograph.sum()
+        if pattern_total > 0:
+            scale_factor = total_depth_inches / pattern_total
+            hyetograph = hyetograph * scale_factor
 
         # Create DataFrame
         result = pd.DataFrame({
@@ -678,47 +887,37 @@ class StormGenerator:
             'cumulative_depth': np.cumsum(hyetograph)
         })
 
-        logger.info(f"Generated {ari}-year, {duration_hours}-hour hyetograph "
-                   f"(peak at {position_percent}%, total depth: {result['cumulative_depth'].iloc[-1]:.3f})")
+        logger.info(f"Generated {duration_hours}-hour hyetograph "
+                   f"(peak at {position_percent}%, total depth: {result['cumulative_depth'].iloc[-1]:.6f} inches)")
 
         return result
 
+    @staticmethod
+    @log_call
     def validate_hyetograph(
-        self,
         hyetograph: pd.DataFrame,
-        ari: int,
-        duration_hours: float,
-        tolerance: float = 0.01
+        expected_total_depth: float,
+        tolerance: float = 1e-6
     ) -> bool:
         """
-        Validate generated hyetograph against Atlas 14 total depth.
-
-        The final cumulative depth should match the Atlas 14 total depth
-        for the storm duration within the specified tolerance.
-
-        This validation method matches the HEC-HMS verified implementation
-        to ensure hyetographs are generated correctly.
+        Validate that hyetograph total depth matches expected value.
 
         Args:
             hyetograph: Hyetograph DataFrame from generate_hyetograph()
-            ari: Annual Recurrence Interval in years (e.g., 100)
-            duration_hours: Storm duration in hours (e.g., 24)
-            tolerance: Allowable relative error (default 1%)
+            expected_total_depth: Expected total precipitation depth in inches
+            tolerance: Allowable absolute error in inches (default 1e-6)
 
         Returns:
             True if validation passes
 
         Raises:
-            ValueError: If validation fails (relative error exceeds tolerance)
+            ValueError: If validation fails (error exceeds tolerance)
 
         Example:
-            >>> gen = StormGenerator.download_from_coordinates(38.9, -77.0)
-            >>> hyeto = gen.generate_hyetograph(100, 24)
-            >>> gen.validate_hyetograph(hyeto, 100, 24)
+            >>> ddf = StormGenerator.download_from_coordinates(29.76, -95.37)
+            >>> hyeto = StormGenerator.generate_hyetograph(ddf, total_depth_inches=17.0, duration_hours=24)
+            >>> StormGenerator.validate_hyetograph(hyeto, expected_total_depth=17.0)
             True
-
-        Note:
-            Validated against HEC-HMS 4.11 frequency storm output (Dec 2024).
         """
         if hyetograph.empty:
             raise ValueError("Empty hyetograph DataFrame")
@@ -726,59 +925,55 @@ class StormGenerator:
         # Get final cumulative depth from hyetograph
         final_depth = hyetograph['cumulative_depth'].iloc[-1]
 
-        # Get expected Atlas 14 depth for this ARI and duration
-        ari_str = str(ari)
-        if ari_str not in self.ari_columns:
-            raise ValueError(f"ARI {ari} not available for validation. Available: {self.ari_columns}")
+        # Calculate absolute error
+        abs_error = abs(final_depth - expected_total_depth)
 
-        # Interpolate expected depth for exact duration
-        expected_depths, _ = self.interpolate_depths(ari, duration_hours)
-        expected_depth = expected_depths[-1]  # Final cumulative depth from Atlas 14
-
-        # Calculate relative error
-        relative_error = abs(final_depth - expected_depth) / expected_depth
-
-        if relative_error > tolerance:
+        if abs_error > tolerance:
             raise ValueError(
-                f"Hyetograph validation failed: generated depth {final_depth:.3f} differs from "
-                f"Atlas 14 total {expected_depth:.3f} by {relative_error*100:.2f}% "
-                f"(tolerance: {tolerance*100:.1f}%)"
+                f"Hyetograph validation failed: generated depth {final_depth:.6f} differs from "
+                f"expected {expected_total_depth:.6f} by {abs_error:.9f} inches "
+                f"(tolerance: {tolerance:.9f})"
             )
 
-        logger.info(f"Validation passed: {final_depth:.3f} vs {expected_depth:.3f} "
-                   f"({relative_error*100:.2f}% error, tolerance: {tolerance*100:.1f}%)")
+        logger.info(f"Validation passed: {final_depth:.6f} vs {expected_total_depth:.6f} "
+                   f"(error: {abs_error:.9f} inches)")
 
         return True
 
+    @staticmethod
+    @log_call
     def generate_all(
-        self,
-        aep_events: List[int],
-        durations: List[float],
+        ddf_data: pd.DataFrame,
+        events: Dict[str, Dict[str, float]],
         position_percent: float = 50.0,
         output_dir: Optional[Union[str, Path]] = None
-    ) -> Dict[int, Dict[float, Union[pd.DataFrame, Path]]]:
+    ) -> Dict[str, Union[pd.DataFrame, Path]]:
         """
-        Generate hyetographs for all ARI/duration combinations.
+        Generate hyetographs for multiple events.
 
         Args:
-            aep_events: List of ARIs (e.g., [2, 5, 10, 25, 50, 100])
-            durations: List of durations in hours (e.g., [6, 12, 24])
-            position_percent: Peak position for all storms
+            ddf_data: DDF DataFrame from download_from_coordinates() or load_csv()
+            events: Dictionary mapping event names to their parameters.
+                   Each event must have 'total_depth_inches' and 'duration_hours'.
+                   Example: {
+                       '100yr_24hr': {'total_depth_inches': 17.0, 'duration_hours': 24},
+                       '500yr_24hr': {'total_depth_inches': 21.5, 'duration_hours': 24},
+                   }
+            position_percent: Peak position for all storms (0-100)
             output_dir: If provided, save CSVs and return paths.
                        If None, return DataFrames.
 
         Returns:
-            Nested dict: {ari: {duration: DataFrame or Path}}
+            Dict mapping event names to DataFrames or Paths
 
         Example:
-            >>> gen = StormGenerator('Atlas14.csv')
-            >>> # Get DataFrames
-            >>> storms = gen.generate_all([10, 100], [24])
-            >>> df_100yr = storms[100][24]
-            >>>
-            >>> # Save to files
-            >>> files = gen.generate_all([10, 100], [24], output_dir='storms/')
-            >>> print(files[100][24])  # Path to saved file
+            >>> ddf = StormGenerator.download_from_coordinates(29.76, -95.37)
+            >>> events = {
+            ...     '100yr_24hr': {'total_depth_inches': 17.0, 'duration_hours': 24},
+            ...     '500yr_24hr': {'total_depth_inches': 21.5, 'duration_hours': 24},
+            ... }
+            >>> storms = StormGenerator.generate_all(ddf, events)
+            >>> df_100yr = storms['100yr_24hr']
         """
         results = {}
 
@@ -786,33 +981,39 @@ class StormGenerator:
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
 
-        for ari in aep_events:
-            results[ari] = {}
-            for duration in durations:
-                try:
-                    hyeto = self.generate_hyetograph(
-                        ari=ari,
-                        duration_hours=duration,
-                        position_percent=position_percent
-                    )
+        for event_name, params in events.items():
+            try:
+                total_depth = params.get('total_depth_inches')
+                duration = params.get('duration_hours')
 
-                    if output_dir:
-                        filename = f"hyetograph_{ari}yr_{int(duration)}hr.csv"
-                        filepath = output_path / filename
-                        hyeto.to_csv(filepath, index=False)
-                        results[ari][duration] = filepath
-                        logger.info(f"Saved: {filepath}")
-                    else:
-                        results[ari][duration] = hyeto
+                if total_depth is None or duration is None:
+                    raise ValueError(f"Event '{event_name}' missing 'total_depth_inches' or 'duration_hours'")
 
-                except Exception as e:
-                    logger.error(f"Failed to generate {ari}-year, {duration}-hour: {e}")
-                    results[ari][duration] = None
+                hyeto = StormGenerator.generate_hyetograph(
+                    ddf_data=ddf_data,
+                    total_depth_inches=total_depth,
+                    duration_hours=duration,
+                    position_percent=position_percent
+                )
+
+                if output_dir:
+                    filename = f"hyetograph_{event_name}.csv"
+                    filepath = output_path / filename
+                    hyeto.to_csv(filepath, index=False)
+                    results[event_name] = filepath
+                    logger.info(f"Saved: {filepath}")
+                else:
+                    results[event_name] = hyeto
+
+            except Exception as e:
+                logger.error(f"Failed to generate {event_name}: {e}")
+                results[event_name] = None
 
         return results
 
+    @staticmethod
+    @log_call
     def save_hyetograph(
-        self,
         hyetograph: pd.DataFrame,
         output_path: Union[str, Path],
         format: str = 'csv'
@@ -844,21 +1045,27 @@ class StormGenerator:
         logger.info(f"Saved hyetograph to: {output_path}")
         return output_path
 
+    @staticmethod
+    @log_call
     def plot_hyetographs(
-        self,
-        aep_events: List[int],
-        duration_hours: float,
+        ddf_data: pd.DataFrame,
+        events: Dict[str, Dict[str, float]],
         position_percent: float = 50.0,
         show_cumulative: bool = True,
         figsize: Tuple[float, float] = (12, 6)
     ):
         """
-        Plot hyetographs for multiple AEP events.
+        Plot hyetographs for multiple events.
 
         Args:
-            aep_events: List of ARIs to plot
-            duration_hours: Storm duration for all events
-            position_percent: Peak position
+            ddf_data: DDF DataFrame from download_from_coordinates() or load_csv()
+            events: Dictionary mapping event names to their parameters.
+                   Each event must have 'total_depth_inches' and 'duration_hours'.
+                   Example: {
+                       '100yr_24hr': {'total_depth_inches': 17.0, 'duration_hours': 24},
+                       '500yr_24hr': {'total_depth_inches': 21.5, 'duration_hours': 24},
+                   }
+            position_percent: Peak position for all storms (0-100)
             show_cumulative: Include cumulative depth on secondary axis
             figsize: Figure dimensions
 
@@ -872,29 +1079,45 @@ class StormGenerator:
 
         fig, ax1 = plt.subplots(figsize=figsize)
 
-        colors = plt.cm.viridis(np.linspace(0.2, 0.8, len(aep_events)))
+        colors = plt.cm.viridis(np.linspace(0.2, 0.8, len(events)))
 
-        for ari, color in zip(aep_events, colors):
-            hyeto = self.generate_hyetograph(ari, duration_hours, position_percent)
+        for (event_name, params), color in zip(events.items(), colors):
+            total_depth = params.get('total_depth_inches')
+            duration = params.get('duration_hours')
+
+            hyeto = StormGenerator.generate_hyetograph(
+                ddf_data=ddf_data,
+                total_depth_inches=total_depth,
+                duration_hours=duration,
+                position_percent=position_percent
+            )
 
             ax1.bar(
                 hyeto['hour'],
                 hyeto['incremental_depth'],
                 width=hyeto['hour'].iloc[1] - hyeto['hour'].iloc[0] if len(hyeto) > 1 else 1,
                 alpha=0.6,
-                label=f'{ari}-year',
+                label=event_name,
                 color=color
             )
 
         ax1.set_xlabel('Time (hours)')
-        ax1.set_ylabel('Incremental Depth')
-        ax1.set_title(f'{duration_hours}-hour Design Storm Hyetographs')
+        ax1.set_ylabel('Incremental Depth (inches)')
+        ax1.set_title('Design Storm Hyetographs')
         ax1.legend(loc='upper left')
 
         if show_cumulative:
             ax2 = ax1.twinx()
-            for ari, color in zip(aep_events, colors):
-                hyeto = self.generate_hyetograph(ari, duration_hours, position_percent)
+            for (event_name, params), color in zip(events.items(), colors):
+                total_depth = params.get('total_depth_inches')
+                duration = params.get('duration_hours')
+
+                hyeto = StormGenerator.generate_hyetograph(
+                    ddf_data=ddf_data,
+                    total_depth_inches=total_depth,
+                    duration_hours=duration,
+                    position_percent=position_percent
+                )
                 ax2.plot(
                     hyeto['hour'],
                     hyeto['cumulative_depth'],
@@ -902,7 +1125,7 @@ class StormGenerator:
                     color=color,
                     alpha=0.8
                 )
-            ax2.set_ylabel('Cumulative Depth')
+            ax2.set_ylabel('Cumulative Depth (inches)')
 
         plt.tight_layout()
         return fig

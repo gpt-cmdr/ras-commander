@@ -203,3 +203,7 @@ ras_commander/sources/
 
 # Claude Code workspace directories
 examples/.claude/
+
+# Environment variables and API keys
+.env
+.env.local

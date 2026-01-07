@@ -35,7 +35,11 @@ List of Functions in RasUnsteady:
 - parse_fixed_width_table()
 - extract_tables()
 - write_table_to_file()
+- set_precipitation_hyetograph()
 - set_gridded_precipitation()
+
+Precipitation Hyetograph Functions:
+- set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
 
 DSS Boundary Condition Functions:
 - get_dss_boundaries() - Extract all DSS-linked BCs with full path info
@@ -679,6 +683,257 @@ class RasUnsteady:
         except IOError as e:
             logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
             raise
+
+    @staticmethod
+    @log_call
+    def set_precipitation_hyetograph(
+        unsteady_file: Union[str, Path],
+        hyetograph_df: pd.DataFrame,
+        boundary_name: Optional[str] = None,
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Set precipitation hyetograph in an unsteady flow file from a DataFrame.
+
+        This method writes hyetograph data directly to the "Precipitation Hydrograph="
+        section in HEC-RAS unsteady flow files (.u##). It automatically detects the
+        time interval from the DataFrame and formats values in HEC-RAS fixed-width format.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##) or unsteady number (e.g., "01")
+        hyetograph_df : pd.DataFrame
+            DataFrame with columns:
+            - 'hour': Time in hours from storm start (end of interval)
+            - 'incremental_depth': Precipitation depth for this interval (inches)
+            - 'cumulative_depth': Cumulative precipitation depth (inches)
+        boundary_name : str, optional
+            Name of the 2D Flow Area or Storage Area to update.
+            If None, updates the first Precipitation Hydrograph found.
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        None
+            The function modifies the file in-place.
+
+        Raises
+        ------
+        ValueError
+            If DataFrame is missing required columns
+        FileNotFoundError
+            If unsteady flow file not found
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady, init_ras_project
+        >>> from ras_commander.precip import StormGenerator
+        >>>
+        >>> # Generate hyetograph
+        >>> gen = StormGenerator.download_from_coordinates(29.76, -95.37)
+        >>> hyeto = gen.generate_hyetograph(
+        ...     total_depth_inches=17.0,
+        ...     duration_hours=24,
+        ...     position_percent=50
+        ... )
+        >>>
+        >>> # Write to unsteady file
+        >>> RasUnsteady.set_precipitation_hyetograph("project.u01", hyeto)
+
+        Notes
+        -----
+        **DataFrame Format**:
+        - All methods in ras-commander.precip return DataFrames with the required columns
+        - Atlas14Storm, FrequencyStorm, ScsTypeStorm (from hms-commander) also use this format
+
+        **Interval Detection**:
+        - Interval is calculated from `hour` column spacing (e.g., 1.0 → "1HOUR", 0.5 → "30MIN")
+        - The Interval= line immediately preceding the Precipitation Hydrograph section is updated
+
+        **Fixed-Width Format**:
+        - Values formatted as 8-character fixed-width fields (8.2f)
+        - 10 values per line
+        - HEC-RAS uses (time, depth) pairs, so count = len(hyetograph) × 2
+
+        **Depth Conservation**:
+        - Total depth is logged for verification
+        - Should match the total_depth_inches used in generation
+
+        See Also
+        --------
+        StormGenerator.generate_hyetograph : Generate design storm hyetograph
+        Atlas14Storm.generate_hyetograph : HMS-equivalent hyetograph (from hms-commander)
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass  # Allow standalone use without initialized project
+
+        # Resolve unsteady file path
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            # It's an unsteady number, resolve to full path
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        # Validate DataFrame columns
+        required_columns = ['hour', 'incremental_depth', 'cumulative_depth']
+        missing_columns = [col for col in required_columns if col not in hyetograph_df.columns]
+        if missing_columns:
+            raise ValueError(
+                f"DataFrame missing required columns: {missing_columns}. "
+                f"Required columns: {required_columns}"
+            )
+
+        # Calculate interval from hour column
+        hours = hyetograph_df['hour'].values
+        if len(hours) < 2:
+            raise ValueError("DataFrame must have at least 2 rows to determine interval")
+
+        interval_hours = hours[1] - hours[0]
+
+        # Convert interval to HEC-RAS format string
+        if interval_hours >= 1.0:
+            if interval_hours == int(interval_hours):
+                interval_str = f"{int(interval_hours)}HOUR"
+            else:
+                # Convert to minutes if fractional hour
+                interval_min = int(interval_hours * 60)
+                interval_str = f"{interval_min}MIN"
+        else:
+            interval_min = int(interval_hours * 60)
+            interval_str = f"{interval_min}MIN"
+
+        # Read the file
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        # Get precipitation values (incremental depths)
+        precip_values = hyetograph_df['incremental_depth'].values
+
+        # Calculate total depth for logging
+        total_depth = hyetograph_df['cumulative_depth'].iloc[-1]
+
+        # Format values as (time, depth) pairs in HEC-RAS fixed-width format
+        # HEC-RAS expects paired values: time, value, time, value, ...
+        paired_values = []
+        for i, (hour, depth) in enumerate(zip(hours, precip_values)):
+            paired_values.append(hour)
+            paired_values.append(depth)
+
+        num_pairs = len(precip_values)
+
+        # Format into fixed-width lines (8 chars each, 10 values per line)
+        formatted_lines = []
+        for i in range(0, len(paired_values), 10):
+            row_values = paired_values[i:i+10]
+            formatted_row = ''.join(f'{value:8.2f}' for value in row_values)
+            formatted_lines.append(formatted_row + '\n')
+
+        # Find the Precipitation Hydrograph section(s)
+        precip_sections = []
+        for i, line in enumerate(lines):
+            if line.startswith('Precipitation Hydrograph='):
+                precip_sections.append(i)
+
+        if not precip_sections:
+            raise ValueError(
+                f"No 'Precipitation Hydrograph=' section found in {unsteady_path}. "
+                "Ensure the unsteady file has a precipitation boundary condition defined."
+            )
+
+        # Determine which section to update
+        if boundary_name is not None:
+            # Find the section associated with the specified boundary
+            target_section = None
+            for precip_idx in precip_sections:
+                # Search backwards for Boundary Location
+                for j in range(precip_idx - 1, max(0, precip_idx - 50), -1):
+                    if lines[j].startswith('Boundary Location='):
+                        # Check if boundary name matches (usually in position 6 for storage area)
+                        loc_parts = lines[j].replace('Boundary Location=', '').split(',')
+                        for part in loc_parts:
+                            if boundary_name.strip().lower() in part.strip().lower():
+                                target_section = precip_idx
+                                break
+                        break
+                if target_section is not None:
+                    break
+
+            if target_section is None:
+                logger.warning(
+                    f"Boundary '{boundary_name}' not found. "
+                    f"Updating first Precipitation Hydrograph section."
+                )
+                target_section = precip_sections[0]
+        else:
+            target_section = precip_sections[0]
+
+        precip_line_idx = target_section
+
+        # Find the end of the old data section by scanning for next keyword line
+        # Data starts right after the Precipitation Hydrograph= line
+        old_data_start = precip_line_idx + 1
+        old_data_end = old_data_start
+
+        # Scan forward to find where data ends (next line with '=' keyword)
+        for k in range(old_data_start, len(lines)):
+            line = lines[k]
+            # Data lines are numeric only; keyword lines contain '='
+            if '=' in line:
+                old_data_end = k
+                break
+            # Also check for empty lines that might mark end of section
+            if not line.strip():
+                # Empty line might be end of section, but continue checking
+                pass
+        else:
+            # Reached end of file
+            old_data_end = len(lines)
+
+        # Update the Precipitation Hydrograph header line with new count
+        new_precip_line = f"Precipitation Hydrograph= {num_pairs} \n"
+
+        # Search backwards from Precipitation Hydrograph line for Interval line
+        interval_updated = False
+        for j in range(precip_line_idx - 1, max(0, precip_line_idx - 20), -1):
+            if lines[j].startswith('Interval='):
+                old_interval = lines[j].strip()
+                lines[j] = f"Interval={interval_str}\n"
+                interval_updated = True
+                logger.debug(f"Updated {old_interval} to Interval={interval_str}")
+                break
+
+        if not interval_updated:
+            logger.warning(
+                f"Could not find Interval= line before Precipitation Hydrograph at line {precip_line_idx + 1}. "
+                "Interval not updated."
+            )
+
+        # Replace the old data section with new formatted data
+        # 1. Update header line
+        lines[precip_line_idx] = new_precip_line
+
+        # 2. Replace data lines
+        new_lines = lines[:old_data_start] + formatted_lines + lines[old_data_end:]
+
+        # Write updated content back to file
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+
+        logger.info(
+            f"Updated Precipitation Hydrograph in {unsteady_path.name}: "
+            f"{num_pairs} time steps, interval={interval_str}, "
+            f"total depth={total_depth:.4f} inches"
+        )
 
     @staticmethod
     def _update_precipitation_hdf(

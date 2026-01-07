@@ -6,9 +6,53 @@ This subpackage provides tools for integrating precipitation data into HEC-RAS m
 
 The precip subpackage automates precipitation data retrieval, processing, and formatting for HEC-RAS and HEC-HMS models. It supports both historical calibration workflows (AORC) and design storm generation (Atlas 14).
 
+## Method Selection Guide - Quick Reference
+
+### Four Hyetograph Generation Methods
+
+| Method | HMS Equivalent | Depth Conservation | Durations | Best For |
+|--------|----------------|-------------------|-----------|----------|
+| **Atlas14Storm** | YES (10^-6) | Exact | 6h, 12h, 24h, 96h | Modern Atlas 14, any US location |
+| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | TP-40 legacy data, Houston area, variable duration |
+| **ScsTypeStorm** | YES (10^-6) | Exact | 24hr only | SCS Type I/IA/II/III distributions |
+| **StormGenerator** | NO | Exact | Any | Flexible peak positioning (0-100%) |
+
+### Decision Tree
+
+```
+Need precipitation hyetograph for HEC-RAS?
+│
+├─ Need HMS-equivalent results?
+│  │
+│  ├─ Modern Atlas 14 (6h, 12h, 24h, 96h)?
+│  │  └─ Use Atlas14Storm
+│  │
+│  ├─ TP-40 or variable duration (6-48hr)?
+│  │  └─ Use FrequencyStorm
+│  │
+│  └─ SCS Type I/IA/II/III (24hr only)?
+│     └─ Use ScsTypeStorm
+│
+└─ Need flexible peak positioning (0-100%)?
+   └─ Use StormGenerator
+```
+
+### Known Limitations
+
+**Not Yet Implemented**:
+- ❌ 48-hour duration for Atlas14Storm (NOAA doesn't publish 48h temporal CSVs)
+  - Workaround: Use FrequencyStorm (HMS-equivalent, 48hr validated)
+
+**All Other Durations Covered**:
+- 6h: Atlas14Storm or FrequencyStorm
+- 12h: Atlas14Storm or FrequencyStorm
+- 24h: Atlas14Storm, FrequencyStorm, or ScsTypeStorm
+- 48h: FrequencyStorm only
+- 96h: Atlas14Storm
+
 ## Module Organization
 
-The precip subpackage contains 5 modules organized by data source:
+The precip subpackage contains 3 native modules plus 2 HMS-equivalent imports from hms-commander:
 
 ### PrecipAorc.py (AORC Data Integration)
 
@@ -41,40 +85,49 @@ The precip subpackage contains 5 modules organized by data source:
 - **Period of Record**: 1979 - present (updated operationally)
 - **Source**: NOAA National Water Model retrospective forcing
 
-### StormGenerator.py (Atlas 14 Design Storms)
+### StormGenerator.py (Alternating Block Method)
 
-**StormGenerator** - NOAA Atlas 14 design storm generation (27 KB):
+**StormGenerator** - Design storm hyetograph generation using the Alternating Block Method (27 KB):
 
-**Design Storm Creation**:
-- `generate_design_storm()` - Create Atlas 14 design storm hyetograph
-- `get_precipitation_frequency()` - Query Atlas 14 point precipitation values
-- `apply_temporal_distribution()` - Apply standard temporal patterns (SCS Type II, etc.)
+**Key Features**:
+- Static class pattern (v0.88.0+) - no instantiation required
+- User-specified total depth (exact conservation)
+- Flexible peak positioning (0-100%)
+- DDF data used for temporal pattern only
+- NOT HMS-equivalent (different algorithm)
 
-**AEP Events** (Annual Exceedance Probability):
-- Standard AEPs: 50%, 20%, 10%, 4%, 2%, 1%, 0.5%, 0.2%
-- Common durations: 6hr, 12hr, 24hr, 48hr
-- Custom AEP and duration supported
+**Primary Methods**:
+- `download_from_coordinates(lat, lon, ...)` - Download DDF data from NOAA API (returns DataFrame)
+- `generate_hyetograph(ddf_data, total_depth_inches, duration_hours, ...)` - Generate hyetograph with exact depth
 
-**Temporal Distributions**:
-- **SCS Type II** - Standard for most of US
-- **SCS Type IA** - Pacific maritime climate
-- **SCS Type III** - Gulf Coast and Florida
-- **Custom distributions** - User-defined hyetograph patterns
+**Usage (v0.88.0+ Static Pattern)**:
+```python
+from ras_commander.precip import StormGenerator
 
-**Spatial Processing**:
-- `interpolate_point_values()` - Interpolate Atlas 14 values to grid
-- `apply_areal_reduction()` - Apply ARF (Areal Reduction Factor) for large watersheds
-- `generate_multi_point_storms()` - Spatially distributed design storms
+# Download DDF data for temporal pattern (returns DataFrame)
+ddf_data = StormGenerator.download_from_coordinates(29.76, -95.37)
 
-**Output Formats**:
-- HEC-HMS precipitation gage file
-- HEC-RAS DSS precipitation
-- Tabular hyetograph (CSV)
+# Generate hyetograph with user-specified depth
+hyeto = StormGenerator.generate_hyetograph(
+    ddf_data=ddf_data,
+    total_depth_inches=17.0,  # Atlas 14 value
+    duration_hours=24,
+    position_percent=50       # Peak at 50% (centered)
+)
 
-**Atlas 14 Regions**:
-- CONUS coverage (volumes 1-11)
-- Automatic region detection by lat/lon
-- Hawaii and Puerto Rico supported
+print(f"Total: {hyeto['cumulative_depth'].iloc[-1]:.6f} inches")  # Exact: 17.000000
+```
+
+**Supporting Static Methods**:
+- `load_csv(csv_file)` - Load DDF data from CSV file (returns DataFrame)
+- `validate_hyetograph(hyetograph, expected_total_depth)` - Verify depth conservation
+- `generate_all(ddf_data, events, ...)` - Batch generate multiple events
+- `plot_hyetographs(ddf_data, events, ...)` - Visualize multiple events
+- `save_hyetograph(hyetograph, output_path, format)` - Save to CSV or HEC-RAS format
+
+**Deprecation Notice**: Instance-based usage (e.g., `gen = StormGenerator.download_from_coordinates(...)` followed by `gen.generate_hyetograph(...)`) is deprecated as of v0.88.0 and will be removed in v0.89.0. Use the static pattern shown above.
+
+**Note**: The DDF data is used only for the temporal pattern (shape). The actual depths come from the user-specified `total_depth_inches` parameter, ensuring exact depth conservation.
 
 ### Atlas14Storm (HMS-Equivalent - from hms-commander)
 
@@ -87,12 +140,12 @@ The precip subpackage contains 5 modules organized by data source:
 **Choose Atlas14Storm** for:
 - HMS-equivalent workflows
 - Official NOAA Atlas 14 temporal distributions
-- Workflows requiring proven depth conservation
+- Regulatory submittals
 
 **Choose StormGenerator** for:
 - Flexible peak positioning (0-100%)
-- Non-HMS workflows
-- Custom DDF data sources
+- Custom temporal distributions
+- Non-regulatory workflows
 
 **Usage**:
 ```python
@@ -112,6 +165,95 @@ if ATLAS14_AVAILABLE:
 
 **Quartile Options**:
 - "First Quartile", "Second Quartile", "Third Quartile", "Fourth Quartile", "All Cases"
+
+**Dependency**: Requires `hms-commander>=0.1.0` (installed automatically with ras-commander)
+
+### FrequencyStorm (HMS-Equivalent - from hms-commander)
+
+**FrequencyStorm** - TP-40 compatible hyetograph generation (imported from hms-commander):
+
+**Key Distinction from Atlas14Storm**:
+- **FrequencyStorm**: TP-40/Hydro-35 pattern, variable duration (6-48hr validated)
+- **Atlas14Storm**: Modern Atlas 14 pattern, multiple durations (6h, 12h, 24h, 96h)
+
+**Choose FrequencyStorm** for:
+- TP-40 legacy DDF data (Houston area and similar)
+- Variable duration HMS-equivalent storms (6hr to 48hr)
+- When 48-hour duration is needed (Atlas14Storm gap)
+
+**Choose Atlas14Storm** for:
+- Modern Atlas 14 data (any US location)
+- 24-hour storms only
+- Multiple quartile options
+
+**Usage**:
+```python
+from ras_commander.precip import FrequencyStorm, FREQUENCY_STORM_AVAILABLE
+
+if FREQUENCY_STORM_AVAILABLE:
+    # TP-40 storm (Houston defaults: 24hr, 5-min, 67% peak)
+    hyeto = FrequencyStorm.generate_hyetograph(total_depth=13.20)
+
+    # Variable duration example
+    hyeto_6hr = FrequencyStorm.generate_hyetograph(
+        total_depth=9.10,
+        total_duration_min=360,  # 6 hours
+        time_interval_min=5
+    )
+```
+
+**Validation**: RMSE < 10^-6 inches vs TP-40 pattern HMS output (24hr validated)
+
+**Quartile Options**: Fixed pattern with 67% peak position (TP-40 standard for Houston)
+
+**Dependency**: Requires `hms-commander>=0.1.0` (installed automatically with ras-commander)
+
+### ScsTypeStorm (HMS-Equivalent - from hms-commander)
+
+**ScsTypeStorm** - SCS Type I, IA, II, III distributions (imported from hms-commander):
+
+**Key Features**:
+- **SCS Type I**: Pacific maritime climate (early peak ~42%)
+- **SCS Type IA**: Coastal areas, Atlantic/Gulf (early peak ~33%)
+- **SCS Type II**: Most of US (peak ~50%)
+- **SCS Type III**: Gulf Coast, Florida (late peak ~50%)
+
+**HMS Equivalence**:
+- Extracted from HEC-HMS 4.13 source code
+- Depth conservation < 10^-6 inches
+- Peak positions match TR-55 specifications
+- 24-hour duration only (HMS constraint)
+
+**Choose ScsTypeStorm** for:
+- SCS Type I/IA/II/III distributions (TR-55 standard)
+- HMS-equivalent workflows requiring SCS patterns
+- 24-hour design storms
+
+**Usage**:
+```python
+from ras_commander.precip import ScsTypeStorm, SCS_TYPE_AVAILABLE
+
+if SCS_TYPE_AVAILABLE:
+    # Generate SCS Type II storm (most common)
+    hyeto = ScsTypeStorm.generate_hyetograph(
+        total_depth_inches=10.0,
+        scs_type='II',
+        time_interval_min=60
+    )
+    print(f"Total depth: {hyeto.sum():.6f} inches")  # Exact: 10.000000
+
+    # Generate all 4 types at once
+    storms = ScsTypeStorm.generate_all_types(
+        total_depth_inches=10.0,
+        time_interval_min=60
+    )
+    for scs_type, hyeto in storms.items():
+        print(f"Type {scs_type}: peak={hyeto.max():.2f} inches")
+```
+
+**Validation**: Depth conservation < 10^-6 inches, peak positions match TR-55
+
+**SCS Type Options**: 'I', 'IA', 'II', 'III' (case-insensitive)
 
 **Dependency**: Requires `hms-commander>=0.1.0` (installed automatically with ras-commander)
 
@@ -644,9 +786,62 @@ data_100yr_24hr = pfe['pfe_24hr'][:, :, 5]  # 100-yr is index 5
 # (future feature)
 ```
 
+## Comprehensive Method Comparison
+
+### Hyetograph Generation Methods
+
+| Method | Source | Algorithm | HMS Equiv | Depth Conservation | Durations | Peak Control |
+|--------|--------|-----------|-----------|-------------------|-----------|--------------|
+| **Atlas14Storm** | hms-cmdr | NOAA Atlas 14 | **YES** | **Exact** | 6h, 12h, 24h, 96h | Fixed (quartile) |
+| **FrequencyStorm** | hms-cmdr | TP-40/M3 pattern | **YES** | **Exact** | 6-48hr | Variable |
+| **ScsTypeStorm** | hms-cmdr | SCS Type I/IA/II/III | **YES** | **Exact** | 24hr | Fixed (type) |
+| **StormGenerator** | ras-cmdr | Alternating Block | NO | **Exact** | Any | Flexible (0-100%) |
+
+### Validation Summary
+
+**Atlas14Storm**:
+- Validated against HEC-HMS DSS output (December 2025)
+- 6 comprehensive proofs, all passing
+- Direct DSS comparison: 10^-6 precision
+- Documentation: `hms-commander/examples/08_atlas14_hyetograph_generation.ipynb`
+
+**FrequencyStorm**:
+- Validated against HMS 4.13 source code (December 2025)
+- RMSE < 10^-6 vs TP-40 pattern HMS output
+- Variable duration tested (6hr to 48hr)
+- Documentation: `hms-commander/.claude/rules/hec-hms/frequency-storms.md`
+
+**ScsTypeStorm**:
+- Extracted from HEC-HMS 4.13 source code (December 2025)
+- Depth conservation < 10^-6 inches
+- Peak positions match TR-55 specifications
+- All 4 SCS types validated (I, IA, II, III)
+- Documentation: `hms-commander/examples/10_scs_type_validation.ipynb`
+
+**StormGenerator**:
+- Based on Chow, Maidment, Mays (1988) textbook
+- Standard Alternating Block Method
+- User-specified depth conserved exactly (scaling approach)
+- NOT HMS-equivalent (different temporal algorithm)
+
+### Choosing the Right Method
+
+**For Regulatory/HMS-RAS Workflows**:
+- Modern Atlas 14 (6h, 12h, 24h, 96h) → **Atlas14Storm**
+- TP-40 legacy data (6-48hr) → **FrequencyStorm**
+- SCS Type I/IA/II/III (24hr) → **ScsTypeStorm**
+
+**For Flexible Design Workflows**:
+- Need custom peak positioning → **StormGenerator**
+- Need non-24hr Atlas 14 → **FrequencyStorm** (uses TP-40 pattern)
+
+**For Spatial Analysis**:
+- Assess uniform vs distributed → **Atlas14Grid** + **Atlas14Variance**
+
 ## See Also
 
 - Parent library context: `ras_commander/CLAUDE.md`
 - DSS file operations: `ras_commander/dss/AGENTS.md`
 - Unsteady flow files: `ras_commander.RasUnsteady`
 - Spatial data handling: `.claude/rules/python/path-handling.md`
+- HMS-Commander integration: `feature_dev_notes/Atlas14_HMS_Integration/`
