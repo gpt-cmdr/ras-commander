@@ -160,7 +160,7 @@ project_folder/
 - `cache_gauge_data()` - Save USGS data to standardized CSV format with metadata
 - `load_cached_gauge_data()` - Load cached data with metadata validation
 - `get_gauge_data_dir()` - Create gauge_data/ directory structure
-- `export_to_dss()` - Export time series to HEC-DSS format (if pydsstools available)
+- `export_to_dss()` - Export time series to HEC-DSS format
 
 **Cache format**: CSV with ISO 8601 timestamps and metadata header.
 

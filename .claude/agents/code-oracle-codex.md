@@ -576,7 +576,7 @@ Files:
 
 Focus on:
 1. Pathname injection (DSS pathname format)
-2. Java bridge security (pydsstools)
+2. Java bridge security
 3. File path validation
 4. Error message information disclosure
 

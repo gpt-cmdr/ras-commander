@@ -294,13 +294,12 @@ for aep in aep_events:
 **Optional**:
 - geopandas (spatial operations on watersheds)
 - rasterio (AORC grid processing)
-- pydsstools (DSS export, lazy-loaded)
 
 **Installation**:
 ```bash
 pip install ras-commander[precip]  # Includes all precipitation dependencies
 # OR
-pip install xarray rasterio geopandas pydsstools
+pip install xarray rasterio geopandas
 ```
 
 ## Navigation Map
@@ -334,7 +333,7 @@ pip install xarray rasterio geopandas pydsstools
 2. **Example Notebooks as References**: Use notebooks to understand workflows in practice
 3. **No Duplication**: This skill does NOT duplicate workflows - it NAVIGATES to them
 4. **Multi-Level Verifiability**: All outputs reviewable in HEC-RAS/HMS GUI
-5. **Lazy Loading**: Optional dependencies (pydsstools) only loaded when needed
+5. **Lazy Loading**: Optional dependencies only loaded when needed
 
 ## Performance Notes (Brief)
 

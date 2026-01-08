@@ -473,7 +473,7 @@ HEC-DSS format for HEC-RAS and HEC-HMS:
 ```python
 from ras_commander.usgs import RasUsgsFileIo
 
-# Export to DSS (requires pydsstools)
+# Export to DSS
 RasUsgsFileIo.export_to_dss(
     hourly_precip,
     dss_file="aorc_precip.dss",
@@ -651,7 +651,6 @@ pip install xarray  # For AORC NetCDF data handling
 ```bash
 pip install rasterio    # For gridded processing
 pip install geopandas   # For custom watershed boundaries
-pip install pydsstools  # For DSS export
 ```
 
 The module uses **lazy loading** - methods check for dependencies only when needed and provide installation instructions if missing.

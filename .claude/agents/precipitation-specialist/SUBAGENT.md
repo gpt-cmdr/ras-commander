@@ -180,11 +180,10 @@ Delegate tasks containing these trigger phrases:
 **Optional**:
 - geopandas (spatial operations)
 - rasterio (AORC grid processing)
-- pydsstools (DSS export, lazy-loaded)
 
 **Installation**:
 ```bash
-pip install xarray rasterio geopandas pydsstools
+pip install xarray rasterio geopandas
 ```
 
 ## Performance Expectations

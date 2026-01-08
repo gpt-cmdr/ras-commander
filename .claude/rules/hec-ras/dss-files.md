@@ -10,7 +10,7 @@
 
 ## Overview
 
-HEC-DSS (Data Storage System) files store time series data for boundary conditions. ras-commander provides lazy-loaded access via Java bridge (pydsstools).
+HEC-DSS (Data Storage System) files store time series data for boundary conditions. ras-commander provides lazy-loaded access via Java bridge.
 
 ## Key Class
 
@@ -49,7 +49,7 @@ data = RasDss.get_timeseries(dss_file, pathname)
 
 **Benefits**:
 - Faster import when DSS not needed
-- Graceful degradation if pydsstools unavailable
+- Graceful degradation if DSS dependencies unavailable
 
 ## Validation Methods
 

@@ -75,7 +75,7 @@ The precip subpackage contains 3 native modules plus 2 HMS-equivalent imports fr
 
 **Output Formats**:
 - CSV time series (for HEC-HMS)
-- DSS format (for HEC-RAS/HMS via pydsstools)
+- DSS format (for HEC-RAS/HMS)
 - NetCDF (for further analysis)
 
 **AORC Dataset Details**:
@@ -431,7 +431,7 @@ six_hour_precip = PrecipAorc.aggregate_to_interval(
 
 Generate model input files:
 ```python
-# Export to DSS (requires pydsstools)
+# Export to DSS
 PrecipAorc.export_to_dss(
     hourly_precip,
     dss_file="precipitation.dss",
@@ -597,11 +597,10 @@ print(f"Areal (500 sq mi): {reduced_precip:.2f} in")
 **Optional**:
 - geopandas (spatial operations on watersheds)
 - rasterio (AORC grid processing)
-- pydsstools (DSS export, lazy-loaded)
 
 **Installation**:
 ```bash
-pip install xarray rasterio geopandas pydsstools
+pip install xarray rasterio geopandas
 ```
 
 ## Data Sources
