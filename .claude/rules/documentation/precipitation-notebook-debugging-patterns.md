@@ -76,44 +76,32 @@ precip_grid = pfe_data['pfe_24hr'][:, :, ari_idx]  # Correct!
 
 **Prevention**: Never hardcode array indices when working with return period data
 
-### Bug 3: HDF Path Resolution After compute_parallel()
+### Bug 3: HDF Path Resolution After compute_parallel() - FIXED in v0.88.1
 
-**Symptom**: "No HDF file found for Plan XX" after successful execution
+**Status**: ✅ **FIXED** - As of v0.88.1, `compute_parallel()` and `compute_test_mode()` consolidate
+HDF results back to the original project folder. No special handling needed.
 
-**Cause**: `compute_parallel()` consolidates results to "[Computed]" folder, code looks in original folder
+**Old Symptom**: "No HDF file found for Plan XX" after successful execution
 
-**Example** (notebook 721 bug):
+**Old Cause**: `compute_parallel()` consolidated results to "[Computed]" folder, but plan_df pointed to original folder
+
+**Current Behavior** (v0.88.1+):
 ```python
-# Execution creates: project_folder [Computed]/
-# But code looks in: project_folder/
+# After compute_parallel(), HDF files are in the ORIGINAL project folder
+RasCmdr.compute_parallel(["01", "02"])
 
-# BUG: Wrong folder
-hdf_files = list(project_path.glob(f"*.p{plan_number}.hdf"))  # Empty!
-
-# Also BUG: Constructs path instead of using plan_df
+# plan_df is automatically refreshed with correct HDF paths
+hdf_path = ras.plan_df[ras.plan_df['plan_number'] == '01']['HDF_Results_Path'].iloc[0]
+# Works! No [Computed] folder detection needed
 ```
 
-**Fix**: Detect "[Computed]" folder and use plan_df
+**Best Practice**: Always use plan_df for HDF paths
 ```python
-# Detect where results actually are
-original_path = storm_projects[aep_name]['path']
-computed_path = original_path.parent / f"{original_path.name} [Computed]"
-
-if computed_path.exists():
-    project_path = computed_path
-else:
-    project_path = original_path
-
-# Re-initialize to get fresh plan_df
-init_ras_project(project_path, RAS_VERSION)
-
 # Use plan_df as authoritative source
 plan_row = ras.plan_df[ras.plan_df['plan_number'] == plan_number]
 hdf_path = plan_row['HDF_Results_Path'].iloc[0]
 hdf_file = Path(hdf_path)
 ```
-
-**Prevention**: Always use plan_df for HDF paths, never construct them
 
 ### Bug 4: File Locking in Custom Parallel Execution
 
@@ -235,14 +223,17 @@ Add cells that verify:
 
 **Example debug cell**:
 ```python
-# After compute_parallel()
-computed_folder = project_path.parent / f"{project_path.name} [Computed]"
-if computed_folder.exists():
-    print(f"[OK] Results consolidated to: {computed_folder}")
-    init_ras_project(computed_folder, "6.6")
-    print(f"     Plans with HDF: {len(ras.plan_df)}")
-else:
-    print(f"[!] No computed folder, using original")
+# After compute_parallel() - HDF files are in original folder (v0.88.1+)
+# plan_df is automatically refreshed
+print(f"Plans with HDF: {ras.plan_df['HDF_Results_Path'].notna().sum()}")
+
+# Verify HDF paths are correct
+for _, row in ras.plan_df.iterrows():
+    hdf_path = row['HDF_Results_Path']
+    if hdf_path and Path(hdf_path).exists():
+        print(f"[OK] Plan {row['plan_number']}: {Path(hdf_path).name}")
+    else:
+        print(f"[!] Plan {row['plan_number']}: No HDF file")
 ```
 
 ### Spatial Analysis Validation

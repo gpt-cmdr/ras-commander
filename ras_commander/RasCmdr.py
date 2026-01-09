@@ -105,16 +105,17 @@ class RasCmdr:
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
 
     @staticmethod
-    def _verify_completion(hdf_path: Path) -> bool:
+    def _verify_completion(hdf_path: Path, check_errors: bool = False) -> bool:
         """
-        Verify that a HEC-RAS computation completed successfully by checking
-        for 'Complete Process' in the compute messages.
+        Verify that a HEC-RAS computation completed successfully (HDF-only).
 
         Args:
-            hdf_path: Path to the plan HDF file
+            hdf_path: Path to plan HDF file
+            check_errors: If True, also fail verification if errors detected
+                         in compute messages (default: False for backward compatibility)
 
         Returns:
-            True if 'Complete Process' found in compute messages, False otherwise
+            bool: True if verification passed
         """
         if not hdf_path.exists():
             logger.debug(f"HDF file does not exist: {hdf_path}")
@@ -124,8 +125,17 @@ class RasCmdr:
             # Late import to avoid circular dependency
             from .hdf.HdfResultsPlan import HdfResultsPlan
 
-            compute_msgs = HdfResultsPlan.get_compute_messages(hdf_path)
+            compute_msgs = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path)
+
             if compute_msgs and 'Complete Process' in compute_msgs:
+                # Optionally check for errors
+                if check_errors:
+                    from .results.ResultsParser import ResultsParser
+                    parsed = ResultsParser.parse_compute_messages(compute_msgs)
+                    if parsed['has_errors']:
+                        logger.debug(f"Verification failed: {parsed['error_count']} errors found in {hdf_path.name}")
+                        return False
+
                 logger.debug(f"Verification passed: 'Complete Process' found in {hdf_path.name}")
                 return True
             else:
@@ -440,7 +450,8 @@ class RasCmdr:
                 ras_obj.geom_df = ras_obj.get_geom_entries()
                 ras_obj.flow_df = ras_obj.get_flow_entries()
                 ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-    
+                ras_obj.update_results_df(plan_numbers=[plan_number])
+
 
 
     @staticmethod
@@ -670,9 +681,15 @@ class RasCmdr:
                         execution_results[plan_num] = False
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
 
-            final_dest_folder = dest_folder_path if dest_folder is not None else project_folder.parent / f"{project_folder.name} [Computed]"
-            final_dest_folder.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Final destination for computed results: {final_dest_folder}")
+            # Consolidate results: use dest_folder if provided, otherwise back to original folder
+            # This eliminates the [Computed] folder anti-pattern - results go directly to original project
+            if dest_folder is not None:
+                final_dest_folder = dest_folder_path
+                final_dest_folder.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Consolidating results to destination folder: {final_dest_folder}")
+            else:
+                final_dest_folder = project_folder
+                logger.info(f"Consolidating results back to original project folder: {final_dest_folder}")
 
             for worker_ras in worker_ras_objects.values():
                 if worker_ras is None:
@@ -720,16 +737,19 @@ class RasCmdr:
                 except Exception as e:
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
 
-            try:
-                final_dest_folder_ras = RasPrj()
-                final_dest_folder_ras_obj = init_ras_project(
-                    ras_project_folder=final_dest_folder, 
-                    ras_version=ras_obj.ras_exe_path,
-                    ras_object=final_dest_folder_ras
-                )
-                final_dest_folder_ras_obj.check_initialized()
-            except Exception as e:
-                logger.critical(f"Failed to initialize RasPrj for final destination: {str(e)}")
+            # Only verify separate destination folder initialization if dest_folder was provided
+            # When consolidating back to original folder, no separate verification needed
+            if dest_folder is not None:
+                try:
+                    final_dest_folder_ras = RasPrj()
+                    final_dest_folder_ras_obj = init_ras_project(
+                        ras_project_folder=final_dest_folder,
+                        ras_version=ras_obj.ras_exe_path,
+                        ras_object=final_dest_folder_ras
+                    )
+                    final_dest_folder_ras_obj.check_initialized()
+                except Exception as e:
+                    logger.critical(f"Failed to initialize RasPrj for final destination: {str(e)}")
 
             logger.info("\nExecution Results:")
             for plan_num, success in execution_results.items():
@@ -741,6 +761,7 @@ class RasCmdr:
             ras_obj.geom_df = ras_obj.get_geom_entries()
             ras_obj.flow_df = ras_obj.get_flow_entries()
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
 
             return execution_results
 
@@ -960,6 +981,31 @@ class RasCmdr:
                     logger.info(f"Total run time for plan {current_plan_number}: {run_time:.2f} seconds")
 
             logger.info("All selected plans have been executed.")
+
+            # Consolidate HDF results back to original project folder
+            # This eliminates the [Test] folder anti-pattern - results go to original project
+            logger.info(f"Consolidating HDF results from {compute_folder} back to original project folder...")
+            hdf_files_copied = 0
+            for hdf_file in compute_folder.glob("*.hdf"):
+                dest_path = project_folder / hdf_file.name
+                try:
+                    if dest_path.exists():
+                        dest_path.unlink()
+                    shutil.copy2(hdf_file, dest_path)
+                    hdf_files_copied += 1
+                    logger.debug(f"Copied {hdf_file.name} to original project folder")
+                except Exception as e:
+                    logger.error(f"Failed to copy {hdf_file.name}: {str(e)}")
+
+            logger.info(f"Consolidated {hdf_files_copied} HDF file(s) to original project folder")
+
+            # Clean up test folder
+            try:
+                shutil.rmtree(compute_folder)
+                logger.info(f"Removed test folder: {compute_folder}")
+            except Exception as e:
+                logger.warning(f"Failed to remove test folder {compute_folder}: {str(e)}")
+
             logger.info("compute_test_mode completed.")
 
             logger.info("\nExecution Results:")
@@ -967,10 +1013,12 @@ class RasCmdr:
                 status = 'Successful' if success else 'Failed'
                 logger.info(f"Plan {plan_num}: {status}")
 
+            # Refresh DataFrames from original folder - HDF files are now there
             ras_obj.plan_df = ras_obj.get_plan_entries()
             ras_obj.geom_df = ras_obj.get_geom_entries()
             ras_obj.flow_df = ras_obj.get_flow_entries()
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
 
             return execution_results
 
