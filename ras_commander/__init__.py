@@ -10,7 +10,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.88.0"
+    __version__ = "0.88.4"
 
 # Set up logging
 setup_logging()
@@ -84,8 +84,11 @@ _FIXIT_EXPORTS = {
 # Terrain module - HEC-RAS terrain creation and manipulation
 _TERRAIN_EXPORTS = {'RasTerrain'}
 
+# Results module - Compute message parsing and execution summary
+_RESULTS_EXPORTS = {'ResultsParser', 'ResultsSummary'}
+
 def __getattr__(name):
-    """Lazy load remote execution, DSS, check, fixit, and terrain components on first access."""
+    """Lazy load remote execution, DSS, check, fixit, terrain, and results components on first access."""
     if name in _REMOTE_EXPORTS:
         from . import remote
         return getattr(remote, name)
@@ -101,6 +104,9 @@ def __getattr__(name):
     if name in _TERRAIN_EXPORTS:
         from . import terrain
         return getattr(terrain, name)
+    if name in _RESULTS_EXPORTS:
+        from . import results
+        return getattr(results, name)
     raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
 
 
@@ -138,6 +144,9 @@ __all__ = [
 
     # Terrain module - HEC-RAS terrain creation (lazy loaded)
     'RasTerrain',
+
+    # Results module - Compute message parsing and execution summary (lazy loaded)
+    'ResultsParser', 'ResultsSummary',
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',

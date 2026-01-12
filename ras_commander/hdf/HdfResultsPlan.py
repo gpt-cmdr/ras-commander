@@ -841,6 +841,102 @@ class HdfResultsPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    def get_compute_messages_hdf_only(hdf_path: Path) -> str:
+        """
+        Extract compute messages from HDF file or .txt files (no RasControl fallback).
+
+        This method reads computation messages without using RasControl/COM interface,
+        making it suitable for automated workflows where COM locking is problematic.
+
+        Args:
+            hdf_path: Path to plan HDF file (or plan number string if using
+                     standardize_input decorator, which resolves to HDF path)
+
+        Returns:
+            str: Compute messages text, or empty string if unavailable
+
+        Example:
+            >>> from ras_commander import init_ras_project, HdfResultsPlan
+            >>> init_ras_project(r"/path/to/project", "6.5")
+            >>> msgs = HdfResultsPlan.get_compute_messages_hdf_only("01")
+            >>> print(msgs)
+
+        Note:
+            Falls back to .txt files on disk but NEVER uses RasControl.
+            Order of attempts:
+            1. HDF Results/Summary/Compute Messages (text)
+            2. {plan_file}.computeMsgs.txt (HEC-RAS 6.x+)
+            3. {plan_file}.comp_msgs.txt (HEC-RAS 5.x)
+        """
+        # Attempt 1: Read from HDF file
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                compute_msgs_path = "Results/Summary/Compute Messages (text)"
+
+                if compute_msgs_path in hdf_file:
+                    logger.info(f"Reading computation messages from HDF: {hdf_path.name}")
+                    dataset = hdf_file[compute_msgs_path]
+                    data = dataset[()]
+
+                    # Decode byte string to UTF-8
+                    if isinstance(data, bytes):
+                        contents = data.decode('utf-8', errors='ignore')
+                    elif isinstance(data, np.ndarray) and len(data) > 0:
+                        # Handle array of byte strings
+                        if isinstance(data[0], bytes):
+                            contents = data[0].decode('utf-8', errors='ignore')
+                        else:
+                            contents = str(data[0])
+                    else:
+                        contents = str(data)
+
+                    logger.info(f"Successfully extracted {len(contents)} characters from HDF")
+                    return contents
+                else:
+                    logger.debug(
+                        f"Compute Messages not found in HDF at '{compute_msgs_path}', "
+                        f"trying .txt file fallbacks"
+                    )
+        except FileNotFoundError:
+            logger.debug(f"HDF file not found: {hdf_path}")
+        except Exception as e:
+            logger.debug(f"Error reading computation messages from HDF: {str(e)}")
+
+        # Attempt 2: Read .computeMsgs.txt file (HEC-RAS 6.x+)
+        try:
+            # Convert HDF path to .computeMsgs.txt path
+            # e.g., "plan.p01.hdf" -> "plan.p01.computeMsgs.txt"
+            txt_path_6x = Path(str(hdf_path).replace('.hdf', '.computeMsgs.txt'))
+            if txt_path_6x.exists():
+                contents = txt_path_6x.read_text(encoding='utf-8', errors='ignore')
+                logger.info(f"Successfully read {len(contents)} characters from {txt_path_6x.name}")
+                return contents
+            else:
+                logger.debug(f".computeMsgs.txt file not found: {txt_path_6x}")
+        except Exception as e:
+            logger.debug(f"Error reading .computeMsgs.txt file: {str(e)}")
+
+        # Attempt 3: Read .comp_msgs.txt file (HEC-RAS 5.x)
+        try:
+            # Convert HDF path to .comp_msgs.txt path
+            # e.g., "plan.p01.hdf" -> "plan.p01.comp_msgs.txt"
+            txt_path_5x = Path(str(hdf_path).replace('.hdf', '.comp_msgs.txt'))
+            if txt_path_5x.exists():
+                contents = txt_path_5x.read_text(encoding='utf-8', errors='ignore')
+                logger.info(f"Successfully read {len(contents)} characters from {txt_path_5x.name}")
+                return contents
+            else:
+                logger.debug(f".comp_msgs.txt file not found: {txt_path_5x}")
+        except Exception as e:
+            logger.debug(f"Error reading .comp_msgs.txt file: {str(e)}")
+
+        # All methods failed - return empty string (no RasControl fallback)
+        logger.debug(f"No computation messages found for {hdf_path.name} (HDF-only mode)")
+        return ""
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
     def get_steady_results(hdf_path: Path) -> pd.DataFrame:
         """
         Extract steady state profile results from HEC-RAS HDF file.

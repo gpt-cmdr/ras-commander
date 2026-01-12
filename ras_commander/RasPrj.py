@@ -42,7 +42,7 @@ Example:
 
 All of the methods in this class are class methods and are designed to be used with instances of the class.
 
-List of Functions in RasPrj:    
+List of Functions in RasPrj:
 - initialize()
 - _load_project_data()
 - _get_geom_file_for_plan()
@@ -63,6 +63,8 @@ List of Functions in RasPrj:
 - print_data()
 - get_plan_value()
 - get_boundary_conditions()
+- update_results_df()
+- get_results_entries()
         
 Functions in RasPrj that are not part of the class:        
 - init_ras_project()
@@ -113,10 +115,11 @@ class RasPrj:
     def __init__(self):
         self.initialized = False
         self.boundaries_df = None  # New attribute to store boundary conditions
+        self.results_df = pd.DataFrame()  # Lightweight HDF results summaries
         self.suppress_logging = False  # Add suppress_logging as instance variable
 
     @log_call
-    def initialize(self, project_folder, ras_exe_path, suppress_logging=True, prj_file=None):
+    def initialize(self, project_folder, ras_exe_path, suppress_logging=True, prj_file=None, load_results_summary=True):
         """
         Initialize a RasPrj instance with project folder and RAS executable path.
 
@@ -129,6 +132,10 @@ class RasPrj:
             suppress_logging (bool, default=True): If True, suppresses initialization logging messages.
             prj_file (str or Path, optional): If provided, use this specific .prj file instead of searching.
                                               This is used when user specifies a .prj file directly.
+            load_results_summary (bool, default=True): If True, populate results_df with lightweight
+                                                        HDF results summaries at initialization. This
+                                                        enables quick queries of execution status and
+                                                        basic results without re-scanning HDF files.
 
         Raises:
             ValueError: If no HEC-RAS project file is found in the specified folder,
@@ -141,6 +148,7 @@ class RasPrj:
             3. Extracting boundary conditions
             4. Setting the initialization flag
             5. Loading RASMapper data (.rasmap)
+            6. Loading results summaries (if load_results_summary=True)
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
@@ -148,7 +156,8 @@ class RasPrj:
 
         # If user specified a .prj file directly, use it (Phase 2 optimization)
         if prj_file is not None:
-            self.prj_file = Path(prj_file).resolve()
+            from .RasUtils import RasUtils
+            self.prj_file = RasUtils.safe_resolve(Path(prj_file))
             if not self.prj_file.exists():
                 logger.error(f"Specified .prj file does not exist: {self.prj_file}")
                 raise ValueError(f"Specified .prj file does not exist: {self.prj_file}. Please check the path and try again.")
@@ -182,9 +191,19 @@ class RasPrj:
                                                 'current_settings'])
         except Exception as e:
             logger.error(f"Error initializing RASMapper data: {e}")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
+            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path',
+                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path',
                                                 'current_settings'])
+
+        # Load results summaries if requested (default behavior)
+        if load_results_summary and self.plan_df is not None and len(self.plan_df) > 0:
+            try:
+                if not suppress_logging:
+                    logger.info("Loading results summaries for initialized plans...")
+                self.update_results_df()
+            except Exception as e:
+                logger.warning(f"Could not load results summaries: {e}")
+                # results_df is already initialized as empty DataFrame in __init__
 
         if not suppress_logging:
             logger.info(f"Initialization complete for project: {self.project_name}")
@@ -193,6 +212,7 @@ class RasPrj:
                          f"Boundary conditions: {len(self.boundaries_df)}")
             logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
             logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
+            logger.info(f"Results summaries loaded: {len(self.results_df)} plans with HDF results")
 
     @log_call
     def _load_project_data(self):
@@ -731,23 +751,24 @@ class RasPrj:
             ... else:
             ...     print("No project file found")
         """
+        from .RasUtils import RasUtils
         folder_path = Path(folder_path)
         prj_files = list(folder_path.glob("*.prj"))
         rasmap_files = list(folder_path.glob("*.rasmap"))
         if len(prj_files) == 1:
-            return prj_files[0].resolve()
+            return RasUtils.safe_resolve(prj_files[0])
         if len(prj_files) > 1:
             if len(rasmap_files) == 1:
                 base_filename = rasmap_files[0].stem
                 prj_file = folder_path / f"{base_filename}.prj"
                 if prj_file.exists():
-                    return prj_file.resolve()
+                    return RasUtils.safe_resolve(prj_file)
             for prj_file in prj_files:
                 try:
                     with open(prj_file, 'r') as file:
                         content = file.read()
                         if "Proj Title=" in content:
-                            return prj_file.resolve()
+                            return RasUtils.safe_resolve(prj_file)
                 except Exception:
                     continue
         return None
@@ -1419,6 +1440,100 @@ class RasPrj:
             'geometry': Path(str(geom_path) + '.hdf') if pd.notna(geom_path) else None,
         }
 
+    # =========================================================================
+    # Results Summary Methods
+    # =========================================================================
+
+    @log_call
+    def update_results_df(self, plan_numbers: List[str] = None) -> pd.DataFrame:
+        """
+        Update results_df with HDF-based summaries for specified plans.
+
+        Extracts lightweight summary data from HDF files including compute
+        messages, runtime data, and volume accounting.
+
+        Args:
+            plan_numbers: List of plan numbers to update (e.g., ["01", "02"]).
+                         If None, updates all plans in plan_df.
+
+        Returns:
+            pd.DataFrame: Updated results_df
+
+        Example:
+            >>> init_ras_project("path/to/project", "6.6")
+            >>> ras.update_results_df(["01"])  # Update specific plan
+            >>> ras.update_results_df()  # Update all plans
+            >>> print(ras.results_df[['plan_number', 'completed', 'has_errors']])
+        """
+        from ras_commander.results.ResultsSummary import ResultsSummary
+
+        if self.plan_df is None or len(self.plan_df) == 0:
+            logger.warning("No plans found in plan_df - cannot update results_df")
+            return self.results_df
+
+        # Filter to specific plans if requested
+        if plan_numbers is not None:
+            plans_to_update = self.plan_df[self.plan_df['plan_number'].isin(plan_numbers)]
+        else:
+            plans_to_update = self.plan_df
+
+        if len(plans_to_update) == 0:
+            logger.warning(f"No matching plans found for: {plan_numbers}")
+            return self.results_df
+
+        # Build list of plan entries for summarization
+        plan_entries = []
+        for _, row in plans_to_update.iterrows():
+            entry = {
+                'plan_number': row['plan_number'],
+                'plan_title': row.get('Plan Title', row.get('plan_title', '')),
+                'flow_type': row.get('flow_type', 'Unsteady'),
+                'HDF_Results_Path': row.get('HDF_Results_Path'),
+                'Program Version': row.get('Program Version'),
+            }
+            plan_entries.append(entry)
+
+        # Generate summaries
+        new_results = ResultsSummary.summarize_plans(plan_entries, self.project_folder)
+
+        if new_results is None or len(new_results) == 0:
+            logger.debug("No results generated from summarization")
+            return self.results_df
+
+        # Merge with existing results_df (update existing, add new)
+        if self.results_df is None or len(self.results_df) == 0:
+            self.results_df = new_results
+        else:
+            # Remove existing entries for updated plans
+            if plan_numbers is not None:
+                self.results_df = self.results_df[~self.results_df['plan_number'].isin(plan_numbers)]
+            else:
+                self.results_df = pd.DataFrame()  # Clear all if updating all
+
+            # Concatenate new results
+            self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+
+        logger.info(f"Updated results_df with {len(new_results)} plan(s)")
+        return self.results_df
+
+    @log_call
+    def get_results_entries(self) -> pd.DataFrame:
+        """
+        Build complete results_df from scratch.
+
+        Generates results summaries for all plans in the project.
+        This is equivalent to calling update_results_df(None).
+
+        Returns:
+            pd.DataFrame: Results summary for all plans
+
+        Note:
+            This method regenerates results_df completely, replacing any
+            existing cached results.
+        """
+        self.results_df = pd.DataFrame()  # Clear existing
+        return self.update_results_df(plan_numbers=None)
+
 
 # Create a global instance named 'ras'
 # Defining the global instance allows the init_ras_project function to initialize the project.
@@ -1434,7 +1549,8 @@ ras = RasPrj()
 def init_ras_project(
     ras_project_folder,
     ras_version=None,
-    ras_object=None
+    ras_object=None,
+    load_results_summary=True
 ) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
@@ -1445,6 +1561,7 @@ def init_ras_project(
     3. Identifies the appropriate HEC-RAS executable
     4. Loads project data (plans, geometries, flows)
     5. Creates dataframes containing project components
+    6. Loads HDF results summaries (if load_results_summary=True)
 
     Args:
         ras_project_folder (str or Path): Path to the RAS project folder OR direct path to a .prj file.
@@ -1458,6 +1575,12 @@ def init_ras_project(
         ras_object (RasPrj, optional): If None, updates the global 'ras' object.
                                        If a RasPrj instance, updates that instance.
                                        If any other value, creates and returns a new RasPrj instance.
+        load_results_summary (bool, default=True): If True, populate results_df with lightweight
+                                                    HDF results summaries at initialization. This
+                                                    enables quick queries of execution status and
+                                                    basic results via ras.results_df without needing
+                                                    to re-scan HDF files. Set to False for faster
+                                                    initialization when results are not needed.
 
     Returns:
         RasPrj: An initialized RasPrj instance.
@@ -1479,9 +1602,14 @@ def init_ras_project(
         >>> # Create a new RasPrj instance with .prj file
         >>> my_project = init_ras_project("/path/to/project/MyModel.prj", "6.6", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
+        >>>
+        >>> # Skip results loading for faster initialization
+        >>> init_ras_project("/path/to/project", "6.6", load_results_summary=False)
     """
     # Convert to Path object for consistent handling
-    input_path = Path(ras_project_folder).resolve()
+    # Use safe_resolve to preserve drive letters on Windows mapped network drives
+    from .RasUtils import RasUtils
+    input_path = RasUtils.safe_resolve(Path(ras_project_folder))
 
     # Detect if input is a file or folder
     if input_path.is_file():
@@ -1600,9 +1728,11 @@ def init_ras_project(
     # Initialize or re-initialize with the determined executable path
     # Pass specified_prj_file to avoid re-searching when user provided .prj file directly
     if specified_prj_file is not None:
-        ras_object.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file)
+        ras_object.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file,
+                              load_results_summary=load_results_summary)
     else:
-        ras_object.initialize(project_folder, ras_exe_path)
+        ras_object.initialize(project_folder, ras_exe_path,
+                              load_results_summary=load_results_summary)
 
     # Store version for RasControl (legacy COM interface support)
     ras_object.ras_version = ras_version if ras_version else detected_version
