@@ -43,6 +43,11 @@ Task Subagents (Haiku)
 - **ras-commander-api-expert** - API integration, dataframe structures, spawns explore subagents
 - **api-consistency-auditor** - Enforces API conventions, detects pattern violations
 
+### HEC-RAS Operations System (Sonnet)
+- **hecras-project-inspector** - Project intelligence, DataFrame analysis, execution readiness
+- **hecras-results-analyst** - Results interpretation, quality assessment, anomaly detection
+- **hecras-general-agent** - Thin coordinator for inspect→plan→execute→analyze workflows
+
 ### Knowledge Management (Opus)
 - **hierarchical-knowledge-agent-skill-memory-curator** - Knowledge organization, structural reasoning
 
@@ -192,6 +197,9 @@ Result: Subagent has full context WITHOUT manual passing!
 | **remote-executor** | Sonnet | Domain specialist, complex configuration |
 | **quality-assurance** | Sonnet | Domain specialist, RasFixit patterns |
 | **precipitation-specialist** | Sonnet | Domain specialist, AORC/Atlas 14 workflows |
+| **hecras-project-inspector** | Sonnet | Project analysis, DataFrame inspection |
+| **hecras-results-analyst** | Sonnet | Results interpretation, quality assessment |
+| **hecras-general-agent** | Sonnet | Thin coordinator, workflow orchestration |
 | **documentation-generator** | Sonnet | Content generation, code examples |
 | **example-notebook-librarian** | Sonnet | Notebook management, modifications |
 | **python-environment-manager** | Sonnet | Environment setup, troubleshooting |
@@ -285,7 +293,13 @@ Main agent uses this logic to decide when to spawn agents:
 
 ```
 User Request
-├─ HDF result extraction? → hdf-analyst (Sonnet)
+├─ Full HEC-RAS workflow? → hecras-general-agent (Sonnet)
+│   └─ Coordinates: inspect → plan → execute → analyze
+├─ Project analysis/inspection? → hecras-project-inspector (Sonnet)
+│   └─ Uses: DataFrame analysis, execution readiness
+├─ Results interpretation? → hecras-results-analyst (Sonnet)
+│   └─ Uses: parsing-compute-messages, extracting-hecras-results skills
+├─ HDF data extraction? → hdf-analyst (Sonnet)
 │   └─ Uses: extracting-hecras-results skill
 ├─ Geometry file parsing? → geometry-parser (Sonnet)
 │   └─ Uses: parsing-hecras-geometry skill

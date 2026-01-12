@@ -65,7 +65,9 @@ geom_file = project_folder + "\\geometry.g01"  # String concatenation
 
 **HEC-RAS Execution Context**:
 - HEC-RAS installation: Typically `C:/Program Files/HEC/HEC-RAS/<version>/Ras.exe`
-- Project files: Can be anywhere on Windows filesystem or network shares (UNC paths)
+- Project files: Can be on local drives (C:\) or mapped network drives (H:\, Z:\, etc.)
+  - **Note**: HEC-RAS cannot read UNC paths (\\server\share) - use mapped drives
+  - ras-commander preserves drive letters via `RasUtils.safe_resolve()`
 - Remote execution: Uses PsExec (Windows → Windows) or Docker (platform-agnostic)
 
 ## LLM Forward Development Philosophy
@@ -186,6 +188,9 @@ See `.claude/agents/` for complete list. Key specialists:
 | Subagent | Default | Purpose |
 |----------|---------|---------|
 | `ras-commander-api-expert` | Sonnet | API integration, dataframe structures, spawns explore subagents |
+| `hecras-general-agent` | Sonnet | **NEW** - Thin coordinator for inspect→plan→execute→analyze workflows |
+| `hecras-project-inspector` | Sonnet | **NEW** - Project intelligence, DataFrame analysis, execution readiness |
+| `hecras-results-analyst` | Sonnet | **NEW** - Results interpretation, quality assessment, anomaly detection |
 | `hdf-analyst` | Sonnet | HDF file analysis, results extraction |
 | `geometry-parser` | Sonnet | Geometry file parsing, cross-section analysis |
 | `usgs-integrator` | Sonnet | USGS gauge data integration |
@@ -440,12 +445,13 @@ See **notebook-standards.md** for complete guidelines.
 
 ## Key Development Principles
 
-1. **Use Real HEC-RAS Projects**: Test with RasExamples, not mocks
-2. **Static Classes**: Most classes use static methods (no instantiation)
-3. **pathlib.Path**: Use Path for all file operations, accept str or Path in parameters
-4. **@log_call Decorator**: All public functions should use for automatic logging
-5. **Session-Based Remote Execution**: HEC-RAS requires session_id, not system_account
-6. **Progressive Disclosure**: Details in .claude/rules/, strategic content in CLAUDE.md
+1. **DataFrame-First**: ALWAYS use ras.plan_df, ras.geom_df as authoritative source for file paths and metadata - NEVER use glob patterns or manual path construction. Refresh DataFrames after execution (especially with [Computed] folders). See `.claude/rules/python/dataframe-first-principle.md`
+2. **Use Real HEC-RAS Projects**: Test with RasExamples, not mocks
+3. **Static Classes**: Most classes use static methods (no instantiation)
+4. **pathlib.Path**: Use Path for all file operations, accept str or Path in parameters
+5. **@log_call Decorator**: All public functions should use for automatic logging
+6. **Session-Based Remote Execution**: HEC-RAS requires session_id, not system_account
+7. **Progressive Disclosure**: Details in .claude/rules/, strategic content in CLAUDE.md
 
 ## Quick Reference
 

@@ -82,6 +82,39 @@ HdfBenefitAreas.identify_benefit_areas_1d(
 
 ---
 
+## Precipitation & Rain-on-Grid Features
+
+### Atlas 14 Gridded AEP Events for HEC-RAS
+
+**Status**: Planned
+
+**Description**: Direct Atlas 14 gridded precipitation (AEP design storms) to
+HEC-RAS gridded precipitation boundaries using the same NetCDF/GDAL pathway as
+AORC. This replaces the incorrect hyetograph <-> gridded conversion placeholders.
+
+**Current State**:
+- Atlas14Grid provides depth grids (NetCDF lat/lon, pf_###_hr, inches) for
+  duration/return period, but no time-series export for HEC-RAS.
+- PrecipAorc.download + RasUnsteady.set_gridded_precipitation works for gridded
+  time-series data (NetCDF time/x/y, EPSG:5070).
+- No direct Atlas 14 gridded export path for HEC-RAS design storms.
+
+**Planned Approach**:
+1. Extract Atlas 14 depth grids for project extent and chosen AEP/duration.
+2. Apply a temporal distribution (Atlas14Storm or FrequencyStorm) to build a
+   time series per grid cell.
+3. Write NetCDF in the same structural format as AORC output:
+   - dims: time, y, x
+   - variable: APCP_surface (mm)
+   - CRS: EPSG:5070 (SHG), 2000 m grid
+4. Configure unsteady files via RasUnsteady.set_gridded_precipitation and run.
+
+**Not Planned (remove placeholders)**:
+- convert_hydrograph_to_gridded(...)
+- convert_gridded_to_hydrograph(...)
+
+---
+
 ## Validation & Boundary Condition Features
 
 ### Automated Lateral BC Creation from USGS Gauge Locations
@@ -425,6 +458,162 @@ for gauge_id, name in lateral_gauges.items():
 - Current manual workflow is functional (just slow)
 - Only needed for complex validation scenarios
 - Requires significant development and testing effort
+
+---
+
+## Bug Fixes
+
+### Path.resolve() Converts Mapped Drives to UNC Paths on Windows
+
+**Priority**: High
+**Status**: ✅ Implemented
+**Discovered**: 2026-01-08 (South Belt HEC-RAS 4.1 to 6.6 upgrade)
+**Implemented**: 2026-01-08
+
+#### Problem Statement
+
+On Windows systems with mapped network drives (e.g., `H:\` mapped to `\\192.168.x.x\share`), Python's `Path.resolve()` converts the drive letter path to its underlying UNC path. HEC-RAS **cannot read from UNC paths** - it requires drive letter paths.
+
+**Error Observed**:
+```
+Error loading project data from file:
+"\\192.168.3.10\CLB-Engineering\25-001 HCFCD Benefits\...\A100_00_00.prj"
+```
+
+**Expected Path**: `H:\25-001 HCFCD Benefits\...\A100_00_00.prj`
+
+#### Affected Code Locations
+
+1. **`ras_commander/RasPrj.py` line 151**: `self.prj_path = self.prj_path.resolve()`
+2. **`ras_commander/RasPrj.py` line 1484**: `project_path = Path(project_path).resolve()`
+
+Any other location using `Path.resolve()` on user-provided paths is potentially affected.
+
+#### Current Workaround
+
+A monkey-patch can be applied before importing ras-commander:
+
+```python
+from pathlib import Path
+import os
+
+_original_resolve = Path.resolve
+
+def _patched_resolve(self, strict=False):
+    resolved = _original_resolve(self, strict)
+    original_str = str(self)
+    # If original started with drive letter but resolved became UNC, keep original
+    if (len(original_str) >= 2 and original_str[1] == ':' and
+        str(resolved).startswith('\\\\')):
+        return self if self.is_absolute() else Path(os.path.abspath(str(self)))
+    return resolved
+
+Path.resolve = _patched_resolve
+
+# Now import ras-commander
+from ras_commander import init_ras_project
+```
+
+#### Proposed Solution
+
+**Option A: Replace `resolve()` with `absolute()`** (Simplest)
+- `Path.absolute()` does NOT convert to UNC paths
+- May not canonicalize symlinks, but that's rarely needed for HEC-RAS
+
+```python
+# Before
+self.prj_path = self.prj_path.resolve()
+
+# After
+self.prj_path = self.prj_path.absolute()
+```
+
+**Option B: Custom `safe_resolve()` helper function**
+
+```python
+def safe_resolve(path: Path) -> Path:
+    """Resolve path while preserving Windows drive letters.
+
+    On Windows with mapped network drives, Path.resolve() converts
+    drive letters (H:\) to UNC paths (\\server\share). HEC-RAS cannot
+    read from UNC paths, so we preserve the drive letter format.
+    """
+    if os.name != 'nt':
+        return path.resolve()
+
+    original_str = str(path)
+    resolved = path.resolve()
+
+    # If original had drive letter but resolved is UNC, use absolute() instead
+    if (len(original_str) >= 2 and original_str[1] == ':' and
+        str(resolved).startswith('\\\\')):
+        return path.absolute()
+
+    return resolved
+```
+
+**Option C: Check for UNC and warn/error**
+
+```python
+resolved = path.resolve()
+if str(resolved).startswith('\\\\'):
+    warnings.warn(
+        f"Path resolved to UNC format ({resolved}), which HEC-RAS cannot read. "
+        f"Use a mapped drive letter instead.",
+        UserWarning
+    )
+```
+
+#### Testing Strategy
+
+1. Test on local drive (C:\) - should work unchanged
+2. Test on mapped network drive (H:\ -> \\server\share) - should preserve H:\
+3. Test on direct UNC path (\\server\share) - should work (already UNC)
+4. Test on Linux/Mac - should use standard resolve()
+
+#### Files to Modify
+
+- `ras_commander/RasPrj.py` - Primary locations
+- `ras_commander/utils/path_utils.py` - Create helper if Option B chosen
+- Any other files using `Path.resolve()` on user paths
+
+#### Estimated Scope
+
+- **Code changes**: 10-30 lines
+- **Testing**: 50-100 lines
+- **Documentation**: Update CLAUDE.md with note about network drives
+
+#### Related Issues
+
+- HEC-RAS COM interface also has path sensitivity
+- May affect `shutil.copytree()` if destination path gets resolved
+- RASMapper file paths in `.rasmap` files may also be affected
+
+#### Implementation (2026-01-08)
+
+**Solution Implemented: Option B - `safe_resolve()` helper function**
+
+Added `RasUtils.safe_resolve(path)` that:
+- Uses standard `resolve()` on local drives and non-Windows
+- Falls back to `absolute()` when UNC path detected (preserves drive letter)
+- Logs debug message when fallback occurs
+
+**Files Modified**:
+- `ras_commander/RasUtils.py` - Added `safe_resolve()` function
+- `ras_commander/RasPrj.py` - Updated 5 `.resolve()` calls
+- `ras_commander/RasMap.py` - Updated 4 `.resolve()` calls
+- `ras_commander/dss/RasDss.py` - Updated 3 `.resolve()` calls
+- `.claude/rules/python/path-handling.md` - Added documentation
+- `tests/test_safe_resolve.py` - Added unit tests (13 tests)
+
+**Usage**:
+```python
+from ras_commander.RasUtils import RasUtils
+
+# Instead of: path.resolve()
+# Use: RasUtils.safe_resolve(path)
+resolved = RasUtils.safe_resolve(Path("H:/Projects/Model.prj"))
+```
 
 ---
 

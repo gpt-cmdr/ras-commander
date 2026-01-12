@@ -11,21 +11,33 @@ This directory contains **library workflow skills** - how to use ras-commander f
 
 Both use Claude Skills framework - the distinction is **scope and distribution**.
 
-## Recommended Library Skills (Phase 3)
+## Implemented Library Skills
 
-### Phase 1: Core Operations
-1. **executing-hecras-plans** - RasCmdr.compute_plan(), parallel execution, callbacks
-2. **extracting-hecras-results** - HdfResultsPlan API, steady vs unsteady workflows
-3. **parsing-hecras-geometry** - RasGeometry, RasStruct, fixed-width parsing
+### Execution Skills
+- **executing-hecras-plans** - RasCmdr.compute_plan(), parallel execution, callbacks, mode selection
+- **executing-remote-plans** - PsExec, Docker, SSH worker setup, distributed execution
+- **executing-hecras-rascontrol** - RasControl COM interface for legacy HEC-RAS 3.x-5.x
+- **planning-hecras-execution** - Decision support for execution strategy, mode selection
 
-### Phase 2: Advanced Features
-4. **integrating-usgs-gauges** - Complete USGS workflow (discovery → validation)
-5. **analyzing-aorc-precipitation** - AORC grid extraction, time series generation
-6. **repairing-geometry-issues** - RasFixit validation loops
+### Results & Analysis Skills
+- **extracting-hecras-results** - HdfResultsPlan API, steady vs unsteady workflows
+- **parsing-compute-messages** - HEC-RAS compute message diagnostics, error classification
 
-### Phase 3: Specialized
-7. **executing-remote-plans** - PsExec, Docker, SSH worker setup
-8. **reading-dss-boundary-data** - RasDss API, HEC-DSS V6/V7 files
+### File Operations Skills
+- **parsing-hecras-geometry** - RasGeometry, RasStruct, fixed-width parsing
+- **reading-dss-boundary-data** - RasDss API, HEC-DSS V6/V7 files
+- **repairing-geometry-issues** - RasFixit validation loops
+
+### Data Integration Skills
+- **integrating-usgs-gauges** - Complete USGS workflow (discovery → validation)
+- **analyzing-aorc-precipitation** - AORC grid extraction, time series generation
+- **atlas14-spatial-variance** - Atlas 14 precipitation spatial analysis
+
+### Specialized Skills
+- **organizing-ebfe-models** - FEMA eBFE/BLE model organization
+- **ebfe-validator** - Validate organized eBFE models
+- **exploring-hecras-gui** - HEC-RAS GUI exploration and documentation
+- **using-git-worktrees** - Git worktree management for feature isolation
 
 ## Skill Structure
 

@@ -135,6 +135,108 @@ RasCmdr.compute_test_mode(["01", "02", "03"])
 - Single test folder (not multiple workers)
 - Easier to debug issues
 
+## Mode Selection Guide
+
+Use this decision matrix to select the appropriate execution mode:
+
+| Scenario | Recommended Mode | Rationale |
+|----------|------------------|-----------|
+| Single plan, need full control | `compute_plan()` | Direct control, callback monitoring, parameter tuning |
+| Single plan, quick run | `compute_plan()` | Simplest API, minimal overhead |
+| Multiple plans, debugging issues | `compute_test_mode()` | Sequential execution, single folder, easier diagnosis |
+| Multiple plans, production runs | `compute_parallel()` | Fastest throughput, worker isolation, parallel HDF writes |
+| Distributed across machines | `compute_parallel_remote()` | Scale-out to multiple computers |
+| HEC-RAS 3.x-5.x legacy | `RasControl` | COM-based automation (see rascontrol documentation) |
+| Resume interrupted batch | `compute_parallel(..., skip_existing=True)` | Skips completed plans |
+| Scenario comparison study | `compute_parallel()` with dest_folder | Each scenario in separate folder |
+
+**Quick Decision Tree**:
+1. **How many plans?** Single → `compute_plan()`, Multiple → continue
+2. **Debugging?** Yes → `compute_test_mode()`, No → continue
+3. **Multiple machines?** Yes → `compute_parallel_remote()`, No → `compute_parallel()`
+
+**See**: `.claude/rules/hec-ras/execution.md` for complete mode documentation.
+
+## Orchestrator Integration
+
+### Workflow: Inspector → Execute → Analyze
+
+For complex projects, chain execution with inspection and analysis:
+
+```
+1. Project Inspector → Understand project structure
+2. Mode Selection   → Choose execution approach
+3. Execute          → Run plans
+4. Results Analyst  → Interpret outputs
+```
+
+### Integration with Project Inspector
+
+**Before executing unfamiliar projects**, gather intelligence:
+
+```python
+# Step 1: Inspect project (via hecras-project-inspector agent or manual)
+# - Get plan count and types
+# - Identify dependencies between plans
+# - Check geometry complexity (1D vs 2D vs mixed)
+# - Review execution recommendations
+
+# Step 2: Based on inspection, select mode
+# Example: Inspector finds 5 independent 2D plans
+plans = ["01", "02", "03", "04", "05"]
+mode = "compute_parallel"  # Independent plans → parallel
+
+# Step 3: Execute with appropriate parameters
+RasCmdr.compute_parallel(
+    plans_to_run=plans,
+    max_workers=3,      # Based on system resources
+    num_cores=4,        # 2D models benefit from multiple cores
+    verify=True
+)
+
+# Step 4: Dispatch to results analysis
+# - Extract WSE, velocity, depth from HDF files
+# - Generate comparison plots
+# - Create summary report
+```
+
+### Chaining with Other Skills
+
+**Execution typically follows these upstream skills**:
+- `parsing-hecras-geometry` → After geometry modifications
+- `reading-dss-boundary-data` → After validating boundary conditions
+- `integrating-usgs-gauges` → After setting up gauge-based boundaries
+
+**Execution typically precedes these downstream skills**:
+- `extracting-hecras-results` → Parse HDF outputs
+- Results visualization → Generate plots and maps
+- Validation workflows → Compare to observed data
+
+### Multi-Project Orchestration
+
+For workflows spanning multiple HEC-RAS projects:
+
+```python
+from ras_commander import RasPrj, init_ras_project, RasCmdr
+
+# Create separate project contexts
+projects = {}
+for project_name in ["upstream", "downstream", "tributary"]:
+    projects[project_name] = RasPrj()
+    init_ras_project(
+        f"C:/Models/{project_name}",
+        "6.6",
+        ras_object=projects[project_name]
+    )
+
+# Execute in dependency order
+RasCmdr.compute_plan("01", ras_object=projects["upstream"])
+RasCmdr.compute_plan("01", ras_object=projects["tributary"])
+RasCmdr.compute_plan("01", ras_object=projects["downstream"])
+```
+
+**Critical**: Pass `ras_object` when working with multiple projects. See `.claude/rules/python/ras-commander-patterns.md` for context object discipline.
+
 ## Common Patterns
 
 ### Pattern: Preserve Original Project
@@ -270,86 +372,29 @@ if wse is not None:
 
 ## Performance Optimization
 
-### Geometry Preprocessing
-- **Keep** (`clear_geompre=False`): 2x-10x faster, only if geometry unchanged
-- **Clear** (`clear_geompre=True`): Required after ANY geometry modification
+| Setting | Recommendation | When |
+|---------|---------------|------|
+| `clear_geompre=False` | 2x-10x faster | Geometry unchanged |
+| `clear_geompre=True` | Required | After ANY geometry edit |
+| `num_cores=2-4` | Best balance | Most models |
+| `num_cores=1-2` | Highest efficiency | Resource-limited |
 
-### Core Count
-- **2-4 cores**: Good balance for most models
-- **1-2 cores**: Highest efficiency per core
-- **>8 cores**: Diminishing returns, overhead may slow execution
-
-### Parallel vs Sequential
-**Use parallel when**:
-- Multiple independent plans
-- Sufficient CPU cores (8+ for 4 plans)
-- Time is critical
-
-**Use sequential when**:
-- Debugging execution issues
-- Limited system resources
-- Plans are interdependent
+**See**: `.claude/rules/hec-ras/execution.md` for detailed performance guidance.
 
 ## Troubleshooting
 
-### Plan Doesn't Execute
-**Checklist**:
-1. Project initialized? (`init_ras_project()` called?)
-2. Plan exists? (Check `ras.plan_df`)
-3. HEC-RAS installed? (Correct version?)
-4. Permissions? (Write access to folder?)
+**Plan doesn't execute** - Check: `init_ras_project()` called? Plan in `ras.plan_df`? HEC-RAS installed? Write permissions?
 
+**HDF not created** - Enable `ConsoleCallback(verbose=True)`, check compute messages, try HEC-RAS GUI manually.
+
+**Debug command**:
 ```python
 from ras_commander import ras
 print(f"Project: {ras.project_folder}")
-print(f"RAS executable: {ras.ras_exe_path}")
+print(f"RAS: {ras.ras_exe_path}")
 print(ras.plan_df)
 ```
 
-### HDF File Not Created
-**Diagnosis**:
-1. Enable verbose callback to see execution progress
-2. Check compute messages (if HDF partially exists)
-3. Try running plan manually in HEC-RAS GUI
-
-```python
-from ras_commander.callbacks import ConsoleCallback
-RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))
-```
-
-### Performance Issues
-**Optimization checklist**:
-- ✅ Use `compute_parallel()` for multiple plans
-- ✅ Set `clear_geompre=False` if geometry unchanged
-- ✅ Try 2-4 cores instead of max
-- ✅ Use SSD for project files (not network drive)
-- ✅ Close unnecessary applications
-
-## Where to Learn More
-
-### CLAUDE.md Sections
-- **"Plan Execution"** - Core execution API
-- **"Execution Modes"** - Four execution patterns
-- **"Performance Guidance"** - CPU and execution mode optimization
-- **"Real-Time Computation Messages"** - Callback system (v0.88.0+)
-
-### Example Notebooks
-- **05** - Single plan execution walkthrough
-- **06** - Plan sets and batch processing
-- **07** - Sequential test mode
-- **08** - Parallel execution with performance comparison
-- **23** - Remote/distributed execution
-
-### Code Docstrings
-- **RasCmdr.py** - Complete API reference with examples
-- **callbacks.py** - Real-time monitoring protocol and implementations
-- **BcoMonitor.py** - .bco file monitoring internals
-
-### Related Rules
-- `.claude/rules/hec-ras/execution.md` - Detailed execution patterns
-- `.claude/rules/hec-ras/remote.md` - Remote execution configuration
-- `.claude/rules/python/static-classes.md` - Why RasCmdr is static
-
 ---
 
-**Remember**: This skill is a navigator. For detailed documentation, comprehensive examples, and complete API reference, always consult the primary sources listed above.
+**Remember**: This skill is a navigator. For detailed documentation, comprehensive examples, and complete API reference, always consult the Primary Sources section above.
