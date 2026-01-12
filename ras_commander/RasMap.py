@@ -3483,9 +3483,12 @@ class RasMap:
         except ET.ParseError as e:
             raise ValueError(f"Error parsing .rasmap XML: {e}")
 
+        # Import safe_resolve to preserve Windows drive letters on mapped network drives
+        from .RasUtils import RasUtils
+
         # Calculate relative path from rasmap to terrain HDF
-        rasmap_dir = rasmap_path.parent.resolve()
-        terrain_hdf_resolved = terrain_hdf.resolve()
+        rasmap_dir = RasUtils.safe_resolve(rasmap_path.parent)
+        terrain_hdf_resolved = RasUtils.safe_resolve(terrain_hdf)
 
         try:
             # Calculate relative path
@@ -3543,10 +3546,10 @@ class RasMap:
         # Update projection reference if provided
         if projection_prj is not None:
             try:
-                prj_rel_path = projection_prj.resolve().relative_to(rasmap_dir)
+                prj_rel_path = RasUtils.safe_resolve(projection_prj).relative_to(rasmap_dir)
                 prj_rel_path_str = ".\\" + str(prj_rel_path).replace("/", "\\")
             except ValueError:
-                prj_rel_path_str = str(projection_prj.resolve()).replace("/", "\\")
+                prj_rel_path_str = str(RasUtils.safe_resolve(projection_prj)).replace("/", "\\")
 
             # Find or create RASProjectionFilename element
             proj_elem = root.find("RASProjectionFilename")

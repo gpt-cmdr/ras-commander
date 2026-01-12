@@ -387,6 +387,10 @@ class HdfMesh:
         """
         Extract Face Property Tables for each Face in all 2D Flow Areas.
 
+        Returns elevation-area-wetted perimeter relationships for each face,
+        which define the hydraulic properties at different water surface elevations.
+        This data is used internally by HEC-RAS for 2D hydraulic computations.
+
         Parameters
         ----------
         hdf_path : Path
@@ -398,12 +402,19 @@ class HdfMesh:
             A dictionary where:
             - keys: mesh area names (str)
             - values: DataFrames with columns:
-                - Face ID: unique identifier for each face
-                - Z: elevation
-                - Area: face area
-                - Wetted Perimeter: wetted perimeter length
-                - Manning's n: Manning's roughness coefficient
+                - Face ID: unique identifier for each face (int)
+                - Elevation: water surface elevation (float)
+                - Area: face area at that elevation (float)
+                - Wetted Perimeter: wetted perimeter length at that elevation (float)
+                - Manning's n: Manning's roughness coefficient (float)
             Returns an empty dictionary if no 2D areas exist or if there's an error.
+            Returns an empty DataFrame with correct columns for meshes where
+            property tables don't exist.
+
+        Notes
+        -----
+        The HDF path for this data is 'Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Info'
+        and 'Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Values'.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -413,23 +424,32 @@ class HdfMesh:
 
                 result = {}
                 for mesh_name in mesh_area_names:
-                    area_elevation_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Info"][()]
-                    area_elevation_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Values"][()]
-                    
+                    base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+                    info_path = f"{base_path}/Faces Area Elevation Info"
+                    values_path = f"{base_path}/Faces Area Elevation Values"
+
+                    if info_path not in hdf_file or values_path not in hdf_file:
+                        logger.warning(f"Face property tables not found for mesh '{mesh_name}'")
+                        result[mesh_name] = pd.DataFrame(columns=['Face ID', 'Elevation', 'Area', 'Wetted Perimeter', "Manning's n"])
+                        continue
+
+                    area_elevation_info = hdf_file[info_path][()]
+                    area_elevation_values = hdf_file[values_path][()]
+
                     face_data = []
                     for face_id, (start_index, count) in enumerate(area_elevation_info):
                         face_values = area_elevation_values[start_index:start_index+count]
-                        for z, area, wetted_perimeter, mannings_n in face_values:
+                        for elevation, area, wetted_perimeter, mannings_n in face_values:
                             face_data.append({
                                 'Face ID': face_id,
-                                'Z': str(z),
-                                'Area': str(area), 
-                                'Wetted Perimeter': str(wetted_perimeter),
-                                "Manning's n": str(mannings_n)
+                                'Elevation': float(elevation),
+                                'Area': float(area),
+                                'Wetted Perimeter': float(wetted_perimeter),
+                                "Manning's n": float(mannings_n)
                             })
-                    
+
                     result[mesh_name] = pd.DataFrame(face_data)
-                
+
                 return result
 
         except Exception as e:
@@ -441,6 +461,10 @@ class HdfMesh:
     def get_mesh_cell_property_tables(hdf_path: Path) -> Dict[str, pd.DataFrame]:
         """
         Extract Cell Property Tables for each Cell in all 2D Flow Areas.
+
+        Returns elevation-volume relationships for each cell, which define how
+        cell volume changes with water surface elevation. This data is used
+        internally by HEC-RAS for 2D hydraulic computations.
 
         Parameters
         ----------
@@ -454,10 +478,17 @@ class HdfMesh:
             - keys: mesh area names (str)
             - values: DataFrames with columns:
                 - Cell ID: unique identifier for each cell
-                - Z: elevation
-                - Volume: cell volume
-                - Surface Area: cell surface area
+                - Elevation: water surface elevation (float)
+                - Volume: cell volume at that elevation (float)
             Returns an empty dictionary if no 2D areas exist or if there's an error.
+
+        Notes
+        -----
+        The HDF path for this data is 'Geometry/2D Flow Areas/{mesh_name}/Cells Volume Elevation Info'
+        and 'Geometry/2D Flow Areas/{mesh_name}/Cells Volume Elevation Values'.
+
+        Cell surface area is stored separately in 'Cells Surface Area' dataset (one value per cell),
+        not in the elevation-volume table.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -467,22 +498,30 @@ class HdfMesh:
 
                 result = {}
                 for mesh_name in mesh_area_names:
-                    cell_elevation_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Elevation Volume Info"][()]
-                    cell_elevation_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Elevation Volume Values"][()]
-                    
+                    base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+                    info_path = f"{base_path}/Cells Volume Elevation Info"
+                    values_path = f"{base_path}/Cells Volume Elevation Values"
+
+                    if info_path not in hdf_file or values_path not in hdf_file:
+                        logger.warning(f"Cell property tables not found for mesh '{mesh_name}'")
+                        result[mesh_name] = pd.DataFrame(columns=['Cell ID', 'Elevation', 'Volume'])
+                        continue
+
+                    cell_elevation_info = hdf_file[info_path][()]
+                    cell_elevation_values = hdf_file[values_path][()]
+
                     cell_data = []
                     for cell_id, (start_index, count) in enumerate(cell_elevation_info):
                         cell_values = cell_elevation_values[start_index:start_index+count]
-                        for z, volume, surface_area in cell_values:
+                        for elevation, volume in cell_values:
                             cell_data.append({
                                 'Cell ID': cell_id,
-                                'Z': str(z),
-                                'Volume': str(volume),
-                                'Surface Area': str(surface_area)
+                                'Elevation': float(elevation),
+                                'Volume': float(volume),
                             })
-                    
+
                     result[mesh_name] = pd.DataFrame(cell_data)
-                
+
                 return result
 
         except Exception as e:
