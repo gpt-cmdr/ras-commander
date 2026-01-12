@@ -718,34 +718,61 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             print(f"\n  Validating: {dss_file.name}")
             try:
                 catalog = RasDss.get_catalog(dss_file)
-                pathname_count = len(catalog)
+                pathnames = catalog["pathname"].astype(str).tolist()
+                pathname_count = len(pathnames)
                 print(f"    Pathnames: {pathname_count}")
 
-                # Validate sample pathnames (first 10)
-                pathnames = catalog['pathname'].tolist() if hasattr(catalog, 'pathname') else catalog
-                sample_size = min(10, len(pathnames))
+                # NOTE:
+                # Many DSS files contain mixed record types (time series, paired data,
+                # grids, etc.). A "read_timeseries" check on arbitrary catalog entries
+                # can produce false negatives even when the DSS file is perfectly fine
+                # for HEC-RAS (which only needs specific referenced records).
+                #
+                # So our "organize" validation is intentionally lightweight:
+                # - File is readable (catalog can be fetched)
+                # - Pathname formats look structurally correct
+                format_errors = 0
+                format_warnings = 0
 
-                valid_count = 0
-                for pathname in pathnames[:sample_size]:
-                    result = RasDss.check_pathname(dss_file, pathname)
-                    if result.is_valid:
-                        valid_count += 1
+                try:
+                    from ras_commander.validation_base import ValidationSeverity
+                except Exception:
+                    ValidationSeverity = None
 
+                for pn in pathnames:
+                    r = RasDss.check_pathname_format(pn)
+                    passed = (
+                        r.get("passed", False)
+                        if isinstance(r, dict)
+                        else getattr(r, "passed", False)
+                    )
+                    if not passed:
+                        format_errors += 1
+                        continue
+                    if ValidationSeverity is not None:
+                        severity = getattr(r, "severity", None)
+                        if severity == ValidationSeverity.WARNING:
+                            format_warnings += 1
+
+                ok = format_errors == 0
                 validation_results.append({
-                    'file': dss_file.name,
-                    'total_pathnames': pathname_count,
-                    'sample_valid': f"{valid_count}/{sample_size}",
-                    'valid': valid_count == sample_size
+                    "file": dss_file.name,
+                    "total_pathnames": pathname_count,
+                    "format_errors": format_errors,
+                    "format_warnings": format_warnings,
+                    "valid": ok,
                 })
 
-                print(f"    Sample: {valid_count}/{sample_size} valid")
+                if ok:
+                    print(f"    ✓ Format OK ({format_warnings} warnings)")
+                else:
+                    print(f"    ⚠️ Format errors: {format_errors} ({format_warnings} warnings)")
 
             except Exception as e:
                 print(f"    ✗ Error: {e}")
                 validation_results.append({
                     'file': dss_file.name,
                     'total_pathnames': 0,
-                    'sample_valid': 'N/A',
                     'valid': False,
                     'error': str(e)
                 })
@@ -997,10 +1024,18 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """Create agent/model_log.md for Spring Creek."""
         dss_section = ""
         if dss_results:
+            # Backwards-compatible formatting across validation versions
+            def _fmt_dss_result(r: Dict) -> str:
+                if "format_errors" in r:
+                    errs = r.get("format_errors", 0)
+                    warns = r.get("format_warnings", 0)
+                    return f"{r['file']}: format_errors={errs}, warnings={warns}"
+                return f"{r['file']}: {r.get('sample_valid', 'N/A')}"
+
             dss_section = f"""
 ### DSS Validation
 **Files**: {len(dss_results)}
-**Results**: {', '.join(f"{r['file']}: {r.get('sample_valid', 'N/A')}" for r in dss_results)}
+**Results**: {', '.join(_fmt_dss_result(r) for r in dss_results)}
 """
 
         log_content = f"""# Agent Work Log - Spring Creek
