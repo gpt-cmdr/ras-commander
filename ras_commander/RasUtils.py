@@ -27,6 +27,7 @@ All of the methods in this class are static and are designed to be used without 
 
 List of Functions in RasUtils:
 - create_directory()
+- safe_resolve()
 - find_files_by_extension()
 - get_file_size()
 - get_file_modification_time()
@@ -109,6 +110,60 @@ class RasUtils:
             logger.error(f"Failed to create directory {path}: {e}")
             raise
         return path
+
+    @staticmethod
+    def safe_resolve(path: Path) -> Path:
+        """
+        Resolve path while preserving Windows drive letters.
+
+        On Windows with mapped network drives, Path.resolve() converts
+        drive letters (H:\\) to UNC paths (\\\\server\\share). HEC-RAS cannot
+        read from UNC paths, so we preserve the drive letter format.
+
+        This function:
+        - On non-Windows: Uses standard resolve()
+        - On Windows with local drives: Uses standard resolve()
+        - On Windows with mapped drives: Falls back to absolute() to preserve drive letter
+
+        Parameters:
+            path (Path): Path to resolve
+
+        Returns:
+            Path: Resolved path with drive letter preserved if applicable
+
+        Example:
+            >>> from pathlib import Path
+            >>> from ras_commander import RasUtils
+            >>> # Local drive - normal resolution
+            >>> resolved = RasUtils.safe_resolve(Path("C:/Projects/Model.prj"))
+            >>> # Mapped drive - preserves H: instead of converting to UNC
+            >>> resolved = RasUtils.safe_resolve(Path("H:/Projects/Model.prj"))
+        """
+        # Ensure we have a Path object
+        path = Path(path)
+
+        # On non-Windows, use standard resolve
+        if os.name != 'nt':
+            return path.resolve()
+
+        original_str = str(path)
+        resolved = path.resolve()
+
+        # Check if original had drive letter but resolved became UNC path
+        # Drive letter format: "X:..." where X is a letter
+        # UNC format: "\\..." (starts with double backslash)
+        has_drive_letter = len(original_str) >= 2 and original_str[1] == ':'
+        is_unc = str(resolved).startswith('\\\\')
+
+        if has_drive_letter and is_unc:
+            # Mapped network drive detected - use absolute() to preserve drive letter
+            logger.debug(
+                f"Mapped drive detected: {original_str} would resolve to UNC {resolved}. "
+                f"Using absolute() to preserve drive letter."
+            )
+            return path.absolute()
+
+        return resolved
 
     @staticmethod
     @log_call

@@ -196,10 +196,11 @@ class RasDss:
 
         # Import Java classes via pyjnius (lazy)
         from jnius import autoclass
+        from ras_commander.RasUtils import RasUtils
 
         HecDss = autoclass('hec.heclib.dss.HecDss')
 
-        dss_file = str(Path(dss_file).resolve())
+        dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
 
         # Open DSS file
         dss = HecDss.open(dss_file)
@@ -248,11 +249,12 @@ class RasDss:
 
         # Import Java classes via pyjnius (lazy)
         from jnius import autoclass, cast
+        from ras_commander.RasUtils import RasUtils
 
         HecDss = autoclass('hec.heclib.dss.HecDss')
         TimeSeriesContainer = autoclass('hec.io.TimeSeriesContainer')
 
-        dss_file = str(Path(dss_file).resolve())
+        dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
 
         # Open DSS file
         dss = HecDss.open(dss_file)
@@ -346,12 +348,13 @@ class RasDss:
             print(f"Total paths: {info['total_paths']}")
             print(f"File size: {info['file_size_mb']:.2f} MB")
         """
+        from ras_commander.RasUtils import RasUtils
         dss_path = Path(dss_file)
 
         catalog = RasDss.get_catalog(dss_file)
 
         return {
-            'filepath': str(dss_path.resolve()),
+            'filepath': str(RasUtils.safe_resolve(dss_path)),
             'filename': dss_path.name,
             'file_size_mb': dss_path.stat().st_size / (1024 * 1024),
             'total_paths': len(catalog),
@@ -487,7 +490,7 @@ class RasDss:
         Check DSS pathname format validity.
 
         Validates against DSS pathname specification:
-        - Format: //A/B/C/D/E/F/
+        - Format: /A/B/C/D/E/F/ (common) or //A/B/C/D/E/F/ (accepted)
         - Parts: A (basin/project), B (location), C (parameter),
                  D (date), E (interval), F (scenario)
 
@@ -499,7 +502,7 @@ class RasDss:
 
         Example:
             >>> from ras_commander.dss import RasDss
-            >>> result = RasDss.check_pathname_format("//BASIN/LOC/FLOW/01JAN2020/1HOUR/OBS/")
+            >>> result = RasDss.check_pathname_format("/BASIN/LOC/FLOW/01JAN2020/1HOUR/OBS/")
             >>> print(result.passed)
             True
         """
@@ -508,18 +511,22 @@ class RasDss:
             from ..validation_base import ValidationResult, ValidationSeverity
         except ImportError:
             # Return basic dict if validation framework not available
-            if pathname.startswith('//') and pathname.endswith('/') and pathname.count('/') == 8:
+            if (
+                pathname.startswith('/')
+                and pathname.endswith('/')
+                and pathname.strip('/').count('/') == 5
+            ):
                 return {'passed': True, 'message': 'Format appears valid (validation framework not available)'}
             else:
                 return {'passed': False, 'message': 'Format appears invalid (validation framework not available)'}
 
-        # Check start with '//' and end with '/'
-        if not pathname.startswith('//'):
+        # Check prefix and trailing slash
+        if not pathname.startswith('/'):
             return ValidationResult(
                 check_name="path_format",
                 severity=ValidationSeverity.ERROR,
                 passed=False,
-                message=f"DSS path must start with '//': {pathname}",
+                message=f"DSS path must start with '/': {pathname}",
                 details={"pathname": pathname}
             )
 
@@ -533,26 +540,44 @@ class RasDss:
             )
 
         # Split and validate parts
-        # DSS path format: //A/B/C/D/E/F/
+        # DSS path format is typically: /A/B/C/D/E/F/
+        # Split by '/' gives: ['', 'A', 'B', 'C', 'D', 'E', 'F', '']
+        # Some tools use: //A/B/C/D/E/F/
         # Split by '/' gives: ['', '', 'A', 'B', 'C', 'D', 'E', 'F', '']
         parts = pathname.split('/')
-        # Expected: 9 parts (2 empty at start, 6 data parts, 1 empty at end)
-        if len(parts) != 9:
+        if pathname.startswith('//'):
+            expected_len = 9
+            part_values = parts[2:-1]  # skip two empties + trailing empty
+        else:
+            expected_len = 8
+            part_values = parts[1:-1]  # skip leading empty + trailing empty
+
+        if len(parts) != expected_len:
             return ValidationResult(
                 check_name="path_format",
                 severity=ValidationSeverity.ERROR,
                 passed=False,
-                message=f"DSS path must have 6 parts (//A/B/C/D/E/F/), got {len(parts)-3}: {pathname}",
+                message=(
+                    "DSS path must have 6 parts "
+                    "(/A/B/C/D/E/F/), got "
+                    f"{len(pathname.strip('/').split('/'))}: {pathname}"
+                ),
                 details={
                     "pathname": pathname,
                     "expected_parts": 6,
-                    "actual_parts": len(parts) - 3
+                    "actual_parts": len(pathname.strip('/').split('/'))
                 }
             )
 
-        # Extract parts (skip first two empty and last empty)
-        part_names = ['basin', 'location', 'parameter', 'date', 'interval', 'scenario']
-        part_values = parts[2:-1]
+        # Extract parts into named components
+        part_names = [
+            'basin',
+            'location',
+            'parameter',
+            'date',
+            'interval',
+            'scenario'
+        ]
 
         # Check for empty parts (warning, not error - some DSS paths have empty parts)
         empty_parts = []
@@ -688,7 +713,12 @@ class RasDss:
             # Try basic check without validation framework
             try:
                 catalog = RasDss.get_catalog(dss_file)
-                if pathname in catalog:
+                if isinstance(catalog, pd.DataFrame) and 'pathname' in catalog.columns:
+                    catalog_paths = catalog['pathname'].astype(str).tolist()
+                else:
+                    catalog_paths = [str(p) for p in catalog]
+
+                if pathname in catalog_paths:
                     return {'passed': True, 'message': 'Pathname exists (validation framework not available)'}
                 else:
                     return {'passed': False, 'message': 'Pathname not found (validation framework not available)'}
@@ -709,32 +739,41 @@ class RasDss:
                 details={"error": str(e), "dss_file": str(dss_file)}
             )
 
+        # Normalize catalog to a list of path strings
+        if isinstance(catalog, pd.DataFrame) and 'pathname' in catalog.columns:
+            catalog_paths = catalog['pathname'].astype(str).tolist()
+        elif hasattr(catalog, 'pathname'):
+            # Defensive: if a custom object exposes a pathname attribute
+            catalog_paths = list(getattr(catalog, 'pathname'))
+        else:
+            catalog_paths = [str(p) for p in catalog]
+
         # Check exact match
-        if pathname in catalog:
+        if pathname in catalog_paths:
             return ValidationResult(
                 check_name="pathname_existence",
                 severity=ValidationSeverity.INFO,
                 passed=True,
                 message="Pathname exists in DSS file",
-                details={"total_paths": len(catalog)}
+                details={"total_paths": len(catalog_paths)}
             )
 
         # Try case-insensitive match (DSS is case-sensitive but provide hint)
         pathname_upper = pathname.upper()
-        if pathname_upper in [p.upper() for p in catalog]:
+        if pathname_upper in [p.upper() for p in catalog_paths]:
             return ValidationResult(
                 check_name="pathname_existence",
                 severity=ValidationSeverity.WARNING,
                 passed=True,
                 message="Pathname exists but case differs (DSS is case-sensitive)",
-                details={"total_paths": len(catalog)}
+                details={"total_paths": len(catalog_paths)}
             )
 
         # Find similar paths (match on location part - index 2)
-        parts = pathname.split('/')
-        if len(parts) >= 3:
-            location = parts[2]
-            similar = [p for p in catalog if location in p]
+        segments = pathname.strip('/').split('/')
+        location = segments[1] if len(segments) >= 2 else ""
+        if location:
+            similar = [p for p in catalog_paths if location in p]
         else:
             similar = []
 
@@ -745,7 +784,7 @@ class RasDss:
             message="Pathname not found in DSS file",
             details={
                 "pathname": pathname,
-                "total_paths": len(catalog),
+                "total_paths": len(catalog_paths),
                 "similar_paths": similar[:5]  # First 5 similar paths
             }
         )

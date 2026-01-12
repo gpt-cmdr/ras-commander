@@ -116,6 +116,45 @@ p2 = Path(r"C:\Users\name\file.txt")
 assert p1 == p2  # True - pathlib normalizes
 ```
 
+### Mapped Network Drives and UNC Paths
+
+**Critical**: On Windows with mapped network drives (e.g., `H:\` mapped to `\\server\share`), Python's `Path.resolve()` converts drive letter paths to UNC paths. **HEC-RAS cannot read from UNC paths**.
+
+**Problem**:
+```python
+# H: is mapped to \\192.168.1.1\share
+path = Path("H:/Projects/Model.prj")
+resolved = path.resolve()
+# resolved = \\192.168.1.1\share\Projects\Model.prj
+# HEC-RAS will fail to open this!
+```
+
+**Solution**: Use `RasUtils.safe_resolve()` instead of `.resolve()`:
+
+```python
+from ras_commander.RasUtils import RasUtils
+from pathlib import Path
+
+# ✅ Correct - preserves drive letter on mapped drives
+path = Path("H:/Projects/Model.prj")
+resolved = RasUtils.safe_resolve(path)
+# resolved = H:\Projects\Model.prj (drive letter preserved)
+```
+
+**How it works**:
+- On local drives: Uses standard `resolve()` (unchanged behavior)
+- On mapped network drives: Falls back to `absolute()` to preserve drive letter
+- On Linux/Mac: Uses standard `resolve()`
+
+**When to use**:
+- ✅ Any path that will be written to HEC-RAS files (.prj, .rasmap, etc.)
+- ✅ Any path that will be passed to HEC-RAS for execution
+- ✅ Any path that could be on a network drive
+
+**When NOT to use**:
+- Internal Python module paths (use regular `.resolve()`)
+- Paths that never interact with HEC-RAS
+
 ## Path Composition
 
 ### Use `/` Operator to Join Paths
