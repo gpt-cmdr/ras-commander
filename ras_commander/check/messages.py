@@ -564,6 +564,41 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
     },
 
     # =========================================================================
+    # HTAB CHECK MESSAGES
+    # =========================================================================
+
+    # HTAB Starting Elevation
+    "HTAB_SE_01": {
+        "message": "HTAB starting elevation ({starting_el}) is below cross section invert ({invert}) at {river}/{reach}/RS {station}",
+        "help_text": "HEC-RAS requires HTAB starting elevation >= cross section invert. "
+                     "The hydraulic property table cannot start below the minimum channel elevation. "
+                     "Use math.ceil(invert * 100) / 100 to round invert up to 0.01 ft precision.",
+        "type": MessageType.XSCHECK
+    },
+    "HTAB_SE_02": {
+        "message": "HTAB starting elevation ({starting_el}) is more than {threshold} ft above invert ({invert}) at {river}/{reach}/RS {station}",
+        "help_text": "Starting elevation significantly above invert may miss low-flow hydraulic calculations. "
+                     "Consider using invert elevation as starting elevation to capture full flow range.",
+        "type": MessageType.XSCHECK
+    },
+
+    # HTAB Increment
+    "HTAB_INC_01": {
+        "message": "HTAB increment ({increment}) is larger than {threshold} ft at {river}/{reach}/RS {station}",
+        "help_text": "Large elevation increments may cause interpolation errors in hydraulic calculations. "
+                     "Typical increments are 0.1-0.5 ft. Consider using smaller increments for better accuracy.",
+        "type": MessageType.XSCHECK
+    },
+
+    # HTAB Number of Points
+    "HTAB_PTS_01": {
+        "message": "HTAB has only {num_points} points at {river}/{reach}/RS {station} (recommended >= {min_points})",
+        "help_text": "Low number of HTAB points may reduce hydraulic table accuracy. "
+                     "HEC-RAS allows up to 500 points. More points provide better interpolation.",
+        "type": MessageType.XSCHECK
+    },
+
+    # =========================================================================
     # STRUCTURE CHECK MESSAGES
     # =========================================================================
 

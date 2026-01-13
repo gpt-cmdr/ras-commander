@@ -1589,6 +1589,241 @@ class RasCheck:
 
     @staticmethod
     @log_call
+    def check_htab_params(
+        geom_file: Union[str, Path],
+        thresholds: Optional[ValidationThresholds] = None
+    ) -> CheckResults:
+        """
+        Check HTAB (Hydraulic Table) parameters for cross sections.
+
+        Validates HTAB parameters against best practices:
+        - Starting elevation must be >= cross section invert
+        - Starting elevation should not be too far above invert
+        - Increment should not be excessively large
+        - Number of points should be adequate for accuracy
+
+        This is a SEPARATE check method, not integrated into xs_check().
+
+        Args:
+            geom_file: Path to geometry file (.g##) - NOT HDF file
+            thresholds: Custom ValidationThresholds (uses defaults if None)
+
+        Returns:
+            CheckResults with HTAB validation messages and summary DataFrame
+
+        Example:
+            >>> from ras_commander.check import RasCheck
+            >>> results = RasCheck.check_htab_params("model.g01")
+            >>> print(f"Found {results.get_error_count()} HTAB errors")
+
+        Notes:
+            - Requires plain text geometry file, not HDF
+            - Uses GeomCrossSection to read HTAB parameters
+            - ERROR: starting_el < invert (HEC-RAS requirement)
+            - WARNING: starting_el > invert + threshold (may miss low flows)
+            - WARNING: increment > threshold (interpolation accuracy)
+            - INFO: num_points < minimum (table resolution)
+        """
+        from ..geom.GeomCrossSection import GeomCrossSection
+        import math
+
+        results = CheckResults()
+        messages = []
+        summary_data = []
+
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            msg = CheckMessage(
+                message_id="SYS_001",
+                severity=Severity.ERROR,
+                check_type="HTAB",
+                message=f"Geometry file not found: {geom_file}"
+            )
+            results.messages.append(msg)
+            return results
+
+        # Default thresholds for HTAB validation
+        se_above_invert_threshold = 1.0  # ft - warn if starting_el > invert + this
+        increment_warn_threshold = 1.0   # ft - warn if increment > this
+        min_points_info = 100            # warn if num_points < this
+
+        try:
+            # Get all cross sections from geometry file
+            xs_df = GeomCrossSection.get_cross_sections(geom_file)
+
+            if xs_df.empty:
+                logger.info(f"No cross sections found in {geom_file.name}")
+                results.messages = messages
+                return results
+
+            logger.info(f"Checking HTAB parameters for {len(xs_df)} cross sections")
+
+            for _, row in xs_df.iterrows():
+                river = row['River']
+                reach = row['Reach']
+                rs = row['RS']
+                issues = []
+
+                try:
+                    # Get HTAB parameters for this XS
+                    htab_params = GeomCrossSection.get_xs_htab_params(
+                        geom_file, river, reach, rs
+                    )
+
+                    starting_el = htab_params.get('starting_el')
+                    increment = htab_params.get('increment')
+                    num_points = htab_params.get('num_points')
+                    invert = htab_params.get('invert')
+
+                    # Skip if no HTAB params defined
+                    if starting_el is None and increment is None and num_points is None:
+                        continue
+
+                    # Check 1: starting_el < invert (ERROR)
+                    if starting_el is not None and invert is not None:
+                        if starting_el < invert:
+                            msg = CheckMessage(
+                                message_id="HTAB_SE_01",
+                                severity=Severity.ERROR,
+                                check_type="HTAB",
+                                river=river,
+                                reach=reach,
+                                station=str(rs),
+                                message=format_message(
+                                    "HTAB_SE_01",
+                                    starting_el=starting_el,
+                                    invert=invert,
+                                    river=river,
+                                    reach=reach,
+                                    station=rs
+                                ),
+                                value=starting_el,
+                                threshold=invert,
+                                help_text=get_help_text("HTAB_SE_01")
+                            )
+                            messages.append(msg)
+                            issues.append("SE<invert")
+
+                        # Check 2: starting_el > invert + threshold (WARNING)
+                        elif starting_el > invert + se_above_invert_threshold:
+                            msg = CheckMessage(
+                                message_id="HTAB_SE_02",
+                                severity=Severity.WARNING,
+                                check_type="HTAB",
+                                river=river,
+                                reach=reach,
+                                station=str(rs),
+                                message=format_message(
+                                    "HTAB_SE_02",
+                                    starting_el=starting_el,
+                                    threshold=se_above_invert_threshold,
+                                    invert=invert,
+                                    river=river,
+                                    reach=reach,
+                                    station=rs
+                                ),
+                                value=starting_el,
+                                threshold=invert + se_above_invert_threshold,
+                                help_text=get_help_text("HTAB_SE_02")
+                            )
+                            messages.append(msg)
+                            issues.append("SE>invert+threshold")
+
+                    # Check 3: increment > threshold (WARNING)
+                    if increment is not None and increment > increment_warn_threshold:
+                        msg = CheckMessage(
+                            message_id="HTAB_INC_01",
+                            severity=Severity.WARNING,
+                            check_type="HTAB",
+                            river=river,
+                            reach=reach,
+                            station=str(rs),
+                            message=format_message(
+                                "HTAB_INC_01",
+                                increment=increment,
+                                threshold=increment_warn_threshold,
+                                river=river,
+                                reach=reach,
+                                station=rs
+                            ),
+                            value=increment,
+                            threshold=increment_warn_threshold,
+                            help_text=get_help_text("HTAB_INC_01")
+                        )
+                        messages.append(msg)
+                        issues.append("large_increment")
+
+                    # Check 4: num_points < min (INFO)
+                    if num_points is not None and num_points < min_points_info:
+                        msg = CheckMessage(
+                            message_id="HTAB_PTS_01",
+                            severity=Severity.INFO,
+                            check_type="HTAB",
+                            river=river,
+                            reach=reach,
+                            station=str(rs),
+                            message=format_message(
+                                "HTAB_PTS_01",
+                                num_points=num_points,
+                                min_points=min_points_info,
+                                river=river,
+                                reach=reach,
+                                station=rs
+                            ),
+                            value=num_points,
+                            threshold=min_points_info,
+                            help_text=get_help_text("HTAB_PTS_01")
+                        )
+                        messages.append(msg)
+                        issues.append("low_points")
+
+                    # Add to summary
+                    summary_data.append({
+                        'River': river,
+                        'Reach': reach,
+                        'RS': rs,
+                        'starting_el': starting_el,
+                        'increment': increment,
+                        'num_points': num_points,
+                        'invert': invert,
+                        'issues': issues
+                    })
+
+                except Exception as e:
+                    logger.warning(f"Error checking HTAB for {river}/{reach}/RS {rs}: {e}")
+                    continue
+
+            results.messages = messages
+
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                # Convert issues list to string for display
+                summary_df['issues'] = summary_df['issues'].apply(
+                    lambda x: ', '.join(x) if x else ''
+                )
+                results.xs_summary = summary_df  # Reuse xs_summary for HTAB results
+
+            logger.info(
+                f"HTAB check complete: {len(messages)} issues found "
+                f"({len([m for m in messages if m.severity == Severity.ERROR])} errors, "
+                f"{len([m for m in messages if m.severity == Severity.WARNING])} warnings)"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to check HTAB parameters: {e}")
+            msg = CheckMessage(
+                message_id="SYS_002",
+                severity=Severity.ERROR,
+                check_type="SYSTEM",
+                message=f"Failed to check HTAB parameters: {e}"
+            )
+            results.messages.append(msg)
+
+        return results
+
+    @staticmethod
+    @log_call
     def check_xs(
         plan_hdf: Path,
         geom_hdf: Path,

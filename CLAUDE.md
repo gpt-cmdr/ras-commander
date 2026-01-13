@@ -519,6 +519,15 @@ init_ras_project(organized / "RAS Model/UPGU1", "6.5")
 # See docs/ebfe_models.md for complete documentation
 ```
 
+**HTAB optimization** (optimize hydraulic property tables from results):
+```python
+from ras_commander.geom import GeomHtab
+
+# Optimize ALL HTAB from HDF results (one call)
+result = GeomHtab.optimize_all_htab_from_results("model.g01", "model.p01.hdf")
+# See ras_commander/geom/AGENTS.md for complete HTAB documentation
+```
+
 ### Common Pitfalls
 
 - ❌ Don't instantiate static classes: `RasCmdr()` is wrong

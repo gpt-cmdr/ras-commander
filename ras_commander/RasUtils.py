@@ -53,6 +53,9 @@ List of Functions in RasUtils:
 - horizontal_distance()
 - find_valid_ras_folders()
 - is_valid_ras_folder()
+- safe_write_geometry()      # Phase 2.1 - Atomic file write with backup
+- rollback_geometry()        # Phase 2.1 - Restore from backup
+- validate_geometry_file_basic()  # Phase 2.1 - Basic validation
 
 """
 import os
@@ -1275,3 +1278,305 @@ class RasUtils:
                 return True
 
         return False
+
+    # =============================================================================
+    # Atomic File Write Infrastructure (Phase 2.1 - HTAB Modification)
+    # =============================================================================
+
+    @staticmethod
+    @log_call
+    def safe_write_geometry(
+        geom_file: Union[str, Path],
+        modified_lines: List[str],
+        create_backup: bool = True
+    ) -> Optional[Path]:
+        """
+        Atomically write geometry file with backup for safe file modification.
+
+        This function implements safe file modification for HEC-RAS geometry files,
+        ensuring data integrity through atomic operations and optional backup creation.
+
+        Process:
+            1. Create timestamped backup: geom_file.YYYYMMDD_HHMMSS.bak
+            2. Write to temp file: geom_file.tmp
+            3. Basic validation (line count reasonable, file size reasonable)
+            4. Atomic rename temp -> original (os.replace)
+            5. Return backup path
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to the geometry file to write.
+            modified_lines (List[str]): List of lines to write to the file.
+                Each line should include newline characters if needed.
+            create_backup (bool): If True, create timestamped backup before modification.
+                Defaults to True for safety.
+
+        Returns:
+            Optional[Path]: Path to backup file if create_backup=True and successful,
+                None if create_backup=False or file didn't exist before.
+
+        Raises:
+            FileNotFoundError: If the geometry file doesn't exist (for modification).
+            PermissionError: If write access is denied to the file or directory.
+            ValueError: If modified_lines is empty or validation fails.
+            IOError: If atomic rename fails.
+
+        Example:
+            >>> from ras_commander import RasUtils
+            >>> from pathlib import Path
+            >>>
+            >>> # Read geometry file
+            >>> geom_file = Path("project/geometry.g01")
+            >>> with open(geom_file, 'r') as f:
+            ...     lines = f.readlines()
+            >>>
+            >>> # Modify HTAB parameters (example)
+            >>> modified_lines = modify_htab_params(lines, starting_el=580.0)
+            >>>
+            >>> # Safe write with backup
+            >>> backup_path = RasUtils.safe_write_geometry(geom_file, modified_lines)
+            >>> print(f"Backup created at: {backup_path}")
+
+        Notes:
+            - This function uses os.replace() for atomic rename, which is atomic on
+              both Windows (NTFS) and Unix filesystems.
+            - Backup files use format: filename.YYYYMMDD_HHMMSS.bak
+            - If validation fails, temp file is deleted and original remains unchanged.
+            - For rollback, use rollback_geometry() with the returned backup path.
+
+        See Also:
+            - rollback_geometry: Restore from backup after failed modification
+            - .claude/rules/python/path-handling.md: Path handling patterns
+        """
+        geom_file = Path(geom_file)
+        backup_path = None
+        temp_path = None
+
+        # Validate inputs
+        if not modified_lines:
+            raise ValueError("modified_lines cannot be empty")
+
+        # Verify original file exists (we're modifying, not creating)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        # Check write permissions
+        if not os.access(geom_file.parent, os.W_OK):
+            raise PermissionError(f"Write permission denied for directory: {geom_file.parent}")
+
+        try:
+            # Read original file for validation comparison
+            original_size = geom_file.stat().st_size
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                original_line_count = sum(1 for _ in f)
+
+            # Step 1: Create timestamped backup
+            if create_backup:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = geom_file.parent / f"{geom_file.name}.{timestamp}.bak"
+
+                # Copy original to backup
+                shutil.copy2(geom_file, backup_path)
+                logger.info(f"Backup created: {backup_path}")
+
+            # Step 2: Write to temp file
+            temp_path = geom_file.parent / f"{geom_file.name}.tmp"
+            with open(temp_path, 'w', encoding='utf-8', newline='') as f:
+                f.writelines(modified_lines)
+            logger.debug(f"Temp file written: {temp_path}")
+
+            # Step 3: Basic validation
+            temp_size = temp_path.stat().st_size
+            new_line_count = len(modified_lines)
+
+            # Validation: File shouldn't be empty
+            if temp_size == 0:
+                raise ValueError("Modified file would be empty - validation failed")
+
+            # Validation: Line count shouldn't change drastically (>50% reduction suspicious)
+            if new_line_count < original_line_count * 0.5:
+                raise ValueError(
+                    f"Line count reduced drastically ({original_line_count} -> {new_line_count}). "
+                    f"This may indicate data corruption. Aborting."
+                )
+
+            # Validation: File size shouldn't shrink too much (>80% reduction suspicious)
+            if temp_size < original_size * 0.2:
+                raise ValueError(
+                    f"File size reduced drastically ({original_size} -> {temp_size} bytes). "
+                    f"This may indicate data corruption. Aborting."
+                )
+
+            logger.debug(
+                f"Validation passed: {new_line_count} lines, {temp_size} bytes "
+                f"(original: {original_line_count} lines, {original_size} bytes)"
+            )
+
+            # Step 4: Atomic rename temp -> original
+            # os.replace() is atomic on both Windows (NTFS) and Unix
+            os.replace(temp_path, geom_file)
+            temp_path = None  # Mark as successfully moved
+            logger.info(f"Geometry file atomically updated: {geom_file}")
+
+            return backup_path
+
+        except Exception as e:
+            # Clean up temp file if it exists
+            if temp_path and temp_path.exists():
+                try:
+                    temp_path.unlink()
+                    logger.debug(f"Cleaned up temp file: {temp_path}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temp file {temp_path}: {cleanup_error}")
+
+            logger.error(f"Failed to write geometry file {geom_file}: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    def rollback_geometry(
+        geom_file: Union[str, Path],
+        backup_path: Union[str, Path]
+    ) -> None:
+        """
+        Restore geometry file from backup after failed modification.
+
+        This function restores a geometry file from a previously created backup,
+        typically used when a modification operation fails or produces incorrect results.
+
+        Process:
+            1. Verify backup file exists
+            2. Copy backup -> original (preserves backup for safety)
+            3. Log restoration
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to the geometry file to restore.
+            backup_path (Union[str, Path]): Path to the backup file created by
+                safe_write_geometry().
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If backup file doesn't exist.
+            PermissionError: If write access is denied.
+            IOError: If copy operation fails.
+
+        Example:
+            >>> from ras_commander import RasUtils
+            >>> from pathlib import Path
+            >>>
+            >>> # Attempt modification
+            >>> try:
+            ...     backup = RasUtils.safe_write_geometry(geom_file, modified_lines)
+            ...     # Run HEC-RAS to validate
+            ...     RasCmdr.compute_plan("01", clear_geompre=True)
+            ... except Exception as e:
+            ...     # Modification failed - rollback
+            ...     if backup:
+            ...         RasUtils.rollback_geometry(geom_file, backup)
+            ...         print("Geometry file restored from backup")
+            ...     raise
+
+        Notes:
+            - This function copies the backup to original, preserving the backup.
+            - Use shutil.copy2() to preserve file metadata (timestamps, permissions).
+            - After successful rollback, you may want to delete the backup manually
+              if no longer needed.
+
+        See Also:
+            - safe_write_geometry: Create backup and safely write modifications
+        """
+        geom_file = Path(geom_file)
+        backup_path = Path(backup_path)
+
+        # Verify backup exists
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        # Check write permissions
+        if geom_file.exists() and not os.access(geom_file, os.W_OK):
+            raise PermissionError(f"Write permission denied for file: {geom_file}")
+
+        if not os.access(geom_file.parent, os.W_OK):
+            raise PermissionError(f"Write permission denied for directory: {geom_file.parent}")
+
+        try:
+            # Copy backup to original (preserves backup for safety)
+            shutil.copy2(backup_path, geom_file)
+            logger.info(f"Geometry file restored from backup: {geom_file} <- {backup_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to restore geometry file {geom_file} from {backup_path}: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    def validate_geometry_file_basic(
+        geom_file: Union[str, Path],
+        min_lines: int = 10,
+        required_patterns: Optional[List[str]] = None
+    ) -> bool:
+        """
+        Perform basic validation on a geometry file.
+
+        This function checks that a geometry file meets basic structural requirements,
+        useful for pre-modification validation or post-write verification.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to the geometry file to validate.
+            min_lines (int): Minimum number of lines expected. Defaults to 10.
+            required_patterns (Optional[List[str]]): List of strings that must appear
+                somewhere in the file. Defaults to ["River Reach="] for HEC-RAS geometry.
+
+        Returns:
+            bool: True if validation passes, False otherwise.
+
+        Example:
+            >>> if RasUtils.validate_geometry_file_basic(geom_file):
+            ...     print("Geometry file appears valid")
+            >>>
+            >>> # Custom validation
+            >>> if RasUtils.validate_geometry_file_basic(
+            ...     geom_file,
+            ...     required_patterns=["River Reach=", "Type RM Length"]
+            ... ):
+            ...     print("Geometry file has cross sections")
+
+        Notes:
+            - This is a basic structural check, not a full HEC-RAS validation.
+            - For comprehensive validation, use HEC-RAS geometric preprocessor.
+        """
+        geom_file = Path(geom_file)
+
+        if required_patterns is None:
+            # Default: Check for River Reach definition (present in most geometry files)
+            required_patterns = ["River Reach="]
+
+        if not geom_file.exists():
+            logger.warning(f"Geometry file does not exist: {geom_file}")
+            return False
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+                lines = content.splitlines()
+
+            # Check minimum line count
+            if len(lines) < min_lines:
+                logger.warning(
+                    f"Geometry file has too few lines: {len(lines)} < {min_lines}"
+                )
+                return False
+
+            # Check required patterns
+            for pattern in required_patterns:
+                if pattern not in content:
+                    logger.warning(f"Required pattern not found in geometry file: {pattern}")
+                    return False
+
+            logger.debug(f"Geometry file validation passed: {geom_file}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating geometry file {geom_file}: {e}")
+            return False

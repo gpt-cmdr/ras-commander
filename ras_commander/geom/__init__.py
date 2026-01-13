@@ -15,6 +15,8 @@ Classes:
     GeomInlineWeir - Inline weir operations
     GeomBridge - Bridge operations
     GeomCulvert - Culvert operations
+    GeomHtabUtils - HTAB parameter calculation utilities
+    GeomHtab - Unified HTAB optimization for all geometry elements
 
 Example:
     >>> from ras_commander import GeomCrossSection, GeomBridge
@@ -24,6 +26,19 @@ Example:
     >>>
     >>> # Get bridge deck geometry
     >>> deck_df = GeomBridge.get_deck("model.g01", "River", "Reach", "1000")
+    >>>
+    >>> # Calculate optimal HTAB parameters
+    >>> from ras_commander.geom import GeomHtabUtils
+    >>> params = GeomHtabUtils.calculate_optimal_xs_htab(
+    ...     invert=580.0, max_wse=605.0, safety_factor=1.3
+    ... )
+    >>>
+    >>> # One-call optimization of ALL HTAB from results
+    >>> from ras_commander.geom import GeomHtab
+    >>> result = GeomHtab.optimize_all_htab_from_results(
+    ...     "model.g01", "model.p01.hdf"
+    ... )
+    >>> print(f"Optimized {result['xs_modified']} XS, {result['structures_modified']} structures")
 """
 
 from .GeomParser import GeomParser
@@ -35,6 +50,8 @@ from .GeomLateral import GeomLateral
 from .GeomInlineWeir import GeomInlineWeir
 from .GeomBridge import GeomBridge
 from .GeomCulvert import GeomCulvert
+from .GeomHtabUtils import GeomHtabUtils
+from .GeomHtab import GeomHtab
 
 __all__ = [
     'GeomParser',
@@ -46,4 +63,6 @@ __all__ = [
     'GeomInlineWeir',
     'GeomBridge',
     'GeomCulvert',
+    'GeomHtabUtils',
+    'GeomHtab',
 ]

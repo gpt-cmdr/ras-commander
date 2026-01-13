@@ -479,6 +479,138 @@ class GeomParser:
 
     @staticmethod
     @log_call
+    def safe_write_geometry(geom_file: Path,
+                            modified_lines: List[str],
+                            create_backup: bool = True) -> Optional[Path]:
+        """
+        Atomically write geometry file with backup.
+
+        This method provides safe file writing with backup creation and
+        atomic write via temp file. If the write fails, the original
+        file remains intact.
+
+        Process:
+            1. Create backup: geom_file.bak (if create_backup=True)
+            2. Write to temp file: geom_file.tmp
+            3. Validate temp file (basic syntax check)
+            4. Rename temp -> original (atomic on most filesystems)
+            5. Return backup path for potential rollback
+
+        Parameters:
+            geom_file (Path): Path to geometry file to write
+            modified_lines (List[str]): Lines to write to file
+            create_backup (bool): Create .bak file before modifying (default True)
+
+        Returns:
+            Optional[Path]: Backup file path (for rollback if needed),
+                           or None if create_backup=False
+
+        Raises:
+            FileNotFoundError: If original file doesn't exist
+            IOError: If write fails
+
+        Example:
+            >>> from pathlib import Path
+            >>> geom_file = Path("model.g01")
+            >>> with open(geom_file, 'r') as f:
+            ...     lines = f.readlines()
+            >>> # Modify lines...
+            >>> backup = GeomParser.safe_write_geometry(geom_file, lines)
+            >>> print(f"Backup at: {backup}")
+
+        Notes:
+            - Uses atomic rename where supported by filesystem
+            - Backup can be used with rollback_geometry() for recovery
+            - Validates temp file has content before rename
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        backup_path = None
+        temp_path = geom_file.with_suffix(geom_file.suffix + '.tmp')
+
+        try:
+            # Step 1: Create backup if requested
+            if create_backup:
+                backup_path = GeomParser.create_backup(geom_file)
+                logger.debug(f"Created backup: {backup_path}")
+
+            # Step 2: Write to temp file
+            with open(temp_path, 'w') as f:
+                f.writelines(modified_lines)
+
+            # Step 3: Basic validation - check temp file has content
+            if temp_path.stat().st_size == 0:
+                raise IOError("Temp file is empty - write failed")
+
+            # Step 4: Atomic rename temp -> original
+            import os
+            if os.name == 'nt':  # Windows
+                # Windows doesn't support atomic rename over existing file
+                # Remove original first, then rename
+                geom_file.unlink()
+                temp_path.rename(geom_file)
+            else:  # Unix-like
+                # Atomic rename
+                temp_path.rename(geom_file)
+
+            logger.info(f"Successfully wrote geometry file: {geom_file}")
+            return backup_path
+
+        except Exception as e:
+            logger.error(f"Failed to write geometry file: {e}")
+            # Clean up temp file if it exists
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
+            raise IOError(f"Failed to write geometry file: {e}")
+
+    @staticmethod
+    @log_call
+    def rollback_geometry(geom_file: Path, backup_path: Path) -> None:
+        """
+        Restore geometry file from backup.
+
+        Used for recovery after a failed write or modification.
+
+        Parameters:
+            geom_file (Path): Path to geometry file to restore
+            backup_path (Path): Path to backup file to restore from
+
+        Raises:
+            FileNotFoundError: If backup file doesn't exist
+            IOError: If restore fails
+
+        Example:
+            >>> from pathlib import Path
+            >>> geom_file = Path("model.g01")
+            >>> backup_path = Path("model.g01.bak")
+            >>> GeomParser.rollback_geometry(geom_file, backup_path)
+
+        Notes:
+            - Overwrites current geometry file with backup contents
+            - Does not delete backup file (preserved for additional recovery)
+        """
+        geom_file = Path(geom_file)
+        backup_path = Path(backup_path)
+
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        try:
+            import shutil
+            shutil.copy2(backup_path, geom_file)
+            logger.info(f"Restored geometry file from backup: {geom_file}")
+        except Exception as e:
+            logger.error(f"Failed to restore geometry file: {e}")
+            raise IOError(f"Failed to restore geometry file: {e}")
+
+    @staticmethod
+    @log_call
     def validate_river_reach_rs(geom_file: Path,
                                river: str,
                                reach: str,

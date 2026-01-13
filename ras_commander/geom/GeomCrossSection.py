@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Union, Optional, List, Tuple
 import pandas as pd
 import numpy as np
+import math
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -980,3 +981,1233 @@ class GeomCrossSection:
         except Exception as e:
             logger.error(f"Error reading Manning's n: {str(e)}")
             raise IOError(f"Failed to read Manning's n: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_xs_htab_params(geom_file: Union[str, Path],
+                           river: str,
+                           reach: str,
+                           rs: str) -> dict:
+        """
+        Read cross section HTAB (hydraulic table) parameters from geometry file.
+
+        HTAB parameters control how HEC-RAS pre-computes hydraulic properties
+        (area, conveyance, storage) as a function of elevation. These tables are
+        used during unsteady flow simulations for fast lookup via interpolation.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            river (str): River name (case-sensitive)
+            reach (str): Reach name (case-sensitive)
+            rs (str): River station (as string, e.g., "5280")
+
+        Returns:
+            dict with keys:
+                - 'starting_el' (float or None): Starting elevation for HTAB
+                - 'increment' (float or None): Elevation increment between points
+                - 'num_points' (int or None): Number of points in HTAB
+                - 'invert' (float): Lowest elevation in cross section
+                - 'top' (float): Highest elevation in cross section
+                - 'has_htab_lines' (bool): True if explicit HTAB lines found in file
+
+        Notes:
+            - Handles two geometry file formats:
+              1. Combined format: "XS HTab Starting El and Incr=val1,val2, val3"
+              2. Separate format: "HTAB Starting El and Incr=" and "HTAB Number of Points="
+            - If HTAB lines are not present, starting_el/increment/num_points will be None
+              (HEC-RAS uses defaults: starting=invert+0.5-1.0, increment=1.0, points~20)
+            - invert/top are always computed from station-elevation data
+
+        Example:
+            >>> params = GeomCrossSection.get_xs_htab_params(
+            ...     "Muncie.g01", "White", "Muncie", "15696.24"
+            ... )
+            >>> print(f"Starting El: {params['starting_el']}")
+            >>> print(f"Increment: {params['increment']}")
+            >>> print(f"Num Points: {params['num_points']}")
+            >>> print(f"Invert: {params['invert']}, Top: {params['top']}")
+            >>> if not params['has_htab_lines']:
+            ...     print("No HTAB lines - using HEC-RAS defaults")
+        """
+        import re
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        # Regex patterns for both HTAB formats
+        # Format 1 (combined): XS HTab Starting El and Incr=937.99,0.5, 100
+        XS_HTAB_COMBINED_PATTERN = re.compile(
+            r'^XS HTab Starting El and Incr=\s*([\d.+-]+)\s*,\s*([\d.+-]+)\s*,\s*(\d+)\s*$'
+        )
+
+        # Format 2 (separate lines):
+        # HTAB Starting El and Incr=     580.0,      0.5
+        # HTAB Number of Points= 100
+        HTAB_START_PATTERN = re.compile(
+            r'^HTAB Starting El and Incr=\s*([\d.+-]+)\s*,\s*([\d.+-]+)\s*$'
+        )
+        HTAB_POINTS_PATTERN = re.compile(
+            r'^HTAB Number of Points=\s*(\d+)\s*$'
+        )
+
+        try:
+            with open(geom_file, 'r') as f:
+                lines = f.readlines()
+
+            # Find the cross section using helper
+            xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
+
+            if xs_idx is None:
+                raise ValueError(
+                    f"Cross section not found: {river}/{reach}/RS {rs} in {geom_file.name}"
+                )
+
+            # Initialize result dict
+            params = {
+                'starting_el': None,
+                'increment': None,
+                'num_points': None,
+                'invert': None,
+                'top': None,
+                'has_htab_lines': False
+            }
+
+            # Search forward from XS start
+            # Need extended range because "XS HTab" combined format appears AFTER
+            # station-elevation data, which can be 100+ lines for large XS
+            max_search_range = 200  # Extended range for combined HTAB format
+            for i in range(xs_idx, min(xs_idx + max_search_range, len(lines))):
+                line = lines[i].rstrip('\n\r')
+
+                # Stop at next XS or structure
+                if line.startswith("River Reach=") and i > xs_idx + 5:
+                    break
+                if line.startswith("Type RM Length L Ch R =") and i > xs_idx + 5:
+                    break
+
+                # Try Format 1: Combined line (XS HTab Starting El and Incr=val1,val2, val3)
+                match = XS_HTAB_COMBINED_PATTERN.match(line)
+                if match:
+                    params['starting_el'] = float(match.group(1))
+                    params['increment'] = float(match.group(2))
+                    params['num_points'] = int(match.group(3))
+                    params['has_htab_lines'] = True
+                    logger.debug(
+                        f"Found combined HTAB format at line {i}: "
+                        f"starting_el={params['starting_el']}, "
+                        f"increment={params['increment']}, "
+                        f"num_points={params['num_points']}"
+                    )
+                    continue
+
+                # Try Format 2a: HTAB Starting El and Incr
+                match = HTAB_START_PATTERN.match(line)
+                if match:
+                    params['starting_el'] = float(match.group(1))
+                    params['increment'] = float(match.group(2))
+                    params['has_htab_lines'] = True
+                    logger.debug(
+                        f"Found separate HTAB starting el at line {i}: "
+                        f"starting_el={params['starting_el']}, increment={params['increment']}"
+                    )
+                    continue
+
+                # Try Format 2b: HTAB Number of Points
+                match = HTAB_POINTS_PATTERN.match(line)
+                if match:
+                    params['num_points'] = int(match.group(1))
+                    params['has_htab_lines'] = True
+                    logger.debug(f"Found separate HTAB num points at line {i}: {params['num_points']}")
+
+            # Get invert/top from station-elevation data
+            try:
+                sta_elev_df = GeomCrossSection.get_station_elevation(
+                    geom_file, river, reach, rs
+                )
+                if sta_elev_df is not None and len(sta_elev_df) > 0:
+                    params['invert'] = float(sta_elev_df['Elevation'].min())
+                    params['top'] = float(sta_elev_df['Elevation'].max())
+                    logger.debug(f"Computed invert={params['invert']}, top={params['top']}")
+            except Exception as e:
+                logger.warning(f"Could not extract station-elevation data: {e}")
+                # Continue without invert/top - they'll remain None
+
+            logger.info(
+                f"Extracted HTAB params for {river}/{reach}/RS {rs}: "
+                f"has_htab_lines={params['has_htab_lines']}, "
+                f"starting_el={params['starting_el']}, "
+                f"increment={params['increment']}, "
+                f"num_points={params['num_points']}"
+            )
+
+            return params
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading XS HTAB params: {str(e)}")
+            raise IOError(f"Failed to read XS HTAB params: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_xs_htab_params(geom_file: Union[str, Path],
+                           river: str,
+                           reach: str,
+                           rs: str,
+                           starting_el: Optional[Union[float, str]] = None,
+                           increment: Optional[float] = None,
+                           num_points: Optional[int] = None) -> None:
+        """
+        Set cross section HTAB (hydraulic table) parameters in geometry file.
+
+        This method modifies the HTAB parameters for a specific cross section,
+        either replacing existing values or inserting new HTAB lines if they
+        don't exist.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            river (str): River name (case-sensitive)
+            reach (str): Reach name (case-sensitive)
+            rs (str): River station (as string, e.g., "5280")
+            starting_el (Optional[Union[float, str]]): Starting elevation:
+                - float: Use this elevation value
+                - 'invert': Copy the cross section's minimum elevation
+                - None: No change (keep existing or HEC-RAS default)
+            increment (Optional[float]): Elevation increment (0.1-2.0 typical)
+                - None: No change (keep existing or HEC-RAS default)
+            num_points (Optional[int]): Number of points (20-500)
+                - None: No change (keep existing or HEC-RAS default)
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If cross section not found, or parameters invalid
+            IOError: If file write fails
+
+        Notes:
+            - Only specified parameters are modified
+            - If HTAB lines don't exist in the file, they are inserted
+            - Geometry file is modified in-place with backup (.bak) created
+            - HTAB lines are inserted after "Type RM Length" line, before
+              "XS GIS Cut Line" or "#Sta/Elev"
+
+        File Format:
+            HTAB Starting El and Incr=     580.0,      0.1
+            HTAB Number of Points= 500
+
+        Example:
+            >>> # Set optimal HTAB for single XS
+            >>> GeomCrossSection.set_xs_htab_params(
+            ...     "model.g01", "River", "Reach", "5280",
+            ...     starting_el=580.0, increment=0.1, num_points=500
+            ... )
+
+            >>> # Copy invert as starting elevation
+            >>> GeomCrossSection.set_xs_htab_params(
+            ...     "model.g01", "River", "Reach", "5280",
+            ...     starting_el='invert', increment=0.1, num_points=500
+            ... )
+
+            >>> # Only update increment (keep other values)
+            >>> GeomCrossSection.set_xs_htab_params(
+            ...     "model.g01", "River", "Reach", "5280",
+            ...     increment=0.2
+            ... )
+
+        See Also:
+            - get_xs_htab_params(): Read current HTAB parameters
+            - GeomHtabUtils.validate_xs_htab_params(): Validate parameters
+            - GeomHtabUtils.calculate_optimal_xs_htab(): Calculate optimal values
+        """
+        from .GeomHtabUtils import GeomHtabUtils
+
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        # Get current HTAB params (for defaults and validation)
+        current_params = GeomCrossSection.get_xs_htab_params(
+            geom_file, river, reach, rs
+        )
+
+        # Handle 'invert' as starting_el
+        final_starting_el = None
+        xs_invert = current_params.get('invert')
+
+        if starting_el is not None:
+            if isinstance(starting_el, str) and starting_el.lower() == 'invert':
+                if xs_invert is not None:
+                    # Round invert UP to 0.01 ft precision to ensure starting_el >= invert
+                    final_starting_el = math.ceil(xs_invert * 100) / 100
+                    logger.info(
+                        f"Using invert elevation as starting_el: {final_starting_el} "
+                        f"(rounded up from {xs_invert})"
+                    )
+                else:
+                    raise ValueError(
+                        f"Cannot use 'invert' as starting_el: invert elevation "
+                        f"not available for {river}/{reach}/RS {rs}"
+                    )
+            else:
+                final_starting_el = float(starting_el)
+                # Auto-fix: If starting_el < invert, round up to ensure >= invert
+                if xs_invert is not None and final_starting_el < xs_invert:
+                    corrected_el = math.ceil(xs_invert * 100) / 100
+                    logger.info(
+                        f"HTAB starting_el ({final_starting_el}) adjusted to {corrected_el} "
+                        f"(>= invert {xs_invert}) for {river}/{reach}/RS {rs}"
+                    )
+                    final_starting_el = corrected_el
+
+        final_increment = increment
+        final_num_points = num_points
+
+        # If no parameters specified, nothing to do
+        if final_starting_el is None and final_increment is None and final_num_points is None:
+            logger.warning(
+                f"No HTAB parameters specified for {river}/{reach}/RS {rs}. "
+                "Geometry file unchanged."
+            )
+            return
+
+        # Build final parameters dict for validation
+        # Use current values for any unspecified parameters
+        params_to_write = {
+            'starting_el': final_starting_el if final_starting_el is not None else current_params.get('starting_el'),
+            'increment': final_increment if final_increment is not None else current_params.get('increment'),
+            'num_points': final_num_points if final_num_points is not None else current_params.get('num_points')
+        }
+
+        # Check if we have enough to write
+        # We need at least starting_el and increment for the first line
+        # and num_points for the second line
+        write_start_incr = params_to_write['starting_el'] is not None and params_to_write['increment'] is not None
+        write_num_points = params_to_write['num_points'] is not None
+
+        if not write_start_incr and not write_num_points:
+            logger.warning(
+                f"Insufficient parameters to write HTAB for {river}/{reach}/RS {rs}. "
+                "Need at least (starting_el + increment) or num_points."
+            )
+            return
+
+        # Validate parameters if we have a complete set
+        if all(v is not None for v in params_to_write.values()):
+            # Use xs_invert already retrieved above, default to 0 if still None
+            validation_invert = xs_invert if xs_invert is not None else 0
+            xs_top = current_params.get('top', validation_invert + 100)
+
+            errors, warnings = GeomHtabUtils.validate_xs_htab_params(
+                params_to_write, validation_invert, xs_top
+            )
+
+            if errors:
+                raise ValueError(
+                    f"Invalid HTAB parameters for {river}/{reach}/RS {rs}: "
+                    f"{'; '.join(errors)}"
+                )
+
+            for warning in warnings:
+                logger.warning(f"HTAB validation warning: {warning}")
+
+        try:
+            # Create backup
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
+
+            with open(geom_file, 'r') as f:
+                lines = f.readlines()
+
+            # Find the cross section
+            xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
+
+            if xs_idx is None:
+                raise ValueError(
+                    f"Cross section not found: {river}/{reach}/RS {rs} in {geom_file.name}"
+                )
+
+            # Find existing HTAB lines and insertion point
+            # HEC-RAS has TWO possible HTAB formats:
+            # 1. Separate format (early in XS block): "HTAB Starting El and Incr=" + "HTAB Number of Points="
+            # 2. Combined format (later in XS block): "XS HTab Starting El and Incr=val1,val2, val3"
+            htab_start_idx = None       # Line index of "HTAB Starting El and Incr="
+            htab_points_idx = None      # Line index of "HTAB Number of Points="
+            xs_htab_combined_idx = None # Line index of "XS HTab Starting El and Incr=" (combined format)
+            insert_idx = None           # Where to insert if not found
+
+            # Extended search range - XS blocks can be 100+ lines with station/elevation data
+            max_search_range = 200
+
+            for i in range(xs_idx, min(xs_idx + max_search_range, len(lines))):
+                line = lines[i]
+
+                # Track "Type RM Length" as potential insertion point (insert after it)
+                if line.startswith("Type RM Length") and i == xs_idx:
+                    insert_idx = i + 1
+
+                # Check for existing HTAB lines - separate format (near top of XS)
+                if line.startswith("HTAB Starting El and Incr="):
+                    htab_start_idx = i
+                    # Also note where to insert num_points if needed
+                    if insert_idx is None:
+                        insert_idx = i + 1
+                elif line.startswith("HTAB Number of Points="):
+                    htab_points_idx = i
+
+                # Check for combined format (later in XS, after bank stations)
+                if line.startswith("XS HTab Starting El and Incr="):
+                    xs_htab_combined_idx = i
+
+                # Track insertion point - should be after Type RM Length, before XS GIS Cut Line
+                if line.startswith("XS GIS Cut Line") or line.startswith("#Sta/Elev"):
+                    if insert_idx is None:
+                        insert_idx = i
+
+                # Stop at next XS or river reach
+                if line.startswith("River Reach=") and i > xs_idx + 5:
+                    break
+                if line.startswith("Type RM Length L Ch R =") and i > xs_idx + 5:
+                    break
+
+            # Build the HTAB lines to write
+            modified_lines = lines.copy()
+
+            # If combined format exists, we need to update it (it takes precedence in HEC-RAS)
+            if xs_htab_combined_idx is not None:
+                # Update the combined format line
+                combined_line = f"XS HTab Starting El and Incr={params_to_write['starting_el']},{params_to_write['increment']}, {params_to_write['num_points']} \n"
+                modified_lines[xs_htab_combined_idx] = combined_line
+                logger.debug(f"Updated combined format XS HTab at line {xs_htab_combined_idx}")
+
+                # If separate format lines also exist, update them for consistency
+                if write_start_incr and htab_start_idx is not None:
+                    htab_start_line = f"HTAB Starting El and Incr={params_to_write['starting_el']:10.1f},{params_to_write['increment']:10.4f}\n"
+                    modified_lines[htab_start_idx] = htab_start_line
+                    logger.debug(f"Also updated separate format HTAB at line {htab_start_idx}")
+
+                if write_num_points and htab_points_idx is not None:
+                    htab_points_line = f"HTAB Number of Points= {params_to_write['num_points']}\n"
+                    modified_lines[htab_points_idx] = htab_points_line
+                    logger.debug(f"Also updated separate format HTAB points at line {htab_points_idx}")
+            else:
+                # No combined format - use separate format
+                # Handle "HTAB Starting El and Incr=" line
+                if write_start_incr:
+                    htab_start_line = f"HTAB Starting El and Incr={params_to_write['starting_el']:10.1f},{params_to_write['increment']:10.4f}\n"
+
+                    if htab_start_idx is not None:
+                        # Replace existing line
+                        modified_lines[htab_start_idx] = htab_start_line
+                        logger.debug(f"Replaced HTAB Starting El and Incr at line {htab_start_idx}")
+                    else:
+                        # Insert new line
+                        if insert_idx is not None:
+                            modified_lines.insert(insert_idx, htab_start_line)
+                            # Adjust indices if we inserted before other HTAB line
+                            if htab_points_idx is not None and htab_points_idx >= insert_idx:
+                                htab_points_idx += 1
+                            insert_idx += 1  # Move insertion point for next line
+                            logger.debug(f"Inserted HTAB Starting El and Incr at line {insert_idx - 1}")
+                        else:
+                            raise ValueError(
+                                f"Could not find insertion point for HTAB lines in {river}/{reach}/RS {rs}"
+                            )
+
+                # Handle "HTAB Number of Points=" line
+                if write_num_points:
+                    htab_points_line = f"HTAB Number of Points= {params_to_write['num_points']}\n"
+
+                    if htab_points_idx is not None:
+                        # Replace existing line
+                        modified_lines[htab_points_idx] = htab_points_line
+                        logger.debug(f"Replaced HTAB Number of Points at line {htab_points_idx}")
+                    else:
+                        # Insert new line (after HTAB Starting El and Incr if we just inserted it)
+                        if insert_idx is not None:
+                            modified_lines.insert(insert_idx, htab_points_line)
+                            logger.debug(f"Inserted HTAB Number of Points at line {insert_idx}")
+                        else:
+                            raise ValueError(
+                                f"Could not find insertion point for HTAB lines in {river}/{reach}/RS {rs}"
+                            )
+
+            # Write modified file
+            with open(geom_file, 'w') as f:
+                f.writelines(modified_lines)
+
+            logger.info(
+                f"Updated HTAB params for {river}/{reach}/RS {rs}: "
+                f"starting_el={params_to_write.get('starting_el')}, "
+                f"increment={params_to_write.get('increment')}, "
+                f"num_points={params_to_write.get('num_points')}"
+            )
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing XS HTAB params: {str(e)}")
+            # Attempt to restore from backup if write failed
+            if backup_path and backup_path.exists():
+                logger.info(f"Restoring from backup: {backup_path}")
+                import shutil
+                shutil.copy2(backup_path, geom_file)
+            raise IOError(f"Failed to write XS HTAB params: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_all_xs_htab_params(geom_file: Union[str, Path],
+                                starting_el: Union[float, str] = 'invert',
+                                increment: float = 0.1,
+                                num_points: int = 500,
+                                create_backup: bool = True) -> dict:
+        """
+        Set HTAB parameters for ALL cross sections in geometry file.
+
+        This method efficiently updates HTAB parameters for every cross section
+        in a single file read/write cycle. It's optimized for batch operations
+        on geometry files with many cross sections.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            starting_el (Union[float, str]): Starting elevation for all XS:
+                - float: Use this elevation for all cross sections
+                - 'invert': Copy each XS's invert (minimum elevation) - RECOMMENDED
+            increment (float): Elevation increment for all XS (default 0.1)
+                              Typical values: 0.1-0.2 ft for fine resolution
+            num_points (int): Number of points for all XS (default 500)
+                             HEC-RAS maximum is 500
+            create_backup (bool): Create .bak file before modifying (default True)
+
+        Returns:
+            dict: Summary of modifications with keys:
+                - 'modified' (int): Number of cross sections successfully modified
+                - 'skipped' (int): Number of cross sections skipped (no valid data)
+                - 'backup' (Path or None): Path to backup file, or None if no backup
+                - 'xs_details' (List[dict]): Per-XS details with river/reach/rs/starting_el
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If invalid parameters (increment <= 0, num_points out of range)
+            IOError: If file write fails
+
+        Notes:
+            - Processes all cross sections in a SINGLE file read/write cycle
+            - Much more efficient than calling set_xs_htab_params() in a loop
+            - When starting_el='invert', each XS gets its own invert elevation
+            - Uses safe_write_geometry() for atomic write with backup
+            - Handles both HTAB formats: separate lines and combined "XS HTab" format
+
+        Performance:
+            - Target: <5 seconds for 100 cross sections
+            - Single file read, single file write
+
+        Example:
+            >>> # Set optimal HTAB for all XS (recommended settings)
+            >>> result = GeomCrossSection.set_all_xs_htab_params(
+            ...     "model.g01",
+            ...     starting_el='invert',  # Copy each XS's invert
+            ...     increment=0.1,
+            ...     num_points=500
+            ... )
+            >>> print(f"Modified {result['modified']} cross sections")
+            >>> print(f"Backup at: {result['backup']}")
+
+            >>> # Set fixed starting elevation for all XS
+            >>> result = GeomCrossSection.set_all_xs_htab_params(
+            ...     "model.g01",
+            ...     starting_el=580.0,  # Same starting el for all
+            ...     increment=0.2,
+            ...     num_points=250
+            ... )
+
+        See Also:
+            - set_xs_htab_params(): Set HTAB for single XS
+            - get_xs_htab_params(): Read current HTAB parameters
+            - get_cross_sections(): List all XS in geometry file
+        """
+        import re
+        import time
+
+        start_time = time.time()
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        # Validate parameters
+        if increment <= 0:
+            raise ValueError(f"increment ({increment}) must be positive")
+
+        if num_points < 20:
+            raise ValueError(f"num_points ({num_points}) must be >= 20 (HEC-RAS minimum)")
+
+        if num_points > 500:
+            raise ValueError(f"num_points ({num_points}) must be <= 500 (HEC-RAS maximum)")
+
+        # Regex patterns for both HTAB formats
+        # Format 1 (combined): XS HTab Starting El and Incr=937.99,0.5, 100
+        XS_HTAB_COMBINED_PATTERN = re.compile(
+            r'^XS HTab Starting El and Incr=\s*([\d.+-]+)\s*,\s*([\d.+-]+)\s*,\s*(\d+)\s*$'
+        )
+
+        # Format 2 (separate lines):
+        # HTAB Starting El and Incr=     580.0,      0.5
+        # HTAB Number of Points= 100
+        HTAB_START_PATTERN = re.compile(
+            r'^HTAB Starting El and Incr='
+        )
+        HTAB_POINTS_PATTERN = re.compile(
+            r'^HTAB Number of Points='
+        )
+
+        # XS identifier pattern
+        STA_ELEV_PATTERN = re.compile(r'^#Sta/Elev=\s*(\d+)')
+
+        try:
+            # Step 1: Read entire file ONCE
+            with open(geom_file, 'r') as f:
+                lines = f.readlines()
+
+            logger.info(f"Read {len(lines)} lines from {geom_file.name}")
+
+            # Step 2: Get all cross sections using existing method
+            xs_df = GeomCrossSection.get_cross_sections(geom_file)
+            logger.info(f"Found {len(xs_df)} cross sections in geometry file")
+
+            if len(xs_df) == 0:
+                logger.warning(f"No cross sections found in {geom_file.name}")
+                return {
+                    'modified': 0,
+                    'skipped': 0,
+                    'backup': None,
+                    'xs_details': []
+                }
+
+            # Step 3: Build index of XS locations and compute inverts
+            # This avoids re-reading the file for each XS
+            xs_info = []
+            for _, row in xs_df.iterrows():
+                river = row['River']
+                reach = row['Reach']
+                rs = row['RS']
+
+                # Find XS start index
+                xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
+                if xs_idx is None:
+                    logger.warning(f"Could not find XS {river}/{reach}/RS {rs} in lines")
+                    continue
+
+                # Get station-elevation data to compute invert
+                invert = None
+                top = None
+                for j in range(xs_idx, min(xs_idx + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(lines))):
+                    match = STA_ELEV_PATTERN.match(lines[j])
+                    if match:
+                        count = int(match.group(1))
+                        # Parse station-elevation data
+                        sta_elev_df = GeomCrossSection._parse_paired_data(
+                            lines, j + 1, count, 'Station', 'Elevation'
+                        )
+                        if len(sta_elev_df) > 0:
+                            invert = float(sta_elev_df['Elevation'].min())
+                            top = float(sta_elev_df['Elevation'].max())
+                        break
+
+                xs_info.append({
+                    'river': river,
+                    'reach': reach,
+                    'rs': rs,
+                    'line_idx': xs_idx,
+                    'invert': invert,
+                    'top': top
+                })
+
+            logger.info(f"Indexed {len(xs_info)} cross sections with location data")
+
+            # Step 4: Process all XS and modify lines in place
+            modified_count = 0
+            skipped_count = 0
+            xs_details = []
+            modified_lines = lines.copy()
+
+            # Track line offset due to insertions
+            line_offset = 0
+
+            for xs in xs_info:
+                river = xs['river']
+                reach = xs['reach']
+                rs = xs['rs']
+                xs_idx = xs['line_idx'] + line_offset
+                xs_invert = xs['invert']
+                xs_top = xs['top']
+
+                # Determine starting elevation for this XS
+                if isinstance(starting_el, str) and starting_el.lower() == 'invert':
+                    if xs_invert is None:
+                        logger.warning(
+                            f"Cannot use 'invert' for {river}/{reach}/RS {rs}: "
+                            "invert not available. Skipping."
+                        )
+                        skipped_count += 1
+                        continue
+                    # Round invert UP to 0.01 ft precision to ensure starting_el >= invert
+                    final_starting_el = math.ceil(xs_invert * 100) / 100
+                else:
+                    final_starting_el = float(starting_el)
+                    # Auto-fix: If starting_el < invert, round up to ensure >= invert
+                    if xs_invert is not None and final_starting_el < xs_invert:
+                        corrected_el = math.ceil(xs_invert * 100) / 100
+                        logger.info(
+                            f"HTAB starting_el ({final_starting_el}) adjusted to {corrected_el} "
+                            f"(>= invert {xs_invert}) for {river}/{reach}/RS {rs}"
+                        )
+                        final_starting_el = corrected_el
+
+                # Find HTAB lines for this XS
+                htab_start_idx = None
+                htab_points_idx = None
+                xs_htab_combined_idx = None
+                insert_idx = None
+
+                # Extended search range
+                max_search = min(xs_idx + 200, len(modified_lines))
+
+                for i in range(xs_idx, max_search):
+                    line = modified_lines[i]
+
+                    # Track insertion point after "Type RM Length"
+                    if line.startswith("Type RM Length") and i == xs_idx:
+                        insert_idx = i + 1
+
+                    # Check for existing HTAB lines
+                    if HTAB_START_PATTERN.match(line):
+                        htab_start_idx = i
+                        if insert_idx is None:
+                            insert_idx = i + 1
+
+                    if HTAB_POINTS_PATTERN.match(line):
+                        htab_points_idx = i
+
+                    if XS_HTAB_COMBINED_PATTERN.match(line):
+                        xs_htab_combined_idx = i
+
+                    # Track insertion point before XS GIS Cut Line
+                    if line.startswith("XS GIS Cut Line") or line.startswith("#Sta/Elev"):
+                        if insert_idx is None:
+                            insert_idx = i
+
+                    # Stop at next XS
+                    if line.startswith("River Reach=") and i > xs_idx + 5:
+                        break
+                    if line.startswith("Type RM Length L Ch R =") and i > xs_idx + 5:
+                        break
+
+                # Build HTAB lines to write
+                htab_start_line = f"HTAB Starting El and Incr={final_starting_el:10.1f},{increment:10.4f}\n"
+                htab_points_line = f"HTAB Number of Points= {num_points}\n"
+
+                lines_added = 0
+
+                # Handle combined format (takes precedence)
+                if xs_htab_combined_idx is not None:
+                    combined_line = f"XS HTab Starting El and Incr={final_starting_el},{increment}, {num_points} \n"
+                    modified_lines[xs_htab_combined_idx] = combined_line
+
+                    # Also update separate format if exists
+                    if htab_start_idx is not None:
+                        modified_lines[htab_start_idx] = htab_start_line
+                    if htab_points_idx is not None:
+                        modified_lines[htab_points_idx] = htab_points_line
+
+                else:
+                    # Use separate format
+                    # Handle HTAB Starting El and Incr
+                    if htab_start_idx is not None:
+                        modified_lines[htab_start_idx] = htab_start_line
+                    else:
+                        if insert_idx is not None:
+                            modified_lines.insert(insert_idx, htab_start_line)
+                            lines_added += 1
+                            # Adjust indices for subsequent operations
+                            if htab_points_idx is not None and htab_points_idx >= insert_idx:
+                                htab_points_idx += 1
+                            insert_idx += 1
+                        else:
+                            logger.warning(f"Could not find insertion point for {river}/{reach}/RS {rs}")
+                            skipped_count += 1
+                            continue
+
+                    # Handle HTAB Number of Points
+                    if htab_points_idx is not None:
+                        modified_lines[htab_points_idx] = htab_points_line
+                    else:
+                        if insert_idx is not None:
+                            modified_lines.insert(insert_idx, htab_points_line)
+                            lines_added += 1
+
+                # Update line offset for subsequent XS
+                line_offset += lines_added
+
+                modified_count += 1
+                xs_details.append({
+                    'river': river,
+                    'reach': reach,
+                    'rs': rs,
+                    'starting_el': final_starting_el,
+                    'increment': increment,
+                    'num_points': num_points
+                })
+
+            # Step 5: Write file ONCE using safe_write_geometry
+            if modified_count > 0:
+                backup_path = GeomParser.safe_write_geometry(
+                    geom_file,
+                    modified_lines,
+                    create_backup=create_backup
+                )
+            else:
+                backup_path = None
+                logger.warning("No cross sections modified - file unchanged")
+
+            elapsed_time = time.time() - start_time
+
+            result = {
+                'modified': modified_count,
+                'skipped': skipped_count,
+                'backup': backup_path,
+                'xs_details': xs_details
+            }
+
+            logger.info(
+                f"set_all_xs_htab_params complete: {modified_count} modified, "
+                f"{skipped_count} skipped, {elapsed_time:.2f} seconds"
+            )
+
+            return result
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error in set_all_xs_htab_params: {str(e)}")
+            raise IOError(f"Failed to set all XS HTAB params: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def optimize_xs_htab_from_results(
+        geom_file: Union[str, Path],
+        hdf_results_path: Union[str, Path],
+        safety_factor: float = 1.3,
+        increment: float = 0.1,
+        num_points: int = 500
+    ) -> dict:
+        """
+        Optimize cross section HTAB parameters based on existing HEC-RAS results.
+
+        This method reads maximum water surface elevations from HDF results,
+        computes optimal HTAB parameters for each cross section using appropriate
+        safety factors, and writes the optimized parameters to the geometry file.
+
+        Algorithm:
+            1. Get all cross sections from geometry file
+            2. Extract maximum WSE for each cross section from HDF results
+            3. For each cross section:
+               a. Get invert elevation from geometry
+               b. Look up max WSE from HDF results
+               c. Use GeomHtabUtils.calculate_optimal_xs_htab() to compute parameters
+               d. Collect modification for batch write
+            4. Write all modifications to geometry file (single write operation)
+            5. Return summary statistics
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            hdf_results_path (Union[str, Path]): Path to plan HDF file with results
+            safety_factor (float): Multiplier on max depth to provide buffer (default 1.3 = 30%)
+                                   Recommended: 1.2-1.5 for typical floods, 2.0 for dam break
+            increment (float): Maximum elevation increment in feet (default 0.1)
+                              Smaller increments give more accurate interpolation
+            num_points (int): Maximum number of points (default 500, HEC-RAS limit)
+
+        Returns:
+            dict: Summary statistics with keys:
+                - 'modified_count' (int): Number of cross sections modified
+                - 'total_xs_count' (int): Total number of cross sections in geometry
+                - 'skipped_count' (int): Number of XS skipped (no results or errors)
+                - 'backup_path' (Path): Path to geometry backup file
+                - 'min_increment' (float): Minimum increment used
+                - 'max_increment' (float): Maximum increment used
+                - 'avg_increment' (float): Average increment used
+                - 'modifications' (List[dict]): Details of each modification
+
+        Raises:
+            FileNotFoundError: If geometry file or HDF file doesn't exist
+            ValueError: If safety_factor < 1.0 or other invalid parameters
+            IOError: If file read/write fails
+
+        Example:
+            >>> from ras_commander import RasExamples, init_ras_project, RasCmdr
+            >>> from ras_commander.geom import GeomCrossSection
+            >>>
+            >>> # Extract and run example project
+            >>> path = RasExamples.extract_project("Muncie", suffix="htab_opt")
+            >>> init_ras_project(path, "6.6")
+            >>> RasCmdr.compute_plan("01")  # Run to get results
+            >>>
+            >>> # Optimize HTAB from results
+            >>> summary = GeomCrossSection.optimize_xs_htab_from_results(
+            ...     path / "Muncie.g01",
+            ...     path / "Muncie.p01.hdf",
+            ...     safety_factor=1.3,
+            ...     increment=0.1,
+            ...     num_points=500
+            ... )
+            >>> print(f"Modified {summary['modified_count']} of {summary['total_xs_count']} XS")
+            >>> print(f"Increment range: {summary['min_increment']:.2f} - {summary['max_increment']:.2f}")
+
+        Notes:
+            - Creates a single backup before any modifications
+            - Cross sections without matching HDF results are skipped
+            - Modifications are batched to minimize file I/O
+            - Safety factor is applied to depth range (max_wse - invert), not absolute elevation
+
+        See Also:
+            - GeomHtabUtils.calculate_optimal_xs_htab(): Core calculation algorithm
+            - set_xs_htab_params(): Write HTAB parameters for single XS
+            - get_xs_htab_params(): Read current HTAB parameters
+        """
+        import re
+        import time
+        from .GeomHtabUtils import GeomHtabUtils
+        from ..hdf.HdfResultsXsec import HdfResultsXsec
+
+        start_time = time.time()
+        geom_file = Path(geom_file)
+        hdf_results_path = Path(hdf_results_path)
+
+        # Validate inputs
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        if not hdf_results_path.exists():
+            raise FileNotFoundError(f"HDF results file not found: {hdf_results_path}")
+
+        if safety_factor < 1.0:
+            raise ValueError(f"safety_factor ({safety_factor}) must be >= 1.0")
+
+        if num_points < GeomHtabUtils.MIN_XS_POINTS or num_points > GeomHtabUtils.MAX_XS_POINTS:
+            raise ValueError(
+                f"num_points ({num_points}) must be between {GeomHtabUtils.MIN_XS_POINTS} "
+                f"and {GeomHtabUtils.MAX_XS_POINTS}"
+            )
+
+        if increment <= 0:
+            raise ValueError(f"increment ({increment}) must be positive")
+
+        logger.info(
+            f"Optimizing XS HTAB from results: geom={geom_file.name}, "
+            f"hdf={hdf_results_path.name}, safety={safety_factor}, "
+            f"increment={increment}, num_points={num_points}"
+        )
+
+        # Step 1: Get all cross sections from geometry file
+        xs_df = GeomCrossSection.get_cross_sections(geom_file)
+        total_xs_count = len(xs_df)
+
+        if total_xs_count == 0:
+            logger.warning(f"No cross sections found in {geom_file.name}")
+            return {
+                'modified_count': 0,
+                'total_xs_count': 0,
+                'skipped_count': 0,
+                'backup_path': None,
+                'min_increment': increment,
+                'max_increment': increment,
+                'avg_increment': increment,
+                'modifications': []
+            }
+
+        logger.info(f"Found {total_xs_count} cross sections in geometry file")
+
+        # Step 2: Extract maximum WSE from HDF results
+        try:
+            xsec_results = HdfResultsXsec.get_xsec_timeseries(hdf_results_path)
+
+            # Build lookup dictionary with multiple key formats
+            # The HDF results use format: "River Reach RS" in cross_section names
+            # Plus River/Reach/Station as separate coordinate arrays
+            max_wse_lookup = {}
+
+            if 'Maximum_Water_Surface' in xsec_results.coords:
+                xs_names = xsec_results.coords['cross_section'].values
+                rivers = xsec_results.coords['River'].values
+                reaches = xsec_results.coords['Reach'].values
+                stations = xsec_results.coords['Station'].values
+                max_wses = xsec_results.coords['Maximum_Water_Surface'].values
+
+                for idx in range(len(xs_names)):
+                    max_wse = float(max_wses[idx])
+
+                    # Store by cross_section name (full string)
+                    xs_name = str(xs_names[idx])
+                    max_wse_lookup[xs_name] = max_wse
+
+                    # Store by (River, Reach, Station) tuple
+                    river = str(rivers[idx])
+                    reach = str(reaches[idx])
+                    station = str(stations[idx])
+                    key = (river, reach, station)
+                    max_wse_lookup[key] = max_wse
+
+            logger.info(f"Extracted max WSE for {len(max_wse_lookup) // 2} cross sections from HDF")
+
+        except Exception as e:
+            logger.error(f"Failed to extract cross section results from HDF: {e}")
+            raise IOError(f"Failed to read HDF results: {e}")
+
+        # Step 3: Read geometry file once and prepare for modifications
+        with open(geom_file, 'r') as f:
+            lines = f.readlines()
+
+        # Regex patterns for HTAB lines
+        HTAB_START_PATTERN = re.compile(r'^HTAB Starting El and Incr=')
+        HTAB_POINTS_PATTERN = re.compile(r'^HTAB Number of Points=')
+        XS_HTAB_COMBINED_PATTERN = re.compile(
+            r'^XS HTab Starting El and Incr=\s*([\d.+-]+)\s*,\s*([\d.+-]+)\s*,\s*(\d+)\s*$'
+        )
+        STA_ELEV_PATTERN = re.compile(r'^#Sta/Elev=\s*(\d+)')
+
+        # Step 4: Create backup ONCE before any modifications
+        backup_path = GeomParser.create_backup(geom_file)
+        logger.info(f"Created backup: {backup_path}")
+
+        # Step 5: Calculate optimal parameters for each XS and collect modifications
+        modifications = []
+        skipped_count = 0
+        increments_used = []
+        modified_lines = lines.copy()
+        line_offset = 0
+
+        for _, xs_row in xs_df.iterrows():
+            river = xs_row['River']
+            reach = xs_row['Reach']
+            rs = xs_row['RS']
+
+            # Try multiple lookup key formats
+            max_wse = None
+
+            # Try (River, Reach, RS) tuple
+            lookup_key = (river, reach, rs)
+            max_wse = max_wse_lookup.get(lookup_key)
+
+            if max_wse is None:
+                # Try alternate lookup with various string formats
+                for key, value in max_wse_lookup.items():
+                    if isinstance(key, str):
+                        # Key might be "River Reach RS" or other format
+                        if river in key and reach in key and rs in key:
+                            max_wse = value
+                            break
+
+            if max_wse is None:
+                logger.debug(f"No HDF results for XS {river}/{reach}/RS {rs}, skipping")
+                skipped_count += 1
+                continue
+
+            # Find XS in lines and get invert
+            xs_idx = GeomCrossSection._find_cross_section(modified_lines, river, reach, rs)
+            if xs_idx is None:
+                logger.warning(f"XS {river}/{reach}/RS {rs} not found in geometry file, skipping")
+                skipped_count += 1
+                continue
+
+            # Adjust for any previously inserted lines
+            xs_idx_adjusted = xs_idx
+
+            # Get invert from station-elevation data
+            invert = None
+            for j in range(xs_idx_adjusted, min(xs_idx_adjusted + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(modified_lines))):
+                match = STA_ELEV_PATTERN.match(modified_lines[j])
+                if match:
+                    count = int(match.group(1))
+                    sta_elev_df = GeomCrossSection._parse_paired_data(
+                        modified_lines, j + 1, count, 'Station', 'Elevation'
+                    )
+                    if len(sta_elev_df) > 0:
+                        invert = float(sta_elev_df['Elevation'].min())
+                    break
+
+            if invert is None:
+                logger.warning(f"Could not determine invert for {river}/{reach}/RS {rs}, skipping")
+                skipped_count += 1
+                continue
+
+            # Validate max_wse > invert
+            if max_wse <= invert:
+                logger.warning(
+                    f"Max WSE ({max_wse}) <= invert ({invert}) for {river}/{reach}/RS {rs}, skipping"
+                )
+                skipped_count += 1
+                continue
+
+            # Calculate optimal HTAB parameters
+            try:
+                optimal_params = GeomHtabUtils.calculate_optimal_xs_htab(
+                    invert=invert,
+                    max_wse=max_wse,
+                    safety_factor=safety_factor,
+                    target_increment=increment,
+                    max_points=num_points
+                )
+
+                final_starting_el = optimal_params['starting_el']
+                final_increment = optimal_params['increment']
+                final_num_points = optimal_params['num_points']
+
+                # Find and update HTAB lines for this XS
+                htab_start_idx = None
+                htab_points_idx = None
+                xs_htab_combined_idx = None
+                insert_idx = None
+
+                max_search = min(xs_idx_adjusted + 200, len(modified_lines))
+
+                for i in range(xs_idx_adjusted, max_search):
+                    line = modified_lines[i]
+
+                    if line.startswith("Type RM Length") and i == xs_idx_adjusted:
+                        insert_idx = i + 1
+
+                    if HTAB_START_PATTERN.match(line):
+                        htab_start_idx = i
+                        if insert_idx is None:
+                            insert_idx = i + 1
+
+                    if HTAB_POINTS_PATTERN.match(line):
+                        htab_points_idx = i
+
+                    if XS_HTAB_COMBINED_PATTERN.match(line):
+                        xs_htab_combined_idx = i
+
+                    if line.startswith("XS GIS Cut Line") or line.startswith("#Sta/Elev"):
+                        if insert_idx is None:
+                            insert_idx = i
+
+                    if line.startswith("River Reach=") and i > xs_idx_adjusted + 5:
+                        break
+                    if line.startswith("Type RM Length L Ch R =") and i > xs_idx_adjusted + 5:
+                        break
+
+                # Build HTAB lines
+                htab_start_line = f"HTAB Starting El and Incr={final_starting_el:10.1f},{final_increment:10.4f}\n"
+                htab_points_line = f"HTAB Number of Points= {final_num_points}\n"
+
+                lines_added = 0
+
+                # Handle combined format
+                if xs_htab_combined_idx is not None:
+                    combined_line = f"XS HTab Starting El and Incr={final_starting_el},{final_increment}, {final_num_points} \n"
+                    modified_lines[xs_htab_combined_idx] = combined_line
+
+                    if htab_start_idx is not None:
+                        modified_lines[htab_start_idx] = htab_start_line
+                    if htab_points_idx is not None:
+                        modified_lines[htab_points_idx] = htab_points_line
+
+                else:
+                    # Use separate format
+                    if htab_start_idx is not None:
+                        modified_lines[htab_start_idx] = htab_start_line
+                    else:
+                        if insert_idx is not None:
+                            modified_lines.insert(insert_idx, htab_start_line)
+                            lines_added += 1
+                            if htab_points_idx is not None and htab_points_idx >= insert_idx:
+                                htab_points_idx += 1
+                            insert_idx += 1
+
+                    if htab_points_idx is not None:
+                        modified_lines[htab_points_idx] = htab_points_line
+                    else:
+                        if insert_idx is not None:
+                            modified_lines.insert(insert_idx, htab_points_line)
+                            lines_added += 1
+
+                line_offset += lines_added
+
+                modifications.append({
+                    'river': river,
+                    'reach': reach,
+                    'rs': rs,
+                    'invert': invert,
+                    'max_wse': max_wse,
+                    'starting_el': final_starting_el,
+                    'increment': final_increment,
+                    'num_points': final_num_points,
+                    'actual_max_el': optimal_params['actual_max_el'],
+                    'target_max_el': optimal_params['target_max_el']
+                })
+
+                increments_used.append(final_increment)
+
+            except Exception as e:
+                logger.warning(f"Error calculating optimal params for {river}/{reach}/RS {rs}: {e}")
+                skipped_count += 1
+                continue
+
+        logger.info(
+            f"Calculated optimal HTAB for {len(modifications)} cross sections, "
+            f"skipped {skipped_count}"
+        )
+
+        # Step 6: Write all modifications to geometry file
+        if modifications:
+            try:
+                with open(geom_file, 'w') as f:
+                    f.writelines(modified_lines)
+
+                logger.info(f"Wrote {len(modifications)} HTAB modifications to {geom_file.name}")
+
+            except Exception as e:
+                logger.error(f"Error writing modifications: {e}")
+                # Restore from backup
+                if backup_path and backup_path.exists():
+                    import shutil
+                    logger.info(f"Restoring from backup: {backup_path}")
+                    shutil.copy2(backup_path, geom_file)
+                raise IOError(f"Failed to write HTAB modifications: {e}")
+
+        # Calculate summary statistics
+        if increments_used:
+            min_increment = min(increments_used)
+            max_increment = max(increments_used)
+            avg_increment = sum(increments_used) / len(increments_used)
+        else:
+            min_increment = max_increment = avg_increment = increment
+
+        elapsed_time = time.time() - start_time
+
+        summary = {
+            'modified_count': len(modifications),
+            'total_xs_count': total_xs_count,
+            'skipped_count': skipped_count,
+            'backup_path': backup_path,
+            'min_increment': round(min_increment, 4),
+            'max_increment': round(max_increment, 4),
+            'avg_increment': round(avg_increment, 4),
+            'modifications': modifications,
+            'elapsed_time': round(elapsed_time, 2)
+        }
+
+        logger.info(
+            f"HTAB optimization complete: {summary['modified_count']} of {summary['total_xs_count']} "
+            f"XS modified, increment range {summary['min_increment']}-{summary['max_increment']}, "
+            f"{elapsed_time:.2f} seconds"
+        )
+
+        return summary

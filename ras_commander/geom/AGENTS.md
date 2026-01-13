@@ -19,6 +19,8 @@ The `geom` subpackage provides comprehensive functionality for parsing and modif
 | GeomInlineWeir.py | `GeomInlineWeir` | Inline weir structures |
 | GeomBridge.py | `GeomBridge` | Bridge/culvert structure geometry |
 | GeomCulvert.py | `GeomCulvert` | Culvert data extraction |
+| GeomHtab.py | `GeomHtab` | Unified HTAB parameter optimization |
+| GeomHtabUtils.py | `GeomHtabUtils` | HTAB calculation utilities |
 
 ## Technical Patterns
 
@@ -109,6 +111,67 @@ Standard exception hierarchy:
 
 ### GeomPreprocessor
 - `clear_geompre_files(plan_files=None, ras_object=None)` - Clear preprocessor files
+
+### GeomHtab (HTAB Optimization)
+- `optimize_all_htab_from_results(geom_file, hdf_results_path, ...)` - One-call optimization of ALL HTAB in geometry file
+- `optimize_xs_htab_from_results(geom_file, hdf_results_path, ...)` - Optimize all cross section HTAB from HDF results
+- `optimize_structures_htab_from_results(geom_file, hdf_results_path, ...)` - Optimize all structure HTAB from HDF results
+- `get_optimization_report(geom_file, hdf_results_path, ...)` - Generate markdown report showing current vs recommended HTAB
+
+### GeomHtabUtils (HTAB Calculations)
+- `calculate_optimal_xs_htab(invert, max_wse, safety_factor=1.3, ...)` - Calculate optimal XS HTAB parameters
+- `calculate_optimal_structure_htab(struct_invert, max_hw, max_tw, max_flow, ...)` - Calculate optimal structure HTAB parameters
+- `validate_xs_htab_params(params, xs_invert, xs_top)` - Validate XS HTAB parameters against HEC-RAS limits
+- `validate_structure_htab_params(params, struct_invert, max_expected_hw, max_expected_flow)` - Validate structure HTAB parameters
+- `get_xs_htab_defaults()` - Get default XS HTAB parameter recommendations
+- `get_structure_htab_defaults()` - Get default structure HTAB parameter recommendations
+
+## HTAB Optimization
+
+HTAB (Hydraulic Table) parameters control how HEC-RAS pre-computes hydraulic property tables. Poorly configured HTAB can cause extrapolation errors during simulation.
+
+### When to Use HTAB Optimization
+
+- **After initial simulation**: Optimize HTAB based on observed max WSE/flows
+- **Before production runs**: Ensure HTAB covers expected range with safety factor
+- **Dam break analysis**: Use higher safety factors (2.0x) for extreme events
+
+### Optimization Workflow
+
+```python
+from ras_commander.geom import GeomHtab
+
+# One-call optimization of ALL HTAB from existing results
+result = GeomHtab.optimize_all_htab_from_results(
+    geom_file="model.g01",
+    hdf_results_path="model.p01.hdf",
+    xs_safety_factor=1.3,       # 30% safety on XS depth
+    structure_hw_safety=2.0     # 100% safety on structure HW
+)
+print(f"Modified {result['xs_modified']} XS, {result['structures_modified']} structures")
+print(f"Backup at: {result['backup']}")
+
+# After optimization, re-run geometric preprocessor
+from ras_commander import RasCmdr
+RasCmdr.compute_plan("01", clear_geompre=True)
+```
+
+### Safety Factor Recommendations
+
+| Scenario | XS Safety Factor | Structure Safety Factor |
+|----------|-----------------|------------------------|
+| Typical flood | 1.2 - 1.5 | 1.5 - 2.0 |
+| Dam break | 2.0 | 2.0 - 3.0 |
+| Calibration runs | 1.3 (default) | 2.0 (default) |
+
+### Key Technical Details
+
+- **XS HTAB**: Starting elevation set to invert (no offset), 500 points max, increment auto-adjusted
+- **Structure HTAB**: Safety applied to RANGE above invert, not absolute elevation
+- **Backup**: Single backup created before any modifications
+- **Example Notebook**: `examples/830_htab_optimization.ipynb` (when created)
+
+See `feature_dev_notes/HTAB_Parameter_Modification/` for algorithm details.
 
 ## Culvert Shape Codes
 
