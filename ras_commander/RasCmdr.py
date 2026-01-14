@@ -737,19 +737,14 @@ class RasCmdr:
                 except Exception as e:
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
 
-            # Only verify separate destination folder initialization if dest_folder was provided
-            # When consolidating back to original folder, no separate verification needed
+            # When dest_folder is used, re-initialize ras_obj from dest_folder
+            # This ensures results_df reflects results in the destination folder
             if dest_folder is not None:
                 try:
-                    final_dest_folder_ras = RasPrj()
-                    final_dest_folder_ras_obj = init_ras_project(
-                        ras_project_folder=final_dest_folder,
-                        ras_version=ras_obj.ras_exe_path,
-                        ras_object=final_dest_folder_ras
-                    )
-                    final_dest_folder_ras_obj.check_initialized()
+                    ras_obj.initialize(final_dest_folder, ras_obj.ras_exe_path)
+                    logger.info(f"Re-initialized ras_object from destination folder: {final_dest_folder}")
                 except Exception as e:
-                    logger.critical(f"Failed to initialize RasPrj for final destination: {str(e)}")
+                    logger.critical(f"Failed to re-initialize ras_object from destination folder: {str(e)}")
 
             logger.info("\nExecution Results:")
             for plan_num, success in execution_results.items():

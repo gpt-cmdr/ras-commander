@@ -17,6 +17,9 @@ class FixAction(Enum):
     GAP_INSERTED = "GAP_INSERTED"              # 0.02-unit gap added for adjacency compliance
     SEGMENT_MERGED = "SEGMENT_MERGED"          # Same-elevation segments combined
     NO_ACTION = "NO_ACTION"                    # No fix needed (no issues detected)
+    # HTAB (Hydraulic Table) fix actions
+    HTAB_STARTING_EL_FIXED = "HTAB_STARTING_EL_FIXED"  # Starting elevation raised to >= invert
+    HTAB_PARAMS_SET = "HTAB_PARAMS_SET"        # HTAB parameters written/updated
 
 
 @dataclass

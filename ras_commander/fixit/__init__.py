@@ -18,17 +18,33 @@ Modules:
 Supported Fixes:
     - Blocked Obstruction Overlaps (FX_BO_01): Resolves overlapping obstructions
       using maximum elevation envelope algorithm
+    - HTAB Starting Elevation (FX_HTAB_01): Corrects starting_el < invert issues
+      that cause HEC-RAS to fail during geometry preprocessing (common after
+      version upgrades)
 
 Integration with Check Module:
-    RasCheck detects issues (e.g., XS_BO_01, XS_BO_02 for obstructions)
-    RasFixit provides corresponding fix methods
+    RasCheck detects issues; RasFixit provides corresponding fix methods:
+      - RasCheck.check_htab_params() -> RasFixit.fix_htab_starting_elevations()
+      - RasCheck.check_xs() (obstructions) -> RasFixit.fix_blocked_obstructions()
 
 Engineering Review Requirements:
     IMPORTANT: All fixes should be reviewed by a licensed professional engineer
     before accepting changes to production models. Visualization outputs
     provide audit trail for review.
 
-Example - Direct Fix:
+Example - Fix HTAB Starting Elevation Issues:
+    >>> from ras_commander import RasFixit
+    >>>
+    >>> # Fix HTAB starting_el < invert issues (version upgrade problem)
+    >>> results = RasFixit.fix_htab_starting_elevations("model.g01")
+    >>> print(f"Fixed {results.total_xs_fixed} cross sections")
+    >>>
+    >>> # Detection only (dry run)
+    >>> results = RasFixit.detect_htab_issues("model.g01")
+    >>> for msg in results.messages:
+    ...     print(f"  {msg.river}/{msg.reach}/RS {msg.station}: {msg.message}")
+
+Example - Fix Blocked Obstructions:
     >>> from ras_commander import RasFixit
     >>>
     >>> # Fix with visualization for engineering review

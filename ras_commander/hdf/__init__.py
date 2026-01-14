@@ -62,6 +62,7 @@ from .HdfMesh import HdfMesh
 from .HdfXsec import HdfXsec
 from .HdfBndry import HdfBndry
 from .HdfStruc import HdfStruc
+from .HdfStruc1D import HdfStruc1D
 from .HdfHydraulicTables import HdfHydraulicTables
 
 # Results classes
@@ -90,7 +91,7 @@ __all__ = [
     # Core
     'HdfBase', 'HdfUtils', 'HdfPlan',
     # Geometry
-    'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfHydraulicTables',
+    'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStruc1D', 'HdfHydraulicTables',
     # Results
     'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsXsec', 'HdfResultsBreach',
     # Infrastructure
