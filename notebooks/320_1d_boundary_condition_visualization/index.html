@@ -5396,15 +5396,16 @@
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady Flow Files: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Boundary Conditions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39;
-2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D&#39; already exists. Deleting existing folder...
-2025-12-28 23:47:42 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D&#39; has been deleted.
-2025-12-28 23:47:44 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D
-2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:22:59 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2026-01-12 00:22:59 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-12 00:22:59 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-12 00:22:59 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-12 00:22:59 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39;
+2026-01-12 00:22:59 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D&#39; already exists. Deleting existing folder...
+2026-01-12 00:23:00 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D&#39; has been deleted.
+2026-01-12 00:23:01 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D
+2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
+2026-01-12 00:23:01 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
 
 
 Project extracted to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D
@@ -5449,11 +5450,11 @@ Boundary Conditions: 51
 </span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Sample cross-sections:&quot;</span><span class="p">)</span>
 </span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="n">cross_sections_gdf</span><span class="p">[[</span><span class="s1">&#39;River&#39;</span><span class="p">,</span> <span class="s1">&#39;Reach&#39;</span><span class="p">,</span> <span class="s1">&#39;RS&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Found 10 geometries in .rasmap
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\Terrain\Projection.prj
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Found 10 geometries in .rasmap
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\Terrain\Projection.prj
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
 
 
 Available Geometries:
@@ -7569,20 +7570,20 @@ Boundaries with DSS links: 5
 </span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No boundary conditions matched to cross-sections.&quot;</span><span class="p">)</span>
 </span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>    <span class="n">output_geojson</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\Terrain\Projection.prj
-2025-12-28 23:47:44 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.g08.hdf
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\Terrain\Projection.prj
+2026-01-12 00:23:01 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
 
 
 Output folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\1D_Boundary_Conditions
+
+
+2026-01-12 00:23:01 - pyogrio._io - INFO - Created 5 records
+
+
 Project CRS: EPSG:2271
 Reprojected to: EPSG:4326 (WGS84) for RASMapper
-
-
-2025-12-28 23:47:44 - pyogrio._io - INFO - Created 5 records
-
-
 Saved GeoJSON: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\1D_Boundary_Conditions\boundary_cross_sections.geojson
 Boundary Condition Data:
 </code></pre></div>
@@ -7687,11 +7688,13 @@ Boundary Condition Data:
 </span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
 </span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total layers: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">layers_before</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Found 4 map layers in .rasmap
-
-
-Current Map Layers in .rasmap:
+<div class="language-text highlight"><pre><span></span><code>Current Map Layers in .rasmap:
 ============================================================
+
+
+2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Found 4 map layers in .rasmap
+
+
 1. [ ] Google Hybrid
       Type: WMSLayer
       File: %LocalAppData%\HEC\Mapping\5.1\XML\Google Hybrid.xml
@@ -7734,7 +7737,7 @@ Total layers: 4
 </span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No GeoJSON file to add&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Added map layer &#39;1D Boundary Conditions&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Added map layer &#39;1D Boundary Conditions&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
 
 
 Adding layer &#39;1D Boundary Conditions&#39; to RASMapper...
@@ -7758,7 +7761,7 @@ Successfully added layer!
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total layers: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">layers_after</span><span class="p">)</span><span class="si">}</span><span class="s2"> (was </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">layers_before</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Found 5 map layers in .rasmap
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Found 5 map layers in .rasmap
 
 
 Map Layers After Adding Boundary Conditions:
@@ -7801,9 +7804,9 @@ Total layers: 5 (was 4)
 </span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>    <span class="n">marker</span> <span class="o">=</span> <span class="s2">&quot; &lt;-- SELECTED&quot;</span> <span class="k">if</span> <span class="n">g</span><span class="p">[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">target_geom</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
 </span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">checked</span><span class="si">}</span><span class="s2"> g</span><span class="si">{</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}{</span><span class="n">marker</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Modified visibility for 10 geometries
-2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Set geometry &#39;1D-2D Dam Break Model Refined Grid&#39; visibility to True
-2025-12-28 23:47:44 - ras_commander.rasmap - INFO - Found 10 geometries in .rasmap
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Modified visibility for 10 geometries
+2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Set geometry &#39;1D-2D Dam Break Model Refined Grid&#39; visibility to True
+2026-01-12 00:23:01 - ras_commander.RasMap - INFO - Found 10 geometries in .rasmap
 
 
 Configuring geometry visibility...
@@ -7848,8 +7851,8 @@ Geometry visibility after configuration:
 </span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">RASMapper session ended (may have had issues)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-28 23:47:44 - ras_commander.RasGuiAutomation - INFO - Opening HEC-RAS...
-2025-12-28 23:47:44 - ras_commander.RasGuiAutomation - INFO - HEC-RAS opened with Process ID: 211808
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 00:23:01 - ras_commander.RasGuiAutomation - INFO - Opening HEC-RAS...
+2026-01-12 00:23:01 - ras_commander.RasGuiAutomation - INFO - HEC-RAS opened with Process ID: 238196
 
 
 Opening RASMapper...
@@ -7864,23 +7867,19 @@ Close RASMapper and HEC-RAS when done to continue.
 ============================================================
 
 
-2025-12-28 23:47:48 - ras_commander.RasGuiAutomation - INFO - Waiting for HEC-RAS main window...
-2025-12-28 23:47:50 - ras_commander.RasGuiAutomation - INFO - Found HEC-RAS main window: HEC-RAS 6.6
-2025-12-28 23:47:50 - ras_commander.RasGuiAutomation - INFO - Opening RASMapper via menu...
-2025-12-28 23:47:51 - ras_commander.RasGuiAutomation - INFO - Found RAS Mapper menu item: &#39;RAS Mapper ...&#39; (ID: 102)
-2025-12-28 23:47:51 - ras_commander.RasGuiAutomation - INFO - Clicked menu item ID: 102
-2025-12-28 23:47:51 - ras_commander.RasGuiAutomation - INFO - Clicked RAS Mapper menu via menu ID
-2025-12-28 23:47:51 - ras_commander.RasGuiAutomation - INFO - Waiting for RASMapper window (up to 300 seconds)...
-2025-12-28 23:47:51 - ras_commander.RasGuiAutomation - INFO - Note: Large projects may take several minutes to load...
-2025-12-28 23:48:06 - ras_commander.RasGuiAutomation - INFO - RASMapper opened: RAS Mapper (took 15s)
-2025-12-28 23:48:06 - ras_commander.RasGuiAutomation - INFO - Waiting for user to close RASMapper...
-2025-12-28 23:48:12 - ras_commander.RasGuiAutomation - INFO - RASMapper closed by user
-2025-12-28 23:48:12 - ras_commander.RasGuiAutomation - INFO - Closing HEC-RAS...
-2025-12-28 23:48:12 - ras_commander.RasGuiAutomation - INFO - HEC-RAS closed
-
-
-
-RASMapper session completed successfully!
+2026-01-12 00:23:02 - ras_commander.RasGuiAutomation - INFO - Found &#39;already running&#39; dialog - clicking Yes to continue
+2026-01-12 00:23:02 - ras_commander.RasGuiAutomation - INFO - Clicked button: &amp;Yes
+2026-01-12 00:23:02 - ras_commander.RasGuiAutomation - INFO - Clicked &#39;Yes&#39; button on already running dialog
+2026-01-12 00:23:03 - ras_commander.RasGuiAutomation - INFO - Waiting for HEC-RAS main window...
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Found HEC-RAS main window: HEC-RAS 6.6
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Opening RASMapper via menu...
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Found RAS Mapper menu item: &#39;RAS Mapper ...&#39; (ID: 102)
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Clicked menu item ID: 102
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Clicked RAS Mapper menu via menu ID
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Waiting for RASMapper window (up to 300 seconds)...
+2026-01-12 00:23:05 - ras_commander.RasGuiAutomation - INFO - Note: Large projects may take several minutes to load...
+2026-01-12 00:23:20 - ras_commander.RasGuiAutomation - INFO - RASMapper opened: RAS Mapper (took 15s)
+2026-01-12 00:23:20 - ras_commander.RasGuiAutomation - INFO - Waiting for user to close RASMapper...
 </code></pre></div>
 <h2 id="12-summary">12. Summary<a class="headerlink" href="#12-summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the complete workflow for visualizing 1D boundary conditions in RASMapper:</p>
@@ -7972,16 +7971,6 @@ RASMapper session completed successfully!
 </span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  .rasmap file: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s1">.rasmap&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  New layer: &#39;1D Boundary Conditions&#39;&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Output Files Created:
-============================================================
-GeoJSON: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\1D_Boundary_Conditions\boundary_cross_sections.geojson
-Size: 3.0 KB
-Features: 5 boundary conditions
-
-RASMapper Configuration Updated:
-  .rasmap file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.rasmap
-  New layer: &#39;1D Boundary Conditions&#39;
-</code></pre></div>
 <hr />
 <h2 id="optional-remove-the-map-layer">Optional: Remove the Map Layer<a class="headerlink" href="#optional-remove-the-map-layer" title="Permanent link">&para;</a></h2>
 <p>The cells below demonstrate how to remove the boundary conditions layer from RASMapper.
@@ -8081,7 +8070,7 @@ Convert these markdown cells to code cells to execute them.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     
@@ -8091,7 +8080,7 @@ Convert these markdown cells to code cells to execute them.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     

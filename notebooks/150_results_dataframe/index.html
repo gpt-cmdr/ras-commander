@@ -4832,6 +4832,18 @@
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="s2">&quot;Muncie&quot;</span><span class="p">)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project extracted to: </span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - Extracting project &#39;Muncie&#39;
+2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - Folder &#39;Muncie&#39; already exists. Deleting existing folder...
+2026-01-11 23:57:09 - ras_commander.RasExamples - INFO - Existing folder &#39;Muncie&#39; has been deleted.
+2026-01-11 23:57:10 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Muncie&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie
+
+
+Project extracted to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie
+</code></pre></div>
 <h2 id="initialize-project-with-results_df">Initialize Project with results_df<a class="headerlink" href="#initialize-project-with-results_df" title="Permanent link">&para;</a></h2>
 <p>When initializing a project, <code>results_df</code> is automatically populated by default (<code>load_results_summary=True</code>).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Initialize project - results_df is automatically loaded</span>
@@ -4840,6 +4852,13 @@
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plans in project: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results summaries loaded: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-11 23:57:10 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.rasmap
+2026-01-11 23:57:10 - ras_commander.RasPrj - INFO - Updated results_df with 3 plan(s)
+
+
+Plans in project: 3
+Results summaries loaded: 3
+</code></pre></div>
 <h2 id="view-initial-results_df">View Initial results_df<a class="headerlink" href="#view-initial-results_df" title="Permanent link">&para;</a></h2>
 <p>Before execution, <code>results_df</code> shows plans with HDF files already present (if any).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># View initial results_df</span>
@@ -4847,6 +4866,12 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;hdf_exists&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">]</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="n">cols</span><span class="p">]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>=== Initial results_df ===
+  plan_number                                plan_title  hdf_exists  completed  has_errors
+0          01                  Unsteady Multi  9-SA run       False      False       False
+1          03            Unsteady Run with 2D 50ft Grid       False      False       False
+2          04  Unsteady Run with 2D 50ft User n Value R       False      False       False
+</code></pre></div>
 <h2 id="execute-a-plan">Execute a Plan<a class="headerlink" href="#execute-a-plan" title="Permanent link">&para;</a></h2>
 <p>After execution, <code>results_df</code> is automatically updated with fresh results.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Execute plan 01</span>
@@ -4854,6 +4879,37 @@
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Execution complete!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-11 23:57:10 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie
+2026-01-11 23:57:10 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01
+2026-01-11 23:57:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01
+2026-01-11 23:57:10 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 01
+2026-01-11 23:57:10 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-11 23:57:10 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01&quot;
+
+
+Executing plan 01...
+
+
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 13.37 seconds
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2577 characters from HDF
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Multi  9-SA run
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\RasPrj.py:1514: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+2026-01-11 23:57:23 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+
+
+Execution complete!
+</code></pre></div>
 <h2 id="view-updated-results_df">View Updated results_df<a class="headerlink" href="#view-updated-results_df" title="Permanent link">&para;</a></h2>
 <p>The <code>results_df</code> is automatically refreshed after execution.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># View updated results_df</span>
@@ -4861,6 +4917,12 @@
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;hdf_exists&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">]</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="n">cols</span><span class="p">]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>=== After Execution ===
+  plan_number  hdf_exists  completed  has_errors  has_warnings
+0          03       False      False       False         False
+1          04       False      False       False         False
+2          01        True       True       False         False
+</code></pre></div>
 <h2 id="inspect-plan-01-details">Inspect Plan 01 Details<a class="headerlink" href="#inspect-plan-01-details" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Get plan 01 results</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plan_01</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;01&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -4878,6 +4940,20 @@
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Has Warnings: </span><span class="si">{</span><span class="n">plan_01</span><span class="p">[</span><span class="s1">&#39;has_warnings&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Warning Count: </span><span class="si">{</span><span class="n">plan_01</span><span class="p">[</span><span class="s1">&#39;warning_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>=== Plan 01 Summary ===
+Plan Title: Unsteady Multi  9-SA run
+Flow Type: Unsteady
+HDF File: Muncie.p01.hdf
+HDF Modified: 2026-01-11 23:57:23.216435
+RAS Version: 5.00
+
+Execution Status:
+  Completed: True
+  Has Errors: False
+  Error Count: 0
+  Has Warnings: False
+  Warning Count: 0
+</code></pre></div>
 <h2 id="runtime-performance-data">Runtime Performance Data<a class="headerlink" href="#runtime-performance-data" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Runtime data</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== Runtime Performance ===&quot;</span><span class="p">)</span>
@@ -4888,6 +4964,14 @@
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady Compute Hours: </span><span class="si">{</span><span class="n">plan_01</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;runtime_unsteady_compute_hours&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Complete Process Speed: </span><span class="si">{</span><span class="n">plan_01</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;runtime_complete_process_speed&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> hr/hr&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>=== Runtime Performance ===
+Simulation Start: 1900-01-02 00:00:00
+Simulation End: 1900-01-03 00:00:00
+Simulation Hours: 24.0
+Complete Process Hours: 0.003298611111111111
+Unsteady Compute Hours: 0.0025
+Complete Process Speed: 7275.8 hr/hr
+</code></pre></div>
 <h2 id="volume-accounting-unsteady-only">Volume Accounting (Unsteady Only)<a class="headerlink" href="#volume-accounting-unsteady-only" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Volume accounting data</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">vol_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;vol_&#39;</span><span class="p">)]</span>
@@ -4904,6 +4988,15 @@
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No volume accounting data (steady flow or data not available)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>=== Volume Accounting ===
+error: -0.27747151255607605
+accounting_units: Acre Feet
+error_percent: 0.0007499889470636845
+flux_in: 36674.50390625
+flux_out: 33463.0078125
+starting: 322.2446594238281
+ending: 3533.462646484375
+</code></pre></div>
 <h2 id="filter-plans-by-execution-status">Filter Plans by Execution Status<a class="headerlink" href="#filter-plans-by-execution-status" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Find executed plans</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">executed</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;hdf_exists&#39;</span><span class="p">]]</span>
@@ -4924,6 +5017,11 @@
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="n">pending</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="o">~</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;hdf_exists&#39;</span><span class="p">]]</span>
 </span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plans pending execution: </span><span class="si">{</span><span class="n">pending</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Executed plans: [&#39;01&#39;]
+Completed plans: [&#39;01&#39;]
+No plans with errors detected
+Plans pending execution: [&#39;03&#39;, &#39;04&#39;]
+</code></pre></div>
 <h2 id="execute-multiple-plans-in-parallel">Execute Multiple Plans in Parallel<a class="headerlink" href="#execute-multiple-plans-in-parallel" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Execute remaining plans in parallel</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">pending_plans</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="o">~</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="s1">&#39;hdf_exists&#39;</span><span class="p">]][</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
@@ -4935,6 +5033,116 @@
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All plans already executed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;03&#39;, &#39;04&#39;]
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 2
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]
+2026-01-11 23:57:23 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.rasmap
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2577 characters from HDF
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Multi  9-SA run
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.RasPrj - INFO - Updated results_df with 3 plan(s)
+
+
+
+Executing 2 plans in parallel: [&#39;03&#39;, &#39;04&#39;]
+
+
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Created worker folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]
+2026-01-11 23:57:23 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.rasmap
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2577 characters from HDF
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Multi  9-SA run
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p01.hdf
+2026-01-11 23:57:23 - ras_commander.RasPrj - INFO - Updated results_df with 3 plan(s)
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]
+2026-01-11 23:57:23 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03
+2026-01-11 23:57:23 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04
+2026-01-11 23:57:23 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03
+2026-01-11 23:57:23 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03&quot;
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 04
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-11 23:57:23 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04&quot;
+2026-01-11 23:58:00 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+2026-01-11 23:58:00 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 37.11 seconds
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2157 characters from HDF
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Run with 2D 50ft Grid
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 1]\Muncie.p03.hdf
+2026-01-11 23:58:00 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-11 23:58:00 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 1: Successful
+2026-01-11 23:58:02 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
+2026-01-11 23:58:02 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 38.63 seconds
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2173 characters from HDF
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Run with 2D 50ft User n Value R
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie [Worker 2]\Muncie.p04.hdf
+2026-01-11 23:58:02 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-11 23:58:02 - ras_commander.RasCmdr - INFO - Plan 04 executed in worker 2: Successful
+2026-01-11 23:58:02 - ras_commander.RasCmdr - INFO - Consolidating results back to original project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie
+2026-01-11 23:58:06 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+2026-01-11 23:58:06 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+2026-01-11 23:58:06 - ras_commander.RasCmdr - INFO - Plan 04: Successful
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2157 characters from HDF
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Run with 2D 50ft Grid
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2173 characters from HDF
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Run with 2D 50ft User n Value R
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.RasPrj - INFO - Updated results_df with 2 plan(s)
+
+
+Parallel execution complete!
+</code></pre></div>
 <h2 id="view-complete-results-summary">View Complete Results Summary<a class="headerlink" href="#view-complete-results-summary" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Complete results summary</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Final Results Summary ===&quot;</span><span class="p">)</span>
@@ -4952,6 +5160,20 @@
 </span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;With warnings: </span><span class="si">{</span><span class="n">executed</span><span class="p">[</span><span class="s1">&#39;has_warnings&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total compute time: </span><span class="si">{</span><span class="n">executed</span><span class="p">[</span><span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> hours&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>=== Final Results Summary ===
+  plan_number                                plan_title  completed  has_errors  runtime_complete_process_hours  runtime_complete_process_speed
+0          01                  Unsteady Multi  9-SA run       True       False                        0.003299                     7275.789474
+1          03            Unsteady Run with 2D 50ft Grid       True       False                        0.009753                     2460.837368
+2          04  Unsteady Run with 2D 50ft User n Value R       True       False                        0.010182                     2357.049323
+
+=== Summary Statistics ===
+Total plans: 3
+Executed: 3
+Completed successfully: 3
+With errors: 0
+With warnings: 0
+Total compute time: 0.0232 hours
+</code></pre></div>
 <h2 id="manual-results_df-update">Manual results_df Update<a class="headerlink" href="#manual-results_df-update" title="Permanent link">&para;</a></h2>
 <p>You can manually refresh results_df for specific plans or all plans.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Manually update results_df for specific plans</span>
@@ -4962,6 +5184,57 @@
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">ras</span><span class="o">.</span><span class="n">update_results_df</span><span class="p">()</span>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Updated results for all plans&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2577 characters from HDF
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Multi  9-SA run
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2577 characters from HDF
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Multi  9-SA run
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2157 characters from HDF
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Run with 2D 50ft Grid
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p03.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2173 characters from HDF
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Unsteady Run with 2D 50ft User n Value R
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 24.0
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p04.hdf
+2026-01-11 23:58:06 - ras_commander.RasPrj - INFO - Updated results_df with 3 plan(s)
+
+
+Updated results for plan 01
+Updated results for all plans
+</code></pre></div>
 <h2 id="using-resultsparser-directly">Using ResultsParser Directly<a class="headerlink" href="#using-resultsparser-directly" title="Permanent link">&para;</a></h2>
 <p>You can parse compute messages directly using <code>ResultsParser</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span>
@@ -4984,6 +5257,35 @@
 </span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">parsed</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie\Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
+2026-01-11 23:58:06 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2577 characters from HDF
+
+
+Compute messages length: 2577 characters
+
+First 300 characters:
+Plan: &#39;Unsteady Multi  9-SA run&#39; (Muncie.p01)
+Simulation started at: 11Jan2026 11:57:11 PM
+
+Writing Plan GIS Data...
+Completed Writing Plan GIS Data
+Writing Geometry...
+Computing Bank Lines
+Bank lines generated in 55 ms
+Computing Edge Lines
+Edge Lines generated in 32 ms
+Computing XS Interp
+
+Parsed results:
+  completed: True
+  has_errors: False
+  has_warnings: False
+  error_count: 0
+  warning_count: 0
+  first_error_line: None
+</code></pre></div>
 <h2 id="benefits-of-results_df">Benefits of results_df<a class="headerlink" href="#benefits-of-results_df" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Quick Status Checks</strong>: See execution status without opening HDF files</li>
@@ -5001,6 +5303,8 @@
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">example_projects</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cleaned up: </span><span class="si">{</span><span class="n">example_projects</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Cleaned up: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects
+</code></pre></div>
 
 
 
@@ -5023,7 +5327,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     
@@ -5033,7 +5337,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     

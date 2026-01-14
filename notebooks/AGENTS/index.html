@@ -5022,6 +5022,11 @@
 - Focus: Parse and modify 2D geometry: storage areas, SA/2D connections, dam breach.
 - Functions: RasGeometry (storage areas, connections), get_connection_weir_profile, get_connection_gates.
 - Pattern: Extract elevation-volume curves, dam crest profiles, gate configurations for dam breach analysis.</p>
+<p>203_htab_parameter_optimization.ipynb
+- Focus: Optimize HTAB parameters to prevent extrapolation errors and improve model stability.
+- Functions: GeomHtab.optimize_all_htab_from_results (ras_commander/geom/GeomHtab.py), GeomHtab.get_optimization_report (ras_commander/geom/GeomHtab.py), GeomCrossSection.get_xs_htab_params (ras_commander/geom/GeomCrossSection.py), GeomHtabUtils.calculate_optimal_xs_htab (ras_commander/geom/GeomHtabUtils.py), GeomHtabUtils.calculate_optimal_structure_htab (ras_commander/geom/GeomHtabUtils.py).
+- Pattern: Run baseline simulation, extract max WSE from results, apply safety factors to compute optimal HTAB parameters, re-run with force_geompre=True.
+- Key: Safety factor 1.3x (30%) for typical floods, 2.0x (100%) for dam break/extreme events.</p>
 <p>210_fixit_blocked_obstructions.ipynb
 - Focus: Automatically detect and fix overlapping blocked obstructions.
 - Functions: RasFixit.check_blocked_obstructions (ras_commander/RasFixit.py), RasFixit.fix_blocked_obstructions (ras_commander/RasFixit.py).

@@ -4887,17 +4887,19 @@ RasProcess.exe exists: True
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">terrain_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Terrain folder: </span><span class="si">{</span><span class="n">terrain_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 07:10:24 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-29 07:10:24 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_920&#39;
-2025-12-29 07:10:25 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_920
+<div class="language-text highlight"><pre><span></span><code>2026-01-13 10:30:53 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2026-01-13 10:30:53 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-13 10:30:53 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-13 10:30:53 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-13 10:30:53 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_920&#39;
+2026-01-13 10:30:53 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_920&#39; already exists. Deleting existing folder...
+2026-01-13 10:30:54 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_920&#39; has been deleted.
+2026-01-13 10:30:56 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_920
+2026-01-13 10:30:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_920\BaldEagleDamBrk.rasmap
+2026-01-13 10:30:56 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
 
 
 Project extracted to: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_920
-
-
-2025-12-29 07:10:26 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_920\BaldEagleDamBrk.rasmap
-
-
 Project initialized: BaldEagleDamBrk
 Terrain folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_920\Terrain
 </code></pre></div>
@@ -5016,15 +5018,15 @@ Download bounding box (WGS84):
 </span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cannot find projects - missing bbox or geopandas&quot;</span><span class="p">)</span>
 </span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>    <span class="n">USGS_PROJECTS</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 07:10:26 - ras_commander.terrain.Usgs3depAws - INFO - Using cached 1m tile index: cache\usgs3dep\FESM_1m.gpkg
+<div class="language-text highlight"><pre><span></span><code>2026-01-13 10:30:56 - ras_commander.terrain.Usgs3depAws - INFO - Using cached 1m tile index: cache\usgs3dep\FESM_1m.gpkg
 
 
 Finding USGS 3DEP 1m projects for this area...
 This will download a ~15 MB tile index (one-time, cached).
 
 
-2025-12-29 07:10:31 - ras_commander.terrain.Usgs3depAws - INFO -   Loaded 870 tiles
-2025-12-29 07:10:31 - ras_commander.terrain.Usgs3depAws - INFO - Found 3 projects intersecting bbox
+2026-01-13 10:31:06 - ras_commander.terrain.Usgs3depAws - INFO -   Loaded 870 tiles
+2026-01-13 10:31:06 - ras_commander.terrain.Usgs3depAws - INFO - Found 3 projects intersecting bbox
 
 
 
@@ -5069,7 +5071,7 @@ Found 3 project(s) with 1m data:
 </span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cannot download - missing bbox or no projects found&quot;</span><span class="p">)</span>
 </span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>    <span class="n">DOWNLOADED_TILES</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 07:10:31 - ras_commander.terrain.Usgs3depAws - INFO - Using cached 1m tile index: cache\usgs3dep\FESM_1m.gpkg
+<div class="language-text highlight"><pre><span></span><code>2026-01-13 10:31:06 - ras_commander.terrain.Usgs3depAws - INFO - Using cached 1m tile index: cache\usgs3dep\FESM_1m.gpkg
 
 
 Downloading 1m DEM tiles for project area...
@@ -5078,385 +5080,417 @@ Note: This checks each tile in project(s) for intersection (~10 min for large pr
 
 
 
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -   Loaded 870 tiles
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO - Found 3 projects intersecting bbox
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO - Found 3 projects intersecting bbox
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -   Selecting most recent project (year 2019)
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -     Selected: PA_Northcentral_2019_B19
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -     Skipping 2 older project(s):
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -       - PA_South_Central_2017_D17 (year 2017)
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -       - PA_South_Central_2017_D17 (year 2017)
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO - 
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO -   Loaded 870 tiles
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO - Found 3 projects intersecting bbox
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO - Found 3 projects intersecting bbox
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO -   Selecting most recent project (year 2019)
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO -     Selected: PA_Northcentral_2019_B19
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO -     Skipping 2 older project(s):
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO -       - PA_South_Central_2017_D17 (year 2017)
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO -       - PA_South_Central_2017_D17 (year 2017)
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO - 
 Processing project: PA_Northcentral_2019_B19
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO - Fetching tile list from: PA_Northcentral_2019_B19
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -   Found 653 tiles in project
-2025-12-29 07:10:37 - ras_commander.terrain.Usgs3depAws - INFO -   Checking 653 tiles for intersection...
-2025-12-29 07:10:38 - ras_commander.terrain.Usgs3depAws - INFO -   Found 98 intersecting tiles
-2025-12-29 07:10:38 - ras_commander.terrain.Usgs3depAws - INFO -   Downloading tiles with 3 concurrent workers...
-2025-12-29 07:10:38 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:10:38 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:10:38 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:11:10 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (308.78 MB)
-2025-12-29 07:11:10 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:11:30 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (293.74 MB)
-2025-12-29 07:11:30 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:11:47 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (312.02 MB)
-2025-12-29 07:11:47 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:11:48 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (320.38 MB)
-2025-12-29 07:11:48 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:12:24 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.65 MB)
-2025-12-29 07:12:24 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:12:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.71 MB)
-2025-12-29 07:12:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:12:43 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.89 MB)
-2025-12-29 07:12:43 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:13:18 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (292.75 MB)
-2025-12-29 07:13:18 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:13:24 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (303.93 MB)
-2025-12-29 07:13:24 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:13:33 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.43 MB)
-2025-12-29 07:13:33 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:14:14 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.08 MB)
-2025-12-29 07:14:14 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:14:25 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.85 MB)
-2025-12-29 07:14:25 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:14:41 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.42 MB)
-2025-12-29 07:14:41 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:15:00 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (294.59 MB)
-2025-12-29 07:15:00 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:15:12 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (322.25 MB)
-2025-12-29 07:15:12 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:15:19 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (310.71 MB)
-2025-12-29 07:15:19 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:15:42 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (303.97 MB)
-2025-12-29 07:15:42 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:15:51 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.53 MB)
-2025-12-29 07:15:51 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:16:03 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.69 MB)
-2025-12-29 07:16:03 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:16:13 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (287.92 MB)
-2025-12-29 07:16:13 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:16:41 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.41 MB)
-2025-12-29 07:16:41 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:16:43 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (297.32 MB)
-2025-12-29 07:16:43 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y449_PA_Northcentral_2019_B19.tif
-2025-12-29 07:16:46 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.54 MB)
-2025-12-29 07:16:46 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:17:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (286.54 MB)
-2025-12-29 07:17:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:17:51 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (324.93 MB)
-2025-12-29 07:17:51 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:17:56 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (323.01 MB)
-2025-12-29 07:17:56 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:18:23 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.63 MB)
-2025-12-29 07:18:23 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:18:40 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.73 MB)
-2025-12-29 07:18:40 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:18:46 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.19 MB)
-2025-12-29 07:18:46 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:02 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (290.43 MB)
-2025-12-29 07:19:02 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:21 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.33 MB)
-2025-12-29 07:19:21 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y449_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:29 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (302.27 MB)
-2025-12-29 07:19:29 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x32y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (13.35 MB)
-2025-12-29 07:19:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:33 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (5.31 MB)
-2025-12-29 07:19:33 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:45 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.95 MB)
-2025-12-29 07:19:45 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:45 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (139.34 MB)
-2025-12-29 07:19:45 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:45 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (310.05 MB)
-2025-12-29 07:19:45 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:19:52 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (62.59 MB)
-2025-12-29 07:19:52 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:20:02 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (189.91 MB)
-2025-12-29 07:20:02 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:20:25 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (286.54 MB)
-2025-12-29 07:20:25 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:20:36 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (262.44 MB)
-2025-12-29 07:20:36 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:20:41 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (287.64 MB)
-2025-12-29 07:20:41 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:20:43 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (89.23 MB)
-2025-12-29 07:20:43 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:20:44 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (305.63 MB)
-2025-12-29 07:20:44 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:21:12 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.80 MB)
-2025-12-29 07:21:12 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:21:21 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (325.11 MB)
-2025-12-29 07:21:21 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:21:34 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.07 MB)
-2025-12-29 07:21:34 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:21:35 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (5.63 MB)
-2025-12-29 07:21:35 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:21:50 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.35 MB)
-2025-12-29 07:21:50 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:21:56 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (263.46 MB)
-2025-12-29 07:21:56 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:22:15 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (327.76 MB)
-2025-12-29 07:22:15 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:22:22 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.60 MB)
-2025-12-29 07:22:22 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:23:02 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (302.18 MB)
-2025-12-29 07:23:02 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:23:02 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (297.64 MB)
-2025-12-29 07:23:02 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:23:10 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (325.80 MB)
-2025-12-29 07:23:10 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:23:24 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (105.74 MB)
-2025-12-29 07:23:24 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:23:42 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.54 MB)
-2025-12-29 07:23:42 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:23:42 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (320.21 MB)
-2025-12-29 07:23:42 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:00 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.12 MB)
-2025-12-29 07:24:00 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:11 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.83 MB)
-2025-12-29 07:24:11 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:16 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (61.05 MB)
-2025-12-29 07:24:16 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:22 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (243.78 MB)
-2025-12-29 07:24:22 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:44 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (294.77 MB)
-2025-12-29 07:24:44 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:47 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (319.73 MB)
-2025-12-29 07:24:47 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:24:59 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (287.21 MB)
-2025-12-29 07:24:59 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:04 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (319.13 MB)
-2025-12-29 07:25:04 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:25 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (310.12 MB)
-2025-12-29 07:25:25 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:25 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (297.00 MB)
-2025-12-29 07:25:25 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:31 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (70.76 MB)
-2025-12-29 07:25:31 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y449_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:33 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (25.74 MB)
-2025-12-29 07:25:33 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:50 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.93 MB)
-2025-12-29 07:25:50 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:25:56 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.62 MB)
-2025-12-29 07:25:56 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:26:23 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (298.55 MB)
-2025-12-29 07:26:23 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:26:31 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.55 MB)
-2025-12-29 07:26:31 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:26:41 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.43 MB)
-2025-12-29 07:26:41 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:27:03 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.29 MB)
-2025-12-29 07:27:03 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:27:20 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.44 MB)
-2025-12-29 07:27:20 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:27:35 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (289.76 MB)
-2025-12-29 07:27:35 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y449_PA_Northcentral_2019_B19.tif
-2025-12-29 07:27:58 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (325.42 MB)
-2025-12-29 07:27:58 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:28:00 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.78 MB)
-2025-12-29 07:28:00 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:28:25 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.18 MB)
-2025-12-29 07:28:25 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:28:37 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.06 MB)
-2025-12-29 07:28:37 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:28:40 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.60 MB)
-2025-12-29 07:28:40 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:29:07 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (309.04 MB)
-2025-12-29 07:29:07 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:29:08 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (281.36 MB)
-2025-12-29 07:29:08 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:29:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (309.55 MB)
-2025-12-29 07:29:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:29:54 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.88 MB)
-2025-12-29 07:29:54 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y449_PA_Northcentral_2019_B19.tif
-2025-12-29 07:30:06 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.36 MB)
-2025-12-29 07:30:06 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y457_PA_Northcentral_2019_B19.tif
-2025-12-29 07:30:19 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (321.94 MB)
-2025-12-29 07:30:19 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y456_PA_Northcentral_2019_B19.tif
-2025-12-29 07:30:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (288.89 MB)
-2025-12-29 07:30:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y455_PA_Northcentral_2019_B19.tif
-2025-12-29 07:30:39 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (328.36 MB)
-2025-12-29 07:30:39 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y454_PA_Northcentral_2019_B19.tif
-2025-12-29 07:30:59 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.91 MB)
-2025-12-29 07:30:59 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y453_PA_Northcentral_2019_B19.tif
-2025-12-29 07:31:14 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (314.91 MB)
-2025-12-29 07:31:14 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y452_PA_Northcentral_2019_B19.tif
-2025-12-29 07:31:28 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (288.08 MB)
-2025-12-29 07:31:28 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y451_PA_Northcentral_2019_B19.tif
-2025-12-29 07:31:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (308.41 MB)
-2025-12-29 07:31:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y450_PA_Northcentral_2019_B19.tif
-2025-12-29 07:31:55 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.60 MB)
-2025-12-29 07:31:59 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (322.39 MB)
-2025-12-29 07:32:09 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.31 MB)
-2025-12-29 07:32:09 - ras_commander.terrain.Usgs3depAws - INFO - 
+2026-01-13 10:31:15 - ras_commander.terrain.Usgs3depAws - INFO - Fetching tile list from: PA_Northcentral_2019_B19
+2026-01-13 10:31:16 - ras_commander.terrain.Usgs3depAws - INFO -   Found 653 tiles in project
+2026-01-13 10:31:16 - ras_commander.terrain.Usgs3depAws - INFO -   Checking 653 tiles for intersection...
+2026-01-13 10:31:17 - ras_commander.terrain.Usgs3depAws - INFO -   Found 98 intersecting tiles
+2026-01-13 10:31:17 - ras_commander.terrain.Usgs3depAws - INFO -   Downloading tiles with 3 concurrent workers...
+2026-01-13 10:31:17 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:31:17 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:31:17 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:31:49 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (312.02 MB)
+2026-01-13 10:31:49 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:31:59 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (308.78 MB)
+2026-01-13 10:31:59 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:32:26 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.71 MB)
+2026-01-13 10:32:26 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:32:26 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (293.74 MB)
+2026-01-13 10:32:26 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:32:53 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (320.38 MB)
+2026-01-13 10:32:53 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x76y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:33:15 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.89 MB)
+2026-01-13 10:33:15 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:33:33 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.65 MB)
+2026-01-13 10:33:33 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:33:33 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (303.93 MB)
+2026-01-13 10:33:33 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:33:56 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.42 MB)
+2026-01-13 10:33:56 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:33:58 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (292.75 MB)
+2026-01-13 10:33:58 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:34:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.43 MB)
+2026-01-13 10:34:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:34:55 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.85 MB)
+2026-01-13 10:34:55 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:35:16 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.08 MB)
+2026-01-13 10:35:16 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x75y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:35:31 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (294.59 MB)
+2026-01-13 10:35:31 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:35:44 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (310.71 MB)
+2026-01-13 10:35:44 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:36:22 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (303.97 MB)
+2026-01-13 10:36:22 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:36:26 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (322.25 MB)
+2026-01-13 10:36:26 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:36:57 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.53 MB)
+2026-01-13 10:36:57 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:37:08 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (287.92 MB)
+2026-01-13 10:37:08 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:37:40 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (297.32 MB)
+2026-01-13 10:37:40 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:37:50 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.41 MB)
+2026-01-13 10:37:50 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:38:00 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.69 MB)
+2026-01-13 10:38:00 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x74y449_PA_Northcentral_2019_B19.tif
+2026-01-13 10:38:42 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (324.93 MB)
+2026-01-13 10:38:42 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:38:42 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (323.01 MB)
+2026-01-13 10:38:42 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:38:47 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.54 MB)
+2026-01-13 10:38:47 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:39:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.19 MB)
+2026-01-13 10:39:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:39:52 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (311.63 MB)
+2026-01-13 10:39:52 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:39:57 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (286.54 MB)
+2026-01-13 10:39:57 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:40:23 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (302.27 MB)
+2026-01-13 10:40:23 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:41:08 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.73 MB)
+2026-01-13 10:41:08 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:41:08 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.95 MB)
+2026-01-13 10:41:08 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_17_x73y449_PA_Northcentral_2019_B19.tif
+2026-01-13 10:41:34 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (290.43 MB)
+2026-01-13 10:41:34 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x32y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:41:36 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (13.35 MB)
+2026-01-13 10:41:36 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:41:37 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (5.31 MB)
+2026-01-13 10:41:37 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:41:54 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (139.34 MB)
+2026-01-13 10:41:54 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:42:15 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (310.05 MB)
+2026-01-13 10:42:15 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x31y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:42:16 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (262.44 MB)
+2026-01-13 10:42:16 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:42:24 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (62.59 MB)
+2026-01-13 10:42:24 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:42:49 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (189.91 MB)
+2026-01-13 10:42:49 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:42:59 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.33 MB)
+2026-01-13 10:42:59 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:43:21 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (305.63 MB)
+2026-01-13 10:43:21 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x30y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:43:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (89.23 MB)
+2026-01-13 10:43:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:43:42 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (287.64 MB)
+2026-01-13 10:43:42 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:43:54 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (286.54 MB)
+2026-01-13 10:43:54 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:44:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.07 MB)
+2026-01-13 10:44:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:44:49 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.80 MB)
+2026-01-13 10:44:49 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:45:02 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (325.11 MB)
+2026-01-13 10:45:02 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x29y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:45:03 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (5.63 MB)
+2026-01-13 10:45:03 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:45:28 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (295.35 MB)
+2026-01-13 10:45:28 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:45:48 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (263.46 MB)
+2026-01-13 10:45:48 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:45:55 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (327.76 MB)
+2026-01-13 10:45:55 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:46:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (297.64 MB)
+2026-01-13 10:46:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:46:33 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (325.80 MB)
+2026-01-13 10:46:33 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x28y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:46:41 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (105.74 MB)
+2026-01-13 10:46:41 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:47:18 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (302.18 MB)
+2026-01-13 10:47:18 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:47:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.60 MB)
+2026-01-13 10:47:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:47:27 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.12 MB)
+2026-01-13 10:47:27 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:48:06 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.54 MB)
+2026-01-13 10:48:06 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:48:35 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.83 MB)
+2026-01-13 10:48:35 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:48:38 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (287.21 MB)
+2026-01-13 10:48:38 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x27y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:48:46 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (61.05 MB)
+2026-01-13 10:48:46 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:48:57 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (320.21 MB)
+2026-01-13 10:48:57 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:49:34 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (294.77 MB)
+2026-01-13 10:49:34 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:49:53 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (243.78 MB)
+2026-01-13 10:49:53 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:50:03 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (319.73 MB)
+2026-01-13 10:50:03 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:50:41 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (310.12 MB)
+2026-01-13 10:50:41 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:51:04 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.93 MB)
+2026-01-13 10:51:04 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:51:05 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (319.13 MB)
+2026-01-13 10:51:05 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:51:15 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (70.76 MB)
+2026-01-13 10:51:15 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x26y449_PA_Northcentral_2019_B19.tif
+2026-01-13 10:51:19 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (25.74 MB)
+2026-01-13 10:51:19 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:51:47 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (297.00 MB)
+2026-01-13 10:51:47 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:52:16 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.62 MB)
+2026-01-13 10:52:16 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:52:51 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.55 MB)
+2026-01-13 10:52:51 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:52:56 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (298.55 MB)
+2026-01-13 10:52:56 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:53:22 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.43 MB)
+2026-01-13 10:53:22 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:53:39 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.44 MB)
+2026-01-13 10:53:39 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:53:46 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (289.76 MB)
+2026-01-13 10:53:46 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:53:52 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.29 MB)
+2026-01-13 10:53:52 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x25y449_PA_Northcentral_2019_B19.tif
+2026-01-13 10:54:15 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (317.18 MB)
+2026-01-13 10:54:15 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:54:22 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (325.42 MB)
+2026-01-13 10:54:22 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:54:51 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (304.06 MB)
+2026-01-13 10:54:51 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:55:18 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.78 MB)
+2026-01-13 10:55:18 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:55:36 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (309.55 MB)
+2026-01-13 10:55:36 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:55:47 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (313.60 MB)
+2026-01-13 10:55:47 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:56:09 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (281.36 MB)
+2026-01-13 10:56:09 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:56:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (309.04 MB)
+2026-01-13 10:56:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:56:32 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (299.36 MB)
+2026-01-13 10:56:32 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x24y449_PA_Northcentral_2019_B19.tif
+2026-01-13 10:56:50 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.88 MB)
+2026-01-13 10:56:50 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y457_PA_Northcentral_2019_B19.tif
+2026-01-13 10:57:12 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (321.94 MB)
+2026-01-13 10:57:12 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y456_PA_Northcentral_2019_B19.tif
+2026-01-13 10:57:34 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (328.36 MB)
+2026-01-13 10:57:34 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y455_PA_Northcentral_2019_B19.tif
+2026-01-13 10:57:47 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (314.91 MB)
+2026-01-13 10:57:47 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y454_PA_Northcentral_2019_B19.tif
+2026-01-13 10:57:54 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (288.89 MB)
+2026-01-13 10:57:54 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y453_PA_Northcentral_2019_B19.tif
+2026-01-13 10:58:23 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (296.91 MB)
+2026-01-13 10:58:23 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y452_PA_Northcentral_2019_B19.tif
+2026-01-13 10:58:48 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (308.41 MB)
+2026-01-13 10:58:48 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y451_PA_Northcentral_2019_B19.tif
+2026-01-13 10:58:50 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (306.60 MB)
+2026-01-13 10:58:50 - ras_commander.terrain.Usgs3depAws - INFO -     Downloading: USGS_1M_18_x23y450_PA_Northcentral_2019_B19.tif
+2026-01-13 10:59:00 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (288.08 MB)
+2026-01-13 10:59:14 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (307.31 MB)
+2026-01-13 10:59:39 - ras_commander.terrain.Usgs3depAws - INFO -       Saved (322.39 MB)
+2026-01-13 10:59:39 - ras_commander.terrain.Usgs3depAws - INFO - 
 Total tiles downloaded: 98
 
 
 
 Downloaded 98 tiles:
-  USGS_1M_17_x76y455_PA_Northcentral_2019_B19.tif (308.78 MB)
-  USGS_1M_17_x76y457_PA_Northcentral_2019_B19.tif (293.74 MB)
   USGS_1M_17_x76y456_PA_Northcentral_2019_B19.tif (312.02 MB)
-  USGS_1M_17_x76y454_PA_Northcentral_2019_B19.tif (320.38 MB)
-  USGS_1M_17_x76y452_PA_Northcentral_2019_B19.tif (295.65 MB)
+  USGS_1M_17_x76y455_PA_Northcentral_2019_B19.tif (308.78 MB)
   USGS_1M_17_x76y453_PA_Northcentral_2019_B19.tif (299.71 MB)
+  USGS_1M_17_x76y457_PA_Northcentral_2019_B19.tif (293.74 MB)
+  USGS_1M_17_x76y454_PA_Northcentral_2019_B19.tif (320.38 MB)
   USGS_1M_17_x76y451_PA_Northcentral_2019_B19.tif (317.89 MB)
-  USGS_1M_17_x75y456_PA_Northcentral_2019_B19.tif (292.75 MB)
+  USGS_1M_17_x76y452_PA_Northcentral_2019_B19.tif (295.65 MB)
   USGS_1M_17_x76y450_PA_Northcentral_2019_B19.tif (303.93 MB)
-  USGS_1M_17_x75y457_PA_Northcentral_2019_B19.tif (311.43 MB)
-  USGS_1M_17_x75y453_PA_Northcentral_2019_B19.tif (311.08 MB)
-  USGS_1M_17_x75y454_PA_Northcentral_2019_B19.tif (295.85 MB)
   USGS_1M_17_x75y455_PA_Northcentral_2019_B19.tif (295.42 MB)
+  USGS_1M_17_x75y456_PA_Northcentral_2019_B19.tif (292.75 MB)
+  USGS_1M_17_x75y457_PA_Northcentral_2019_B19.tif (311.43 MB)
+  USGS_1M_17_x75y454_PA_Northcentral_2019_B19.tif (295.85 MB)
+  USGS_1M_17_x75y453_PA_Northcentral_2019_B19.tif (311.08 MB)
   USGS_1M_17_x75y452_PA_Northcentral_2019_B19.tif (294.59 MB)
-  USGS_1M_17_x75y450_PA_Northcentral_2019_B19.tif (322.25 MB)
   USGS_1M_17_x75y451_PA_Northcentral_2019_B19.tif (310.71 MB)
   USGS_1M_17_x74y457_PA_Northcentral_2019_B19.tif (303.97 MB)
+  USGS_1M_17_x75y450_PA_Northcentral_2019_B19.tif (322.25 MB)
   USGS_1M_17_x74y456_PA_Northcentral_2019_B19.tif (313.53 MB)
-  USGS_1M_17_x74y455_PA_Northcentral_2019_B19.tif (311.69 MB)
   USGS_1M_17_x74y454_PA_Northcentral_2019_B19.tif (287.92 MB)
-  USGS_1M_17_x74y452_PA_Northcentral_2019_B19.tif (307.41 MB)
   USGS_1M_17_x74y453_PA_Northcentral_2019_B19.tif (297.32 MB)
-  USGS_1M_17_x74y451_PA_Northcentral_2019_B19.tif (306.54 MB)
-  USGS_1M_17_x73y457_PA_Northcentral_2019_B19.tif (286.54 MB)
+  USGS_1M_17_x74y452_PA_Northcentral_2019_B19.tif (307.41 MB)
+  USGS_1M_17_x74y455_PA_Northcentral_2019_B19.tif (311.69 MB)
   USGS_1M_17_x74y450_PA_Northcentral_2019_B19.tif (324.93 MB)
   USGS_1M_17_x74y449_PA_Northcentral_2019_B19.tif (323.01 MB)
-  USGS_1M_17_x73y456_PA_Northcentral_2019_B19.tif (311.63 MB)
-  USGS_1M_17_x73y454_PA_Northcentral_2019_B19.tif (299.73 MB)
+  USGS_1M_17_x74y451_PA_Northcentral_2019_B19.tif (306.54 MB)
   USGS_1M_17_x73y455_PA_Northcentral_2019_B19.tif (306.19 MB)
-  USGS_1M_17_x73y453_PA_Northcentral_2019_B19.tif (290.43 MB)
-  USGS_1M_17_x73y450_PA_Northcentral_2019_B19.tif (304.33 MB)
+  USGS_1M_17_x73y456_PA_Northcentral_2019_B19.tif (311.63 MB)
+  USGS_1M_17_x73y457_PA_Northcentral_2019_B19.tif (286.54 MB)
   USGS_1M_17_x73y452_PA_Northcentral_2019_B19.tif (302.27 MB)
+  USGS_1M_17_x73y454_PA_Northcentral_2019_B19.tif (299.73 MB)
+  USGS_1M_17_x73y451_PA_Northcentral_2019_B19.tif (313.95 MB)
+  USGS_1M_17_x73y453_PA_Northcentral_2019_B19.tif (290.43 MB)
   USGS_1M_18_x32y455_PA_Northcentral_2019_B19.tif (13.35 MB)
   USGS_1M_18_x31y457_PA_Northcentral_2019_B19.tif (5.31 MB)
-  USGS_1M_17_x73y451_PA_Northcentral_2019_B19.tif (313.95 MB)
   USGS_1M_18_x31y456_PA_Northcentral_2019_B19.tif (139.34 MB)
   USGS_1M_17_x73y449_PA_Northcentral_2019_B19.tif (310.05 MB)
+  USGS_1M_18_x31y455_PA_Northcentral_2019_B19.tif (262.44 MB)
   USGS_1M_18_x31y454_PA_Northcentral_2019_B19.tif (62.59 MB)
   USGS_1M_18_x30y457_PA_Northcentral_2019_B19.tif (189.91 MB)
-  USGS_1M_18_x30y455_PA_Northcentral_2019_B19.tif (286.54 MB)
-  USGS_1M_18_x31y455_PA_Northcentral_2019_B19.tif (262.44 MB)
-  USGS_1M_18_x30y454_PA_Northcentral_2019_B19.tif (287.64 MB)
-  USGS_1M_18_x30y453_PA_Northcentral_2019_B19.tif (89.23 MB)
+  USGS_1M_17_x73y450_PA_Northcentral_2019_B19.tif (304.33 MB)
   USGS_1M_18_x30y456_PA_Northcentral_2019_B19.tif (305.63 MB)
+  USGS_1M_18_x30y453_PA_Northcentral_2019_B19.tif (89.23 MB)
+  USGS_1M_18_x30y454_PA_Northcentral_2019_B19.tif (287.64 MB)
+  USGS_1M_18_x30y455_PA_Northcentral_2019_B19.tif (286.54 MB)
+  USGS_1M_18_x29y456_PA_Northcentral_2019_B19.tif (317.07 MB)
   USGS_1M_18_x29y455_PA_Northcentral_2019_B19.tif (307.80 MB)
   USGS_1M_18_x29y457_PA_Northcentral_2019_B19.tif (325.11 MB)
-  USGS_1M_18_x29y456_PA_Northcentral_2019_B19.tif (317.07 MB)
   USGS_1M_18_x29y452_PA_Northcentral_2019_B19.tif (5.63 MB)
   USGS_1M_18_x29y454_PA_Northcentral_2019_B19.tif (295.35 MB)
   USGS_1M_18_x29y453_PA_Northcentral_2019_B19.tif (263.46 MB)
   USGS_1M_18_x28y457_PA_Northcentral_2019_B19.tif (327.76 MB)
-  USGS_1M_18_x28y455_PA_Northcentral_2019_B19.tif (306.60 MB)
-  USGS_1M_18_x28y453_PA_Northcentral_2019_B19.tif (302.18 MB)
   USGS_1M_18_x28y454_PA_Northcentral_2019_B19.tif (297.64 MB)
   USGS_1M_18_x28y456_PA_Northcentral_2019_B19.tif (325.80 MB)
   USGS_1M_18_x28y452_PA_Northcentral_2019_B19.tif (105.74 MB)
-  USGS_1M_18_x27y455_PA_Northcentral_2019_B19.tif (317.54 MB)
-  USGS_1M_18_x27y456_PA_Northcentral_2019_B19.tif (320.21 MB)
+  USGS_1M_18_x28y453_PA_Northcentral_2019_B19.tif (302.18 MB)
+  USGS_1M_18_x28y455_PA_Northcentral_2019_B19.tif (306.60 MB)
   USGS_1M_18_x27y457_PA_Northcentral_2019_B19.tif (307.12 MB)
+  USGS_1M_18_x27y455_PA_Northcentral_2019_B19.tif (317.54 MB)
   USGS_1M_18_x27y454_PA_Northcentral_2019_B19.tif (299.83 MB)
-  USGS_1M_18_x27y451_PA_Northcentral_2019_B19.tif (61.05 MB)
-  USGS_1M_18_x27y452_PA_Northcentral_2019_B19.tif (243.78 MB)
-  USGS_1M_18_x26y457_PA_Northcentral_2019_B19.tif (294.77 MB)
-  USGS_1M_18_x26y456_PA_Northcentral_2019_B19.tif (319.73 MB)
   USGS_1M_18_x27y453_PA_Northcentral_2019_B19.tif (287.21 MB)
-  USGS_1M_18_x26y454_PA_Northcentral_2019_B19.tif (319.13 MB)
+  USGS_1M_18_x27y451_PA_Northcentral_2019_B19.tif (61.05 MB)
+  USGS_1M_18_x27y456_PA_Northcentral_2019_B19.tif (320.21 MB)
+  USGS_1M_18_x26y457_PA_Northcentral_2019_B19.tif (294.77 MB)
+  USGS_1M_18_x27y452_PA_Northcentral_2019_B19.tif (243.78 MB)
+  USGS_1M_18_x26y456_PA_Northcentral_2019_B19.tif (319.73 MB)
   USGS_1M_18_x26y455_PA_Northcentral_2019_B19.tif (310.12 MB)
-  USGS_1M_18_x26y452_PA_Northcentral_2019_B19.tif (297.00 MB)
+  USGS_1M_18_x26y453_PA_Northcentral_2019_B19.tif (296.93 MB)
+  USGS_1M_18_x26y454_PA_Northcentral_2019_B19.tif (319.13 MB)
   USGS_1M_18_x26y450_PA_Northcentral_2019_B19.tif (70.76 MB)
   USGS_1M_18_x26y449_PA_Northcentral_2019_B19.tif (25.74 MB)
-  USGS_1M_18_x26y453_PA_Northcentral_2019_B19.tif (296.93 MB)
+  USGS_1M_18_x26y452_PA_Northcentral_2019_B19.tif (297.00 MB)
   USGS_1M_18_x25y457_PA_Northcentral_2019_B19.tif (304.62 MB)
-  USGS_1M_18_x25y455_PA_Northcentral_2019_B19.tif (298.55 MB)
   USGS_1M_18_x26y451_PA_Northcentral_2019_B19.tif (296.55 MB)
+  USGS_1M_18_x25y455_PA_Northcentral_2019_B19.tif (298.55 MB)
   USGS_1M_18_x25y456_PA_Northcentral_2019_B19.tif (296.43 MB)
-  USGS_1M_18_x25y454_PA_Northcentral_2019_B19.tif (313.29 MB)
   USGS_1M_18_x25y453_PA_Northcentral_2019_B19.tif (304.44 MB)
   USGS_1M_18_x25y452_PA_Northcentral_2019_B19.tif (289.76 MB)
-  USGS_1M_18_x25y450_PA_Northcentral_2019_B19.tif (325.42 MB)
-  USGS_1M_18_x25y449_PA_Northcentral_2019_B19.tif (299.78 MB)
+  USGS_1M_18_x25y454_PA_Northcentral_2019_B19.tif (313.29 MB)
   USGS_1M_18_x25y451_PA_Northcentral_2019_B19.tif (317.18 MB)
+  USGS_1M_18_x25y450_PA_Northcentral_2019_B19.tif (325.42 MB)
   USGS_1M_18_x24y456_PA_Northcentral_2019_B19.tif (304.06 MB)
-  USGS_1M_18_x24y457_PA_Northcentral_2019_B19.tif (313.60 MB)
-  USGS_1M_18_x24y453_PA_Northcentral_2019_B19.tif (309.04 MB)
-  USGS_1M_18_x24y454_PA_Northcentral_2019_B19.tif (281.36 MB)
+  USGS_1M_18_x25y449_PA_Northcentral_2019_B19.tif (299.78 MB)
   USGS_1M_18_x24y455_PA_Northcentral_2019_B19.tif (309.55 MB)
-  USGS_1M_18_x24y451_PA_Northcentral_2019_B19.tif (306.88 MB)
+  USGS_1M_18_x24y457_PA_Northcentral_2019_B19.tif (313.60 MB)
+  USGS_1M_18_x24y454_PA_Northcentral_2019_B19.tif (281.36 MB)
+  USGS_1M_18_x24y453_PA_Northcentral_2019_B19.tif (309.04 MB)
   USGS_1M_18_x24y452_PA_Northcentral_2019_B19.tif (299.36 MB)
+  USGS_1M_18_x24y451_PA_Northcentral_2019_B19.tif (306.88 MB)
   USGS_1M_18_x24y450_PA_Northcentral_2019_B19.tif (321.94 MB)
-  USGS_1M_18_x23y457_PA_Northcentral_2019_B19.tif (288.89 MB)
   USGS_1M_18_x24y449_PA_Northcentral_2019_B19.tif (328.36 MB)
-  USGS_1M_18_x23y454_PA_Northcentral_2019_B19.tif (296.91 MB)
   USGS_1M_18_x23y456_PA_Northcentral_2019_B19.tif (314.91 MB)
-  USGS_1M_18_x23y453_PA_Northcentral_2019_B19.tif (288.08 MB)
+  USGS_1M_18_x23y457_PA_Northcentral_2019_B19.tif (288.89 MB)
+  USGS_1M_18_x23y454_PA_Northcentral_2019_B19.tif (296.91 MB)
   USGS_1M_18_x23y452_PA_Northcentral_2019_B19.tif (308.41 MB)
   USGS_1M_18_x23y455_PA_Northcentral_2019_B19.tif (306.60 MB)
-  USGS_1M_18_x23y450_PA_Northcentral_2019_B19.tif (322.39 MB)
+  USGS_1M_18_x23y453_PA_Northcentral_2019_B19.tif (288.08 MB)
   USGS_1M_18_x23y451_PA_Northcentral_2019_B19.tif (307.31 MB)
+  USGS_1M_18_x23y450_PA_Northcentral_2019_B19.tif (322.39 MB)
 
 Total size: 27234.32 MB
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Create VRT mosaic from downloaded tiles and convert to single TIFF</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">if</span> <span class="n">DOWNLOADED_TILES</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">DOWNLOADED_TILES</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Creating mosaic from </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">DOWNLOADED_TILES</span><span class="p">)</span><span class="si">}</span><span class="s2"> tiles...&quot;</span><span class="p">)</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="c1"># Create VRT mosaic</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">vrt_path</span> <span class="o">=</span> <span class="n">terrain_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">NEW_TERRAIN_NAME</span><span class="si">}</span><span class="s2">.vrt&quot;</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>        <span class="n">vrt</span> <span class="o">=</span> <span class="n">Usgs3depAws</span><span class="o">.</span><span class="n">create_vrt</span><span class="p">(</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>            <span class="n">tile_files</span><span class="o">=</span><span class="n">DOWNLOADED_TILES</span><span class="p">,</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>            <span class="n">output_vrt</span><span class="o">=</span><span class="n">vrt_path</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="p">)</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created VRT mosaic: </span><span class="si">{</span><span class="n">vrt</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>        <span class="c1"># Convert VRT to single TIFF using RasTerrain</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Converting VRT to TIFF...&quot;</span><span class="p">)</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Note: This may take several minutes for large mosaics&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Create mosaic from downloaded tiles</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Uses GDAL VRT if available, otherwise falls back to rasterio merge</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">if</span> <span class="n">DOWNLOADED_TILES</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">DOWNLOADED_TILES</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Creating mosaic from </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">DOWNLOADED_TILES</span><span class="p">)</span><span class="si">}</span><span class="s2"> tiles...&quot;</span><span class="p">)</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">output_tiff</span> <span class="o">=</span> <span class="n">terrain_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">NEW_TERRAIN_NAME</span><span class="si">}</span><span class="s2">.tif&quot;</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        <span class="k">if</span> <span class="n">GDAL_AVAILABLE</span><span class="p">:</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>            <span class="c1"># Method 1: GDAL VRT approach (faster for large datasets)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Using GDAL VRT approach...&quot;</span><span class="p">)</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>            <span class="n">vrt_path</span> <span class="o">=</span> <span class="n">terrain_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">NEW_TERRAIN_NAME</span><span class="si">}</span><span class="s2">.vrt&quot;</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>            <span class="n">vrt</span> <span class="o">=</span> <span class="n">Usgs3depAws</span><span class="o">.</span><span class="n">create_vrt</span><span class="p">(</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>                <span class="n">tile_files</span><span class="o">=</span><span class="n">DOWNLOADED_TILES</span><span class="p">,</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>                <span class="n">output_vrt</span><span class="o">=</span><span class="n">vrt_path</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>            <span class="p">)</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created VRT mosaic: </span><span class="si">{</span><span class="n">vrt</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>        <span class="n">output_tiff</span> <span class="o">=</span> <span class="n">terrain_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">NEW_TERRAIN_NAME</span><span class="si">}</span><span class="s2">.tif&quot;</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>        <span class="n">final_tiff</span> <span class="o">=</span> <span class="n">RasTerrain</span><span class="o">.</span><span class="n">vrt_to_tiff</span><span class="p">(</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>            <span class="n">vrt_path</span><span class="o">=</span><span class="n">vrt</span><span class="p">,</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>            <span class="n">output_path</span><span class="o">=</span><span class="n">output_tiff</span><span class="p">,</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>            <span class="n">compression</span><span class="o">=</span><span class="s2">&quot;LZW&quot;</span><span class="p">,</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>            <span class="n">create_overviews</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>            <span class="n">hecras_version</span><span class="o">=</span><span class="n">RAS_VERSION</span>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>        <span class="p">)</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Saved: </span><span class="si">{</span><span class="n">final_tiff</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Size: </span><span class="si">{</span><span class="n">final_tiff</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> MB&quot;</span><span class="p">)</span>
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>
-</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>        <span class="c1"># Get info about the TIFF</span>
-</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">final_tiff</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shape: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2"> pixels&quot;</span><span class="p">)</span>
-</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Resolution: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Bounds: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">bounds</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>
-</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>        <span class="n">DOWNLOADED_TIFF</span> <span class="o">=</span> <span class="n">final_tiff</span>
-</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-8-41"><a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mosaic/conversion failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-8-42"><a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>        <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
-</span><span id="__span-8-43"><a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a>        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
-</span><span id="__span-8-44"><a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>        <span class="n">DOWNLOADED_TIFF</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-8-45"><a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-8-46"><a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No tiles to mosaic&quot;</span><span class="p">)</span>
-</span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a>    <span class="n">DOWNLOADED_TIFF</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>            <span class="c1"># Convert VRT to single TIFF using RasTerrain</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Converting VRT to TIFF...&quot;</span><span class="p">)</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Note: This may take several minutes for large mosaics&quot;</span><span class="p">)</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>            <span class="n">final_tiff</span> <span class="o">=</span> <span class="n">RasTerrain</span><span class="o">.</span><span class="n">vrt_to_tiff</span><span class="p">(</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>                <span class="n">vrt_path</span><span class="o">=</span><span class="n">vrt</span><span class="p">,</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>                <span class="n">output_path</span><span class="o">=</span><span class="n">output_tiff</span><span class="p">,</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>                <span class="n">compression</span><span class="o">=</span><span class="s2">&quot;LZW&quot;</span><span class="p">,</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>                <span class="n">create_overviews</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>                <span class="n">hecras_version</span><span class="o">=</span><span class="n">RAS_VERSION</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>            <span class="p">)</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>            <span class="c1"># Method 2: Rasterio merge (no GDAL dependency)</span>
+</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Using rasterio merge approach (GDAL not available)...&quot;</span><span class="p">)</span>
+</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Note: This may take several minutes for large mosaics&quot;</span><span class="p">)</span>
+</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>            <span class="kn">from</span><span class="w"> </span><span class="nn">rasterio.merge</span><span class="w"> </span><span class="kn">import</span> <span class="n">merge</span>
+</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>
+</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>            <span class="c1"># Open all tiles and merge</span>
+</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>            <span class="n">src_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">tile</span><span class="p">)</span> <span class="k">for</span> <span class="n">tile</span> <span class="ow">in</span> <span class="n">DOWNLOADED_TILES</span><span class="p">]</span>
+</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>            <span class="n">mosaic</span><span class="p">,</span> <span class="n">out_transform</span> <span class="o">=</span> <span class="n">merge</span><span class="p">(</span><span class="n">src_files</span><span class="p">)</span>
+</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>
+</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>            <span class="c1"># Get metadata from first file</span>
+</span><span id="__span-8-41"><a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>            <span class="n">out_meta</span> <span class="o">=</span> <span class="n">src_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</span><span id="__span-8-42"><a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>            <span class="n">out_meta</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+</span><span id="__span-8-43"><a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a>                <span class="s2">&quot;driver&quot;</span><span class="p">:</span> <span class="s2">&quot;GTiff&quot;</span><span class="p">,</span>
+</span><span id="__span-8-44"><a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>                <span class="s2">&quot;height&quot;</span><span class="p">:</span> <span class="n">mosaic</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+</span><span id="__span-8-45"><a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a>                <span class="s2">&quot;width&quot;</span><span class="p">:</span> <span class="n">mosaic</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+</span><span id="__span-8-46"><a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a>                <span class="s2">&quot;transform&quot;</span><span class="p">:</span> <span class="n">out_transform</span><span class="p">,</span>
+</span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a>                <span class="s2">&quot;compress&quot;</span><span class="p">:</span> <span class="s2">&quot;lzw&quot;</span>
+</span><span id="__span-8-48"><a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a>            <span class="p">})</span>
+</span><span id="__span-8-49"><a id="__codelineno-8-49" name="__codelineno-8-49" href="#__codelineno-8-49"></a>
+</span><span id="__span-8-50"><a id="__codelineno-8-50" name="__codelineno-8-50" href="#__codelineno-8-50"></a>            <span class="c1"># Close source files</span>
+</span><span id="__span-8-51"><a id="__codelineno-8-51" name="__codelineno-8-51" href="#__codelineno-8-51"></a>            <span class="k">for</span> <span class="n">src</span> <span class="ow">in</span> <span class="n">src_files</span><span class="p">:</span>
+</span><span id="__span-8-52"><a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a>                <span class="n">src</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span id="__span-8-53"><a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a>
+</span><span id="__span-8-54"><a id="__codelineno-8-54" name="__codelineno-8-54" href="#__codelineno-8-54"></a>            <span class="c1"># Write merged TIFF</span>
+</span><span id="__span-8-55"><a id="__codelineno-8-55" name="__codelineno-8-55" href="#__codelineno-8-55"></a>            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">output_tiff</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">out_meta</span><span class="p">)</span> <span class="k">as</span> <span class="n">dest</span><span class="p">:</span>
+</span><span id="__span-8-56"><a id="__codelineno-8-56" name="__codelineno-8-56" href="#__codelineno-8-56"></a>                <span class="n">dest</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">mosaic</span><span class="p">)</span>
+</span><span id="__span-8-57"><a id="__codelineno-8-57" name="__codelineno-8-57" href="#__codelineno-8-57"></a>
+</span><span id="__span-8-58"><a id="__codelineno-8-58" name="__codelineno-8-58" href="#__codelineno-8-58"></a>            <span class="n">final_tiff</span> <span class="o">=</span> <span class="n">output_tiff</span>
+</span><span id="__span-8-59"><a id="__codelineno-8-59" name="__codelineno-8-59" href="#__codelineno-8-59"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Merged </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">DOWNLOADED_TILES</span><span class="p">)</span><span class="si">}</span><span class="s2"> tiles using rasterio&quot;</span><span class="p">)</span>
+</span><span id="__span-8-60"><a id="__codelineno-8-60" name="__codelineno-8-60" href="#__codelineno-8-60"></a>
+</span><span id="__span-8-61"><a id="__codelineno-8-61" name="__codelineno-8-61" href="#__codelineno-8-61"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Saved: </span><span class="si">{</span><span class="n">final_tiff</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-8-62"><a id="__codelineno-8-62" name="__codelineno-8-62" href="#__codelineno-8-62"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Size: </span><span class="si">{</span><span class="n">final_tiff</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> MB&quot;</span><span class="p">)</span>
+</span><span id="__span-8-63"><a id="__codelineno-8-63" name="__codelineno-8-63" href="#__codelineno-8-63"></a>
+</span><span id="__span-8-64"><a id="__codelineno-8-64" name="__codelineno-8-64" href="#__codelineno-8-64"></a>        <span class="c1"># Get info about the TIFF</span>
+</span><span id="__span-8-65"><a id="__codelineno-8-65" name="__codelineno-8-65" href="#__codelineno-8-65"></a>        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">final_tiff</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+</span><span id="__span-8-66"><a id="__codelineno-8-66" name="__codelineno-8-66" href="#__codelineno-8-66"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shape: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2"> pixels&quot;</span><span class="p">)</span>
+</span><span id="__span-8-67"><a id="__codelineno-8-67" name="__codelineno-8-67" href="#__codelineno-8-67"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-8-68"><a id="__codelineno-8-68" name="__codelineno-8-68" href="#__codelineno-8-68"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Resolution: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-8-69"><a id="__codelineno-8-69" name="__codelineno-8-69" href="#__codelineno-8-69"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Bounds: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">bounds</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-8-70"><a id="__codelineno-8-70" name="__codelineno-8-70" href="#__codelineno-8-70"></a>
+</span><span id="__span-8-71"><a id="__codelineno-8-71" name="__codelineno-8-71" href="#__codelineno-8-71"></a>        <span class="n">DOWNLOADED_TIFF</span> <span class="o">=</span> <span class="n">final_tiff</span>
+</span><span id="__span-8-72"><a id="__codelineno-8-72" name="__codelineno-8-72" href="#__codelineno-8-72"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-8-73"><a id="__codelineno-8-73" name="__codelineno-8-73" href="#__codelineno-8-73"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mosaic/conversion failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-8-74"><a id="__codelineno-8-74" name="__codelineno-8-74" href="#__codelineno-8-74"></a>        <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
+</span><span id="__span-8-75"><a id="__codelineno-8-75" name="__codelineno-8-75" href="#__codelineno-8-75"></a>        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+</span><span id="__span-8-76"><a id="__codelineno-8-76" name="__codelineno-8-76" href="#__codelineno-8-76"></a>        <span class="n">DOWNLOADED_TIFF</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-8-77"><a id="__codelineno-8-77" name="__codelineno-8-77" href="#__codelineno-8-77"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-8-78"><a id="__codelineno-8-78" name="__codelineno-8-78" href="#__codelineno-8-78"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No tiles to mosaic&quot;</span><span class="p">)</span>
+</span><span id="__span-8-79"><a id="__codelineno-8-79" name="__codelineno-8-79" href="#__codelineno-8-79"></a>    <span class="n">DOWNLOADED_TIFF</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>Creating mosaic from 98 tiles...
-Mosaic/conversion failed: No module named &#39;osgeo&#39;
+Using rasterio merge approach (GDAL not available)...
+Note: This may take several minutes for large mosaics
+Mosaic/conversion failed: Unable to allocate 181. GiB for an array with shape (1, 90012, 540012) and data type float32
 
 
 Traceback (most recent call last):
-  File &quot;C:\Users\billk_clb\AppData\Local\Temp\ipykernel_365440\4225228260.py&quot;, line 9, in &lt;module&gt;
-    vrt = Usgs3depAws.create_vrt(
-        tile_files=DOWNLOADED_TILES,
-        output_vrt=vrt_path
-    )
-  File &quot;c:\GH\ras-commander\ras_commander\terrain\Usgs3depAws.py&quot;, line 836, in create_vrt
-    from osgeo import gdal
-ModuleNotFoundError: No module named &#39;osgeo&#39;
+  File &quot;C:\Users\billk_clb\AppData\Local\Temp\ipykernel_165176\1063916843.py&quot;, line 38, in &lt;module&gt;
+    mosaic, out_transform = merge(src_files)
+                            ~~~~~^^^^^^^^^^^
+  File &quot;c:\Users\billk_clb\anaconda3\envs\rascmdr_local\Lib\site-packages\rasterio\merge.py&quot;, line 427, in merge
+    dest = np.zeros((output_count, chunk.height, chunk.width), dtype=dt)
+numpy._core._exceptions._ArrayMemoryError: Unable to allocate 181. GiB for an array with shape (1, 90012, 540012) and data type float32
 </code></pre></div>
 <h2 id="create-terrain-hdf">Create Terrain HDF<a class="headerlink" href="#create-terrain-hdf" title="Permanent link">&para;</a></h2>
 <p>Use <code>RasTerrain.create_terrain_hdf()</code> to create HEC-RAS terrain from the downloaded TIFF.</p>
@@ -5615,9 +5649,9 @@ Using existing: Projection.prj
 </span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No .rasmap files found in project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 07:32:09 - ras_commander.RasMap - INFO - Replaced existing terrain layer: Terrain50
-2025-12-29 07:32:09 - ras_commander.RasMap - INFO - Updated projection reference: .\Terrain\Projection.prj
-2025-12-29 07:32:09 - ras_commander.RasMap - INFO - Added terrain layer &#39;Terrain50&#39; to .rasmap file: .\Terrain\Terrain50.hdf
+<div class="language-text highlight"><pre><span></span><code>2026-01-13 10:59:41 - ras_commander.RasMap - INFO - Replaced existing terrain layer: Terrain50
+2026-01-13 10:59:41 - ras_commander.RasMap - INFO - Updated projection reference: .\Terrain\Projection.prj
+2026-01-13 10:59:41 - ras_commander.RasMap - INFO - Added terrain layer &#39;Terrain50&#39; to .rasmap file: .\Terrain\Terrain50.hdf
 
 
 Adding terrain layer to BaldEagleDamBrk.rasmap:
@@ -5891,7 +5925,7 @@ Set CLEANUP_PROJECT = True to remove on next run
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     
@@ -5901,7 +5935,7 @@ Set CLEANUP_PROJECT = True to remove on next run
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     

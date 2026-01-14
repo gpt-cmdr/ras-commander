@@ -4989,8 +4989,8 @@ from ras_commander import *</p>
 </span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+✓ Loaded: c:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
@@ -5035,30 +5035,43 @@ from ras_commander import *</p>
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Extracting project &#39;Chippewa_2D&#39; as &#39;Chippewa_2D_13&#39;
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Folder &#39;Chippewa_2D_13&#39; already exists. Deleting existing folder...
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Existing folder &#39;Chippewa_2D_13&#39; has been deleted.
-2025-12-29 00:14:43 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Chippewa_2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13
-2025-12-29 00:14:43 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.rasmap
-2025-12-29 00:14:43 - __main__ - INFO - Chippewa_2D project initialized with folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13
-2025-12-29 00:14:43 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13
-2025-12-29 00:14:43 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02
-2025-12-29 00:14:43 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02
-2025-12-29 00:14:43 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 02
-2025-12-29 00:14:43 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-29 00:14:43 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02&quot;
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:22:28 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+2026-01-12 23:22:28 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-12 23:22:28 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-12 23:22:28 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-12 23:22:28 - ras_commander.RasExamples - INFO - Extracting project &#39;Chippewa_2D&#39; as &#39;Chippewa_2D_13&#39;
+2026-01-12 23:22:28 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Chippewa_2D&#39; to C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13
+2026-01-12 23:22:28 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.rasmap
+2026-01-12 23:22:29 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-12 23:22:29 - __main__ - INFO - Chippewa_2D project initialized with folder: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13
+2026-01-12 23:22:29 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13
+2026-01-12 23:22:29 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02
+2026-01-12 23:22:29 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02
+2026-01-12 23:22:29 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 02
 
 
-Extracted project to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13
+Extracted project to: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13
 Chippewa_2D project exists: True
 
 
-2025-12-29 00:16:24 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
-2025-12-29 00:16:24 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 100.46 seconds
+2026-01-12 23:22:29 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-12 23:22:29 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02&quot;
+2026-01-12 23:26:01 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+2026-01-12 23:26:01 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 212.15 seconds
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1721 characters from HDF
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 100ft Sediment
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 816.0
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+c:\GH\ras-commander\ras_commander\RasPrj.py:1514: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+2026-01-12 23:26:01 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
 
 
 
@@ -5128,12 +5141,12 @@ True
       <td>1</td>
       <td>PARDISO (Direct)</td>
       <td>Perimeter 1</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
   </tbody>
 </table>
@@ -5175,7 +5188,7 @@ True
     <tr>
       <th>0</th>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>2019-test</td>
       <td>6.40</td>
       <td>0</td>
@@ -5247,7 +5260,7 @@ True
       <td>...</td>
       <td>[5770, 5760, 6200, 5630, 6400, 6970, 6610, 610...</td>
       <td>NaN</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>2019-test</td>
       <td>6.40</td>
       <td>0</td>
@@ -5271,7 +5284,7 @@ True
       <td>...</td>
       <td>[11800, 12300, 12400, 12200, 12400, 11900, 117...</td>
       <td>..\..\2018\ChippewaRiverBedload\RAS_Final\Sedi...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>2019-test</td>
       <td>6.40</td>
       <td>0</td>
@@ -5295,7 +5308,7 @@ True
       <td>...</td>
       <td>[666.68, 666.81, 666.82, 666.8, 666.83, 666.87...</td>
       <td>..\..\2018\ChippewaRiverBedload\RAS_Final\Sedi...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>2019-test</td>
       <td>6.40</td>
       <td>0</td>
@@ -5319,7 +5332,7 @@ True
       <td>...</td>
       <td>[18093.43, 20945.317590.3917795.6817894.251879...</td>
       <td>NaN</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>2019-test</td>
       <td>6.40</td>
       <td>0</td>
@@ -5343,7 +5356,7 @@ True
       <td>...</td>
       <td>[679.743, 680.239, 679.775, 679.757, 679.75, 6...</td>
       <td>NaN</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>2019-test</td>
       <td>6.40</td>
       <td>0</td>
@@ -5418,12 +5431,12 @@ True
       <td>1</td>
       <td>PARDISO (Direct)</td>
       <td>Perimeter 1</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
   </tbody>
 </table>
@@ -5496,12 +5509,12 @@ True
       <td>1</td>
       <td>PARDISO (Direct)</td>
       <td>Perimeter 1</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>01</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
       <td>04</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
-      <td>C:\Users\billk_clb\anaconda3\envs\rascmdr_pipt...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
+      <td>C:\GH\ras-commander\examples\example_projects\...</td>
     </tr>
   </tbody>
 </table>
@@ -5517,14 +5530,14 @@ True
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">plan_hdf_path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.p02.hdf&#39;
+<div class="language-text highlight"><pre><span></span><code>&#39;C:\\GH\\ras-commander\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.p02.hdf&#39;
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Alternate: Get the geometry HDF path if you are extracting geometry elements from the geometry HDF </span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">geom_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;Geom Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">geom_hdf_path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.g01.hdf&#39;
+<div class="language-text highlight"><pre><span></span><code>&#39;C:\\GH\\ras-commander\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.g01.hdf&#39;
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Example: Extract runtime and compute time data</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example 2: Extracting runtime and compute time data&quot;</span><span class="p">)</span>
@@ -5534,10 +5547,10 @@ True
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No runtime data found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Chippewa_2D.p02.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 100ft Sediment
-2025-12-29 00:16:24 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 816.0
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Chippewa_2D.p02.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 100ft Sediment
+2026-01-12 23:26:01 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 816.0
 
 
 
@@ -5550,7 +5563,7 @@ Example 2: Extracting runtime and compute time data
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># If you want to call the geometry by number, call RasHdfGeom functions with a number</span>
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Otherwise, if you want to look up geometry hdf path by plan number, follow the logic in the previous code cells</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><pre><span></span><code>C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Use HdfUtils for extracting projection</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Extracting Projection from HDF&quot;</span><span class="p">)</span>
@@ -5560,11 +5573,11 @@ Example 2: Extracting runtime and compute time data
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No projection information found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2. RASMapper projection file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2. RASMapper projection file C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
 To fix this:
 1. Open RASMapper
 2. Click Map &gt; Set Projection
@@ -5591,12 +5604,12 @@ No projection information found.
 </span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No base geometry attributes found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfPlan - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfPlan - INFO - Getting geometry attributes from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfPlan - INFO - Checking for Geometry group in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfPlan - INFO - Getting root level geometry attributes
-2025-12-29 00:16:24 - ras_commander.hdf.HdfPlan - INFO - Successfully extracted 17 root level geometry attributes
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfPlan - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfPlan - INFO - Getting geometry attributes from C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfPlan - INFO - Checking for Geometry group in C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfPlan - INFO - Getting root level geometry attributes
+2026-01-12 23:26:01 - ras_commander.hdf.HdfPlan - INFO - Successfully extracted 17 root level geometry attributes
 
 
 
@@ -5608,8 +5621,8 @@ Base Geometry Attributes:
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">flow_area_names</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_area_names</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2D Flow Area Names:&quot;</span><span class="p">,</span> <span class="n">flow_area_names</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 
@@ -5621,8 +5634,8 @@ Example 3: Listing 2D Flow Area Names
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">flow_area_attributes</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_area_attributes</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">flow_area_attributes</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 
@@ -5726,15 +5739,15 @@ Example: Extracting 2D Flow Area Attributes
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting 2D Flow Area Perimeter Polygons&quot;</span><span class="p">)</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">mesh_areas</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_areas</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>  <span class="c1"># Corrected function name</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2. RASMapper projection file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2. RASMapper projection file C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
 To fix this:
 1. Open RASMapper
 2. Click Map &gt; Set Projection
@@ -5755,15 +5768,15 @@ Example: Extracting 2D Flow Area Perimeter Polygons
 </span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;First few rows of mesh cell faces:&quot;</span><span class="p">)</span>
 </span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="n">mesh_cell_faces</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2. RASMapper projection file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:01 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2. RASMapper projection file C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
 To fix this:
 1. Open RASMapper
 2. Click Map &gt; Set Projection
@@ -5929,15 +5942,15 @@ Distance: 5.74 units
 </span><span id="__span-27-33"><a id="__codelineno-27-33" name="__codelineno-27-33" href="#__codelineno-27-33"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-27-34"><a id="__codelineno-27-34" name="__codelineno-27-34" href="#__codelineno-27-34"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:24 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2. RASMapper projection file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2. RASMapper projection file C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
 To fix this:
 1. Open RASMapper
 2. Click Map &gt; Set Projection
@@ -6050,15 +6063,15 @@ First few rows of mesh cell faces:
 </span><span id="__span-28-98"><a id="__codelineno-28-98" name="__codelineno-28-98" href="#__codelineno-28-98"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">faces</span><span class="o">.</span><span class="n">empty</span> <span class="ow">and</span> <span class="s1">&#39;distance_along_profile&#39;</span> <span class="ow">in</span> <span class="n">faces</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
 </span><span id="__span-28-99"><a id="__codelineno-28-99" name="__codelineno-28-99" href="#__codelineno-28-99"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Distance range: </span><span class="si">{</span><span class="n">faces</span><span class="p">[</span><span class="s1">&#39;distance_along_profile&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">faces</span><span class="p">[</span><span class="s1">&#39;distance_along_profile&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:25 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:25 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:25 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:25 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:25 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:25 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:25 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2. RASMapper projection file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:02 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2. RASMapper projection file C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
 To fix this:
 1. Open RASMapper
 2. Click Map &gt; Set Projection
@@ -6072,19 +6085,19 @@ Loaded 814 mesh cell faces
 Loaded 3 profile lines
 
 
-2025-12-29 00:16:25 - ras_commander.hdf.HdfMesh - INFO - Found 16 faces along profile line
+2026-01-12 23:26:03 - ras_commander.hdf.HdfMesh - INFO - Found 16 faces along profile line
 
 
 Profile Line 1: Found 16 perpendicular faces
 
 
-2025-12-29 00:16:26 - ras_commander.hdf.HdfMesh - INFO - Found 25 faces along profile line
+2026-01-12 23:26:05 - ras_commander.hdf.HdfMesh - INFO - Found 25 faces along profile line
 
 
 Profile Line 2: Found 25 perpendicular faces
 
 
-2025-12-29 00:16:27 - ras_commander.hdf.HdfMesh - INFO - Found 19 faces along profile line
+2026-01-12 23:26:06 - ras_commander.hdf.HdfMesh - INFO - Found 19 faces along profile line
 
 
 Profile Line 3: Found 19 perpendicular faces
@@ -6105,27 +6118,27 @@ Total profile lines processed: 3
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">face_property_tables</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_face_property_tables</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">face_property_tables</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:27 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 
 
 
-{&#39;Perimeter 1&#39;:       Face ID          Z       Area Wetted Perimeter Manning&#39;s n
- 0           0  683.78314        0.0              0.0  0.06680043
- 1           0  683.98315  25.314476        311.06384  0.06680043
- 2           0   684.1409   77.88681         355.3648  0.06600185
- 3           0   684.1893  98.404495        368.92633  0.06575739
- 4           0   684.5791  249.17476         400.5631  0.06531201
- ...       ...        ...        ...              ...         ...
- 5183      812  683.02405   1228.017        475.78708  0.06334631
- 5184      813   683.6363        0.0              0.0  0.07539803
- 5185      813   683.8363  13.135144        199.78789  0.07539803
- 5186      813   683.9459  45.552128        391.64612  0.07541533
- 5187      813  683.94946   51.69725         397.8351  0.07541589
+{&#39;Perimeter 1&#39;:       Face ID   Elevation         Area  Wetted Perimeter  Manning&#39;s n
+ 0           0  683.783142     0.000000          0.000000     0.066800
+ 1           0  683.983154    25.314476        311.063843     0.066800
+ 2           0  684.140930    77.886810        355.364807     0.066002
+ 3           0  684.189270    98.404495        368.926331     0.065757
+ 4           0  684.579102   249.174759        400.563110     0.065312
+ ...       ...         ...          ...               ...          ...
+ 5183      812  683.024048  1228.016968        475.787079     0.063346
+ 5184      813  683.636292     0.000000          0.000000     0.075398
+ 5185      813  683.836304    13.135144        199.787888     0.075398
+ 5186      813  683.945923    45.552128        391.646118     0.075415
+ 5187      813  683.949463    51.697250        397.835114     0.075416
 
  [5188 rows x 5 columns]}
 </code></pre></div>
@@ -6165,20 +6178,7 @@ Total profile lines processed: 3
 </span><span id="__span-30-34"><a id="__codelineno-30-34" name="__codelineno-30-34" href="#__codelineno-30-34"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-30-35"><a id="__codelineno-30-35" name="__codelineno-30-35" href="#__codelineno-30-35"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-2025-12-29 00:16:28 - matplotlib.category - INFO - Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
-</code></pre></div>
-<p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_38_1.png" /></p>
+<p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_38_0.png" /></p>
 <h2 id="cell-property-tables">Cell Property Tables<a class="headerlink" href="#cell-property-tables" title="Permanent link">&para;</a></h2>
 <p>Similar to face property tables, <strong>cell property tables</strong> provide elevation-volume relationships for each mesh cell.
 This data defines how cell volume changes with water surface elevation and is used internally by HEC-RAS for 2D hydraulic computations.</p>
@@ -6202,6 +6202,19 @@ This data defines how cell volume changes with water surface elevation and is us
 </span><span id="__span-31-17"><a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No cell property tables found in geometry HDF.&quot;</span><span class="p">)</span>
 </span><span id="__span-31-18"><a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cell property tables are generated during geometry preprocessing.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:07 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+
+
+Mesh areas with cell property tables: [&#39;Perimeter 1&#39;]
+
+Mesh: Perimeter 1
+  Shape: (6074, 3)
+  Columns: [&#39;Cell ID&#39;, &#39;Elevation&#39;, &#39;Volume&#39;]
+  Number of unique cells: 354
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Plot elevation-volume curve for a sample cell</span>
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="k">if</span> <span class="n">cell_property_tables</span><span class="p">:</span>
 </span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
@@ -6224,6 +6237,7 @@ This data defines how cell volume changes with water surface elevation and is us
 </span><span id="__span-32-20"><a id="__codelineno-32-20" name="__codelineno-32-20" href="#__codelineno-32-20"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-32-21"><a id="__codelineno-32-21" name="__codelineno-32-21" href="#__codelineno-32-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping plot - no cell property tables available.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_41_0.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Get mesh timeseries output</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="c1"># Get mesh areas from previous code cell</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="n">mesh_areas</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_area_names</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
@@ -6231,10 +6245,10 @@ This data defines how cell volume changes with water surface elevation and is us
 </span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="n">mesh_name</span> <span class="o">=</span> <span class="n">mesh_areas</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Use the first 2D flow area name</span>
 </span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="n">timeseries_da</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">mesh_name</span><span class="p">,</span> <span class="s2">&quot;Water Surface&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:28 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:08 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Timeseries Output (Water Surface) for </span><span class="si">{</span><span class="n">mesh_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
 </span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">timeseries_da</span>
@@ -6704,7 +6718,7 @@ Coordinates:
 Attributes:
     units:      ft
     mesh_name:  Perimeter 1
-    variable:   Water Surface</pre><div class='xr-wrap' style='display:none'><div class='xr-header'><div class='xr-obj-type'>xarray.DataArray</div><div class='xr-array-name'></div><ul class='xr-dim-list'><li><span class='xr-has-index'>time</span>: 1633</li><li><span class='xr-has-index'>cell_id</span>: 433</li></ul></div><ul class='xr-sections'><li class='xr-section-item'><div class='xr-array-wrap'><input id='section-f62f3c6b-a276-412d-9519-31a06025fdf5' class='xr-array-in' type='checkbox' checked><label for='section-f62f3c6b-a276-412d-9519-31a06025fdf5' title='Show/hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-array-preview xr-preview'><span>681.3 681.3 681.2 681.2 681.0 680.9 ... 691.6 680.8 685.1 680.1 683.8</span></div><div class='xr-array-data'><pre>array([[681.284  , 681.25146, 681.22766, ..., 685.05927, 680.1254 ,
+    variable:   Water Surface</pre><div class='xr-wrap' style='display:none'><div class='xr-header'><div class='xr-obj-type'>xarray.DataArray</div><div class='xr-array-name'></div><ul class='xr-dim-list'><li><span class='xr-has-index'>time</span>: 1633</li><li><span class='xr-has-index'>cell_id</span>: 433</li></ul></div><ul class='xr-sections'><li class='xr-section-item'><div class='xr-array-wrap'><input id='section-73b66d8d-a46f-43e8-97b7-9d544790c766' class='xr-array-in' type='checkbox' checked><label for='section-73b66d8d-a46f-43e8-97b7-9d544790c766' title='Show/hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-array-preview xr-preview'><span>681.3 681.3 681.2 681.2 681.0 680.9 ... 691.6 680.8 685.1 680.1 683.8</span></div><div class='xr-array-data'><pre>array([[681.284  , 681.25146, 681.22766, ..., 685.05927, 680.1254 ,
         683.6363 ],
        [681.2948 , 681.26215, 681.23834, ..., 685.05927, 680.1254 ,
         683.6363 ],
@@ -6716,10 +6730,10 @@ Attributes:
        [680.8906 , 680.8606 , 680.8381 , ..., 685.05927, 680.1254 ,
         683.7824 ],
        [680.8839 , 680.854  , 680.83167, ..., 685.05927, 680.1254 ,
-        683.7824 ]], shape=(1633, 433), dtype=float32)</pre></div></div></li><li class='xr-section-item'><input id='section-850f7c11-3a66-4ea0-ace2-64d3ecd24cd5' class='xr-section-summary-in' type='checkbox'  checked><label for='section-850f7c11-3a66-4ea0-ace2-64d3ecd24cd5' class='xr-section-summary' >Coordinates: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>time</span></div><div class='xr-var-dims'>(time)</div><div class='xr-var-dtype'>datetime64[ns]</div><div class='xr-var-preview xr-preview'>2019-04-02 ... 2019-05-06</div><input id='attrs-73566c2b-dc70-4a78-aaca-3c3399acdbb3' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-73566c2b-dc70-4a78-aaca-3c3399acdbb3' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-8d2d9ac6-9c61-4768-a8ca-afb8463eb032' class='xr-var-data-in' type='checkbox'><label for='data-8d2d9ac6-9c61-4768-a8ca-afb8463eb032' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;2019-04-02T00:00:00.000000000&#x27;, &#x27;2019-04-02T00:30:00.000000000&#x27;,
+        683.7824 ]], shape=(1633, 433), dtype=float32)</pre></div></div></li><li class='xr-section-item'><input id='section-4be8b75e-22a8-4bca-8982-f92a308e7d3b' class='xr-section-summary-in' type='checkbox'  checked><label for='section-4be8b75e-22a8-4bca-8982-f92a308e7d3b' class='xr-section-summary' >Coordinates: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>time</span></div><div class='xr-var-dims'>(time)</div><div class='xr-var-dtype'>datetime64[ns]</div><div class='xr-var-preview xr-preview'>2019-04-02 ... 2019-05-06</div><input id='attrs-29cedd70-99e2-4419-a4e6-dd0049126160' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-29cedd70-99e2-4419-a4e6-dd0049126160' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-b47b3370-6f47-4e7f-bf76-5fa1ccd9e892' class='xr-var-data-in' type='checkbox'><label for='data-b47b3370-6f47-4e7f-bf76-5fa1ccd9e892' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;2019-04-02T00:00:00.000000000&#x27;, &#x27;2019-04-02T00:30:00.000000000&#x27;,
        &#x27;2019-04-02T01:00:00.000000000&#x27;, ..., &#x27;2019-05-05T23:00:00.000000000&#x27;,
        &#x27;2019-05-05T23:30:00.000000000&#x27;, &#x27;2019-05-06T00:00:00.000000000&#x27;],
-      shape=(1633,), dtype=&#x27;datetime64[ns]&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>cell_id</span></div><div class='xr-var-dims'>(cell_id)</div><div class='xr-var-dtype'>int64</div><div class='xr-var-preview xr-preview'>0 1 2 3 4 5 ... 428 429 430 431 432</div><input id='attrs-a6b9e738-9eca-4c69-a519-fd1d21c7b9f7' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-a6b9e738-9eca-4c69-a519-fd1d21c7b9f7' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-e2da1c23-6cc0-4923-9498-2c931b6b1ed8' class='xr-var-data-in' type='checkbox'><label for='data-e2da1c23-6cc0-4923-9498-2c931b6b1ed8' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([  0,   1,   2, ..., 430, 431, 432], shape=(433,))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-090500f4-0cf6-4a53-8254-32025abf8c0b' class='xr-section-summary-in' type='checkbox'  ><label for='section-090500f4-0cf6-4a53-8254-32025abf8c0b' class='xr-section-summary' >Indexes: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-index-name'><div>time</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-dcef766c-c823-4784-b789-2b43383e1ad5' class='xr-index-data-in' type='checkbox'/><label for='index-dcef766c-c823-4784-b789-2b43383e1ad5' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(DatetimeIndex([&#x27;2019-04-02 00:00:00&#x27;, &#x27;2019-04-02 00:30:00&#x27;,
+      shape=(1633,), dtype=&#x27;datetime64[ns]&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>cell_id</span></div><div class='xr-var-dims'>(cell_id)</div><div class='xr-var-dtype'>int64</div><div class='xr-var-preview xr-preview'>0 1 2 3 4 5 ... 428 429 430 431 432</div><input id='attrs-c5393cd5-d717-4684-ab88-a66cf0d8082e' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-c5393cd5-d717-4684-ab88-a66cf0d8082e' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-b5ce7491-9f09-49a1-9c57-34c0825f934c' class='xr-var-data-in' type='checkbox'><label for='data-b5ce7491-9f09-49a1-9c57-34c0825f934c' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([  0,   1,   2, ..., 430, 431, 432], shape=(433,))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-ecbbad6e-4c1d-441d-aa00-f6f26baeabac' class='xr-section-summary-in' type='checkbox'  ><label for='section-ecbbad6e-4c1d-441d-aa00-f6f26baeabac' class='xr-section-summary' >Indexes: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-index-name'><div>time</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-ced1e73a-7f58-4d6f-9ed3-db6e2ca28420' class='xr-index-data-in' type='checkbox'/><label for='index-ced1e73a-7f58-4d6f-9ed3-db6e2ca28420' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(DatetimeIndex([&#x27;2019-04-02 00:00:00&#x27;, &#x27;2019-04-02 00:30:00&#x27;,
                &#x27;2019-04-02 01:00:00&#x27;, &#x27;2019-04-02 01:30:00&#x27;,
                &#x27;2019-04-02 02:00:00&#x27;, &#x27;2019-04-02 02:30:00&#x27;,
                &#x27;2019-04-02 03:00:00&#x27;, &#x27;2019-04-02 03:30:00&#x27;,
@@ -6730,43 +6744,43 @@ Attributes:
                &#x27;2019-05-05 21:30:00&#x27;, &#x27;2019-05-05 22:00:00&#x27;,
                &#x27;2019-05-05 22:30:00&#x27;, &#x27;2019-05-05 23:00:00&#x27;,
                &#x27;2019-05-05 23:30:00&#x27;, &#x27;2019-05-06 00:00:00&#x27;],
-              dtype=&#x27;datetime64[ns]&#x27;, name=&#x27;time&#x27;, length=1633, freq=None))</pre></div></li><li class='xr-var-item'><div class='xr-index-name'><div>cell_id</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-763d0823-57c4-4955-9bee-1fada4d07b54' class='xr-index-data-in' type='checkbox'/><label for='index-763d0823-57c4-4955-9bee-1fada4d07b54' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(Index([  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
+              dtype=&#x27;datetime64[ns]&#x27;, name=&#x27;time&#x27;, length=1633, freq=None))</pre></div></li><li class='xr-var-item'><div class='xr-index-name'><div>cell_id</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-617fd653-8542-450e-be36-9c96bc1d2ae3' class='xr-index-data-in' type='checkbox'/><label for='index-617fd653-8542-450e-be36-9c96bc1d2ae3' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(Index([  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
        ...
        423, 424, 425, 426, 427, 428, 429, 430, 431, 432],
-      dtype=&#x27;int64&#x27;, name=&#x27;cell_id&#x27;, length=433))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-871b6de2-9d21-454e-a91f-3f8df386cd50' class='xr-section-summary-in' type='checkbox'  checked><label for='section-871b6de2-9d21-454e-a91f-3f8df386cd50' class='xr-section-summary' >Attributes: <span>(3)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Water Surface</dd></dl></div></li></ul></div></div>
+      dtype=&#x27;int64&#x27;, name=&#x27;cell_id&#x27;, length=433))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-2a7188fd-3679-4000-b840-9271a037c239' class='xr-section-summary-in' type='checkbox'  checked><label for='section-2a7188fd-3679-4000-b840-9271a037c239' class='xr-section-summary' >Attributes: <span>(3)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Water Surface</dd></dl></div></li></ul></div></div>
 
 <div class="language-python highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Get mesh cells timeseries output</span>
 </span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="n">cells_timeseries_ds</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_cells_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">mesh_name</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Depth&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity X&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity Y&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Froude Number&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Courant Number&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Shear Stress&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Bed Elevation&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Precipitation Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Infiltration Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Evaporation Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Percolation Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Elevation&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Depth&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Flow&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity X&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity Y&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Water Surface&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Courant&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Cumulative Volume&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Eddy Viscosity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow Period Average&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Friction Term&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Pressure Gradient Term&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Shear Stress&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Depth&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity X&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity Y&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Froude Number&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Courant Number&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Shear Stress&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Bed Elevation&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Precipitation Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Infiltration Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Evaporation Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Percolation Rate&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Elevation&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Depth&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Flow&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity X&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity Y&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Water Surface&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Courant&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Cumulative Volume&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Eddy Viscosity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow Period Average&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Friction Term&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Pressure Gradient Term&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Shear Stress&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Cells Timeseries Output:&quot;</span><span class="p">)</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="n">cells_timeseries_ds</span>
@@ -6794,12 +6808,12 @@ Attributes:
 <div class="language-python highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Get mesh faces timeseries output</span>
 </span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="n">faces_timeseries_ds</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_faces_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">mesh_name</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
-2025-12-29 00:16:28 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+<div class="language-text highlight"><pre><span></span><code>2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+2026-01-12 23:26:08 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Faces Timeseries Output:&quot;</span><span class="p">)</span>
 </span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="n">faces_timeseries_ds</span>
@@ -7260,10 +7274,10 @@ Data variables:
 Attributes:
     units:      ft/s
     mesh_name:  Perimeter 1
-    variable:   Face Velocity</pre><div class='xr-wrap' style='display:none'><div class='xr-header'><div class='xr-obj-type'>xarray.Dataset</div></div><ul class='xr-sections'><li class='xr-section-item'><input id='section-ee84b8fc-05ff-4e91-9350-1c3be97f73ff' class='xr-section-summary-in' type='checkbox' disabled ><label for='section-ee84b8fc-05ff-4e91-9350-1c3be97f73ff' class='xr-section-summary'  title='Expand/collapse section'>Dimensions:</label><div class='xr-section-inline-details'><ul class='xr-dim-list'><li><span class='xr-has-index'>time</span>: 1633</li><li><span class='xr-has-index'>face_id</span>: 814</li></ul></div><div class='xr-section-details'></div></li><li class='xr-section-item'><input id='section-985dce19-af1c-4d80-b015-4b46b68c98b8' class='xr-section-summary-in' type='checkbox'  checked><label for='section-985dce19-af1c-4d80-b015-4b46b68c98b8' class='xr-section-summary' >Coordinates: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>time</span></div><div class='xr-var-dims'>(time)</div><div class='xr-var-dtype'>datetime64[ns]</div><div class='xr-var-preview xr-preview'>2019-04-02 ... 2019-05-06</div><input id='attrs-3ff18d80-fb21-458d-b733-b66e85be0ef0' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-3ff18d80-fb21-458d-b733-b66e85be0ef0' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-bb8b1b65-6823-450b-9d35-ba13141a30fc' class='xr-var-data-in' type='checkbox'><label for='data-bb8b1b65-6823-450b-9d35-ba13141a30fc' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;2019-04-02T00:00:00.000000000&#x27;, &#x27;2019-04-02T00:30:00.000000000&#x27;,
+    variable:   Face Velocity</pre><div class='xr-wrap' style='display:none'><div class='xr-header'><div class='xr-obj-type'>xarray.Dataset</div></div><ul class='xr-sections'><li class='xr-section-item'><input id='section-1e8bcfd7-cf8b-44c9-a5f9-f3353985c0ab' class='xr-section-summary-in' type='checkbox' disabled ><label for='section-1e8bcfd7-cf8b-44c9-a5f9-f3353985c0ab' class='xr-section-summary'  title='Expand/collapse section'>Dimensions:</label><div class='xr-section-inline-details'><ul class='xr-dim-list'><li><span class='xr-has-index'>time</span>: 1633</li><li><span class='xr-has-index'>face_id</span>: 814</li></ul></div><div class='xr-section-details'></div></li><li class='xr-section-item'><input id='section-856d7e4b-3a80-42e9-9d30-f19cae713390' class='xr-section-summary-in' type='checkbox'  checked><label for='section-856d7e4b-3a80-42e9-9d30-f19cae713390' class='xr-section-summary' >Coordinates: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>time</span></div><div class='xr-var-dims'>(time)</div><div class='xr-var-dtype'>datetime64[ns]</div><div class='xr-var-preview xr-preview'>2019-04-02 ... 2019-05-06</div><input id='attrs-c43677cd-9c16-4a7d-8240-668bd130623e' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-c43677cd-9c16-4a7d-8240-668bd130623e' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-840c0c26-5f94-493a-aa47-b680ace6fdf6' class='xr-var-data-in' type='checkbox'><label for='data-840c0c26-5f94-493a-aa47-b680ace6fdf6' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;2019-04-02T00:00:00.000000000&#x27;, &#x27;2019-04-02T00:30:00.000000000&#x27;,
        &#x27;2019-04-02T01:00:00.000000000&#x27;, ..., &#x27;2019-05-05T23:00:00.000000000&#x27;,
        &#x27;2019-05-05T23:30:00.000000000&#x27;, &#x27;2019-05-06T00:00:00.000000000&#x27;],
-      shape=(1633,), dtype=&#x27;datetime64[ns]&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>face_id</span></div><div class='xr-var-dims'>(face_id)</div><div class='xr-var-dtype'>int64</div><div class='xr-var-preview xr-preview'>0 1 2 3 4 5 ... 809 810 811 812 813</div><input id='attrs-5f92f643-3c52-4318-beb0-699202cec4c8' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-5f92f643-3c52-4318-beb0-699202cec4c8' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-db19fa85-2825-43fd-9bbc-0f9a9e3773eb' class='xr-var-data-in' type='checkbox'><label for='data-db19fa85-2825-43fd-9bbc-0f9a9e3773eb' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([  0,   1,   2, ..., 811, 812, 813], shape=(814,))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-9ee24a59-3501-4469-8042-60744d8ba679' class='xr-section-summary-in' type='checkbox'  checked><label for='section-9ee24a59-3501-4469-8042-60744d8ba679' class='xr-section-summary' >Data variables: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span>face_velocity</span></div><div class='xr-var-dims'>(time, face_id)</div><div class='xr-var-dtype'>float32</div><div class='xr-var-preview xr-preview'>0.0 0.0 0.0 0.0 ... 0.0 0.0 -0.0</div><input id='attrs-6ef2f4b5-c2cc-4ed9-a4b1-cd849efc1f10' class='xr-var-attrs-in' type='checkbox' ><label for='attrs-6ef2f4b5-c2cc-4ed9-a4b1-cd849efc1f10' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-e9ce40e5-e484-4421-bf8c-a802f17e5cfc' class='xr-var-data-in' type='checkbox'><label for='data-e9ce40e5-e484-4421-bf8c-a802f17e5cfc' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft/s</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Face Velocity</dd></dl></div><div class='xr-var-data'><pre>array([[ 0.        ,  0.        ,  0.        , ...,  0.        ,
+      shape=(1633,), dtype=&#x27;datetime64[ns]&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>face_id</span></div><div class='xr-var-dims'>(face_id)</div><div class='xr-var-dtype'>int64</div><div class='xr-var-preview xr-preview'>0 1 2 3 4 5 ... 809 810 811 812 813</div><input id='attrs-daec2198-cad9-4019-bfcf-7321fd7b6411' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-daec2198-cad9-4019-bfcf-7321fd7b6411' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-4f9becb6-0c95-4da2-802d-e4b94311cb1d' class='xr-var-data-in' type='checkbox'><label for='data-4f9becb6-0c95-4da2-802d-e4b94311cb1d' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([  0,   1,   2, ..., 811, 812, 813], shape=(814,))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-6482e07b-542c-4dd8-9cee-aa88f13a93b4' class='xr-section-summary-in' type='checkbox'  checked><label for='section-6482e07b-542c-4dd8-9cee-aa88f13a93b4' class='xr-section-summary' >Data variables: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span>face_velocity</span></div><div class='xr-var-dims'>(time, face_id)</div><div class='xr-var-dtype'>float32</div><div class='xr-var-preview xr-preview'>0.0 0.0 0.0 0.0 ... 0.0 0.0 -0.0</div><input id='attrs-82131ab5-a60e-4789-a508-7cdd559256e4' class='xr-var-attrs-in' type='checkbox' ><label for='attrs-82131ab5-a60e-4789-a508-7cdd559256e4' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-9370d3a3-c68d-4086-9a81-bf2fe4868ac0' class='xr-var-data-in' type='checkbox'><label for='data-9370d3a3-c68d-4086-9a81-bf2fe4868ac0' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft/s</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Face Velocity</dd></dl></div><div class='xr-var-data'><pre>array([[ 0.        ,  0.        ,  0.        , ...,  0.        ,
          0.        , -0.        ],
        [ 0.        ,  0.        ,  0.        , ...,  0.        ,
          0.        , -0.        ],
@@ -7275,20 +7289,20 @@ Attributes:
        [-0.00021978,  0.        ,  0.00075304, ...,  0.        ,
          0.        , -0.        ],
        [-0.00021902,  0.        ,  0.00075007, ...,  0.        ,
-         0.        , -0.        ]], shape=(1633, 814), dtype=float32)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span>face_flow</span></div><div class='xr-var-dims'>(time, face_id)</div><div class='xr-var-dtype'>float32</div><div class='xr-var-preview xr-preview'>0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0</div><input id='attrs-f9d9b383-3989-4058-a9c0-e455645ad2df' class='xr-var-attrs-in' type='checkbox' ><label for='attrs-f9d9b383-3989-4058-a9c0-e455645ad2df' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-4b144cb6-5761-4496-a647-50e03e4dc53f' class='xr-var-data-in' type='checkbox'><label for='data-4b144cb6-5761-4496-a647-50e03e4dc53f' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>cfs</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Face Flow</dd></dl></div><div class='xr-var-data'><pre>array([[ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00, ...,
+         0.        , -0.        ]], shape=(1633, 814), dtype=float32)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span>face_flow</span></div><div class='xr-var-dims'>(time, face_id)</div><div class='xr-var-dtype'>float32</div><div class='xr-var-preview xr-preview'>0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0</div><input id='attrs-f6bc25e8-8c91-48a5-a796-9e9d2792978f' class='xr-var-attrs-in' type='checkbox' ><label for='attrs-f6bc25e8-8c91-48a5-a796-9e9d2792978f' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-259a6714-1c8c-4bf1-bc71-6a7f8940d15e' class='xr-var-data-in' type='checkbox'><label for='data-259a6714-1c8c-4bf1-bc71-6a7f8940d15e' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>cfs</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Face Flow</dd></dl></div><div class='xr-var-data'><pre>array([[ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00, ...,
          0.0000000e+00,  0.0000000e+00,  0.0000000e+00],
        [ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00, ...,
          0.0000000e+00,  0.0000000e+00,  0.0000000e+00],
        [ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00, ...,
          0.0000000e+00,  0.0000000e+00,  0.0000000e+00],
        ...,
-       [-4.2929114e-06,  0.0000000e+00,  5.7360735e-06, ...,
+       [-4.2929782e-06,  0.0000000e+00,  5.7361158e-06, ...,
          0.0000000e+00,  0.0000000e+00,  0.0000000e+00],
-       [-4.2558213e-06,  0.0000000e+00,  5.6853937e-06, ...,
+       [-4.2558877e-06,  0.0000000e+00,  5.6854369e-06, ...,
          0.0000000e+00,  0.0000000e+00,  0.0000000e+00],
-       [-4.2191750e-06,  0.0000000e+00,  5.6358367e-06, ...,
+       [-4.2192437e-06,  0.0000000e+00,  5.6358799e-06, ...,
          0.0000000e+00,  0.0000000e+00,  0.0000000e+00]],
-      shape=(1633, 814), dtype=float32)</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-a5556021-5f32-46a9-8cdf-56546fe3c37a' class='xr-section-summary-in' type='checkbox'  ><label for='section-a5556021-5f32-46a9-8cdf-56546fe3c37a' class='xr-section-summary' >Indexes: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-index-name'><div>time</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-d7355c0b-5004-4bf0-9f4e-7d0d9ee91c7c' class='xr-index-data-in' type='checkbox'/><label for='index-d7355c0b-5004-4bf0-9f4e-7d0d9ee91c7c' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(DatetimeIndex([&#x27;2019-04-02 00:00:00&#x27;, &#x27;2019-04-02 00:30:00&#x27;,
+      shape=(1633, 814), dtype=float32)</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-90cd38f0-c489-4d3c-9655-0cd8411b561b' class='xr-section-summary-in' type='checkbox'  ><label for='section-90cd38f0-c489-4d3c-9655-0cd8411b561b' class='xr-section-summary' >Indexes: <span>(2)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-index-name'><div>time</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-2ea646ad-2148-47eb-abee-828483c01928' class='xr-index-data-in' type='checkbox'/><label for='index-2ea646ad-2148-47eb-abee-828483c01928' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(DatetimeIndex([&#x27;2019-04-02 00:00:00&#x27;, &#x27;2019-04-02 00:30:00&#x27;,
                &#x27;2019-04-02 01:00:00&#x27;, &#x27;2019-04-02 01:30:00&#x27;,
                &#x27;2019-04-02 02:00:00&#x27;, &#x27;2019-04-02 02:30:00&#x27;,
                &#x27;2019-04-02 03:00:00&#x27;, &#x27;2019-04-02 03:30:00&#x27;,
@@ -7299,10 +7313,10 @@ Attributes:
                &#x27;2019-05-05 21:30:00&#x27;, &#x27;2019-05-05 22:00:00&#x27;,
                &#x27;2019-05-05 22:30:00&#x27;, &#x27;2019-05-05 23:00:00&#x27;,
                &#x27;2019-05-05 23:30:00&#x27;, &#x27;2019-05-06 00:00:00&#x27;],
-              dtype=&#x27;datetime64[ns]&#x27;, name=&#x27;time&#x27;, length=1633, freq=None))</pre></div></li><li class='xr-var-item'><div class='xr-index-name'><div>face_id</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-8257fcdc-a034-4ed7-b883-e9484b35ea07' class='xr-index-data-in' type='checkbox'/><label for='index-8257fcdc-a034-4ed7-b883-e9484b35ea07' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(Index([  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
+              dtype=&#x27;datetime64[ns]&#x27;, name=&#x27;time&#x27;, length=1633, freq=None))</pre></div></li><li class='xr-var-item'><div class='xr-index-name'><div>face_id</div></div><div class='xr-index-preview'>PandasIndex</div><input type='checkbox' disabled/><label></label><input id='index-506c13f9-0e85-451b-a78d-887ac37ef15e' class='xr-index-data-in' type='checkbox'/><label for='index-506c13f9-0e85-451b-a78d-887ac37ef15e' title='Show/Hide index repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-index-data'><pre>PandasIndex(Index([  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
        ...
        804, 805, 806, 807, 808, 809, 810, 811, 812, 813],
-      dtype=&#x27;int64&#x27;, name=&#x27;face_id&#x27;, length=814))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-5654dd76-f28f-41b5-94f7-0d8bc0dda9ab' class='xr-section-summary-in' type='checkbox'  checked><label for='section-5654dd76-f28f-41b5-94f7-0d8bc0dda9ab' class='xr-section-summary' >Attributes: <span>(3)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft/s</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Face Velocity</dd></dl></div></li></ul></div></div>
+      dtype=&#x27;int64&#x27;, name=&#x27;face_id&#x27;, length=814))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-28978abc-1214-46a3-8030-82ccbd7f78bd' class='xr-section-summary-in' type='checkbox'  checked><label for='section-28978abc-1214-46a3-8030-82ccbd7f78bd' class='xr-section-summary' >Attributes: <span>(3)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft/s</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Face Velocity</dd></dl></div></li></ul></div></div>
 
 <h2 id="positive-flow-direction-normalization">Positive Flow Direction Normalization<a class="headerlink" href="#positive-flow-direction-normalization" title="Permanent link">&para;</a></h2>
 <p>The following function enforces consistent flow direction for aggregation.
@@ -7862,7 +7876,7 @@ Weighted velocities calculated.
 Number of ordered faces: 16
 Converted time to datetime format.
 Number of ordered faces: 16
-Saved weighted velocities to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Profile Line 1_discharge_weighted_velocity.csv
+Saved weighted velocities to C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Profile Line 1_discharge_weighted_velocity.csv
 
 Processing profile: Profile Line 2
 Calculating weighted velocity...
@@ -7878,7 +7892,7 @@ Weighted velocities calculated.
 Number of ordered faces: 25
 Converted time to datetime format.
 Number of ordered faces: 25
-Saved weighted velocities to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Profile Line 2_discharge_weighted_velocity.csv
+Saved weighted velocities to C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Profile Line 2_discharge_weighted_velocity.csv
 
 Processing profile: Profile Line 3
 Calculating weighted velocity...
@@ -7894,7 +7908,7 @@ Weighted velocities calculated.
 Number of ordered faces: 19
 Converted time to datetime format.
 Number of ordered faces: 19
-Saved weighted velocities to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Chippewa_2D_13\Profile Line 3_discharge_weighted_velocity.csv
+Saved weighted velocities to C:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Profile Line 3_discharge_weighted_velocity.csv
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="c1"># Create plots comparing discharge-weighted velocity and simple average for each profile line</span>
 </span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="k">for</span> <span class="n">profile_name</span><span class="p">,</span> <span class="n">profile_df</span> <span class="ow">in</span> <span class="n">profile_time_series</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -8118,7 +8132,7 @@ to filter faces that deviate too far from perpendicular (default: 60 degrees fro
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     
@@ -8128,7 +8142,7 @@ to filter faces that deviate too far from perpendicular (default: 60 degrees fro
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 12, 2026 01:35:13 UTC">January 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 14, 2026 16:43:44 UTC">January 14, 2026</span>
   </span>
 
     
