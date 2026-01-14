@@ -176,6 +176,7 @@ examples/Atlas\ 14\ Storm\ Hyetographs/
 
 # Test notebooks
 test_notebook*.ipynb
+examples/test_*.ipynb
 
 # Cleanup scripts (can be regenerated)
 cleanup_temp_files.sh
@@ -203,6 +204,10 @@ ras_commander/sources/
 
 # Claude Code workspace directories
 examples/.claude/
+
+# Claude Code session temp files
+tmpclaude-*-cwd
+**/tmpclaude-*-cwd
 
 # Environment variables and API keys
 .env
