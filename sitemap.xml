@@ -2,470 +2,470 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/DOCUMENTATION_PLAN/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/ebfe_models/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/about/acknowledgments/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/core/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/dss/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/fixit/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/geometry/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/hdf/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/api/remote/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/cognitive-infrastructure/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/cognitive-infrastructure/agents/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/cognitive-infrastructure/commands/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/cognitive-infrastructure/skills/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/development/agent-infrastructure/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/development/architecture/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/development/contributing/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/development/llm-development/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/development/release-notes/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/examples/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/getting-started/installation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/getting-started/project-initialization/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/getting-started/quickstart/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/100_using_ras_examples/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/101_project_initialization/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/102_multiple_project_operations/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/103_plan_and_geometry_operations/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/104_plan_parameter_operations/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/110_single_plan_execution/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/111_executing_plan_sets/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/112_sequential_plan_execution/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/113_parallel_execution/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/120_automating_ras_with_win32com/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/121_legacy_hecrascontroller_and_rascontrol/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/150_results_dataframe/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/201_1d_plaintext_geometry/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/202_2d_plaintext_geometry/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/203_htab_parameter_optimization/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/210_fixit_blocked_obstructions/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/300_unsteady_flow_operations/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/310_dss_boundary_extraction/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/311_validating_dss_paths/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/320_1d_boundary_condition_visualization/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/400_1d_hdf_data_extraction/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/401_steady_flow_analysis/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/410_2d_hdf_data_extraction/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/411_2d_hdf_pipes_and_pumps/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/412_2d_detail_face_data_extraction/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/420_breach_results_extraction/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/500_remote_execution_psexec/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/600_floodplain_mapping_gui/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/601_floodplain_mapping_rasprocess/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/602_floodplain_mapping_python_gis/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/610_fluvial_pluvial_delineation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/611_validating_map_layers/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/700_core_sensitivity/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/701_benchmarking_versions_6.1_to_6.6/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/710_mannings_sensitivity_bulk_analysis/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/711_mannings_sensitivity_multi_interval/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/720_precipitation_methods_comprehensive/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/721_Precipitation_Hyetograph_Comparison/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/722_gridded_precipitation_atlas14/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/725_atlas14_spatial_variance/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/800_quality_assurance_rascheck/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/801_advanced_structure_validation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/802_custom_workflows_and_standards/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/900_aorc_precipitation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/901_aorc_precipitation_catalog/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/910_usgs_gauge_catalog/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/911_usgs_gauge_data_integration/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/912_usgs_real_time_monitoring/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/913_bc_generation_from_live_gauge/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/914_historical_event_validation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/914_model_validation_with_usgs/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/920_terrain_creation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/950_ebfe_spring_creek/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/951_ebfe_north_galveston_bay/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/952_ebfe_upper_guadalupe_cascade/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/AGENTS/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/parallel-compute/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/parallel-compute/local-parallel/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/parallel-compute/remote-parallel/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/parallel-compute/scaling-strategies/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/parallel-compute/worker-types/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/dataframe-reference/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/file-formats/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/geometry-parsing/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/hdf-structure/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/hdf-writing-guide/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/prj-parsing/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/quick-reference/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/steady-parsing/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/reference/unsteady-parsing/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/atlas14-precipitation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/boundary-conditions/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/dam-breach-analysis/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/dss-operations/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/geometry-operations/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/gridded-precipitation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/hdf-data-extraction/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/legacy-com-interface/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/overview/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/plan-execution/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/project-file-validation/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/quality-assurance/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/remote-execution/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/spatial-data/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/steady-flow-analysis/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/usgs-gauge-data/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/workflows-and-patterns/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/quality-assurance/floodway-check/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/quality-assurance/nt-check/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/quality-assurance/profiles-check/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/quality-assurance/structure-check/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/quality-assurance/xs-check/</loc>
-         <lastmod>2026-01-14</lastmod>
+         <lastmod>2026-01-15</lastmod>
     </url>
 </urlset>
