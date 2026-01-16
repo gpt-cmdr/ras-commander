@@ -178,14 +178,13 @@ nav:
       - Version Benchmarking (6.1-6.6): notebooks/701_benchmarking_versions_6.1_to_6.6.md
       - Manning's n Bulk Analysis: notebooks/710_mannings_sensitivity_bulk_analysis.md
       - Manning's n Multi-Interval: notebooks/711_mannings_sensitivity_multi_interval.md
-      - Atlas 14 AEP Events: notebooks/720_atlas14_aep_events.md
-      - Atlas 14 Caching Demo: notebooks/721_atlas14_caching_demo.md
-      - Atlas 14 Multi-Project: notebooks/722_atlas14_multi_project.md
+      - Precipitation Methods: notebooks/720_precipitation_methods_comprehensive.md
+      - Hyetograph Comparison: notebooks/721_Precipitation_Hyetograph_Comparison.md
+      - Gridded Precipitation Atlas14: notebooks/722_gridded_precipitation_atlas14.md
       - Atlas 14 Spatial Variance: notebooks/725_atlas14_spatial_variance.md
     - Quality Assurance (800s):
       - RasCheck Validation: notebooks/800_quality_assurance_rascheck.md
       - Advanced Structure Validation: notebooks/801_advanced_structure_validation.md
-      - Custom Workflows & Standards: notebooks/802_custom_workflows_and_standards.md
     - External Data Integrations (900s):
       - AORC Precipitation: notebooks/900_aorc_precipitation.md
       - AORC Precipitation Catalog: notebooks/901_aorc_precipitation_catalog.md

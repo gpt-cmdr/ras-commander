@@ -24,19 +24,29 @@ from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpacka
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
-from .ebfe_models import RasEbfeModels
-from .M3Model import M3Model
+from .sources.federal import RasEbfeModels, RasEbfeExamples
+from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
 from .RasMap import RasMap
-from .RasProcess import RasProcess
+from .RasProcess import RasProcess, ProjectionInfo
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
 
 # Validation framework - core validation infrastructure
-from .validation_base import ValidationSeverity, ValidationResult, ValidationReport
+from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
+
+# Real-time execution monitoring callbacks
+from .ExecutionCallback import ExecutionCallback
+from .callbacks import (
+    ConsoleCallback,
+    FileLoggerCallback,
+    ProgressBarCallback,
+    SynchronizedCallback,
+)
+from .RasBco import BcoMonitor
 
 # Geometry handling - imported from geom subpackage
 from .geom import (
@@ -115,7 +125,7 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'RasEbfeExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
@@ -162,4 +172,125 @@ __all__ = [
 
     # Validation framework
     'ValidationSeverity', 'ValidationResult', 'ValidationReport',
+
+    # Real-time execution monitoring callbacks
+    'ExecutionCallback',
+    'ConsoleCallback',
+    'FileLoggerCallback',
+    'ProgressBarCallback',
+    'SynchronizedCallback',
+    'BcoMonitor',
 ]
+
+# =============================================================================
+# BACKWARD COMPATIBILITY - DEPRECATED MODULE PATHS (DEPRECATED in v0.89.0)
+# =============================================================================
+# These aliases provide backward compatibility for old import paths.
+# Users should migrate to new paths. Old paths will show DeprecationWarning.
+#
+# Migration:
+#   OLD: from ras_commander.BcoMonitor import BcoMonitor
+#   NEW: from ras_commander.RasBco import BcoMonitor
+#
+#   OLD: from ras_commander.validation_base import ValidationSeverity, ...
+#   NEW: from ras_commander.RasValidation import ValidationSeverity, ...
+# =============================================================================
+
+import sys
+import warnings
+
+
+class _DeprecatedBcoMonitor:
+    """Backward compatibility shim for old BcoMonitor import path."""
+
+    def __getattr__(self, name):
+        warnings.warn(
+            "Importing from ras_commander.BcoMonitor is deprecated. "
+            "Use: from ras_commander.RasBco import BcoMonitor",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .RasBco import BcoMonitor as _BcoMonitor
+        if name == 'BcoMonitor':
+            return _BcoMonitor
+        return getattr(_BcoMonitor, name)
+
+
+class _DeprecatedValidationBase:
+    """Backward compatibility shim for old validation_base import path."""
+
+    def __getattr__(self, name):
+        warnings.warn(
+            "Importing from ras_commander.validation_base is deprecated. "
+            "Use: from ras_commander.RasValidation import ValidationSeverity, ValidationResult, ValidationReport",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
+        mapping = {
+            'ValidationSeverity': ValidationSeverity,
+            'ValidationResult': ValidationResult,
+            'ValidationReport': ValidationReport,
+        }
+        if name in mapping:
+            return mapping[name]
+        raise AttributeError(f"module 'ras_commander.validation_base' has no attribute '{name}'")
+
+
+# Register the deprecated module shims in sys.modules for old import paths
+sys.modules['ras_commander.BcoMonitor'] = _DeprecatedBcoMonitor()
+sys.modules['ras_commander.validation_base'] = _DeprecatedValidationBase()
+
+
+class _DeprecatedM3Model:
+    """Backward compatibility shim for old M3Model import path."""
+
+    def __getattr__(self, name):
+        warnings.warn(
+            "Importing from ras_commander.M3Model is deprecated. "
+            "Use: from ras_commander.sources.county import M3Model",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .sources.county import M3Model
+        if name == 'M3Model':
+            return M3Model
+        return getattr(M3Model, name)
+
+
+class _DeprecatedEbfeModels:
+    """Backward compatibility shim for old ebfe_models import path."""
+
+    def __getattr__(self, name):
+        warnings.warn(
+            "Importing from ras_commander.ebfe_models is deprecated. "
+            "Use: from ras_commander.sources.federal import RasEbfeModels",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .sources.federal import RasEbfeModels
+        if name == 'RasEbfeModels':
+            return RasEbfeModels
+        return getattr(RasEbfeModels, name)
+
+
+class _DeprecatedEbfeExamples:
+    """Backward compatibility shim for old ebfe_examples import path."""
+
+    def __getattr__(self, name):
+        warnings.warn(
+            "Importing from ras_commander.ebfe_examples is deprecated. "
+            "Use: from ras_commander.sources.federal import RasEbfeExamples",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .sources.federal import RasEbfeExamples
+        if name == 'RasEbfeExamples':
+            return RasEbfeExamples
+        return getattr(RasEbfeExamples, name)
+
+
+# Register deprecated module paths for M3Model, ebfe_models, ebfe_examples
+sys.modules['ras_commander.M3Model'] = _DeprecatedM3Model()
+sys.modules['ras_commander.ebfe_models'] = _DeprecatedEbfeModels()
+sys.modules['ras_commander.ebfe_examples'] = _DeprecatedEbfeExamples()
