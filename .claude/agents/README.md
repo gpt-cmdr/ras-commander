@@ -71,6 +71,65 @@ Task Subagents (Haiku)
 - **best-practice-extractor** - Pattern extraction (Sonnet)
 - **blocker-detector** - Problem identification (Sonnet)
 
+## Agent File Organization
+
+### Two Acceptable Patterns
+
+Agents may be organized using **either** of these patterns:
+
+**Pattern 1: Root-Level Single File** (17 agents):
+```
+.claude/agents/
+├── hdf-analyst.md
+├── geometry-parser.md
+└── usgs-integrator.md
+```
+
+**Pattern 2: Subdirectory with SUBAGENT.md** (9 agents):
+```
+.claude/agents/
+├── git-operations/
+│   └── SUBAGENT.md
+├── python-environment-manager/
+│   └── SUBAGENT.md
+└── win32com-automation-expert/
+    └── SUBAGENT.md
+```
+
+**When to use each**:
+- **Root-level** (`{name}.md`): Simple agents, single file suffices
+- **Subdirectory** (`{name}/SUBAGENT.md`): Agents that may need supporting files (fixtures, test data)
+
+**Both patterns are valid** and documented in `.claude/rules/documentation/hierarchical-knowledge-best-practices.md`.
+
+### Unauthorized Subdirectories
+
+**ONLY 2 agents are permitted to have reference/ subdirectories**:
+
+1. **hierarchical-knowledge-agent-skill-memory-curator/reference/** - Meta-knowledge about the hierarchical system
+2. **claude-code-guide/reference/** - Cached official Anthropic documentation
+
+**All other subdirectories are prohibited**:
+- ❌ NO `researchers/` folders (research artifacts belong in `agent_tasks/.old/`)
+- ❌ NO `examples/` folders (examples belong in `examples/` root or notebooks)
+- ❌ NO `reference/` folders (except 2 documented exceptions)
+- ❌ NO task artifacts (REFACTOR_SUMMARY.md, COMPLETION_SUMMARY.md)
+
+**Rationale**: Agents are **lightweight navigators** (200-400 lines), not documentation repositories. They point to primary sources, not duplicate them.
+
+### File Size Guidelines
+
+**Target**: 200-400 lines per agent file
+
+**Current exceptions** (agents >600 lines, may need review):
+- `code-oracle-codex.md` (963 lines) - Complex CLI integration
+- `code-oracle-gemini.md` (914 lines) - Complex CLI integration
+- `win32com-automation-expert.md` (714 lines) - COM automation patterns
+- `hecras-code-archaeologist.md` (644 lines) - Assembly analysis patterns
+- `git-operations/SUBAGENT.md` (629 lines) - Git workflow patterns
+
+**Note**: These agents handle complex integrations that may justify larger size. However, they should be reviewed for potential duplication of primary sources.
+
 ## Subagent Definition Format
 
 ```yaml

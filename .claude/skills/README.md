@@ -41,21 +41,31 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 
 ## Skill Structure
 
-Each skill folder contains:
+**CRITICAL: Each skill folder contains ONLY `SKILL.md`**
+
 ```
-executing-hecras-plans/
-├── SKILL.md              # Main instructions with YAML frontmatter
-├── reference/
-│   ├── compute_plan.md   # Detailed API docs (load on-demand)
-│   ├── parallel.md       # Parallel execution details
-│   └── callbacks.md      # Real-time monitoring
-├── examples/
-│   ├── basic.md          # Simple examples
-│   └── advanced.md       # Complex workflows
-└── scripts/
-    ├── validate_plan.py  # Utility scripts (token-free execution!)
-    └── setup_workers.py
+.claude/skills/
+├── executing-hecras-plans/
+│   └── SKILL.md                    # ONLY file (200-400 lines)
+├── integrating-usgs-gauges/
+│   └── SKILL.md                    # ONLY file
+└── analyzing-aorc-precipitation/
+    └── SKILL.md                    # ONLY file
 ```
+
+**Prohibited in skill folders**:
+- ❌ NO `README.md` (duplicates SKILL.md)
+- ❌ NO `reference/` folders (skills are navigators, not docs)
+- ❌ NO `examples/` folders (examples belong in `examples/` root)
+- ❌ NO `scripts/` folders (utilities belong in `ras_commander/` or `tools/`)
+- ❌ NO task artifacts (COMPLETION_SUMMARY.md, REFACTORING_NOTES.txt)
+
+**Rationale**: Skills are **lightweight navigators** that point to primary sources:
+- Workflows → `ras_commander/{module}/CLAUDE.md`
+- API reference → Code docstrings
+- Examples → `examples/*.ipynb` notebooks
+
+**File size target**: 200-400 lines per SKILL.md
 
 ## Creating Library Skills
 
