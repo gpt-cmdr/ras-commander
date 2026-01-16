@@ -987,23 +987,47 @@ class RasPrj:
     def get_geom_entries(self):
         """
         Get all geometry entries from the HEC-RAS project.
-        
+
         Returns a DataFrame containing all geometry files (.g*) in the project
-        with their associated properties, paths and HDF links.
+        with their associated properties, paths, HDF links, and geometry metadata.
 
         Returns:
-            pd.DataFrame: A DataFrame with columns including 'geom_number', 'full_path', 
-                          'hdf_path', etc.
+            pd.DataFrame: A DataFrame with the following columns:
+                - geom_file (str): Geometry file identifier (e.g., 'g01')
+                - geom_number (str): Geometry number extracted from identifier
+                - full_path (str): Full path to plain text geometry file
+                - hdf_path (str): Path to geometry HDF file (.g##.hdf)
+                - has_1d_xs (bool): True if geometry has 1D cross sections
+                - has_2d_mesh (bool): True if geometry has 2D mesh areas
+                - num_cross_sections (int): Count of 1D cross sections
+                - num_inline_structures (int): Total count of bridges + culverts + weirs
+                - num_bridges (int): Count of bridge structures
+                - num_culverts (int): Count of culvert structures
+                - num_weirs (int): Count of inline weir structures
+                - num_gates (int): Count of gate structures
+                - num_lateral_structures (int): Count of lateral structures
+                - num_sa_2d_connections (int): Count of SA to 2D connections
+                - mesh_cell_count (int): Total 2D mesh cells across all areas
+                - mesh_area_names (list[str]): Names of 2D flow areas
 
         Raises:
             RuntimeError: If the project has not been initialized.
-        
+
+        Note:
+            Geometry metadata is extracted using GeomMetadata, which prefers HDF-based
+            extraction (fast) when .g##.hdf files exist, with plain text fallback.
+            If metadata extraction fails for any geometry, default values are used
+            (0 for counts, False for booleans, empty list for mesh_area_names).
+
         Example:
             >>> geom_entries = ras.get_geom_entries()
             >>> print(f"Project contains {len(geom_entries)} geometry files")
             >>> # Display the first geometry file's properties
             >>> if not geom_entries.empty:
             ...     print(geom_entries.iloc[0])
+            >>> # Filter to geometries with 2D mesh
+            >>> mesh_geoms = geom_entries[geom_entries['has_2d_mesh']]
+            >>> print(f"Found {len(mesh_geoms)} geometries with 2D mesh")
         """
         self.check_initialized()
         geom_pattern = re.compile(r'Geom File=(\w+)')
@@ -1020,7 +1044,59 @@ class RasPrj:
             geom_df['geom_number'] = geom_df['geom_file'].str.extract(r'(\d+)$')
             geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
             geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
-            
+
+            # Add geometry metadata columns using GeomMetadata
+            # Lazy import to avoid circular dependencies
+            import time
+            metadata_start = time.perf_counter()
+
+            try:
+                from .geom.GeomMetadata import GeomMetadata
+
+                # Initialize metadata columns with defaults
+                metadata_columns = [
+                    'has_1d_xs', 'has_2d_mesh', 'num_cross_sections',
+                    'num_inline_structures', 'num_bridges', 'num_culverts',
+                    'num_weirs', 'num_gates', 'num_lateral_structures',
+                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names'
+                ]
+                for col in metadata_columns:
+                    default = GeomMetadata.DEFAULT_COUNTS.get(col)
+                    if isinstance(default, list):
+                        # Lists need one instance per row to avoid broadcast error
+                        geom_df[col] = [default.copy() for _ in range(len(geom_df))]
+                    else:
+                        geom_df[col] = default
+
+                # Extract metadata for each geometry file
+                for idx, row in geom_df.iterrows():
+                    try:
+                        geom_path = Path(row['full_path'])
+                        hdf_path = Path(row['hdf_path'])
+
+                        counts = GeomMetadata.get_geometry_counts(
+                            geom_path=geom_path,
+                            hdf_path=hdf_path if hdf_path.exists() else None
+                        )
+
+                        # Update DataFrame row with extracted counts
+                        for col in metadata_columns:
+                            if col in counts:
+                                geom_df.at[idx, col] = counts[col]
+
+                    except Exception as e:
+                        logger.debug(f"Failed to extract metadata for {row['geom_file']}: {e}")
+                        # Keep default values on failure
+
+                metadata_elapsed = time.perf_counter() - metadata_start
+                if not self.suppress_logging:
+                    logger.debug(f"Geometry metadata extraction completed in {metadata_elapsed:.3f}s")
+
+            except ImportError as e:
+                logger.warning(f"GeomMetadata not available, skipping metadata extraction: {e}")
+            except Exception as e:
+                logger.warning(f"Geometry metadata extraction failed: {e}")
+
             if not self.suppress_logging:  # Only log if suppress_logging is False
                 logger.info(f"Found {len(geom_df)} geometry entries")
             return geom_df

@@ -17,6 +17,7 @@ Classes:
     GeomCulvert - Culvert operations
     GeomHtabUtils - HTAB parameter calculation utilities
     GeomHtab - Unified HTAB optimization for all geometry elements
+    GeomMetadata - Efficient geometry element count extraction
 
 Example:
     >>> from ras_commander import GeomCrossSection, GeomBridge
@@ -52,6 +53,7 @@ from .GeomBridge import GeomBridge
 from .GeomCulvert import GeomCulvert
 from .GeomHtabUtils import GeomHtabUtils
 from .GeomHtab import GeomHtab
+from .GeomMetadata import GeomMetadata
 
 __all__ = [
     'GeomParser',
@@ -65,4 +67,5 @@ __all__ = [
     'GeomCulvert',
     'GeomHtabUtils',
     'GeomHtab',
+    'GeomMetadata',
 ]

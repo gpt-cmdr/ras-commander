@@ -22,22 +22,23 @@ Example:
         logger = logging.getLogger(__name__)
         logger.debug("Additional debug information")
         # Function logic here
-        
-        
+
+
 -----
 
 All of the methods in this class are static and are designed to be used without instantiation.
 
-List of Functions in RasExamples:   
+List of Functions in RasExamples:
 - get_example_projects()
 - list_categories()
 - list_projects()
 - extract_project()
 - is_project_extracted()
 - clean_projects_directory()
-        
+
 """
 import os
+import sys
 import requests
 import zipfile
 import pandas as pd
@@ -54,10 +55,52 @@ from ras_commander.LoggingConfig import log_call
 
 logger = get_logger(__name__)
 
+
+def _get_user_data_dir() -> Path:
+    """
+    Get platform-appropriate user data directory for ras-commander.
+
+    This function returns a user-writable directory for storing downloaded
+    example projects and cache files, avoiding permission issues with
+    system-wide package installations.
+
+    Returns:
+        Path: User data directory
+            - Windows: %LOCALAPPDATA%/ras-commander (e.g., C:/Users/name/AppData/Local/ras-commander)
+            - macOS: ~/Library/Application Support/ras-commander
+            - Linux: ~/.local/share/ras-commander (XDG_DATA_HOME if set)
+    """
+    if sys.platform == 'win32':
+        # Windows: Use LOCALAPPDATA
+        base = os.environ.get('LOCALAPPDATA')
+        if base:
+            return Path(base) / 'ras-commander'
+        # Fallback to user home
+        return Path.home() / 'AppData' / 'Local' / 'ras-commander'
+    elif sys.platform == 'darwin':
+        # macOS: Use Application Support
+        return Path.home() / 'Library' / 'Application Support' / 'ras-commander'
+    else:
+        # Linux/Unix: Use XDG_DATA_HOME or ~/.local/share
+        xdg_data = os.environ.get('XDG_DATA_HOME')
+        if xdg_data:
+            return Path(xdg_data) / 'ras-commander'
+        return Path.home() / '.local' / 'share' / 'ras-commander'
+
 class RasExamples:
     """
     A class for quickly loading HEC-RAS example projects for testing and development of ras-commander.
     All methods are class methods, so no initialization is required.
+
+    Storage Locations:
+    - ZIP files and CSV cache: User data directory (writable without admin)
+      - Windows: %LOCALAPPDATA%/ras-commander/examples
+      - macOS: ~/Library/Application Support/ras-commander/examples
+      - Linux: ~/.local/share/ras-commander/examples
+    - Extracted projects: Current working directory / example_projects (or output_path)
+
+    This design ensures RasExamples works in system-wide conda environments
+    without requiring administrator privileges.
     """
     base_url = 'https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/'
     valid_versions = [
@@ -65,11 +108,22 @@ class RasExamples:
             "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
-    # Find examples directory relative to this module (ras_commander/RasExamples.py -> ../examples)
-    base_dir = Path(__file__).resolve().parent.parent / 'examples'
-    examples_dir = base_dir
-    projects_dir = examples_dir / 'example_projects'
-    csv_file_path = examples_dir / 'example_projects.csv'
+
+    # User data directory for ZIP files and CSV cache (writable without admin)
+    _user_data_dir = _get_user_data_dir() / 'examples'
+
+    # Legacy directory (package location) - checked for backward compatibility
+    _legacy_dir = Path(__file__).resolve().parent.parent / 'examples'
+
+    # Active examples_dir points to user data directory (for ZIP/CSV storage)
+    examples_dir = _user_data_dir
+
+    # Default projects extraction directory
+    # Note: Evaluated at import time. Use output_path parameter for different location.
+    projects_dir = Path.cwd() / 'example_projects'
+
+    # CSV cache file in user data directory
+    csv_file_path = _user_data_dir / 'example_projects.csv'
     
     # Special projects that are not in the main zip file
     SPECIAL_PROJECTS = {
@@ -240,20 +294,52 @@ class RasExamples:
 
     @classmethod
     def _find_zip_file(cls):
-        """Locate the example projects zip file in the examples directory."""
-        for version in cls.valid_versions:
-            potential_zip = cls.examples_dir / f"Example_Projects_{version.replace('.', '_')}.zip"
-            if potential_zip.exists():
-                cls._zip_file_path = potential_zip
-                logger.info(f"Found zip file: {cls._zip_file_path}")
-                break
-        else:
-            logger.warning("No existing example projects zip file found.")
+        """
+        Locate the example projects zip file.
+
+        Checks multiple locations in order:
+        1. User data directory (primary location for new downloads)
+        2. Legacy package directory (backward compatibility for existing installations)
+
+        This allows users with existing ZIP files in the old location to continue
+        using them without re-downloading.
+        """
+        # Directories to search (order matters - user data first, then legacy)
+        search_dirs = [cls._user_data_dir, cls._legacy_dir]
+
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+
+            for version in cls.valid_versions:
+                potential_zip = search_dir / f"Example_Projects_{version.replace('.', '_')}.zip"
+                if potential_zip.exists():
+                    cls._zip_file_path = potential_zip
+                    if search_dir == cls._legacy_dir:
+                        logger.info(f"Found zip file in legacy location: {cls._zip_file_path}")
+                        logger.info("Note: Future downloads will use user data directory.")
+                    else:
+                        logger.info(f"Found zip file: {cls._zip_file_path}")
+                    return
+
+        logger.warning("No existing example projects zip file found.")
 
     @classmethod
     def get_example_projects(cls, version_number='6.6'):
         """
         Download and extract HEC-RAS example projects for a specified version.
+
+        Downloads the ZIP file to the user data directory, which is writable
+        without administrator privileges:
+        - Windows: %LOCALAPPDATA%/ras-commander/examples
+        - macOS: ~/Library/Application Support/ras-commander/examples
+        - Linux: ~/.local/share/ras-commander/examples
+
+        Args:
+            version_number: HEC-RAS version (default: '6.6')
+
+        Returns:
+            Path: Directory where projects will be extracted
         """
         logger.info(f"Getting example projects for version {version_number}")
         if version_number not in cls.valid_versions:
@@ -262,13 +348,23 @@ class RasExamples:
             raise ValueError(error_msg)
 
         zip_url = f"{cls.base_url}1.0.33/Example_Projects_{version_number.replace('.', '_')}.zip"
-        
-        cls.examples_dir.mkdir(parents=True, exist_ok=True)
-        
-        cls._zip_file_path = cls.examples_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
+
+        # Create user data directory for ZIP storage (writable without admin)
+        try:
+            cls._user_data_dir.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Using user data directory: {cls._user_data_dir}")
+        except PermissionError as e:
+            # This should not happen with user data directory, but handle gracefully
+            logger.error(f"Cannot create user data directory {cls._user_data_dir}: {e}")
+            logger.error("Please check your system permissions or set RasExamples._user_data_dir manually.")
+            raise
+
+        cls._zip_file_path = cls._user_data_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
 
         if not cls._zip_file_path.exists():
-            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}. \nThe file is over 400 MB, so it may take a few minutes to download....")
+            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}.")
+            logger.info(f"Saving to: {cls._zip_file_path}")
+            logger.info("The file is over 400 MB, so it may take a few minutes to download....")
             try:
                 response = requests.get(zip_url, stream=True)
                 response.raise_for_status()
@@ -342,9 +438,11 @@ class RasExamples:
 
     @classmethod
     def _save_to_csv(cls):
-        """Save the extracted folder structure to CSV file."""
+        """Save the extracted folder structure to CSV file in user data directory."""
         if cls._folder_df is not None and not cls._folder_df.empty:
             try:
+                # Ensure parent directory exists
+                cls.csv_file_path.parent.mkdir(parents=True, exist_ok=True)
                 cls._folder_df.to_csv(cls.csv_file_path, index=False)
                 logger.info(f"Saved project data to {cls.csv_file_path}")
             except Exception as e:
