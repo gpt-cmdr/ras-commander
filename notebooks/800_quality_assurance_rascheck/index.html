@@ -3152,28 +3152,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#quality-standards-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quality Standards Reference
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#when-to-use-rascheck" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to Use RasCheck
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -3235,17 +3213,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#verification-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verification Checklist
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -3287,23 +3254,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Generating Reports for All Projects">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#using-qa-reports-in-fema-submittal" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Using QA Reports in FEMA Submittal
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -5019,28 +4969,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#quality-standards-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quality Standards Reference
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#when-to-use-rascheck" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to Use RasCheck
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -5102,17 +5030,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#verification-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verification Checklist
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -5154,23 +5071,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Generating Reports for All Projects">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#using-qa-reports-in-fema-submittal" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Using QA Reports in FEMA Submittal
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -5282,7 +5182,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
@@ -5295,14 +5195,14 @@
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Import ras-commander</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPrj</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasPrj</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Verify which version loaded</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
-Loaded: c:\GH\ras-commander\ras_commander\__init__.py
+<div class="language-text highlight"><pre><span></span><code>PIP PACKAGE MODE: Loading installed ras-commander
+Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your projects. This notebook uses <strong>multiple projects</strong> to demonstrate different RasCheck validation scenarios.</p>
@@ -5386,9 +5286,7 @@ of HEC-RAS 5.0.7."</em></p>
 <p>This Python implementation extends these validation checks to work with modern HEC-RAS 6.x
 HDF-based outputs, providing equivalent functionality through the ras-commander library.</p>
 <p><strong>For Informational Purposes Only</strong></p>
-<p>Outputs from this library are for <strong>informational purposes only</strong> and should be
-validated by a qualified engineer. This tool does not replace professional engineering
-judgment or official FEMA review processes.</p>
+<p>Outputs from this library are still in Beta and are provided for <strong>informational purposes only</strong>.  These guidelines provide a flexible framework based on commonly accepted industry standards for users to build their own validation checks and QAQC workflows.  &gt; judgment.</p>
 </blockquote>
 <p><strong>NOTE</strong>: This is an UNOFFICIAL Python implementation and is NOT affiliated with or endorsed by FEMA.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
@@ -5433,57 +5331,21 @@ judgment or official FEMA review processes.</p>
 <h3 id="llm-forward-verification-approach">LLM Forward Verification Approach<a class="headerlink" href="#llm-forward-verification-approach" title="Permanent link">&para;</a></h3>
 <p>This notebook follows <strong>LLM Forward</strong> principles for quality assurance:</p>
 <ol>
-<li><strong>Visual Verification</strong>: Every validation check produces reviewable outputs (HTML reports, DataFrames)</li>
+<li><strong>Visual Verification</strong>: Every validation check produces reviewable outputs via notbook outputs</li>
 <li><strong>Multiple Review Pathways</strong>: </li>
 <li>Traditional engineering review (HTML reports with message IDs)</li>
 <li>Visual inspection (DataFrame filtering and grouping)</li>
 <li>Code audit trail (@log_call decorators track all validation operations)</li>
+<li><strong>Agentic Scaffolding</strong> - Intended to serve as a framework for building your own agentic QAQC workflows using ras-commander</li>
 <li><strong>Professional Responsibility</strong>: These checks support, but do not replace, professional engineering judgment</li>
-<li><strong>Self-Documenting</strong>: Export to CSV/HTML creates permanent audit trail of QA findings</li>
 </ol>
-<h3 id="quality-standards-reference">Quality Standards Reference<a class="headerlink" href="#quality-standards-reference" title="Permanent link">&para;</a></h3>
-<p>RasCheck implements validation checks that are aligned with:</p>
-<ul>
-<li><strong><a href="https://www.fema.gov/flood-maps/guidance-partners/guidelines-standards">FEMA Guidelines and Standards for Flood Risk Analysis</a></strong></li>
-<li>Appendix D: Guidance for Riverine Flooding Analyses and Mapping</li>
-<li>
-<p>Standards for model geometry, hydraulic parameters, and boundary conditions</p>
-</li>
-<li>
-<p><strong><a href="https://www.publications.usace.army.mil/USACE-Publications/Engineer-Manuals/">USACE EM 1110-2-1416: River Hydraulics</a></strong></p>
-</li>
-<li>Chapter 10: Model Calibration and Verification</li>
-<li>
-<p>Guidance on Manning's n selection, cross section spacing, structure modeling</p>
-</li>
-<li>
-<p><strong>State/Local Floodplain Management Requirements</strong></p>
-</li>
-<li>State-specific floodway surcharge limits (IL: 0.1 ft, TX: 1.0 ft, etc.)</li>
-<li>Local drainage district standards (where applicable)</li>
-</ul>
-<p>However, <em>always</em> check and validate references and ensure they are current and applicable within your modeling context.  Automated review checks are not a substitute for sound engineering judgement.</p>
-<h3 id="when-to-use-rascheck">When to Use RasCheck<a class="headerlink" href="#when-to-use-rascheck" title="Permanent link">&para;</a></h3>
-<p><strong>Pre-Submittal QA</strong> (preliminary):
-- Run RasCheck validation on final model
-- Generate HTML report for submittal package
-- Document how each ERROR/WARNING was addressed
-- Include report in engineering analysis documentation</p>
-<p><strong>Mid-Development QA</strong> (during model development):
-- Run checks iteratively as model is refined
-- Use custom thresholds for project-specific requirements
-- Filter by check type to focus on specific issues</p>
-<p><strong>Post-Calibration QA</strong> (after calibration complete):
-- Verify model still meets QA standards after calibration adjustments
-- Document any parameter changes that triggered new messages
-- Ensure calibration didn't introduce geometry issues</p>
 <h2 id="import-required-modules">Import Required Modules<a class="headerlink" href="#import-required-modules" title="Permanent link">&para;</a></h2>
 <p><strong>Note</strong>: The RasCheck module is currently in development. Ensure <code>USE_LOCAL_SOURCE = True</code> in the toggle cell above to load the local development version.</p>
 <p>For detailed demonstrations of the new validation features, see:
 - <strong>801_advanced_structure_validation.ipynb</strong> - Culvert and starting WSE validation
 - <strong>802_custom_workflows_and_standards.ipynb</strong> - State-specific standards and custom workflows</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPrj</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasPrj</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">HdfResultsPlan</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.check</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -5537,15 +5399,13 @@ judgment or official FEMA review processes.</p>
 </span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>
 </span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Successfully initialized </span><span class="si">{</span><span class="nb">len</span><span class="p">([</span><span class="n">p</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">project_paths</span><span class="o">.</span><span class="n">values</span><span class="p">()</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">p</span><span class="p">])</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">PROJECTS</span><span class="p">)</span><span class="si">}</span><span class="s2"> projects&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_800&#39;
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Folder &#39;Balde Eagle Creek_800&#39; already exists. Deleting existing folder...
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Existing folder &#39;Balde Eagle Creek_800&#39; has been deleted.
-2025-12-29 13:02:27 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_800
-2025-12-29 13:02:27 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\Balde Eagle Creek_800\BaldEagle.rasmap
+<div class="language-text highlight"><pre><span></span><code>2026-01-14 19:35:29 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-14 19:35:29 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_800&#39;
+2026-01-14 19:35:29 - ras_commander.RasExamples - INFO - Folder &#39;Balde Eagle Creek_800&#39; already exists. Deleting existing folder...
+2026-01-14 19:35:29 - ras_commander.RasExamples - INFO - Existing folder &#39;Balde Eagle Creek_800&#39; has been deleted.
+2026-01-14 19:35:29 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;Balde Eagle Creek&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800
+2026-01-14 19:35:29 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.rasmap
+2026-01-14 19:35:29 - ras_commander.RasPrj - INFO - Updated results_df with 2 plan(s)
 
 
 
@@ -5666,17 +5526,97 @@ Successfully initialized 1 of 1 projects
 </span><span id="__span-5-56"><a id="__codelineno-5-56" name="__codelineno-5-56" href="#__codelineno-5-56"></a>    <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;[OK] Success&quot;</span> <span class="k">if</span> <span class="n">success</span> <span class="k">else</span> <span class="s2">&quot;[ERROR] Failed&quot;</span>
 </span><span id="__span-5-57"><a id="__codelineno-5-57" name="__codelineno-5-57" href="#__codelineno-5-57"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Running Balde Eagle Creek Plan 02...
-  Error: name &#39;RasPlan&#39; is not defined
+<div class="language-text highlight"><pre><span></span><code>2026-01-14 19:35:29 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800
+2026-01-14 19:35:29 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02
+2026-01-14 19:35:29 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02
+2026-01-14 19:35:29 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 02
+2026-01-14 19:35:29 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-14 19:35:29 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02&quot;
+
+
+
+Running Balde Eagle Creek Plan 02...
+
+
+2026-01-14 19:35:36 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+2026-01-14 19:35:36 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 6.39 seconds
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 718 characters from HDF
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - ERROR - Error parsing simulation times: time data &#39;Unknown&#39; does not match format &#39;%d%b%Y %H:%M:%S&#39;
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\RasPrj.py:1514: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+2026-01-14 19:35:36 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Found 8 steady state profiles: [&#39;.5 year&#39;, &#39;1 year&#39;, &#39;2 year&#39;, &#39;5 year&#39;, &#39;10 year&#39;, &#39;25 year&#39;, &#39;50 year&#39;, &#39;100 year&#39;]
+
+
+  Steady plan with 8 profiles
 
 ============================================================
 Execution Summary:
 ============================================================
-  Balde Eagle Creek: [ERROR] Failed
+  Balde Eagle Creek: [OK] Success
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Display results summary from results_df</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">ras_obj</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>plan_title</th>
+      <th>completed</th>
+      <th>has_errors</th>
+      <th>has_warnings</th>
+      <th>runtime_complete_process_hours</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>01</td>
+      <td>Unsteady with Bridges and Dam</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>02</td>
+      <td>Steady Flow Run</td>
+      <td>True</td>
+      <td>False</td>
+      <td>False</td>
+      <td>None</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <hr />
 <h2 id="running-rascheck-validation-on-multiple-projects">Running RasCheck Validation on Multiple Projects<a class="headerlink" href="#running-rascheck-validation-on-multiple-projects" title="Permanent link">&para;</a></h2>
 <p>Now we'll run RasCheck validation on each project and compare the results. This demonstrates how different model types produce different validation messages.</p>
@@ -5707,7 +5647,39 @@ Execution Summary:
 </span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Validation Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>        <span class="n">all_results</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Skipping Balde Eagle Creek: not ready for validation
+<div class="language-text highlight"><pre><span></span><code>2026-01-14 19:35:36 - ras_commander.check.RasCheck - INFO - Detected flow type: steady
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:36 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 1424 rows (8 profiles x 178 cross sections)
+
+
+
+Validating Balde Eagle Creek Plan 02...
+
+
+2026-01-14 19:35:37 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:37 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:37 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:37 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+ was checked and no projection attribute found2. No RASMapper projection file found
+To fix this:
+1. Open RASMapper
+2. Click Map &gt; Set Projection
+3. Select an appropriate projection file or coordinate system
+4. Save the RASMapper project
+2026-01-14 19:35:37 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame.
+2026-01-14 19:35:37 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame with attributes.
+2026-01-14 19:35:37 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:37 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:37 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 1424 rows (8 profiles x 178 cross sections)
+
+
+  Total Messages: 5782
+  Errors: 0
+  Warnings: 4714
+  Info: 1068
 </code></pre></div>
 <h3 id="compare-validation-results-across-projects">Compare Validation Results Across Projects<a class="headerlink" href="#compare-validation-results-across-projects" title="Permanent link">&para;</a></h3>
 <p>Let's create a summary comparison of validation results across all projects.</p>
@@ -5740,8 +5712,49 @@ Execution Summary:
 </span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No validation results to compare&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No validation results to compare
+<div class="language-text highlight"><pre><span></span><code>Validation Results Comparison:
+================================================================================
 </code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Project</th>
+      <th>Total Messages</th>
+      <th>Errors</th>
+      <th>Warnings</th>
+      <th>Info</th>
+      <th>Check Types</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>Balde Eagle Creek</td>
+      <td>5782</td>
+      <td>0</td>
+      <td>4714</td>
+      <td>1068</td>
+      <td>PROFILES, XS, NT, STRUCT</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Visualize comparison</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">if</span> <span class="n">comparison_data</span><span class="p">:</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
@@ -5774,27 +5787,7 @@ Execution Summary:
 </span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<h3 id="verification-checklist">Verification Checklist<a class="headerlink" href="#verification-checklist" title="Permanent link">&para;</a></h3>
-<p>After running validation checks, review the following:</p>
-<p><strong>Check Results Summary</strong>:
-- [ ] Total ERROR messages &lt; 10 (or zero for final submittal)
-- [ ] All CRITICAL issues addressed (model cannot be submitted with CRITICAL errors)
-- [ ] WARNING messages reviewed and documented (explain why acceptable)</p>
-<p><strong>Success Criteria</strong>:
-- <strong>FEMA Submittal</strong>: Zero ERROR or CRITICAL messages
-- <strong>Development QA</strong>: &lt;20 WARNING messages, zero CRITICAL
-- <strong>Post-Calibration</strong>: No new ERROR messages introduced by calibration changes</p>
-<p><strong>Audit Trail Documentation</strong>:
-1. Save HTML report to <code>qa_reports/{project_name}_{date}_rascheck.html</code>
-2. Export CSV of all messages for tracking: <code>qa_reports/{project_name}_{date}_messages.csv</code>
-3. Document resolution of each ERROR/WARNING in engineering analysis
-4. Include report in submittal package (FEMA Appendix L: Model Certification)</p>
-<p><strong>Common Issues to Address</strong>:
-- Manning's n outside typical ranges (see EM 1110-2-1416 Table 7-6)
-- Cross section spacing &gt; 500 ft in areas of changing topography
-- Ineffective flow areas overlapping channel
-- Bridge/culvert expansion coefficients &gt; 0.5
-- Floodway surcharge exceeding state limits</p>
+<p><img alt="png" src="../800_quality_assurance_rascheck_files/800_quality_assurance_rascheck_18_0.png" /></p>
 <hr />
 <h2 id="detailed-analysis-first-project">Detailed Analysis: First Project<a class="headerlink" href="#detailed-analysis-first-project" title="Permanent link">&para;</a></h2>
 <p>Let's perform a detailed analysis on the first project to demonstrate the full RasCheck workflow.</p>
@@ -5808,20 +5801,268 @@ Execution Summary:
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="c1"># Convert to DataFrame</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="n">df</span> <span class="o">=</span> <span class="n">first_results</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">()</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DataFrame shape: </span><span class="si">{</span><span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>    <span class="n">display</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No results available for detailed analysis&quot;</span><span class="p">)</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="c1"># Ensure full message column is visible</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>    <span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s1">&#39;display.max_colwidth&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DataFrame shape: </span><span class="si">{</span><span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>    <span class="n">display</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No results available for detailed analysis&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No results available for detailed analysis
+<div class="language-text highlight"><pre><span></span><code>Detailed Analysis: Balde Eagle Creek
+============================================================
+
+DataFrame shape: (5782, 12)
+Columns: [&#39;message_id&#39;, &#39;severity&#39;, &#39;check_type&#39;, &#39;river&#39;, &#39;reach&#39;, &#39;station&#39;, &#39;structure&#39;, &#39;message&#39;, &#39;flagged&#39;, &#39;comment&#39;, &#39;value&#39;, &#39;threshold&#39;]
 </code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>message_id</th>
+      <th>severity</th>
+      <th>check_type</th>
+      <th>river</th>
+      <th>reach</th>
+      <th>station</th>
+      <th>structure</th>
+      <th>message</th>
+      <th>flagged</th>
+      <th>comment</th>
+      <th>value</th>
+      <th>threshold</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>NT_RC_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>49715.77</td>
+      <td></td>
+      <td>Left overbank Manning's n value (0.012) is less than 0.030</td>
+      <td>False</td>
+      <td></td>
+      <td>0.012000</td>
+      <td>0.03</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>NT_RC_05</td>
+      <td>INFO</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>49715.77</td>
+      <td></td>
+      <td>Overbank n values (LOB=0.012, ROB=0.130) are not greater than channel n (0.040)</td>
+      <td>False</td>
+      <td></td>
+      <td>NaN</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>NT_RC_03C</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>24843.25</td>
+      <td></td>
+      <td>Channel Manning's n value (0.005) is less than 0.025</td>
+      <td>False</td>
+      <td></td>
+      <td>0.005000</td>
+      <td>0.025</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>NT_VR_01R</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>70651.52</td>
+      <td></td>
+      <td>Large ROB n-value change (118%) between RS 71400.81 (0.055) and RS 70651.52 (0.120)</td>
+      <td>False</td>
+      <td></td>
+      <td>118.181814</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>NT_VR_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>68604.09</td>
+      <td></td>
+      <td>Large LOB n-value change (100%) between RS 6940.066 (0.050) and RS 68604.09 (0.100)</td>
+      <td>False</td>
+      <td></td>
+      <td>100.000000</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>NT_VR_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>64908.02</td>
+      <td></td>
+      <td>Large LOB n-value change (60%) between RS 659.942 (0.075) and RS 64908.02 (0.120)</td>
+      <td>False</td>
+      <td></td>
+      <td>59.999990</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>NT_VR_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>6267.489</td>
+      <td></td>
+      <td>Large LOB n-value change (58%) between RS 62746.41 (0.120) and RS 6267.489 (0.050)</td>
+      <td>False</td>
+      <td></td>
+      <td>58.333332</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>NT_VR_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>61896.89</td>
+      <td></td>
+      <td>Large LOB n-value change (140%) between RS 6267.489 (0.050) and RS 61896.89 (0.120)</td>
+      <td>False</td>
+      <td></td>
+      <td>139.999991</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>NT_VR_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>5523.234</td>
+      <td></td>
+      <td>Large LOB n-value change (64%) between RS 55700.55 (0.140) and RS 5523.234 (0.050)</td>
+      <td>False</td>
+      <td></td>
+      <td>64.285714</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>NT_VR_01L</td>
+      <td>WARNING</td>
+      <td>NT</td>
+      <td>Bald Eagle</td>
+      <td>Loc Hav</td>
+      <td>54696.51</td>
+      <td></td>
+      <td>Large LOB n-value change (180%) between RS 5523.234 (0.050) and RS 54696.51 (0.140)</td>
+      <td>False</td>
+      <td></td>
+      <td>179.999997</td>
+      <td>None</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Group messages by check type and severity</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">if</span> <span class="n">first_results</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">df</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">check_summary</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s1">&#39;check_type&#39;</span><span class="p">,</span> <span class="s1">&#39;severity&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">size</span><span class="p">()</span><span class="o">.</span><span class="n">unstack</span><span class="p">(</span><span class="n">fill_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Messages by Check Type and Severity:&quot;</span><span class="p">)</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">display</span><span class="p">(</span><span class="n">check_summary</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Messages by Check Type and Severity:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>severity</th>
+      <th>INFO</th>
+      <th>WARNING</th>
+    </tr>
+    <tr>
+      <th>check_type</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>NT</th>
+      <td>1</td>
+      <td>44</td>
+    </tr>
+    <tr>
+      <th>PROFILES</th>
+      <td>473</td>
+      <td>3671</td>
+    </tr>
+    <tr>
+      <th>STRUCT</th>
+      <td>1</td>
+      <td>33</td>
+    </tr>
+    <tr>
+      <th>XS</th>
+      <td>593</td>
+      <td>966</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Show ERROR messages (if any)</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">if</span> <span class="n">first_results</span><span class="p">:</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">errors</span> <span class="o">=</span> <span class="n">first_results</span><span class="o">.</span><span class="n">filter_by_severity</span><span class="p">(</span><span class="n">Severity</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
@@ -5833,6 +6074,9 @@ Execution Summary:
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>        <span class="nb">print</span><span class="p">()</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>ERROR Messages (0 total):
+------------------------------------------------------------
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Show WARNING messages (sample)</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">if</span> <span class="n">first_results</span><span class="p">:</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">warnings</span> <span class="o">=</span> <span class="n">first_results</span><span class="o">.</span><span class="n">filter_by_severity</span><span class="p">(</span><span class="n">Severity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
@@ -5842,6 +6086,14 @@ Execution Summary:
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">warnings</span><span class="p">[:</span><span class="mi">5</span><span class="p">]:</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [</span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="si">}</span><span class="s2">] RS </span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">station</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">message</span><span class="p">[:</span><span class="mi">80</span><span class="p">]</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>WARNING Messages (4714 total, showing first 5):
+------------------------------------------------------------
+  [NT_RC_01L] RS 49715.77: Left overbank Manning&#39;s n value (0.012) is less than 0.030...
+  [NT_RC_03C] RS 24843.25: Channel Manning&#39;s n value (0.005) is less than 0.025...
+  [NT_VR_01R] RS 70651.52: Large ROB n-value change (118%) between RS 71400.81 (0.055) and RS 70651.52 (0.1...
+  [NT_VR_01L] RS 68604.09: Large LOB n-value change (100%) between RS 6940.066 (0.050) and RS 68604.09 (0.1...
+  [NT_VR_01L] RS 64908.02: Large LOB n-value change (60%) between RS 659.942 (0.075) and RS 64908.02 (0.120...
+</code></pre></div>
 <h3 id="message-id-distribution">Message ID Distribution<a class="headerlink" href="#message-id-distribution" title="Permanent link">&para;</a></h3>
 <p>RasCheck uses standardized message IDs to categorize issues:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>{CHECK_TYPE}_{CATEGORY}_{NUMBER}{SUFFIX}
@@ -5858,6 +6110,29 @@ Execution Summary:
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="n">msg_counts</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;message_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span>
 </span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="n">display</span><span class="p">(</span><span class="n">msg_counts</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Message ID Distribution:
+==================================================
+
+
+
+message_id
+MP_Q_01        1246
+MP_WS_01       1246
+PF_VEL_01       895
+MP_TW_01        473
+XS_AR_01        360
+PF_TW_01        284
+XS_EC_01L       181
+XS_SL_01        181
+XS_GD_01        178
+XS_EC_01R       155
+XS_TW_02        148
+XS_FS_01        135
+XS_SL_02        132
+XS_EC_01BUL      14
+XS_EC_01BDL      14
+Name: count, dtype: int64
+</code></pre></div>
 <hr />
 <h2 id="generating-reports-for-all-projects">Generating Reports for All Projects<a class="headerlink" href="#generating-reports-for-all-projects" title="Permanent link">&para;</a></h2>
 <p>Generate HTML and CSV reports for each validated project.</p>
@@ -5901,63 +6176,13 @@ Execution Summary:
 </span><span id="__span-16-38"><a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  HTML: </span><span class="si">{</span><span class="n">html_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-16-39"><a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  CSV: </span><span class="si">{</span><span class="n">csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="using-qa-reports-in-fema-submittal">Using QA Reports in FEMA Submittal<a class="headerlink" href="#using-qa-reports-in-fema-submittal" title="Permanent link">&para;</a></h3>
-<p><strong>FEMA Submittal Requirements</strong> (<a href="https://www.fema.gov/flood-maps/guidance-partners/guidelines-standards">Guidelines and Standards, Appendix D</a>):</p>
-<ol>
-<li><strong>Model Certification</strong> (Appendix L):</li>
-<li>Professional Engineer must certify model meets FEMA standards</li>
-<li>RasCheck report provides supporting documentation</li>
-<li>
-<p>Document how all ERROR/WARNING messages were addressed</p>
-</li>
-<li>
-<p><strong>Engineering Analysis</strong> (required deliverable):</p>
-</li>
-<li>Include RasCheck HTML report in analysis appendix</li>
-<li>Provide narrative explaining any WARNING messages</li>
-<li>
-<p>Reference specific FEMA/USACE guidance for parameter selection</p>
-</li>
-<li>
-<p><strong>Quality Assurance Log</strong>:</p>
-</li>
-<li>Date of QA check</li>
-<li>RasCheck version used</li>
-<li>Summary of ERROR/WARNING counts</li>
-<li>Resolution documentation for each issue</li>
-</ol>
-<p><strong>Report Interpretation</strong>:</p>
-<table>
-<thead>
-<tr>
-<th>Severity</th>
-<th>Submittal Action</th>
-<th>Example</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>INFO</strong></td>
-<td>No action needed</td>
-<td>"Manning's n = 0.045 in typical range"</td>
-</tr>
-<tr>
-<td><strong>WARNING</strong></td>
-<td>Document in analysis</td>
-<td>"XS spacing = 520 ft, acceptable for gradual terrain"</td>
-</tr>
-<tr>
-<td><strong>ERROR</strong></td>
-<td>Must fix before submittal</td>
-<td>"Manning's n = 0.200, exceeds maximum (0.150)"</td>
-</tr>
-<tr>
-<td><strong>CRITICAL</strong></td>
-<td>Fix immediately</td>
-<td>"HDF file corrupted, results invalid"</td>
-</tr>
-</tbody>
-</table>
+<div class="language-text highlight"><pre><span></span><code>2026-01-14 19:35:38 - ras_commander.check.report - INFO - Generated HTML report: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\ras_checker\validation_report.html
+
+
+Reports generated for Balde Eagle Creek:
+  HTML: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\ras_checker\validation_report.html
+  CSV: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\ras_checker\validation_messages.csv
+</code></pre></div>
 <hr />
 <h2 id="customizing-validation-thresholds">Customizing Validation Thresholds<a class="headerlink" href="#customizing-validation-thresholds" title="Permanent link">&para;</a></h2>
 <p>RasCheck uses configurable thresholds for all checks. You can customize these for project-specific requirements.</p>
@@ -6014,6 +6239,34 @@ Default Transition Coefficients:
 </span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Custom thresholds:  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">custom_results</span><span class="o">.</span><span class="n">messages</span><span class="p">)</span><span class="si">}</span><span class="s2"> messages&quot;</span><span class="p">)</span>
 </span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Difference: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">custom_results</span><span class="o">.</span><span class="n">messages</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">first_results</span><span class="o">.</span><span class="n">messages</span><span class="p">)</span><span class="si">:</span><span class="s2">+d</span><span class="si">}</span><span class="s2"> messages&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2026-01-14 19:35:38 - ras_commander.check.RasCheck - INFO - Detected flow type: steady
+2026-01-14 19:35:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:38 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:38 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 1424 rows (8 profiles x 178 cross sections)
+2026-01-14 19:35:39 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:39 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:39 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:39 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+2026-01-14 19:35:39 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
+1. HDF file projection attribute: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.g01.hdf
+ was checked and no projection attribute found2. No RASMapper projection file found
+To fix this:
+1. Open RASMapper
+2. Click Map &gt; Set Projection
+3. Select an appropriate projection file or coordinate system
+4. Save the RASMapper project
+2026-01-14 19:35:39 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame.
+2026-01-14 19:35:39 - ras_commander.hdf.HdfStruc - INFO - Successfully extracted structures GeoDataFrame with attributes.
+2026-01-14 19:35:39 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:39 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_800\BaldEagle.p02.hdf
+2026-01-14 19:35:39 - ras_commander.hdf.HdfResultsPlan - INFO - Extracted steady results: 1424 rows (8 profiles x 178 cross sections)
+
+
+Threshold Comparison for Balde Eagle Creek:
+  Default thresholds: 5782 messages
+  Custom thresholds:  5792 messages
+  Difference: +10 messages
+</code></pre></div>
 <hr />
 <h2 id="state-specific-floodway-surcharge-limits">State-Specific Floodway Surcharge Limits<a class="headerlink" href="#state-specific-floodway-surcharge-limits" title="Permanent link">&para;</a></h2>
 <p>Different states have different maximum surcharge limits for floodway analysis. This is important when validating floodway models for regulatory submittals.</p>
@@ -6031,7 +6284,7 @@ Default Transition Coefficients:
 </span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>
 </span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="c1"># Create DataFrame for reference</span>
 </span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="n">surcharge_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">surcharge_data</span><span class="p">)</span>
-</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Note: Default FEMA limit is 1.0 ft. States with stricter limits require special attention.&quot;</span><span class="p">)</span>
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Note: Default limit is 1.0 ft. States with stricter limits require special attention.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>State-Specific Surcharge Limits:
 ========================================
@@ -6182,7 +6435,7 @@ Note: Default FEMA limit is 1.0 ft. States with stricter limits require special 
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 16, 2026 08:42:52 UTC">January 16, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 18, 2026 15:11:15 UTC">January 18, 2026</span>
   </span>
 
     
@@ -6192,7 +6445,7 @@ Note: Default FEMA limit is 1.0 ft. States with stricter limits require special 
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 16, 2026 08:42:52 UTC">January 16, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 18, 2026 15:11:15 UTC">January 18, 2026</span>
   </span>
 
     
