@@ -63,7 +63,7 @@ from typing import Union, List, Optional, Dict
 from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
-from .BcoMonitor import BcoMonitor
+from .RasBco import BcoMonitor
 from typing import Callable
 
 logger = get_logger(__name__)
@@ -159,7 +159,7 @@ class RasCmdr:
         skip_existing: bool = False,
         verify: bool = False,
         stream_callback: Optional[Callable] = None
-    ):
+    ) -> bool:
         """
         Execute a single HEC-RAS plan in a specified location.
 
@@ -498,7 +498,7 @@ class RasCmdr:
             ras_object (Optional[RasPrj]): RAS project object. If None, uses global 'ras' instance.
                 Useful when working with multiple projects simultaneously.
             dest_folder (Union[str, Path, None]): Destination folder for computed results.
-                If None, creates a "[Computed]" folder adjacent to the project folder.
+                If None, results are consolidated back to the original project folder.
                 If string, creates folder in the project's parent directory.
                 If Path, uses the exact path provided.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
@@ -777,7 +777,7 @@ class RasCmdr:
         overwrite_dest=False,
         skip_existing: bool = False,
         verify: bool = False
-    ):
+    ) -> Dict[str, bool]:
         """
         Execute HEC-RAS plans sequentially in a separate test folder.
 

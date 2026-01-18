@@ -64,9 +64,7 @@ class HdfFluvialPluvial:
         ...     temporal_tolerance_hours=1.0
         ... )
     """
-    def __init__(self):
-        self.logger = get_logger(__name__)  # Initialize logger with module name
-    
+
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def calculate_fluvial_pluvial_boundary(

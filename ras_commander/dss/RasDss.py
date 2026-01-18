@@ -508,7 +508,7 @@ class RasDss:
         """
         # Lazy import validation framework
         try:
-            from ..validation_base import ValidationResult, ValidationSeverity
+            from ..RasValidation import ValidationResult, ValidationSeverity
         except ImportError:
             # Return basic dict if validation framework not available
             if (
@@ -628,7 +628,7 @@ class RasDss:
         """
         # Lazy import validation framework
         try:
-            from ..validation_base import ValidationResult, ValidationSeverity
+            from ..RasValidation import ValidationResult, ValidationSeverity
         except ImportError:
             dss_file = Path(dss_file)
             if dss_file.exists() and dss_file.is_file():
@@ -708,7 +708,7 @@ class RasDss:
         """
         # Lazy import validation framework
         try:
-            from ..validation_base import ValidationResult, ValidationSeverity
+            from ..RasValidation import ValidationResult, ValidationSeverity
         except ImportError:
             # Try basic check without validation framework
             try:
@@ -820,7 +820,7 @@ class RasDss:
         """
         # Lazy import validation framework
         try:
-            from ..validation_base import ValidationResult, ValidationSeverity
+            from ..RasValidation import ValidationResult, ValidationSeverity
         except ImportError:
             # Try basic check without validation framework
             try:
@@ -941,7 +941,7 @@ class RasDss:
         """
         # Lazy import validation framework
         try:
-            from ..validation_base import ValidationReport
+            from ..RasValidation import ValidationReport
         except ImportError:
             # Return basic dict if validation framework not available
             results = []

@@ -371,6 +371,24 @@ compute_parallel_remote(
 )
 ```
 
+## DataFrame Updates
+
+**Important**: `compute_parallel_remote()` does NOT automatically update `plan_df` or `results_df`.
+
+This is by design because:
+- Results stay on remote workers (not consolidated to local project)
+- User receives `ExecutionResult` objects with HDF paths on remote systems
+- Manual DataFrame refresh requires copying results back first
+
+**To update DataFrames after remote execution**:
+```python
+results = compute_parallel_remote(plans, workers)
+
+# If results copied back to local project manually:
+ras.plan_df = ras.get_plan_entries()
+ras.update_results_df(list(results.keys()))
+```
+
 ## See Also
 
 - **Remote Subpackage**: `ras_commander/remote/AGENTS.md` - Complete remote execution documentation

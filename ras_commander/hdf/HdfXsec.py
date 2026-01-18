@@ -82,19 +82,40 @@ class HdfXsec:
         -------
         gpd.GeoDataFrame
             Cross-section data with columns:
-            - geometry: LineString of cross-section path
-            - station_elevation: Station-elevation profile points
-            - mannings_n: Dictionary of Manning's n values and stations (raw data)
-            - n_lob: Left overbank Manning's n value (computed from bank stations)
-            - n_channel: Main channel Manning's n value (computed from bank stations)
-            - n_rob: Right overbank Manning's n value (computed from bank stations)
-            - ineffective_blocks: List of ineffective flow area blocks
-            - River, Reach, RS: River system identifiers
-            - Name, Description: Cross-section labels
-            - Len Left/Channel/Right: Flow path lengths
-            - Left/Right Bank: Bank station locations
-            - Contr, Expan: Contraction and expansion coefficients
-            - Additional hydraulic parameters and attributes
+            - geometry: LineString - Cross-section polyline geometry
+            - station_elevation: ndarray - Station-elevation profile (Nx2 array: [station, elevation])
+            - mannings_n: dict - Raw Manning's n data with keys 'Station' and 'Mann n' (lists)
+            - n_lob: float - Left overbank Manning's n (computed from bank stations)
+            - n_channel: float - Main channel Manning's n (computed from bank stations)
+            - n_rob: float - Right overbank Manning's n (computed from bank stations)
+            - ineffective_blocks: list - List of dicts with keys: 'Left Sta', 'Right Sta', 'Elevation', 'Permanent'
+            - River: str - River name
+            - Reach: str - Reach name
+            - RS: str - River station identifier
+            - Name: str - Cross-section name
+            - Description: str - Cross-section description
+            - Len Left: float - Left overbank flow path length
+            - Len Channel: float - Main channel flow path length
+            - Len Right: float - Right overbank flow path length
+            - Left Bank: float - Left bank station location
+            - Right Bank: float - Right bank station location
+            - Friction Mode: str - Friction method used
+            - Contr: float - Contraction coefficient
+            - Expan: float - Expansion coefficient
+            - Left Levee Sta: float - Left levee station (if exists)
+            - Left Levee Elev: float - Left levee elevation (if exists)
+            - Right Levee Sta: float - Right levee station (if exists)
+            - Right Levee Elev: float - Right levee elevation (if exists)
+            - HP Count: int - Hydraulic table point count
+            - HP Start Elev: float - Hydraulic table starting elevation
+            - HP Vert Incr: float - Hydraulic table vertical increment
+            - HP LOB Slices: int - Left overbank slices count
+            - HP Chan Slices: int - Main channel slices count
+            - HP ROB Slices: int - Right overbank slices count
+            - Ineff Block Mode: int - Ineffective area block mode
+            - Obstr Block Mode: int - Obstruction block mode
+            - Default Centerline: int - Default centerline flag
+            - Last Edited: str - Last edit timestamp
 
         Notes
         -----
@@ -339,11 +360,17 @@ class HdfXsec:
         -------
         GeoDataFrame
             River centerline data with columns:
-            - geometry: LineString of river centerline
-            - River Name, Reach Name: River system identifiers
-            - US/DS Type, Name: Upstream/downstream connection info
-            - length: Centerline length in project units
-            Additional attributes from the HDF file are included
+            - geometry: LineString - River centerline geometry
+            - River Name: str - Name of the river
+            - Reach Name: str - Name of the reach
+            - US Type: str - Upstream connection type (e.g., 'Junction', 'External')
+            - US Name: str - Upstream connection name
+            - DS Type: str - Downstream connection type (e.g., 'Junction', 'External')
+            - DS Name: str - Downstream connection name
+            - length: float - Centerline length in project coordinate units (computed)
+
+            Note: Additional HDF attributes may be included depending on HEC-RAS version.
+            Use datetime_to_str=True to convert any datetime columns to ISO format strings.
 
         Notes
         -----
@@ -432,10 +459,12 @@ class HdfXsec:
         -------
         GeoDataFrame
             Original centerlines with additional columns:
-            - station_start: Starting station value (0 or length)
-            - station_end: Ending station value (length or 0)
-            - stations: Array of station values along centerline
-            - points: Array of interpolated point geometries
+            - station_start: float - Starting station value (0.0 or total_length, depends on US/DS connections)
+            - station_end: float - Ending station value (total_length or 0.0, depends on US/DS connections)
+            - stations: ndarray - Array of 100 evenly-spaced station values along centerline
+            - points: list - List of shapely Point geometries at each station location
+
+            All original columns from centerlines_gdf are preserved (geometry, River Name, Reach Name, etc.).
 
         Notes
         -----
@@ -533,7 +562,18 @@ class HdfXsec:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the river reaches with their attributes and geometries.
+            River reach data with columns:
+            - geometry: LineString - River reach line geometry
+            - river_id: int - Unique identifier for each reach (0-indexed)
+            - River Name: str - Name of the river
+            - Reach Name: str - Name of the reach
+            - US Type: str - Upstream connection type
+            - US Name: str - Upstream connection name
+            - DS Type: str - Downstream connection type
+            - DS Name: str - Downstream connection name
+            - Last Edited: datetime or str - Last edit timestamp (str if datetime_to_str=True)
+
+            Note: Additional HDF attributes may be included depending on HEC-RAS version.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -585,8 +625,15 @@ class HdfXsec:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing river edge lines with their attributes and geometries.
-            Each row represents a river bank (left or right) with associated attributes.
+            River edge line data with columns:
+            - geometry: LineString - River edge line geometry
+            - edge_id: int - Unique identifier for each edge line (0-indexed)
+            - bank_side: str - Bank side indicator ('Left' or 'Right')
+            - length: float - Length of edge line in project coordinate units (computed)
+            - Last Edited: datetime or str - Last edit timestamp (str if datetime_to_str=True, if available)
+
+            Note: Each row represents one river bank (left or right). Additional HDF attributes
+            may be included depending on HEC-RAS version.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -662,11 +709,14 @@ class HdfXsec:
         Returns
         -------
         GeoDataFrame
-            GeoDataFrame containing river bank line geometries with attributes:
-            - bank_id: Unique identifier for each bank line
-            - bank_side: Left or Right bank indicator
-            - geometry: LineString geometry of the bank
-            - length: Length of the bank line in project units
+            River bank line data with columns:
+            - geometry: LineString - River bank line geometry
+            - bank_id: int - Unique identifier for each bank line (0-indexed)
+            - bank_side: str - Bank side indicator ('Left' or 'Right')
+            - length: float - Length of the bank line in project coordinate units (computed)
+
+            Note: Bank lines are assumed to be in pairs (left/right). If odd number of geometries
+            exist, the bank_side pattern may not align perfectly.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:

@@ -24,10 +24,24 @@ import os
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Union, Optional, List, Dict, Any
 from datetime import datetime
 import shutil
+
+
+@dataclass
+class ProjectionInfo:
+    """
+    Terrain projection information extracted from .rasmap XML.
+
+    Attributes:
+        prj_path: Path to projection file (.prj) if found, None otherwise
+        terrain_path: Path to terrain TIF file if found, None otherwise
+    """
+    prj_path: Optional[Path]
+    terrain_path: Optional[Path]
 
 from .RasPrj import ras
 from .RasMap import RasMap
@@ -172,7 +186,7 @@ class RasProcess:
 
     @staticmethod
     @log_call
-    def _get_projection_info(rasmap_path: Path) -> tuple:
+    def _get_projection_info(rasmap_path: Path) -> ProjectionInfo:
         """
         Extract projection file path and terrain path from .rasmap XML.
 
@@ -180,7 +194,8 @@ class RasProcess:
             rasmap_path: Path to .rasmap file
 
         Returns:
-            Tuple of (prj_path, terrain_tif_path) or (None, None) if not found
+            ProjectionInfo dataclass with prj_path and terrain_path fields.
+            Fields are None if not found.
         """
         try:
             tree = ET.parse(rasmap_path)
@@ -210,11 +225,11 @@ class RasProcess:
                             break
                     break
 
-            return prj_path, terrain_path
+            return ProjectionInfo(prj_path=prj_path, terrain_path=terrain_path)
 
         except Exception as e:
             logger.error(f"Failed to parse rasmap for projection info: {e}")
-            return None, None
+            return ProjectionInfo(prj_path=None, terrain_path=None)
 
     @staticmethod
     @log_call
@@ -698,11 +713,11 @@ class RasProcess:
 
             # Fix georeferencing if requested
             if fix_georef and generated_files:
-                prj_path, terrain_path = RasProcess._get_projection_info(rasmap_path)
-                if prj_path and terrain_path:
+                proj_info = RasProcess._get_projection_info(rasmap_path)
+                if proj_info.prj_path and proj_info.terrain_path:
                     for tif_list in generated_files.values():
                         for tif_path in tif_list:
-                            RasProcess._fix_georeferencing(tif_path, prj_path, terrain_path)
+                            RasProcess._fix_georeferencing(tif_path, proj_info.prj_path, proj_info.terrain_path)
                 else:
                     logger.warning("Could not find projection/terrain for georef fix")
 

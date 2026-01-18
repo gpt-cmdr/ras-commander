@@ -79,10 +79,6 @@ class HdfInfiltration:
     # Constants for unit conversion
     SQM_TO_ACRE = 0.000247105
     SQM_TO_SQMILE = 3.861e-7
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-
 
     @staticmethod
     @log_call 
@@ -1108,16 +1104,16 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input
-    def get_infiltration_parameters(hdf_path: Path = None, mukey: str = None, ras_object: Any = None) -> dict:
+    def get_infiltration_parameters(hdf_path: Path = None, mukey: str = None, ras_object: Any = None) -> Optional[Dict[str, float]]:
         """Get infiltration parameters for a specific mukey from HDF file
-        
+
         Args:
             hdf_path: Optional path to the HDF file. If not provided, uses first infiltration_hdf_path from rasmap_df
             mukey: Mukey identifier
             ras_object: Optional RAS object. If not provided, uses global ras instance
-            
+
         Returns:
-            Dictionary of infiltration parameters
+            Optional[Dict[str, float]]: Dictionary of infiltration parameters, or None if mukey not found
         """
         if hdf_path is None:
             if ras_object is None:
