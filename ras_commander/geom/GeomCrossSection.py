@@ -406,7 +406,7 @@ class GeomCrossSection:
                 i += 1
 
             df = pd.DataFrame(cross_sections)
-            logger.info(f"Extracted {len(df)} cross sections from {geom_file.name}")
+            logger.debug(f"Extracted {len(df)} cross sections from {geom_file.name}")
 
             if river is not None:
                 logger.debug(f"Filtered to river '{river}': {len(df)} cross sections")
@@ -1573,11 +1573,11 @@ class GeomCrossSection:
             with open(geom_file, 'r') as f:
                 lines = f.readlines()
 
-            logger.info(f"Read {len(lines)} lines from {geom_file.name}")
+            logger.debug(f"Read {len(lines)} lines from {geom_file.name}")
 
             # Step 2: Get all cross sections using existing method
             xs_df = GeomCrossSection.get_cross_sections(geom_file)
-            logger.info(f"Found {len(xs_df)} cross sections in geometry file")
+            logger.debug(f"Found {len(xs_df)} cross sections in geometry file")
 
             if len(xs_df) == 0:
                 logger.warning(f"No cross sections found in {geom_file.name}")
@@ -1932,7 +1932,7 @@ class GeomCrossSection:
                 'modifications': []
             }
 
-        logger.info(f"Found {total_xs_count} cross sections in geometry file")
+        logger.debug(f"Found {total_xs_count} cross sections in geometry file")
 
         # Step 2: Extract maximum WSE from HDF results
         try:

@@ -180,7 +180,7 @@ class GeomStorage:
                 if original_count != len(df):
                     logger.debug(f"Excluded {original_count - len(df)} 2D flow areas")
 
-            logger.info(f"Found {len(df)} storage areas in {geom_file.name}")
+            logger.debug(f"Found {len(df)} storage areas in {geom_file.name}")
             return df
 
         except FileNotFoundError:

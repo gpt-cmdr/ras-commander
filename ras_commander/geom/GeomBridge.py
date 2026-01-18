@@ -252,7 +252,7 @@ class GeomBridge:
                 i += 1
 
             df = pd.DataFrame(bridges)
-            logger.info(f"Found {len(df)} bridges in {geom_file.name}")
+            logger.debug(f"Found {len(df)} bridges in {geom_file.name}")
             return df
 
         except FileNotFoundError:
@@ -1683,7 +1683,7 @@ class GeomBridge:
                     'backup': str(backup_path) if backup_path else None
                 }
 
-            logger.info(f"Found {len(structures)} structures in {geom_file.name}")
+            logger.debug(f"Found {len(structures)} structures in {geom_file.name}")
 
             # Process structures in reverse order to preserve line indices
             # (modifications at higher indices don't affect lower indices)
@@ -2123,7 +2123,7 @@ class GeomBridge:
                 'backup_path': str(backup_path)
             }
 
-        logger.info(f"Found {len(structures)} structures to optimize")
+        logger.debug(f"Found {len(structures)} structures to optimize")
 
         details = []
         errors = []

@@ -286,7 +286,7 @@ class GeomInlineWeir:
                 i += 1
 
             df = pd.DataFrame(inline_weirs)
-            logger.info(f"Found {len(df)} inline weirs in {geom_file.name}")
+            logger.debug(f"Found {len(df)} inline weirs in {geom_file.name}")
             return df
 
         except FileNotFoundError:

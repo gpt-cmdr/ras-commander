@@ -259,11 +259,11 @@ class GeomCulvert:
                 i += 1
 
             if not culverts:
-                logger.info(f"No culverts found at {river}/{reach}/RS {rs}")
+                logger.debug(f"No culverts found at {river}/{reach}/RS {rs}")
                 return pd.DataFrame()
 
             df = pd.DataFrame(culverts)
-            logger.info(f"Found {len(df)} culverts at {river}/{reach}/RS {rs}")
+            logger.debug(f"Found {len(df)} culverts at {river}/{reach}/RS {rs}")
             return df
 
         except FileNotFoundError:
@@ -391,7 +391,7 @@ class GeomCulvert:
                 i += 1
 
             df = pd.DataFrame(all_culverts)
-            logger.info(f"Found {len(df)} total culverts in {geom_file.name}")
+            logger.debug(f"Found {len(df)} total culverts in {geom_file.name}")
             return df
 
         except FileNotFoundError:

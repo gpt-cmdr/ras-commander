@@ -147,7 +147,7 @@ class GeomLateral:
                 i += 1
 
             df = pd.DataFrame(laterals)
-            logger.info(f"Found {len(df)} lateral structures in {geom_file.name}")
+            logger.debug(f"Found {len(df)} lateral structures in {geom_file.name}")
             return df
 
         except FileNotFoundError:
@@ -341,7 +341,7 @@ class GeomLateral:
                 i += 1
 
             df = pd.DataFrame(connections)
-            logger.info(f"Found {len(df)} SA/2D connections in {geom_file.name}")
+            logger.debug(f"Found {len(df)} SA/2D connections in {geom_file.name}")
             return df
 
         except FileNotFoundError:
