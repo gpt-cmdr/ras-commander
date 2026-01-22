@@ -553,6 +553,25 @@ else:
     print("No results found")
 ```
 
+## DataFrame Refresh Behavior
+
+All local compute functions automatically refresh DataFrames after execution:
+
+| Function | Refreshes DataFrames | Condition |
+|----------|---------------------|-----------|
+| `compute_plan()` | Yes | Only when `dest_folder=None` |
+| `compute_parallel()` | Yes | Always (re-inits from final location) |
+| `compute_test_mode()` | Yes | Always |
+| `compute_parallel_remote()` | No | By design (results on remote workers) |
+
+**After execution, access results via plan_df**:
+```python
+# DataFrames are automatically refreshed - just use them
+hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == '01', 'HDF_Results_Path'].iloc[0]
+```
+
+**Note**: For `compute_parallel_remote()`, results stay on remote workers. See `.claude/rules/hec-ras/remote.md` for details on updating DataFrames after remote execution.
+
 ## Performance Optimization
 
 ### Smart Execution Skip (New in v0.88.0)

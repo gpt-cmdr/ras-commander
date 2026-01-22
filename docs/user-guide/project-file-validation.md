@@ -30,7 +30,7 @@ flowchart LR
 ## Validation Severity Levels
 
 ```python
-from ras_commander.validation_base import ValidationSeverity
+from ras_commander.RasValidation import ValidationSeverity
 
 # INFO: Informational (doesn't affect operation)
 ValidationSeverity.INFO      # e.g., "File size: 2.5 GB"
@@ -275,7 +275,7 @@ else:
 Build custom validation reports:
 
 ```python
-from ras_commander.validation_base import (
+from ras_commander.RasValidation import (
     ValidationResult,
     ValidationReport,
     ValidationSeverity

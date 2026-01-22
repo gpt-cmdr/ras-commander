@@ -445,7 +445,7 @@ See **notebook-standards.md** for complete guidelines.
 
 ## Key Development Principles
 
-1. **DataFrame-First**: ALWAYS use ras.plan_df, ras.geom_df as authoritative source for file paths and metadata - NEVER use glob patterns or manual path construction. Refresh DataFrames after execution (especially with [Computed] folders). See `.claude/rules/python/dataframe-first-principle.md`
+1. **DataFrame-First**: ALWAYS use ras.plan_df, ras.geom_df as authoritative source for file paths and metadata - NEVER use glob patterns or manual path construction. DataFrames are automatically refreshed after execution. See `.claude/rules/python/dataframe-first-principle.md`
 2. **Use Real HEC-RAS Projects**: Test with RasExamples, not mocks
 3. **Static Classes**: Most classes use static methods (no instantiation)
 4. **pathlib.Path**: Use Path for all file operations, accept str or Path in parameters

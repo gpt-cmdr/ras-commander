@@ -76,9 +76,6 @@ class HdfMesh:
     Note: This class relies on HdfBase and HdfUtils for some underlying operations.
     """
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-
     @staticmethod
     @standardize_input(file_type='plan_hdf')
     def get_mesh_area_names(hdf_path: Path) -> List[str]:
@@ -163,9 +160,9 @@ class HdfMesh:
         -------
         GeoDataFrame
             A GeoDataFrame containing the 2D flow mesh cell polygons with columns:
-            - mesh_name: name of the mesh area
-            - cell_id: unique identifier for each cell
-            - geometry: polygon geometry of the cell
+            - mesh_name: str - Name of the 2D flow area
+            - cell_id: int - Unique cell identifier (0-indexed)
+            - geometry: Polygon - Cell polygon geometry constructed from face edges
             Returns an empty GeoDataFrame if no 2D areas exist or if there's an error.
         """
         # Lazy imports for heavy dependencies
@@ -236,7 +233,10 @@ class HdfMesh:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the 2D flow mesh cell center points.
+            A GeoDataFrame containing the 2D flow mesh cell center points with columns:
+            - mesh_name: str - Name of the 2D flow area
+            - cell_id: int - Unique cell identifier (0-indexed)
+            - geometry: Point - Cell center point geometry
         """
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
@@ -292,7 +292,10 @@ class HdfMesh:
         Returns
         -------
         GeoDataFrame
-            A GeoDataFrame containing the 2D flow mesh cell faces.
+            A GeoDataFrame containing the 2D flow mesh cell faces with columns:
+            - mesh_name: str - Name of the 2D flow area
+            - face_id: int - Unique face identifier (0-indexed)
+            - geometry: LineString - Face edge geometry (may include intermediate perimeter points)
         """
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
@@ -358,7 +361,9 @@ class HdfMesh:
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the 2D flow area attributes.
+            A DataFrame containing the 2D flow area attributes with:
+            - Index: str - Attribute names (e.g., 'Name', 'Cell Count', 'Face Count')
+            - Value: varies - Attribute values (decoded from HDF bytes)
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -537,7 +542,7 @@ class HdfMesh:
         point,
         cell_faces_gdf: 'GeoDataFrame',
         mesh_name: str = None
-    ) -> Tuple[int, float]:
+    ) -> Optional[Tuple[int, float]]:
         """
         Find the nearest mesh cell face to a given point.
 
@@ -556,16 +561,18 @@ class HdfMesh:
 
         Returns
         -------
-        Tuple[int, float]
+        Optional[Tuple[int, float]]
             A tuple containing:
             - face_id (int): The ID of the nearest cell face
             - distance (float): The distance to the nearest cell face
+            Returns (None, None) if no faces found to search.
 
         Example
         -------
         >>> cell_faces = HdfMesh.get_mesh_cell_faces(hdf_path)
         >>> face_id, dist = HdfMesh.find_nearest_face((500000, 4000000), cell_faces)
-        >>> print(f"Nearest face: {face_id}, Distance: {dist:.2f}")
+        >>> if face_id is not None:
+        ...     print(f"Nearest face: {face_id}, Distance: {dist:.2f}")
         """
         from shapely.geometry import Point
 
@@ -595,7 +602,7 @@ class HdfMesh:
         point,
         cell_points_gdf: 'GeoDataFrame',
         mesh_name: str = None
-    ) -> Tuple[int, float]:
+    ) -> Optional[Tuple[int, float]]:
         """
         Find the nearest mesh cell center to a given point.
 
@@ -614,16 +621,18 @@ class HdfMesh:
 
         Returns
         -------
-        Tuple[int, float]
+        Optional[Tuple[int, float]]
             A tuple containing:
             - cell_id (int): The ID of the nearest cell
             - distance (float): The distance to the nearest cell center
+            Returns (None, None) if no cells found to search.
 
         Example
         -------
         >>> cell_points = HdfMesh.get_mesh_cell_points(hdf_path)
         >>> cell_id, dist = HdfMesh.find_nearest_cell((500000, 4000000), cell_points)
-        >>> print(f"Nearest cell: {cell_id}, Distance: {dist:.2f}")
+        >>> if cell_id is not None:
+        ...     print(f"Nearest cell: {cell_id}, Distance: {dist:.2f}")
         """
         from shapely.geometry import Point
 
@@ -861,7 +870,7 @@ class HdfMesh:
     def combine_faces_to_linestring(
         faces_gdf: 'GeoDataFrame',
         order_column: str = 'distance_along_profile'
-    ):
+    ) -> Optional[Any]:
         """
         Combine ordered faces into a single LineString.
 
@@ -876,8 +885,9 @@ class HdfMesh:
 
         Returns
         -------
-        shapely.geometry.LineString
-            A LineString combining all face geometries.
+        Optional[shapely.geometry.LineString]
+            A LineString combining all face geometries, or None if faces_gdf is empty
+            or fewer than 2 coordinates found.
         """
         from shapely.geometry import LineString
 

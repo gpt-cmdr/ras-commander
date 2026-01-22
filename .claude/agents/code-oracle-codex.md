@@ -86,7 +86,7 @@ Requirements:
 - Support multiple precipitation data sources
 
 Context files:
-@ras_commander/validation_base.py
+@ras_commander/RasValidation.py
 @.claude/rules/validation/validation-patterns.md
 
 Provide:
@@ -369,7 +369,7 @@ response_text = '\n'.join([l for l in output_lines if 'SESSION_ID:' not in l])
 ```bash
 # Read context
 Read(".claude/rules/validation/validation-patterns.md")
-Read("ras_commander/validation_base.py")
+Read("ras_commander/RasValidation.py")
 
 # Invoke Codex oracle
 Bash(
@@ -382,7 +382,7 @@ Bash(
     - Support Atlas14Storm, FrequencyStorm, ScsTypeStorm
 
     Context:
-    @ras_commander/validation_base.py
+    @ras_commander/RasValidation.py
     @.claude/rules/validation/validation-patterns.md
 
     Provide:
@@ -511,7 +511,7 @@ except Exception as e:
 If Codex returns structured findings, map to ras-commander validation:
 
 ```python
-from ras_commander.validation_base import (
+from ras_commander.RasValidation import (
     ValidationSeverity,
     ValidationResult,
     ValidationReport

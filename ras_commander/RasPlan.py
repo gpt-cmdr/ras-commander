@@ -430,7 +430,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_results_path(plan_number: Union[str, Number], ras_object=None) -> Optional[str]:
+    def get_results_path(plan_number: Union[str, Number], ras_object=None) -> Optional[Path]:
         """
         Retrieve the results file path for a given HEC-RAS plan number.
 
@@ -439,7 +439,7 @@ class RasPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            Optional[str]: The full path to the results file if found and the file exists, or None if not found.
+            Optional[Path]: The full path to the results file if found and the file exists, or None if not found.
 
         Raises:
             RuntimeError: If the project is not initialized.
@@ -465,7 +465,7 @@ class RasPlan:
         if not plan_entry.empty:
             results_path = plan_entry['HDF_Results_Path'].iloc[0]
             if results_path and Path(results_path).exists():
-                return results_path
+                return Path(results_path)
             else:
                 return None
         else:
@@ -473,7 +473,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def get_plan_path(plan_number: Union[str, Number], ras_object=None) -> Optional[str]:
+    def get_plan_path(plan_number: Union[str, Number], ras_object=None) -> Optional[Path]:
         """
         Return the full path for a given plan number.
 
@@ -485,7 +485,7 @@ class RasPlan:
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-        Optional[str]: The full path of the plan file if found, None otherwise.
+        Optional[Path]: The full path of the plan file if found, None otherwise.
 
         Raises:
         RuntimeError: If the project is not initialized.
@@ -509,18 +509,18 @@ class RasPlan:
         plan_df = ras_obj.get_plan_entries()
         
         plan_path = plan_df[plan_df['plan_number'] == plan_number]
-        
+
         if not plan_path.empty:
             if 'full_path' in plan_path.columns and not pd.isna(plan_path['full_path'].iloc[0]):
-                return plan_path['full_path'].iloc[0]
+                return Path(plan_path['full_path'].iloc[0])
             else:
                 # Fallback to constructing path
-                return str(ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}")
+                return ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
         return None
 
     @staticmethod
     @log_call
-    def get_flow_path(flow_number: Union[str, Number], ras_object=None) -> Optional[str]:
+    def get_flow_path(flow_number: Union[str, Number], ras_object=None) -> Optional[Path]:
         """
         Return the full path for a given flow number.
 
@@ -529,7 +529,7 @@ class RasPlan:
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-        Optional[str]: The full path of the flow file if found, None otherwise.
+        Optional[Path]: The full path of the flow file if found, None otherwise.
 
         Raises:
         RuntimeError: If the project is not initialized.
@@ -556,13 +556,13 @@ class RasPlan:
         flow_path = ras_obj.flow_df[ras_obj.flow_df['flow_number'] == flow_number]
         if not flow_path.empty:
             full_path = flow_path['full_path'].iloc[0]
-            return full_path
+            return Path(full_path) if full_path else None
         else:
             return None
 
     @staticmethod
     @log_call
-    def get_unsteady_path(unsteady_number: Union[str, Number], ras_object=None) -> Optional[str]:
+    def get_unsteady_path(unsteady_number: Union[str, Number], ras_object=None) -> Optional[Path]:
         """
         Return the full path for a given unsteady number.
 
@@ -571,7 +571,7 @@ class RasPlan:
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-        Optional[str]: The full path of the unsteady file if found, None otherwise.
+        Optional[Path]: The full path of the unsteady file if found, None otherwise.
 
         Raises:
         RuntimeError: If the project is not initialized.
@@ -598,13 +598,13 @@ class RasPlan:
         unsteady_path = ras_obj.unsteady_df[ras_obj.unsteady_df['unsteady_number'] == unsteady_number]
         if not unsteady_path.empty:
             full_path = unsteady_path['full_path'].iloc[0]
-            return full_path
+            return Path(full_path) if full_path else None
         else:
             return None
 
     @staticmethod
     @log_call
-    def get_geom_path(geom_number: Union[str, Number], ras_object=None) -> Optional[str]:
+    def get_geom_path(geom_number: Union[str, Number], ras_object=None) -> Optional[Path]:
         """
         Return the full path for a given geometry number.
 
@@ -613,7 +613,7 @@ class RasPlan:
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-        Optional[str]: The full path of the geometry file if found, None otherwise.
+        Optional[Path]: The full path of the geometry file if found, None otherwise.
 
         Raises:
         RuntimeError: If the project is not initialized.
@@ -650,10 +650,10 @@ class RasPlan:
                 if 'full_path' in geom_path.columns and pd.notna(geom_path['full_path'].iloc[0]):
                     full_path = geom_path['full_path'].iloc[0]
                     logger.info(f"Found geometry path: {full_path}")
-                    return full_path
+                    return Path(full_path)
                 else:
                     # Fallback to constructing path
-                    constructed_path = str(ras_obj.project_folder / f"{ras_obj.project_name}.g{geom_number}")
+                    constructed_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{geom_number}"
                     logger.info(f"Constructed geometry path: {constructed_path}")
                     return constructed_path
             else:
@@ -680,7 +680,7 @@ class RasPlan:
         run_flags: Dict = None,
         description: str = None,
         ras_object=None
-    ):
+    ) -> str:
         """
         Create a new plan file based on a template and optionally configure it.
 
@@ -1002,7 +1002,7 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def clone_geom(template_geom: Union[str, Number], ras_object=None):
+    def clone_geom(template_geom: Union[str, Number], ras_object=None) -> str:
         """
         Copy geometry files from a template, find the next geometry number,
         and update the project file accordingly.

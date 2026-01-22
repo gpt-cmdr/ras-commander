@@ -104,6 +104,26 @@ class SessionLock:
         return cls.from_json(path.read_text(encoding='utf-8'))
 
 
+@dataclass
+class ProjectInfo:
+    """
+    Resolved project information for RasControl operations.
+
+    Returned by _get_project_info() to provide named access to
+    project path, version, and plan details.
+
+    Attributes:
+        project_path: Path to the .prj file
+        version: HEC-RAS version string (e.g., "4.1", "6.5")
+        plan_number: Plan number (e.g., "01") or None if using direct path
+        plan_name: Plan name from project or None if using direct path
+    """
+    project_path: Path
+    version: str
+    plan_number: Optional[str]
+    plan_name: Optional[str]
+
+
 # Module-level session tracking
 _active_sessions: Dict[str, SessionLock] = {}  # {session_id: SessionLock}
 
@@ -596,13 +616,13 @@ class RasControl:
         )
 
     @staticmethod
-    def _get_project_info(plan: Union[str, Path], ras_object=None):
+    def _get_project_info(plan: Union[str, Path], ras_object=None) -> ProjectInfo:
         """
         Resolve plan number/path to project path, version, and plan details.
 
         Returns:
-            Tuple[Path, str, str, str]: (project_path, version, plan_number, plan_name)
-            plan_number and plan_name are None if using direct .prj path
+            ProjectInfo: Dataclass with project_path, version, plan_number, and plan_name.
+            plan_number and plan_name are None if using direct .prj path.
         """
         if ras_object is None:
             ras_object = ras
@@ -616,7 +636,12 @@ class RasControl:
                     "When using direct .prj paths, project must be initialized with version.\n"
                     "Use: init_ras_project(path, '4.1') or similar"
                 )
-            return plan_path, ras_object.ras_version, None, None
+            return ProjectInfo(
+                project_path=plan_path,
+                version=ras_object.ras_version,
+                plan_number=None,
+                plan_name=None
+            )
 
         # Otherwise treat as plan number
         plan_num = str(plan).zfill(2)
@@ -646,7 +671,12 @@ class RasControl:
 
         plan_name = plan_row['Plan Title'].iloc[0]
 
-        return project_path, version, plan_num, plan_name
+        return ProjectInfo(
+            project_path=project_path,
+            version=version,
+            plan_number=plan_num,
+            plan_name=plan_name
+        )
 
     @staticmethod
     def _com_open_close(project_path: Path, version: str, operation_func: Callable[[Any], Any]) -> Any:
@@ -795,7 +825,7 @@ class RasControl:
             - Automatically terminates orphaned ras.exe processes
             - Enforces max_runtime timeout
         """
-        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
         # Enable Write Detailed= 1 to ensure .comp_msgs.txt is written
         # This is critical for results_df fallback on all HEC-RAS versions
@@ -808,16 +838,16 @@ class RasControl:
             watchdog_pid = 0
 
             # Set current plan if we have plan_name (using plan number)
-            if plan_name:
-                logger.info(f"Setting current plan to: {plan_name}")
-                com_rc.Plan_SetCurrent(plan_name)
+            if info.plan_name:
+                logger.info(f"Setting current plan to: {info.plan_name}")
+                com_rc.Plan_SetCurrent(info.plan_name)
 
             # Check if results are current (unless force_recompute=True)
             if not force_recompute:
                 try:
                     is_current = com_rc.PlanOutput_IsCurrent()
                     if is_current:
-                        logger.info(f"Plan {plan_num} results are current. Skipping computation.")
+                        logger.info(f"Plan {info.plan_number} results are current. Skipping computation.")
                         logger.info("Use force_recompute=True to recompute anyway.")
                         return True, ["Results are current - computation skipped"]
                 except Exception as e:
@@ -825,7 +855,7 @@ class RasControl:
                     logger.warning("Proceeding with computation...")
 
             # Version-specific behavior (normalize for checking)
-            norm_version = RasControl._normalize_version(version)
+            norm_version = RasControl._normalize_version(info.version)
 
             # Start computation (returns immediately - ASYNCHRONOUS!)
             logger.info("Starting computation...")
@@ -839,7 +869,7 @@ class RasControl:
                 # Find our session to get ras_pid and lock file
                 current_session = None
                 for session in _active_sessions.values():
-                    if session.project_path == str(project_path):
+                    if session.project_path == str(info.project_path):
                         current_session = session
                         break
 
@@ -849,7 +879,7 @@ class RasControl:
                         parent_pid=os.getpid(),
                         ras_pid=current_session.ras_pid,
                         max_runtime=max_runtime,
-                        lock_file_path=lock_file
+                        lock_file_path=str(lock_file)
                     )
                 else:
                     logger.warning("Could not spawn watchdog - ras.exe PID not detected")
@@ -888,7 +918,7 @@ class RasControl:
                 if watchdog_pid:
                     _terminate_watchdog(watchdog_pid)
 
-        return RasControl._com_open_close(project_path, version, _run_operation)
+        return RasControl._com_open_close(info.project_path, info.version, _run_operation)
 
     @staticmethod
     def _parse_ras_datetime(time_string: str) -> pd.Timestamp:
@@ -1049,13 +1079,13 @@ class RasControl:
         For comparison with HDF-based methods, see:
         ``feature_dev_notes/rascontrol_vs_hdf_comparison.md``
         """
-        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
         def _extract_operation(com_rc):
             # Set current plan if we have plan_name (using plan number)
-            if plan_name:
-                logger.info(f"Setting current plan to: {plan_name}")
-                com_rc.Plan_SetCurrent(plan_name)
+            if info.plan_name:
+                logger.info(f"Setting current plan to: {info.plan_name}")
+                com_rc.Plan_SetCurrent(info.plan_name)
 
             results = []
             error_logged = False  # Track if we've already logged comp_msgs
@@ -1156,8 +1186,8 @@ class RasControl:
 
                                         # Read comp_msgs file
                                         try:
-                                            project_base = project_path.stem
-                                            plan_file = project_path.parent / f"{project_base}.p{plan_num}"
+                                            project_base = info.project_path.stem
+                                            plan_file = info.project_path.parent / f"{project_base}.p{info.plan_number}"
                                             comp_msgs_file = Path(str(plan_file) + ".comp_msgs.txt")
 
                                             if comp_msgs_file.exists():
@@ -1181,7 +1211,7 @@ class RasControl:
             logger.info(f"Extracted {len(results)} result rows")
             return pd.DataFrame(results)
 
-        return RasControl._com_open_close(project_path, version, _extract_operation)
+        return RasControl._com_open_close(info.project_path, info.version, _extract_operation)
 
     @staticmethod
     def get_unsteady_results(plan: Union[str, Path], max_times: Optional[int] = None,
@@ -1326,13 +1356,13 @@ class RasControl:
         For comparison with HDF-based methods, see:
         ``feature_dev_notes/rascontrol_vs_hdf_comparison.md``
         """
-        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
         def _extract_operation(com_rc):
             # Set current plan if we have plan_name (using plan number)
-            if plan_name:
-                logger.info(f"Setting current plan to: {plan_name}")
-                com_rc.Plan_SetCurrent(plan_name)
+            if info.plan_name:
+                logger.info(f"Setting current plan to: {info.plan_name}")
+                com_rc.Plan_SetCurrent(info.plan_name)
 
             results = []
             error_logged = False  # Track if we've already logged comp_msgs
@@ -1438,8 +1468,8 @@ class RasControl:
 
                                         # Read comp_msgs file
                                         try:
-                                            project_base = project_path.stem
-                                            plan_file = project_path.parent / f"{project_base}.p{plan_num}"
+                                            project_base = info.project_path.stem
+                                            plan_file = info.project_path.parent / f"{project_base}.p{info.plan_number}"
                                             comp_msgs_file = Path(str(plan_file) + ".comp_msgs.txt")
 
                                             if comp_msgs_file.exists():
@@ -1463,7 +1493,7 @@ class RasControl:
             logger.info(f"Extracted {len(results)} result rows")
             return pd.DataFrame(results)
 
-        return RasControl._com_open_close(project_path, version, _extract_operation)
+        return RasControl._com_open_close(info.project_path, info.version, _extract_operation)
 
     @staticmethod
     def get_output_times(plan: Union[str, Path], ras_object=None) -> List[str]:
@@ -1481,13 +1511,13 @@ class RasControl:
             >>> times = RasControl.get_output_times("01")
             >>> print(f"Found {len(times)} output times")
         """
-        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
         def _get_times(com_rc):
             # Set current plan if we have plan_name (using plan number)
-            if plan_name:
-                logger.info(f"Setting current plan to: {plan_name}")
-                com_rc.Plan_SetCurrent(plan_name)
+            if info.plan_name:
+                logger.info(f"Setting current plan to: {info.plan_name}")
+                com_rc.Plan_SetCurrent(info.plan_name)
 
             _, time_strings = com_rc.Output_GetProfiles(0, None)
 
@@ -1500,7 +1530,7 @@ class RasControl:
             logger.info(f"Found {len(times)} output times")
             return times
 
-        return RasControl._com_open_close(project_path, version, _get_times)
+        return RasControl._com_open_close(info.project_path, info.version, _get_times)
 
     @staticmethod
     def get_plans(plan: Union[str, Path], ras_object=None) -> List[dict]:
@@ -1514,7 +1544,7 @@ class RasControl:
         Returns:
             List of dicts with 'name' and 'filename' keys
         """
-        project_path, version, _, _ = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
         def _get_plans(com_rc):
             # Don't set current plan - just getting list
@@ -1528,7 +1558,7 @@ class RasControl:
             logger.info(f"Found {len(plans)} plans")
             return plans
 
-        return RasControl._com_open_close(project_path, version, _get_plans)
+        return RasControl._com_open_close(info.project_path, info.version, _get_plans)
 
     @staticmethod
     def set_current_plan(plan: Union[str, Path], ras_object=None) -> bool:

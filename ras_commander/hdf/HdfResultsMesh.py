@@ -1,8 +1,8 @@
 """
 Class: HdfResultsMesh
 
-Attribution: A substantial amount of code in this file is sourced or derived 
-from the https://github.com/fema-ffrd/rashdf library, 
+Attribution: A substantial amount of code in this file is sourced or derived
+from the https://github.com/fema-ffrd/rashdf library,
 released under MIT license and Copyright (c) 2024 fema-ffrd
 
 The file has been forked and modified for use in RAS Commander.
@@ -11,30 +11,60 @@ The file has been forked and modified for use in RAS Commander.
 
 All methods in this class are static and designed to be used without instantiation.
 
-Public Functions:
-- get_mesh_summary(): Get summary output data for a variable 
-- get_mesh_timeseries(): Get timeseries output for a mesh and variable  
-- get_mesh_faces_timeseries(): Get timeseries for all face-based variables
-- get_mesh_cells_timeseries(): Get timeseries for mesh cells
-- get_mesh_last_iter(): Get last iteration count for cells
-- get_mesh_max_ws(): Get maximum water surface elevation at each cell   
-- get_mesh_min_ws(): Get minimum water surface elevation at each cell
-- get_mesh_max_face_v(): Get maximum face velocity at each face
-- get_mesh_min_face_v(): Get minimum face velocity at each face
-- get_mesh_max_ws_err(): Get maximum water surface error at each cell
-- get_mesh_max_iter(): Get maximum iteration count at each cell
+## xarray Return Type Conventions
 
-Private Functions:
-- _get_mesh_timeseries_output_path(): Get HDF path for timeseries output  #REDUNDANT??
-- _get_mesh_cells_timeseries_output(): Internal handler for cell timeseries   #REDUNDANT??
-- _get_mesh_timeseries_output(): Internal handler for mesh timeseries       # FACES?? 
-- _get_mesh_timeseries_output_values_units(): Get values and units for timeseries
-- _get_available_meshes(): Get list of available meshes in HDF            #USE HDFBASE OR HDFUTIL
-- get_mesh_summary_output(): Internal handler for summary output        
-- get_mesh_summary_output_group(): Get HDF group for summary output         #REDUNDANT??  Include in Above
+This module uses xarray data structures for efficient multi-dimensional array operations.
+Understanding when each return type is used:
 
-The class works with HEC-RAS version 6.0+ plan HDF files and uses HdfBase and 
-HdfUtils for common operations. Methods use @log_call decorator for logging and 
+**xr.DataArray - Single Variable**:
+- Use when returning a SINGLE variable with labeled dimensions
+- Example: Water surface elevation time series for one mesh
+- Methods: get_mesh_timeseries(), _get_mesh_timeseries_output()
+- Structure: Single variable with dimensions (time, cell_id/face_id)
+
+**xr.Dataset - Multiple Variables (Single Mesh)**:
+- Use when returning MULTIPLE variables for ONE mesh area
+- Example: Face velocity + face flow for a mesh
+- Methods: get_mesh_faces_timeseries(), get_boundary_conditions_timeseries()
+- Structure: Multiple data variables sharing common dimensions
+
+**Dict[str, xr.Dataset] - Multiple Mesh Areas**:
+- Use when returning data for MULTIPLE mesh areas
+- Example: All variables for all mesh areas in a model
+- Methods: get_mesh_cells_timeseries(), _get_mesh_cells_timeseries_output()
+- Structure: Dictionary with mesh names as keys, Dataset for each mesh
+- Allows different meshes to have different dimensions
+
+**pandas DataFrame/GeoDataFrame - Summary/Spatial Data**:
+- Use for summary statistics (max/min) with geometry
+- Methods: get_mesh_max_ws(), get_mesh_min_ws(), get_mesh_max_iter()
+- Structure: Tabular data with spatial reference
+
+## Public Functions
+- get_mesh_summary(): Get summary output data for a variable → gpd.GeoDataFrame
+- get_mesh_timeseries(): Get timeseries for one mesh/variable → xr.DataArray
+- get_mesh_faces_timeseries(): Get face variables for one mesh → xr.Dataset
+- get_mesh_cells_timeseries(): Get cell timeseries for all meshes → Dict[str, xr.Dataset]
+- get_mesh_last_iter(): Get last iteration count → pd.DataFrame
+- get_mesh_max_ws(): Get maximum water surface → gpd.GeoDataFrame
+- get_mesh_min_ws(): Get minimum water surface → gpd.GeoDataFrame
+- get_mesh_max_face_v(): Get maximum face velocity → pd.DataFrame
+- get_mesh_min_face_v(): Get minimum face velocity → pd.DataFrame
+- get_mesh_max_ws_err(): Get maximum water surface error → pd.DataFrame
+- get_mesh_max_iter(): Get maximum iteration count → gpd.GeoDataFrame
+- get_boundary_conditions_timeseries(): Get all BC timeseries → xr.Dataset
+
+## Private Functions
+- _get_mesh_timeseries_output_path(): Get HDF path for timeseries output
+- _get_mesh_cells_timeseries_output(): Internal handler for cell timeseries
+- _get_mesh_timeseries_output(): Internal handler for mesh timeseries
+- _get_mesh_timeseries_output_values_units(): Get values and units
+- _get_available_meshes(): Get list of available meshes in HDF
+- get_mesh_summary_output(): Internal handler for summary output
+- get_mesh_summary_output_group(): Get HDF group for summary output
+
+The class works with HEC-RAS version 6.0+ plan HDF files and uses HdfBase and
+HdfUtils for common operations. Methods use @log_call decorator for logging and
 @standardize_input decorator to handle different input types.
 
 
@@ -123,13 +153,20 @@ class HdfResultsMesh:
             truncate (bool): Whether to truncate trailing zeros (default True)
 
         Returns:
-            xr.DataArray: DataArray with dimensions:
-                - time: Timestamps
-                - face_id/cell_id: IDs for faces/cells
-                And attributes:
-                - units: Variable units
-                - mesh_name: Name of mesh
-                - variable: Variable name
+            xr.DataArray: **Single variable** time series data.
+                Use DataArray when extracting ONE variable for ONE mesh.
+
+                Dimensions:
+                    - time: Timestamps
+                    - face_id/cell_id: IDs for faces/cells
+
+                Attributes:
+                    - units: Variable units
+                    - mesh_name: Name of mesh
+                    - variable: Variable name
+
+                When to use: Single variable extraction for focused analysis.
+                For multiple variables, use get_mesh_cells_timeseries() → Dict[str, Dataset].
 
         Valid variables include:
             "Water Surface", "Face Velocity", "Cell Velocity X"...
@@ -149,7 +186,21 @@ class HdfResultsMesh:
             mesh_name (str): Name of the mesh.
 
         Returns:
-            xr.Dataset: Dataset containing the timeseries output for all face-based variables.
+            xr.Dataset: **Multiple variables for ONE mesh**.
+                Use Dataset when extracting MULTIPLE variables for a SINGLE mesh area.
+
+                Data variables:
+                    - face_velocity: Face velocity time series
+                    - face_flow: Face flow time series
+                    (Each variable shares common dimensions)
+
+                Dimensions:
+                    - time: Timestamps
+                    - face_id: Face IDs
+
+                When to use: Combined face analysis for single mesh.
+                For single variable, use get_mesh_timeseries() → DataArray.
+                For multiple meshes, use get_mesh_cells_timeseries() → Dict[str, Dataset].
         """
         face_vars = ["Face Velocity", "Face Flow"]
         datasets = []
@@ -188,10 +239,29 @@ class HdfResultsMesh:
             ras_object (Any, optional): RAS object if available
 
         Returns:
-            Dict[str, xr.Dataset]: Dictionary mapping mesh names to datasets containing:
-                - Time-indexed variables
-                - Cell/face IDs
-                - Variable metadata
+            Dict[str, xr.Dataset]: **Multiple mesh areas with multiple variables**.
+                Use Dict[str, Dataset] when extracting data for MULTIPLE mesh areas.
+
+                Structure:
+                    {
+                        'Mesh1': Dataset(vars=['Water Surface', 'Velocity', ...]),
+                        'Mesh2': Dataset(vars=['Water Surface', 'Velocity', ...]),
+                        ...
+                    }
+
+                Each Dataset contains:
+                    Data variables: All cell/face variables for that mesh
+                    Dimensions: time, cell_id/face_id (specific to each mesh)
+                    Attributes: mesh_name, start_time
+
+                When to use: Model-wide analysis across multiple mesh areas.
+                For single mesh, use get_mesh_faces_timeseries() → Dataset.
+                For single variable, use get_mesh_timeseries() → DataArray.
+
+                Why dictionary: Different meshes may have different:
+                    - Number of cells/faces
+                    - Available variables
+                    - Time series lengths
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_path:
@@ -378,13 +448,13 @@ class HdfResultsMesh:
 
 
     @staticmethod
-    def _get_mesh_cells_timeseries_output(hdf_path: h5py.File, 
+    def _get_mesh_cells_timeseries_output(hdf_path: h5py.File,
                                          mesh_names: Optional[Union[str, List[str]]] = None,
-                                         var: Optional[str] = None, 
+                                         var: Optional[str] = None,
                                          truncate: bool = False) -> Dict[str, xr.Dataset]:
         """
         Get mesh cells timeseries output for specified meshes and variables.
-        
+
         Args:
             hdf_path (h5py.File): Open HDF file object.
             mesh_names (Optional[Union[str, List[str]]]): Name(s) of the mesh(es). If None, processes all available meshes.
@@ -392,7 +462,18 @@ class HdfResultsMesh:
             truncate (bool): If True, truncates the output to remove trailing zeros.
 
         Returns:
-            Dict[str, xr.Dataset]: A dictionary of xarray Datasets, one for each mesh, containing the mesh cells timeseries output.
+            Dict[str, xr.Dataset]: **Dictionary of Datasets for multiple meshes**.
+                Internal implementation of get_mesh_cells_timeseries().
+
+                Why Dict[str, Dataset]:
+                    - Each mesh area has independent dimensions (cell count, time steps)
+                    - Cannot combine into single Dataset due to incompatible dimensions
+                    - Dictionary allows accessing each mesh independently
+
+                Each value (Dataset) contains:
+                    - Multiple data variables (Water Surface, Velocity, etc.)
+                    - Common dimensions for that mesh (time, cell_id/face_id)
+                    - Mesh-specific attributes
 
         Raises:
             ValueError: If there's an error processing the timeseries output data.
@@ -490,7 +571,18 @@ class HdfResultsMesh:
             truncate (bool): Whether to truncate the output to remove trailing zeros (default True).
 
         Returns:
-            xr.DataArray: DataArray containing the timeseries output.
+            xr.DataArray: **Single variable time series**.
+                Internal implementation of get_mesh_timeseries().
+
+                Returns DataArray (not Dataset) because:
+                    - Only ONE variable being extracted
+                    - No need for Dataset overhead
+                    - Direct array access for plotting/analysis
+
+                Structure:
+                    - Data: 2D array (time × cell/face)
+                    - Dimensions: time, cell_id/face_id
+                    - Attributes: units, mesh_name, variable
 
         Raises:
             ValueError: If the specified path is not found in the HDF file or if there's an error processing the data.
@@ -745,13 +837,28 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
 
         Returns:
-            xr.Dataset: Dataset containing all boundary condition data with:
-                - Dimensions: time, bc_name (boundary condition name), face_id
-                - Variables: stage, flow, flow_per_face, stage_per_face
-                - Coordinates and attributes preserving original metadata
+            xr.Dataset: **Multiple variables with shared structure**.
+                Use Dataset when returning MULTIPLE variables that share common dimensions.
+
+                Data variables:
+                    - stage: Water surface elevation at each BC
+                    - flow: Flow at each BC
+                    - flow_per_face: Flow distribution across faces (3D)
+                    - stage_per_face: Stage distribution across faces (3D)
+
+                Dimensions:
+                    - time: Timestamps
+                    - bc_name: Boundary condition names
+                    - face_id: Face IDs (for per-face variables)
+
+                Coordinates:
+                    Metadata from HDF attributes (BC types, locations, etc.)
+
+                When to use: Boundary condition analysis across model.
+                All BCs combined in single Dataset for easy comparison.
 
         Example:
-            >>> bc_data = HdfResultsMesh.get_boundary_conditions_timeseries_combined(hdf_path)
+            >>> bc_data = HdfResultsMesh.get_boundary_conditions_timeseries(hdf_path)
             >>> print(bc_data)
             >>> # Plot flow for all boundary conditions
             >>> bc_data.flow.plot(x='time', hue='bc_name')
