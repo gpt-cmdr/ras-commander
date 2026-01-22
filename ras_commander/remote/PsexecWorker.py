@@ -407,6 +407,12 @@ def execute_psexec_plan(
         prj_file = list(worker_project_path.glob("*.prj"))[0]
         plan_file = worker_project_path / f"{project_name}.p{plan_number}"
 
+        # Enable Write Detailed= 1 to ensure .computeMsgs.txt is written
+        # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
+        from ..BcoMonitor import BcoMonitor
+        BcoMonitor.enable_detailed_logging(plan_file)
+        logger.debug(f"Enabled Write Detailed= 1 for plan {plan_number}")
+
         # Step 3: Generate batch file
         prj_file_local = convert_unc_to_local_path(str(prj_file), worker.share_path, worker.worker_folder)
         plan_file_local = convert_unc_to_local_path(str(plan_file), worker.share_path, worker.worker_folder)

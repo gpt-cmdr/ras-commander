@@ -311,12 +311,14 @@ class RasCmdr:
                     else:
                         logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
+            # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
+            # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
+            BcoMonitor.enable_detailed_logging(compute_plan_path)
+            logger.debug(f"Enabled Write Detailed= 1 for plan {plan_number}")
+
             # Enable .bco monitoring if callback provided
             bco_monitor = None
             if stream_callback:
-                # Enable detailed logging in plan file to create .bco file
-                BcoMonitor.enable_detailed_logging(compute_plan_path)
-
                 # Create monitor with callback wrapper
                 bco_monitor = BcoMonitor(
                     project_path=Path(compute_ras.project_folder),

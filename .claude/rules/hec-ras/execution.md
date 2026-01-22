@@ -642,13 +642,43 @@ RasCmdr.compute_plan("01", force_geompre=True)
 3. Enable `clear_geompre=False` if geometry unchanged
 4. Use SSD for project files (not network drive)
 
+## Compute Messages File Generation
+
+### Write Detailed Flag
+
+**All ras-commander execution functions automatically enable `Write Detailed= 1`** in plan files.
+
+**What it does**:
+- Generates `.computeMsgs.txt` file (HEC-RAS 6.x+)
+- Generates `.comp_msgs.txt` file (HEC-RAS 5.x and earlier)
+- Contains detailed computation messages, warnings, errors, convergence info
+
+**Why automatic**:
+- Required for results_df fallback on pre-6.4 HEC-RAS versions
+- Enables better debugging (messages always available)
+- Minimal overhead (1-5 KB file, no performance impact)
+
+**Affected functions**:
+- `RasCmdr.compute_plan()` - Enables before execution
+- `RasCmdr.compute_parallel()` - Inherits from compute_plan
+- `RasCmdr.compute_test_mode()` - Inherits from compute_plan
+- `RasControl.run_plan()` - Enables before COM execution
+- All remote workers - Enable in worker folders
+
+**File naming by version**:
+- HEC-RAS 6.x+: `{project}.p##.computeMsgs.txt`
+- HEC-RAS 5.x: `{project}.p##.comp_msgs.txt`
+
+**Manual override**: Not currently supported (flag always enabled)
+
 ## See Also
 
 - **Remote Execution**: `.claude/rules/hec-ras/remote.md` - Distributed execution
 - **Static Classes**: `.claude/rules/python/static-classes.md` - RasCmdr pattern
 - **Error Handling**: `.claude/rules/python/error-handling.md` - Exception patterns
 - **HDF Results**: `ras_commander/hdf/CLAUDE.md` - Results extraction
+- **Results DataFrame**: `ras_commander/results/ResultsSummary.py` - Fallback mechanism
 
 ---
 
-**Key Takeaway**: Use `RasCmdr.compute_plan()` for single plans, `compute_parallel()` for multiple plans, and `compute_parallel_remote()` for distributed execution. Smart skip (default) automatically avoids re-running current results. Use `force_rerun=True` to override. Always pass plan numbers as strings ("01", not 1).
+**Key Takeaway**: Use `RasCmdr.compute_plan()` for single plans, `compute_parallel()` for multiple plans, and `compute_parallel_remote()` for distributed execution. Smart skip (default) automatically avoids re-running current results. Use `force_rerun=True` to override. Always pass plan numbers as strings ("01", not 1). All execution functions automatically enable `Write Detailed= 1` for compute messages generation.

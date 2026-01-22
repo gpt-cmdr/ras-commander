@@ -125,6 +125,7 @@ class ResultsSummary:
             'runtime_complete_process_hours': None,
             'runtime_unsteady_compute_hours': None,
             'runtime_complete_process_speed': None,
+            'runtime_source': None,  # 'hdf' or 'compute_messages' (data provenance)
         })
 
         # Determine flow_type for later use
@@ -147,7 +148,10 @@ class ResultsSummary:
         except Exception as e:
             logger.debug(f"Error extracting compute messages: {e}")
 
-        # Extract runtime data
+        # Extract runtime data - try HDF structured paths first, then compute messages fallback
+        runtime_extracted = False
+        fallback_data = None
+
         try:
             runtime_df = HdfResultsPlan.get_runtime_data(hdf_path)
             if runtime_df is not None and len(runtime_df) > 0:
@@ -159,8 +163,31 @@ class ResultsSummary:
                 result['runtime_complete_process_hours'] = runtime_row.get('Complete Process (hr)')
                 result['runtime_unsteady_compute_hours'] = runtime_row.get('Unsteady Flow Computations (hr)')
                 result['runtime_complete_process_speed'] = runtime_row.get('Complete Process Speed (hr/hr)')
+                result['runtime_source'] = 'hdf'
+                runtime_extracted = True
         except Exception as e:
-            logger.debug(f"Error extracting runtime data: {e}")
+            logger.debug(f"Error extracting runtime data from HDF: {e}")
+
+        # Fallback: Parse compute messages for runtime data (pre-6.4 HEC-RAS versions)
+        if not runtime_extracted:
+            try:
+                messages = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path)
+                if messages:
+                    fallback_data = ResultsParser.parse_compute_messages_runtime(messages)
+
+                    # Extract runtime from compute messages
+                    if fallback_data.get('runtime_complete_process_seconds') is not None:
+                        result['runtime_complete_process_hours'] = fallback_data['runtime_complete_process_seconds'] / 3600.0
+                        result['runtime_source'] = 'compute_messages'
+                        logger.debug(f"Using compute messages fallback for runtime data (pre-6.4 HEC-RAS)")
+
+                    if fallback_data.get('runtime_unsteady_compute_seconds') is not None:
+                        result['runtime_unsteady_compute_hours'] = fallback_data['runtime_unsteady_compute_seconds'] / 3600.0
+
+                    if fallback_data.get('complete_process_speed') is not None:
+                        result['runtime_complete_process_speed'] = fallback_data['complete_process_speed']
+            except Exception as e:
+                logger.debug(f"Error extracting runtime data from compute messages: {e}")
 
         # Extract volume accounting (unsteady only) with explicit column mapping
         if flow_type == 'unsteady':
@@ -175,6 +202,7 @@ class ResultsSummary:
                 'Volume Ending': 'vol_ending',
             }
 
+            vol_extracted = False
             try:
                 vol_df = HdfResultsPlan.get_volume_accounting(hdf_path)
                 if vol_df is not None and len(vol_df) > 0:
@@ -183,8 +211,15 @@ class ResultsSummary:
                     for hdf_col, result_col in VOL_COLUMN_MAP.items():
                         if hdf_col in vol_df.columns:
                             result[result_col] = vol_row.get(hdf_col)
+                    vol_extracted = True
             except Exception as e:
-                logger.debug(f"Error extracting volume accounting: {e}")
+                logger.debug(f"Error extracting volume accounting from HDF: {e}")
+
+            # Fallback: Use volume error percent from compute messages (pre-6.4 HEC-RAS)
+            if not vol_extracted and fallback_data is not None:
+                if fallback_data.get('vol_error_percent') is not None:
+                    result['vol_error_percent'] = fallback_data['vol_error_percent']
+                    logger.debug(f"Using compute messages fallback for volume error percent")
 
         return result
 
@@ -330,6 +365,7 @@ class ResultsSummary:
             'runtime_complete_process_hours',
             'runtime_unsteady_compute_hours',
             'runtime_complete_process_speed',
+            'runtime_source',  # 'hdf' or 'compute_messages' (data provenance)
             # Volume accounting (unsteady only)
             'vol_error',
             'vol_accounting_units',
