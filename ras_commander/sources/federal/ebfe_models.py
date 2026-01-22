@@ -735,7 +735,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                 format_warnings = 0
 
                 try:
-                    from ras_commander.validation_base import ValidationSeverity
+                    from ras_commander.RasValidation import ValidationSeverity
                 except Exception:
                     ValidationSeverity = None
 

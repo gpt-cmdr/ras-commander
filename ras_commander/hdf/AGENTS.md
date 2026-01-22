@@ -41,7 +41,8 @@ ras_commander/hdf/
 ├── HdfResultsPlot.py        # Results visualization
 │
 └── # Analysis
-    └── HdfFluvialPluvial.py # Fluvial-pluvial analysis
+    ├── HdfBenefitAreas.py    # 2D benefit area polygons (WSE reduction analysis)
+    └── HdfFluvialPluvial.py  # Fluvial-pluvial analysis
 ```
 
 ## Lazy Loading Pattern
@@ -101,6 +102,7 @@ HdfBase (foundation)
   ├── HdfResultsPlan (uses HdfBase)
   ├── HdfResultsXsec (uses HdfBase)
   ├── HdfResultsBreach (uses HdfBase)
+  ├── HdfBenefitAreas (uses HdfMesh, HdfResultsMesh)
   ├── HdfFluvialPluvial (uses HdfMesh, HdfResultsMesh)
   └── HdfUtils (standalone utilities)
 

@@ -11,7 +11,7 @@ This module follows the ras-commander static class pattern and integrates with t
 centralized logging system.
 
 Example:
-    >>> from ras_commander.validation_base import ValidationSeverity, ValidationResult
+    >>> from ras_commander.RasValidation import ValidationSeverity, ValidationResult
     >>> result = ValidationResult(
     ...     check_name="format_check",
     ...     severity=ValidationSeverity.ERROR,
@@ -55,7 +55,7 @@ class ValidationSeverity(Enum):
         CRITICAL: Blocking issue requiring immediate attention (e.g., "Corrupt file format")
 
     Example:
-        >>> from ras_commander.validation_base import ValidationSeverity
+        >>> from ras_commander.RasValidation import ValidationSeverity
         >>> severity = ValidationSeverity.ERROR
         >>> if severity >= ValidationSeverity.WARNING:
         ...     print("Action required")
@@ -154,7 +154,7 @@ class ValidationResult:
         details: Optional dictionary with additional context (default: empty dict)
 
     Example:
-        >>> from ras_commander.validation_base import ValidationSeverity, ValidationResult
+        >>> from ras_commander.RasValidation import ValidationSeverity, ValidationResult
         >>> result = ValidationResult(
         ...     check_name="file_exists",
         ...     severity=ValidationSeverity.ERROR,
@@ -219,7 +219,7 @@ class ValidationReport:
 
     Example:
         >>> from datetime import datetime
-        >>> from ras_commander.validation_base import (
+        >>> from ras_commander.RasValidation import (
         ...     ValidationSeverity, ValidationResult, ValidationReport
         ... )
         >>> results = [

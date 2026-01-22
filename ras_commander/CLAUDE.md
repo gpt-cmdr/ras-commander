@@ -26,7 +26,7 @@ The ras_commander library is organized into core modules and specialized subpack
 - `RasControl` (`RasControl.py`) - Legacy HEC-RAS 3.x-4.x COM interface
 
 **Validation Framework**:
-- `validation_base` (`validation_base.py`) - Core validation infrastructure
+- `RasValidation` (`RasValidation.py`) - Core validation infrastructure
   - `ValidationSeverity` - Severity levels (INFO < WARNING < ERROR < CRITICAL)
   - `ValidationResult` - Single validation check result
   - `ValidationReport` - Comprehensive validation report

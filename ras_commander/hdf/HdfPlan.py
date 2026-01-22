@@ -32,7 +32,7 @@ import h5py
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict, Union
 import re
 import numpy as np
 
@@ -42,6 +42,59 @@ from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
+
+
+# TypedDict definitions for dict-returning methods
+class PlanInformationDict(TypedDict, total=False):
+    """
+    Plan information attributes from HDF Plan Data/Plan Information.
+
+    Common attributes (not exhaustive - HDF may contain additional fields):
+    - Simulation Start Time: str
+    - Simulation End Time: str
+    - Flow Regime: str (e.g., "Unsteady", "Steady")
+    - Computation Level: str
+    - Program Version: str
+    - Simulation Type: str
+    - Plan Name: str
+    - Short Identifier: str
+    - Geometry File: str
+    - Flow File: str
+    """
+    pass  # All fields optional, types vary
+
+
+class PlanMetPrecipDict(TypedDict, total=False):
+    """
+    Precipitation attributes from Event Conditions/Meteorology/Precipitation.
+
+    Common attributes (not exhaustive - HDF may contain additional fields):
+    - Precipitation Method: str
+    - Time Series: str or array
+    - Spatial Distribution: str
+    - Units: str
+    """
+    pass  # All fields optional, types vary
+
+
+class StartingWSEMethodDict(TypedDict, total=False):
+    """
+    Initial water surface elevation calculation method.
+
+    Attributes:
+    - method: Calculation method name (e.g., "Normal Depth", "Known WSE", "Critical Depth")
+    - slope: Normal depth slope (if method is "Normal Depth")
+    - wse: Known water surface elevation (if method is "Known WSE")
+    - regime: Flow regime (if found in Plan Information)
+    - note: Additional information (if method not found)
+    - error: Error message (if exception occurred)
+    """
+    method: str
+    slope: Optional[float]
+    wse: Optional[float]
+    regime: Optional[str]
+    note: Optional[str]
+    error: Optional[str]
 
 
 class HdfPlan:
@@ -129,7 +182,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_plan_information(hdf_path: Path) -> Dict:
+    def get_plan_information(hdf_path: Path) -> PlanInformationDict:
         """
         Get plan information from a HEC-RAS HDF plan file.
 
@@ -137,7 +190,7 @@ class HdfPlan:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: Plan information including simulation times, flow regime, 
+            PlanInformationDict: Plan information including simulation times, flow regime,
                 computation settings, etc.
 
         Raises:
@@ -235,7 +288,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_plan_met_precip(hdf_path: Path) -> Dict:
+    def get_plan_met_precip(hdf_path: Path) -> PlanMetPrecipDict:
         """
         Get precipitation attributes from a HEC-RAS HDF plan file.
 
@@ -243,7 +296,7 @@ class HdfPlan:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
 
         Returns:
-            Dict: Precipitation attributes including method, time series data,
+            PlanMetPrecipDict: Precipitation attributes including method, time series data,
                 and spatial distribution if available. Returns empty dict if
                 no precipitation data exists.
         """
@@ -319,7 +372,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_starting_wse_method(hdf_path: Path) -> Dict:
+    def get_starting_wse_method(hdf_path: Path) -> StartingWSEMethodDict:
         """
         Extract initial water surface elevation calculation method from plan HDF.
 
@@ -330,7 +383,7 @@ class HdfPlan:
 
         Returns
         -------
-        Dict
+        StartingWSEMethodDict
             Initial condition method with keys:
             - method: calculation method name (e.g., "Normal Depth", "Known WSE", "Critical Depth", "EGL Slope Line")
             - slope: normal depth slope (if method is "Normal Depth")
@@ -341,7 +394,7 @@ class HdfPlan:
         -----
         The method determines how HEC-RAS calculates initial water surface elevations
         at the start of an unsteady flow simulation or downstream boundary for steady flow.
-        Returns empty dict if boundary condition data not found.
+        Returns dict with 'method': 'Unknown' if boundary condition data not found.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:

@@ -63,7 +63,7 @@ All file paths, execution status, and project configuration should be queried fr
 
 1. **Don't use glob patterns to find files**
    ```python
-   # ❌ WRONG - fragile, doesn't handle [Computed] folders
+   # ❌ WRONG - fragile, doesn't handle dest_folder parameter
    hdf_files = list(project_path.glob(f"*.p{plan_num}.hdf"))
    hdf_path = hdf_files[0] if hdf_files else None
    ```

@@ -12,7 +12,7 @@ The validation framework provides comprehensive validation capabilities for HEC-
 - **ValidationResult** - Single validation check result with severity and context
 - **ValidationReport** - Aggregation of multiple validation results with summary statistics
 
-**Module**: `ras_commander.validation_base`
+**Module**: `ras_commander.RasValidation`
 
 **Current Implementations**:
 - `RasDss` (DSS boundary conditions)
@@ -79,7 +79,7 @@ else:
 ### Level Definitions
 
 ```python
-from ras_commander.validation_base import ValidationSeverity
+from ras_commander.RasValidation import ValidationSeverity
 
 # INFO: Informational (doesn't affect operation)
 ValidationSeverity.INFO      # e.g., "File size: 2.5 GB"
@@ -138,7 +138,7 @@ assert ValidationSeverity.CRITICAL > ValidationSeverity.WARNING
 Represents one validation check:
 
 ```python
-from ras_commander.validation_base import ValidationResult, ValidationSeverity
+from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
 result = ValidationResult(
     check_name="format_check",
@@ -165,7 +165,7 @@ Aggregates multiple ValidationResult objects:
 
 ```python
 from datetime import datetime
-from ras_commander.validation_base import ValidationReport
+from ras_commander.RasValidation import ValidationReport
 
 report = ValidationReport(
     target="boundary.dss",
@@ -297,7 +297,7 @@ for bc_name, bc_pathname in boundary_pathnames.items():
 **Step 1: Import validation base classes**
 
 ```python
-from ras_commander.validation_base import (
+from ras_commander.RasValidation import (
     ValidationSeverity,
     ValidationResult,
     ValidationReport
@@ -677,7 +677,7 @@ def test_validation_report():
 
 ## See Also
 
-- **validation_base.py** - Core validation classes
+- **RasValidation.py** - Core validation classes
 - **RasDss validation** - `ras_commander/dss/RasDss.py` (check_pathname, etc.)
 - **RasMap validation** - `ras_commander/RasMap.py` (check_layer, etc.)
 - **Example notebooks**:

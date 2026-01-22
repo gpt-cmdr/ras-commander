@@ -2644,7 +2644,7 @@ class RasMap:
             >>> if result.is_valid:
             ...     print(f"Format valid: {result.context.get('format')}")
         """
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         layer_file = Path(layer_file)
 
@@ -2730,7 +2730,7 @@ class RasMap:
     @staticmethod
     def _validate_geojson_format(layer_file: Path) -> 'ValidationResult':
         """Validate GeoJSON file format and structure."""
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         try:
             import geopandas as gpd
@@ -2765,7 +2765,7 @@ class RasMap:
     @staticmethod
     def _validate_shapefile_format(layer_file: Path) -> 'ValidationResult':
         """Validate Shapefile format and structure."""
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         try:
             import geopandas as gpd
@@ -2800,7 +2800,7 @@ class RasMap:
     @staticmethod
     def _validate_geotiff_format(layer_file: Path) -> 'ValidationResult':
         """Validate GeoTIFF raster format and metadata."""
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         try:
             import rasterio
@@ -2840,7 +2840,7 @@ class RasMap:
     @staticmethod
     def _validate_hdf_format(layer_file: Path) -> 'ValidationResult':
         """Validate HDF file format."""
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         try:
             import h5py
@@ -2892,7 +2892,7 @@ class RasMap:
             >>> if not result.passed:
             ...     print(f"CRS issue: {result.message}")
         """
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         layer_file = Path(layer_file)
         suffix = layer_file.suffix.lower()
@@ -3024,7 +3024,7 @@ class RasMap:
             ...     if not result.passed:
             ...         print(f"Issue: {result.message}")
         """
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         layer_file = Path(layer_file)
         results = []
@@ -3143,7 +3143,7 @@ class RasMap:
             >>> if result.passed:
             ...     print(f"Coverage: {result.details.get('coverage_percent'):.1f}%")
         """
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         layer_file = Path(layer_file)
         suffix = layer_file.suffix.lower()
@@ -3243,7 +3243,7 @@ class RasMap:
             >>> if not result.passed:
             ...     print(f"Terrain issue: {result.message}")
         """
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         rasmap_path = Path(rasmap_path)
 
@@ -3298,7 +3298,7 @@ class RasMap:
             >>> if result.passed:
             ...     print("Land cover layer valid")
         """
-        from ras_commander.validation_base import ValidationResult, ValidationSeverity
+        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
 
         rasmap_path = Path(rasmap_path)
 
@@ -3345,7 +3345,7 @@ class RasMap:
             >>> if not report.is_valid:
             ...     print(report.summary())
         """
-        from ras_commander.validation_base import ValidationReport
+        from ras_commander.RasValidation import ValidationReport
         from datetime import datetime
 
         rasmap_path = Path(rasmap_path)
@@ -3360,7 +3360,7 @@ class RasMap:
             results.append(result)
         else:
             # Generic layer check
-            from ras_commander.validation_base import ValidationResult, ValidationSeverity
+            from ras_commander.RasValidation import ValidationResult, ValidationSeverity
             results.append(ValidationResult(
                 check_name="layer_type",
                 severity=ValidationSeverity.INFO,

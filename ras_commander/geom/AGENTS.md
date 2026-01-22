@@ -21,6 +21,7 @@ The `geom` subpackage provides comprehensive functionality for parsing and modif
 | GeomCulvert.py | `GeomCulvert` | Culvert data extraction |
 | GeomHtab.py | `GeomHtab` | Unified HTAB parameter optimization |
 | GeomHtabUtils.py | `GeomHtabUtils` | HTAB calculation utilities |
+| GeomMetadata.py | `GeomMetadata` | Efficient geometry element count extraction |
 
 ## Technical Patterns
 
@@ -125,6 +126,104 @@ Standard exception hierarchy:
 - `validate_structure_htab_params(params, struct_invert, max_expected_hw, max_expected_flow)` - Validate structure HTAB parameters
 - `get_xs_htab_defaults()` - Get default XS HTAB parameter recommendations
 - `get_structure_htab_defaults()` - Get default structure HTAB parameter recommendations
+
+### GeomMetadata (Element Count Extraction)
+- `get_geometry_counts(geom_path, hdf_path=None)` - Extract all geometry element counts efficiently
+
+**Returns dict with:**
+- `has_1d_xs` (bool) - True if num_cross_sections > 0
+- `has_2d_mesh` (bool) - True if mesh_area_names is not empty
+- `num_cross_sections` (int) - Count of 1D cross sections
+- `num_inline_structures` (int) - Total bridges + culverts + weirs
+- `num_bridges` (int) - Bridge count
+- `num_culverts` (int) - Culvert count
+- `num_weirs` (int) - Inline weir count
+- `num_gates` (int) - Gate count
+- `num_lateral_structures` (int) - Lateral structure count
+- `num_sa_2d_connections` (int) - SA to 2D connections count
+- `mesh_cell_count` (int) - Total 2D mesh cells
+- `mesh_area_names` (list[str]) - Names of 2D flow areas
+
+**Performance:**
+- HDF path: ~10-50ms for all counts (single file read)
+- Text path: ~100-500ms per geometry file (full file parse)
+
+**Example:**
+```python
+from ras_commander.geom import GeomMetadata
+
+# Prefer HDF when available (fast)
+counts = GeomMetadata.get_geometry_counts(
+    geom_path="model.g01",
+    hdf_path="model.g01.hdf"
+)
+
+print(f"1D XS: {counts['num_cross_sections']}")
+print(f"2D Mesh: {counts['mesh_area_names']}")
+print(f"Total cells: {counts['mesh_cell_count']}")
+```
+
+## geom_df Metadata Integration
+
+Starting with v0.88+, `ras.geom_df` automatically includes 12 metadata columns extracted via `GeomMetadata`. These columns provide quick access to geometry element counts without needing to parse individual files.
+
+### Metadata Columns in geom_df
+
+When you initialize a project with `init_ras_project()`, the following columns are automatically populated in `ras.geom_df`:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `has_1d_xs` | bool | True if num_cross_sections > 0 |
+| `has_2d_mesh` | bool | True if mesh_area_names is not empty |
+| `num_cross_sections` | int | Count of 1D cross sections |
+| `num_inline_structures` | int | Total bridges + culverts + weirs |
+| `num_bridges` | int | Bridge count |
+| `num_culverts` | int | Culvert count |
+| `num_weirs` | int | Inline weir count |
+| `num_gates` | int | Gate count |
+| `num_lateral_structures` | int | Lateral structure count |
+| `num_sa_2d_connections` | int | SA to 2D connections count |
+| `mesh_cell_count` | int | Total 2D mesh cells |
+| `mesh_area_names` | list[str] | Names of 2D flow areas |
+
+### Usage Example
+
+```python
+from ras_commander import init_ras_project, ras
+
+init_ras_project("path/to/project", "6.6")
+
+# Access metadata directly from geom_df
+for _, row in ras.geom_df.iterrows():
+    print(f"Geometry: {row['geom_file']}")
+    print(f"  1D Cross Sections: {row['num_cross_sections']}")
+    print(f"  2D Mesh Cells: {row['mesh_cell_count']}")
+    print(f"  2D Areas: {row['mesh_area_names']}")
+    print(f"  Bridges: {row['num_bridges']}")
+    print(f"  Inline Weirs: {row['num_weirs']}")
+
+# Filter geometries by type
+mixed_models = ras.geom_df[(ras.geom_df['has_1d_xs']) & (ras.geom_df['has_2d_mesh'])]
+pure_2d = ras.geom_df[(~ras.geom_df['has_1d_xs']) & (ras.geom_df['has_2d_mesh'])]
+```
+
+### Extraction Behavior
+
+The metadata extraction uses a two-tier approach for optimal performance:
+
+1. **HDF-based extraction (fast)**: When `.g##.hdf` files exist, counts are extracted from HDF structures in ~10-50ms
+2. **Plain text fallback (slower)**: When no HDF exists, parses the `.g##` file directly (~100-500ms)
+
+**Note**: Lateral structures and SA/2D connections are always extracted from plain text (not stored in HDF).
+
+### Graceful Degradation
+
+If metadata extraction fails for any geometry file, default values are used:
+- Integer columns default to `0`
+- Boolean columns default to `False`
+- `mesh_area_names` defaults to empty list `[]`
+
+This ensures `geom_df` is always complete and consistent, even if some geometry files are malformed or inaccessible.
 
 ## HTAB Optimization
 
