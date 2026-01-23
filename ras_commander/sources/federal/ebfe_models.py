@@ -827,7 +827,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         This finds where DSS files actually exist and corrects all references.
 
         Handles:
-        - Absolute paths: C:\eBFE\... → relative path to actual file
+        - Absolute paths: C:\\eBFE\\... → relative path to actual file
         - Wrong relative paths: DSS\Input\file.dss → file.dss (if file is in same folder)
 
         Args:
@@ -931,8 +931,8 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
         Correct terrain HDF path references in .rasmap files.
 
-        eBFE .rasmap files often reference Terrain\RAS_Terrain\Terrain.hdf but the
-        actual file is at Terrain\Terrain.hdf. This finds the actual terrain file
+        eBFE .rasmap files often reference Terrain\\RAS_Terrain\\Terrain.hdf but the
+        actual file is at Terrain\\Terrain.hdf. This finds the actual terrain file
         and corrects the .rasmap reference.
 
         Args:
@@ -1203,7 +1203,7 @@ init_ras_project(project, "5.0.7")
 - **Benefit**: .rasmap terrain references now valid
 
 **3. DSS Path Corrections**:
-- eBFE has absolute DSS paths from original system (C:\eBFE\...)
+- eBFE has absolute DSS paths from original system (C:\\eBFE\\...)
 - **Fix**: Updated all "DSS File=" references to relative paths
 - **Result**: No "DSS path needs correction" GUI popups
 - **Benefit**: Automation-friendly, no manual GUI fixes needed
