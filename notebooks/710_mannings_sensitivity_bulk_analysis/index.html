@@ -4697,21 +4697,22 @@
 <h2 id="import-libraries-and-setup-ras-commander">Import Libraries and Setup ras-commander<a class="headerlink" href="#import-libraries-and-setup-ras-commander" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="err">!</span><span class="n">pip</span> <span class="n">install</span> <span class="n">seaborn</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Requirement already satisfied: seaborn in c:\users\billk_clb\anaconda3\lib\site-packages (0.13.2)
-Requirement already satisfied: numpy!=1.24.0,&gt;=1.20 in c:\users\billk_clb\anaconda3\lib\site-packages (from seaborn) (2.3.4)
-Requirement already satisfied: pandas&gt;=1.2 in c:\users\billk_clb\anaconda3\lib\site-packages (from seaborn) (2.3.3)
-Requirement already satisfied: matplotlib!=3.6.1,&gt;=3.4 in c:\users\billk_clb\anaconda3\lib\site-packages (from seaborn) (3.10.7)
-Requirement already satisfied: contourpy&gt;=1.0.1 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (1.3.3)
-Requirement already satisfied: cycler&gt;=0.10 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (0.12.1)
-Requirement already satisfied: fonttools&gt;=4.22.0 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (4.60.1)
-Requirement already satisfied: kiwisolver&gt;=1.3.1 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (1.4.9)
-Requirement already satisfied: packaging&gt;=20.0 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (25.0)
-Requirement already satisfied: pillow&gt;=8 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (11.3.0)
-Requirement already satisfied: pyparsing&gt;=3 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (3.2.5)
-Requirement already satisfied: python-dateutil&gt;=2.7 in c:\users\billk_clb\anaconda3\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (2.9.0.post0)
-Requirement already satisfied: pytz&gt;=2020.1 in c:\users\billk_clb\anaconda3\lib\site-packages (from pandas&gt;=1.2-&gt;seaborn) (2025.2)
-Requirement already satisfied: tzdata&gt;=2022.7 in c:\users\billk_clb\anaconda3\lib\site-packages (from pandas&gt;=1.2-&gt;seaborn) (2025.2)
-Requirement already satisfied: six&gt;=1.5 in c:\users\billk_clb\anaconda3\lib\site-packages (from python-dateutil&gt;=2.7-&gt;matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (1.17.0)
+<div class="language-text highlight"><pre><span></span><code>Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: seaborn in c:\users\bill\appdata\roaming\python\python313\site-packages (0.13.2)
+Requirement already satisfied: numpy!=1.24.0,&gt;=1.20 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from seaborn) (2.4.1)
+Requirement already satisfied: pandas&gt;=1.2 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from seaborn) (2.3.3)
+Requirement already satisfied: matplotlib!=3.6.1,&gt;=3.4 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from seaborn) (3.10.8)
+Requirement already satisfied: contourpy&gt;=1.0.1 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (1.3.3)
+Requirement already satisfied: cycler&gt;=0.10 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (0.12.1)
+Requirement already satisfied: fonttools&gt;=4.22.0 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (4.61.1)
+Requirement already satisfied: kiwisolver&gt;=1.3.1 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (1.4.9)
+Requirement already satisfied: packaging&gt;=20.0 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (25.0)
+Requirement already satisfied: pillow&gt;=8 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (12.1.0)
+Requirement already satisfied: pyparsing&gt;=3 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (3.3.1)
+Requirement already satisfied: python-dateutil&gt;=2.7 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (2.9.0.post0)
+Requirement already satisfied: pytz&gt;=2020.1 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from pandas&gt;=1.2-&gt;seaborn) (2025.2)
+Requirement already satisfied: tzdata&gt;=2022.7 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from pandas&gt;=1.2-&gt;seaborn) (2025.3)
+Requirement already satisfied: six&gt;=1.5 in c:\programdata\anaconda3\envs\ras-commander\lib\site-packages (from python-dateutil&gt;=2.7-&gt;matplotlib!=3.6.1,&gt;=3.4-&gt;seaborn) (1.17.0)
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
@@ -4749,9 +4750,7 @@ Requirement already satisfied: six&gt;=1.5 in c:\users\billk_clb\anaconda3\lib\s
 </span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-
-
-✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+✓ Loaded: C:\Users\bill\AppData\Roaming\Python\Python313\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
@@ -4772,7 +4771,7 @@ Requirement already satisfied: six&gt;=1.5 in c:\users\billk_clb\anaconda3\lib\s
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Execution Settings</span>
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">RUN_PARALLEL</span> <span class="o">=</span> <span class="kc">True</span>                   <span class="c1"># Run plans in parallel</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">MAX_WORKERS</span> <span class="o">=</span> <span class="mi">2</span>                       <span class="c1"># Parallel workers</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">MAX_WORKERS</span> <span class="o">=</span> <span class="mi">4</span>                       <span class="c1"># Parallel workers</span>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="n">NUM_CORES</span> <span class="o">=</span> <span class="mi">2</span>                         <span class="c1"># Cores per worker</span>
 </span></code></pre></div>
 <h2 id="note-on-dataframe-column-naming">Note on DataFrame Column Naming<a class="headerlink" href="#note-on-dataframe-column-naming" title="Permanent link">&para;</a></h2>
@@ -5309,28 +5308,14 @@ while HEC-RAS's internal HDF structure retains the technically correct spelling 
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Either as a tuple (x, y) or as a Point object</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">point_of_interest</span> <span class="o">=</span> <span class="n">POINT_OF_INTEREST</span>  <span class="c1"># Use from parameters</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-
-
-2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-
-
-2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-
-
-2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-
-
-2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_105&#39;
-
-
-2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_105&#39; already exists. Deleting existing folder...
-
-
-2025-12-16 14:47:07 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_105&#39; has been deleted.
-
-
-2025-12-16 14:47:09 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105
+<div class="language-text highlight"><pre><span></span><code>2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
+2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_105&#39;
+2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_105&#39; already exists. Deleting existing folder...
+2026-01-17 17:44:40 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_105&#39; has been deleted.
+2026-01-17 17:44:41 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Uncomment and Run this Code Cell if you are using your own project</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1">#project_folder = r&quot;C:\Path\To\HEC-RAS\Project&quot;</span>
@@ -5370,34 +5355,95 @@ while HEC-RAS's internal HDF structure retains the technically correct spelling 
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="n">NUM_CORES</span><span class="p">)</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Template plan </span><span class="si">{</span><span class="n">template_plan</span><span class="si">}</span><span class="s2"> execution complete.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 14:47:09 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
-
-
-2025-12-16 14:47:09 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105
-
-
-2025-12-16 14:47:09 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03
-
-
-2025-12-16 14:47:09 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03
-
-
-2025-12-16 14:47:09 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
-
-
-2025-12-16 14:47:09 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2025-12-16 14:47:09 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03&quot;
+<div class="language-text highlight"><pre><span></span><code>2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
 
 
 Executing template plan 03 before sensitivity analysis...
 
 
-2025-12-16 15:05:19 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
-
-
-2025-12-16 15:05:19 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 1089.82 seconds
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:44:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:44:42 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
+2026-01-17 17:44:42 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
+2026-01-17 17:44:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105
+2026-01-17 17:44:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03
+2026-01-17 17:44:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:44:42 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:44:42 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 03
+2026-01-17 17:44:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-17 17:44:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03&quot;
+2026-01-17 17:47:33 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+2026-01-17 17:47:33 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 171.21 seconds
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+C:\Users\bill\AppData\Roaming\Python\Python313\site-packages\ras_commander\RasPrj.py:1590: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+2026-01-17 17:47:33 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
 
 
 Template plan 03 execution complete.
@@ -5424,26 +5470,68 @@ Template plan 03 execution complete.
 </span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>    <span class="n">num_cores</span><span class="o">=</span><span class="n">NUM_CORES</span>
 </span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-16 15:05:19 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><pre><span></span><code>2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
 
 
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07
+Initializing HEC-RAS project: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105
 
 
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07
+2026-01-17 17:47:33 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:33 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:33 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 07
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
 
 
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 07
-
-
-2025-12-16 15:05:19 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
-
-
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g04
-
-
-Initializing HEC-RAS project: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105
-Results will be saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity
+Results will be saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity
 
 Available plans:
    plan_number                               Plan Title  \
@@ -5478,31 +5566,106 @@ Creating plan: Minimum (ShortID: Min_n)
 Description: Minimum Recommended Mannings n Values
 
 
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09.hdf to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g04.hdf
-
-
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 04
-
-
-2025-12-16 15:05:19 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g04 for plan 07
-
-
-2025-12-16 15:05:19 - ras_commander.RasPlan - INFO - Geometry for plan 07 set to 04
-
-
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08
-
-
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08
-
-
-2025-12-16 15:05:19 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08
-
-
-2025-12-16 15:05:19 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
-
-
-2025-12-16 15:05:20 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g05
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:34 - ras_commander.RasPrj - INFO - Updated results_df with 12 plan(s)
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g04
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09.hdf to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g04.hdf
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 04
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:34 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:34 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g04 for plan 07
+2026-01-17 17:47:34 - ras_commander.RasPlan - INFO - Geometry for plan 07 set to 04
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08
+2026-01-17 17:47:34 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
 
 
   Adjusted base override for &#39;NoData&#39;: 0.0600 → 0.0500
@@ -5543,34 +5706,106 @@ Creating plan: Maximum (ShortID: Max_n)
 Description: Maximum Recommended Mannings n Values
 
 
-2025-12-16 15:05:20 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09.hdf to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g05.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 05
-
-
-2025-12-16 15:05:20 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g05 for plan 08
-
-
-2025-12-16 15:05:20 - ras_commander.RasPlan - INFO - Geometry for plan 08 set to 05
-
-
-2025-12-16 15:05:20 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;03&#39;, &#39;07&#39;, &#39;08&#39;]
-
-
-2025-12-16 15:05:20 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 3
-
-
-2025-12-16 15:05:20 - ras_commander.RasCmdr - CRITICAL - Error in compute_parallel: [WinError 32] The process cannot access the file because it is being used by another process: &#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\BaldEagleCrkMulti2D_105 [Worker 1]\\BaldEagleDamBrk.bco08&#39;
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.rasmap
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:35 - ras_commander.RasPrj - INFO - Updated results_df with 13 plan(s)
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g05
+2026-01-17 17:47:35 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g09.hdf to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.g05.hdf
+2026-01-17 17:47:35 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 05
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:35 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:35 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g05 for plan 08
+2026-01-17 17:47:35 - ras_commander.RasPlan - INFO - Geometry for plan 08 set to 05
+2026-01-17 17:47:35 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;03&#39;, &#39;07&#39;, &#39;08&#39;]
+2026-01-17 17:47:35 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 3
+2026-01-17 17:47:36 - ras_commander.RasCmdr - INFO - Removed existing worker folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]
 
 
   Adjusted base override for &#39;NoData&#39;: 0.0600 → 0.0700
@@ -5611,32 +5846,468 @@ Scenarios:
 Plan Numbers: 
 [&#39;03&#39;, &#39;07&#39;, &#39;08&#39;]
 
-Scenario information saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\scenarios.csv
+Scenario information saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\scenarios.csv
 
 Running 3 plans in parallel...
 
+
+2026-01-17 17:47:36 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:36 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:36 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.rasmap
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:36 - ras_commander.RasPrj - INFO - Updated results_df with 13 plan(s)
+2026-01-17 17:47:36 - ras_commander.RasCmdr - INFO - Removed existing worker folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]
+2026-01-17 17:47:37 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:37 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:37 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.rasmap
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:37 - ras_commander.RasPrj - INFO - Updated results_df with 13 plan(s)
+2026-01-17 17:47:38 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:38 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.rasmap
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.RasPrj - INFO - Updated results_df with 13 plan(s)
+2026-01-17 17:47:38 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]
+2026-01-17 17:47:38 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]
+2026-01-17 17:47:38 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07
+2026-01-17 17:47:38 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08
+2026-01-17 17:47:38 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:38 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08
+2026-01-17 17:47:38 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:38 - ras_commander.RasCmdr - INFO - Skipping plan 03: Plan 03 results are current (newer than all inputs)
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:38 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 07
+2026-01-17 17:47:39 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07
+2026-01-17 17:47:39 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Cleared geometry preprocessor files for plan: 08
+2026-01-17 17:47:39 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08
+2026-01-17 17:47:39 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 1]\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+C:\Users\bill\AppData\Roaming\Python\Python313\site-packages\ras_commander\RasPrj.py:1590: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+2026-01-17 17:47:39 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 1: Successful
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 07
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07&quot;
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 08
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2026-01-17 17:47:39 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08&quot;
+2026-01-17 17:51:39 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 07
+2026-01-17 17:51:39 - ras_commander.RasCmdr - INFO - Total run time for plan 07: 240.00 seconds
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:51:39 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:51:40 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 2]\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:51:40 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-17 17:51:40 - ras_commander.RasCmdr - INFO - Plan 07 executed in worker 2: Successful
+2026-01-17 17:52:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 08
+2026-01-17 17:52:41 - ras_commander.RasCmdr - INFO - Total run time for plan 08: 301.45 seconds
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:52:41 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2108 characters from HDF
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105 [Worker 3]\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:41 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
+2026-01-17 17:52:41 - ras_commander.RasCmdr - INFO - Plan 08 executed in worker 3: Successful
+2026-01-17 17:52:41 - ras_commander.RasCmdr - INFO - Consolidating results back to original project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105
+2026-01-17 17:52:48 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+2026-01-17 17:52:48 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+2026-01-17 17:52:48 - ras_commander.RasCmdr - INFO - Plan 07: Successful
+2026-01-17 17:52:48 - ras_commander.RasCmdr - INFO - Plan 08: Successful
+2026-01-17 17:52:48 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-17 17:52:48 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-17 17:52:48 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g04
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g04
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g05
+2026-01-17 17:52:49 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g05
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2109 characters from HDF
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2108 characters from HDF
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Single 2D Area - Internal Dam Structure
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+C:\Users\bill\AppData\Roaming\Python\Python313\site-packages\ras_commander\RasPrj.py:1590: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+2026-01-17 17:52:49 - ras_commander.RasPrj - INFO - Updated results_df with 3 plan(s)
+2026-01-17 17:52:49 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p03.hdf
+
+
+
 Execution results:
+  Plan 03: Successful
+  Plan 07: Successful
+  Plan 08: Successful
 
 
-2025-12-16 15:05:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p03.hdf
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Froude Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Courant Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Bed Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Precipitation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Infiltration Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Evaporation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Percolation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:49 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
 
 
 
@@ -5645,109 +6316,110 @@ Distance: 56.22 units
 Mesh area: BaldEagleCr
 
 
-2025-12-16 15:05:20 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:20 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Froude Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Courant Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Bed Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Precipitation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Infiltration Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Evaporation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Percolation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Water Surface&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Courant&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Cumulative Volume&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Eddy Viscosity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow Period Average&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Friction Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Pressure Gradient Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - ERROR - HDF file not found: 07
-
-
-2025-12-16 15:05:21 - ras_commander.hdf.HdfResultsMesh - ERROR - HDF file not found: 08
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Water Surface&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Courant&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Cumulative Volume&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Eddy Viscosity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow Period Average&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Friction Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Pressure Gradient Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:50 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:50 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p07.hdf
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Froude Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Courant Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Bed Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Precipitation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Infiltration Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Evaporation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Percolation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
 
 
 Scenario: Current (Current): Max Water Surface = 560.73
-  Time series saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\timeseries_Current.csv
-Error extracting results for scenario Minimum: HDF file not found: 07
-Error extracting results for scenario Maximum: HDF file not found: 08
-
-Summary of maximum water surface elevations saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\max_water_surface_summary.csv
+  Time series saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\timeseries_Current.csv
 
 
-Time series plot saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\water_surface_timeseries.png
-Bar chart saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\max_water_surface_comparison.png
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Water Surface&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Courant&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Cumulative Volume&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Eddy Viscosity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow Period Average&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Friction Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Pressure Gradient Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:50 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:50 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\BaldEagleDamBrk.p08.hdf
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Froude Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Courant Number&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Bed Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Precipitation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Infiltration Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Evaporation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Percolation Rate&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Elevation&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Depth&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity X&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Groundwater Velocity Y&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+
+
+Scenario: Minimum (Min_n): Max Water Surface = 560.11
+  Time series saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\timeseries_Min_n.csv
+
+
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Water Surface&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Courant&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Cumulative Volume&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Eddy Viscosity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Flow Period Average&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Friction Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Pressure Gradient Term&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Shear Stress&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+2026-01-17 17:52:50 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;BaldEagleCr&#39;. Skipping.
+
+
+Scenario: Maximum (Max_n): Max Water Surface = 559.45
+  Time series saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\timeseries_Max_n.csv
+
+Summary of maximum water surface elevations saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\max_water_surface_summary.csv
+Time series plot saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\water_surface_timeseries.png
+Bar chart saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity\max_water_surface_comparison.png
 </code></pre></div>
-<p><img alt="png" src="../710_mannings_sensitivity_bulk_analysis_files/710_mannings_sensitivity_bulk_analysis_17_68.png" /></p>
-<p><img alt="png" src="../710_mannings_sensitivity_bulk_analysis_files/710_mannings_sensitivity_bulk_analysis_17_69.png" /></p>
+<p><img alt="png" src="../710_mannings_sensitivity_bulk_analysis_files/710_mannings_sensitivity_bulk_analysis_17_18.png" /></p>
+<p><img alt="png" src="../710_mannings_sensitivity_bulk_analysis_files/710_mannings_sensitivity_bulk_analysis_17_19.png" /></p>
+<div class="language-text highlight"><pre><span></span><code>Sensitivity Analysis Summary:
+  Current maximum WSE: 560.73 ft
+  Minimum n maximum WSE: 560.11 ft
+  Maximum n maximum WSE: 559.45 ft
+  Range: -0.66 ft
+  Current vs Min: 0.62 ft
+  Current vs Max: -1.28 ft
+  Current position within range: -93.9%
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Access the results</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">scenarios</span> <span class="o">=</span> <span class="n">sensitivity_results</span><span class="p">[</span><span class="s1">&#39;scenarios&#39;</span><span class="p">]</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">max_ws_summary</span> <span class="o">=</span> <span class="n">sensitivity_results</span><span class="p">[</span><span class="s1">&#39;max_ws_summary&#39;</span><span class="p">]</span>
@@ -5755,7 +6427,7 @@ Bar chart saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-p
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Results saved to: </span><span class="si">{</span><span class="n">output_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Results saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity
+<div class="language-text highlight"><pre><span></span><code>Results saved to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_105\Mannings_Bulk_Sensitivity
 </code></pre></div>
 <p>This notebook provides a comprehensive framework for Mannings n sensitivity analysis in HEC-RAS models. It allows you to:</p>
 <ol>
@@ -5787,7 +6459,7 @@ Bar chart saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-p
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 22, 2026 17:57:53 UTC">January 22, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 23, 2026 17:45:47 UTC">January 23, 2026</span>
   </span>
 
     
@@ -5797,7 +6469,7 @@ Bar chart saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-p
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 22, 2026 17:57:53 UTC">January 22, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 23, 2026 17:45:47 UTC">January 23, 2026</span>
   </span>
 
     
