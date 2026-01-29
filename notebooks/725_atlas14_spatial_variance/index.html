@@ -4939,7 +4939,7 @@
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+✓ Loaded: C:\Users\bill\AppData\Roaming\Python\Python313\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="1-direct-bounds-query">1. Direct Bounds Query<a class="headerlink" href="#1-direct-bounds-query" title="Permanent link">&para;</a></h2>
 <p>First, let's demonstrate querying Atlas 14 data for a specific geographic area without a HEC-RAS project. This is useful for exploring data availability and understanding precipitation patterns.</p>
@@ -4959,14 +4959,14 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Durations: </span><span class="si">{</span><span class="n">pfe</span><span class="p">[</span><span class="s1">&#39;durations&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> hours&quot;</span><span class="p">)</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Return periods: </span><span class="si">{</span><span class="n">pfe</span><span class="p">[</span><span class="s1">&#39;return_periods&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> years&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:39:45 - ras_commander.precip.Atlas14Grid - INFO - Loading Atlas 14 coordinate arrays from remote file...
-2026-01-14 11:39:45 - ras_commander.precip.Atlas14Grid - INFO - Loading Atlas 14 coordinate arrays from remote file...
-2026-01-14 11:39:56 - ras_commander.precip.Atlas14Grid - INFO - Loaded coordinates: lat=3121, lon=7081, ari=9
-2026-01-14 11:39:56 - ras_commander.precip.Atlas14Grid - INFO - Loaded coordinates: lat=3121, lon=7081, ari=9
-2026-01-14 11:39:56 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-95.5000, 29.5000, -95.0000, 30.0000): lat[661:721], lon[3541:3601]
-2026-01-14 11:39:56 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-95.5000, 29.5000, -95.0000, 30.0000): lat[661:721], lon[3541:3601]
-2026-01-14 11:40:02 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 189.8 KB (vs 1138.1 MB full grid, 100.0% reduction)
-2026-01-14 11:40:02 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 189.8 KB (vs 1138.1 MB full grid, 100.0% reduction)
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:10:46 - ras_commander.precip.Atlas14Grid - INFO - Loading Atlas 14 coordinate arrays from remote file...
+2026-01-25 17:10:46 - ras_commander.precip.Atlas14Grid - INFO - Loading Atlas 14 coordinate arrays from remote file...
+2026-01-25 17:10:59 - ras_commander.precip.Atlas14Grid - INFO - Loaded coordinates: lat=3121, lon=7081, ari=9
+2026-01-25 17:10:59 - ras_commander.precip.Atlas14Grid - INFO - Loaded coordinates: lat=3121, lon=7081, ari=9
+2026-01-25 17:10:59 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-95.5000, 29.5000, -95.0000, 30.0000): lat[661:721], lon[3541:3601]
+2026-01-25 17:10:59 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-95.5000, 29.5000, -95.0000, 30.0000): lat[661:721], lon[3541:3601]
+2026-01-25 17:11:04 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 189.8 KB (vs 1138.1 MB full grid, 100.0% reduction)
+2026-01-25 17:11:04 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 189.8 KB (vs 1138.1 MB full grid, 100.0% reduction)
 
 
 Bounds: (-95.5, 29.5, -95.0, 30.0)
@@ -5041,8 +5041,8 @@ Return periods: [10, 50, 100] years
 </span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="p">)</span>
 </span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="nb">print</span><span class="p">(</span><span class="n">point_df_pivot</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:40:02 - ras_commander.precip.Atlas14Grid - INFO - Point (29.7600, -95.3700) -&gt; nearest grid (29.7583, -95.3667)
-2026-01-14 11:40:02 - ras_commander.precip.Atlas14Grid - INFO - Point (29.7600, -95.3700) -&gt; nearest grid (29.7583, -95.3667)
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:11:04 - ras_commander.precip.Atlas14Grid - INFO - Point (29.7600, -95.3700) -&gt; nearest grid (29.7583, -95.3667)
+2026-01-25 17:11:04 - ras_commander.precip.Atlas14Grid - INFO - Point (29.7600, -95.3700) -&gt; nearest grid (29.7583, -95.3667)
 
 
 Point Precipitation Frequency Estimates (Houston, TX):
@@ -5066,25 +5066,69 @@ duration_hr
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry files: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_atlas14_variance&#39;
-2026-01-14 11:40:12 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_atlas14_variance&#39;
-2026-01-14 11:40:13 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance
-2026-01-14 11:40:13 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance
-2026-01-14 11:40:13 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.rasmap
-2026-01-14 11:40:13 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.rasmap
-2026-01-14 11:40:13 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
-2026-01-14 11:40:13 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_atlas14_variance&#39;
+2026-01-25 17:11:09 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_atlas14_variance&#39;
+2026-01-25 17:11:11 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance
+2026-01-25 17:11:11 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g06
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g06
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g08
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g08
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g10
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g10
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g11
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g11
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g12
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g12
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g09
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g09
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g13
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g13
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g01
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g01
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
 
 
-Project extracted to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance
+Project extracted to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance
+
+
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g03
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g03
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 lateral structures in BaldEagleDamBrk.g02
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-25 17:11:11 - ras_commander.geom.GeomLateral - INFO - Found 0 SA/2D connections in BaldEagleDamBrk.g02
+2026-01-25 17:11:11 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.rasmap
+2026-01-25 17:11:11 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.rasmap
+2026-01-25 17:11:11 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
+2026-01-25 17:11:11 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
+
+
 
 Project: BaldEagleDamBrk
 Geometry files: 10
@@ -5119,30 +5163,30 @@ Geometry files: 10
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="k">if</span> <span class="s1">&#39;mesh_area_names&#39;</span> <span class="ow">in</span> <span class="n">pfe_project</span><span class="p">:</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;2D Areas: </span><span class="si">{</span><span class="n">pfe_project</span><span class="p">[</span><span class="s1">&#39;mesh_area_names&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:40:13 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
-2026-01-14 11:40:13 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:13 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:13 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
-2026-01-14 11:40:13 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
-2026-01-14 11:40:13 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
-2026-01-14 11:40:13 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:11:11 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+2026-01-25 17:11:11 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:11 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:11 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
+2026-01-25 17:11:11 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
+2026-01-25 17:11:11 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
+2026-01-25 17:11:11 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
 
 
 Extent source: 2d_flow_area
@@ -5168,54 +5212,54 @@ Grid dimensions: 20 x 44
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Variance Analysis Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:40:26 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Variance - INFO - Durations: [6, 12, 24] hours, Return periods: [10, 25, 50, 100] years
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Variance - INFO - Durations: [6, 12, 24] hours, Return periods: [10, 25, 50, 100] years
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:26 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
-2026-01-14 11:40:26 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
-2026-01-14 11:40:33 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
-2026-01-14 11:40:33 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:33 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:33 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
-2026-01-14 11:40:33 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
-2026-01-14 11:40:33 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 7.1%, mean range = 4.9%
-2026-01-14 11:40:33 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 7.1%, mean range = 4.9%
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:11:20 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Variance - INFO - Durations: [6, 12, 24] hours, Return periods: [10, 25, 50, 100] years
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Variance - INFO - Durations: [6, 12, 24] hours, Return periods: [10, 25, 50, 100] years
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:20 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
+2026-01-25 17:11:20 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 46.4 KB (vs 1138.1 MB full grid, 100.0% reduction)
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 7.1%, mean range = 4.9%
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 7.1%, mean range = 4.9%
 
 
 
@@ -5369,54 +5413,54 @@ return_period_yr aep_pct
 </span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Uniform rainfall is likely appropriate&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:40:34 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Variance - INFO - Durations: [24] hours, Return periods: [100] years
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Variance - INFO - Durations: [24] hours, Return periods: [100] years
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:34 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
-2026-01-14 11:40:34 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 15.5 KB (vs 379.4 MB full grid, 100.0% reduction)
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 15.5 KB (vs 379.4 MB full grid, 100.0% reduction)
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:37 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 5.9%, mean range = 5.9%
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 5.9%, mean range = 5.9%
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Durations: [24] hours, Return periods: [100] years
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Variance - INFO - Durations: [24] hours, Return periods: [100] years
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:27 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - 2D flow area bounds: W=-77.6324, S=41.0459, E=-77.3275, N=41.1842
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
+2026-01-25 17:11:27 - ras_commander.precip.Atlas14Grid - INFO - Extracting Atlas 14 data for bounds (-77.6629, 41.0321, -77.2970, 41.1980): lat[2044:2064], lon[5681:5725]
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 15.5 KB (vs 379.4 MB full grid, 100.0% reduction)
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Grid - INFO - Data transfer: 15.5 KB (vs 379.4 MB full grid, 100.0% reduction)
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\BaldEagleDamBrk.g01.hdf
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Found projection in RASMapper file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Terrain\Projection.prj
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:31 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from RASMapper file Projection.prj
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Analyzing mesh area: BaldEagleCr
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 5.9%, mean range = 5.9%
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Variance analysis complete: max range = 5.9%, mean range = 5.9%
 
 
 Quick Variance Check (100-yr, 24-hr):
@@ -5465,20 +5509,20 @@ Quick Variance Check (100-yr, 24-hr):
 </span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Variance Heatmap:&quot;</span><span class="p">)</span>
 </span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a>        <span class="n">display</span><span class="p">(</span><span class="n">Image</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">heatmap_plot</span><span class="p">)))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved statistics to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_statistics.csv
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved statistics to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_statistics.csv
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved summary to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_summary.csv
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved summary to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_summary.csv
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_by_duration.png
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_by_duration.png
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_heatmap.png
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_heatmap.png
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Report generated in: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report
-2026-01-14 11:40:37 - ras_commander.precip.Atlas14Variance - INFO - Report generated in: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report
+<div class="language-text highlight"><pre><span></span><code>2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved statistics to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_statistics.csv
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved statistics to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_statistics.csv
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved summary to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_summary.csv
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved summary to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_summary.csv
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_by_duration.png
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_by_duration.png
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_heatmap.png
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Saved plot: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report\variance_heatmap.png
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Report generated in: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report
+2026-01-25 17:11:31 - ras_commander.precip.Atlas14Variance - INFO - Report generated in: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report
 
 
 
-Report generated at: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report
+Report generated at: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_atlas14_variance\Atlas14_Variance_Report
 
 Files created:
   - variance_by_duration.png
@@ -5546,7 +5590,7 @@ Variance by Duration:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 23, 2026 17:45:47 UTC">January 23, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 29, 2026 17:12:41 UTC">January 29, 2026</span>
   </span>
 
     
@@ -5556,7 +5600,7 @@ Variance by Duration:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 23, 2026 17:45:47 UTC">January 23, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 29, 2026 17:12:41 UTC">January 29, 2026</span>
   </span>
 
     

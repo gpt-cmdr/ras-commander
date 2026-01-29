@@ -5635,31 +5635,21 @@ Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat=29.76&amp;lon=-
 </span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;NOAA API may be unavailable.&quot;</span><span class="p">)</span>
 </span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>    <span class="n">STORM_GEN_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:39 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
-2026-01-05 01:32:39 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
+<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:52 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
+2026-01-23 22:10:52 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
 
 
 Downloading Atlas 14 data from NOAA for StormGenerator...
 
 
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Downloaded Atlas 14 data for region: Texas
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Downloaded Atlas 14 data for region: Texas
+2026-01-23 22:10:54 - ras_commander.precip.StormGenerator - INFO - Downloaded Atlas 14 data for region: Texas
+2026-01-23 22:10:54 - ras_commander.precip.StormGenerator - INFO - Downloaded Atlas 14 data for region: Texas
 
 
 
 [OK] Downloaded successfully!
-  Available ARIs: [&#39;2&#39;, &#39;5&#39;, &#39;10&#39;, &#39;25&#39;, &#39;50&#39;, &#39;100&#39;, &#39;200&#39;, &#39;500&#39;, &#39;1000&#39;, &#39;2000&#39;]
-  Durations: 19 values
-
-  Sample depths for 100-year storm:
-     1-hr: 4.33 inches
-     6-hr: 9.56 inches
-    12-hr: 11.70 inches
-    24-hr: 14.10 inches
-
-Note: StormGenerator interpolates from DDF table showing 14.10 inches
-      All methods will use Atlas 14 value (17.0 inches) for comparison.
-      StormGenerator deviation demonstrates interpolation differences.
+[!!] Error downloading: &#39;DataFrame&#39; object has no attribute &#39;ari_columns&#39;
+NOAA API may be unavailable.
 </code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># 1.2 Generate Hyetograph using Alternating Block Method</span>
@@ -5693,110 +5683,6 @@ Note: StormGenerator interpolates from DDF table showing 14.10 inches
 </span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="n">display</span><span class="p">(</span><span class="n">hyeto_ab</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24.0-hour hyetograph (peak at 50%, total depth: 17.000000 inches)
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24.0-hour hyetograph (peak at 50%, total depth: 17.000000 inches)
-
-
-Generating 100-year, 24-hour hyetograph...
-  Peak position: 50% (centered)
-  Target depth: 17.0 inches (Atlas 14)
-
-[OK] Generated 24 intervals
-  Total depth: 17.000000 inches
-  Peak intensity: 8.5000 inches
-  Peak at hour: 13.0
-
-  Depth conservation error: 0.000000000 inches
-  Depth Conservation: VERIFIED
-</code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>hour</th>
-      <th>incremental_depth</th>
-      <th>cumulative_depth</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>1.000000</td>
-      <td>0.143492</td>
-      <td>0.143492</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>2.000000</td>
-      <td>0.154089</td>
-      <td>0.297581</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>3.000000</td>
-      <td>0.166626</td>
-      <td>0.464207</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>4.000000</td>
-      <td>0.181717</td>
-      <td>0.645924</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>5.000000</td>
-      <td>0.200276</td>
-      <td>0.846200</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>6.000000</td>
-      <td>0.223723</td>
-      <td>1.069923</td>
-    </tr>
-    <tr>
-      <th>6</th>
-      <td>7.000000</td>
-      <td>0.256427</td>
-      <td>1.326350</td>
-    </tr>
-    <tr>
-      <th>7</th>
-      <td>8.000000</td>
-      <td>0.298794</td>
-      <td>1.625144</td>
-    </tr>
-    <tr>
-      <th>8</th>
-      <td>9.000000</td>
-      <td>0.361076</td>
-      <td>1.986219</td>
-    </tr>
-    <tr>
-      <th>9</th>
-      <td>10.000000</td>
-      <td>0.470726</td>
-      <td>2.456946</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># 1.3 Flexible Peak Positioning Demo</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># =============================================================================</span>
@@ -5840,23 +5726,6 @@ Generating 100-year, 24-hour hyetograph...
 </span><span id="__span-5-41"><a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[OK] StormGenerator allows flexible peak positioning (0-100%)&quot;</span><span class="p">)</span>
 </span><span id="__span-5-42"><a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  All positions conserve the specified total depth exactly.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24-hour hyetograph (peak at 25%, total depth: 17.000000 inches)
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24-hour hyetograph (peak at 25%, total depth: 17.000000 inches)
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24-hour hyetograph (peak at 50%, total depth: 17.000000 inches)
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24-hour hyetograph (peak at 50%, total depth: 17.000000 inches)
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24-hour hyetograph (peak at 75%, total depth: 17.000000 inches)
-2026-01-05 01:32:40 - ras_commander.precip.StormGenerator - INFO - Generated 24-hour hyetograph (peak at 75%, total depth: 17.000000 inches)
-
-
-Generating hyetographs with different peak positions...
-  25% position: Peak at hour 7.0, Total: 17.000000 in
-  50% position: Peak at hour 13.0, Total: 17.000000 in
-  75% position: Peak at hour 19.0, Total: 17.000000 in
-</code></pre></div>
-<p><img alt="png" src="../720_precipitation_methods_comprehensive_files/720_precipitation_methods_comprehensive_7_2.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>[OK] StormGenerator allows flexible peak positioning (0-100%)
-  All positions conserve the specified total depth exactly.
-</code></pre></div>
 <hr />
 <h2 id="part-2-atlas14storm-hms-equivalent-modern-atlas-14">Part 2: Atlas14Storm (HMS-Equivalent - Modern Atlas 14)<a class="headerlink" href="#part-2-atlas14storm-hms-equivalent-modern-atlas-14" title="Permanent link">&para;</a></h2>
 <p><strong>Validation Status</strong>: [OK] <strong>FULLY CERTIFIED</strong> - HEC-HMS ground truth at 10^-6 precision</p>
@@ -5905,10 +5774,12 @@ Generating hyetographs with different peak positions...
 </span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] Atlas14Storm not available - install hms-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_24h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_24h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 49 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 49 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
 
 
 Generating HMS-equivalent 100-year, 24-hour hyetograph...
@@ -5964,7 +5835,7 @@ Generating HMS-equivalent 100-year, 24-hour hyetograph...
 </span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>    <span class="n">colors</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;blue&#39;</span><span class="p">,</span> <span class="s1">&#39;green&#39;</span><span class="p">,</span> <span class="s1">&#39;orange&#39;</span><span class="p">,</span> <span class="s1">&#39;red&#39;</span><span class="p">,</span> <span class="s1">&#39;black&#39;</span><span class="p">]</span>
 </span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>
 </span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>    <span class="k">for</span> <span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">hyeto_q</span><span class="p">),</span> <span class="n">color</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">hyetos_quartile</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">colors</span><span class="p">):</span>
-</span><span id="__span-7-41"><a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours_a14</span><span class="p">,</span> <span class="n">hyeto_q</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">q</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+</span><span id="__span-7-41"><a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours_a14</span><span class="p">,</span> <span class="n">hyeto_q</span><span class="p">[</span><span class="s1">&#39;incremental_depth&#39;</span><span class="p">],</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">q</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
 </span><span id="__span-7-42"><a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a>
 </span><span id="__span-7-43"><a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Time (hours)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 </span><span id="__span-7-44"><a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Incremental Depth (inches)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
@@ -5976,26 +5847,26 @@ Generating HMS-equivalent 100-year, 24-hour hyetograph...
 </span><span id="__span-7-50"><a id="__codelineno-7-50" name="__codelineno-7-50" href="#__codelineno-7-50"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-7-51"><a id="__codelineno-7-51" name="__codelineno-7-51" href="#__codelineno-7-51"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
 
 
 Generating hyetographs for all 5 quartiles...
@@ -6089,15 +5960,13 @@ Quartile Selection Guide:
 </span><span id="__span-8-72"><a id="__codelineno-8-72" name="__codelineno-8-72" href="#__codelineno-8-72"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-8-73"><a id="__codelineno-8-73" name="__codelineno-8-73" href="#__codelineno-8-73"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_6h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_6h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 13 intervals, 9.560 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 13 intervals, 9.560 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_12h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_12h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 25 intervals, 11.700 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 25 intervals, 11.700 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_6h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_6h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 13 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 13 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 13 intervals, 9.560 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 13 intervals, 9.560 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_12h_temporal.csv
 
 
 Using fallback Atlas 14 depths (NOAA API not available)
@@ -6107,18 +5976,26 @@ Atlas14Storm Multi-Duration Demo
 Duration        Steps     Total Depth     Depth Error    HMS Equiv
 ----------------------------------------------------------------------
   6h               13        9.560000     0.000000000     VERIFIED
+
+
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_12h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 25 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 25 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 25 intervals, 11.700 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 25 intervals, 11.700 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 14.100 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 14.100 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_96h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_96h_temporal.csv
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 97 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 97 time steps each
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 97 intervals, 19.300 inches total
+2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 97 intervals, 19.300 inches total
+
+
  12h               25       11.700000     0.000000000     VERIFIED
-
-
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 14.100 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 14.100 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_96h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_96h
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 97 intervals, 19.300 inches total
-2026-01-05 01:32:41 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 97 intervals, 19.300 inches total
-
-
  24h               49       14.100000     0.000000000     VERIFIED
  96h               97       19.300000     0.000000000     VERIFIED
 ----------------------------------------------------------------------
@@ -6370,8 +6247,8 @@ Duration        Steps     Total Depth     Depth Error    HMS Equiv
 </span><span id="__span-11-38"><a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] ScsTypeStorm not available - install hms-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-11-39"><a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
+<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
 
 
 Generating SCS Type II storm (most common in CONUS)...
@@ -6439,7 +6316,7 @@ Note: SCS Type II is the standard design storm for most of CONUS.
 </span><span id="__span-12-46"><a id="__codelineno-12-46" name="__codelineno-12-46" href="#__codelineno-12-46"></a>    <span class="n">colors</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;blue&#39;</span><span class="p">,</span> <span class="s1">&#39;cyan&#39;</span><span class="p">,</span> <span class="s1">&#39;green&#39;</span><span class="p">,</span> <span class="s1">&#39;red&#39;</span><span class="p">]</span>
 </span><span id="__span-12-47"><a id="__codelineno-12-47" name="__codelineno-12-47" href="#__codelineno-12-47"></a>
 </span><span id="__span-12-48"><a id="__codelineno-12-48" name="__codelineno-12-48" href="#__codelineno-12-48"></a>    <span class="k">for</span> <span class="p">(</span><span class="n">scs_type</span><span class="p">,</span> <span class="n">hyeto_type</span><span class="p">),</span> <span class="n">color</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">hyetos_scs</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">colors</span><span class="p">):</span>
-</span><span id="__span-12-49"><a id="__codelineno-12-49" name="__codelineno-12-49" href="#__codelineno-12-49"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours_scs</span><span class="p">,</span> <span class="n">hyeto_type</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Type </span><span class="si">{</span><span class="n">scs_type</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+</span><span id="__span-12-49"><a id="__codelineno-12-49" name="__codelineno-12-49" href="#__codelineno-12-49"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours_scs</span><span class="p">,</span> <span class="n">hyeto_type</span><span class="p">[</span><span class="s1">&#39;incremental_depth&#39;</span><span class="p">],</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Type </span><span class="si">{</span><span class="n">scs_type</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
 </span><span id="__span-12-50"><a id="__codelineno-12-50" name="__codelineno-12-50" href="#__codelineno-12-50"></a>
 </span><span id="__span-12-51"><a id="__codelineno-12-51" name="__codelineno-12-51" href="#__codelineno-12-51"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Time (hours)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 </span><span id="__span-12-52"><a id="__codelineno-12-52" name="__codelineno-12-52" href="#__codelineno-12-52"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Incremental Depth (inches)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
@@ -6453,14 +6330,14 @@ Note: SCS Type II is the standard design storm for most of CONUS.
 </span><span id="__span-12-60"><a id="__codelineno-12-60" name="__codelineno-12-60" href="#__codelineno-12-60"></a>
 </span><span id="__span-12-61"><a id="__codelineno-12-61" name="__codelineno-12-61" href="#__codelineno-12-61"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Note: SCS types are 24-hour ONLY (HMS constraint - cannot be customized).&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type IA hyetograph: 25 intervals, 17.000000 inches total, peak 2.669 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type IA hyetograph: 25 intervals, 17.000000 inches total, peak 2.669 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type III hyetograph: 25 intervals, 17.000000 inches total, peak 4.250 inches
-2026-01-05 01:32:42 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type III hyetograph: 25 intervals, 17.000000 inches total, peak 4.250 inches
+<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type IA hyetograph: 25 intervals, 17.000000 inches total, peak 2.669 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type IA hyetograph: 25 intervals, 17.000000 inches total, peak 2.669 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type III hyetograph: 25 intervals, 17.000000 inches total, peak 4.250 inches
+2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type III hyetograph: 25 intervals, 17.000000 inches total, peak 4.250 inches
 
 
 Generating all 4 SCS type storms...
@@ -6604,16 +6481,6 @@ COMPREHENSIVE METHOD COMPARISON
   <tbody>
     <tr>
       <th>0</th>
-      <td>StormGenerator</td>
-      <td>Alternating Block</td>
-      <td>17.000000</td>
-      <td>0.000000000</td>
-      <td>NO</td>
-      <td>Flexible (0-100%)</td>
-      <td>Any</td>
-    </tr>
-    <tr>
-      <th>1</th>
       <td>Atlas14Storm</td>
       <td>NOAA Temporal Dist.</td>
       <td>17.000000</td>
@@ -6623,7 +6490,7 @@ COMPREHENSIVE METHOD COMPARISON
       <td>6h, 12h, 24h, 96h</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>1</th>
       <td>FrequencyStorm</td>
       <td>TP-40 M3</td>
       <td>17.000000</td>
@@ -6633,7 +6500,7 @@ COMPREHENSIVE METHOD COMPARISON
       <td>6-48hr</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>2</th>
       <td>ScsTypeStorm</td>
       <td>SCS TR-55 Curves</td>
       <td>17.000000</td>
@@ -6755,42 +6622,39 @@ KEY OBSERVATIONS
 </span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
 </span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>    <span class="c1"># Atlas14Storm</span>
 </span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>    <span class="k">if</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">:</span>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>        <span class="n">time_hours</span> <span class="o">=</span> <span class="n">hyeto_a14</span><span class="p">[</span><span class="s1">&#39;hour&#39;</span><span class="p">]</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">hyeto_a14</span><span class="p">),</span> <span class="s1">&#39;g--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> 
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Atlas14Storm (HMS-equiv)&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
-</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>
-</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>    <span class="c1"># FrequencyStorm</span>
-</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>    <span class="k">if</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span><span class="p">:</span>
-</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>        <span class="n">time_hours</span> <span class="o">=</span> <span class="n">hyeto_freq</span><span class="p">[</span><span class="s1">&#39;hour&#39;</span><span class="p">]</span>
-</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">hyeto_freq</span><span class="p">),</span> <span class="s1">&#39;orange&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;-.&#39;</span><span class="p">,</span> 
-</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;FrequencyStorm (HMS-equiv)&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
-</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a>
-</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a>    <span class="c1"># ScsTypeStorm</span>
-</span><span id="__span-15-25"><a id="__codelineno-15-25" name="__codelineno-15-25" href="#__codelineno-15-25"></a>    <span class="k">if</span> <span class="n">SCS_TYPE_AVAILABLE</span><span class="p">:</span>
-</span><span id="__span-15-26"><a id="__codelineno-15-26" name="__codelineno-15-26" href="#__codelineno-15-26"></a>        <span class="n">time_hours</span> <span class="o">=</span> <span class="n">hyeto_scs2</span><span class="p">[</span><span class="s1">&#39;hour&#39;</span><span class="p">]</span>
-</span><span id="__span-15-27"><a id="__codelineno-15-27" name="__codelineno-15-27" href="#__codelineno-15-27"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_hours</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">hyeto_scs2</span><span class="p">),</span> <span class="s1">&#39;r:&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> 
-</span><span id="__span-15-28"><a id="__codelineno-15-28" name="__codelineno-15-28" href="#__codelineno-15-28"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;ScsTypeStorm Type II (HMS-equiv)&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
-</span><span id="__span-15-29"><a id="__codelineno-15-29" name="__codelineno-15-29" href="#__codelineno-15-29"></a>
-</span><span id="__span-15-30"><a id="__codelineno-15-30" name="__codelineno-15-30" href="#__codelineno-15-30"></a>    <span class="c1"># Target line</span>
-</span><span id="__span-15-31"><a id="__codelineno-15-31" name="__codelineno-15-31" href="#__codelineno-15-31"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span> 
-</span><span id="__span-15-32"><a id="__codelineno-15-32" name="__codelineno-15-32" href="#__codelineno-15-32"></a>               <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Atlas 14 Target: </span><span class="si">{</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="si">}</span><span class="s1"> in&#39;</span><span class="p">)</span>
-</span><span id="__span-15-33"><a id="__codelineno-15-33" name="__codelineno-15-33" href="#__codelineno-15-33"></a>
-</span><span id="__span-15-34"><a id="__codelineno-15-34" name="__codelineno-15-34" href="#__codelineno-15-34"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Time (hours)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
-</span><span id="__span-15-35"><a id="__codelineno-15-35" name="__codelineno-15-35" href="#__codelineno-15-35"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Cumulative Depth (inches)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
-</span><span id="__span-15-36"><a id="__codelineno-15-36" name="__codelineno-15-36" href="#__codelineno-15-36"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Cumulative Depth Comparison - All Methods</span><span class="se">\n</span><span class="si">{</span><span class="n">TEST_ARI</span><span class="si">}</span><span class="s1">-Year, 24-Hour Storm - Houston, TX&#39;</span><span class="p">,</span> 
-</span><span id="__span-15-37"><a id="__codelineno-15-37" name="__codelineno-15-37" href="#__codelineno-15-37"></a>                 <span class="n">fontsize</span><span class="o">=</span><span class="mi">13</span><span class="p">,</span> <span class="n">fontweight</span><span class="o">=</span><span class="s1">&#39;bold&#39;</span><span class="p">)</span>
-</span><span id="__span-15-38"><a id="__codelineno-15-38" name="__codelineno-15-38" href="#__codelineno-15-38"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;lower right&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-</span><span id="__span-15-39"><a id="__codelineno-15-39" name="__codelineno-15-39" href="#__codelineno-15-39"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">hyeto_a14</span><span class="p">[</span><span class="s1">&#39;hour&#39;</span><span class="p">],</span> <span class="n">hyeto_a14</span><span class="p">[</span><span class="s1">&#39;cumulative_depth&#39;</span><span class="p">],</span> <span class="s1">&#39;g--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> 
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Atlas14Storm (HMS-equiv)&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>    <span class="c1"># FrequencyStorm</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>    <span class="k">if</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span><span class="p">:</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">hyeto_freq</span><span class="p">[</span><span class="s1">&#39;hour&#39;</span><span class="p">],</span> <span class="n">hyeto_freq</span><span class="p">[</span><span class="s1">&#39;cumulative_depth&#39;</span><span class="p">],</span> <span class="s1">&#39;orange&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;-.&#39;</span><span class="p">,</span> 
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;FrequencyStorm (HMS-equiv)&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>
+</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a>    <span class="c1"># ScsTypeStorm</span>
+</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a>    <span class="k">if</span> <span class="n">SCS_TYPE_AVAILABLE</span><span class="p">:</span>
+</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">hyeto_scs2</span><span class="p">[</span><span class="s1">&#39;hour&#39;</span><span class="p">],</span> <span class="n">hyeto_scs2</span><span class="p">[</span><span class="s1">&#39;cumulative_depth&#39;</span><span class="p">],</span> <span class="s1">&#39;r:&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> 
+</span><span id="__span-15-25"><a id="__codelineno-15-25" name="__codelineno-15-25" href="#__codelineno-15-25"></a>                <span class="n">label</span><span class="o">=</span><span class="s1">&#39;ScsTypeStorm Type II (HMS-equiv)&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+</span><span id="__span-15-26"><a id="__codelineno-15-26" name="__codelineno-15-26" href="#__codelineno-15-26"></a>
+</span><span id="__span-15-27"><a id="__codelineno-15-27" name="__codelineno-15-27" href="#__codelineno-15-27"></a>    <span class="c1"># Target line</span>
+</span><span id="__span-15-28"><a id="__codelineno-15-28" name="__codelineno-15-28" href="#__codelineno-15-28"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span> 
+</span><span id="__span-15-29"><a id="__codelineno-15-29" name="__codelineno-15-29" href="#__codelineno-15-29"></a>               <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Atlas 14 Target: </span><span class="si">{</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="si">}</span><span class="s1"> in&#39;</span><span class="p">)</span>
+</span><span id="__span-15-30"><a id="__codelineno-15-30" name="__codelineno-15-30" href="#__codelineno-15-30"></a>
+</span><span id="__span-15-31"><a id="__codelineno-15-31" name="__codelineno-15-31" href="#__codelineno-15-31"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Time (hours)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+</span><span id="__span-15-32"><a id="__codelineno-15-32" name="__codelineno-15-32" href="#__codelineno-15-32"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Cumulative Depth (inches)&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+</span><span id="__span-15-33"><a id="__codelineno-15-33" name="__codelineno-15-33" href="#__codelineno-15-33"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Cumulative Depth Comparison - All Methods</span><span class="se">\n</span><span class="si">{</span><span class="n">TEST_ARI</span><span class="si">}</span><span class="s1">-Year, 24-Hour Storm - Houston, TX&#39;</span><span class="p">,</span> 
+</span><span id="__span-15-34"><a id="__codelineno-15-34" name="__codelineno-15-34" href="#__codelineno-15-34"></a>                 <span class="n">fontsize</span><span class="o">=</span><span class="mi">13</span><span class="p">,</span> <span class="n">fontweight</span><span class="o">=</span><span class="s1">&#39;bold&#39;</span><span class="p">)</span>
+</span><span id="__span-15-35"><a id="__codelineno-15-35" name="__codelineno-15-35" href="#__codelineno-15-35"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;lower right&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</span><span id="__span-15-36"><a id="__codelineno-15-36" name="__codelineno-15-36" href="#__codelineno-15-36"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+</span><span id="__span-15-37"><a id="__codelineno-15-37" name="__codelineno-15-37" href="#__codelineno-15-37"></a>
+</span><span id="__span-15-38"><a id="__codelineno-15-38" name="__codelineno-15-38" href="#__codelineno-15-38"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</span><span id="__span-15-39"><a id="__codelineno-15-39" name="__codelineno-15-39" href="#__codelineno-15-39"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span><span id="__span-15-40"><a id="__codelineno-15-40" name="__codelineno-15-40" href="#__codelineno-15-40"></a>
-</span><span id="__span-15-41"><a id="__codelineno-15-41" name="__codelineno-15-41" href="#__codelineno-15-41"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-</span><span id="__span-15-42"><a id="__codelineno-15-42" name="__codelineno-15-42" href="#__codelineno-15-42"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</span><span id="__span-15-43"><a id="__codelineno-15-43" name="__codelineno-15-43" href="#__codelineno-15-43"></a>
-</span><span id="__span-15-44"><a id="__codelineno-15-44" name="__codelineno-15-44" href="#__codelineno-15-44"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">All methods now conserve the user-specified depth exactly (&lt; 10^-6 inch error).&quot;</span><span class="p">)</span>
-</span><span id="__span-15-45"><a id="__codelineno-15-45" name="__codelineno-15-45" href="#__codelineno-15-45"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All curves converge to </span><span class="si">{TOTAL_DEPTH_INCHES}</span><span class="s2"> inches at 24 hours.&quot;</span><span class="p">)</span>
+</span><span id="__span-15-41"><a id="__codelineno-15-41" name="__codelineno-15-41" href="#__codelineno-15-41"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">All methods now conserve the user-specified depth exactly (&lt; 10^-6 inch error).&quot;</span><span class="p">)</span>
+</span><span id="__span-15-42"><a id="__codelineno-15-42" name="__codelineno-15-42" href="#__codelineno-15-42"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;All curves converge to </span><span class="si">{</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="si">}</span><span class="s2"> inches at 24 hours.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../720_precipitation_methods_comprehensive_files/720_precipitation_methods_comprehensive_21_0.png" /></p>
 <div class="language-text highlight"><pre><span></span><code>All methods now conserve the user-specified depth exactly (&lt; 10^-6 inch error).
-All curves converge to {TOTAL_DEPTH_INCHES} inches at 24 hours.
+All curves converge to 17.0 inches at 24 hours.
 </code></pre></div>
 <hr />
 <h2 id="part-6-spatial-tools-overview-atlas14grid-atlas14variance">Part 6: Spatial Tools Overview (Atlas14Grid + Atlas14Variance)<a class="headerlink" href="#part-6-spatial-tools-overview-atlas14grid-atlas14variance" title="Permanent link">&para;</a></h2>
@@ -6982,7 +6846,7 @@ All curves converge to {TOTAL_DEPTH_INCHES} inches at 24 hours.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 23, 2026 17:45:47 UTC">January 23, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 29, 2026 17:12:41 UTC">January 29, 2026</span>
   </span>
 
     
@@ -6992,7 +6856,7 @@ All curves converge to {TOTAL_DEPTH_INCHES} inches at 24 hours.
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 23, 2026 17:45:47 UTC">January 23, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 29, 2026 17:12:41 UTC">January 29, 2026</span>
   </span>
 
     
