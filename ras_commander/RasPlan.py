@@ -1417,10 +1417,11 @@ class RasPlan:
         in_description = False
         description_found = False
         for line in lines:
-            if line.strip() == "BEGIN DESCRIPTION:":
+            stripped_upper = line.strip().upper()
+            if stripped_upper in ('BEGIN DESCRIPTION:', 'BEGIN DESCRIPTION'):
                 in_description = True
                 description_found = True
-            elif line.strip() == "END DESCRIPTION:":
+            elif stripped_upper in ('END DESCRIPTION:', 'END DESCRIPTION'):
                 break
             elif in_description:
                 description_lines.append(line.strip())
@@ -1557,9 +1558,9 @@ class RasPlan:
             description_clean = description.rstrip()
 
             description_block = [
-                'Begin DESCRIPTION\n',
+                'BEGIN DESCRIPTION:\n',
                 description_clean + '\n',
-                'END DESCRIPTION\n'
+                'END DESCRIPTION:\n'
             ]
             
             # Build the new file content
