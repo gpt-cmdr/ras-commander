@@ -285,7 +285,8 @@ class ResultsSummary:
 
             # Resolve HDF path
             hdf_path = entry.get('HDF_Results_Path')
-            if hdf_path:
+            # Check for valid path (not None, not NaN, and is string/Path)
+            if hdf_path is not None and pd.notna(hdf_path) and isinstance(hdf_path, (str, Path)):
                 hdf_path = Path(hdf_path)
             elif project_folder:
                 # Construct expected path if not provided

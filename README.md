@@ -147,11 +147,9 @@ pip install pywin32 psutil
 Additional packages needed to run the example notebooks in the `examples/` folder:
 
 ```bash
-# For raster visualization (notebooks 15, 21)
-pip install rasterio
+# For raster visualization (notebooks 15, 21) and coordinate system operations (notebook 14) and external downloads 
+pip install rasterio pyproj requests aiohttp
 
-# For coordinate system operations (notebook 14)
-pip install pyproj
 ```
 
 ### Optional Dependencies
