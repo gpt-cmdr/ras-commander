@@ -39,6 +39,10 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 - **exploring-hecras-gui** - HEC-RAS GUI exploration and documentation
 - **using-git-worktrees** - Git worktree management for feature isolation
 
+### CLI Subagent Skills
+- **invoking-codex-cli** - Delegate implementation tasks to Codex CLI (gpt-5.2-codex) via markdown file handoff
+- **invoking-gemini-cli** - Delegate QAQC/review tasks to Gemini CLI (gemini-3-pro-preview) via markdown file handoff
+
 ## Skill Structure
 
 **CRITICAL: Each skill folder contains ONLY `SKILL.md`**

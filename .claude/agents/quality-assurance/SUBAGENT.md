@@ -146,6 +146,18 @@ results = RasCheck.run_all_checks("C:/Projects/MyModel")
 structure_results = RasCheck.structure_check("C:/Projects/MyModel")
 ```
 
+## Required Pre-Flight: Project Linkage QA/QC
+
+Before (or alongside) RasCheck/RasFixit, always ensure the project is internally
+consistent and targeting the intended files:
+
+- Plan/geometry/unsteady linkages are valid (e.g., plan "01" points at the intended `.u01`)
+- Baseline vs roundtrip copies are isolated (no cross-folder references)
+- Unsteady boundary locations match the intended river/reach/station
+- Any HDF comparisons are like-for-like (same scenario/time window/coordinates)
+
+For notebook-driven workflows, delegate to: `hecras-notebook-qaqc`.
+
 **Step 2: Fix - Repair Issues**
 ```python
 from ras_commander.fixit import RasFixit

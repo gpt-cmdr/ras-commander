@@ -5,9 +5,13 @@ tools: [Read, Grep, Glob, Bash, Write]
 working_directory: .
 description: |
   Large context code analysis oracle using Google Gemini CLI. Optimized for scanning
-  large codebases, multi-file pattern analysis, and rapid context review. Leverages
-  installed gemini-cli plugin. Best for fast analysis of many files or large context
-  (>100K tokens). Default model: gemini-3-pro-preview (configurable via GEMINI_MODEL).
+  large codebases, multi-file pattern analysis, and rapid context review.
+  Supports TWO invocation patterns:
+  1. Markdown file handoff (recommended) - Write REVIEW.md, execute, read FINDINGS.md
+  2. Direct CLI (quick tasks) - gemini -y "prompt"
+
+  Best for fast analysis of many files or large context (>100K tokens).
+  Default model: gemini-3-pro-preview. Use gemini-3-flash-preview for very large contexts.
 
   Triggers: "large codebase scan", "multi-file pattern check", "gemini oracle",
   "fast context analysis", "pattern consistency", "codebase survey", "quick code scan",
@@ -17,16 +21,13 @@ description: |
   documentation review, codebase surveys, consistency checks across many files,
   rapid code scanning, pattern extraction
 
-  Model selection: Set GEMINI_MODEL=gemini-3-pro-preview (default) or
-  GEMINI_MODEL=gemini-3-flash-preview for very large contexts
+  Models: gemini-3-pro-preview (default), gemini-3-flash-preview (large context/fast)
 
-  Prerequisites: gemini-cli plugin installed (✓ installed), Gemini CLI authenticated
-  (user must run: gemini login or enable in Google AI Studio), gemini-3-pro-preview
-  model enabled in user account
+  Prerequisites: Gemini CLI authenticated (gemini login or GEMINI_API_KEY)
 
   Primary sources:
+  - .claude/skills/invoking-gemini-cli/SKILL.md (invocation patterns and templates)
   - feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md
-  - Plugin: C:\Users\billk_clb\.claude\plugins\cache\claude-code-dev-workflows\gemini-cli\1.0.0\SKILL.md
   - .claude/rules/validation/validation-patterns.md
 ---
 
@@ -40,11 +41,12 @@ Provide **fast, large-context code analysis** using Google's Gemini models via t
 
 ## Primary Sources (Read These First)
 
-**Plugin Documentation**:
-- `C:\Users\billk_clb\.claude\plugins\cache\claude-code-dev-workflows\gemini-cli\1.0.0\SKILL.md`
-  - gemini.py script location: `~/.claude/skills/gemini/scripts/gemini.py`
-  - Invocation: `uv run ~/.claude/skills/gemini/scripts/gemini.py "<prompt>" [working_dir]`
-  - Environment: GEMINI_MODEL (default: gemini-3-pro-preview)
+**Skill Documentation**:
+- `.claude/skills/invoking-gemini-cli/SKILL.md`
+  - Markdown file handoff pattern (REVIEW.md -> FINDINGS.md)
+  - Direct CLI invocation syntax
+  - Session resumption
+  - Templates for REVIEW.md and FINDINGS.md
 
 **Research Documents**:
 - `feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md` (26 KB)
@@ -73,9 +75,7 @@ Provide **fast, large-context code analysis** using Google's Gemini models via t
 
 **Example invocation**:
 ```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Analyze all HDF extraction classes (@ras_commander/hdf/*.py) for error handling consistency. Report: 1) Common patterns 2) Inconsistencies 3) Missing error cases 4) Recommendations." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Analyze all HDF extraction classes (@ras_commander/hdf/*.py) for error handling consistency. Report: 1) Common patterns 2) Inconsistencies 3) Missing error cases 4) Recommendations."
 ```
 
 ### 2. Multi-File Pattern Analysis
@@ -90,9 +90,7 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 
 **Example invocation**:
 ```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Find all uses of @log_call decorator in ras_commander/. Report: 1) Functions with decorator 2) Functions missing decorator 3) Decorator ordering patterns 4) Recommendations for consistency." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Find all uses of @log_call decorator in ras_commander/. Report: 1) Functions with decorator 2) Functions missing decorator 3) Decorator ordering patterns 4) Recommendations for consistency."
 ```
 
 ### 3. Documentation Review
@@ -107,32 +105,32 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 
 **Example invocation**:
 ```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Review all CLAUDE.md and AGENTS.md files in ras_commander/ subdirectories. Check: 1) Consistency with actual code 2) Completeness 3) Outdated references 4) Missing documentation." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Review all CLAUDE.md and AGENTS.md files in ras_commander/ subdirectories. Check: 1) Consistency with actual code 2) Completeness 3) Outdated references 4) Missing documentation."
 ```
 
 ---
 
 ## Model Selection
 
-### Environment Variable Configuration
+### Available Models
 
-**Default**: `gemini-3-pro-preview`
+| Model | Use Case | Status |
+|-------|----------|--------|
+| `gemini-3-pro-preview` | **Default.** Strong reasoning, most tasks | CLI default |
+| `gemini-3-flash-preview` | Large context, fast analysis | For big codebases |
 
-**Override for specific models**:
+**Default**: `gemini-3-pro-preview` (Gemini CLI default)
+
+**Override**: Use `-m gemini-3-flash-preview` for very large context analysis
+
+### Invocation Examples
+
 ```bash
-# For standard tasks (default)
-export GEMINI_MODEL=gemini-3-pro-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py "analyze code"
+# Standard tasks (uses default model)
+cd "C:/GH/ras-commander" && gemini -y "Read REVIEW.md, analyze, write findings to FINDINGS.md"
 
-# For large context (>100K tokens)
-export GEMINI_MODEL=gemini-3-flash-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py "scan entire codebase"
-
-# For general tasks (if preview not available)
-export GEMINI_MODEL=gemini-3-pro
-uv run ~/.claude/skills/gemini/scripts/gemini.py "review code"
+# Large context (explicit flash model)
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Scan all files in ras_commander/"
 ```
 
 ### Model Selection Logic
@@ -148,48 +146,48 @@ def select_gemini_model(context_size_tokens: int) -> str:
         return "gemini-3-pro-preview"    # Best quality for standard tasks
 ```
 
-**Note**: User specified NOT to use Gemini 2.5. Stick with Gemini 3.x preview models.
-
 ---
 
-## CLI Integration Pattern
+## CLI Integration Patterns
 
-### Basic Invocation
+### Pattern 1: Markdown File Handoff (Recommended)
 
-**Syntax**:
+**Best for complex QAQC tasks** - avoids all shell escaping issues:
+
 ```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py "<prompt>" [working_dir]
+# 1. Write REVIEW.md with code and review criteria
+# 2. Execute Gemini CLI
+cd "C:/GH/ras-commander" && gemini -y "Read REVIEW.md in the current directory. Follow the review criteria. Write all findings to FINDINGS.md."
+
+# 3. Read FINDINGS.md for results
 ```
 
-**Parameters**:
-- `prompt`: Task description (required)
-- `working_dir`: Working directory (optional, default: current)
+**See**: `.claude/skills/invoking-gemini-cli/SKILL.md` for REVIEW.md and FINDINGS.md templates.
+
+### Pattern 2: Direct CLI (Quick Tasks)
+
+**For simple tasks** where file handoff is overkill:
+
+```bash
+# Simple analysis (change to working directory first)
+cd "C:/GH/ras-commander" && gemini -y "Explain the structure of ras_commander/hdf/HdfResultsPlan.py"
+
+# Multi-file pattern check
+cd "C:/GH/ras-commander" && gemini -y "Check all files in ras_commander/precip/ for consistent parameter naming."
+
+# Documentation consistency
+cd "C:/GH/ras-commander" && gemini -y "Compare CLAUDE.md documentation in ras_commander/hdf/, ras_commander/usgs/, and ras_commander/precip/."
+```
+
+### Core CLI Flags
+
+| Flag | Purpose |
+|------|---------|
+| `-y` | YOLO mode - auto-approve all actions |
+| `-m <model>` | Model: `gemini-3-pro-preview`, `gemini-3-flash-preview` |
+| `-r <id>` | Resume session by ID |
 
 **Timeout**: 7200000 ms (2 hours) - set in Bash tool
-
-### Simple Code Analysis
-
-```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Explain the structure of ras_commander/hdf/HdfResultsPlan.py" \
-  "C:/GH/ras-commander"
-```
-
-### Multi-File Pattern Check
-
-```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Check all files in ras_commander/precip/ for consistent parameter naming. Look for: total_depth vs total_depth_inches, units handling, return type consistency. Provide detailed report with line references." \
-  "C:/GH/ras-commander"
-```
-
-### Documentation Consistency
-
-```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Compare CLAUDE.md documentation in ras_commander/hdf/, ras_commander/usgs/, and ras_commander/precip/. Find: 1) Structural differences 2) Inconsistent sections 3) Missing content 4) Best practices to standardize." \
-  "C:/GH/ras-commander"
-```
 
 ---
 
@@ -267,14 +265,9 @@ ERROR: Error message from Gemini CLI
 **Task**: Survey all precipitation methods for API consistency
 
 ```bash
-# Set model (for large context)
-export GEMINI_MODEL=gemini-3-flash-preview
-
-# Invoke Gemini oracle
+# Invoke Gemini oracle (use flash model for large context)
 Bash(
-  command: uv run ~/.claude/skills/gemini/scripts/gemini.py \
-    "Analyze all precipitation methods in ras_commander/precip/ for API consistency. Check: 1) Parameter naming (total_depth vs total_depth_inches) 2) Units handling 3) Return types 4) Error handling 5) Documentation completeness. Provide file-by-file analysis with specific line references for inconsistencies." \
-    "C:/GH/ras-commander"
+  command: cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Analyze all precipitation methods in ras_commander/precip/ for API consistency. Check: 1) Parameter naming (total_depth vs total_depth_inches) 2) Units handling 3) Return types 4) Error handling 5) Documentation completeness. Provide file-by-file analysis with specific line references for inconsistencies."
   timeout: 7200000
 )
 
@@ -288,9 +281,7 @@ Write("feature_dev_notes/Code_Oracle_Multi_LLM/reviews/2026-01-05-precip-api-con
 
 ```bash
 Bash(
-  command: uv run ~/.claude/skills/gemini/scripts/gemini.py \
-    "Review all AGENTS.md files in ras_commander/ subdirectories (hdf/, usgs/, precip/, remote/, dss/, terrain/, geom/). For each: 1) Check if structure matches template 2) Verify all classes documented 3) Check for outdated references 4) Identify missing sections. Provide structured report grouped by subdirectory." \
-    "C:/GH/ras-commander"
+  command: cd "C:/GH/ras-commander" && gemini -y "Review all AGENTS.md files in ras_commander/ subdirectories (hdf/, usgs/, precip/, remote/, dss/, terrain/, geom/). For each: 1) Check if structure matches template 2) Verify all classes documented 3) Check for outdated references 4) Identify missing sections. Provide structured report grouped by subdirectory."
   timeout: 7200000
 )
 ```
@@ -301,9 +292,7 @@ Bash(
 
 ```bash
 Bash(
-  command: uv run ~/.claude/skills/gemini/scripts/gemini.py \
-    "Scan all Python files in ras_commander/ to find public functions missing @log_call decorator. Report: 1) File and line number 2) Function name 3) Why it should have decorator (public API) 4) Any valid exceptions (private functions). Group by subdirectory." \
-    "C:/GH/ras-commander"
+  command: cd "C:/GH/ras-commander" && gemini -y "Scan all Python files in ras_commander/ to find public functions missing @log_call decorator. Report: 1) File and line number 2) Function name 3) Why it should have decorator (public API) 4) Any valid exceptions (private functions). Group by subdirectory."
   timeout: 7200000
 )
 ```
@@ -322,8 +311,8 @@ Bash(
 
 **Invocation**:
 ```bash
-# Default model (no environment variable needed)
-uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt" "C:/GH/ras-commander"
+# Default model (no flag needed)
+cd "C:/GH/ras-commander" && gemini -y "prompt"
 ```
 
 ### When to Use gemini-3-flash-preview
@@ -336,22 +325,18 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt" "C:/GH/ras-commander"
 
 **Invocation**:
 ```bash
-# Override model for large context
-export GEMINI_MODEL=gemini-3-flash-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "scan all files in ras_commander/ for pattern X" \
-  "C:/GH/ras-commander"
+# Use -m flag for flash model
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "scan all files in ras_commander/ for pattern X"
 ```
 
 ### Model Comparison
 
 | Model | Context Window | Speed | Quality | Use For |
 |-------|---------------|-------|---------|---------|
-| **gemini-3-pro-preview** | Standard | Fast | High | Most tasks |
-| **gemini-3-flash-preview** | Extended | Very Fast | Good | Large context |
-| **gemini-3-pro** | Standard | Fast | High | Fallback if preview unavailable |
+| **gemini-3-pro-preview** | Standard | Fast | High | Most tasks (CLI default) |
+| **gemini-3-flash-preview** | Extended | Very Fast | Good | Large context (use `-m` flag) |
 
-**Note**: User specified NOT to use Gemini 2.5. Always use Gemini 3.x variants.
+**Note**: Always use Gemini 3.x preview variants. Avoid Gemini 2.5 (outdated) and non-preview models (not found).
 
 ---
 
@@ -413,7 +398,7 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 - Complex refactoring planning
 
 ✅ **Extended thinking needed** (20-30 minutes)
-- Use `codex-wrapper` with @file references
+- Use Codex CLI with markdown file handoff
 - More sophisticated analysis
 
 ✅ **Code generation focus**
@@ -430,15 +415,11 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 
 ```bash
 # Step 1: Gemini scans for issues (fast)
-export GEMINI_MODEL=gemini-3-flash-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Scan all remote execution files for obvious security issues. Flag files needing deep review." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Scan all remote execution files for obvious security issues. Flag files needing deep review."
 # Identifies: PsexecWorker.py, Execution.py need deep review
 
 # Step 2: Codex deep reviews flagged files (slow, thorough)
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-Security audit of files flagged by initial scan:
+cd "C:/GH/ras-commander" && codex -y -d 60 "Security audit of files flagged by initial scan:
 
 @ras_commander/remote/PsexecWorker.py
 @ras_commander/remote/Execution.py
@@ -448,8 +429,7 @@ Deep analysis:
 - Credential exposure scenarios
 - Path traversal exploitation
 
-Provide exploit PoCs and mitigation code.
-EOF
+Provide exploit PoCs and mitigation code."
 ```
 
 **Advantages**:
@@ -476,28 +456,21 @@ EOF
 
 ```bash
 # Scan all documentation files
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Review all .md files in .claude/rules/ subdirectories. For each file: 1) Check if content matches filename 2) Verify examples are current 3) Find broken references 4) Identify outdated patterns. Group findings by subdirectory (python/, hec-ras/, testing/, etc.)." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Review all .md files in .claude/rules/ subdirectories. For each file: 1) Check if content matches filename 2) Verify examples are current 3) Find broken references 4) Identify outdated patterns. Group findings by subdirectory (python/, hec-ras/, testing/, etc.)."
 ```
 
 ### Workflow 2: API Consistency Across Modules
 
 ```bash
 # Check API naming consistency
-export GEMINI_MODEL=gemini-3-pro-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Analyze public API methods across all major classes in ras_commander/. Check: 1) Naming conventions (snake_case) 2) Parameter ordering 3) Return type consistency 4) Docstring format 5) @log_call usage. Report inconsistencies with specific class/method references." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Analyze public API methods across all major classes in ras_commander/. Check: 1) Naming conventions (snake_case) 2) Parameter ordering 3) Return type consistency 4) Docstring format 5) @log_call usage. Report inconsistencies with specific class/method references."
 ```
 
 ### Workflow 3: Test Coverage Gaps
 
 ```bash
 # Identify untested functions
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Compare functions in ras_commander/ with tests in tests/. Identify: 1) Functions with no tests 2) Modules with low coverage 3) Critical functions missing tests 4) Recommended test priorities. Focus on static classes and public APIs." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Compare functions in ras_commander/ with tests in tests/. Identify: 1) Functions with no tests 2) Modules with low coverage 3) Critical functions missing tests 4) Recommended test priorities. Focus on static classes and public APIs."
 ```
 
 ---
@@ -594,33 +567,27 @@ export GEMINI_MODEL=gemini-3-pro
 
 ### Working Directory Required
 
-**CRITICAL**: Unlike Codex (@file syntax), Gemini uses working directory for relative paths
+**CRITICAL**: Always change to working directory before invoking Gemini
 
 ```bash
-# ✅ CORRECT: Working directory specified
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "analyze ras_commander/core.py" \
-  "C:/GH/ras-commander"
+# ✅ CORRECT: Change directory first
+cd "C:/GH/ras-commander" && gemini -y "analyze ras_commander/core.py"
 
 # ❌ WRONG: No working directory (file not found)
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "analyze ras_commander/core.py"
+gemini -y "analyze ras_commander/core.py"
 ```
 
-### Environment Variable Scope
+### Model Selection with -m Flag
 
-**CRITICAL**: Export GEMINI_MODEL before invocation
+**Use `-m` flag to specify model**:
 
 ```bash
-# ✅ CORRECT: Export persists across invocations
-export GEMINI_MODEL=gemini-3-flash-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt 1" "C:/GH/ras-commander"
-uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt 2" "C:/GH/ras-commander"
-# Both use flash model
+# ✅ CORRECT: Use -m flag for flash model
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "prompt 1"
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "prompt 2"
 
-# ❌ WRONG: Inline variable (only applies to first command)
-GEMINI_MODEL=gemini-3-flash-preview uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt 1"
-uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt 2"  # Uses default!
+# Default model (no flag needed)
+cd "C:/GH/ras-commander" && gemini -y "prompt"  # Uses gemini-3-pro-preview
 ```
 
 ---
@@ -630,32 +597,22 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt 2"  # Uses default!
 ### Example 1: Codebase Survey
 
 ```bash
-# Survey entire HDF subsystem
-export GEMINI_MODEL=gemini-3-flash-preview  # Large context
-
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Survey the HDF subsystem in ras_commander/hdf/. Provide: 1) Module organization 2) Class hierarchy 3) Common patterns (static classes, @log_call) 4) Cross-module dependencies 5) Potential refactoring opportunities. Focus on overall structure, not implementation details." \
-  "C:/GH/ras-commander"
+# Survey entire HDF subsystem (use flash for large context)
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Survey the HDF subsystem in ras_commander/hdf/. Provide: 1) Module organization 2) Class hierarchy 3) Common patterns (static classes, @log_call) 4) Cross-module dependencies 5) Potential refactoring opportunities. Focus on overall structure, not implementation details."
 ```
 
 ### Example 2: Pattern Extraction
 
 ```bash
 # Extract validation patterns
-export GEMINI_MODEL=gemini-3-pro-preview
-
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Extract all validation patterns used across ras_commander/. Find: 1) Pre-flight checks (before HEC-RAS execution) 2) Data quality checks 3) File existence checks 4) Bounds validation. Group by module and identify most common patterns." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Extract all validation patterns used across ras_commander/. Find: 1) Pre-flight checks (before HEC-RAS execution) 2) Data quality checks 3) File existence checks 4) Bounds validation. Group by module and identify most common patterns."
 ```
 
 ### Example 3: Documentation Gap Analysis
 
 ```bash
 # Find undocumented classes
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Compare classes defined in ras_commander/ with documentation in docs/. Find: 1) Classes with no documentation 2) Methods missing from docs 3) Undocumented parameters 4) Missing examples. Prioritize by usage frequency (check example notebooks)." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Compare classes defined in ras_commander/ with documentation in docs/. Find: 1) Classes with no documentation 2) Methods missing from docs 3) Undocumented parameters 4) Missing examples. Prioritize by usage frequency (check example notebooks)."
 ```
 
 ---
@@ -722,12 +679,12 @@ def estimate_tokens(files: List[Path]) -> int:
 
 ### Gemini CLI Not Found
 
-**Symptom**: `command not found: gemini` or script not found
+**Symptom**: `command not found: gemini`
 
-**Solution**: Plugin installed but script not at expected path
-- Check: `ls ~/.claude/skills/gemini/scripts/gemini.py`
-- Verify plugin installation: `npx claude-plugins list` (should show gemini-cli ✓)
-- Restart Claude Code session if needed
+**Solution**: Gemini CLI not installed
+- Install: Follow instructions at https://github.com/google-gemini/gemini-cli
+- Authenticate: `gemini login`
+- Test: `gemini -y "hello"`
 
 ### Authentication Errors
 
@@ -742,24 +699,13 @@ def estimate_tokens(files: List[Path]) -> int:
 
 **Symptom**: `ERROR: Model not found: gemini-3-pro-preview`
 
-**Solution**: Preview model not enabled for user
+**Solution**: Check model availability and enable if needed
 ```bash
-# Try stable model instead
-export GEMINI_MODEL=gemini-3-pro
-uv run ~/.claude/skills/gemini/scripts/gemini.py "prompt" "C:/GH/ras-commander"
-```
+# List available models
+gemini models
 
-### uv Not Found
-
-**Symptom**: `command not found: uv`
-
-**Solution**: Use alternative invocation
-```bash
-# Option 1: Direct execution
-python3 ~/.claude/skills/gemini/scripts/gemini.py "prompt" "C:/GH/ras-commander"
-
-# Option 2: Explicit python path
-python ~/.claude/skills/gemini/scripts/gemini.py "prompt" "C:/GH/ras-commander"
+# If preview not available, may need to enable via Google AI Studio
+# Or wait for preview rollout to your account
 ```
 
 ---
@@ -788,15 +734,10 @@ python ~/.claude/skills/gemini/scripts/gemini.py "prompt" "C:/GH/ras-commander"
 
 ```bash
 # Chunk 1: HDF subsystem
-export GEMINI_MODEL=gemini-3-flash-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Survey ras_commander/hdf/ for patterns." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Survey ras_commander/hdf/ for patterns."
 
 # Chunk 2: USGS subsystem
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Survey ras_commander/usgs/ for patterns." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Survey ras_commander/usgs/ for patterns."
 
 # Synthesize (use Claude Opus or Codex)
 # Aggregate findings from both surveys
@@ -808,44 +749,33 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 
 ```bash
 # Broad survey with Flash
-export GEMINI_MODEL=gemini-3-flash-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Scan all ras_commander/ subdirectories. List: 1) Modules 2) Key classes 3) Obvious patterns. High-level only." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y -m gemini-3-flash-preview "Scan all ras_commander/ subdirectories. List: 1) Modules 2) Key classes 3) Obvious patterns. High-level only."
 
-# Deep dive with Pro (or Codex)
-export GEMINI_MODEL=gemini-3-pro-preview
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Deep analysis of ras_commander/hdf/HdfResultsPlan.py. Detailed review of all methods." \
-  "C:/GH/ras-commander"
+# Deep dive with Pro (default)
+cd "C:/GH/ras-commander" && gemini -y "Deep analysis of ras_commander/hdf/HdfResultsPlan.py. Detailed review of all methods."
 ```
 
 ### 3. Provide Clear Structure Requests
 
 **Good prompt**:
 ```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Analyze error handling in ras_commander/precip/. Report in this structure:
+cd "C:/GH/ras-commander" && gemini -y "Analyze error handling in ras_commander/precip/. Report in this structure:
 
-   1. CURRENT PATTERNS:
-      - List each pattern found
-      - Files using each pattern
+1. CURRENT PATTERNS:
+   - List each pattern found
+   - Files using each pattern
 
-   2. INCONSISTENCIES:
-      - Pattern X in files A,B vs Pattern Y in files C,D
+2. INCONSISTENCIES:
+   - Pattern X in files A,B vs Pattern Y in files C,D
 
-   3. RECOMMENDATIONS:
-      - Suggested standard pattern
-      - Migration steps
-  " \
-  "C:/GH/ras-commander"
+3. RECOMMENDATIONS:
+   - Suggested standard pattern
+   - Migration steps"
 ```
 
 **Bad prompt**:
 ```bash
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "analyze error handling" \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "analyze error handling"
 # Too vague, unclear output structure
 ```
 
@@ -859,9 +789,7 @@ Grep("@staticmethod", path="ras_commander", output_mode="files_with_matches")
 # Results: 45 files
 
 # Analyze subset with Gemini
-uv run ~/.claude/skills/gemini/scripts/gemini.py \
-  "Analyze static method patterns in: [list of 45 files]. Check for: 1) Correct usage 2) Missing @staticmethod 3) Should-be-instance methods. Report inconsistencies." \
-  "C:/GH/ras-commander"
+cd "C:/GH/ras-commander" && gemini -y "Analyze static method patterns in: [list of 45 files]. Check for: 1) Correct usage 2) Missing @staticmethod 3) Should-be-instance methods. Report inconsistencies."
 ```
 
 ---
@@ -891,13 +819,12 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 
 ## See Also
 
-**Plugin Documentation**:
-- `C:\Users\billk_clb\.claude\plugins\cache\claude-code-dev-workflows\gemini-cli\1.0.0\SKILL.md`
+**Skill Documentation** (preferred patterns):
+- `.claude/skills/invoking-gemini-cli/SKILL.md` - Markdown file handoff pattern and templates
 
 **Research Documents**:
 - `feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md`
 - `feature_dev_notes/Code_Oracle_Multi_LLM/DESIGN.md`
-- `feature_dev_notes/Code_Oracle_Multi_LLM/RESEARCH_SUMMARY.md`
 
 **Related Agents**:
 - `code-oracle-codex` - For deep analysis (Codex with extended thinking)
@@ -910,5 +837,5 @@ uv run ~/.claude/skills/gemini/scripts/gemini.py \
 
 ---
 
-**Key Takeaway**: Use `gemini-3-flash-preview` for large context (>100K tokens), `gemini-3-pro-preview` for standard analysis. Invocation: `uv run ~/.claude/skills/gemini/scripts/gemini.py "<prompt>" [working_dir]`. Set model via `export GEMINI_MODEL=...`. Always specify working directory. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
+**Key Takeaway**: Use markdown file handoff pattern (REVIEW.md -> FINDINGS.md) for complex QAQC tasks, or `gemini -y` for quick tasks. Default model is `gemini-3-pro-preview`; use `gemini-3-flash-preview` for large context (>100K tokens) via `-m` flag. See `.claude/skills/invoking-gemini-cli/SKILL.md` for templates. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
 

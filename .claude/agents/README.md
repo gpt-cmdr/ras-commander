@@ -57,6 +57,7 @@ Task Subagents (Haiku)
 - **python-environment-manager** - Environment setup
 - **git-operations** - Git workflows
 - **notebook-runner** - Notebook execution
+- **hecras-notebook-qaqc** - Notebook-driven project linkage QA/QC
 
 ### Review Agents (Haiku)
 - **notebook-output-auditor** - Review notebook outputs for errors
