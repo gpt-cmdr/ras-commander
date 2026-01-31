@@ -425,14 +425,14 @@ Kimi K2.5 findings should be given extra weight when:
 ## Integration with Other Skills
 
 **Works with:**
-- `invoking-kimi-cli` - Follow up with Kimi-specific testing
-- `invoking-gemini-cli` - Deep dive on Gemini findings
-- `invoking-codex-cli` - Implement fixes identified
+- `dev_invoke_kimi-cli` - Follow up with Kimi-specific testing
+- `dev_invoke_gemini-cli` - Deep dive on Gemini findings
+- `dev_invoke_codex-cli` - Implement fixes identified
 - `using-git-worktrees` - Create isolated workspace for fixes
 
 ## See Also
 
-- **Kimi CLI Skill**: `.claude/skills/invoking-kimi-cli/SKILL.md`
+- **Kimi CLI Skill**: `.claude/skills/dev_invoke_kimi-cli/SKILL.md`
 - **Subagent Output Pattern**: `.claude/rules/subagent-output-pattern.md`
 - **Agent Integration Testing**: `.claude/rules/testing/agent-integration-testing.md`
 - **Orchestrator Pattern**: Root `CLAUDE.md` - Orchestrator section

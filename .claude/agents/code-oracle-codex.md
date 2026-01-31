@@ -25,7 +25,7 @@ description: |
   Model: gpt-5.2-codex (default, supports xhigh reasoning effort)
 
   Primary sources:
-  - .claude/skills/invoking-codex-cli/SKILL.md (invocation patterns and templates)
+  - .claude/skills/dev_invoke_codex-cli/SKILL.md (invocation patterns and templates)
   - feature_dev_notes/Code_Oracle_Multi_LLM/2026-01-05-codex-cli-research.md (CLI capabilities)
   - .claude/rules/validation/validation-patterns.md (output format)
 ---
@@ -41,7 +41,7 @@ Provide **deep code planning and review** capabilities using OpenAI's `gpt-5.2-c
 ## Primary Sources (Read These First)
 
 **Skill Documentation**:
-- `.claude/skills/invoking-codex-cli/SKILL.md`
+- `.claude/skills/dev_invoke_codex-cli/SKILL.md`
   - Markdown file handoff pattern (TASK.md -> OUTPUT.md)
   - Direct CLI invocation syntax
   - Session resumption
@@ -174,7 +174,7 @@ codex e "Read TASK.md in the current directory. Follow the instructions exactly.
 # 3. Read OUTPUT.md for results
 ```
 
-**See**: `.claude/skills/invoking-codex-cli/SKILL.md` for TASK.md and OUTPUT.md templates.
+**See**: `.claude/skills/dev_invoke_codex-cli/SKILL.md` for TASK.md and OUTPUT.md templates.
 
 ### Pattern 2: Direct CLI with HEREDOC (Quick Tasks)
 
@@ -982,7 +982,7 @@ If Code Oracle Codex doesn't provide sufficient depth, escalate to:
 ## See Also
 
 **Skill Documentation** (preferred patterns):
-- `.claude/skills/invoking-codex-cli/SKILL.md` - Markdown file handoff pattern and templates
+- `.claude/skills/dev_invoke_codex-cli/SKILL.md` - Markdown file handoff pattern and templates
 
 **Research Documents**:
 - `feature_dev_notes/Code_Oracle_Multi_LLM/2026-01-05-codex-cli-research.md`
@@ -999,5 +999,5 @@ If Code Oracle Codex doesn't provide sufficient depth, escalate to:
 
 ---
 
-**Key Takeaway**: Use markdown file handoff pattern (TASK.md -> OUTPUT.md) for complex tasks, or `codex e` with HEREDOC for quick tasks. See `.claude/skills/invoking-codex-cli/SKILL.md` for templates. Default 2-hour timeout supports extended thinking. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
+**Key Takeaway**: Use markdown file handoff pattern (TASK.md -> OUTPUT.md) for complex tasks, or `codex e` with HEREDOC for quick tasks. See `.claude/skills/dev_invoke_codex-cli/SKILL.md` for templates. Default 2-hour timeout supports extended thinking. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
 

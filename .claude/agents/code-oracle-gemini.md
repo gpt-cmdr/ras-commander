@@ -26,7 +26,7 @@ description: |
   Prerequisites: Gemini CLI authenticated (gemini login or GEMINI_API_KEY)
 
   Primary sources:
-  - .claude/skills/invoking-gemini-cli/SKILL.md (invocation patterns and templates)
+  - .claude/skills/dev_invoke_gemini-cli/SKILL.md (invocation patterns and templates)
   - feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md
   - .claude/rules/validation/validation-patterns.md
 ---
@@ -42,7 +42,7 @@ Provide **fast, large-context code analysis** using Google's Gemini models via t
 ## Primary Sources (Read These First)
 
 **Skill Documentation**:
-- `.claude/skills/invoking-gemini-cli/SKILL.md`
+- `.claude/skills/dev_invoke_gemini-cli/SKILL.md`
   - Markdown file handoff pattern (REVIEW.md -> FINDINGS.md)
   - Direct CLI invocation syntax
   - Session resumption
@@ -162,7 +162,7 @@ cd "C:/GH/ras-commander" && gemini -y "Read REVIEW.md in the current directory. 
 # 3. Read FINDINGS.md for results
 ```
 
-**See**: `.claude/skills/invoking-gemini-cli/SKILL.md` for REVIEW.md and FINDINGS.md templates.
+**See**: `.claude/skills/dev_invoke_gemini-cli/SKILL.md` for REVIEW.md and FINDINGS.md templates.
 
 ### Pattern 2: Direct CLI (Quick Tasks)
 
@@ -820,7 +820,7 @@ cd "C:/GH/ras-commander" && gemini -y "Analyze static method patterns in: [list 
 ## See Also
 
 **Skill Documentation** (preferred patterns):
-- `.claude/skills/invoking-gemini-cli/SKILL.md` - Markdown file handoff pattern and templates
+- `.claude/skills/dev_invoke_gemini-cli/SKILL.md` - Markdown file handoff pattern and templates
 
 **Research Documents**:
 - `feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md`
@@ -837,5 +837,5 @@ cd "C:/GH/ras-commander" && gemini -y "Analyze static method patterns in: [list 
 
 ---
 
-**Key Takeaway**: Use markdown file handoff pattern (REVIEW.md -> FINDINGS.md) for complex QAQC tasks, or `gemini -y` for quick tasks. Default model is `gemini-3-pro-preview`; use `gemini-3-flash-preview` for large context (>100K tokens) via `-m` flag. See `.claude/skills/invoking-gemini-cli/SKILL.md` for templates. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
+**Key Takeaway**: Use markdown file handoff pattern (REVIEW.md -> FINDINGS.md) for complex QAQC tasks, or `gemini -y` for quick tasks. Default model is `gemini-3-pro-preview`; use `gemini-3-flash-preview` for large context (>100K tokens) via `-m` flag. See `.claude/skills/dev_invoke_gemini-cli/SKILL.md` for templates. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
 

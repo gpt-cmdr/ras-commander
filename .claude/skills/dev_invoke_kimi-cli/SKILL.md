@@ -482,8 +482,8 @@ GEMINI_API_KEY=xxx        # Google Gemini models
 ## Integration with Other Skills
 
 **Works well with:**
-- `invoking-gemini-cli` - Cross-verify test coverage with Gemini
-- `invoking-codex-cli` - Implement fixes after Kimi identifies issues
+- `dev_invoke_gemini-cli` - Cross-verify test coverage with Gemini
+- `dev_invoke_codex-cli` - Implement fixes after Kimi identifies issues
 - `using-git-worktrees` - Create isolated workspace for test development
 - `triple-model-code-review` - Multi-model validation
 
