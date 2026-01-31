@@ -68,6 +68,12 @@ Task(
     Context: {project_folder}
     HEC-RAS Version: {version}
 
+    CRITICAL - API-First Requirement:
+    - Call init_ras_project() first to populate DataFrames
+    - Use ras.plan_df, ras.geom_df, ras.boundaries_df for all analysis
+    - Do NOT use Explore/Bash/Grep to inventory project files
+    - See .claude/rules/python/api-first-principle.md
+
     Produce Project Intelligence Report following schema in your instructions.
     Write output to: .claude/outputs/hecras-project-inspector/{date}-{project_name}.md
     """
@@ -84,6 +90,89 @@ Task(
 | `hecras_compute_remote` | Distributed execution | Multiple machines available |
 | `hecras_parse_compute-messages` | Compute output analysis | When diagnosing execution |
 | `hecras_extract_results` | HDF results extraction | Post-execution data |
+
+## API-First Dispatch Requirement
+
+**When dispatching to any HEC-RAS specialist agent, MUST include API-first context.**
+
+### Required Dispatch Pattern
+
+All dispatch prompts to HEC-RAS specialists must include:
+
+```
+CRITICAL - API-First Requirement:
+- Call init_ras_project() first to populate DataFrames
+- Use ras.plan_df, ras.geom_df, ras.boundaries_df for project analysis
+- Use HdfResultsPlan, HdfResultsMesh for HDF data extraction
+- Use GeomCrossSection, GeomBridge, etc. for geometry operations
+- Do NOT use Explore/Bash/Grep for data extraction
+- See .claude/rules/python/api-first-principle.md
+```
+
+### Example: Dispatching to Project Inspector
+
+```python
+Task(
+    subagent_type="hecras-project-inspector",
+    model="sonnet",
+    prompt="""
+    Analyze the HEC-RAS project.
+
+    Context: {project_folder}
+    HEC-RAS Version: {version}
+
+    CRITICAL - API-First Requirement:
+    - Call init_ras_project() first to populate DataFrames
+    - Use ras.plan_df, ras.geom_df, ras.boundaries_df for all analysis
+    - Do NOT use Explore/Bash/Grep to inventory project files
+    - See .claude/rules/python/api-first-principle.md
+
+    Produce Project Intelligence Report following schema in your instructions.
+    Write output to: .claude/outputs/hecras-project-inspector/{date}-{project_name}.md
+    """
+)
+```
+
+### Example: Dispatching to Results Analyst
+
+```python
+Task(
+    subagent_type="hecras-results-analyst",
+    model="sonnet",
+    prompt="""
+    Analyze results for plans {plan_list}.
+
+    CRITICAL - API-First Requirement:
+    - Use HdfResultsPlan.get_compute_messages() for execution verification
+    - Use HdfResultsMesh.get_mesh_max_ws() for envelope data
+    - Do NOT use raw h5py or parse compute message files directly
+    - See .claude/rules/python/api-first-principle.md
+
+    Produce Results Analysis Report following schema in your instructions.
+    Write output to: .claude/outputs/hecras-results-analyst/{date}-{project}.md
+    """
+)
+```
+
+### Example: Dispatching to HDF Analyst
+
+```python
+Task(
+    subagent_type="hdf-analyst",
+    model="sonnet",
+    prompt="""
+    Extract {data_type} from {plan_numbers}.
+
+    CRITICAL - API-First Requirement:
+    - Use HdfResultsPlan, HdfResultsMesh, HdfMesh classes
+    - Check is_steady_plan() before extraction
+    - Do NOT use raw h5py.File() for data extraction
+    - See .claude/rules/python/api-first-principle.md
+
+    Write output to: .claude/outputs/hdf-analyst/{date}-{task}.md
+    """
+)
+```
 
 ---
 

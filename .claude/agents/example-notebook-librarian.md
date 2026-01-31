@@ -57,6 +57,10 @@ Then spawn Haiku reviewers:
 - `notebook-output-auditor` for exceptions/tracebacks/stderr
 - `notebook-anomaly-spotter` for “unexpected behavior” signals
 
+For notebooks that touch HEC-RAS projects (extract/init/compute/modify/compare):
+- Spawn `hecras-notebook-qaqc` to verify project linkages, file targeting isolation,
+  unsteady boundary locations, plan→unsteady bindings, and HDF comparison validity.
+
 ### 3) Self-Improvement Agent (Repo Hygiene)
 
 When you find recurring issues, propose and (when approved) implement:
@@ -96,6 +100,7 @@ notebook guidance (and/or in `examples/AGENTS.md` when it improves navigation).
 - Remote execution: `remote-executor`
 - QA/QC and repair: `quality-assurance`
 - GUI automation / RASMapper: `win32com-automation-expert`
+- Notebook-driven project linkage QA/QC: `hecras-notebook-qaqc`
 
 ## Success Criteria
 

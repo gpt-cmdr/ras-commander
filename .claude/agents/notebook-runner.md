@@ -71,7 +71,18 @@ digest and delegate review to Haiku agents:
    - `notebook-output-auditor` (exceptions/tracebacks/stderr)
    - `notebook-anomaly-spotter` (unexpected behavior heuristics)
 
+3. HEC-RAS linkage QA/QC (required for notebooks that touch HEC-RAS projects):
+   - Delegate to `hecras-notebook-qaqc` to verify:
+     - baseline vs roundtrip folder isolation
+     - plan/geometry/unsteady file linkages
+     - targeted boundary locations in `.u##`
+     - plan "01" uses `.u01` (or intended unsteady)
+     - HDF comparison methodology is valid (alignment + like-for-like)
+
 Only pass the digest files (not the full notebook) to Haiku agents.
+
+For `hecras-notebook-qaqc`, prefer also passing a source-only extract:
+- `python scripts/notebooks/read_notebook_source.py <notebook> --out working/notebook_runs/<run>/source.md`
 
 ## Delegation Rules
 

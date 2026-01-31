@@ -5,9 +5,13 @@ tools: [Read, Grep, Glob, Bash, Write]
 working_directory: .
 description: |
   Deep code planning and review oracle using OpenAI Codex CLI (gpt-5.2-codex).
-  Leverages installed codex-cli plugin for extended thinking on architecture decisions,
-  security analysis, and complex refactoring planning. Provides structured code review
-  with severity-ranked findings. Best for tasks requiring 20-30 minutes of deep analysis.
+  Supports TWO invocation patterns:
+  1. Markdown file handoff (recommended) - Write TASK.md, execute, read OUTPUT.md
+  2. Direct CLI with HEREDOC (quick tasks) - codex e "prompt" --full-auto
+
+  Best for tasks requiring 20-30 minutes of deep analysis: architecture decisions,
+  security analysis, complex refactoring planning. Provides structured code review
+  with severity-ranked findings.
 
   Triggers: "deep code review", "architecture planning", "security analysis", "codex oracle",
   "refactoring strategy", "design decisions", "code quality deep dive", "multi-file impact",
@@ -17,14 +21,13 @@ description: |
   complex refactoring strategies, multi-file impact analysis, design decision documentation,
   code pattern consistency analysis
 
-  Prerequisites: codex-cli plugin installed (✓ installed), codex CLI authenticated
-  (user must run: codex login or set OPENAI_API_KEY), gpt-5.2-codex model available
+  Prerequisites: Codex CLI authenticated (codex login or OPENAI_API_KEY)
+  Model: gpt-5.2-codex (default, supports xhigh reasoning effort)
 
   Primary sources:
+  - .claude/skills/invoking-codex-cli/SKILL.md (invocation patterns and templates)
   - feature_dev_notes/Code_Oracle_Multi_LLM/2026-01-05-codex-cli-research.md (CLI capabilities)
-  - feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md (integration patterns)
   - .claude/rules/validation/validation-patterns.md (output format)
-  - Plugin: C:\Users\billk_clb\.claude\plugins\cache\claude-code-dev-workflows\codex-cli\1.0.0\SKILL.md
 ---
 
 # Code Oracle Codex Subagent
@@ -37,12 +40,12 @@ Provide **deep code planning and review** capabilities using OpenAI's `gpt-5.2-c
 
 ## Primary Sources (Read These First)
 
-**Plugin Documentation**:
-- `C:\Users\billk_clb\.claude\plugins\cache\claude-code-dev-workflows\codex-cli\1.0.0\SKILL.md`
-  - codex-wrapper command syntax
-  - HEREDOC pattern for complex prompts
-  - Parallel execution with dependencies
+**Skill Documentation**:
+- `.claude/skills/invoking-codex-cli/SKILL.md`
+  - Markdown file handoff pattern (TASK.md -> OUTPUT.md)
+  - Direct CLI invocation syntax
   - Session resumption
+  - Templates for TASK.md and OUTPUT.md
 
 **Research Documents**:
 - `feature_dev_notes/Code_Oracle_Multi_LLM/2026-01-05-codex-cli-research.md` (46 KB)
@@ -50,11 +53,6 @@ Provide **deep code planning and review** capabilities using OpenAI's `gpt-5.2-c
   - Model comparison (vs Opus 4.5, Sonnet 4.5)
   - Context window: 400K tokens, output: 128K tokens
   - Benchmarks: 56.4% on SWE-Bench Pro
-
-- `feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md` (26 KB)
-  - Integration patterns from myclaude, CodexMCP, Puzld.ai
-  - Best practices: per-call execution, JSON schemas, sandbox modes
-  - Multi-LLM orchestration examples
 
 **Validation Framework**:
 - `.claude/rules/validation/validation-patterns.md`
@@ -159,39 +157,36 @@ Provide step-by-step migration plan with breaking changes documented.
 
 ---
 
-## CLI Integration Pattern
+## CLI Integration Patterns
 
-### Invocation via codex-wrapper
+### Pattern 1: Markdown File Handoff (Recommended)
 
-**CRITICAL**: Use HEREDOC syntax for all complex prompts
+**Best for complex tasks** - avoids all shell escaping issues:
 
 ```bash
-codex-wrapper - <<'EOF'
-<prompt content>
+# 1. Write TASK.md with instructions and context
+# 2. Execute Codex CLI
+codex e "Read TASK.md in the current directory. Follow the instructions exactly. Write all deliverables to OUTPUT.md." \
+  -C "C:/GH/ras-commander" \
+  --full-auto \
+  --skip-git-repo-check
 
-Context files:
-@file1.py
-@file2.py
-
-<detailed instructions>
-EOF
+# 3. Read OUTPUT.md for results
 ```
 
-**Why HEREDOC?**
-- Avoids shell quoting nightmares
-- Handles special characters (`$`, backticks, quotes)
-- Preserves multiline formatting
-- No escaping needed
+**See**: `.claude/skills/invoking-codex-cli/SKILL.md` for TASK.md and OUTPUT.md templates.
 
-### Basic Invocation
+### Pattern 2: Direct CLI with HEREDOC (Quick Tasks)
+
+**For simple tasks** where file handoff is overkill:
 
 ```bash
 # Simple task
-codex-wrapper "explain @ras_commander/core.py"
+codex e "explain this code" -C "C:/GH/ras-commander" --full-auto
 
-# Complex task (HEREDOC required)
-codex-wrapper - <<'EOF'
-Review @ras_commander/hdf/HdfResultsPlan.py for:
+# Complex task with HEREDOC
+codex e "$(cat <<'EOF'
+Review ras_commander/hdf/HdfResultsPlan.py for:
 1. Edge case handling
 2. Error propagation
 3. Performance bottlenecks
@@ -199,89 +194,55 @@ Review @ras_commander/hdf/HdfResultsPlan.py for:
 Focus on the get_wse() and get_velocity() methods.
 Provide specific line references and code examples.
 EOF
+)" -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check
 ```
 
-### With Working Directory
+**Note**: For complex tasks, prefer Pattern 1 (markdown file handoff) to avoid shell escaping issues.
 
-```bash
-# Set working directory for file references
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-Analyze all HDF extraction classes for consistent error handling.
+### Core CLI Flags
 
-Files to check:
-@ras_commander/hdf/*.py
+| Flag | Purpose |
+|------|---------|
+| `-C /path` | Working directory |
+| `--full-auto` | Sandboxed auto-execution (workspace-write + no approvals) |
+| `--skip-git-repo-check` | Work in any directory |
+| `-c model_reasoning_effort=<level>` | Reasoning: xhigh (default), high, medium, low |
 
-Report inconsistencies and suggest standardization.
-EOF
-```
+**Model**: Always use `gpt-5.2-codex` (latest). Adjust reasoning effort for simpler tasks instead of using older models.
 
 ### Session Resumption
 
 ```bash
-# First invocation
-codex-wrapper - <<'EOF'
-Plan architecture for terrain validation framework.
-EOF
-# Returns: SESSION_ID: 019a7247-ac9d-71f3-89e2-a823dbd8fd14
+# First invocation returns thread ID in console output
+codex e "Plan architecture for terrain validation framework." \
+  -C "C:/GH/ras-commander" --full-auto
 
-# Continue with more context
-codex-wrapper resume 019a7247-ac9d-71f3-89e2-a823dbd8fd14 - <<'EOF'
-Now add error handling patterns for invalid terrain layers.
-EOF
+# Resume with thread ID
+codex e resume <thread_id> "Now add error handling patterns for invalid terrain layers."
 ```
 
 ---
 
 ## Parallel Execution (Advanced)
 
-For multi-step workflows, use parallel mode with dependencies:
+**Note**: Parallel execution mode is not documented in the new Codex CLI skill. For multi-step workflows:
 
+**Option 1**: Break into sequential TASK.md files with session resume:
 ```bash
-codex-wrapper --parallel <<'EOF'
----TASK---
-id: analyze_precip_methods
-workdir: C:/GH/ras-commander
----CONTENT---
-Analyze all precipitation methods for API consistency.
+# Task 1
+codex e "Read TASK1.md, write to OUTPUT1.md" -C "C:/GH/ras-commander" --full-auto
 
-Files:
-@ras_commander/precip/Atlas14Storm.py
-@ras_commander/precip/FrequencyStorm.py
-@ras_commander/precip/ScsTypeStorm.py
-@ras_commander/precip/StormGenerator.py
-
-Report: Parameter name inconsistencies and unit handling differences.
-
----TASK---
-id: design_unified_api
-workdir: C:/GH/ras-commander
-dependencies: analyze_precip_methods
----CONTENT---
-Design unified API based on analyze_precip_methods findings.
-
-Requirements:
-- Consistent parameter naming
-- Unified units handling
-- Backward compatibility plan
-
----TASK---
-id: security_review
-workdir: C:/GH/ras-commander
----CONTENT---
-Security review of remote execution module.
-
-Files:
-@ras_commander/remote/PsexecWorker.py
-@ras_commander/remote/Execution.py
-
-Focus: Command injection, credential handling, path traversal.
-EOF
+# Task 2 (depends on Task 1)
+codex e resume <thread_id> "Read TASK2.md, write to OUTPUT2.md"
 ```
 
-**Benefits**:
-- Tasks 1 and 3 run in parallel (independent)
-- Task 2 waits for task 1 (dependency)
-- All in single invocation
+**Option 2**: Use Claude Code's Task tool to manage parallel Codex invocations:
+```python
+# Launch multiple independent Codex tasks
+Task(agent="codex", prompt="Read analysis_task.md...")
+Task(agent="codex", prompt="Read security_task.md...")
+# Wait for completion, then launch dependent task
+```
 
 ---
 
@@ -359,42 +320,51 @@ response_text = '\n'.join([l for l in output_lines if 'SESSION_ID:' not in l])
 
 **Steps**:
 1. Read existing validation patterns
-2. Build Codex prompt with requirements
-3. Invoke codex-wrapper with @file references
-4. Parse response
+2. Write TASK.md with requirements and context
+3. Invoke Codex CLI with markdown file handoff
+4. Read OUTPUT.md
 5. Write findings to markdown
 6. Return file path to orchestrator
 
 **Implementation**:
 ```bash
-# Read context
-Read(".claude/rules/validation/validation-patterns.md")
-Read("ras_commander/RasValidation.py")
+# 1. Write TASK.md with instructions
+Write("TASK.md", """
+# Task: Design Precipitation Validation Framework
 
-# Invoke Codex oracle
+## Objective
+Design validation framework for precipitation depth conservation.
+
+## Context
+- Validate depth conservation at 10^-6 precision
+- Integration with ValidationSeverity pattern
+- Support Atlas14Storm, FrequencyStorm, ScsTypeStorm
+
+## Input Files
+- `ras_commander/RasValidation.py`
+- `.claude/rules/validation/validation-patterns.md`
+
+## Instructions
+1. Design class structure (PrecipValidator, methods)
+2. Identify integration points (existing vs new code)
+3. Provide example usage patterns
+
+## Deliverables
+Write to OUTPUT.md:
+- Class structure and responsibilities
+- Integration approach
+- Example usage code
+""")
+
+# 2. Invoke Codex
 Bash(
-  command: codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-    Design precipitation validation framework.
-
-    Requirements:
-    - Validate depth conservation at 10^-6 precision
-    - Integration with ValidationSeverity pattern
-    - Support Atlas14Storm, FrequencyStorm, ScsTypeStorm
-
-    Context:
-    @ras_commander/RasValidation.py
-    @.claude/rules/validation/validation-patterns.md
-
-    Provide:
-    1. Class structure (PrecipValidator, methods)
-    2. Integration points (existing vs new code)
-    3. Example usage patterns
-    EOF
+  command: 'codex e "Read TASK.md, follow instructions, write to OUTPUT.md" -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check',
   timeout: 7200000  # 2 hours
 )
 
-# Write findings
-Write("feature_dev_notes/Code_Oracle_Multi_LLM/plans/2026-01-05-precip-validation.md", formatted_output)
+# 3. Read OUTPUT.md and write findings
+output = Read("OUTPUT.md")
+Write("feature_dev_notes/Code_Oracle_Multi_LLM/plans/2026-01-05-precip-validation.md", output)
 ```
 
 ### Workflow 2: Security Code Review
@@ -402,30 +372,45 @@ Write("feature_dev_notes/Code_Oracle_Multi_LLM/plans/2026-01-05-precip-validatio
 **Task**: Audit remote execution for vulnerabilities
 
 ```bash
-# Invoke Codex for security analysis
+# 1. Write TASK.md
+Write("TASK.md", """
+# Task: Security Audit of Remote Execution Module
+
+## Objective
+Security audit focusing on command injection, credentials, and path security.
+
+## Input Files
+- `ras_commander/remote/PsexecWorker.py`
+- `ras_commander/remote/Execution.py`
+- `ras_commander/remote/Utils.py`
+
+## Instructions
+Analyze for:
+1. Command injection (subprocess calls)
+2. Credential exposure (passwords, API keys)
+3. Path traversal (UNC paths, file operations)
+4. Network security (SMB, PsExec)
+
+Rank findings by severity (critical, major, minor).
+Provide exploit scenarios and mitigation code.
+
+## Deliverables
+Write to OUTPUT.md:
+- Severity-ranked findings
+- Specific line references
+- Exploit scenarios
+- Mitigation code examples
+""")
+
+# 2. Execute Codex
 Bash(
-  command: codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-    Security audit of remote execution module.
-
-    Files:
-    @ras_commander/remote/PsexecWorker.py
-    @ras_commander/remote/Execution.py
-    @ras_commander/remote/Utils.py
-
-    Analyze for:
-    1. Command injection (subprocess calls)
-    2. Credential exposure (passwords, API keys)
-    3. Path traversal (UNC paths, file operations)
-    4. Network security (SMB, PsExec)
-
-    Rank findings by severity (critical, major, minor).
-    Provide exploit scenarios and mitigation code.
-    EOF
+  command: 'codex e "Read TASK.md, perform audit, write to OUTPUT.md" -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check',
   timeout: 7200000
 )
 
-# Parse and format
-# Write to feature_dev_notes/Code_Oracle_Multi_LLM/reviews/{date}-security-audit.md
+# 3. Process results
+output = Read("OUTPUT.md")
+Write("feature_dev_notes/Code_Oracle_Multi_LLM/reviews/{date}-security-audit.md", output)
 ```
 
 ### Workflow 3: Pattern Consistency Analysis
@@ -433,24 +418,38 @@ Bash(
 **Task**: Check error handling across HDF modules
 
 ```bash
+# 1. Write TASK.md
+Write("TASK.md", """
+# Task: Analyze Error Handling Patterns Across HDF Modules
+
+## Objective
+Identify inconsistencies in error handling across HDF modules.
+
+## Input Files
+- `ras_commander/hdf/HdfResultsPlan.py`
+- `ras_commander/hdf/HdfMesh.py`
+- `ras_commander/hdf/HdfResultsBreach.py`
+- `ras_commander/hdf/HdfStruc.py`
+
+## Instructions
+Report:
+1. Current error handling patterns used
+2. Inconsistencies between modules
+3. Missing error cases
+4. Recommendations for standardization
+
+Provide specific examples with line numbers.
+
+## Deliverables
+Write to OUTPUT.md:
+- Pattern analysis
+- Inconsistency list with examples
+- Standardization recommendations
+""")
+
+# 2. Execute
 Bash(
-  command: codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-    Analyze error handling patterns across HDF modules.
-
-    Files:
-    @ras_commander/hdf/HdfResultsPlan.py
-    @ras_commander/hdf/HdfMesh.py
-    @ras_commander/hdf/HdfResultsBreach.py
-    @ras_commander/hdf/HdfStruc.py
-
-    Report:
-    1. Current error handling patterns used
-    2. Inconsistencies between modules
-    3. Missing error cases
-    4. Recommendations for standardization
-
-    Provide specific examples of inconsistencies with line numbers.
-    EOF
+  command: 'codex e "Read TASK.md, analyze patterns, write to OUTPUT.md" -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check',
   timeout: 7200000
 )
 ```
@@ -477,14 +476,15 @@ fi
 
 ### Timeout Handling
 
-**Default**: 2 hours (7200000 ms)
+**Default**: 2 hours (7200000 ms) via Bash tool timeout parameter
 
 **For shorter tasks**:
 ```bash
-# Override via environment variable
-CODEX_TIMEOUT=1800000 codex-wrapper - <<'EOF'
-Quick code review of small file...
-EOF
+# Adjust Bash timeout parameter
+Bash(
+  command: 'codex e "Read TASK.md..." -C "..." --full-auto',
+  timeout: 1800000  # 30 minutes
+)
 ```
 
 ### Parse Errors
@@ -538,42 +538,55 @@ severity_map = {
 ### Example 1: Architecture Planning
 
 ```bash
-# Task: Design terrain validation framework
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-Design a terrain layer validation framework.
+# 1. Write TASK.md
+Write("TASK.md", """
+# Task: Design Terrain Layer Validation Framework
 
-Requirements:
+## Objective
+Design validation framework for terrain HDF layers.
+
+## Context
 - Validate HDF file structure
 - Check coordinate reference system
 - Verify pyramid levels
 - Integration with RasMap.check_layer()
 
-Context files:
-@ras_commander/RasMap.py
-@ras_commander/terrain/RasTerrain.py
-@.claude/rules/validation/validation-patterns.md
+## Input Files
+- `ras_commander/RasMap.py`
+- `ras_commander/terrain/RasTerrain.py`
+- `.claude/rules/validation/validation-patterns.md`
 
+## Instructions
 Provide:
 1. Class structure (TerrainValidator)
 2. Validation methods (check_hdf_structure, check_crs, etc.)
 3. Integration with ValidationResult/ValidationReport
 4. Example usage in pre-flight checks
 
-Output as detailed markdown with code examples.
-EOF
+## Deliverables
+Write to OUTPUT.md with detailed markdown and code examples.
+""")
+
+# 2. Execute
+codex e "Read TASK.md, design framework, write to OUTPUT.md" \
+  -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check
 ```
 
 ### Example 2: Security Review
 
 ```bash
-# Task: Security audit of DSS module
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-Security review of DSS module.
+# 1. Write TASK.md
+Write("TASK.md", """
+# Task: Security Review of DSS Module
 
-Files:
-@ras_commander/dss/RasDss.py
-@ras_commander/dss/DssUtils.py
+## Objective
+Security audit focusing on pathname injection and Java bridge security.
 
+## Input Files
+- `ras_commander/dss/RasDss.py`
+- `ras_commander/dss/DssUtils.py`
+
+## Instructions
 Focus on:
 1. Pathname injection (DSS pathname format)
 2. Java bridge security
@@ -582,88 +595,95 @@ Focus on:
 
 Rank findings by severity.
 Provide code examples of vulnerabilities and fixes.
-EOF
+
+## Deliverables
+Write to OUTPUT.md with severity-ranked findings and code examples.
+""")
+
+# 2. Execute
+codex e "Read TASK.md, perform security audit, write to OUTPUT.md" \
+  -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check
 ```
 
 ### Example 3: Refactoring Strategy
 
 ```bash
-# Task: Plan API unification
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-Plan refactoring for precipitation API standardization.
+# 1. Write TASK.md
+Write("TASK.md", """
+# Task: Plan Precipitation API Standardization
 
+## Objective
+Create migration plan for API unification.
+
+## Context
 Current inconsistencies:
 - total_depth vs total_depth_inches
 - Mixed units handling (inches everywhere vs parameter)
 - Different return types (DataFrame vs numpy array)
 
-Files:
-@ras_commander/precip/Atlas14Storm.py
-@ras_commander/precip/FrequencyStorm.py
-@ras_commander/precip/ScsTypeStorm.py
-@ras_commander/precip/StormGenerator.py
+## Input Files
+- `ras_commander/precip/Atlas14Storm.py`
+- `ras_commander/precip/FrequencyStorm.py`
+- `ras_commander/precip/ScsTypeStorm.py`
+- `ras_commander/precip/StormGenerator.py`
 
+## Instructions
 Provide:
 1. Step-by-step migration plan
 2. Breaking changes documentation
 3. Backward compatibility strategy (if feasible)
 4. Testing approach
 
-Output as implementation-ready plan.
-EOF
+## Deliverables
+Write to OUTPUT.md as implementation-ready plan.
+""")
+
+# 2. Execute
+codex e "Read TASK.md, create migration plan, write to OUTPUT.md" \
+  -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check
 ```
 
 ---
 
-## Parallel Multi-File Analysis
+## Multi-Module Analysis Pattern
 
-For complex tasks requiring analysis of multiple modules:
+For complex tasks requiring analysis of multiple modules, use sequential session resume:
 
 ```bash
-codex-wrapper --parallel <<'EOF'
----TASK---
-id: analyze_hdf_modules
-workdir: C:/GH/ras-commander
----CONTENT---
-Analyze HDF extraction classes for pattern consistency.
-
-Files:
-@ras_commander/hdf/*.py
-
+# 1. Write analysis tasks to separate files
+Write("TASK_HDF.md", """
+# Task: Analyze HDF Module Patterns
+## Input Files
+- `ras_commander/hdf/*.py`
+## Instructions
 Report error handling, logging, and validation patterns.
+## Deliverables
+Write to OUTPUT_HDF.md
+""")
 
----TASK---
-id: analyze_usgs_modules
-workdir: C:/GH/ras-commander
----CONTENT---
-Analyze USGS integration classes for pattern consistency.
-
-Files:
-@ras_commander/usgs/*.py
-
+Write("TASK_USGS.md", """
+# Task: Analyze USGS Module Patterns
+## Input Files
+- `ras_commander/usgs/*.py`
+## Instructions
 Report error handling, API design, and validation patterns.
+## Deliverables
+Write to OUTPUT_USGS.md
+""")
 
----TASK---
-id: synthesize_patterns
-workdir: C:/GH/ras-commander
-dependencies: analyze_hdf_modules, analyze_usgs_modules
----CONTENT---
-Synthesize findings from HDF and USGS analyses.
+# 2. Execute first analysis
+codex e "Read TASK_HDF.md, write to OUTPUT_HDF.md" \
+  -C "C:/GH/ras-commander" --full-auto --skip-git-repo-check
+# Note thread_id from output
 
-Identify:
-1. Common patterns across both subsystems
-2. Unique patterns in each
-3. Best practices to adopt library-wide
-4. Inconsistencies to resolve
+# 3. Execute second analysis with same session
+codex e resume <thread_id> "Read TASK_USGS.md, write to OUTPUT_USGS.md"
 
-Provide unified coding standards recommendation.
-EOF
+# 4. Synthesize findings
+codex e resume <thread_id> "Read OUTPUT_HDF.md and OUTPUT_USGS.md. Synthesize patterns and write unified recommendations to OUTPUT_SYNTHESIS.md"
 ```
 
-**Advantages**:
-- Parallel execution of independent analyses
-- Automatic dependency management
-- Single invocation for complex workflows
+**Note**: For true parallel execution, use Claude Code's Task tool to launch multiple independent Codex sessions.
 
 ---
 
@@ -684,7 +704,7 @@ codex login
 export OPENAI_API_KEY="sk-..."
 ```
 
-**Subagent behavior**: If codex-wrapper fails with auth error, provide clear instructions to user.
+**Subagent behavior**: If codex CLI fails with auth error, provide clear instructions to user.
 
 ### Timeout Management
 
@@ -692,44 +712,49 @@ export OPENAI_API_KEY="sk-..."
 
 **For extended thinking tasks**: Keep default timeout
 
-**Override if needed**:
+**Override if needed**: Adjust Bash tool timeout parameter:
 ```bash
-CODEX_TIMEOUT=3600000 codex-wrapper - <<'EOF'
-Quick analysis task...
-EOF
+Bash(
+  command: 'codex e "Read TASK.md..." -C "..." --full-auto',
+  timeout: 3600000  # 1 hour
+)
 ```
 
 ### Working Directory
 
-**CRITICAL**: Always specify working directory for @file references
+**CRITICAL**: Always specify working directory with `-C` flag
 
 ```bash
 # ✅ CORRECT: Working directory specified
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-analyze @ras_commander/core.py
-EOF
+codex e "analyze file" -C "C:/GH/ras-commander" --full-auto
 
-# ❌ WRONG: No working directory (@ references won't resolve)
-codex-wrapper - <<'EOF'
-analyze @ras_commander/core.py
-EOF
+# ❌ WRONG: No working directory
+codex e "analyze file" --full-auto
 ```
+
+**Note**: With markdown file handoff, files are read from the working directory specified by `-C`.
 
 ### Shell Escaping
 
-**CRITICAL**: Use HEREDOC for complex prompts
+**CRITICAL**: Use markdown file handoff pattern for complex prompts to avoid shell escaping issues
 
 ```bash
-# ✅ CORRECT: HEREDOC (no escaping needed)
-codex-wrapper - <<'EOF'
+# ✅ CORRECT: Markdown file handoff (no escaping issues)
+Write("TASK.md", """
 Fix bug where regex /\d+/ doesn't match "123"
 Code: const re = /\d+/;
 Check for $variable escaping issues.
-EOF
+""")
+codex e "Read TASK.md, fix issues, write to OUTPUT.md" -C "..." --full-auto
 
-# ❌ WRONG: Direct quoting (shell will interpret $, `, \)
-codex-wrapper "Fix bug where regex /\d+/ doesn't match \"123\""
+# ⚠️ HEREDOC alternative (watch for shell interpretation)
+codex e "$(cat <<'EOF'
+Fix bug where regex /\d+/ doesn't match "123"
+EOF
+)" -C "..." --full-auto
 ```
+
+**Prefer markdown file handoff** - cleaner and avoids all shell escaping issues.
 
 ---
 
@@ -757,79 +782,93 @@ codex-wrapper "Fix bug where regex /\d+/ doesn't match \"123\""
 
 ### 1. Provide Rich Context
 
-**Good**:
+**Good** (markdown file handoff):
 ```bash
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-Design validation framework.
+Write("TASK.md", """
+# Task: Design Validation Framework
 
+## Context
 Existing patterns:
-@.claude/rules/validation/validation-patterns.md
+- `.claude/rules/validation/validation-patterns.md`
 
 Similar implementations:
-@ras_commander/dss/RasDss.py (DSS validation)
-@ras_commander/RasMap.py (terrain validation)
+- `ras_commander/dss/RasDss.py` (DSS validation)
+- `ras_commander/RasMap.py` (terrain validation)
 
-Requirements:
+## Requirements
 - INFO < WARNING < ERROR < CRITICAL
 - check_* methods for details
 - is_valid_* methods for boolean checks
-EOF
+
+## Deliverables
+Write to OUTPUT.md with class structure and examples.
+""")
+
+codex e "Read TASK.md, design framework, write to OUTPUT.md" \
+  -C "C:/GH/ras-commander" --full-auto
 ```
 
 **Bad**:
 ```bash
-codex-wrapper "design validation framework"
+codex e "design validation framework" -C "..." --full-auto
 # No context, vague requirements
 ```
 
 ### 2. Specify Expected Output
 
-**Good**:
+**Good** (explicit deliverables in TASK.md):
 ```bash
-codex-wrapper - <<'EOF'
-Security review of @ras_commander/remote/PsexecWorker.py
+Write("TASK.md", """
+# Task: Security Review
 
-Provide:
+## Input Files
+- `ras_commander/remote/PsexecWorker.py`
+
+## Instructions
+Perform security review.
+
+## Deliverables
+Write to OUTPUT.md:
 1. Severity-ranked findings (critical → info)
 2. Specific line references
 3. Exploit scenarios (if applicable)
 4. Mitigation code examples
 
 Format as structured markdown with code blocks.
-EOF
+""")
+
+codex e "Read TASK.md, perform review, write to OUTPUT.md" \
+  -C "C:/GH/ras-commander" --full-auto
 ```
 
-### 3. Use Parallel Mode for Complex Workflows
+### 3. Use Session Resume for Multi-Step Workflows
 
-**When to use**:
-- Multiple independent analyses
-- Sequential steps with dependencies
-- Large-scale code reviews
+**When to use session resume**:
+- Sequential analysis building on prior context
+- Iterative refinement of designs
+- Multi-step refactorings
 
-**When NOT to use**:
-- Single file review
-- Quick questions
-- Interactive tasks requiring user feedback
+**When to use separate sessions**:
+- Independent parallel analyses
+- Different working directories
+- No shared context needed
 
 ### 4. Resume Sessions for Iterative Work
 
 **Pattern**:
 ```bash
 # Session 1: Initial analysis
-codex-wrapper - <<'EOF'
-Analyze precipitation API inconsistencies.
-EOF
-# Returns: SESSION_ID: abc123
+codex e "Read TASK_ANALYSIS.md, write to OUTPUT_ANALYSIS.md" \
+  -C "C:/GH/ras-commander" --full-auto
+# Note thread_id from console output
 
 # Session 2: Add more requirements
-codex-wrapper resume abc123 - <<'EOF'
-Now also check units handling and depth conservation.
-EOF
+codex e resume <thread_id> \
+  "Read TASK_UNITS.md, write additional findings to OUTPUT_UNITS.md"
 
 # Session 3: Final synthesis
-codex-wrapper resume abc123 - <<'EOF'
-Synthesize all findings into migration plan.
-EOF
+codex e resume <thread_id> \
+  "Synthesize all findings and write migration plan to OUTPUT_FINAL.md"
 ```
 
 ---
@@ -838,11 +877,11 @@ EOF
 
 ### Codex Not Found
 
-**Symptom**: `command not found: codex-wrapper`
+**Symptom**: `command not found: codex`
 
-**Solution**: Plugin installed but binary not in PATH
-- Restart Claude Code session (plugins loaded on startup)
-- Verify: `which codex-wrapper`
+**Solution**: Codex CLI not installed
+- Install: `npm install -g @openai/codex` or follow Codex CLI docs
+- Verify: `which codex` or `codex --version`
 
 ### Authentication Errors
 
@@ -858,31 +897,33 @@ codex login
 
 **Symptom**: Task killed after 2 hours
 
-**Solution**: For extremely long tasks, increase timeout
+**Solution**: For extremely long tasks, increase Bash tool timeout
 ```bash
-CODEX_TIMEOUT=14400000 codex-wrapper - <<'EOF'
-... very complex task ...
-EOF
+Bash(
+  command: 'codex e "Read TASK.md..." -C "..." --full-auto',
+  timeout: 14400000  # 4 hours
+)
 ```
 
-**Or** break into smaller tasks using parallel mode with dependencies
+**Or** break into smaller tasks and use session resume to chain them
 
-### @File References Not Found
+### Files Not Found
 
-**Symptom**: Codex can't find files referenced with @
+**Symptom**: Codex can't find files specified in TASK.md
 
-**Solution**: Specify working directory
+**Solution 1**: Verify working directory with `-C` flag
 ```bash
-# ✅ CORRECT
-codex-wrapper - "C:/GH/ras-commander" <<'EOF'
-analyze @ras_commander/core.py
-EOF
-
-# ❌ WRONG (no working directory)
-codex-wrapper - <<'EOF'
-analyze @ras_commander/core.py
-EOF
+# ✅ CORRECT: Working directory specified
+codex e "Read TASK.md..." -C "C:/GH/ras-commander" --full-auto
 ```
+
+**Solution 2**: Use absolute paths in TASK.md
+```markdown
+## Input Files
+- `C:/GH/ras-commander/ras_commander/core.py`
+```
+
+**Solution 3**: Verify files exist at specified paths before invoking Codex
 
 ---
 
@@ -940,12 +981,11 @@ If Code Oracle Codex doesn't provide sufficient depth, escalate to:
 
 ## See Also
 
-**Plugin Documentation**:
-- `C:\Users\billk_clb\.claude\plugins\cache\claude-code-dev-workflows\codex-cli\1.0.0\SKILL.md`
+**Skill Documentation** (preferred patterns):
+- `.claude/skills/invoking-codex-cli/SKILL.md` - Markdown file handoff pattern and templates
 
 **Research Documents**:
 - `feature_dev_notes/Code_Oracle_Multi_LLM/2026-01-05-codex-cli-research.md`
-- `feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md`
 - `feature_dev_notes/Code_Oracle_Multi_LLM/DESIGN.md`
 
 **Related Agents**:
@@ -959,5 +999,5 @@ If Code Oracle Codex doesn't provide sufficient depth, escalate to:
 
 ---
 
-**Key Takeaway**: Use `codex-wrapper` via Bash tool with HEREDOC syntax for all complex prompts. Specify working directory for @file references. Default 2-hour timeout supports extended thinking. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
+**Key Takeaway**: Use markdown file handoff pattern (TASK.md -> OUTPUT.md) for complex tasks, or `codex e` with HEREDOC for quick tasks. See `.claude/skills/invoking-codex-cli/SKILL.md` for templates. Default 2-hour timeout supports extended thinking. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
 

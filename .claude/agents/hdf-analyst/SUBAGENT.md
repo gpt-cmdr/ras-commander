@@ -66,33 +66,133 @@ Expert in HEC-RAS HDF5 file operations using the `ras_commander.hdf` subpackage.
 
 **DO NOT duplicate API details in this file. Point users to source.**
 
-## Quick Start
+## CRITICAL: API-First Mandate
 
-### Pattern 1: Check What's in an HDF File
-```bash
-# Read the architecture guide first
-Read ras_commander/hdf/AGENTS.md
+**This agent MUST use ras-commander HDF API classes for all data extraction.**
 
-# Then grep for specific methods
-Grep "def get_" ras_commander/hdf/HdfResultsPlan.py
+### Required Approach
+
+1. **MUST** use `HdfResultsPlan`, `HdfResultsMesh`, `HdfMesh`, `HdfXsec` classes
+2. **MUST** check `is_steady_plan()` before choosing extraction method
+3. **MUST** pass `ras_object` when using local RasPrj instances
+4. **MUST NOT** use raw `h5py.File()` for data extraction
+5. **MUST NOT** use Grep/Bash to find HDF paths or explore HDF structure
+
+### Why This Matters
+
+The HDF API classes provide:
+- Automatic handling of steady vs unsteady plan differences
+- Proper coordinate reference system handling for GeoDataFrames
+- Lazy loading of heavy dependencies (geopandas, xarray)
+- Consistent return types (DataFrame, GeoDataFrame, dict)
+- Error handling and validation
+
+Using raw h5py bypasses these features and requires understanding internal HDF structure.
+
+See `.claude/rules/python/api-first-principle.md` for complete guidance.
+
+---
+
+## Quick Start - API Patterns
+
+### Pattern 1: Initialize and Extract WSE
+
+```python
+from ras_commander import init_ras_project, ras
+from ras_commander.hdf import HdfResultsPlan, HdfResultsMesh
+
+# Initialize project
+init_ras_project("/path/to/project", "6.6")
+
+# Check plan type and extract appropriately
+if HdfResultsPlan.is_steady_plan("01", ras_object=ras):
+    wse = HdfResultsPlan.get_steady_wse("01", ras_object=ras)
+else:
+    wse = HdfResultsPlan.get_wse("01", time_index=-1, ras_object=ras)
 ```
 
-### Pattern 2: Extract Results Workflow
-```bash
-# Read the relevant example notebook
-Read examples/11_2d_hdf_data_extraction.ipynb
+### Pattern 2: Extract Mesh Envelope Data
 
-# Find the specific method you need
-Grep "get_mesh_max_ws" ras_commander/hdf/HdfResultsMesh.py
+```python
+from ras_commander.hdf import HdfResultsMesh
+
+# Maximum water surface elevation
+max_wse = HdfResultsMesh.get_mesh_max_ws("01", ras_object=ras)
+
+# Maximum velocity
+max_vel = HdfResultsMesh.get_mesh_max_face_v("01", ras_object=ras)
+
+# Maximum iterations (numerical performance)
+max_iter = HdfResultsMesh.get_mesh_max_iter("01", ras_object=ras)
 ```
 
-### Pattern 3: Understand Lazy Loading
-```bash
-# Read the architecture explanation
-Read ras_commander/hdf/AGENTS.md  # Section: "Lazy Loading Pattern"
+### Pattern 3: Extract Mesh Geometry
 
-# See implementation in a specific class
-Read ras_commander/hdf/HdfMesh.py  # Check imports at top vs inside methods
+```python
+from ras_commander.hdf import HdfMesh
+
+# Cell polygons as GeoDataFrame
+cells = HdfMesh.get_mesh_cell_polygons("01", ras_object=ras)
+
+# Cell center points
+points = HdfMesh.get_mesh_cell_points("01", ras_object=ras)
+
+# Face geometry
+faces = HdfMesh.get_mesh_face_points("01", ras_object=ras)
+```
+
+### Pattern 4: Extract Time Series
+
+```python
+from ras_commander.hdf import HdfResultsMesh
+
+# Time series for specific cells
+ts = HdfResultsMesh.get_mesh_cells_timeseries(
+    "01",
+    cell_ids=[100, 200, 300],
+    ras_object=ras
+)
+```
+
+### Pattern 5: Extract Compute Messages
+
+```python
+from ras_commander.hdf import HdfResultsPlan
+
+# Execution verification
+messages = HdfResultsPlan.get_compute_messages("01", ras_object=ras)
+runtime = HdfResultsPlan.get_runtime_data("01", ras_object=ras)
+
+# Check completion
+is_complete = runtime is not None
+```
+
+### Prohibited Patterns
+
+```python
+# ❌ WRONG - Do NOT use raw h5py
+import h5py
+with h5py.File("plan.p01.hdf") as f:
+    wse = f['/Results/Unsteady/Output/Output Blocks/...'][:]
+
+# ❌ WRONG - Do NOT grep for HDF structure
+Grep "Results" plan.p01.hdf
+
+# ❌ WRONG - Do NOT use Bash to find HDF files
+Bash("ls *.hdf")
+```
+
+### Finding HDF File Paths
+
+```python
+# ✅ CORRECT - Use DataFrames
+hdf_path = ras.plan_df.loc[
+    ras.plan_df['plan_number'] == '01',
+    'HDF_Results_Path'
+].iloc[0]
+
+# ❌ WRONG - Do NOT construct paths manually
+hdf_path = f"{project_folder}/{project_name}.p01.hdf"
 ```
 
 ## When to Delegate

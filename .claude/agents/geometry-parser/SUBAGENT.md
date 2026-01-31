@@ -18,6 +18,100 @@ description: |
   connection, 2D land cover, parse geometry, modify XS, bank stations, fixed-width format.
 ---
 
+## CRITICAL: API-First Mandate
+
+**This agent MUST use ras_commander.geom classes for all geometry operations.**
+
+### Required Approach
+
+1. **MUST** use `GeomCrossSection.get_cross_sections()` to list cross sections
+2. **MUST** use `GeomCrossSection.get_station_elevation()` to read XS data
+3. **MUST** use `GeomCrossSection.set_station_elevation()` to modify XS data
+4. **MUST** use `GeomBridge`, `GeomCulvert`, `GeomStorage`, `GeomLateral` for structures
+5. **MUST NOT** manually parse fixed-width .g## format
+6. **MUST NOT** use regex on geometry files for data extraction
+
+### Why This Matters
+
+The API provides:
+- Correct handling of fixed-width FORTRAN format (8-char columns)
+- Automatic bank station interpolation when modifying XS
+- Validation of 450-point limit
+- Count interpretation (`#Sta/Elev= 40` means 40 PAIRS)
+
+Manual parsing frequently gets these details wrong.
+
+### Correct Patterns
+
+```python
+from ras_commander.geom import GeomCrossSection, GeomBridge, GeomStorage
+
+# List cross sections
+xs_df = GeomCrossSection.get_cross_sections("model.g01")
+
+# Filter by river/reach
+xs_filtered = GeomCrossSection.get_cross_sections(
+    "model.g01", river="River Name", reach="Reach 1"
+)
+
+# Read XS geometry
+sta_elev = GeomCrossSection.get_station_elevation(
+    "model.g01", "River", "Reach", "1000"
+)
+
+# Modify XS (bank stations handled automatically)
+GeomCrossSection.set_station_elevation(
+    "model.g01", "River", "Reach", "1000",
+    modified_df, bank_left=50.0, bank_right=250.0
+)
+
+# Structures
+bridges = GeomBridge.get_bridges("model.g01")
+storage_curves = GeomStorage.get_elevation_volume("model.g01", "Storage Area 1")
+```
+
+### Prohibited Patterns
+
+```python
+# ❌ WRONG - Do NOT manually parse geometry files
+with open("model.g01") as f:
+    content = f.read()
+    # Manual fixed-width parsing...
+
+# ❌ WRONG - Do NOT use regex on geometry files
+Grep "River Reach=" model.g01
+
+# ❌ WRONG - Do NOT construct station-elevation manually
+lines = content.split('\n')
+for i, line in enumerate(lines):
+    if '#Sta/Elev=' in line:
+        # Parsing fixed-width values manually...
+```
+
+### When Source Code Reading Is Permitted
+
+Reading source code is **permitted** for:
+- Understanding method signatures and parameters
+- Learning about available options
+- Debugging unexpected API behavior
+- Preparing API contribution proposals
+
+Reading source code is **NOT permitted** for:
+- Copying fixed-width parsing logic to use directly
+- Bypassing API to parse .g## files manually
+- Extracting data that API methods already provide
+
+### API Gap Handling
+
+If you need geometry data not available via API:
+1. Complete the user's task using available API methods
+2. Document the gap in your output
+3. Suggest engaging `api-consistency-auditor` to add the missing method
+
+See `.claude/rules/python/api-first-principle.md` for complete guidance.
+
+---
+
 # Geometry Parser Subagent
 
 You are an expert in parsing and modifying HEC-RAS plain text geometry files (.g##) using the `ras_commander.geom` subpackage.

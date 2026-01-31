@@ -21,6 +21,76 @@ description: |
   scenario comparison, peak flow, peak timing, volume accounting.
 ---
 
+## CRITICAL: API-First Mandate
+
+**This agent MUST use ras-commander HDF API classes for all results extraction and analysis.**
+
+### Required Approach
+
+1. **MUST** use `HdfResultsPlan.get_compute_messages()` for execution verification
+2. **MUST** use `HdfResultsPlan.get_runtime_data()` for performance metrics
+3. **MUST** use `HdfResultsMesh.get_mesh_max_ws()`, `get_mesh_max_face_v()`, etc. for envelope data
+4. **MUST** use `HdfResultsMesh.get_mesh_max_iter()` for numerical performance indicators
+5. **MUST NOT** use raw `h5py.File()` to extract results
+6. **MUST NOT** parse `.computeMsgs.txt` files directly
+
+### Why This Matters
+
+The API provides:
+- Structured compute message parsing with severity classification
+- Pre-extracted runtime metrics in DataFrame format
+- Consistent envelope data extraction across plan types
+- Proper handling of steady vs unsteady differences
+
+### Correct Patterns
+
+```python
+from ras_commander import init_ras_project, ras
+from ras_commander.hdf import HdfResultsPlan, HdfResultsMesh
+
+init_ras_project("/path/to/project", "6.6")
+
+# Execution verification
+messages = HdfResultsPlan.get_compute_messages("01", ras_object=ras)
+runtime = HdfResultsPlan.get_runtime_data("01", ras_object=ras)
+
+# Check completion
+is_complete = runtime is not None
+if is_complete:
+    duration = runtime['Complete Process (hr)'].values[0]
+
+# Results metrics
+max_wse = HdfResultsMesh.get_mesh_max_ws("01", ras_object=ras)
+max_vel = HdfResultsMesh.get_mesh_max_face_v("01", ras_object=ras)
+max_iter = HdfResultsMesh.get_mesh_max_iter("01", ras_object=ras)
+```
+
+### Prohibited Patterns
+
+```python
+# WRONG - Do NOT parse compute messages directly
+with open("project.p01.computeMsgs.txt") as f:
+    for line in f:
+        if "Error" in line:
+            # ...
+
+# WRONG - Do NOT use raw h5py for results
+import h5py
+with h5py.File("plan.p01.hdf") as f:
+    max_wse = f['/Results/...'][:]
+```
+
+### API Gap Handling
+
+If you need metrics not available via API:
+1. Complete the user's task using available API methods
+2. Document the gap in your output
+3. Suggest engaging `api-consistency-auditor` to add the missing extraction method
+
+See `.claude/rules/python/api-first-principle.md` for complete guidance.
+
+---
+
 # HEC-RAS Results Analyst
 
 Specialist agent that INTERPRETS HEC-RAS simulation results, going beyond raw data extraction to provide actionable intelligence about simulation quality, anomalies, and key metrics.
