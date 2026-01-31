@@ -432,6 +432,7 @@ task_prompt = """
 Check for:
 - **Import errors:** Indicates missing dependencies or broken imports
 - **HEC-RAS errors:** Check HDF files exist and compute messages are clean
+- **Project linkages (required):** For notebooks that extract/clone multiple projects, verify plan/geometry/unsteady bindings, baseline vs roundtrip isolation, and intended boundary locations (use `hecras-notebook-qaqc`)
 - **Warnings:** Review pandas/numpy/geopandas deprecation warnings
 - **Data quality:** Spot-check DataFrames, plots, and extracted values
 - **Performance:** Note if runtimes significantly increase/decrease

@@ -178,6 +178,9 @@ examples/Atlas\ 14\ Storm\ Hyetographs/
 test_notebook*.ipynb
 examples/test_*.ipynb
 
+# Work-in-progress example notebooks (hold until second example added)
+examples/313_hms_to_ras_boundary_matching.ipynb
+
 # Cleanup scripts (can be regenerated)
 cleanup_temp_files.sh
 
@@ -213,3 +216,4 @@ tmpclaude-*-cwd
 .env
 .env.local
 .pypirc
+/agent_tasks/plans

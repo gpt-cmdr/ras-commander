@@ -1301,7 +1301,8 @@ class RasPrj:
         
         # Parse other fields
         known_fields = ['Interval', 'DSS Path', 'Use DSS', 'Use Fixed Start Time', 'Fixed Start Date/Time',
-                        'Is Critical Boundary', 'Critical Boundary Flow', 'DSS File']
+                        'Is Critical Boundary', 'Critical Boundary Flow', 'DSS File',
+                        'Flow Hydrograph QMult', 'Flow Hydrograph QMin']
         for i, line in enumerate(lines):
             if '=' in line:
                 key, value = line.split('=', 1)
@@ -1309,7 +1310,26 @@ class RasPrj:
                 if key in known_fields:
                     bc_info[key] = value.strip()
                     parsed_lines.add(i)
-        
+
+        # Parse DSS Path components if available
+        if 'DSS Path' in bc_info and bc_info['DSS Path']:
+            dss_path = bc_info['DSS Path']
+            # DSS Format: //A/B/C/D/E/F/
+            clean_path = dss_path.strip('/')
+            parts = clean_path.split('/')
+            if len(parts) >= 1:
+                bc_info['dss_part_a'] = parts[0]  # HMS subbasin/location
+            if len(parts) >= 2:
+                bc_info['dss_part_b'] = parts[1]  # Parameter (FLOW, STAGE)
+            if len(parts) >= 3:
+                bc_info['dss_part_c'] = parts[2]  # Date
+            if len(parts) >= 4:
+                bc_info['dss_part_d'] = parts[3]  # Interval
+            if len(parts) >= 5:
+                bc_info['dss_part_e'] = parts[4]  # Run identifier
+            if len(parts) >= 6:
+                bc_info['dss_part_f'] = parts[5]  # Additional part
+
         # Handle hydrograph values
         bc_info['hydrograph_num_values'] = 0
         if bc_info['hydrograph_type']:

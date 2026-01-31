@@ -231,6 +231,27 @@ else:
     raise ValueError("Pre-flight validation failed")
 ```
 
+## Project Linkage QA/QC (Required)
+
+In addition to external file validation (DSS, terrain), always verify that your
+HEC-RAS project is targeting the intended files and that notebook-driven workflows
+did not cross-link or overwrite projects:
+
+- Plan/geometry/unsteady linkages are consistent and refer to existing files
+- Baseline vs roundtrip copies use separate project folders (no cross-folder paths)
+- Unsteady boundary location (river/reach/station) matches workflow expectations
+- Plan "01" uses the expected `.u01` (or intended `.u##`)
+- Any HDF comparisons are like-for-like and coordinate-aligned
+
+For notebook-based workflows, use:
+
+```bat
+python scripts\notebooks\read_notebook_source.py examples\<notebook>.ipynb ^
+  --out working\notebook_runs\manual_run_01\source.md
+```
+
+Then run a linkage QA/QC review (agent workflow): `hecras-notebook-qaqc`.
+
 ## Validation Result Details
 
 Access detailed diagnostic information:

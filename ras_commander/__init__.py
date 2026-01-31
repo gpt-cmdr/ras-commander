@@ -34,6 +34,7 @@ from .RasProcess import RasProcess, ProjectionInfo
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
+from .RasHydroCompare import RasHydroCompare
 
 # Validation framework - core validation infrastructure
 from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport

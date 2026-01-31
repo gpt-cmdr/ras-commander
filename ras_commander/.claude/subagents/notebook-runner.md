@@ -19,6 +19,7 @@ Executes Jupyter notebooks from `examples/` as repeatable tests and validates ou
 
 **Notebook Execution**:
 - `scripts/notebooks/audit_ipynb.py` - Output audit tooling (scan without execution)
+- `scripts/notebooks/read_notebook_source.py` - Extract code+markdown cells (no outputs)
 - `scripts/notebooks/README.md` - Usage documentation
 - `.claude/rules/documentation/notebook-standards.md` - Notebook conventions
 - `examples/AGENTS.md` - Notebook index and structure
@@ -117,6 +118,10 @@ working/notebook_runs/2025-12-14_103045/
    - **notebook-output-auditor** (Haiku) - Reviews exceptions, tracebacks, stderr
    - **notebook-anomaly-spotter** (Haiku) - Reviews unexpected behavior heuristics
 
+3. **HEC-RAS Notebook QA/QC (Required)**:
+   - Spawn `hecras-notebook-qaqc` for notebooks that initialize/extract/modify HEC-RAS projects.
+   - Provide the notebook path, plus `working/notebook_runs/<timestamp>/source.md` if available.
+
 3. **Report Summary**: Combine Haiku findings into concise report
 
 **Why Digest**: Prevents context overflow when reviewing large notebook outputs.
@@ -166,6 +171,10 @@ jupyter nbconvert --execute --to notebook \
 # Scan notebook outputs for issues
 python scripts/notebooks/audit_ipynb.py examples/11_2d_hdf_data_extraction.ipynb \
   --out-dir working/notebook_runs/$(date +%Y%m%d_%H%M%S)
+
+# Extract notebook source (code+markdown only)
+python scripts/notebooks/read_notebook_source.py examples/11_2d_hdf_data_extraction.ipynb \
+  --out working/notebook_runs/$(date +%Y%m%d_%H%M%S)/source.md
 ```
 
 ### 4. Full Execution + Audit Workflow

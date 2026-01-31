@@ -293,23 +293,23 @@ class RasCmdr:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 return False
 
-            # Smart execution skip logic (unless force_rerun)
-            if not force_rerun:
-                if skip_existing:
-                    # Original simple check (backward compatible)
-                    hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                    if RasCmdr._verify_completion(hdf_path):
-                        logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
-                        return True
+            # Skip existing check - runs regardless of force_rerun (for resume capability)
+            if skip_existing:
+                hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
+                if RasCmdr._verify_completion(hdf_path):
+                    logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
+                    return True
+
+            # Smart skip: check file modification times (unless force_rerun or skip_existing)
+            # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
+            if not force_rerun and not skip_existing:
+                from .RasCurrency import RasCurrency
+                is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
+                if is_current:
+                    logger.info(f"Skipping plan {plan_number}: {reason}")
+                    return True
                 else:
-                    # Smart skip: check file modification times
-                    from .RasCurrency import RasCurrency
-                    is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
-                    if is_current:
-                        logger.info(f"Skipping plan {plan_number}: {reason}")
-                        return True
-                    else:
-                        logger.debug(f"Plan {plan_number} needs execution: {reason}")
+                    logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
             # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
@@ -667,7 +667,7 @@ class RasCmdr:
                         ras_object=worker_ras_objects[worker_id],
                         clear_geompre=clear_geompre,
                         force_geompre=force_geompre,
-                        force_rerun=force_rerun,
+                        force_rerun=True,  # Always force execution in workers - plans passed skip_existing filter
                         num_cores=num_cores,
                         verify=verify
                     )
@@ -959,9 +959,9 @@ class RasCmdr:
                         ras_object=compute_ras,
                         clear_geompre=clear_geompre,
                         force_geompre=force_geompre,
-                        force_rerun=force_rerun,
+                        force_rerun=True,  # Always force execution in test folder - bypass broken smart skip from copytree timestamp preservation
                         num_cores=num_cores,
-                        skip_existing=skip_existing,
+                        skip_existing=skip_existing,  # Still respected (skip_existing check happens before force_rerun check)
                         verify=verify
                     )
                     execution_results[current_plan_number] = success

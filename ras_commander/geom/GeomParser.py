@@ -33,7 +33,7 @@ Example Usage:
 
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Union
 from datetime import datetime
 
 from ..LoggingConfig import get_logger
@@ -688,3 +688,233 @@ class GeomParser:
         except Exception as e:
             logger.error(f"Error validating river/reach/RS: {str(e)}")
             raise ValueError(f"Validation failed: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_xs_cut_lines(
+        geom_file: Union[str, Path],
+        ras_object=None
+    ):
+        """
+        Extract cross-section GIS cut line coordinates from geometry file.
+
+        Parses "XS GIS Cut Line=" sections from .g## files and returns
+        a GeoDataFrame with LineString geometries for each cross-section.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            ras_object: Optional RasPrj instance (unused, for API consistency)
+
+        Returns:
+            gpd.GeoDataFrame: DataFrame with columns: river, reach, station,
+                geometry (LineString). CRS is not set (caller should set based
+                on project CRS).
+
+        Raises:
+            FileNotFoundError: If geometry file does not exist
+            ImportError: If geopandas or shapely are not installed
+
+        Example:
+            >>> from ras_commander import GeomParser
+            >>> xs_gdf = GeomParser.get_xs_cut_lines("model.g01")
+            >>> print(f"Found {len(xs_gdf)} cross-sections")
+            >>> xs_gdf = xs_gdf.set_crs(epsg=2278)  # Set project CRS
+        """
+        try:
+            import geopandas as gpd
+            from shapely.geometry import LineString
+        except ImportError:
+            raise ImportError(
+                "geopandas and shapely are required for get_xs_cut_lines(). "
+                "Install with: pip install geopandas shapely"
+            )
+
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        logger.info(f"Extracting XS cut lines from: {geom_file}")
+
+        with open(geom_file, 'r') as f:
+            lines = f.readlines()
+
+        xs_list = []
+        current_river = None
+        current_reach = None
+        current_station = None
+        i = 0
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Track current river/reach
+            if line.startswith("River Reach="):
+                parts = line.split("=")[1].split(",")
+                if len(parts) >= 2:
+                    current_river = parts[0].strip()
+                    current_reach = parts[1].strip()
+
+            # Track current station
+            elif line.startswith("Type RM Length L Ch R ="):
+                value_str = line.split("=")[1]
+                values = [v.strip() for v in value_str.split(',')]
+                if len(values) >= 2:
+                    current_station = values[1]
+
+            # Parse XS GIS Cut Line coordinates
+            elif line.startswith("XS GIS Cut Line="):
+                if current_river is None or current_reach is None or current_station is None:
+                    i += 1
+                    continue
+
+                count_str = line.split("=")[1].strip()
+                num_points = int(count_str)
+                total_values = num_points * 2
+
+                coords = []
+                i += 1
+                values_read = 0
+
+                while values_read < total_values and i < len(lines):
+                    data_line = lines[i].strip()
+                    if not data_line or data_line.startswith(
+                        ('River', 'Type', 'Node', '#', 'XS', 'Levee', 'Bank')
+                    ):
+                        break
+
+                    parts = data_line.split()
+                    for part in parts:
+                        try:
+                            coords.append(float(part))
+                            values_read += 1
+                        except ValueError:
+                            break
+                    i += 1
+
+                if len(coords) >= 4:
+                    points = [(coords[j], coords[j+1]) for j in range(0, len(coords)-1, 2)]
+                    if len(points) >= 2:
+                        xs_list.append({
+                            'river': current_river,
+                            'reach': current_reach,
+                            'station': current_station,
+                            'geometry': LineString(points)
+                        })
+                continue
+
+            i += 1
+
+        logger.info(f"Found {len(xs_list)} XS cut lines")
+        return gpd.GeoDataFrame(xs_list, geometry='geometry') if xs_list else gpd.GeoDataFrame(
+            columns=['river', 'reach', 'station', 'geometry']
+        )
+
+    @staticmethod
+    @log_call
+    def get_river_centerlines(
+        geom_file: Union[str, Path],
+        ras_object=None
+    ):
+        """
+        Extract river/reach centerline coordinates from geometry file.
+
+        Parses "Reach XY=" sections from .g## files and returns a
+        GeoDataFrame with LineString geometries for each river reach.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            ras_object: Optional RasPrj instance (unused, for API consistency)
+
+        Returns:
+            gpd.GeoDataFrame: DataFrame with columns: river, reach,
+                geometry (LineString). CRS is not set.
+
+        Raises:
+            FileNotFoundError: If geometry file does not exist
+            ImportError: If geopandas or shapely are not installed
+
+        Example:
+            >>> from ras_commander import GeomParser
+            >>> rivers = GeomParser.get_river_centerlines("model.g01")
+            >>> for _, row in rivers.iterrows():
+            ...     print(f"{row['river']}/{row['reach']}: {len(row['geometry'].coords)} pts")
+        """
+        try:
+            import geopandas as gpd
+            from shapely.geometry import LineString
+        except ImportError:
+            raise ImportError(
+                "geopandas and shapely are required for get_river_centerlines(). "
+                "Install with: pip install geopandas shapely"
+            )
+
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        logger.info(f"Extracting river centerlines from: {geom_file}")
+
+        with open(geom_file, 'r') as f:
+            lines = f.readlines()
+
+        reaches = []
+        current_river = None
+        current_reach = None
+        i = 0
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Track current river/reach
+            if line.startswith("River Reach="):
+                parts = line.split("=")[1].split(",")
+                if len(parts) >= 2:
+                    current_river = parts[0].strip()
+                    current_reach = parts[1].strip()
+
+            # Parse Reach XY coordinates
+            elif line.startswith("Reach XY="):
+                if current_river is None or current_reach is None:
+                    i += 1
+                    continue
+
+                count_str = line.split("=")[1].strip()
+                num_pairs = int(count_str)
+                total_values = num_pairs * 2
+
+                coords = []
+                i += 1
+                values_read = 0
+
+                while values_read < total_values and i < len(lines):
+                    data_line = lines[i].strip()
+                    if not data_line or data_line.startswith(
+                        ('River', 'Junct', 'Type', 'Node', '#')
+                    ):
+                        break
+
+                    parts = data_line.split()
+                    for part in parts:
+                        try:
+                            coords.append(float(part))
+                            values_read += 1
+                        except ValueError:
+                            break
+                    i += 1
+
+                if len(coords) >= 4:
+                    points = [(coords[j], coords[j+1]) for j in range(0, len(coords)-1, 2)]
+                    if len(points) >= 2:
+                        reaches.append({
+                            'river': current_river,
+                            'reach': current_reach,
+                            'geometry': LineString(points)
+                        })
+                continue
+
+            i += 1
+
+        logger.info(f"Found {len(reaches)} river centerlines")
+        return gpd.GeoDataFrame(reaches, geometry='geometry') if reaches else gpd.GeoDataFrame(
+            columns=['river', 'reach', 'geometry']
+        )

@@ -45,8 +45,12 @@ DSS Boundary Condition Functions:
 - get_dss_boundaries() - Extract all DSS-linked BCs with full path info
 - get_inline_hydrograph_boundaries() - Extract inline table BCs with time series data
 - update_dss_run_identifier() - Update DSS path F-part for new scenarios
-- set_boundary_dss_link() - Convert inline BC to DSS-linked
+- set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
+- set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
 - get_unique_dss_subbasins() - Get unique HMS subbasin names from DSS paths
+- update_dss_path_by_station() - Update DSS A-part for specific river station
+- update_flow_multiplier_by_station() - Update/insert QMult for specific river station
+- update_boundary_dss_paths() - Batch update DSS paths and multipliers
         
 """
 import os
@@ -1867,8 +1871,9 @@ class RasUnsteady:
         Convert an inline hydrograph boundary to use DSS linkage.
 
         This function modifies a boundary condition in a .u## file to use a DSS
-        file reference instead of inline table data. This is useful for converting
-        manually-linked models to DSS-linked models.
+        file reference instead of inline table data. It performs a complete state
+        transition: sets Use DSS=True, adds DSS File/Path, sets the inline table
+        count to 0, and removes any inline data lines.
 
         Parameters
         ----------
@@ -1938,51 +1943,474 @@ class RasUnsteady:
             logger.warning(f"Boundary not found: {river}/{reach}/{station}")
             return False
 
-        # Find and update DSS-related lines for this boundary
-        i = boundary_idx + 1
-        dss_file_updated = False
-        dss_path_updated = False
-        use_dss_updated = False
-        interval_updated = False
+        # Inline table type keywords that may have data to remove
+        TABLE_KEYWORDS = [
+            'Flow Hydrograph=', 'Stage Hydrograph=', 'Lateral Inflow Hydrograph=',
+            'Uniform Lateral Inflow=', 'Precipitation Hydrograph=',
+            'Uniform Lateral Inflow Hydrograph='
+        ]
 
-        while i < len(lines) and i < boundary_idx + 50:
+        # Scan the boundary block to find all relevant lines and inline data
+        i = boundary_idx + 1
+        dss_file_idx = None
+        dss_path_idx = None
+        use_dss_idx = None
+        interval_idx = None
+        table_header_idx = None
+        table_keyword = None
+        inline_data_start = None
+        inline_data_end = None
+
+        while i < len(lines) and i < boundary_idx + 500:
             line = lines[i]
 
             if line.startswith('Boundary Location='):
                 break
             elif line.startswith('DSS File='):
-                lines[i] = f'DSS File={dss_file}\n'
-                dss_file_updated = True
+                dss_file_idx = i
             elif line.startswith('DSS Path='):
-                lines[i] = f'DSS Path={dss_path}\n'
-                dss_path_updated = True
+                dss_path_idx = i
             elif line.startswith('Use DSS='):
-                lines[i] = 'Use DSS=True\n'
-                use_dss_updated = True
+                use_dss_idx = i
             elif line.startswith('Interval='):
-                lines[i] = f'Interval={interval}\n'
-                interval_updated = True
-
+                interval_idx = i
+            else:
+                # Check for table header keywords
+                for kw in TABLE_KEYWORDS:
+                    if line.startswith(kw):
+                        table_header_idx = i
+                        table_keyword = kw
+                        # Parse count
+                        try:
+                            count = int(line.replace(kw, '').strip())
+                        except ValueError:
+                            count = 0
+                        if count > 0:
+                            # Find extent of inline data lines
+                            inline_data_start = i + 1
+                            inline_data_end = inline_data_start
+                            for k in range(inline_data_start, len(lines)):
+                                data_line = lines[k]
+                                if '=' in data_line or data_line.startswith('Boundary Location='):
+                                    inline_data_end = k
+                                    break
+                                if not data_line.strip():
+                                    continue
+                            else:
+                                inline_data_end = len(lines)
+                        break
             i += 1
 
-        # Insert any missing lines
-        insert_idx = boundary_idx + 1
-        if not interval_updated:
+        # Step 1: Remove inline data lines (if any) - do this first to preserve indices
+        lines_removed = 0
+        if inline_data_start is not None and inline_data_end is not None and inline_data_end > inline_data_start:
+            del lines[inline_data_start:inline_data_end]
+            lines_removed = inline_data_end - inline_data_start
+            logger.debug(f"Removed {lines_removed} inline data lines")
+            # Adjust indices for removed lines
+            if dss_file_idx is not None and dss_file_idx > inline_data_start:
+                dss_file_idx -= lines_removed
+            if dss_path_idx is not None and dss_path_idx > inline_data_start:
+                dss_path_idx -= lines_removed
+            if use_dss_idx is not None and use_dss_idx > inline_data_start:
+                use_dss_idx -= lines_removed
+            if interval_idx is not None and interval_idx > inline_data_start:
+                interval_idx -= lines_removed
+
+        # Step 2: Set table count to 0
+        if table_header_idx is not None and table_keyword is not None:
+            lines[table_header_idx] = f'{table_keyword} 0 \n'
+            logger.debug(f"Set {table_keyword.strip()} count to 0")
+
+        # Step 3: Update existing DSS/interval lines or insert missing ones
+        if interval_idx is not None:
+            lines[interval_idx] = f'Interval={interval}\n'
+        if dss_file_idx is not None:
+            lines[dss_file_idx] = f'DSS File={dss_file}\n'
+        if dss_path_idx is not None:
+            lines[dss_path_idx] = f'DSS Path={dss_path}\n'
+        if use_dss_idx is not None:
+            lines[use_dss_idx] = 'Use DSS=True\n'
+
+        # Insert any missing lines after the table header (or after boundary location)
+        insert_after = table_header_idx if table_header_idx is not None else boundary_idx
+        insert_idx = insert_after + 1
+
+        if interval_idx is None:
             lines.insert(insert_idx, f'Interval={interval}\n')
             insert_idx += 1
-        if not dss_file_updated:
+            # Adjust subsequent indices
+            if dss_file_idx is not None and dss_file_idx >= insert_idx - 1:
+                dss_file_idx += 1
+            if dss_path_idx is not None and dss_path_idx >= insert_idx - 1:
+                dss_path_idx += 1
+            if use_dss_idx is not None and use_dss_idx >= insert_idx - 1:
+                use_dss_idx += 1
+
+        if dss_file_idx is None:
             lines.insert(insert_idx, f'DSS File={dss_file}\n')
             insert_idx += 1
-        if not dss_path_updated:
+            if dss_path_idx is not None and dss_path_idx >= insert_idx - 1:
+                dss_path_idx += 1
+            if use_dss_idx is not None and use_dss_idx >= insert_idx - 1:
+                use_dss_idx += 1
+
+        if dss_path_idx is None:
             lines.insert(insert_idx, f'DSS Path={dss_path}\n')
             insert_idx += 1
-        if not use_dss_updated:
+            if use_dss_idx is not None and use_dss_idx >= insert_idx - 1:
+                use_dss_idx += 1
+
+        if use_dss_idx is None:
             lines.insert(insert_idx, 'Use DSS=True\n')
 
         with open(unsteady_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
 
-        logger.info(f"Updated boundary {river}/{reach}/{station} to use DSS link")
+        logger.info(f"Updated boundary {river}/{reach}/{station} to use DSS link "
+                     f"(removed {lines_removed} inline data lines)")
+        return True
+
+    @staticmethod
+    @log_call
+    def set_boundary_inline_hydrograph(
+        unsteady_file: Union[str, Path],
+        hydrograph_df: pd.DataFrame,
+        bc_type: str = "Flow Hydrograph",
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        ras_object: Optional[Any] = None
+    ) -> bool:
+        """
+        Write an inline hydrograph table to a boundary condition, converting from DSS if needed.
+
+        This method performs a complete DSS→inline state transition: sets Use DSS=False,
+        removes DSS File/Path lines, writes inline hydrograph data in HEC-RAS fixed-width
+        format, and updates the table count and Interval line.
+
+        The method follows the same pattern as ``set_precipitation_hyetograph()`` for
+        inline table writing.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##) or unsteady number (e.g., "01")
+        hydrograph_df : pd.DataFrame
+            DataFrame with columns:
+
+            - ``'hour'``: Time in hours from start (float)
+            - ``'value'``: Hydrograph value at each time step (flow in cfs/cms or stage in ft/m)
+
+        bc_type : str, default "Flow Hydrograph"
+            Boundary condition type. Must be one of:
+
+            - ``"Flow Hydrograph"``
+            - ``"Stage Hydrograph"``
+            - ``"Lateral Inflow Hydrograph"``
+            - ``"Uniform Lateral Inflow"``
+
+        river : str, optional
+            River name to locate the boundary. If None, updates the first matching bc_type.
+        reach : str, optional
+            Reach name to locate the boundary.
+        station : str, optional
+            River station to locate the boundary.
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        bool
+            True if boundary was successfully updated, False if not found
+
+        Raises
+        ------
+        ValueError
+            If DataFrame is missing required columns or bc_type is unsupported
+        FileNotFoundError
+            If unsteady flow file not found
+
+        Example
+        -------
+        >>> import pandas as pd
+        >>> from ras_commander import RasUnsteady
+        >>> # Create a simple flow hydrograph
+        >>> hours = list(range(25))
+        >>> flows = [100, 150, 300, 600, 1200, 2000, 3000, 4000, 5000, 4500,
+        ...          4000, 3500, 3000, 2500, 2000, 1700, 1400, 1200, 1000,
+        ...          800, 600, 400, 300, 200, 100]
+        >>> df = pd.DataFrame({'hour': hours, 'value': flows})
+        >>> RasUnsteady.set_boundary_inline_hydrograph(
+        ...     "project.u01", df, bc_type="Flow Hydrograph",
+        ...     river="White", reach="Muncie", station="15696.24"
+        ... )
+
+        Notes
+        -----
+        **Inline Hydrograph Format** (HEC-RAS .u## files):
+
+        Flow/Stage/Lateral hydrographs store values only (not time-value pairs).
+        Each value is 8 characters wide, 10 values per line. The count on the header
+        line is the number of values, and time is implied from the Interval setting.
+
+        This differs from Precipitation Hydrograph which stores (time, depth) pairs.
+
+        **State Transition**:
+
+        When converting from DSS mode, this method:
+
+        1. Sets ``Use DSS=False``
+        2. Removes ``DSS File=`` and ``DSS Path=`` content (sets to empty)
+        3. Writes inline data after the hydrograph header line
+        4. Updates the value count and Interval line
+
+        See Also
+        --------
+        set_boundary_dss_link : Convert inline boundary to DSS mode
+        set_precipitation_hyetograph : Write precipitation hyetograph (uses time-value pairs)
+        """
+        SUPPORTED_TYPES = {
+            "Flow Hydrograph": "Flow Hydrograph=",
+            "Stage Hydrograph": "Stage Hydrograph=",
+            "Lateral Inflow Hydrograph": "Lateral Inflow Hydrograph=",
+            "Uniform Lateral Inflow": "Uniform Lateral Inflow=",
+            "Uniform Lateral Inflow Hydrograph": "Uniform Lateral Inflow Hydrograph=",
+        }
+
+        if bc_type not in SUPPORTED_TYPES:
+            raise ValueError(
+                f"Unsupported bc_type: '{bc_type}'. "
+                f"Supported types: {list(SUPPORTED_TYPES.keys())}"
+            )
+
+        table_keyword = SUPPORTED_TYPES[bc_type]
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass
+
+        # Resolve unsteady file path
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        # Validate DataFrame columns
+        required_columns = ['hour', 'value']
+        missing_columns = [col for col in required_columns if col not in hydrograph_df.columns]
+        if missing_columns:
+            raise ValueError(
+                f"DataFrame missing required columns: {missing_columns}. "
+                f"Required columns: {required_columns}"
+            )
+
+        # Extract values
+        hours = hydrograph_df['hour'].values
+        values = hydrograph_df['value'].values
+        num_values = len(values)
+
+        if num_values < 2:
+            raise ValueError("DataFrame must have at least 2 rows")
+
+        # Calculate interval from hour column
+        interval_hours = float(hours[1] - hours[0])
+        if interval_hours >= 1.0:
+            if interval_hours == int(interval_hours):
+                interval_str = f"{int(interval_hours)}HOUR"
+            else:
+                interval_min = int(interval_hours * 60)
+                interval_str = f"{interval_min}MIN"
+        else:
+            interval_min = int(interval_hours * 60)
+            interval_str = f"{interval_min}MIN"
+
+        # Format values as fixed-width (8 chars each, 10 values per line)
+        # Flow/Stage hydrographs use values only (not time-value pairs)
+        formatted_lines = []
+        for i in range(0, num_values, 10):
+            row_values = values[i:i+10]
+            formatted_row = ''.join(f'{v:8.2f}' if abs(v) < 1e7 else f'{v:8.1f}'
+                                    for v in row_values)
+            formatted_lines.append(formatted_row + '\n')
+
+        # Read the file
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        # Find the target boundary
+        target_boundary_idx = None
+        for idx, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                if river is not None or reach is not None or station is not None:
+                    loc_line = line.replace('Boundary Location=', '')
+                    parts = [p.strip() for p in loc_line.split(',')]
+                    match = True
+                    if river is not None and (len(parts) < 1 or parts[0] != river):
+                        match = False
+                    if reach is not None and (len(parts) < 2 or parts[1] != reach):
+                        match = False
+                    if station is not None and (len(parts) < 3 or parts[2] != station):
+                        match = False
+                    if match:
+                        target_boundary_idx = idx
+                        break
+                else:
+                    # No location filter - find first boundary with matching bc_type
+                    # Scan ahead to check bc_type
+                    for j in range(idx + 1, min(idx + 50, len(lines))):
+                        if lines[j].startswith('Boundary Location='):
+                            break
+                        if lines[j].startswith(table_keyword):
+                            target_boundary_idx = idx
+                            break
+                    if target_boundary_idx is not None:
+                        break
+
+        if target_boundary_idx is None:
+            loc_str = f"{river}/{reach}/{station}" if river else "first matching"
+            logger.warning(f"Boundary not found for {bc_type}: {loc_str}")
+            return False
+
+        # Scan the boundary block for relevant lines
+        block_start = target_boundary_idx + 1
+        table_header_idx = None
+        interval_idx = None
+        dss_file_idx = None
+        dss_path_idx = None
+        use_dss_idx = None
+        old_data_start = None
+        old_data_end = None
+        block_end = len(lines)
+
+        i = block_start
+        while i < len(lines) and i < target_boundary_idx + 500:
+            line = lines[i]
+
+            if line.startswith('Boundary Location='):
+                block_end = i
+                break
+            elif line.startswith('Interval='):
+                interval_idx = i
+            elif line.startswith(table_keyword):
+                table_header_idx = i
+                # Check if there are existing inline data lines
+                try:
+                    old_count = int(line.replace(table_keyword, '').strip())
+                except ValueError:
+                    old_count = 0
+                if old_count > 0:
+                    old_data_start = i + 1
+                    # Find end of old data
+                    for k in range(old_data_start, len(lines)):
+                        data_line = lines[k]
+                        if '=' in data_line or data_line.startswith('Boundary Location='):
+                            old_data_end = k
+                            break
+                    else:
+                        old_data_end = len(lines)
+            elif line.startswith('DSS File='):
+                dss_file_idx = i
+            elif line.startswith('DSS Path='):
+                dss_path_idx = i
+            elif line.startswith('Use DSS='):
+                use_dss_idx = i
+
+            i += 1
+
+        # Step 1: Remove old inline data (if any)
+        lines_removed = 0
+        if old_data_start is not None and old_data_end is not None and old_data_end > old_data_start:
+            del lines[old_data_start:old_data_end]
+            lines_removed = old_data_end - old_data_start
+            # Adjust indices
+            for attr in ['interval_idx', 'dss_file_idx', 'dss_path_idx', 'use_dss_idx']:
+                val = locals().get(attr)
+                if val is not None and val > old_data_start:
+                    locals()[attr] = val - lines_removed
+            # Re-read adjusted indices from locals
+            if interval_idx is not None and interval_idx > old_data_start:
+                interval_idx -= lines_removed
+            if dss_file_idx is not None and dss_file_idx > old_data_start:
+                dss_file_idx -= lines_removed
+            if dss_path_idx is not None and dss_path_idx > old_data_start:
+                dss_path_idx -= lines_removed
+            if use_dss_idx is not None and use_dss_idx > old_data_start:
+                use_dss_idx -= lines_removed
+
+        # Step 2: Update table header with new count
+        if table_header_idx is not None:
+            lines[table_header_idx] = f'{table_keyword} {num_values} \n'
+        else:
+            # Insert table header after Interval line (or after boundary location)
+            insert_pos = interval_idx + 1 if interval_idx is not None else target_boundary_idx + 1
+            lines.insert(insert_pos, f'{table_keyword} {num_values} \n')
+            table_header_idx = insert_pos
+            # Adjust indices after insertion
+            if interval_idx is not None and interval_idx >= insert_pos:
+                interval_idx += 1
+            if dss_file_idx is not None and dss_file_idx >= insert_pos:
+                dss_file_idx += 1
+            if dss_path_idx is not None and dss_path_idx >= insert_pos:
+                dss_path_idx += 1
+            if use_dss_idx is not None and use_dss_idx >= insert_pos:
+                use_dss_idx += 1
+
+        # Step 3: Insert new inline data right after table header
+        insert_pos = table_header_idx + 1
+        for j, data_line in enumerate(formatted_lines):
+            lines.insert(insert_pos + j, data_line)
+        lines_inserted = len(formatted_lines)
+
+        # Adjust indices for inserted lines
+        if interval_idx is not None and interval_idx >= insert_pos:
+            interval_idx += lines_inserted
+        if dss_file_idx is not None and dss_file_idx >= insert_pos:
+            dss_file_idx += lines_inserted
+        if dss_path_idx is not None and dss_path_idx >= insert_pos:
+            dss_path_idx += lines_inserted
+        if use_dss_idx is not None and use_dss_idx >= insert_pos:
+            use_dss_idx += lines_inserted
+
+        # Step 4: Update Interval line
+        if interval_idx is not None:
+            lines[interval_idx] = f'Interval={interval_str}\n'
+        else:
+            # Insert interval before table header
+            lines.insert(table_header_idx, f'Interval={interval_str}\n')
+            # Adjust all indices after this insertion
+            if dss_file_idx is not None and dss_file_idx >= table_header_idx:
+                dss_file_idx += 1
+            if dss_path_idx is not None and dss_path_idx >= table_header_idx:
+                dss_path_idx += 1
+            if use_dss_idx is not None and use_dss_idx >= table_header_idx:
+                use_dss_idx += 1
+
+        # Step 5: Set Use DSS=False and clear DSS File/Path
+        if use_dss_idx is not None:
+            lines[use_dss_idx] = 'Use DSS=False\n'
+        if dss_file_idx is not None:
+            lines[dss_file_idx] = 'DSS File=\n'
+        if dss_path_idx is not None:
+            lines[dss_path_idx] = 'DSS Path=\n'
+
+        # Write updated content back to file
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        peak_value = float(np.max(values))
+        logger.info(
+            f"Updated {bc_type} inline hydrograph in {unsteady_path.name}: "
+            f"{num_values} values, interval={interval_str}, "
+            f"peak={peak_value:.2f}"
+        )
         return True
 
     @staticmethod
@@ -2030,3 +2458,400 @@ class RasUnsteady:
 
         logger.info(f"Found {len(subbasins)} unique HMS subbasins in DSS paths")
         return subbasins
+
+    @staticmethod
+    @log_call
+    def update_dss_path_by_station(
+        unsteady_file: Union[str, Path],
+        river_station: str,
+        new_a_part: str,
+        old_a_part: str = None,
+        ras_object: Optional[Any] = None
+    ) -> int:
+        """
+        Update the DSS Path A-part for boundary conditions at a specific river station.
+
+        This function modifies the DSS Path values in a .u## file, changing the
+        A-part (first segment) from one value to another. Useful for mapping HMS
+        subbasins to different DSS outputs.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        river_station : str
+            River station identifier (partial match supported)
+        new_a_part : str
+            New A-part value (e.g., "A120A")
+        old_a_part : str, optional
+            Only replace if current A-part matches this value. If None, replaces
+            regardless of current value.
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        int
+            Number of DSS paths updated
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> # Update A-part for boundary at specific station
+        >>> count = RasUnsteady.update_dss_path_by_station(
+        ...     "project.u02",
+        ...     river_station="23280.75",
+        ...     old_a_part="A1200000_2347_J",
+        ...     new_a_part="A120A"
+        ... )
+        >>> print(f"Updated {count} DSS paths")
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        update_count = 0
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Find matching Boundary Location
+            if line.startswith('Boundary Location=') and river_station in line:
+                # Look for DSS Path within this boundary block (search forward)
+                j = i + 1
+                while j < len(lines) and j < i + 50:
+                    if lines[j].startswith('Boundary Location='):
+                        break  # Next boundary block
+                    if lines[j].startswith('DSS Path='):
+                        dss_path = lines[j].replace('DSS Path=', '').strip()
+                        # Parse current A-part
+                        clean_path = dss_path.strip('/')
+                        parts = clean_path.split('/')
+                        if len(parts) >= 1:
+                            current_a_part = parts[0]
+                            # Check if we should update (old_a_part matches or not specified)
+                            if old_a_part is None or current_a_part == old_a_part:
+                                # Build new path with new A-part
+                                parts[0] = new_a_part
+                                new_dss_path = '//' + '/'.join(parts) + '/'
+                                lines[j] = f'DSS Path={new_dss_path}\n'
+                                update_count += 1
+                                logger.debug(f"Updated DSS Path at line {j+1}: A-part '{current_a_part}' -> '{new_a_part}'")
+                        break
+                    j += 1
+            i += 1
+
+        if update_count > 0:
+            with open(unsteady_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"Updated {update_count} DSS paths in {unsteady_path.name}")
+        else:
+            if old_a_part:
+                logger.warning(f"No DSS paths found for station '{river_station}' with A-part '{old_a_part}'")
+            else:
+                logger.warning(f"No DSS paths found for station '{river_station}'")
+
+        return update_count
+
+    @staticmethod
+    @log_call
+    def update_flow_multiplier_by_station(
+        unsteady_file: Union[str, Path],
+        river_station: str,
+        new_multiplier: float,
+        ras_object: Optional[Any] = None
+    ) -> bool:
+        """
+        Update or insert Flow Hydrograph QMult for boundary at specific river station.
+
+        If the `Flow Hydrograph QMult=` line exists, it will be updated. If it doesn't
+        exist, it will be inserted after the Flow Hydrograph line.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        river_station : str
+            River station identifier (partial match supported)
+        new_multiplier : float
+            New multiplier value (e.g., 0.5, 1.0)
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        bool
+            True if multiplier was updated/inserted, False if boundary not found
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> # Set flow multiplier to 0.75 for specific boundary
+        >>> success = RasUnsteady.update_flow_multiplier_by_station(
+        ...     "project.u02",
+        ...     river_station="5714.48",
+        ...     new_multiplier=0.75
+        ... )
+        >>> if success:
+        ...     print("Multiplier updated successfully")
+
+        Notes
+        -----
+        The QMult line appears in unsteady files as:
+            Flow Hydrograph QMult= 0.5
+
+        If this line doesn't exist, it will be inserted after the Flow Hydrograph line
+        in the boundary block.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        updated = False
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Find matching Boundary Location
+            if line.startswith('Boundary Location=') and river_station in line:
+                boundary_idx = i
+                qmult_idx = None
+                flow_hydro_idx = None
+                block_end_idx = None
+
+                # Scan the boundary block
+                j = i + 1
+                while j < len(lines) and j < i + 50:
+                    current_line = lines[j]
+                    if current_line.startswith('Boundary Location='):
+                        block_end_idx = j
+                        break
+                    if current_line.startswith('Flow Hydrograph QMult='):
+                        qmult_idx = j
+                    if current_line.startswith('Flow Hydrograph='):
+                        flow_hydro_idx = j
+                    j += 1
+
+                if block_end_idx is None:
+                    block_end_idx = len(lines)
+
+                # Format the new QMult line
+                qmult_line = f'Flow Hydrograph QMult= {new_multiplier}\n'
+
+                if qmult_idx is not None:
+                    # Update existing line
+                    old_value = lines[qmult_idx].replace('Flow Hydrograph QMult=', '').strip()
+                    lines[qmult_idx] = qmult_line
+                    logger.debug(f"Updated QMult at line {qmult_idx+1}: {old_value} -> {new_multiplier}")
+                    updated = True
+                elif flow_hydro_idx is not None:
+                    # Insert after Flow Hydrograph line (skip the data values first)
+                    # Find the end of hydrograph data by looking for next key=value line
+                    insert_idx = flow_hydro_idx + 1
+                    while insert_idx < block_end_idx:
+                        test_line = lines[insert_idx].strip()
+                        if '=' in test_line and not test_line[0].isdigit():
+                            break
+                        insert_idx += 1
+                    lines.insert(insert_idx, qmult_line)
+                    logger.debug(f"Inserted QMult at line {insert_idx+1}: {new_multiplier}")
+                    updated = True
+                else:
+                    # No Flow Hydrograph found, insert after Boundary Location
+                    lines.insert(boundary_idx + 1, qmult_line)
+                    logger.debug(f"Inserted QMult at line {boundary_idx+2}: {new_multiplier}")
+                    updated = True
+
+                break  # Found and processed the matching boundary
+            i += 1
+
+        if updated:
+            with open(unsteady_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"Updated QMult to {new_multiplier} for station '{river_station}' in {unsteady_path.name}")
+        else:
+            logger.warning(f"Boundary not found for station '{river_station}'")
+
+        return updated
+
+    @staticmethod
+    @log_call
+    def update_boundary_dss_paths(
+        unsteady_file: Union[str, Path],
+        updates: List[Dict[str, Any]],
+        ras_object: Optional[Any] = None
+    ) -> int:
+        """
+        Apply multiple DSS path and multiplier updates to boundary conditions.
+
+        This batch method processes multiple updates in a single file read/write
+        cycle for efficiency. Each update can specify any combination of A-part
+        change and/or multiplier change.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##)
+        updates : List[Dict[str, Any]]
+            List of update dictionaries. Each dict can contain:
+            - river_station: str (required) - partial match supported
+            - new_a_part: str (optional) - new DSS A-part value
+            - old_a_part: str (optional) - only replace if current A-part matches
+            - new_multiplier: float (optional) - new QMult value
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        int
+            Total number of updates applied
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> updates = [
+        ...     {'river_station': '23280.75', 'old_a_part': 'A1200000_2347_J', 'new_a_part': 'A120A'},
+        ...     {'river_station': '12727.63', 'old_a_part': 'A120D1', 'new_a_part': 'A120C'},
+        ...     {'river_station': '5714.48', 'new_multiplier': 0.75},
+        ...     {'river_station': '29113.3', 'new_a_part': 'A120B', 'new_multiplier': 0.5},
+        ... ]
+        >>> count = RasUnsteady.update_boundary_dss_paths("project.u02", updates)
+        >>> print(f"Applied {count} updates")
+
+        Notes
+        -----
+        This method reads the file once, applies all updates in memory, and writes
+        once. This is more efficient than calling individual update methods for
+        each boundary, especially when updating many boundaries.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except:
+                pass
+
+        if not updates:
+            logger.warning("No updates provided")
+            return 0
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        total_updates = 0
+
+        for update in updates:
+            river_station = update.get('river_station')
+            if not river_station:
+                logger.warning("Update missing 'river_station' key, skipping")
+                continue
+
+            new_a_part = update.get('new_a_part')
+            old_a_part = update.get('old_a_part')
+            new_multiplier = update.get('new_multiplier')
+
+            # Find the boundary block
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                if line.startswith('Boundary Location=') and river_station in line:
+                    boundary_idx = i
+                    block_end_idx = None
+                    dss_path_idx = None
+                    qmult_idx = None
+                    flow_hydro_idx = None
+
+                    # Scan the boundary block
+                    j = i + 1
+                    while j < len(lines) and j < i + 50:
+                        current_line = lines[j]
+                        if current_line.startswith('Boundary Location='):
+                            block_end_idx = j
+                            break
+                        if current_line.startswith('DSS Path='):
+                            dss_path_idx = j
+                        if current_line.startswith('Flow Hydrograph QMult='):
+                            qmult_idx = j
+                        if current_line.startswith('Flow Hydrograph='):
+                            flow_hydro_idx = j
+                        j += 1
+
+                    if block_end_idx is None:
+                        block_end_idx = len(lines)
+
+                    # Update DSS A-part if requested
+                    if new_a_part and dss_path_idx is not None:
+                        dss_path = lines[dss_path_idx].replace('DSS Path=', '').strip()
+                        clean_path = dss_path.strip('/')
+                        parts = clean_path.split('/')
+                        if len(parts) >= 1:
+                            current_a_part = parts[0]
+                            if old_a_part is None or current_a_part == old_a_part:
+                                parts[0] = new_a_part
+                                new_dss_path = '//' + '/'.join(parts) + '/'
+                                lines[dss_path_idx] = f'DSS Path={new_dss_path}\n'
+                                total_updates += 1
+                                logger.debug(f"Updated A-part for station '{river_station}': '{current_a_part}' -> '{new_a_part}'")
+
+                    # Update/insert QMult if requested
+                    if new_multiplier is not None:
+                        qmult_line = f'Flow Hydrograph QMult= {new_multiplier}\n'
+
+                        if qmult_idx is not None:
+                            lines[qmult_idx] = qmult_line
+                            total_updates += 1
+                            logger.debug(f"Updated QMult for station '{river_station}': {new_multiplier}")
+                        elif flow_hydro_idx is not None:
+                            # Find insertion point after hydrograph data
+                            insert_idx = flow_hydro_idx + 1
+                            while insert_idx < block_end_idx:
+                                test_line = lines[insert_idx].strip()
+                                if '=' in test_line and not test_line[0].isdigit():
+                                    break
+                                insert_idx += 1
+                            lines.insert(insert_idx, qmult_line)
+                            # Adjust indices for subsequent operations
+                            block_end_idx += 1
+                            total_updates += 1
+                            logger.debug(f"Inserted QMult for station '{river_station}': {new_multiplier}")
+                        else:
+                            lines.insert(boundary_idx + 1, qmult_line)
+                            total_updates += 1
+                            logger.debug(f"Inserted QMult for station '{river_station}': {new_multiplier}")
+
+                    break  # Found and processed this station
+                i += 1
+
+        if total_updates > 0:
+            with open(unsteady_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"Applied {total_updates} updates to {unsteady_path.name}")
+        else:
+            logger.warning("No matching boundaries found for any updates")
+
+        return total_updates
