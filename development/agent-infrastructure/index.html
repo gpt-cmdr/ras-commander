@@ -5823,37 +5823,37 @@
 <td><strong>hdf-analyst</strong></td>
 <td>Sonnet</td>
 <td>HDF file analysis</td>
-<td>extracting-hecras-results</td>
+<td>hecras_extract_results</td>
 </tr>
 <tr>
 <td><strong>geometry-parser</strong></td>
 <td>Sonnet</td>
 <td>Geometry file parsing</td>
-<td>parsing-hecras-geometry</td>
+<td>hecras_parse_geometry</td>
 </tr>
 <tr>
 <td><strong>usgs-integrator</strong></td>
 <td>Sonnet</td>
 <td>USGS gauge data</td>
-<td>integrating-usgs-gauges</td>
+<td>usgs_integrate_gauges</td>
 </tr>
 <tr>
 <td><strong>precipitation-specialist</strong></td>
 <td>Sonnet</td>
 <td>AORC &amp; Atlas 14</td>
-<td>analyzing-aorc-precipitation</td>
+<td>precip_analyze_aorc</td>
 </tr>
 <tr>
 <td><strong>quality-assurance</strong></td>
 <td>Sonnet</td>
 <td>RasFixit validation</td>
-<td>repairing-geometry-issues</td>
+<td>qa_repair_geometry</td>
 </tr>
 <tr>
 <td><strong>remote-executor</strong></td>
 <td>Sonnet</td>
 <td>Distributed execution</td>
-<td>executing-remote-plans</td>
+<td>hecras_compute_remote</td>
 </tr>
 <tr>
 <td><strong>documentation-generator</strong></td>
@@ -5865,7 +5865,7 @@
 <td><strong>git-operations</strong></td>
 <td>Haiku</td>
 <td>Version control</td>
-<td>using-git-worktrees</td>
+<td>dev_manage_git-worktrees</td>
 </tr>
 <tr>
 <td><strong>hierarchical-knowledge-curator</strong></td>
@@ -5886,7 +5886,7 @@
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="no">processing model results.</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sonnet</span>
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nt">tools</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Grep</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Bash</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Write</span><span class="p p-Indicator">]</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nt">skills</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">extracting-hecras-results</span><span class="p p-Indicator">]</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nt">skills</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">hecras_extract_results</span><span class="p p-Indicator">]</span>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="nt">working_directory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ras_commander/hdf</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="nn">---</span>
 </span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
@@ -5898,11 +5898,11 @@
 <p>The main agent uses this logic to spawn subagents:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>User Request
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├─ HDF result extraction? → hdf-analyst (Sonnet)
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│   └─ Uses: extracting-hecras-results skill
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│   └─ Uses: hecras_extract_results skill
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>├─ Geometry file parsing? → geometry-parser (Sonnet)
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│   └─ Uses: parsing-hecras-geometry skill
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│   └─ Uses: hecras_parse_geometry skill
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>├─ USGS data integration? → usgs-integrator (Sonnet)
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>│   └─ Uses: integrating-usgs-gauges skill
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>│   └─ Uses: usgs_integrate_gauges skill
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>├─ Simple file read/grep? → quick-reader (Haiku)
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>│   └─ Fast, cost-effective
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>└─ Complex orchestration? → Handle directly (Opus)
@@ -5925,7 +5925,7 @@
 <td><strong>Library Skills</strong></td>
 <td><code>.claude/skills/</code></td>
 <td>How to use ras-commander</td>
-<td><code>executing-hecras-plans</code></td>
+<td><code>hecras_compute_plans</code></td>
 </tr>
 <tr>
 <td><strong>Domain Skills</strong></td>
@@ -5937,20 +5937,20 @@
 </table>
 <h3 id="implemented-library-skills">Implemented Library Skills<a class="headerlink" href="#implemented-library-skills" title="Permanent link">&para;</a></h3>
 <p><strong>Core Operations:</strong>
-1. <strong>executing-hecras-plans</strong> - RasCmdr.compute_plan(), parallel execution
-2. <strong>extracting-hecras-results</strong> - HdfResultsPlan API, steady vs unsteady
-3. <strong>parsing-hecras-geometry</strong> - RasGeometry, fixed-width parsing</p>
+1. <strong>hecras_compute_plans</strong> - RasCmdr.compute_plan(), parallel execution
+2. <strong>hecras_extract_results</strong> - HdfResultsPlan API, steady vs unsteady
+3. <strong>hecras_parse_geometry</strong> - RasGeometry, fixed-width parsing</p>
 <p><strong>Advanced Features:</strong>
-4. <strong>integrating-usgs-gauges</strong> - Complete USGS workflow
-5. <strong>analyzing-aorc-precipitation</strong> - AORC grid extraction
-6. <strong>repairing-geometry-issues</strong> - RasFixit validation loops</p>
+4. <strong>usgs_integrate_gauges</strong> - Complete USGS workflow
+5. <strong>precip_analyze_aorc</strong> - AORC grid extraction
+6. <strong>qa_repair_geometry</strong> - RasFixit validation loops</p>
 <p><strong>Specialized:</strong>
-7. <strong>executing-remote-plans</strong> - PsExec, Docker, SSH workers
-8. <strong>reading-dss-boundary-data</strong> - RasDss API, HEC-DSS files
-9. <strong>using-git-worktrees</strong> - Isolated development environments</p>
+7. <strong>hecras_compute_remote</strong> - PsExec, Docker, SSH workers
+8. <strong>dss_read_boundary-data</strong> - RasDss API, HEC-DSS files
+9. <strong>dev_manage_git-worktrees</strong> - Isolated development environments</p>
 <h3 id="skill-structure">Skill Structure<a class="headerlink" href="#skill-structure" title="Permanent link">&para;</a></h3>
 <p>Each skill uses progressive disclosure:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>executing-hecras-plans/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>hecras_compute_plans/
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>├── SKILL.md              # Main instructions (&lt; 500 lines)
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>├── reference/            # Detailed docs (loaded on-demand)
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>│   ├── compute_plan.md
@@ -5966,7 +5966,7 @@
 <h3 id="skill-discovery">Skill Discovery<a class="headerlink" href="#skill-discovery" title="Permanent link">&para;</a></h3>
 <p>Skills are discovered through <strong>trigger-rich descriptions</strong> in YAML frontmatter:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nn">---</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">executing-hecras-plans</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hecras_compute_plans</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="no">Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="no">execution across multiple plans, and manages destination folders. Use when</span>
@@ -6275,7 +6275,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 14, 2025 11:43:52 UTC">December 14, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 31, 2026 01:38:48 UTC">January 31, 2026</span>
   </span>
 
     
