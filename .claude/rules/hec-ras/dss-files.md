@@ -89,7 +89,7 @@ report = RasDss.check_pathname(dss_file, pathname)
 - **Complete Documentation**: `ras_commander/dss/AGENTS.md`
 - **Validation Patterns**: `.claude/rules/validation/validation-patterns.md`
 - **Example Notebook**: `examples/310_dss_boundary_extraction.ipynb`
-- **Skill**: `.claude/skills/reading-dss-boundary-data/SKILL.md`
+- **Skill**: `.claude/skills/dss_read_boundary-data/SKILL.md`
 
 ---
 

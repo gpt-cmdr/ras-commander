@@ -196,7 +196,7 @@ except requests.ConnectionError:
   - `examples/720_atlas14_aep_events.ipynb` - Atlas 14 workflow
   - `examples/722_atlas14_multi_project.ipynb` - Batch processing
   - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis
-- **Skill**: `.claude/skills/analyzing-aorc-precipitation/SKILL.md`
+- **Skill**: `.claude/skills/precip_analyze_aorc/SKILL.md`
 
 ---
 

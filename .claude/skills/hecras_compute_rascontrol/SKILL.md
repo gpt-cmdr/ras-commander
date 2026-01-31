@@ -1,5 +1,5 @@
 ---
-name: executing-hecras-rascontrol
+name: hecras_compute_rascontrol
 description: |
   Executes HEC-RAS plans using RasControl class via HECRASController COM interface
   for legacy HEC-RAS versions (3.x-5.x). Handles COM lifecycle management, session
@@ -382,8 +382,8 @@ wse = hdf.get_steady_wse()
 - **examples/121_legacy_hecrascontroller_and_rascontrol.ipynb** - Full workflow examples
 
 ### Related Skills
-- **executing-hecras-plans** - Modern RasCmdr execution (HEC-RAS 6.x+)
-- **extracting-hecras-results** - HDF-based result extraction
+- **hecras_compute_plans** - Modern RasCmdr execution (HEC-RAS 6.x+)
+- **hecras_extract_results** - HDF-based result extraction
 
 ### Related Rules
 - `.claude/rules/hec-ras/execution.md` - Execution mode comparison

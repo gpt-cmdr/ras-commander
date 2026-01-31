@@ -142,7 +142,7 @@ description: |
   processing model results.
 model: sonnet
 tools: Read, Grep, Bash, Write
-skills: extracting-hecras-results
+skills: hecras_extract_results
 working_directory: ras_commander/hdf
 ---
 
@@ -167,7 +167,7 @@ When working in `ras_commander/hdf/`, you automatically inherit:
 
 ## Available Skills
 
-You have access to the `extracting-hecras-results` skill which provides:
+You have access to the `hecras_extract_results` skill which provides:
 - Complete API reference
 - Steady vs unsteady detection patterns
 - Example workflows
@@ -357,13 +357,13 @@ User Request
 ├─ Project analysis/inspection? → hecras-project-inspector (Sonnet)
 │   └─ Uses: DataFrame analysis, execution readiness
 ├─ Results interpretation? → hecras-results-analyst (Sonnet)
-│   └─ Uses: parsing-compute-messages, extracting-hecras-results skills
+│   └─ Uses: hecras_parse_compute-messages, hecras_extract_results skills
 ├─ HDF data extraction? → hdf-analyst (Sonnet)
-│   └─ Uses: extracting-hecras-results skill
+│   └─ Uses: hecras_extract_results skill
 ├─ Geometry file parsing? → geometry-parser (Sonnet)
-│   └─ Uses: parsing-hecras-geometry skill
+│   └─ Uses: hecras_parse_geometry skill
 ├─ USGS data integration? → usgs-integrator (Sonnet)
-│   └─ Uses: integrating-usgs-gauges skill
+│   └─ Uses: usgs_integrate_gauges skill
 ├─ Simple file read/grep? → quick-reader (Haiku)
 │   └─ Fast, cost-effective
 └─ Complex orchestration? → Handle directly (Opus)

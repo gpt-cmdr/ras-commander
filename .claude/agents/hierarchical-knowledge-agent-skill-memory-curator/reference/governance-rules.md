@@ -108,7 +108,7 @@ Level 3 (ras_commander/hdf/CLAUDE.md):
 Level 4 (.claude/rules/hec-ras/hdf-files.md):
   [Complete API reference, code examples, edge cases]
   ↓
-Level 5 (.claude/skills/extracting-hecras-results/reference/api.md):
+Level 5 (.claude/skills/hecras_extract_results/reference/api.md):
   [Exhaustive documentation, all parameters, all methods]
 ```
 
@@ -143,8 +143,8 @@ Create a library skill when:
 ✅ **Reusable pattern** applies to many projects
 
 **Examples**:
-- ✅ "executing-hecras-plans" - RasCmdr workflow with parallel execution
-- ✅ "integrating-usgs-gauges" - Complete USGS workflow across 4 modules
+- ✅ "hecras_compute_plans" - RasCmdr workflow with parallel execution
+- ✅ "usgs_integrate_gauges" - Complete USGS workflow across 4 modules
 - ❌ "reading-one-file" - Too trivial, not a workflow
 
 ### When to Create a Domain Skill (ras_skills/)
@@ -166,11 +166,11 @@ Create a domain skill when:
 **Pattern**: Gerund form (verb + -ing)
 
 ✅ **Good Examples**:
-- `executing-hecras-plans`
+- `hecras_compute_plans`
 - `extracting-results`
-- `integrating-usgs-gauges`
+- `usgs_integrate_gauges`
 - `parsing-geometry-files`
-- `repairing-geometry-issues`
+- `qa_repair_geometry`
 
 ❌ **Bad Examples**:
 - `plan-executor` (noun form)

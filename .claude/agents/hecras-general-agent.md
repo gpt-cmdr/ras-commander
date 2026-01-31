@@ -33,7 +33,7 @@ Lightweight orchestrator that dispatches to specialist agents and skills, then a
 
 **This agent does NOT:**
 - Reinvent inspection logic (dispatches to hecras-project-inspector)
-- Make complex execution decisions (relies on planning-hecras-execution skill)
+- Make complex execution decisions (relies on hecras_plan_execution skill)
 - Handle error recovery directly (reports errors, lets user decide)
 - Directly call HDF extraction (dispatches to specialists if needed)
 
@@ -78,12 +78,12 @@ Task(
 
 | Skill | Purpose | When to Use |
 |-------|---------|-------------|
-| `planning-hecras-execution` | Execution strategy | After inspection, before execution |
-| `executing-hecras-plans` | Modern HEC-RAS 6.x execution | Production execution |
-| `executing-hecras-rascontrol` | Legacy HEC-RAS 3.x-5.x | Version < 6.0 |
-| `executing-remote-plans` | Distributed execution | Multiple machines available |
-| `parsing-compute-messages` | Compute output analysis | When diagnosing execution |
-| `extracting-hecras-results` | HDF results extraction | Post-execution data |
+| `hecras_plan_execution` | Execution strategy | After inspection, before execution |
+| `hecras_compute_plans` | Modern HEC-RAS 6.x execution | Production execution |
+| `hecras_compute_rascontrol` | Legacy HEC-RAS 3.x-5.x | Version < 6.0 |
+| `hecras_compute_remote` | Distributed execution | Multiple machines available |
+| `hecras_parse_compute-messages` | Compute output analysis | When diagnosing execution |
+| `hecras_extract_results` | HDF results extraction | Post-execution data |
 
 ---
 
@@ -95,14 +95,14 @@ Task(
 1. INSPECT: Dispatch to hecras-project-inspector
    Output: Project Intelligence Report
 
-2. PLAN: Dispatch to planning-hecras-execution skill
+2. PLAN: Dispatch to hecras_plan_execution skill
    Input: Project Intelligence Report
    Output: Execution Plan with mode selection
 
 3. EXECUTE: Dispatch to appropriate execution skill
-   - executing-hecras-plans (HEC-RAS 6.x)
-   - executing-hecras-rascontrol (HEC-RAS < 6.0)
-   - executing-remote-plans (distributed)
+   - hecras_compute_plans (HEC-RAS 6.x)
+   - hecras_compute_rascontrol (HEC-RAS < 6.0)
+   - hecras_compute_remote (distributed)
    Output: Execution results
 
 4. ANALYZE: Dispatch to hecras-results-analyst
@@ -267,7 +267,7 @@ Task(
    - Blocked plans
    - HEC-RAS version
 
-3. Dispatch: planning-hecras-execution skill
+3. Dispatch: hecras_plan_execution skill
    Provide inspector output as context
 
 4. Read plan output, extract:
@@ -459,7 +459,7 @@ For large projects spanning multiple sessions:
 - Runnable vs blocked plans
 - Execution readiness assessment
 
-### planning-hecras-execution
+### hecras_plan_execution
 
 **Input**: Project Intelligence Report
 **Output**: Execution Plan with:
@@ -468,7 +468,7 @@ For large projects spanning multiple sessions:
 - Plan execution order
 - Blocker resolution steps
 
-### executing-hecras-plans
+### hecras_compute_plans
 
 **Input**: Plan list, parameters
 **Output**: Execution status for each plan
@@ -489,9 +489,9 @@ For large projects spanning multiple sessions:
 
 - **`.claude/agents/hecras-project-inspector.md`** - Project analysis specialist
 - **`.claude/agents/hecras-results-analyst.md`** - Results interpretation specialist
-- **`.claude/skills/planning-hecras-execution/SKILL.md`** - Execution planning
-- **`.claude/skills/executing-hecras-plans/SKILL.md`** - Modern execution
-- **`.claude/skills/executing-hecras-rascontrol/SKILL.md`** - Legacy execution
-- **`.claude/skills/parsing-compute-messages/SKILL.md`** - Message parsing
+- **`.claude/skills/hecras_plan_execution/SKILL.md`** - Execution planning
+- **`.claude/skills/hecras_compute_plans/SKILL.md`** - Modern execution
+- **`.claude/skills/hecras_compute_rascontrol/SKILL.md`** - Legacy execution
+- **`.claude/skills/hecras_parse_compute-messages/SKILL.md`** - Message parsing
 - **`.claude/rules/hec-ras/execution.md`** - Execution patterns
 - **`agent_tasks/README.md`** - Memory system documentation

@@ -375,11 +375,11 @@ Skills are automatically invoked based on trigger phrases in your prompts:
 
 | Phrase | Skill |
 |--------|-------|
-| "Execute HEC-RAS plan" | `executing-hecras-plans` |
-| "Extract HDF results" | `extracting-hecras-results` |
-| "Parse geometry file" | `parsing-hecras-geometry` |
-| "Integrate USGS data" | `integrating-usgs-gauges` |
-| "Repair geometry issues" | `repairing-geometry-issues` |
+| "Execute HEC-RAS plan" | `hecras_compute_plans` |
+| "Extract HDF results" | `hecras_extract_results` |
+| "Parse geometry file" | `hecras_parse_geometry` |
+| "Integrate USGS data" | `usgs_integrate_gauges` |
+| "Repair geometry issues" | `qa_repair_geometry` |
 
 ### Manual Invocation
 

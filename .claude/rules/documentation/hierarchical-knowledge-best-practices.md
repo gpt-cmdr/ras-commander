@@ -300,7 +300,7 @@ Primary Sources:
 ❌ **Wrong**: Duplicating step-by-step workflows from CLAUDE.md
 
 ```
-.claude/skills/integrating-usgs-gauges/reference/workflow.md (631 lines)
+.claude/skills/usgs_integrate_gauges/reference/workflow.md (631 lines)
 1. Spatial Discovery
    - Use UsgsGaugeSpatial.find_gauges_in_project()
    - Parameters: project_folder, buffer_miles
@@ -311,7 +311,7 @@ Primary Sources:
 ✅ **Right**: Brief overview with pointer to complete workflow
 
 ```
-.claude/skills/integrating-usgs-gauges/SKILL.md (282 lines)
+.claude/skills/usgs_integrate_gauges/SKILL.md (282 lines)
 Common Workflows:
 1. Spatial Discovery → See usgs/CLAUDE.md lines 45-78
 2. Data Retrieval → See usgs/CLAUDE.md lines 80-120
@@ -323,7 +323,7 @@ Common Workflows:
 ❌ **Wrong**: Creating example scripts that duplicate notebook content
 
 ```
-.claude/skills/reading-dss-boundary-data/examples/read-catalog.py (120 lines)
+.claude/skills/dss_read_boundary-data/examples/read-catalog.py (120 lines)
 # Complete workflow duplicating examples/310_dss_boundary_extraction.ipynb
 from ras_commander import RasDss, RasExamples
 path = RasExamples.extract_project("BaldEagleCrkMulti2D")
@@ -333,7 +333,7 @@ path = RasExamples.extract_project("BaldEagleCrkMulti2D")
 ✅ **Right**: Point to existing notebook
 
 ```
-.claude/skills/reading-dss-boundary-data/SKILL.md (322 lines)
+.claude/skills/dss_read_boundary-data/SKILL.md (322 lines)
 Working Examples:
 - examples/310_dss_boundary_extraction.ipynb - Complete workflow with:
   - Project extraction
@@ -357,8 +357,8 @@ Working Examples:
 1. Update `ras_commander/usgs/CLAUDE.md`
 2. Update `.claude/agents/usgs-integrator/SUBAGENT.md`
 3. Update `.claude/agents/usgs-integrator/reference/end-to-end.md`
-4. Update `.claude/skills/integrating-usgs-gauges/SKILL.md`
-5. Update `.claude/skills/integrating-usgs-gauges/reference/workflow.md`
+4. Update `.claude/skills/usgs_integrate_gauges/SKILL.md`
+5. Update `.claude/skills/usgs_integrate_gauges/reference/workflow.md`
 6. Risk: Miss one location → version drift
 
 ### When Adding New Functionality

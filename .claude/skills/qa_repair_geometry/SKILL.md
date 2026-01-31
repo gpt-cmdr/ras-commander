@@ -1,5 +1,5 @@
 ---
-name: repairing-geometry-issues
+name: qa_repair_geometry
 description: |
   Automated geometry repair using RasFixit and quality validation using RasCheck.
   Handles blocked obstructions, generates before/after visualizations, and

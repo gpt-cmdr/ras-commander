@@ -1,5 +1,5 @@
 ---
-name: executing-hecras-plans
+name: hecras_compute_plans
 description: |
   Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel
   execution across multiple plans, manages destination folders, and monitors
@@ -203,12 +203,12 @@ RasCmdr.compute_parallel(
 ### Chaining with Other Skills
 
 **Execution typically follows these upstream skills**:
-- `parsing-hecras-geometry` → After geometry modifications
-- `reading-dss-boundary-data` → After validating boundary conditions
-- `integrating-usgs-gauges` → After setting up gauge-based boundaries
+- `hecras_parse_geometry` → After geometry modifications
+- `dss_read_boundary-data` → After validating boundary conditions
+- `usgs_integrate_gauges` → After setting up gauge-based boundaries
 
 **Execution typically precedes these downstream skills**:
-- `extracting-hecras-results` → Parse HDF outputs
+- `hecras_extract_results` → Parse HDF outputs
 - Results visualization → Generate plots and maps
 - Validation workflows → Compare to observed data
 

@@ -112,14 +112,14 @@ Task Subagents (Claude Haiku)
 | Subagent | Model | Domain | Skills |
 |----------|-------|--------|--------|
 | **claude-code-guide** | Haiku | Claude Code best practices | - |
-| **hdf-analyst** | Sonnet | HDF file analysis | extracting-hecras-results |
-| **geometry-parser** | Sonnet | Geometry file parsing | parsing-hecras-geometry |
-| **usgs-integrator** | Sonnet | USGS gauge data | integrating-usgs-gauges |
-| **precipitation-specialist** | Sonnet | AORC & Atlas 14 | analyzing-aorc-precipitation |
-| **quality-assurance** | Sonnet | RasFixit validation | repairing-geometry-issues |
-| **remote-executor** | Sonnet | Distributed execution | executing-remote-plans |
+| **hdf-analyst** | Sonnet | HDF file analysis | hecras_extract_results |
+| **geometry-parser** | Sonnet | Geometry file parsing | hecras_parse_geometry |
+| **usgs-integrator** | Sonnet | USGS gauge data | usgs_integrate_gauges |
+| **precipitation-specialist** | Sonnet | AORC & Atlas 14 | precip_analyze_aorc |
+| **quality-assurance** | Sonnet | RasFixit validation | qa_repair_geometry |
+| **remote-executor** | Sonnet | Distributed execution | hecras_compute_remote |
 | **documentation-generator** | Sonnet | Notebooks & API docs | - |
-| **git-operations** | Haiku | Version control | using-git-worktrees |
+| **git-operations** | Haiku | Version control | dev_manage_git-worktrees |
 | **hierarchical-knowledge-curator** | Haiku | Memory system curation | - |
 
 ### Subagent Definition Format
@@ -136,7 +136,7 @@ description: |
   processing model results.
 model: sonnet
 tools: [Read, Grep, Bash, Write]
-skills: [extracting-hecras-results]
+skills: [hecras_extract_results]
 working_directory: ras_commander/hdf
 ---
 
@@ -152,11 +152,11 @@ The main agent uses this logic to spawn subagents:
 ```
 User Request
 ├─ HDF result extraction? → hdf-analyst (Sonnet)
-│   └─ Uses: extracting-hecras-results skill
+│   └─ Uses: hecras_extract_results skill
 ├─ Geometry file parsing? → geometry-parser (Sonnet)
-│   └─ Uses: parsing-hecras-geometry skill
+│   └─ Uses: hecras_parse_geometry skill
 ├─ USGS data integration? → usgs-integrator (Sonnet)
-│   └─ Uses: integrating-usgs-gauges skill
+│   └─ Uses: usgs_integrate_gauges skill
 ├─ Simple file read/grep? → quick-reader (Haiku)
 │   └─ Fast, cost-effective
 └─ Complex orchestration? → Handle directly (Opus)
@@ -171,32 +171,32 @@ Skills are reusable workflow patterns that both agents and subagents can invoke.
 
 | Type | Location | Purpose | Example |
 |------|----------|---------|---------|
-| **Library Skills** | `.claude/skills/` | How to use ras-commander | `executing-hecras-plans` |
+| **Library Skills** | `.claude/skills/` | How to use ras-commander | `hecras_compute_plans` |
 | **Domain Skills** | `ras_skills/` | Production automation | `historical-flood-reconstruction` |
 
 ### Implemented Library Skills
 
 **Core Operations:**
-1. **executing-hecras-plans** - RasCmdr.compute_plan(), parallel execution
-2. **extracting-hecras-results** - HdfResultsPlan API, steady vs unsteady
-3. **parsing-hecras-geometry** - RasGeometry, fixed-width parsing
+1. **hecras_compute_plans** - RasCmdr.compute_plan(), parallel execution
+2. **hecras_extract_results** - HdfResultsPlan API, steady vs unsteady
+3. **hecras_parse_geometry** - RasGeometry, fixed-width parsing
 
 **Advanced Features:**
-4. **integrating-usgs-gauges** - Complete USGS workflow
-5. **analyzing-aorc-precipitation** - AORC grid extraction
-6. **repairing-geometry-issues** - RasFixit validation loops
+4. **usgs_integrate_gauges** - Complete USGS workflow
+5. **precip_analyze_aorc** - AORC grid extraction
+6. **qa_repair_geometry** - RasFixit validation loops
 
 **Specialized:**
-7. **executing-remote-plans** - PsExec, Docker, SSH workers
-8. **reading-dss-boundary-data** - RasDss API, HEC-DSS files
-9. **using-git-worktrees** - Isolated development environments
+7. **hecras_compute_remote** - PsExec, Docker, SSH workers
+8. **dss_read_boundary-data** - RasDss API, HEC-DSS files
+9. **dev_manage_git-worktrees** - Isolated development environments
 
 ### Skill Structure
 
 Each skill uses progressive disclosure:
 
 ```
-executing-hecras-plans/
+hecras_compute_plans/
 ├── SKILL.md              # Main instructions (< 500 lines)
 ├── reference/            # Detailed docs (loaded on-demand)
 │   ├── compute_plan.md
@@ -216,7 +216,7 @@ Skills are discovered through **trigger-rich descriptions** in YAML frontmatter:
 
 ```yaml
 ---
-name: executing-hecras-plans
+name: hecras_compute_plans
 description: |
   Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel
   execution across multiple plans, and manages destination folders. Use when

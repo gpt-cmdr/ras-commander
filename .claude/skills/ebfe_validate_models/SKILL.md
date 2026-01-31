@@ -1,5 +1,5 @@
 ---
-name: ebfe-validator
+name: ebfe_validate_models
 model: sonnet
 description: |
   Validate organized eBFE/BLE model using ras-commander dataframes.

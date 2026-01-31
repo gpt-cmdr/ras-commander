@@ -1,5 +1,5 @@
 ---
-name: extracting-hecras-results
+name: hecras_extract_results
 allowed-tools: [Read, Grep, Glob]
 description: |
   Extract HEC-RAS hydraulic results from HDF files including water surface elevations (WSE),
@@ -258,7 +258,7 @@ summary = HdfResultsBreach.get_breach_summary("02", "Dam")
 ### With hdf-analyst Skill
 
 **Division of Responsibility**:
-- **This skill (extracting-hecras-results)**: Standard HEC-RAS result extraction using documented API
+- **This skill (hecras_extract_results)**: Standard HEC-RAS result extraction using documented API
 - **hdf-analyst skill**: Custom HDF path navigation, advanced xarray operations, performance optimization
 
 **Example Handoff**:
@@ -305,7 +305,7 @@ max_wse = HdfResultsMesh.get_mesh_maximum("01", variable="Water Surface")
 
 ## Related Skills
 
-- **executing-hecras-plans**: Run simulations to generate HDF results (prerequisite)
+- **hecras_compute_plans**: Run simulations to generate HDF results (prerequisite)
 - **hdf-analyst**: Advanced HDF operations and custom analysis (advanced use cases)
 
 ---

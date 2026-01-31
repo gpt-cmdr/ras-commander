@@ -155,9 +155,9 @@ Task(
 
 Skills auto-load based on trigger phrases:
 
-- "Execute HEC-RAS plan" → `executing-hecras-plans`
-- "Extract HDF results" → `extracting-hecras-results`
-- "Parse geometry file" → `parsing-hecras-geometry`
+- "Execute HEC-RAS plan" → `hecras_compute_plans`
+- "Extract HDF results" → `hecras_extract_results`
+- "Parse geometry file" → `hecras_parse_geometry`
 
 ### Running Commands
 
@@ -182,8 +182,8 @@ Skills auto-load based on trigger phrases:
 │   ├── usgs-integrator/
 │   └── ...
 ├── skills/           # Workflow templates
-│   ├── executing-hecras-plans/
-│   ├── extracting-hecras-results/
+│   ├── hecras_compute_plans/
+│   ├── hecras_extract_results/
 │   └── ...
 ├── commands/         # Slash commands
 │   ├── agent-taskclose.md

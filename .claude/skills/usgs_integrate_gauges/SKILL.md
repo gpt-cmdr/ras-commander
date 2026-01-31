@@ -1,5 +1,5 @@
 ---
-name: integrating-usgs-gauges
+name: usgs_integrate_gauges
 allowed-tools: [Read, Grep, Glob]
 description: |
   Complete USGS gauge data integration workflow from spatial discovery to
@@ -257,8 +257,8 @@ print(deps)  # {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 
 ## See Also
 
-- **HEC-RAS execution**: `.claude/skills/executing-hecras-plans/`
-- **HDF results extraction**: `.claude/skills/extracting-hecras-results/`
+- **HEC-RAS execution**: `.claude/skills/hecras_compute_plans/`
+- **HDF results extraction**: `.claude/skills/hecras_extract_results/`
 - **Precipitation data**: `ras_commander.precipitation` module
 - **Boundary utilities**: `ras_commander.RasUnsteady`
 

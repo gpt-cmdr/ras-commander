@@ -128,9 +128,9 @@ Task Subagents (Haiku)
 ### 4. Skills Framework Best Practices
 
 **Naming Convention**: Gerund form (verb + -ing)
-- ✅ `executing-hecras-plans`
+- ✅ `hecras_compute_plans`
 - ✅ `extracting-results`
-- ✅ `integrating-usgs-gauges`
+- ✅ `usgs_integrate_gauges`
 - ❌ `plan-executor`
 - ❌ `execute-plans`
 - ❌ `USGS-helper`
@@ -172,7 +172,7 @@ description: |
   processing model results.
 model: sonnet
 tools: Read, Grep, Bash, Write
-skills: extracting-hecras-results
+skills: hecras_extract_results
 working_directory: ras_commander/hdf
 ---
 
@@ -477,7 +477,7 @@ For comprehensive details, see:
 - How to use ras-commander APIs
 - Part of ras-commander repository
 - Teaches library usage
-- Example: executing-hecras-plans
+- Example: hecras_compute_plans
 
 **ras_skills/** (Domain automation):
 - Production-ready capabilities

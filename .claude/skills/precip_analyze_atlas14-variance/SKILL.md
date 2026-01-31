@@ -1,5 +1,5 @@
 ---
-name: atlas14-spatial-variance
+name: precip_analyze_atlas14-variance
 type: skill
 trigger_phrases:
   - atlas 14 variance
@@ -484,7 +484,7 @@ When user asks to:
 ## Related Skills and Agents
 
 **Related Skills**:
-- `/analyzing-aorc-precipitation` - Historic gridded precipitation
+- `/precip_analyze_aorc` - Historic gridded precipitation
 - (Future) `/atlas14-design-storms` - Hyetograph generation
 
 **Relevant Agents**:

@@ -1,5 +1,5 @@
 ---
-name: reading-dss-boundary-data
+name: dss_read_boundary-data
 allowed-tools: [Read, Grep, Glob]
 description: |
   Reads HEC-DSS files (V6 and V7) for boundary condition extraction using

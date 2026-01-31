@@ -1,5 +1,5 @@
 ---
-name: using-git-worktrees
+name: dev_manage_git-worktrees
 model: sonnet
 tools:
   - Bash
@@ -22,7 +22,7 @@ Git worktrees create isolated workspaces sharing the same repository, allowing w
 
 **Core principle:** Systematic directory selection + safety verification = reliable isolation.
 
-**Announce at start:** "I'm using the using-git-worktrees skill to set up an isolated workspace."
+**Announce at start:** "I'm using the dev_manage_git-worktrees skill to set up an isolated workspace."
 
 ## Primary Sources
 
@@ -167,7 +167,7 @@ Ready to implement <feature-name>
 
 ```bash
 # 1. Announce
-echo "I'm using the using-git-worktrees skill to set up an isolated workspace."
+echo "I'm using the dev_manage_git-worktrees skill to set up an isolated workspace."
 
 # 2. Check existing directories
 if [ -d .worktrees ]; then

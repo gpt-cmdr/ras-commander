@@ -41,7 +41,7 @@ Transform fundamentally broken FEMA eBFE/BLE models into runnable HEC-RAS projec
 - `feature_dev_notes/eBFE_Integration/CRITICAL_FIXES.md` - The 3 critical fixes
 - `feature_dev_notes/eBFE_Integration/RESEARCH_FINDINGS.md` - 5 archive patterns
 - `ras_commander/ebfe_models.py` - Production implementation (3 tested models)
-- `.claude/skills/organizing-ebfe-models/SKILL.md` - Organization workflow
+- `.claude/skills/ebfe_organize_models/SKILL.md` - Organization workflow
 
 ## Agent Workflow
 
@@ -192,7 +192,7 @@ content = re.sub(
 
 ### Step 5: Validate Using ras-commander (REQUIRED)
 
-**Sub-skill**: `ebfe-validator`
+**Sub-skill**: `ebfe_validate_models`
 
 **Use init_ras_project() to validate**:
 ```python
@@ -353,7 +353,7 @@ ras = init_ras_project(organized_folder, version)
 
 **Validates**: File existence before correcting paths
 
-### ebfe-validator
+### ebfe_validate_models
 
 **Purpose**: Validate using ras-commander dataframes
 
@@ -587,7 +587,7 @@ def validate_organized_model(organized_folder, version):
 ## See Also
 
 - **Production Implementation**: `ras_commander/ebfe_models.py` - RasEbfeModels class
-- **Skill**: `.claude/skills/organizing-ebfe-models/SKILL.md` - Organization workflow
+- **Skill**: `.claude/skills/ebfe_organize_models/SKILL.md` - Organization workflow
 - **Critical Fixes**: `feature_dev_notes/eBFE_Integration/CRITICAL_FIXES.md`
 - **Pattern Research**: `feature_dev_notes/eBFE_Integration/RESEARCH_FINDINGS.md`
 - **Validation Patterns**: `.claude/rules/validation/validation-patterns.md`

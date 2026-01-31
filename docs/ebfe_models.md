@@ -531,11 +531,11 @@ Complete working examples demonstrating each model:
 
 ## Organizing New Models
 
-For eBFE models not included in RasEbfeModels, use the **organizing-ebfe-models agent skill**:
+For eBFE models not included in RasEbfeModels, use the **ebfe_organize_models agent skill**:
 
 ```bash
 # In Claude Code:
-"Organize West Fork San Jacinto (12040101) using organizing-ebfe-models skill"
+"Organize West Fork San Jacinto (12040101) using ebfe_organize_models skill"
 ```
 
 **Agent produces**:
@@ -637,7 +637,7 @@ RasCmdr.compute_plan("01", num_cores=4)  # Runs to completion
 - **Critical Fixes Documentation**: `feature_dev_notes/eBFE_Integration/CRITICAL_FIXES.md`
 - **Implementation Details**: `feature_dev_notes/eBFE_Integration/IMPLEMENTATION_COMPLETE.md`
 - **Pattern Research**: `feature_dev_notes/eBFE_Integration/RESEARCH_FINDINGS.md`
-- **Agent Skill**: `.claude/skills/organizing-ebfe-models/SKILL.md`
+- **Agent Skill**: `.claude/skills/ebfe_organize_models/SKILL.md`
 
 ---
 

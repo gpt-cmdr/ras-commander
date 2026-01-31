@@ -1,5 +1,5 @@
 ---
-name: parsing-hecras-geometry
+name: hecras_parse_geometry
 allowed-tools: [Read, Grep, Glob]
 description: |
   Parses and modifies HEC-RAS plain text geometry files (.g##) using fixed-width

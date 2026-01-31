@@ -1,5 +1,5 @@
 ---
-name: exploring-hecras-gui
+name: hecras_explore_gui
 description: |
   Explores the HEC-RAS GUI to document menus, dialogs, controls, and workflows
   using win32com automation with screenshot capture. Use when needing to discover
@@ -395,7 +395,7 @@ else:
 
 ## Related Skills
 
-- `executing-hecras-plans` - After documenting GUI, automate plan execution
+- `hecras_compute_plans` - After documenting GUI, automate plan execution
 - `win32com-automation-expert` - Agent for developing GUI automation workflows
 
 ---

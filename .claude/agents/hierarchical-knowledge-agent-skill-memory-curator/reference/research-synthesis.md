@@ -145,18 +145,18 @@ Research Claude Skills best practices, naming conventions, and integration patte
 ### Recommended Skill Suite
 
 **Phase 1** (3 core skills):
-- executing-hecras-plans
-- extracting-hecras-results
-- parsing-hecras-geometry
+- hecras_compute_plans
+- hecras_extract_results
+- hecras_parse_geometry
 
 **Phase 2** (3 advanced skills):
-- integrating-usgs-gauges
-- analyzing-aorc-precipitation
-- repairing-geometry-issues
+- usgs_integrate_gauges
+- precip_analyze_aorc
+- qa_repair_geometry
 
 **Phase 3** (2 specialized skills):
-- executing-remote-plans
-- reading-dss-boundary-data
+- hecras_compute_remote
+- dss_read_boundary-data
 
 ### Impact
 

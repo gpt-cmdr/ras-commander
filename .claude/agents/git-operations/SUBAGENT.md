@@ -13,7 +13,7 @@ description: |
   preparing commits with proper formatting, creating pull requests with gh CLI,
   setting up isolated git worktrees for feature development, or verifying
   documentation builds before pushing. Includes critical pre-push checks to
-  prevent documentation build failures. Integrates with using-git-worktrees
+  prevent documentation build failures. Integrates with dev_manage_git-worktrees
   skill for workspace isolation.
 
   Triggers: "commit", "pull request", "PR", "worktree", "git workflow",
@@ -28,7 +28,7 @@ Handles git operations with safety checks and proper formatting.
 ## Primary Sources
 
 **Git Worktree Workflow**:
-- `.claude/skills/using-git-worktrees/` - Complete worktree workflow
+- `.claude/skills/dev_manage_git-worktrees/` - Complete worktree workflow
   - Directory selection priority (existing → CLAUDE.md → ask)
   - Safety verification (.gitignore checks)
   - Project setup automation
@@ -109,7 +109,7 @@ EOF
 
 ### 3. Git Worktree Management
 
-**Delegates to using-git-worktrees skill for full workflow**
+**Delegates to dev_manage_git-worktrees skill for full workflow**
 
 **Quick reference**:
 ```bash
@@ -129,7 +129,7 @@ npm install  # or appropriate setup command
 npm test
 ```
 
-**See `.claude/skills/using-git-worktrees/` for complete workflow**
+**See `.claude/skills/dev_manage_git-worktrees/` for complete workflow**
 
 ## Common Workflows
 
@@ -195,11 +195,11 @@ EOF
 
 ### Workflow 3: Setup Isolated Worktree
 
-**Delegates to using-git-worktrees skill**
+**Delegates to dev_manage_git-worktrees skill**
 
 ```bash
 # Announce usage
-echo "I'm using the using-git-worktrees skill to set up an isolated workspace."
+echo "I'm using the dev_manage_git-worktrees skill to set up an isolated workspace."
 
 # Skill handles:
 # - Directory selection (.worktrees vs worktrees vs global)
@@ -588,7 +588,7 @@ git add .gitignore
 ## Integration with Other Skills/Subagents
 
 **Calls**:
-- `using-git-worktrees` skill - For worktree setup workflow
+- `dev_manage_git-worktrees` skill - For worktree setup workflow
 - `finishing-a-development-branch` skill - For worktree cleanup
 
 **Called by**:
@@ -606,14 +606,14 @@ git add .gitignore
 | **Commit** | `git commit -m "$(cat <<'EOF'...EOF)"` |
 | **Push branch** | `git push -u origin HEAD` |
 | **Create PR** | `gh pr create --title "..." --body "$(cat <<'EOF'...EOF)"` |
-| **Create worktree** | Delegate to `using-git-worktrees` skill |
+| **Create worktree** | Delegate to `dev_manage_git-worktrees` skill |
 | **Check secrets** | `git diff \| grep -i "password\|secret"` |
 | **View commits** | `git log --oneline -10` |
 
 ## Navigation Map
 
 **For detailed workflows**:
-- Git worktrees → `.claude/skills/using-git-worktrees/` (complete workflow)
+- Git worktrees → `.claude/skills/dev_manage_git-worktrees/` (complete workflow)
 - Commit guidelines → Root `CLAUDE.md` (Git Safety Protocol section)
 - GitHub CLI → `gh --help` or https://cli.github.com/manual/
 
@@ -624,6 +624,6 @@ git add .gitignore
 - Always use heredoc → For multi-line messages
 
 **For integration**:
-- Worktree setup → Delegates to `using-git-worktrees` skill
+- Worktree setup → Delegates to `dev_manage_git-worktrees` skill
 - Worktree cleanup → Delegates to `finishing-a-development-branch` skill
 - PR creation → Uses `gh pr create` with formatted body

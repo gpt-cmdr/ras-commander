@@ -216,8 +216,8 @@ After integration test, write summary:
 
 **System Under Test**:
 - `hecras-project-inspector` agent
-- `planning-hecras-execution` skill
-- `executing-hecras-plans` skill
+- `hecras_plan_execution` skill
+- `hecras_compute_plans` skill
 - `hecras-results-analyst` agent
 - `hecras-general-agent` coordinator
 

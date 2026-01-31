@@ -43,9 +43,9 @@ Create a skill when the notebook demonstrates:
 - ✅ End-to-end process (setup → execute → validate)
 
 **Examples**:
-- `110_single_plan_execution.ipynb` → `executing-hecras-plans` skill
-- `500_remote_execution_psexec.ipynb` → `executing-remote-plans` skill
-- `310_dss_boundary_extraction.ipynb` → `reading-dss-boundary-data` skill
+- `110_single_plan_execution.ipynb` → `hecras_compute_plans` skill
+- `500_remote_execution_psexec.ipynb` → `hecras_compute_remote` skill
+- `310_dss_boundary_extraction.ipynb` → `dss_read_boundary-data` skill
 
 ---
 
@@ -111,7 +111,7 @@ description: |
 
 ---
 
-## Example: executing-hecras-plans Skill
+## Example: hecras_compute_plans Skill
 
 ### Source Notebook
 
@@ -160,7 +160,7 @@ RasCmdr.compute_plan("01", stream_callback=ConsoleCallback())
 - `113_parallel_execution.ipynb`
 - `112_sequential_plan_execution.ipynb`
 
-**One Skill**: `executing-hecras-plans`
+**One Skill**: `hecras_compute_plans`
 
 **Structure**:
 ```markdown

@@ -1,5 +1,5 @@
 ---
-name: planning-hecras-execution
+name: hecras_plan_execution
 description: |
   Decision support for HEC-RAS execution strategy. Analyzes project inspector output
   to recommend which plans to run, execution mode, and optimal parameters. Provides
@@ -22,8 +22,8 @@ Decision support for selecting optimal HEC-RAS execution strategy. Analyzes Proj
 
 - **`.claude/rules/hec-ras/execution.md`** - Complete execution mode documentation
 - **`.claude/agents/hecras-project-inspector.md`** - Project Intelligence Report schema
-- **`.claude/skills/executing-hecras-plans/SKILL.md`** - Mode Selection Guide
-- **`.claude/skills/executing-hecras-rascontrol/SKILL.md`** - Legacy HEC-RAS (< 6.0)
+- **`.claude/skills/hecras_compute_plans/SKILL.md`** - Mode Selection Guide
+- **`.claude/skills/hecras_compute_rascontrol/SKILL.md`** - Legacy HEC-RAS (< 6.0)
 
 ---
 
@@ -31,7 +31,7 @@ Decision support for selecting optimal HEC-RAS execution strategy. Analyzes Proj
 
 ```
 1. Is HEC-RAS version < 6.0?
-   YES -> Use RasControl (executing-hecras-rascontrol skill)
+   YES -> Use RasControl (hecras_compute_rascontrol skill)
    NO  -> Continue
 
 2. How many runnable plans?
@@ -233,14 +233,14 @@ RasCmdr.compute_plan(
 
 ### Upstream Skills
 - **hecras-project-inspector** - Generates intelligence report
-- **reading-dss-boundary-data** - Validates boundary conditions
-- **repairing-geometry-issues** - Fixes geometry blockers
+- **dss_read_boundary-data** - Validates boundary conditions
+- **qa_repair_geometry** - Fixes geometry blockers
 
 ### Downstream Skills
-- **executing-hecras-plans** - Runs the execution plan
-- **executing-remote-plans** - Distributed execution
-- **extracting-hecras-results** - Post-execution analysis
-- **parsing-compute-messages** - Interpret execution results
+- **hecras_compute_plans** - Runs the execution plan
+- **hecras_compute_remote** - Distributed execution
+- **hecras_extract_results** - Post-execution analysis
+- **hecras_parse_compute-messages** - Interpret execution results
 
 ---
 

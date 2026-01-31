@@ -294,18 +294,18 @@ Each subagent:
 Create 8 skills in .claude/skills/:
 
 **Phase 1** (Core operations):
-1. executing-hecras-plans
-2. extracting-hecras-results
-3. parsing-hecras-geometry
+1. hecras_compute_plans
+2. hecras_extract_results
+3. hecras_parse_geometry
 
 **Phase 2** (Advanced features):
-4. integrating-usgs-gauges
-5. analyzing-aorc-precipitation
-6. repairing-geometry-issues
+4. usgs_integrate_gauges
+5. precip_analyze_aorc
+6. qa_repair_geometry
 
 **Phase 3** (Specialized):
-7. executing-remote-plans
-8. reading-dss-boundary-data
+7. hecras_compute_remote
+8. dss_read_boundary-data
 
 Each skill:
 - SKILL.md with YAML frontmatter
@@ -334,10 +334,10 @@ def test_context_inheritance():
 ```python
 # Test skill activation with natural language
 test_cases = [
-    ("How do I run a HEC-RAS plan?", "executing-hecras-plans"),
-    ("Extract water surface elevations", "extracting-hecras-results"),
-    ("Get USGS gauge data", "integrating-usgs-gauges"),
-    ("Fix geometry error", "repairing-geometry-issues"),
+    ("How do I run a HEC-RAS plan?", "hecras_compute_plans"),
+    ("Extract water surface elevations", "hecras_extract_results"),
+    ("Get USGS gauge data", "usgs_integrate_gauges"),
+    ("Fix geometry error", "qa_repair_geometry"),
 ]
 ```
 

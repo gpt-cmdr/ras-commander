@@ -1,5 +1,5 @@
 ---
-name: executing-remote-plans
+name: hecras_compute_remote
 description: |
   Distributed HEC-RAS execution across remote workers (PsExec, Docker, SSH, cloud).
   Handles worker initialization, queue scheduling, and result aggregation. Use when

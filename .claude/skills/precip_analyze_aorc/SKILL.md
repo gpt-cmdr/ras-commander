@@ -1,5 +1,5 @@
 ---
-name: analyzing-aorc-precipitation
+name: precip_analyze_aorc
 description: |
   Retrieves and processes AORC precipitation data for HEC-RAS/HMS models.
   Handles spatial averaging over watersheds, temporal aggregation, DSS export,

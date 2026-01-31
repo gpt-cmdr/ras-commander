@@ -1,5 +1,5 @@
 ---
-name: triple-model-code-review
+name: qa_review_triple-model
 description: |
   Launch three independent AI code reviewers (Opus, Gemini, Codex) to QA/QC code or notebooks.
   Each reviewer writes findings to separate markdown files, then orchestrator synthesizes.

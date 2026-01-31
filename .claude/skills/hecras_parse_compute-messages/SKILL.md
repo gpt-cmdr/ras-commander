@@ -1,5 +1,5 @@
 ---
-name: parsing-compute-messages
+name: hecras_parse_compute-messages
 allowed-tools: [Read, Grep, Glob]
 description: |
   Parse HEC-RAS compute output from HDF files to extract execution status,
@@ -408,6 +408,6 @@ messages = HdfResultsPlan.get_compute_messages_hdf_only("01")
 
 ## See Also
 
-- **extracting-hecras-results**: Full HDF results extraction patterns
-- **executing-hecras-plans**: Plan execution that generates compute messages
-- **repairing-geometry-issues**: Fixing geometry errors found in messages
+- **hecras_extract_results**: Full HDF results extraction patterns
+- **hecras_compute_plans**: Plan execution that generates compute messages
+- **qa_repair_geometry**: Fixing geometry errors found in messages

@@ -108,7 +108,7 @@ If an agent loses context and needs to find their worktree:
 
 - `/agent-close-gitworktree` - Close out a worktree when work is complete
 - `/agent-taskupdate` - Update task progress
-- `using-git-worktrees` skill - Detailed worktree creation patterns
+- `dev_manage_git-worktrees` skill - Detailed worktree creation patterns
 
 ## Important Notes
 

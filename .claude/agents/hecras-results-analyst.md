@@ -31,7 +31,7 @@ Specialist agent that INTERPRETS HEC-RAS simulation results, going beyond raw da
 
 ### Execution Verification
 
-**`.claude/skills/parsing-compute-messages/SKILL.md`** - Complete compute message parsing:
+**`.claude/skills/hecras_parse_compute-messages/SKILL.md`** - Complete compute message parsing:
 - `HdfResultsPlan.get_compute_messages()` - Extract raw compute output
 - `HdfResultsPlan.get_runtime_data()` - Performance metrics (None if incomplete)
 - Message severity classification (CRITICAL/ERROR/WARNING/INFO)
@@ -361,7 +361,7 @@ When producing analysis reports, use this structured output format:
 
 ## Integration with Compute Message Parser
 
-This agent uses the **parsing-compute-messages** skill for execution verification.
+This agent uses the **hecras_parse_compute-messages** skill for execution verification.
 
 **Workflow**:
 ```python
@@ -417,7 +417,7 @@ def classify_severity(line):
 
 ## See Also
 
-- `.claude/skills/parsing-compute-messages/SKILL.md` - Compute message parsing
-- `.claude/skills/extracting-hecras-results/SKILL.md` - Results extraction patterns
+- `.claude/skills/hecras_parse_compute-messages/SKILL.md` - Compute message parsing
+- `.claude/skills/hecras_extract_results/SKILL.md` - Results extraction patterns
 - `ras_commander/hdf/AGENTS.md` - HDF class reference
 - `.claude/agents/hecras-project-inspector.md` - Project analysis (pre-execution)

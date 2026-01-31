@@ -2,42 +2,69 @@
 
 This directory contains **library workflow skills** - how to use ras-commander for common tasks.
 
+## Naming Convention
+
+**Pattern**: `category_verb_modifier` or `category_verb-compound_modifier`
+
+- **Underscore (`_`)**: separates segments (category, verb, modifier)
+- **Hyphen (`-`)**: joins compound words within a segment
+- **Verb alignment**: Matches ras-commander API verbs (compute, extract, parse, organize, etc.)
+
+**Categories**:
+
+| Prefix | Domain |
+|--------|--------|
+| `hecras` | HEC-RAS model operations |
+| `precip` | Precipitation data |
+| `usgs` | USGS gauge integration |
+| `ebfe` | eBFE/BLE FEMA models |
+| `dss` | HEC-DSS file operations |
+| `dev` | Development tooling |
+| `qa` | Quality assurance |
+
 ## Skills vs ras_skills/
 
 | Type | Location | Purpose | Example |
 |------|----------|---------|---------|
-| **Library Skills** | `.claude/skills/` | How to use ras-commander APIs | `executing-hecras-plans` |
+| **Library Skills** | `.claude/skills/` | How to use ras-commander APIs | `hecras_compute_plans` |
 | **Domain Skills** | `ras_skills/` | Production automation capabilities | `dss-linker`, `historical-flood-reconstruction` |
 
 Both use Claude Skills framework - the distinction is **scope and distribution**.
 
 ## Implemented Library Skills
 
-### Execution Skills
-- **executing-hecras-plans** - RasCmdr.compute_plan(), parallel execution, callbacks, mode selection
-- **executing-remote-plans** - PsExec, Docker, SSH worker setup, distributed execution
-- **executing-hecras-rascontrol** - RasControl COM interface for legacy HEC-RAS 3.x-5.x
-- **planning-hecras-execution** - Decision support for execution strategy, mode selection
+### HEC-RAS Execution (`hecras_compute_*`, `hecras_plan_*`)
+- **hecras_compute_plans** - RasCmdr.compute_plan(), parallel execution, callbacks, mode selection
+- **hecras_compute_remote** - PsExec, Docker, SSH worker setup, distributed execution
+- **hecras_compute_rascontrol** - RasControl COM interface for legacy HEC-RAS 3.x-5.x
+- **hecras_plan_execution** - Decision support for execution strategy, mode selection
 
-### Results & Analysis Skills
-- **extracting-hecras-results** - HdfResultsPlan API, steady vs unsteady workflows
-- **parsing-compute-messages** - HEC-RAS compute message diagnostics, error classification
+### HEC-RAS Results & Parsing (`hecras_extract_*`, `hecras_parse_*`)
+- **hecras_extract_results** - HdfResultsPlan API, steady vs unsteady workflows
+- **hecras_parse_compute-messages** - HEC-RAS compute message diagnostics, error classification
+- **hecras_parse_geometry** - RasGeometry, RasStruct, fixed-width parsing
 
-### File Operations Skills
-- **parsing-hecras-geometry** - RasGeometry, RasStruct, fixed-width parsing
-- **reading-dss-boundary-data** - RasDss API, HEC-DSS V6/V7 files
-- **repairing-geometry-issues** - RasFixit validation loops
+### HEC-RAS GUI (`hecras_explore_*`)
+- **hecras_explore_gui** - HEC-RAS GUI exploration and documentation
 
-### Data Integration Skills
-- **integrating-usgs-gauges** - Complete USGS workflow (discovery → validation)
-- **analyzing-aorc-precipitation** - AORC grid extraction, time series generation
-- **atlas14-spatial-variance** - Atlas 14 precipitation spatial analysis
+### DSS Operations (`dss_*`)
+- **dss_read_boundary-data** - RasDss API, HEC-DSS V6/V7 files
 
-### Specialized Skills
-- **organizing-ebfe-models** - FEMA eBFE/BLE model organization
-- **ebfe-validator** - Validate organized eBFE models
-- **exploring-hecras-gui** - HEC-RAS GUI exploration and documentation
-- **using-git-worktrees** - Git worktree management for feature isolation
+### Data Integration (`usgs_*`, `precip_*`)
+- **usgs_integrate_gauges** - Complete USGS workflow (discovery -> validation)
+- **precip_analyze_aorc** - AORC grid extraction, time series generation
+- **precip_analyze_atlas14-variance** - Atlas 14 precipitation spatial analysis
+
+### eBFE/BLE Models (`ebfe_*`)
+- **ebfe_organize_models** - FEMA eBFE/BLE model organization
+- **ebfe_validate_models** - Validate organized eBFE models
+
+### Quality Assurance (`qa_*`)
+- **qa_repair_geometry** - RasFixit validation loops, geometry repair
+- **qa_review_triple-model** - Multi-LLM code review (Opus, Gemini, Codex)
+
+### Development Tools (`dev_*`)
+- **dev_manage_git-worktrees** - Git worktree management for feature isolation
 
 ## Skill Structure
 
@@ -45,36 +72,37 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 
 ```
 .claude/skills/
-├── executing-hecras-plans/
+├── hecras_compute_plans/
 │   └── SKILL.md                    # ONLY file (200-400 lines)
-├── integrating-usgs-gauges/
+├── usgs_integrate_gauges/
 │   └── SKILL.md                    # ONLY file
-└── analyzing-aorc-precipitation/
+└── precip_analyze_aorc/
     └── SKILL.md                    # ONLY file
 ```
 
 **Prohibited in skill folders**:
-- ❌ NO `README.md` (duplicates SKILL.md)
-- ❌ NO `reference/` folders (skills are navigators, not docs)
-- ❌ NO `examples/` folders (examples belong in `examples/` root)
-- ❌ NO `scripts/` folders (utilities belong in `ras_commander/` or `tools/`)
-- ❌ NO task artifacts (COMPLETION_SUMMARY.md, REFACTORING_NOTES.txt)
+- NO `README.md` (duplicates SKILL.md)
+- NO `reference/` folders (skills are navigators, not docs)
+- NO `examples/` folders (examples belong in `examples/` root)
+- NO `scripts/` folders (utilities belong in `ras_commander/` or `tools/`)
+- NO task artifacts (COMPLETION_SUMMARY.md, REFACTORING_NOTES.txt)
 
 **Rationale**: Skills are **lightweight navigators** that point to primary sources:
-- Workflows → `ras_commander/{module}/CLAUDE.md`
-- API reference → Code docstrings
-- Examples → `examples/*.ipynb` notebooks
+- Workflows -> `ras_commander/{module}/CLAUDE.md`
+- API reference -> Code docstrings
+- Examples -> `examples/*.ipynb` notebooks
 
 **File size target**: 200-400 lines per SKILL.md
 
 ## Creating Library Skills
 
 1. **Identify workflow**: Multi-step process users frequently need
-2. **Create folder**: Use gerund naming (`executing-plans`, not `plan-executor`)
-3. **Write SKILL.md**:
+2. **Choose name**: `category_verb_modifier` matching API verbs
+3. **Create folder**: `.claude/skills/{name}/`
+4. **Write SKILL.md**:
    ```yaml
    ---
-   name: executing-hecras-plans
+   name: hecras_compute_plans
    description: |
      Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel
      execution across multiple plans, and manages destination folders. Use when
@@ -82,17 +110,15 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
      up parallel computation workflows.
    ---
 
-   # Executing HEC-RAS Plans
+   # Computing HEC-RAS Plans
 
    ## Quick Start
    [50-line basic example]
 
    ## Detailed References
-   - **compute_plan() API**: See [reference/compute_plan.md](reference/compute_plan.md)
-   - **Parallel Execution**: See [reference/parallel.md](reference/parallel.md)
+   - **compute_plan() API**: See ras_commander/CLAUDE.md
    ```
 
-4. **Add progressive disclosure**: Main SKILL.md < 500 lines, details in reference/
 5. **Test discovery**: Verify skill activates with natural language queries
 
 ## Key Principles
@@ -100,19 +126,12 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 ### Progressive Disclosure
 - **Metadata loads first**: ~100 tokens (name + description)
 - **Full content when relevant**: <5k tokens (SKILL.md)
-- **Reference files on-demand**: 0 tokens until explicitly read
 
 ### Discovery Optimization
 Write descriptions that include:
 - **What it does**: "Executes HEC-RAS plans..."
 - **When to use**: "...when running simulations, computing plans..."
 - **Trigger terms**: "HEC-RAS", "compute", "parallel", "execute model"
-
-### Content Organization
-- **SKILL.md**: Navigation and overview
-- **reference/**: Detailed API and patterns
-- **examples/**: Complete working demonstrations
-- **scripts/**: Executable utilities (run without loading into context!)
 
 ## Guidelines
 

@@ -32,11 +32,11 @@ Claude Skills are **prompt-based context modifiers** that extend Claude's capabi
 **Pattern**: Use **gerund form** (verb + -ing) for activity-based skills
 
 **Good Examples for ras-commander**:
-- `executing-hecras-plans` (gerund - covers plan execution)
-- `analyzing-aorc-precipitation` (gerund - AORC workflows)
-- `integrating-usgs-gauges` (gerund - USGS data integration)
-- `parsing-hecras-geometry` (gerund - geometry file operations)
-- `repairing-geometry-issues` (gerund - RasFixit workflows)
+- `hecras_compute_plans` (gerund - covers plan execution)
+- `precip_analyze_aorc` (gerund - AORC workflows)
+- `usgs_integrate_gauges` (gerund - USGS data integration)
+- `hecras_parse_geometry` (gerund - geometry file operations)
+- `qa_repair_geometry` (gerund - RasFixit workflows)
 
 **Bad Examples**:
 - `helper`, `utils`, `tools` (too vague)
@@ -97,7 +97,7 @@ description: |
 **When Content Exceeds Target**:
 
 ```
-executing-hecras-plans/
+hecras_compute_plans/
 ├── SKILL.md              # Overview + navigation (<500 lines)
 ├── reference/
 │   ├── compute_plan.md   # Detailed API (load on-demand)
@@ -136,19 +136,19 @@ executing-hecras-plans/
 
 ### Phase 1: Core Operations (3 skills)
 
-**1. executing-hecras-plans**
+**1. hecras_compute_plans**
 - RasCmdr.compute_plan(), compute_parallel, compute_test_mode
 - Destination folder management, core allocation
 - Real-time monitoring with stream_callback
 - **Trigger terms**: "run simulation", "execute plan", "compute parallel"
 
-**2. extracting-hecras-results**
+**2. hecras_extract_results**
 - HdfResultsPlan API for steady and unsteady results
 - Conditional workflow (steady vs unsteady detection)
 - Breach results, hydraulic tables, validation
 - **Trigger terms**: "extract results", "HDF file", "water surface elevation", "time series"
 
-**3. parsing-hecras-geometry**
+**3. hecras_parse_geometry**
 - RasGeometry and RasStruct APIs
 - Cross sections, storage areas, structures (bridges, culverts, weirs)
 - Critical: 450-point limit, bank station interpolation
@@ -156,19 +156,19 @@ executing-hecras-plans/
 
 ### Phase 2: Advanced Features (3 skills)
 
-**4. integrating-usgs-gauges**
+**4. usgs_integrate_gauges**
 - Complete USGS workflow: discovery → retrieval → matching → validation
 - RasUsgsCore, GaugeMatcher, validation metrics
 - Boundary condition and initial condition generation
 - **Trigger terms**: "USGS", "gauge data", "observed flow", "model validation"
 
-**5. analyzing-aorc-precipitation**
+**5. precip_analyze_aorc**
 - AORC grid extraction, spatial interpolation
 - Time series generation for HEC-RAS boundaries
 - Quality control and visualization
 - **Trigger terms**: "AORC", "precipitation", "rainfall", "meteorological"
 
-**6. repairing-geometry-issues**
+**6. qa_repair_geometry**
 - RasFixit module workflows
 - Validation loops: detect → backup → fix → verify → test
 - Blocked obstruction fixes, elevation envelope algorithm
@@ -176,13 +176,13 @@ executing-hecras-plans/
 
 ### Phase 3: Specialized (2 skills)
 
-**7. executing-remote-plans**
+**7. hecras_compute_remote**
 - Remote worker setup (PsExec, Docker, SSH)
 - Distributed execution, queue management
 - Critical: Session ID configuration, Group Policy
 - **Trigger terms**: "remote execution", "distributed", "worker", "parallel across machines"
 
-**8. reading-dss-boundary-data**
+**8. dss_read_boundary-data**
 - RasDss API for HEC-DSS V6/V7 files
 - Java bridge setup, lazy loading
 - Boundary condition extraction and conversion
@@ -266,7 +266,7 @@ See [examples/visualization.md](examples/visualization.md)
 **Skills should document dependencies in frontmatter**:
 ```yaml
 ---
-name: integrating-usgs-gauges
+name: usgs_integrate_gauges
 description: Retrieves USGS gauge data using dataretrieval package...
 ---
 
@@ -290,7 +290,7 @@ Required for USGS NWIS access (lazy-loaded by ras-commander).
 ### Phase 1: Create Skill Structure (Week 1-2)
 
 ```bash
-mkdir -p .claude/skills/{executing-hecras-plans,extracting-hecras-results,parsing-hecras-geometry}
+mkdir -p .claude/skills/{hecras_compute_plans,hecras_extract_results,hecras_parse_geometry}
 ```
 
 Create SKILL.md files with YAML frontmatter.
@@ -308,10 +308,10 @@ Create SKILL.md files with YAML frontmatter.
 ### Phase 3: Test Discovery (Week 5)
 
 **Validation queries**:
-- "How do I run a HEC-RAS simulation?" → Should trigger `executing-hecras-plans`
-- "Extract water surface elevations from HDF" → Should trigger `extracting-hecras-results`
-- "Read a geometry file and get cross sections" → Should trigger `parsing-hecras-geometry`
-- "Get USGS gauge data for my model" → Should trigger `integrating-usgs-gauges`
+- "How do I run a HEC-RAS simulation?" → Should trigger `hecras_compute_plans`
+- "Extract water surface elevations from HDF" → Should trigger `hecras_extract_results`
+- "Read a geometry file and get cross sections" → Should trigger `hecras_parse_geometry`
+- "Get USGS gauge data for my model" → Should trigger `usgs_integrate_gauges`
 
 ### Phase 4: Optimize Progressive Disclosure (Week 6)
 
@@ -339,10 +339,10 @@ Create SKILL.md files with YAML frontmatter.
 ```python
 # test_skill_discovery.py
 test_cases = [
-    ("How do I run a HEC-RAS plan?", "executing-hecras-plans"),
-    ("Extract unsteady results from HDF", "extracting-hecras-results"),
-    ("Get USGS flow data", "integrating-usgs-gauges"),
-    ("Fix geometry preprocessing error", "repairing-geometry-issues"),
+    ("How do I run a HEC-RAS plan?", "hecras_compute_plans"),
+    ("Extract unsteady results from HDF", "hecras_extract_results"),
+    ("Get USGS flow data", "usgs_integrate_gauges"),
+    ("Fix geometry preprocessing error", "qa_repair_geometry"),
 ]
 
 for query, expected_skill in test_cases:

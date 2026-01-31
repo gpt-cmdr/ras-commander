@@ -117,7 +117,7 @@ except requests.ConnectionError:
 
 - **Complete Documentation**: `ras_commander/usgs/CLAUDE.md`
 - **Example Notebooks**: `examples/` (USGS integration notebooks)
-- **Skill**: `.claude/skills/integrating-usgs-gauges/SKILL.md`
+- **Skill**: `.claude/skills/usgs_integrate_gauges/SKILL.md`
 
 ---
 
