@@ -837,10 +837,10 @@ class RasControl:
 
         # Enable Write Detailed= 1 to ensure .comp_msgs.txt is written
         # This is critical for results_df fallback on all HEC-RAS versions
-        from .BcoMonitor import BcoMonitor
-        plan_file = project_path.parent / f"{project_path.stem}.p{plan_num}"
+        from .RasBco import BcoMonitor
+        plan_file = info.project_path.parent / f"{info.project_path.stem}.p{info.plan_number}"
         BcoMonitor.enable_detailed_logging(plan_file)
-        logger.debug(f"Enabled Write Detailed= 1 for plan {plan_num}")
+        logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
 
         def _run_operation(com_rc):
             watchdog_pid = 0

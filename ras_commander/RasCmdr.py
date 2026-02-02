@@ -660,7 +660,16 @@ class RasCmdr:
             # If all plans were skipped, return early
             if num_plans == 0:
                 logger.info("All plans skipped (existing results found). No computation needed.")
-                return execution_results
+                # Try to populate results_df from existing results
+                _results_df = pd.DataFrame()
+                try:
+                    if hasattr(ras_obj, 'results_df') and ras_obj.results_df is not None:
+                        mask = ras_obj.results_df['plan_number'].isin(list(execution_results.keys()))
+                        if mask.any():
+                            _results_df = ras_obj.results_df[mask].copy()
+                except Exception:
+                    pass
+                return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
 
             max_workers = min(max_workers, num_plans)
             logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
@@ -691,8 +700,10 @@ class RasCmdr:
             plan_assignments = [(next(worker_cycle), plan_num) for plan_num in filtered_plan_numbers]
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(
+                # Submit futures and track which plan each future represents
+                future_to_plan = {}
+                for worker_id, plan_num in plan_assignments:
+                    future = executor.submit(
                         RasCmdr.compute_plan,
                         plan_num,
                         ras_object=worker_ras_objects[worker_id],
@@ -702,14 +713,16 @@ class RasCmdr:
                         num_cores=num_cores,
                         verify=verify
                     )
-                    for worker_id, plan_num in plan_assignments
-                ]
+                    future_to_plan[future] = (worker_id, plan_num)
 
-                for future, (worker_id, plan_num) in zip(as_completed(futures), plan_assignments):
+                # Process futures as they complete (not in submission order)
+                for future in as_completed(future_to_plan.keys()):
+                    worker_id, plan_num = future_to_plan[future]
                     try:
-                        success = future.result()
-                        execution_results[plan_num] = success
-                        logger.info(f"Plan {plan_num} executed in worker {worker_id}: {'Successful' if success else 'Failed'}")
+                        compute_result = future.result()
+                        # Extract bool from ComputeResult for execution_results dict
+                        execution_results[plan_num] = bool(compute_result)
+                        logger.info(f"Plan {plan_num} executed in worker {worker_id}: {'Successful' if compute_result else 'Failed'}")
                     except Exception as e:
                         execution_results[plan_num] = False
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
@@ -939,7 +952,7 @@ class RasCmdr:
 
             if not project_folder.exists():
                 logger.error(f"Project folder '{project_folder}' does not exist.")
-                return {}
+                return ComputeParallelResult()
 
             compute_folder = project_folder.parent / f"{project_folder.name} {dest_folder_suffix}"
             logger.info(f"Creating the test folder: {compute_folder}...")
@@ -961,7 +974,7 @@ class RasCmdr:
                 logger.info(f"Copied project folder to compute folder: {compute_folder}")
             except Exception as e:
                 logger.critical(f"Error occurred while copying project folder: {str(e)}")
-                return {}
+                return ComputeParallelResult()
 
             try:
                 compute_ras = RasPrj()
@@ -970,11 +983,11 @@ class RasCmdr:
                 logger.info(f"Initialized RAS project in compute folder: {compute_prj_path}")
             except Exception as e:
                 logger.critical(f"Error initializing RAS project in compute folder: {str(e)}")
-                return {}
+                return ComputeParallelResult()
 
             if not compute_prj_path:
                 logger.error("Project file not found.")
-                return {}
+                return ComputeParallelResult()
 
             logger.info("Getting plan entries...")
             try:
@@ -982,7 +995,7 @@ class RasCmdr:
                 logger.info("Retrieved plan entries successfully.")
             except Exception as e:
                 logger.critical(f"Error retrieving plan entries: {str(e)}")
-                return {}
+                return ComputeParallelResult()
 
             if plan_number:
                 if isinstance(plan_number, (str, Number)):
@@ -998,7 +1011,7 @@ class RasCmdr:
                 current_plan_number = plan["plan_number"]
                 start_time = time.time()
                 try:
-                    success = RasCmdr.compute_plan(
+                    compute_result = RasCmdr.compute_plan(
                         current_plan_number,
                         ras_object=compute_ras,
                         clear_geompre=clear_geompre,
@@ -1008,8 +1021,9 @@ class RasCmdr:
                         skip_existing=skip_existing,  # Still respected (skip_existing check happens before force_rerun check)
                         verify=verify
                     )
-                    execution_results[current_plan_number] = success
-                    if success:
+                    # Extract bool from ComputeResult for execution_results dict
+                    execution_results[current_plan_number] = bool(compute_result)
+                    if compute_result:
                         logger.info(f"Successfully computed plan {current_plan_number}")
                     else:
                         logger.error(f"Failed to compute plan {current_plan_number}")
