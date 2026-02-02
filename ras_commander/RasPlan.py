@@ -54,6 +54,14 @@ List of Functions in RasPlan:
 - set_shortid(): Set the Short Identifier in a plan file
 - get_plan_title(): Get the Plan Title from a plan file
 - set_plan_title(): Set the Plan Title in a plan file
+- delete_plan(): Delete a plan and its associated files
+- renumber_plan(): Renumber a plan file and update references
+- delete_geom(): Delete a geometry file and its associated files
+- renumber_geom(): Renumber a geometry file and update references
+- delete_unsteady(): Delete an unsteady flow file
+- renumber_unsteady(): Renumber an unsteady flow file and update references
+- delete_steady(): Delete a steady flow file
+- renumber_steady(): Renumber a steady flow file and update references
 
 
         
@@ -2151,3 +2159,573 @@ class RasPlan:
         except IOError as e:
             logger.error(f"Error removing HDF output variable from plan file {plan_file_path}: {e}")
             return False
+
+    # -------------------------------------------------------------------------
+    # Delete and Renumber Operations
+    # NOTE: These methods are awaiting maintainer review and testing before release
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # Private helpers
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _refresh_all_dataframes(ras_obj) -> None:
+        """
+        Refresh all project DataFrames after structural changes.
+
+        Refreshes plan_df, geom_df, flow_df, unsteady_df, and boundaries_df
+        to ensure all state is current after delete/renumber operations.
+
+        This matches the clone_* pattern but without the heavy initialize() call.
+        """
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+
+    @staticmethod
+    def _update_plan_file_reference(plan_path: Path, key: str, old_value: str, new_value: str) -> bool:
+        """
+        Update a key=value reference inside a plan file.
+
+        Parameters:
+        plan_path (Path): Path to the .pXX file
+        key (str): Key to find (e.g., 'Geom File', 'Flow File')
+        old_value (str): Current value (e.g., 'g06')
+        new_value (str): New value (e.g., 'g02')
+
+        Returns:
+        bool: True if file was modified, False if key/value not found.
+        """
+        try:
+            with open(plan_path, 'r') as f:
+                lines = f.readlines()
+
+            target = f"{key}={old_value}"
+            replacement = f"{key}={new_value}"
+            modified = False
+
+            for i, line in enumerate(lines):
+                if line.strip() == target:
+                    lines[i] = replacement + '\n'
+                    modified = True
+                    break
+
+            if modified:
+                with open(plan_path, 'w') as f:
+                    f.writelines(lines)
+                logger.info(f"Updated {key} from {old_value} to {new_value} in {plan_path.name}")
+
+            return modified
+        except Exception as e:
+            logger.error(f"Error updating reference in {plan_path}: {e}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # Delete and Renumber operations
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def delete_plan(plan_number: Union[str, Number], ras_object=None) -> None:
+        """
+        Delete a plan and its associated files from the project.
+
+        Deletes the .pXX file and any associated .pXX.hdf, .pXX.computeMsgs.txt,
+        and .pXX.comp_msgs.txt files, then removes the entry from the .prj file.
+
+        Parameters:
+        plan_number (Union[str, Number]): Plan number to delete (e.g., '05', 5)
+        ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+
+        Raises:
+        ValueError: If the plan doesn't exist.
+
+        Note:
+        If deleting the Current Plan, a warning is logged but deletion proceeds.
+        HEC-RAS will open without errors, but no plan will be active.
+
+        Example:
+        >>> RasPlan.delete_plan("05")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        plan_number = RasUtils.normalize_ras_number(plan_number)
+
+        # Verify plan exists
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        if plan_number not in ras_obj.plan_df['plan_number'].values:
+            raise ValueError(f"Plan {plan_number} does not exist in the project")
+
+        # Check if this is the current plan - warn but allow deletion
+        with open(ras_obj.prj_file, 'r') as f:
+            prj_content = f.read()
+        if f"Current Plan=p{plan_number}" in prj_content:
+            logger.warning(
+                f"Deleting Current Plan {plan_number}. HEC-RAS will open without errors, "
+                f"but no plan will be active until a new Current Plan is set."
+            )
+
+        # Build list of files to delete
+        base = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
+        files_to_delete = [
+            base,
+            Path(str(base) + '.hdf'),
+            Path(str(base) + '.computeMsgs.txt'),
+            Path(str(base) + '.comp_msgs.txt'),
+        ]
+
+        for f in files_to_delete:
+            if f.exists():
+                f.unlink()
+                logger.info(f"Deleted {f.name}")
+
+        # Remove from .prj
+        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Plan', plan_number, ras_object=ras_obj)
+
+        # Remove Current Plan line if it references this plan
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+        new_lines = [line for line in lines if line.strip() != f"Current Plan=p{plan_number}"]
+        if len(new_lines) < len(lines):
+            with open(ras_obj.prj_file, 'w') as f:
+                f.writelines(new_lines)
+            logger.info(f"Removed Current Plan=p{plan_number} line from .prj")
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+
+    @staticmethod
+    @log_call
+    def renumber_plan(old_number: Union[str, Number], new_number: Union[str, Number], ras_object=None) -> str:
+        """
+        Renumber a plan file and update all project references.
+
+        Renames the .pXX file and associated files (.hdf, .computeMsgs.txt, .comp_msgs.txt),
+        updates the .prj file entry, and updates Current Plan if applicable.
+
+        Parameters:
+        old_number (Union[str, Number]): Current plan number (e.g., '05', 5)
+        new_number (Union[str, Number]): New plan number (e.g., '02', 2)
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Returns:
+        str: The new plan number.
+
+        Raises:
+        ValueError: If old plan doesn't exist or new plan number already exists.
+
+        Example:
+        >>> RasPlan.renumber_plan("13", "01")
+        '01'
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        old_number = RasUtils.normalize_ras_number(old_number)
+        new_number = RasUtils.normalize_ras_number(new_number)
+
+        # Verify old exists, new doesn't
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        if old_number not in ras_obj.plan_df['plan_number'].values:
+            raise ValueError(f"Plan {old_number} does not exist in the project")
+        if new_number in ras_obj.plan_df['plan_number'].values:
+            raise ValueError(f"Plan {new_number} already exists in the project")
+
+        # Build rename pairs
+        base_old = ras_obj.project_folder / f"{ras_obj.project_name}.p{old_number}"
+        base_new = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_number}"
+        rename_pairs = [
+            (base_old, base_new),
+            (Path(str(base_old) + '.hdf'), Path(str(base_new) + '.hdf')),
+            (Path(str(base_old) + '.computeMsgs.txt'), Path(str(base_new) + '.computeMsgs.txt')),
+            (Path(str(base_old) + '.comp_msgs.txt'), Path(str(base_new) + '.comp_msgs.txt')),
+        ]
+
+        for old_path, new_path in rename_pairs:
+            if old_path.exists():
+                old_path.rename(new_path)
+                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+
+        # Update .prj entry
+        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Plan', old_number, new_number, ras_object=ras_obj)
+
+        # Update Current Plan if it references the old number
+        with open(ras_obj.prj_file, 'r') as f:
+            lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.strip() == f"Current Plan=p{old_number}":
+                lines[i] = f"Current Plan=p{new_number}\n"
+                with open(ras_obj.prj_file, 'w') as f:
+                    f.writelines(lines)
+                logger.info(f"Updated Current Plan from p{old_number} to p{new_number}")
+                break
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+        return new_number
+
+    @staticmethod
+    @log_call
+    def delete_geom(geom_number: Union[str, Number], force: bool = False, ras_object=None) -> None:
+        """
+        Delete a geometry file and its associated files from the project.
+
+        Deletes the .gXX, .gXX.hdf, and .cXX files, then removes the entry from the .prj file.
+
+        Parameters:
+        geom_number (Union[str, Number]): Geometry number to delete (e.g., '06', 6)
+        force (bool): If True, allow deletion even if plans reference this geometry. Default False.
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Raises:
+        ValueError: If the geometry doesn't exist, or if plans reference it and force=False.
+
+        Example:
+        >>> RasPlan.delete_geom("06")  # Fails if any plan references g06
+        >>> RasPlan.delete_geom("06", force=True)  # Deletes regardless
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        geom_number = RasUtils.normalize_ras_number(geom_number)
+
+        # Verify geom exists
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        if geom_number not in ras_obj.geom_df['geom_number'].values:
+            raise ValueError(f"Geometry {geom_number} does not exist in the project")
+
+        # Check for referencing plans
+        if not force:
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            referencing = ras_obj.plan_df[ras_obj.plan_df['Geom File'] == geom_number]
+            if not referencing.empty:
+                plan_nums = referencing['plan_number'].tolist()
+                raise ValueError(
+                    f"Cannot delete geometry {geom_number}: referenced by plan(s) {plan_nums}. "
+                    f"Use force=True to delete anyway."
+                )
+
+        # Delete files
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        files_to_delete = [
+            Path(f"{base}.g{geom_number}"),
+            Path(f"{base}.g{geom_number}.hdf"),
+            Path(f"{base}.c{geom_number}"),
+        ]
+
+        for f in files_to_delete:
+            if f.exists():
+                f.unlink()
+                logger.info(f"Deleted {f.name}")
+
+        # Remove from .prj
+        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Geom', geom_number, ras_object=ras_obj)
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+
+    @staticmethod
+    @log_call
+    def renumber_geom(old_number: Union[str, Number], new_number: Union[str, Number], ras_object=None) -> str:
+        """
+        Renumber a geometry file and update all project references.
+
+        Renames .gXX, .gXX.hdf, and .cXX files, updates the .prj file, and updates
+        all plan files that reference this geometry.
+
+        Parameters:
+        old_number (Union[str, Number]): Current geometry number (e.g., '06', 6)
+        new_number (Union[str, Number]): New geometry number (e.g., '02', 2)
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Returns:
+        str: The new geometry number.
+
+        Raises:
+        ValueError: If old geometry doesn't exist or new number already exists.
+
+        Example:
+        >>> RasPlan.renumber_geom("06", "02")
+        '02'
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        old_number = RasUtils.normalize_ras_number(old_number)
+        new_number = RasUtils.normalize_ras_number(new_number)
+
+        # Verify old exists, new doesn't
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        if old_number not in ras_obj.geom_df['geom_number'].values:
+            raise ValueError(f"Geometry {old_number} does not exist in the project")
+        if new_number in ras_obj.geom_df['geom_number'].values:
+            raise ValueError(f"Geometry {new_number} already exists in the project")
+
+        # Rename files
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        rename_pairs = [
+            (Path(f"{base}.g{old_number}"), Path(f"{base}.g{new_number}")),
+            (Path(f"{base}.g{old_number}.hdf"), Path(f"{base}.g{new_number}.hdf")),
+            (Path(f"{base}.c{old_number}"), Path(f"{base}.c{new_number}")),
+        ]
+
+        for old_path, new_path in rename_pairs:
+            if old_path.exists():
+                old_path.rename(new_path)
+                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+
+        # Update .prj entry
+        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Geom', old_number, new_number, ras_object=ras_obj)
+
+        # Update plan files that reference this geometry
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        for _, row in ras_obj.plan_df.iterrows():
+            if row.get('Geom File') == old_number:
+                plan_path = Path(row['full_path'])
+                if plan_path.exists():
+                    RasPlan._update_plan_file_reference(
+                        plan_path, 'Geom File', f'g{old_number}', f'g{new_number}'
+                    )
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+        return new_number
+
+    @staticmethod
+    @log_call
+    def delete_unsteady(unsteady_number: Union[str, Number], force: bool = False, ras_object=None) -> None:
+        """
+        Delete an unsteady flow file from the project.
+
+        Deletes the .uXX file and its .hdf companion, then removes the entry from the .prj file.
+
+        Parameters:
+        unsteady_number (Union[str, Number]): Unsteady number to delete (e.g., '07', 7)
+        force (bool): If True, allow deletion even if plans reference it. Default False.
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Raises:
+        ValueError: If the unsteady file doesn't exist, or if plans reference it and force=False.
+
+        Example:
+        >>> RasPlan.delete_unsteady("07")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        unsteady_number = RasUtils.normalize_ras_number(unsteady_number)
+
+        # Verify exists
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        if unsteady_number not in ras_obj.unsteady_df['unsteady_number'].values:
+            raise ValueError(f"Unsteady {unsteady_number} does not exist in the project")
+
+        # Check for referencing plans
+        if not force:
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            referencing = ras_obj.plan_df[ras_obj.plan_df['unsteady_number'] == unsteady_number]
+            if not referencing.empty:
+                plan_nums = referencing['plan_number'].tolist()
+                raise ValueError(
+                    f"Cannot delete unsteady {unsteady_number}: referenced by plan(s) {plan_nums}. "
+                    f"Use force=True to delete anyway."
+                )
+
+        # Delete files
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        files_to_delete = [
+            Path(f"{base}.u{unsteady_number}"),
+            Path(f"{base}.u{unsteady_number}.hdf"),
+        ]
+
+        for f in files_to_delete:
+            if f.exists():
+                f.unlink()
+                logger.info(f"Deleted {f.name}")
+
+        # Remove from .prj
+        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Unsteady', unsteady_number, ras_object=ras_obj)
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+
+    @staticmethod
+    @log_call
+    def renumber_unsteady(old_number: Union[str, Number], new_number: Union[str, Number], ras_object=None) -> str:
+        """
+        Renumber an unsteady flow file and update all project references.
+
+        Renames .uXX and .uXX.hdf files, updates the .prj file, and updates
+        all plan files that reference this unsteady flow.
+
+        Parameters:
+        old_number (Union[str, Number]): Current unsteady number (e.g., '07', 7)
+        new_number (Union[str, Number]): New unsteady number (e.g., '02', 2)
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Returns:
+        str: The new unsteady number.
+
+        Raises:
+        ValueError: If old unsteady doesn't exist or new number already exists.
+
+        Example:
+        >>> RasPlan.renumber_unsteady("07", "02")
+        '02'
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        old_number = RasUtils.normalize_ras_number(old_number)
+        new_number = RasUtils.normalize_ras_number(new_number)
+
+        # Verify old exists, new doesn't
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        if old_number not in ras_obj.unsteady_df['unsteady_number'].values:
+            raise ValueError(f"Unsteady {old_number} does not exist in the project")
+        if new_number in ras_obj.unsteady_df['unsteady_number'].values:
+            raise ValueError(f"Unsteady {new_number} already exists in the project")
+
+        # Rename files
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        rename_pairs = [
+            (Path(f"{base}.u{old_number}"), Path(f"{base}.u{new_number}")),
+            (Path(f"{base}.u{old_number}.hdf"), Path(f"{base}.u{new_number}.hdf")),
+        ]
+
+        for old_path, new_path in rename_pairs:
+            if old_path.exists():
+                old_path.rename(new_path)
+                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+
+        # Update .prj entry
+        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Unsteady', old_number, new_number, ras_object=ras_obj)
+
+        # Update plan files that reference this unsteady
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        for _, row in ras_obj.plan_df.iterrows():
+            if row.get('unsteady_number') == old_number:
+                plan_path = Path(row['full_path'])
+                if plan_path.exists():
+                    RasPlan._update_plan_file_reference(
+                        plan_path, 'Flow File', f'u{old_number}', f'u{new_number}'
+                    )
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+        return new_number
+
+    @staticmethod
+    @log_call
+    def delete_steady(flow_number: Union[str, Number], force: bool = False, ras_object=None) -> None:
+        """
+        Delete a steady flow file from the project.
+
+        Deletes the .fXX file and removes the entry from the .prj file.
+
+        Parameters:
+        flow_number (Union[str, Number]): Flow number to delete (e.g., '01', 1)
+        force (bool): If True, allow deletion even if plans reference it. Default False.
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Raises:
+        ValueError: If the flow file doesn't exist, or if plans reference it and force=False.
+
+        Example:
+        >>> RasPlan.delete_steady("01")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        flow_number = RasUtils.normalize_ras_number(flow_number)
+
+        # Verify exists
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        if flow_number not in ras_obj.flow_df['flow_number'].values:
+            raise ValueError(f"Steady flow {flow_number} does not exist in the project")
+
+        # Check for referencing plans (steady plans have unsteady_number == None and Flow File matches)
+        if not force:
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            referencing = ras_obj.plan_df[
+                (ras_obj.plan_df['unsteady_number'].isna()) &
+                (ras_obj.plan_df['Flow File'] == flow_number)
+            ]
+            if not referencing.empty:
+                plan_nums = referencing['plan_number'].tolist()
+                raise ValueError(
+                    f"Cannot delete steady flow {flow_number}: referenced by plan(s) {plan_nums}. "
+                    f"Use force=True to delete anyway."
+                )
+
+        # Delete file
+        flow_file = ras_obj.project_folder / f"{ras_obj.project_name}.f{flow_number}"
+        if flow_file.exists():
+            flow_file.unlink()
+            logger.info(f"Deleted {flow_file.name}")
+
+        # Remove from .prj
+        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Flow', flow_number, ras_object=ras_obj)
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+
+    @staticmethod
+    @log_call
+    def renumber_steady(old_number: Union[str, Number], new_number: Union[str, Number], ras_object=None) -> str:
+        """
+        Renumber a steady flow file and update all project references.
+
+        Renames the .fXX file, updates the .prj file, and updates all plan files
+        that reference this steady flow.
+
+        Parameters:
+        old_number (Union[str, Number]): Current flow number (e.g., '01', 1)
+        new_number (Union[str, Number]): New flow number (e.g., '02', 2)
+        ras_object (RasPrj, optional): Specific RAS object to use.
+
+        Returns:
+        str: The new flow number.
+
+        Raises:
+        ValueError: If old flow doesn't exist or new number already exists.
+
+        Example:
+        >>> RasPlan.renumber_steady("01", "02")
+        '02'
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        old_number = RasUtils.normalize_ras_number(old_number)
+        new_number = RasUtils.normalize_ras_number(new_number)
+
+        # Verify old exists, new doesn't
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        if old_number not in ras_obj.flow_df['flow_number'].values:
+            raise ValueError(f"Steady flow {old_number} does not exist in the project")
+        if new_number in ras_obj.flow_df['flow_number'].values:
+            raise ValueError(f"Steady flow {new_number} already exists in the project")
+
+        # Rename file
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        old_path = Path(f"{base}.f{old_number}")
+        new_path = Path(f"{base}.f{new_number}")
+
+        if old_path.exists():
+            old_path.rename(new_path)
+            logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+
+        # Update .prj entry
+        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Flow', old_number, new_number, ras_object=ras_obj)
+
+        # Update plan files that reference this steady flow
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        for _, row in ras_obj.plan_df.iterrows():
+            # Steady flow plans have unsteady_number == None and Flow File matches
+            if pd.isna(row.get('unsteady_number')) and row.get('Flow File') == old_number:
+                plan_path = Path(row['full_path'])
+                if plan_path.exists():
+                    RasPlan._update_plan_file_reference(
+                        plan_path, 'Flow File', f'f{old_number}', f'f{new_number}'
+                    )
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+        return new_number

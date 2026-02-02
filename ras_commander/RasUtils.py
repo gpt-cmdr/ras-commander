@@ -45,6 +45,8 @@ List of Functions in RasUtils:
 - get_next_number()
 - clone_file()
 - update_project_file()
+- remove_prj_entry()
+- rename_prj_entry()
 - decode_byte_strings()
 - perform_kdtree_query()
 - find_nearest_neighbors()
@@ -892,10 +894,93 @@ class RasUtils:
         except Exception as e:
             logger.exception(f"Failed to update project file {prj_file}")
             raise
-        
-  
-        
-        
+
+    # NOTE: remove_prj_entry() and rename_prj_entry() are awaiting maintainer review
+    @staticmethod
+    @log_call
+    def remove_prj_entry(prj_file: Path, file_type: str, number: str, ras_object=None) -> None:
+        """
+        Remove a file entry from the .prj file.
+
+        Parameters:
+        prj_file (Path): Path to the project file
+        file_type (str): Type of file entry ('Plan', 'Geom', 'Unsteady', or 'Flow')
+        number (str): Two-digit number of the entry to remove (e.g., '05')
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Example:
+        >>> RasUtils.remove_prj_entry(Path("project.prj"), "Plan", "05")
+        # Removes the line "Plan File=p05" from the .prj file
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        prefix = file_type[0].lower()
+        target = f"{file_type} File={prefix}{number}"
+
+        try:
+            with open(prj_file, 'r') as f:
+                lines = f.readlines()
+
+            new_lines = [line for line in lines if line.strip() != target]
+
+            if len(new_lines) == len(lines):
+                logger.warning(f"Entry '{target}' not found in {prj_file}")
+                return
+
+            with open(prj_file, 'w') as f:
+                f.writelines(new_lines)
+            logger.info(f"Removed {file_type} entry {number} from project file")
+        except Exception as e:
+            logger.exception(f"Failed to remove entry from project file {prj_file}")
+            raise
+
+    @staticmethod
+    @log_call
+    def rename_prj_entry(prj_file: Path, file_type: str, old_number: str, new_number: str, ras_object=None) -> None:
+        """
+        Rename a file entry in the .prj file.
+
+        Parameters:
+        prj_file (Path): Path to the project file
+        file_type (str): Type of file entry ('Plan', 'Geom', 'Unsteady', or 'Flow')
+        old_number (str): Current two-digit number (e.g., '05')
+        new_number (str): New two-digit number (e.g., '02')
+        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+
+        Example:
+        >>> RasUtils.rename_prj_entry(Path("project.prj"), "Plan", "05", "02")
+        # Changes "Plan File=p05" to "Plan File=p02" in the .prj file
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        prefix = file_type[0].lower()
+        old_line = f"{file_type} File={prefix}{old_number}"
+        new_line_content = f"{file_type} File={prefix}{new_number}"
+
+        try:
+            with open(prj_file, 'r') as f:
+                lines = f.readlines()
+
+            found = False
+            for i, line in enumerate(lines):
+                if line.strip() == old_line:
+                    lines[i] = new_line_content + '\n'
+                    found = True
+                    break
+
+            if not found:
+                logger.warning(f"Entry '{old_line}' not found in {prj_file}")
+                return
+
+            with open(prj_file, 'w') as f:
+                f.writelines(lines)
+            logger.info(f"Renamed {file_type} entry {old_number} to {new_number} in project file")
+        except Exception as e:
+            logger.exception(f"Failed to rename entry in project file {prj_file}")
+            raise
+
     # From FunkShuns
         
     @staticmethod
