@@ -73,6 +73,10 @@ class ComputeParallelResult:
         # New usage:
         results = RasCmdr.compute_parallel(["01", "02"])
         print(results.results_df[['plan_number', 'completed', 'vol_error_percent']])
+
+    Note:
+        __bool__ returns True if execution_results has any entries,
+        False if empty (whether due to error or no plans to execute).
     """
     execution_results: Dict[str, bool] = field(default_factory=dict)
     results_df: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
@@ -128,10 +132,15 @@ class RasControlResult:
         # Old usage (still works):
         success, msgs = RasControl.run_plan("01")
 
-        # New usage:
+        # New usage - access results_df_row (requires attribute access):
         result = RasControl.run_plan("01")
-        if result:
+        if result.results_df_row is not None:
             print(result.results_df_row['runtime_complete_process_hours'])
+
+    Note:
+        results_df_row is only accessible via attribute access, not tuple
+        unpacking. Tuple unpacking (``success, msgs = ...``) only yields
+        success and messages via __iter__.
     """
     success: bool
     messages: List[str] = field(default_factory=list)
