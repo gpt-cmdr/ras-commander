@@ -64,6 +64,8 @@ from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 from .RasBco import BcoMonitor
+from .ComputeResults import ComputeResult, ComputeParallelResult
+import pandas as pd
 from typing import Callable
 
 logger = get_logger(__name__)
@@ -159,7 +161,7 @@ class RasCmdr:
         skip_existing: bool = False,
         verify: bool = False,
         stream_callback: Optional[Callable] = None
-    ) -> bool:
+    ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
 
@@ -205,8 +207,11 @@ class RasCmdr:
                 See ras_commander.callbacks for example implementations.
 
         Returns:
-            bool: True if the execution was successful (and verification passed if enabled), False otherwise.
-                When skip_existing=True and results exist, returns True without running.
+            ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
+                Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
+                Access execution metrics via ``result.results_df_row`` (e.g., runtime, volume accounting).
+                ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
+                When skip_existing=True and results exist, returns ComputeResult(success=True).
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
@@ -258,8 +263,13 @@ class RasCmdr:
             - When skip_existing=True with dest_folder, the check happens AFTER copying to destination.
             - The verify parameter checks for 'Complete Process' in HDF compute messages.
         """
+        _success = False
+        _results_df_row = None
+        _ras_obj = None
+        _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
         try:
             ras_obj = ras_object if ras_object is not None else ras
+            _ras_obj = ras_obj
             logger.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
             ras_obj.check_initialized()
 
@@ -291,14 +301,16 @@ class RasCmdr:
 
             if not compute_prj_path or not compute_plan_path:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
-                return False
+                _success = False
+                return ComputeResult(success=False, results_df_row=None)
 
             # Skip existing check - runs regardless of force_rerun (for resume capability)
             if skip_existing:
                 hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
                 if RasCmdr._verify_completion(hdf_path):
                     logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
-                    return True
+                    _success = True
+                    return ComputeResult(success=True, results_df_row=None)
 
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
             # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
@@ -307,7 +319,8 @@ class RasCmdr:
                 is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
                 if is_current:
                     logger.info(f"Skipping plan {plan_number}: {reason}")
-                    return True
+                    _success = True
+                    return ComputeResult(success=True, results_df_row=None)
                 else:
                     logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
@@ -375,6 +388,7 @@ class RasCmdr:
                 stream_callback.on_exec_start(str(plan_number), cmd)
 
             # Execute the HEC-RAS command
+            _did_execute = True
             start_time = time.time()
             try:
                 # Choose execution method based on whether callback is provided
@@ -423,12 +437,13 @@ class RasCmdr:
 
                     if verified:
                         logger.info(f"Verification passed for plan {plan_number}")
-                        return True
+                        _success = True
                     else:
                         logger.error(f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages")
-                        return False
+                        _success = False
+                else:
+                    _success = True
 
-                return True
             except subprocess.CalledProcessError as e:
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -440,19 +455,33 @@ class RasCmdr:
                 if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
                     stream_callback.on_exec_complete(str(plan_number), False, run_time)
 
-                return False
+                _success = False
         except Exception as e:
             logger.critical(f"Error in compute_plan: {str(e)}")
-            return False
+            _success = False
         finally:
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
-            if ras_obj and dest_folder is None:
-                ras_obj.plan_df = ras_obj.get_plan_entries()
-                ras_obj.geom_df = ras_obj.get_geom_entries()
-                ras_obj.flow_df = ras_obj.get_flow_entries()
-                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-                ras_obj.update_results_df(plan_numbers=[plan_number])
+            if _ras_obj and dest_folder is None:
+                try:
+                    _ras_obj.plan_df = _ras_obj.get_plan_entries()
+                    _ras_obj.geom_df = _ras_obj.get_geom_entries()
+                    _ras_obj.flow_df = _ras_obj.get_flow_entries()
+                    _ras_obj.unsteady_df = _ras_obj.get_unsteady_entries()
+                    if _did_execute:
+                        _ras_obj.update_results_df(plan_numbers=[plan_number])
+                        # Capture results_df row for the executed plan
+                        try:
+                            plan_num_str = str(plan_number).zfill(2) if not isinstance(plan_number, str) else str(plan_number)
+                            mask = _ras_obj.results_df['plan_number'] == plan_num_str
+                            if mask.any():
+                                _results_df_row = _ras_obj.results_df[mask].iloc[0].copy()
+                        except Exception:
+                            pass  # results_df_row stays None
+                except Exception as e_refresh:
+                    logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
+
+            return ComputeResult(success=_success, results_df_row=_results_df_row)
 
 
 
@@ -470,7 +499,7 @@ class RasCmdr:
         overwrite_dest: bool = False,
         skip_existing: bool = False,
         verify: bool = False
-    ) -> Dict[str, bool]:
+    ) -> 'ComputeParallelResult':
         """
         Execute multiple HEC-RAS plans in parallel using multiple worker instances.
 
@@ -513,8 +542,10 @@ class RasCmdr:
                 Plans that fail verification are marked False in results.
 
         Returns:
-            Dict[str, bool]: Dictionary of plan numbers and their execution success status.
-                Keys are plan numbers and values are boolean success indicators.
+            ComputeParallelResult: Result object backward compatible with Dict[str, bool].
+                ``execution_results``: Dict of plan numbers to success booleans.
+                ``results_df``: DataFrame with results_df rows for executed plans.
+                Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
 
@@ -760,11 +791,22 @@ class RasCmdr:
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
             ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
 
-            return execution_results
+            # Extract results_df rows for executed plans
+            _results_df = pd.DataFrame()
+            try:
+                plan_nums = list(execution_results.keys())
+                if hasattr(ras_obj, 'results_df') and ras_obj.results_df is not None and len(ras_obj.results_df) > 0:
+                    mask = ras_obj.results_df['plan_number'].isin(plan_nums)
+                    if mask.any():
+                        _results_df = ras_obj.results_df[mask].copy()
+            except Exception:
+                pass  # _results_df stays empty
+
+            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
 
         except Exception as e:
             logger.critical(f"Error in compute_parallel: {str(e)}")
-            return {}
+            return ComputeParallelResult()
 
     @staticmethod
     @log_call
@@ -779,7 +821,7 @@ class RasCmdr:
         overwrite_dest=False,
         skip_existing: bool = False,
         verify: bool = False
-    ) -> Dict[str, bool]:
+    ) -> 'ComputeParallelResult':
         """
         Execute HEC-RAS plans sequentially in a separate test folder.
 
@@ -817,8 +859,10 @@ class RasCmdr:
                 Plans that fail verification are marked False in results.
 
         Returns:
-            Dict[str, bool]: Dictionary of plan numbers and their execution success status.
-                Keys are plan numbers and values are boolean success indicators.
+            ComputeParallelResult: Result object backward compatible with Dict[str, bool].
+                ``execution_results``: Dict of plan numbers to success booleans.
+                ``results_df``: DataFrame with results_df rows for executed plans.
+                Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
 
@@ -1017,8 +1061,19 @@ class RasCmdr:
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
             ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
 
-            return execution_results
+            # Extract results_df rows for executed plans
+            _results_df = pd.DataFrame()
+            try:
+                plan_nums = list(execution_results.keys())
+                if hasattr(ras_obj, 'results_df') and ras_obj.results_df is not None and len(ras_obj.results_df) > 0:
+                    mask = ras_obj.results_df['plan_number'].isin(plan_nums)
+                    if mask.any():
+                        _results_df = ras_obj.results_df[mask].copy()
+            except Exception:
+                pass  # _results_df stays empty
+
+            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
 
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
-            return {}
+            return ComputeParallelResult()

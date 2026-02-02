@@ -29,6 +29,7 @@ from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
+from .ComputeResults import ComputeResult, ComputeParallelResult, RasControlResult
 from .RasMap import RasMap
 from .RasProcess import RasProcess, ProjectionInfo
 from .RasGuiAutomation import RasGuiAutomation
@@ -126,6 +127,7 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
+    'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'RasExamples', 'RasEbfeModels', 'RasEbfeExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
 
     # Geometry handling (new in v0.86.0)

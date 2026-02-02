@@ -775,7 +775,7 @@ class RasControl:
 
     @staticmethod
     def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False,
-                 use_watchdog: bool = True, max_runtime: int = 86400) -> Tuple[bool, List[str]]:
+                 use_watchdog: bool = True, max_runtime: int = 86400) -> 'RasControlResult':
         """
         Run a plan (steady or unsteady) and wait for completion.
 
@@ -799,13 +799,21 @@ class RasControl:
                 process. Only used if use_watchdog=True. Defaults to 3600 (1 hour).
 
         Returns:
-            Tuple of (success: bool, messages: List[str])
+            RasControlResult: Result object backward compatible with Tuple[bool, List[str]].
+                ``success``: Whether execution succeeded.
+                ``messages``: List of computation messages.
+                ``results_df_row``: Single row from results_df (pd.Series or None).
+                Existing code ``success, msgs = RasControl.run_plan("01")`` still works via __iter__.
 
         Example:
             >>> from ras_commander import init_ras_project, RasControl
             >>> init_ras_project(path, "4.1")
-            >>> # Default: with watchdog protection (recommended)
+            >>> # Old usage (still works):
             >>> success, msgs = RasControl.run_plan("02")
+            >>> # New usage:
+            >>> result = RasControl.run_plan("02")
+            >>> if result:
+            ...     print(result.results_df_row)
             >>> # Force recomputation even if results are current
             >>> success, msgs = RasControl.run_plan("02", force_recompute=True)
             >>> # Disable watchdog (not recommended in Jupyter)
@@ -918,7 +926,27 @@ class RasControl:
                 if watchdog_pid:
                     _terminate_watchdog(watchdog_pid)
 
-        return RasControl._com_open_close(info.project_path, info.version, _run_operation)
+        raw_result = RasControl._com_open_close(info.project_path, info.version, _run_operation)
+
+        # Wrap tuple result into RasControlResult with results_df_row
+        from .ComputeResults import RasControlResult
+        _ras_obj = ras_object if ras_object is not None else ras
+        _success = raw_result[0] if raw_result else False
+        _messages = list(raw_result[1]) if raw_result and len(raw_result) > 1 else []
+        _results_df_row = None
+
+        # Refresh DataFrames and capture results_df row
+        if _success and info.plan_number and hasattr(_ras_obj, 'update_results_df'):
+            try:
+                _ras_obj.plan_df = _ras_obj.get_plan_entries()
+                _ras_obj.update_results_df(plan_numbers=[info.plan_number])
+                mask = _ras_obj.results_df['plan_number'] == info.plan_number
+                if mask.any():
+                    _results_df_row = _ras_obj.results_df[mask].iloc[0].copy()
+            except Exception:
+                pass  # results_df_row stays None
+
+        return RasControlResult(success=_success, messages=_messages, results_df_row=_results_df_row)
 
     @staticmethod
     def _parse_ras_datetime(time_string: str) -> pd.Timestamp:
