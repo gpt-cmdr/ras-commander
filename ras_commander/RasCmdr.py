@@ -472,12 +472,12 @@ class RasCmdr:
                         _ras_obj.update_results_df(plan_numbers=[plan_number])
                         # Capture results_df row for the executed plan
                         try:
-                            plan_num_str = str(plan_number).zfill(2) if not isinstance(plan_number, str) else str(plan_number)
+                            plan_num_str = str(plan_number).zfill(2)
                             mask = _ras_obj.results_df['plan_number'] == plan_num_str
                             if mask.any():
                                 _results_df_row = _ras_obj.results_df[mask].iloc[0].copy()
-                        except Exception:
-                            pass  # results_df_row stays None
+                        except Exception as e:
+                            logger.debug(f"Could not extract results_df_row: {e}")
                 except Exception as e_refresh:
                     logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
 
@@ -812,8 +812,8 @@ class RasCmdr:
                     mask = ras_obj.results_df['plan_number'].isin(plan_nums)
                     if mask.any():
                         _results_df = ras_obj.results_df[mask].copy()
-            except Exception:
-                pass  # _results_df stays empty
+            except Exception as e:
+                logger.debug(f"Could not extract results_df for parallel plans: {e}")
 
             return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
 
@@ -1083,8 +1083,8 @@ class RasCmdr:
                     mask = ras_obj.results_df['plan_number'].isin(plan_nums)
                     if mask.any():
                         _results_df = ras_obj.results_df[mask].copy()
-            except Exception:
-                pass  # _results_df stays empty
+            except Exception as e:
+                logger.debug(f"Could not extract results_df for test mode plans: {e}")
 
             return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
 

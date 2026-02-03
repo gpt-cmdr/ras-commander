@@ -935,16 +935,16 @@ class RasControl:
         _messages = list(raw_result[1]) if raw_result and len(raw_result) > 1 else []
         _results_df_row = None
 
-        # Refresh DataFrames and capture results_df row
-        if _success and info.plan_number and hasattr(_ras_obj, 'update_results_df'):
+        # Refresh DataFrames and capture results_df row (even on failure for diagnostics)
+        if info.plan_number and hasattr(_ras_obj, 'update_results_df'):
             try:
                 _ras_obj.plan_df = _ras_obj.get_plan_entries()
                 _ras_obj.update_results_df(plan_numbers=[info.plan_number])
                 mask = _ras_obj.results_df['plan_number'] == info.plan_number
                 if mask.any():
                     _results_df_row = _ras_obj.results_df[mask].iloc[0].copy()
-            except Exception:
-                pass  # results_df_row stays None
+            except Exception as e:
+                logger.debug(f"Could not extract results_df_row: {e}")
 
         return RasControlResult(success=_success, messages=_messages, results_df_row=_results_df_row)
 
