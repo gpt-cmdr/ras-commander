@@ -4,7 +4,7 @@
 
 - **Python**: 3.10 or higher (3.13 recommended for new installations)
 - **HEC-RAS**: 6.0+ recommended (3.x-5.x supported via RasControl)
-- **Operating System**: Windows (for HEC-RAS execution), Linux/Mac (for HDF analysis only)
+- **Operating System**: Windows (for full HEC-RAS execution), Linux (map generation via Wine), Mac (HDF analysis only)
 
 ## Prerequisites
 
@@ -102,6 +102,60 @@ pip install pyjnius
 
 !!! note "Java Required"
     DSS operations require Java 8+ (JRE or JDK) installed on your system.
+
+### Linux/Wine (Headless Map Generation)
+
+On Linux, `RasProcess.exe` can run under Wine to generate stored maps (WSE, Depth, Velocity TIFs) without a display. This enables headless CI/CD pipelines and cloud-based map generation.
+
+**Requirements**:
+
+- Wine 8.0+ (64-bit prefix)
+- .NET Framework 4.8 (installed via winetricks)
+- HEC-RAS DLLs copied from a Windows installation
+
+```bash
+# Step 1: Install Wine
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install -y wine wine64 wine32 winetricks cabextract
+
+# Step 2: Create Wine prefix with .NET 4.8
+export WINEPREFIX=/opt/hecras-wine
+export WINEARCH=win64
+wineboot --init
+winetricks -q dotnet48      # ~15 min, installs .NET Framework 4.8
+winetricks -q gdiplus       # Native GDI+ (required for System.Drawing)
+winetricks -q corefonts     # Arial, Times New Roman, etc.
+
+# Step 3: Copy HEC-RAS DLLs from a Windows machine
+# From C:\Program Files (x86)\HEC\HEC-RAS\6.6\ copy all DLLs and the GDAL/ folder
+# to /opt/hecras-wine/drive_c/HEC-RAS/6.6/
+```
+
+!!! tip "Detailed Setup Instructions"
+    Run `RasProcess.setup_wine_environment()` in Python to print the complete list of required DLLs and step-by-step instructions.
+
+!!! note "Scope"
+    Wine support covers `RasProcess.exe` (stored map generation) only. Full HEC-RAS simulation (`Ras.exe`) still requires Windows. HDF analysis works natively on Linux without Wine.
+
+**Verify installation**:
+
+```python
+from ras_commander import RasProcess
+
+# Check Wine environment is configured correctly
+status = RasProcess.check_wine_environment()
+print(status)
+```
+
+**Usage** (no code changes needed -- auto-detected):
+
+```python
+from ras_commander import RasProcess
+
+# Same API as Windows -- Wine wrapping is automatic
+results = RasProcess.store_maps(plan_number="01", wse=True, depth=True)
+```
 
 ### Remote Execution
 
