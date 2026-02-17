@@ -91,6 +91,13 @@ How agents should use notebooks
 - Pattern: Run baseline simulation, extract max WSE from results, apply safety factors to compute optimal HTAB parameters, re-run with force_geompre=True.
 - Key: Safety factor 1.3x (30%) for typical floods, 2.0x (100%) for dam break/extreme events.
 
+205_extract_xs_xyz_from_geometry.ipynb
+- Focus: Extract 3D (XYZ) coordinates from plain text geometry files without HEC-RAS execution or HDF preprocessing.
+- Functions: GeomCrossSection.get_xs_coords (ras_commander/geom/GeomCrossSection.py), GeomParser.get_xs_cut_lines (ras_commander/geom/GeomParser.py).
+- Pattern: Extract XYZ from .g## files, filter by river/reach/RS, export to shapefile (3D LineStrings), batch process multiple models.
+- Key: Works with any HEC-RAS version (3.x-6.x); handles fixed-width concatenated coordinates; no version compatibility issues.
+- Use case: Legacy model data extraction, cross section inventory, GIS export without running models.
+
 210_fixit_blocked_obstructions.ipynb
 - Focus: Automatically detect and fix overlapping blocked obstructions.
 - Functions: RasFixit.check_blocked_obstructions (ras_commander/RasFixit.py), RasFixit.fix_blocked_obstructions (ras_commander/RasFixit.py).

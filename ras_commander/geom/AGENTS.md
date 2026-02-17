@@ -69,7 +69,8 @@ Standard exception hierarchy:
 
 ### GeomCrossSection (Cross Sections)
 - `get_cross_sections(geom_file, river=None, reach=None)` - List all XS metadata
-- `get_station_elevation(geom_file, river, reach, rs)` - Get XS geometry
+- `get_station_elevation(geom_file, river, reach, rs)` - Get XS geometry (2D: station, elevation)
+- `get_xs_coords(geom_file, river=None, reach=None, rs=None)` - **NEW** Get XYZ coordinates (3D: x, y, z) without HDF
 - `set_station_elevation(geom_file, river, reach, rs, df, bank_left=None, bank_right=None)` - Modify XS
 - `get_bank_stations(geom_file, river, reach, rs)` - Get bank locations
 - `get_expansion_contraction(geom_file, river, reach, rs)` - Get coefficients
@@ -224,6 +225,125 @@ If metadata extraction fails for any geometry file, default values are used:
 - `mesh_area_names` defaults to empty list `[]`
 
 This ensures `geom_df` is always complete and consistent, even if some geometry files are malformed or inaccessible.
+
+## XYZ Coordinate Extraction (NEW in v0.89.1)
+
+The `GeomCrossSection.get_xs_coords()` method extracts 3D (XYZ) coordinates from plain text geometry files without requiring HEC-RAS execution or geometry HDF preprocessing.
+
+### When to Use XYZ Extraction
+
+**Use `get_xs_coords()` when**:
+- Working with legacy models (HEC-RAS 3.x, 4.x, 5.x)
+- Need cross section coordinates without running the model
+- Batch processing multiple models for cross section inventory
+- Avoiding version compatibility issues (no HEC-RAS execution required)
+- Exporting cross sections to GIS formats
+
+**Use HDF extraction when**:
+- Geometry HDF (`.g##.hdf`) already exists
+- Need additional attributes (Manning's n, bank stations, ineffective areas)
+- Working with HEC-RAS 6.x with preprocessed geometry
+
+### Basic Usage
+
+```python
+from ras_commander.geom import GeomCrossSection
+
+# Extract all cross sections
+xyz = GeomCrossSection.get_xs_coords("model.g01")
+
+# Returns DataFrame with columns:
+# river, reach, RS, station, x, y, z
+print(f"Extracted {len(xyz):,} points from {xyz['RS'].nunique()} cross sections")
+```
+
+### Filtering Options
+
+```python
+# Filter by river
+xyz_river = GeomCrossSection.get_xs_coords("model.g01", river="White")
+
+# Filter by river and reach
+xyz_reach = GeomCrossSection.get_xs_coords("model.g01",
+                                          river="White",
+                                          reach="Muncie")
+
+# Single cross section
+xyz_xs = GeomCrossSection.get_xs_coords("model.g01",
+                                       river="White",
+                                       reach="Muncie",
+                                       rs="15696.24")
+```
+
+### Export to GIS Formats
+
+```python
+import geopandas as gpd
+from shapely.geometry import LineString
+
+# Convert to 3D LineStrings (one per cross section)
+xs_lines = []
+for (river, reach, rs), group in xyz.groupby(['river', 'reach', 'RS']):
+    coords = list(zip(group['x'], group['y'], group['z']))
+    xs_lines.append({
+        'river': river,
+        'reach': reach,
+        'RS': rs,
+        'num_points': len(coords),
+        'min_elev': group['z'].min(),
+        'max_elev': group['z'].max(),
+        'geometry': LineString(coords)
+    })
+
+gdf = gpd.GeoDataFrame(xs_lines, geometry='geometry')
+gdf = gdf.set_crs(epsg=26916)  # Set appropriate CRS for project
+gdf.to_file("cross_sections.shp")
+```
+
+### Algorithm
+
+1. Parse GIS cut line geometry (XY polyline) using `GeomParser.get_xs_cut_lines()`
+2. Extract station-elevation data using `get_station_elevation()`
+3. Interpolate XY coordinates along cut line based on station positions
+4. Combine interpolated XY with elevation Z
+
+### Output Format
+
+**DataFrame columns**:
+- `river` (str): River name
+- `reach` (str): Reach name
+- `RS` (str): River station
+- `station` (float): Station along cross section (from left bank, ft or m)
+- `x` (float): X coordinate (UTM or state plane, units depend on project)
+- `y` (float): Y coordinate
+- `z` (float): Elevation (ft or m)
+
+**Format**: Long format (one row per point)
+
+### Comparison to HDF Extraction
+
+| Aspect | `get_xs_coords()` (Plain Text) | `HdfXsec.get_cross_sections()` (HDF) |
+|--------|-------------------------------|--------------------------------------|
+| **Input** | `.g##` plain text file | `.g##.hdf` geometry HDF |
+| **Requires** | Nothing (file only) | Geometry preprocessing |
+| **HEC-RAS versions** | All (3.x-6.x) | 6.x only |
+| **Speed** | <1 second for 60 XS | Faster (~0.1s) |
+| **Output** | Long DataFrame (one row/point) | Wide GeoDataFrame (one row/XS) |
+| **Additional data** | XYZ only | Manning's n, bank sta, ineffective |
+
+### Known Limitations
+
+1. **Requires GIS cut lines**: Cross sections without XY coordinates will be skipped with warning
+2. **No CRS metadata**: User must set coordinate reference system based on project
+3. **Station orientation**: Assumes standard HEC-RAS convention (stations increase left to right)
+
+### Example Notebook
+
+See `examples/205_extract_xs_xyz_from_geometry.ipynb` for complete demonstration including:
+- Filtering by river/reach
+- Shapefile export
+- Plan view visualization
+- Batch processing multiple models
 
 ## HTAB Optimization
 

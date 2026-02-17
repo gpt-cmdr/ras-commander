@@ -776,19 +776,36 @@ class GeomParser:
                 values_read = 0
 
                 while values_read < total_values and i < len(lines):
-                    data_line = lines[i].strip()
-                    if not data_line or data_line.startswith(
+                    data_line = lines[i]  # Don't strip - preserve spacing for fixed-width
+                    data_stripped = data_line.strip()
+
+                    if not data_stripped or data_stripped.startswith(
                         ('River', 'Type', 'Node', '#', 'XS', 'Levee', 'Bank')
                     ):
                         break
 
-                    parts = data_line.split()
-                    for part in parts:
-                        try:
-                            coords.append(float(part))
-                            values_read += 1
-                        except ValueError:
+                    # XS GIS Cut Lines use 16-character fixed-width format
+                    # Format: each coordinate is exactly 16 characters (padded with spaces if shorter)
+                    COORD_WIDTH = 16
+
+                    # Parse as fixed-width fields
+                    line_values = []
+                    for col_start in range(0, len(data_line), COORD_WIDTH):
+                        if values_read >= total_values:
                             break
+
+                        col_end = min(col_start + COORD_WIDTH, len(data_line))
+                        value_str = data_line[col_start:col_end].strip()
+
+                        if value_str:
+                            try:
+                                value = float(value_str)
+                                coords.append(value)
+                                values_read += 1
+                            except ValueError:
+                                # Not a valid number, skip
+                                pass
+
                     i += 1
 
                 if len(coords) >= 4:

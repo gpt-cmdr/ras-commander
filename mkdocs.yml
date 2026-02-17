@@ -152,6 +152,7 @@ nav:
     - Geometry Parsing & Operations (200s):
       - 1D Plaintext Geometry: notebooks/201_1d_plaintext_geometry.md
       - 2D Plaintext Geometry: notebooks/202_2d_plaintext_geometry.md
+      - Extract XYZ from Geometry: notebooks/205_extract_xs_xyz_from_geometry.md
       - Fixit Blocked Obstructions: notebooks/210_fixit_blocked_obstructions.md
     - Boundary Conditions (300s):
       - Unsteady Flow Operations: notebooks/300_unsteady_flow_operations.md

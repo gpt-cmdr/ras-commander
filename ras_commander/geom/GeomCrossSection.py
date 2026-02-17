@@ -13,6 +13,7 @@ List of Functions:
 - get_bank_stations() - Read left and right bank station locations
 - get_expansion_contraction() - Read expansion and contraction coefficients
 - get_mannings_n() - Read Manning's roughness values with LOB/Channel/ROB classification
+- get_xs_coords() - Extract XYZ coordinates combining cut line geometry with station/elevation data
 
 Example Usage:
     >>> from ras_commander import GeomCrossSection
@@ -981,6 +982,180 @@ class GeomCrossSection:
         except Exception as e:
             logger.error(f"Error reading Manning's n: {str(e)}")
             raise IOError(f"Failed to read Manning's n: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_xs_coords(geom_file: Union[str, Path],
+                     river: Optional[str] = None,
+                     reach: Optional[str] = None,
+                     rs: Optional[str] = None,
+                     ras_object=None) -> pd.DataFrame:
+        """
+        Extract XYZ coordinates for cross sections from plain text geometry file.
+
+        Combines GIS cut line geometry with station-elevation data to produce
+        3D point coordinates along each cross section. This is the plain text
+        equivalent of HdfXsec.get_cross_sections() for extracting XYZ points
+        without requiring geometry HDF files.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            river (Optional[str]): Filter by specific river name. If None, returns all rivers.
+            reach (Optional[str]): Filter by specific reach name. If None, returns all reaches.
+            rs (Optional[str]): Filter by specific river station. If None, returns all stations.
+            ras_object: Optional RasPrj instance for multi-project workflows (unused, for API consistency)
+
+        Returns:
+            pd.DataFrame: DataFrame with columns:
+                - river (str): River name
+                - reach (str): Reach name
+                - RS (str): River station
+                - station (float): Station along cross section (from left bank)
+                - x (float): X coordinate
+                - y (float): Y coordinate
+                - z (float): Elevation
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ImportError: If geopandas or shapely are not installed
+            ValueError: If no cross sections found matching filters
+
+        Example:
+            >>> # Extract XYZ for all cross sections
+            >>> xyz = GeomCrossSection.get_xs_coords("model.g01")
+            >>> print(f"Extracted {len(xyz)} total points")
+            >>>
+            >>> # Filter by river/reach
+            >>> xyz_reach = GeomCrossSection.get_xs_coords("model.g01", river="Main River", reach="Upper")
+            >>>
+            >>> # Export to shapefile (LineStrings)
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import LineString
+            >>> xs_lines = []
+            >>> for (r, rc, rs), group in xyz.groupby(['river', 'reach', 'RS']):
+            ...     coords = list(zip(group['x'], group['y'], group['z']))
+            ...     xs_lines.append({'river': r, 'reach': rc, 'RS': rs, 'geometry': LineString(coords)})
+            >>> gdf = gpd.GeoDataFrame(xs_lines, crs="EPSG:26915")
+            >>> gdf.to_file("cross_sections.shp")
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        logger.info(f"Extracting XYZ coordinates from: {geom_file}")
+
+        # Get GIS cut line geometries
+        try:
+            from shapely.geometry import LineString
+        except ImportError:
+            raise ImportError(
+                "shapely is required for get_xs_coords(). "
+                "Install with: pip install shapely"
+            )
+
+        cut_lines = GeomParser.get_xs_cut_lines(geom_file, ras_object=ras_object)
+
+        if len(cut_lines) == 0:
+            raise ValueError(f"No cross sections with GIS cut lines found in {geom_file}")
+
+        # Apply filters
+        if river:
+            cut_lines = cut_lines[cut_lines['river'] == river]
+        if reach:
+            cut_lines = cut_lines[cut_lines['reach'] == reach]
+        if rs:
+            cut_lines = cut_lines[cut_lines['station'] == rs]
+
+        if len(cut_lines) == 0:
+            filter_desc = []
+            if river:
+                filter_desc.append(f"river='{river}'")
+            if reach:
+                filter_desc.append(f"reach='{reach}'")
+            if rs:
+                filter_desc.append(f"RS='{rs}'")
+            raise ValueError(f"No cross sections found matching: {', '.join(filter_desc)}")
+
+        logger.info(f"Processing {len(cut_lines)} cross sections")
+
+        all_coords = []
+
+        for idx, xs_row in cut_lines.iterrows():
+            # Get station-elevation data
+            try:
+                sta_elev = GeomCrossSection.get_station_elevation(
+                    geom_file,
+                    xs_row['river'],
+                    xs_row['reach'],
+                    xs_row['station']
+                )
+            except ValueError as e:
+                logger.warning(
+                    f"Could not get station/elevation for "
+                    f"{xs_row['river']}/{xs_row['reach']}/{xs_row['station']}: {e}"
+                )
+                continue
+
+            if len(sta_elev) == 0:
+                logger.warning(
+                    f"Empty station/elevation data for "
+                    f"{xs_row['river']}/{xs_row['reach']}/{xs_row['station']}"
+                )
+                continue
+
+            # Get cut line geometry
+            cut_line = xs_row['geometry']
+
+            # Interpolate XY coordinates along cut line
+            # Assumes stations increase from left to right (0 to max)
+            max_station = sta_elev['Station'].max()
+            min_station = sta_elev['Station'].min()
+
+            # Handle edge case where all stations are the same
+            if max_station == min_station:
+                logger.warning(
+                    f"All stations equal for {xs_row['river']}/{xs_row['reach']}/{xs_row['station']}, "
+                    f"using cut line midpoint"
+                )
+                mid_pt = cut_line.interpolate(0.5, normalized=True)
+                for _, pt in sta_elev.iterrows():
+                    all_coords.append({
+                        'river': xs_row['river'],
+                        'reach': xs_row['reach'],
+                        'RS': xs_row['station'],  # River Station (from cut_lines 'station' column)
+                        'station': pt['Station'],  # Station along cross section (from sta/elev data)
+                        'x': mid_pt.x,
+                        'y': mid_pt.y,
+                        'z': pt['Elevation']
+                    })
+                continue
+
+            # Interpolate each point along the cut line
+            for _, pt in sta_elev.iterrows():
+                station = pt['Station']
+                elevation = pt['Elevation']
+
+                # Normalize station to [0, 1] range
+                # Assumes cut line goes from left (station=min) to right (station=max)
+                normalized_pos = (station - min_station) / (max_station - min_station)
+
+                # Interpolate point along cut line
+                interp_point = cut_line.interpolate(normalized_pos, normalized=True)
+
+                all_coords.append({
+                    'river': xs_row['river'],
+                    'reach': xs_row['reach'],
+                    'RS': xs_row['station'],  # River Station (from cut_lines 'station' column)
+                    'station': station,  # Station along cross section (from sta/elev data)
+                    'x': interp_point.x,
+                    'y': interp_point.y,
+                    'z': elevation
+                })
+
+        logger.info(f"Extracted {len(all_coords)} XYZ points from {len(cut_lines)} cross sections")
+
+        return pd.DataFrame(all_coords)
 
     @staticmethod
     @log_call
