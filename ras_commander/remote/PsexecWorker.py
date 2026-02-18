@@ -20,6 +20,7 @@ from typing import Dict, Optional
 from .RasWorker import RasWorker
 from .Utils import convert_unc_to_local_path, authenticate_network_share
 from ..LoggingConfig import get_logger
+from ..RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -401,7 +402,7 @@ def execute_psexec_plan(
     try:
         # Step 2: Copy project to worker folder
         logger.info(f"Copying project to {worker_temp_folder}")
-        shutil.copytree(project_folder, worker_temp_folder / project_name, dirs_exist_ok=True)
+        shutil.copytree(project_folder, worker_temp_folder / project_name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
 
         worker_project_path = worker_temp_folder / project_name
         prj_file = list(worker_project_path.glob("*.prj"))[0]

@@ -28,6 +28,8 @@ All of the methods in this class are static and are designed to be used without 
 
 List of Functions in RasUnsteady:
 - update_flow_title()
+- read_unsteady_description()
+- update_unsteady_description()
 - update_restart_settings()
 - extract_boundary_and_tables()
 - print_boundaries_and_tables()
@@ -144,6 +146,63 @@ class RasUnsteady:
             logger.warning(f"Flow Title not found in {unsteady_file}")
     
         ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    @log_call
+    def read_unsteady_description(unsteady_number_or_path: Union[str, Path], ras_object: Optional[Any] = None) -> str:
+        """
+        Read the description from an unsteady flow file (.u##).
+
+        Args:
+            unsteady_number_or_path (Union[str, Path]): The unsteady number (e.g., '01')
+                or path to the unsteady flow file.
+            ras_object (optional): RAS project object. If None, uses global 'ras' object.
+
+        Returns:
+            str: The description text, or empty string if not found.
+
+        Raises:
+            ValueError: If the unsteady flow file is not found.
+        """
+        from .RasUtils import RasUtils
+
+        unsteady_file_path = Path(unsteady_number_or_path)
+        if not unsteady_file_path.is_file():
+            from .RasPlan import RasPlan
+            unsteady_file_path = RasPlan.get_unsteady_path(unsteady_number_or_path, ras_object)
+            if unsteady_file_path is None or not Path(unsteady_file_path).exists():
+                raise ValueError(f"Unsteady flow file not found: {unsteady_number_or_path}")
+
+        return RasUtils._read_description_block(unsteady_file_path)
+
+    @staticmethod
+    @log_call
+    def update_unsteady_description(unsteady_number_or_path: Union[str, Path], description: str, ras_object: Optional[Any] = None) -> bool:
+        """
+        Update or insert the description in an unsteady flow file (.u##).
+
+        Args:
+            unsteady_number_or_path (Union[str, Path]): The unsteady number (e.g., '01')
+                or path to the unsteady flow file.
+            description (str): Description text to write.
+            ras_object (optional): RAS project object. If None, uses global 'ras' object.
+
+        Returns:
+            bool: True if successful, False otherwise.
+
+        Raises:
+            ValueError: If the unsteady flow file is not found.
+        """
+        from .RasUtils import RasUtils
+
+        unsteady_file_path = Path(unsteady_number_or_path)
+        if not unsteady_file_path.is_file():
+            from .RasPlan import RasPlan
+            unsteady_file_path = RasPlan.get_unsteady_path(unsteady_number_or_path, ras_object)
+            if unsteady_file_path is None or not Path(unsteady_file_path).exists():
+                raise ValueError(f"Unsteady flow file not found: {unsteady_number_or_path}")
+
+        return RasUtils._write_description_block(unsteady_file_path, description, 'Flow Title')
 
     @staticmethod
     @log_call

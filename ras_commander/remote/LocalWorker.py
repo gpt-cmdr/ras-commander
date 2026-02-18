@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
+from ..RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -176,7 +177,7 @@ def execute_local_plan(
         # Step 2: Copy project to worker folder
         logger.info(f"Copying project to {worker_temp_folder}")
         worker_project_path = worker_temp_folder / project_name
-        shutil.copytree(project_folder, worker_project_path, dirs_exist_ok=True)
+        shutil.copytree(project_folder, worker_project_path, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
 
         # Step 3: Execute using RasCmdr.compute_plan()
         from ..RasCmdr import RasCmdr

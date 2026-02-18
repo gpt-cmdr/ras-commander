@@ -58,6 +58,8 @@ List of Functions in RasUtils:
 - safe_write_geometry()      # Phase 2.1 - Atomic file write with backup
 - rollback_geometry()        # Phase 2.1 - Restore from backup
 - validate_geometry_file_basic()  # Phase 2.1 - Basic validation
+- _read_description_block()  # Internal - Read BEGIN DESCRIPTION / END DESCRIPTION block
+- _write_description_block() # Internal - Write BEGIN DESCRIPTION / END DESCRIPTION block
 
 """
 import os
@@ -169,6 +171,51 @@ class RasUtils:
             return path.absolute()
 
         return resolved
+
+    # Windows reserved device names (case-insensitive, without extensions)
+    _WINDOWS_RESERVED_NAMES = frozenset({
+        'CON', 'PRN', 'AUX', 'NUL',
+        'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+        'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+    })
+
+    @staticmethod
+    def ignore_windows_reserved(directory, contents):
+        """
+        Ignore function for shutil.copytree that skips Windows reserved device names.
+
+        Windows lists virtual device names (NUL, CON, PRN, etc.) in directory
+        listings even though they are not real files. shutil.copytree fails
+        when it tries to copy them. This function filters them out.
+
+        Parameters:
+            directory: The directory being copied (provided by copytree)
+            contents: List of names in the directory (provided by copytree)
+
+        Returns:
+            set: Names to ignore (Windows reserved device names)
+        """
+        ignored = set()
+        for name in contents:
+            stem = Path(name).stem.upper()
+            if stem in RasUtils._WINDOWS_RESERVED_NAMES:
+                logger.debug(f"Skipping Windows reserved name: {name} in {directory}")
+                ignored.add(name)
+        return ignored
+
+    @staticmethod
+    def is_windows_reserved_name(name: str) -> bool:
+        """
+        Check if a filename is a Windows reserved device name.
+
+        Parameters:
+            name: Filename to check
+
+        Returns:
+            bool: True if the name is a reserved device name
+        """
+        stem = Path(name).stem.upper()
+        return stem in RasUtils._WINDOWS_RESERVED_NAMES
 
     @staticmethod
     @log_call
@@ -1664,4 +1711,119 @@ class RasUtils:
 
         except Exception as e:
             logger.error(f"Error validating geometry file {geom_file}: {e}")
+            return False
+
+    @staticmethod
+    def _read_description_block(file_path: Union[str, Path]) -> str:
+        """
+        Read the BEGIN DESCRIPTION / END DESCRIPTION block from any HEC-RAS text file.
+
+        HEC-RAS uses the same description block format in plan (.p##), geometry (.g##),
+        unsteady (.u##), and steady flow (.f##) files.
+
+        Parameters:
+            file_path (Union[str, Path]): Path to the HEC-RAS text file.
+
+        Returns:
+            str: The description text, or empty string if no description block found.
+        """
+        file_path = Path(file_path)
+        if not file_path.exists():
+            logger.warning(f"File not found for description read: {file_path}")
+            return ""
+
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+        except IOError as e:
+            logger.error(f"Error reading file {file_path}: {e}")
+            return ""
+
+        description_lines = []
+        in_description = False
+        for line in lines:
+            stripped_upper = line.strip().upper()
+            if stripped_upper in ('BEGIN DESCRIPTION:', 'BEGIN DESCRIPTION'):
+                in_description = True
+            elif stripped_upper in ('END DESCRIPTION:', 'END DESCRIPTION'):
+                break
+            elif in_description:
+                description_lines.append(line.strip())
+
+        return '\n'.join(description_lines)
+
+    @staticmethod
+    def _write_description_block(
+        file_path: Union[str, Path],
+        description: str,
+        title_keyword: str
+    ) -> bool:
+        """
+        Write a BEGIN DESCRIPTION / END DESCRIPTION block into any HEC-RAS text file.
+
+        If an existing description block is found, it is replaced in place.
+        If no description block exists, a new one is inserted after the title and
+        Program Version lines.
+
+        Parameters:
+            file_path (Union[str, Path]): Path to the HEC-RAS text file.
+            description (str): Description text to write.
+            title_keyword (str): The title keyword for this file type, e.g.
+                'Plan Title', 'Geom Title', 'Flow Title'. Used to determine
+                insertion point when no existing description block is found.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        file_path = Path(file_path)
+        if not file_path.exists():
+            logger.error(f"File not found for description write: {file_path}")
+            return False
+
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+        except IOError as e:
+            logger.error(f"Error reading file {file_path}: {e}")
+            return False
+
+        # Find existing description block
+        desc_start_idx = None
+        desc_end_idx = None
+        for i, line in enumerate(lines):
+            stripped_upper = line.strip().upper()
+            if stripped_upper.startswith('BEGIN DESCRIPTION'):
+                desc_start_idx = i
+            elif stripped_upper.startswith('END DESCRIPTION'):
+                desc_end_idx = i
+                break
+
+        # Prepare the new description block
+        description_clean = description.rstrip()
+        description_block = [
+            'BEGIN DESCRIPTION:\n',
+            description_clean + '\n',
+            'END DESCRIPTION:\n'
+        ]
+
+        if desc_start_idx is not None and desc_end_idx is not None:
+            # Replace existing description block in place
+            new_lines = lines[:desc_start_idx] + description_block + lines[desc_end_idx + 1:]
+        else:
+            # Find insertion point: after title_keyword= and Program Version= lines
+            last_header_idx = 0
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith(f'{title_keyword}=') or stripped.startswith('Program Version='):
+                    last_header_idx = max(last_header_idx, i)
+            insertion_idx = last_header_idx + 1
+            new_lines = lines[:insertion_idx] + description_block + lines[insertion_idx:]
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+            logger.info(f"Updated description in {file_path}")
+            return True
+        except IOError as e:
+            logger.error(f"Error writing description to {file_path}: {e}")
             return False

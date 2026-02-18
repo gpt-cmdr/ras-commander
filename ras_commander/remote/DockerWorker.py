@@ -59,6 +59,7 @@ from typing import Dict, Optional, Any
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -743,10 +744,12 @@ def execute_docker_plan(
         # Copy project to LOCAL staging (for preprocessing)
         logger.info(f"Copying project to local staging for preprocessing...")
         for item in project_folder.iterdir():
+            if RasUtils.is_windows_reserved_name(item.name):
+                continue
             if item.is_file():
                 shutil.copy2(item, local_input_staging / item.name)
             elif item.is_dir():
-                shutil.copytree(item, local_input_staging / item.name, dirs_exist_ok=True)
+                shutil.copytree(item, local_input_staging / item.name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
 
         # Step 1: Preprocess on Windows LOCALLY (if enabled)
         if worker.preprocess_on_host:
@@ -763,10 +766,12 @@ def execute_docker_plan(
             remote_output_staging.mkdir(parents=True, exist_ok=True)
 
             for item in local_input_staging.iterdir():
+                if RasUtils.is_windows_reserved_name(item.name):
+                    continue
                 if item.is_file():
                     shutil.copy2(item, remote_input_staging / item.name)
                 elif item.is_dir():
-                    shutil.copytree(item, remote_input_staging / item.name, dirs_exist_ok=True)
+                    shutil.copytree(item, remote_input_staging / item.name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
             logger.info(f"Files copied to: {remote_staging_folder}")
 
         # Extract geometry number

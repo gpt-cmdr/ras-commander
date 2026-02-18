@@ -48,6 +48,7 @@ List of Functions in RasPrj:
 - _get_geom_file_for_plan()
 - _parse_plan_file()
 - _parse_unsteady_file()
+- _parse_flow_file()
 - _get_prj_entries()
 - _parse_boundary_condition()
 - is_initialized (property)
@@ -478,8 +479,8 @@ class RasPrj:
             return plan_info
         
         try:
-            # Extract description
-            description_match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
+            # Extract description (case-insensitive, handles optional colon)
+            description_match = re.search(r'BEGIN DESCRIPTION:?\s*\n(.*?)\nEND DESCRIPTION', content, re.DOTALL | re.IGNORECASE)
             if description_match:
                 plan_info['description'] = description_match.group(1).strip()
             
@@ -570,9 +571,11 @@ class RasPrj:
                             'full_path': full_path
                         }
                         
-                        # Handle Unsteady entries
+                        # Handle entry type-specific parsing
                         if entry_type == 'Unsteady':
                             entry.update(self._process_unsteady_entry(entry_number, full_path))
+                        elif entry_type == 'Flow':
+                            entry.update(self._process_flow_entry(entry_number, full_path))
                         else:
                             entry.update(self._process_default_entry())
                         
@@ -594,6 +597,13 @@ class RasPrj:
         entry = {'unsteady_number': entry_number}
         unsteady_info = self._parse_unsteady_file(Path(full_path))
         entry.update(unsteady_info)
+        return entry
+
+    def _process_flow_entry(self, entry_number: str, full_path: str) -> dict:
+        """Process steady flow entry data."""
+        entry = {'unsteady_number': None}
+        flow_info = self._parse_flow_file(Path(full_path))
+        entry.update(flow_info)
         return entry
 
     def _process_default_entry(self) -> dict:
@@ -696,11 +706,51 @@ class RasPrj:
                 match = re.search(pattern, content)
                 if match:
                     unsteady_info[key] = match.group(1).strip()
-        
+
+            # Extract description (case-insensitive, handles optional colon)
+            description_match = re.search(r'BEGIN DESCRIPTION:?\s*\n(.*?)\nEND DESCRIPTION', content, re.DOTALL | re.IGNORECASE)
+            unsteady_info['description'] = description_match.group(1).strip() if description_match else ''
+
         except Exception as e:
             logger.error(f"Error parsing unsteady file {unsteady_file_path}: {e}")
-        
+
         return unsteady_info
+
+    def _parse_flow_file(self, flow_file_path):
+        """
+        Parse a steady flow file and extract critical information.
+
+        Args:
+            flow_file_path (Path): Path to the steady flow file.
+
+        Returns:
+            dict: Dictionary containing extracted flow file information.
+        """
+        flow_info = {}
+        content, encoding = read_file_with_fallback_encoding(flow_file_path)
+
+        if content is None:
+            return flow_info
+
+        try:
+            supported_flow_keys = {
+                'Flow Title': r'Flow Title=(.+)',
+                'Program Version': r'Program Version=(.+)',
+            }
+
+            for key, pattern in supported_flow_keys.items():
+                match = re.search(pattern, content)
+                if match:
+                    flow_info[key] = match.group(1).strip()
+
+            # Extract description (case-insensitive, handles optional colon)
+            description_match = re.search(r'BEGIN DESCRIPTION:?\s*\n(.*?)\nEND DESCRIPTION', content, re.DOTALL | re.IGNORECASE)
+            flow_info['description'] = description_match.group(1).strip() if description_match else ''
+
+        except Exception as e:
+            logger.error(f"Error parsing flow file {flow_file_path}: {e}")
+
+        return flow_info
 
     @property
     def is_initialized(self):
@@ -997,6 +1047,8 @@ class RasPrj:
                 - geom_number (str): Geometry number extracted from identifier
                 - full_path (str): Full path to plain text geometry file
                 - hdf_path (str): Path to geometry HDF file (.g##.hdf)
+                - geom_title (str): Geometry title from 'Geom Title=' line
+                - description (str): Description from BEGIN/END DESCRIPTION block
                 - has_1d_xs (bool): True if geometry has 1D cross sections
                 - has_2d_mesh (bool): True if geometry has 2D mesh areas
                 - num_cross_sections (int): Count of 1D cross sections
@@ -1096,6 +1148,24 @@ class RasPrj:
                 logger.warning(f"GeomMetadata not available, skipping metadata extraction: {e}")
             except Exception as e:
                 logger.warning(f"Geometry metadata extraction failed: {e}")
+
+            # Extract geom_title and description from each geometry file
+            geom_df['geom_title'] = None
+            geom_df['description'] = None
+            for idx, row in geom_df.iterrows():
+                try:
+                    geom_path = Path(row['full_path'])
+                    if geom_path.exists():
+                        content, _enc = read_file_with_fallback_encoding(geom_path)
+                        if content:
+                            title_match = re.search(r'Geom Title=(.+)', content)
+                            if title_match:
+                                geom_df.at[idx, 'geom_title'] = title_match.group(1).strip()
+                            desc_match = re.search(r'BEGIN DESCRIPTION:?\s*\n(.*?)\nEND DESCRIPTION', content, re.DOTALL | re.IGNORECASE)
+                            if desc_match:
+                                geom_df.at[idx, 'description'] = desc_match.group(1).strip()
+                except Exception as e:
+                    logger.debug(f"Failed to extract title/description for {row['geom_file']}: {e}")
 
             if not self.suppress_logging:  # Only log if suppress_logging is False
                 logger.info(f"Found {len(geom_df)} geometry entries")
@@ -1606,8 +1676,11 @@ class RasPrj:
             else:
                 self.results_df = pd.DataFrame()  # Clear all if updating all
 
-            # Concatenate new results
-            self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+            # Concatenate new results (skip empty frames to avoid FutureWarning)
+            if len(self.results_df) == 0:
+                self.results_df = new_results
+            else:
+                self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
 
         logger.info(f"Updated results_df with {len(new_results)} plan(s)")
         return self.results_df

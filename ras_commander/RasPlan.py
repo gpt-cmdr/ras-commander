@@ -49,6 +49,10 @@ List of Functions in RasPlan:
 - update_plan_intervals(): Update computation and output intervals
 - update_plan_description(): Update the description in a plan file
 - read_plan_description(): Read the description from a plan file
+- read_geom_description(): Read the description from a geometry file
+- update_geom_description(): Update the description in a geometry file
+- read_flow_description(): Read the description from a steady flow file
+- update_flow_description(): Update the description in a steady flow file
 - update_simulation_date(): Update simulation start and end dates
 - get_shortid(): Get the Short Identifier from a plan file
 - set_shortid(): Set the Short Identifier in a plan file
@@ -1619,8 +1623,107 @@ class RasPlan:
             traceback.print_exc()
             return False
 
+    @staticmethod
+    @log_call
+    def read_geom_description(geom_number_or_path: Union[str, Number, Path], ras_object=None) -> str:
+        """
+        Read the description from a geometry file (.g##).
 
+        Args:
+            geom_number_or_path (Union[str, Number, Path]): The geometry number (e.g., '01')
+                or path to the geometry file.
+            ras_object (RasPrj, optional): RAS project object. If None, uses global 'ras' object.
 
+        Returns:
+            str: The description text, or empty string if not found.
+
+        Raises:
+            ValueError: If the geometry file is not found.
+        """
+        geom_file_path = Path(geom_number_or_path)
+        if not geom_file_path.is_file():
+            geom_file_path = RasPlan.get_geom_path(geom_number_or_path, ras_object)
+            if geom_file_path is None or not Path(geom_file_path).exists():
+                raise ValueError(f"Geometry file not found: {geom_number_or_path}")
+
+        return RasUtils._read_description_block(geom_file_path)
+
+    @staticmethod
+    @log_call
+    def update_geom_description(geom_number_or_path: Union[str, Number, Path], description: str, ras_object=None) -> bool:
+        """
+        Update or insert the description in a geometry file (.g##).
+
+        Args:
+            geom_number_or_path (Union[str, Number, Path]): The geometry number (e.g., '01')
+                or path to the geometry file.
+            description (str): Description text to write.
+            ras_object (RasPrj, optional): RAS project object. If None, uses global 'ras' object.
+
+        Returns:
+            bool: True if successful, False otherwise.
+
+        Raises:
+            ValueError: If the geometry file is not found.
+        """
+        geom_file_path = Path(geom_number_or_path)
+        if not geom_file_path.is_file():
+            geom_file_path = RasPlan.get_geom_path(geom_number_or_path, ras_object)
+            if geom_file_path is None or not Path(geom_file_path).exists():
+                raise ValueError(f"Geometry file not found: {geom_number_or_path}")
+
+        return RasUtils._write_description_block(geom_file_path, description, 'Geom Title')
+
+    @staticmethod
+    @log_call
+    def read_flow_description(flow_number_or_path: Union[str, Number, Path], ras_object=None) -> str:
+        """
+        Read the description from a steady flow file (.f##).
+
+        Args:
+            flow_number_or_path (Union[str, Number, Path]): The flow number (e.g., '01')
+                or path to the flow file.
+            ras_object (RasPrj, optional): RAS project object. If None, uses global 'ras' object.
+
+        Returns:
+            str: The description text, or empty string if not found.
+
+        Raises:
+            ValueError: If the flow file is not found.
+        """
+        flow_file_path = Path(flow_number_or_path)
+        if not flow_file_path.is_file():
+            flow_file_path = RasPlan.get_flow_path(flow_number_or_path, ras_object)
+            if flow_file_path is None or not Path(flow_file_path).exists():
+                raise ValueError(f"Flow file not found: {flow_number_or_path}")
+
+        return RasUtils._read_description_block(flow_file_path)
+
+    @staticmethod
+    @log_call
+    def update_flow_description(flow_number_or_path: Union[str, Number, Path], description: str, ras_object=None) -> bool:
+        """
+        Update or insert the description in a steady flow file (.f##).
+
+        Args:
+            flow_number_or_path (Union[str, Number, Path]): The flow number (e.g., '01')
+                or path to the flow file.
+            description (str): Description text to write.
+            ras_object (RasPrj, optional): RAS project object. If None, uses global 'ras' object.
+
+        Returns:
+            bool: True if successful, False otherwise.
+
+        Raises:
+            ValueError: If the flow file is not found.
+        """
+        flow_file_path = Path(flow_number_or_path)
+        if not flow_file_path.is_file():
+            flow_file_path = RasPlan.get_flow_path(flow_number_or_path, ras_object)
+            if flow_file_path is None or not Path(flow_file_path).exists():
+                raise ValueError(f"Flow file not found: {flow_number_or_path}")
+
+        return RasUtils._write_description_block(flow_file_path, description, 'Flow Title')
 
 
 

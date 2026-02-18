@@ -276,7 +276,7 @@ class RasCmdr:
                         raise ValueError(error_msg)
 
                 dest_folder.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True)
+                shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
                 logger.info(f"Copied project folder to destination: {dest_folder}")
 
                 compute_ras = RasPrj()
@@ -590,7 +590,7 @@ class RasCmdr:
                         logger.error(error_msg)
                         raise ValueError(error_msg)
                 dest_folder_path.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True)
+                shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
                 logger.info(f"Copied project folder to destination: {dest_folder_path}")
                 project_folder = dest_folder_path
 
@@ -640,7 +640,7 @@ class RasCmdr:
                 if worker_folder.exists():
                     shutil.rmtree(worker_folder)
                     logger.info(f"Removed existing worker folder: {worker_folder}")
-                shutil.copytree(project_folder, worker_folder)
+                shutil.copytree(project_folder, worker_folder, ignore=RasUtils.ignore_windows_reserved)
                 logger.info(f"Created worker folder: {worker_folder}")
 
                 try:
@@ -709,6 +709,8 @@ class RasCmdr:
                     for retry in range(max_retries):
                         try:
                             for item in worker_folder.iterdir():
+                                if RasUtils.is_windows_reserved_name(item.name):
+                                    continue
                                 dest_path = final_dest_folder / item.name
                                 if dest_path.exists():
                                     if dest_path.is_dir():
@@ -717,7 +719,7 @@ class RasCmdr:
                                         dest_path.unlink()
                                 # Use copy instead of move for more reliability
                                 if item.is_dir():
-                                    shutil.copytree(item, dest_path)
+                                    shutil.copytree(item, dest_path, ignore=RasUtils.ignore_windows_reserved)
                                 else:
                                     shutil.copy2(item, dest_path)
                             
@@ -913,7 +915,7 @@ class RasCmdr:
                     raise ValueError(error_msg)
 
             try:
-                shutil.copytree(project_folder, compute_folder)
+                shutil.copytree(project_folder, compute_folder, ignore=RasUtils.ignore_windows_reserved)
                 logger.info(f"Copied project folder to compute folder: {compute_folder}")
             except Exception as e:
                 logger.critical(f"Error occurred while copying project folder: {str(e)}")
