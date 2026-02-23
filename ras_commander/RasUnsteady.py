@@ -251,6 +251,7 @@ class RasUnsteady:
         
         updated = False
         restart_line_index = None
+        restart_filename_index = None
         for i, line in enumerate(lines):
             if line.startswith("Use Restart="):
                 restart_line_index = i
@@ -259,17 +260,26 @@ class RasUnsteady:
                 lines[i] = f"Use Restart={new_value}\n"
                 updated = True
                 logger.info(f"Updated Use Restart from {old_value} to {new_value}")
-                break
-        
+            elif line.startswith("Restart Filename="):
+                restart_filename_index = i
+
         if use_restart:
             if not restart_filename:
                 logger.error("Restart filename must be specified when enabling restart.")
                 raise ValueError("Restart filename must be specified when enabling restart.")
-            if restart_line_index is not None:
+            if restart_filename_index is not None:
+                lines[restart_filename_index] = f"Restart Filename={restart_filename}\n"
+                logger.info(f"Updated Restart Filename: {restart_filename}")
+            elif restart_line_index is not None:
                 lines.insert(restart_line_index + 1, f"Restart Filename={restart_filename}\n")
                 logger.info(f"Added Restart Filename: {restart_filename}")
             else:
                 logger.warning("Could not find 'Use Restart' line to insert 'Restart Filename'")
+        else:
+            if restart_filename_index is not None:
+                removed_line = lines.pop(restart_filename_index).strip()
+                updated = True
+                logger.info(f"Removed existing restart filename: {removed_line}")
         
         if updated:
             try:
