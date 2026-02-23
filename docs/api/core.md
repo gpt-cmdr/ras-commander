@@ -315,7 +315,7 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
         - clone_unsteady
         - get_unsteady_path
         - set_flow_title
-        - set_restart_settings
+        - update_restart_settings
         - get_boundary_tables
 
 ## Utilities

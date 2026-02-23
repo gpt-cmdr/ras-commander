@@ -148,7 +148,7 @@ bc_counts = ras.boundaries_df['bc_type'].value_counts()
 flow_bcs = ras.boundaries_df[ras.boundaries_df['bc_type'] == 'Flow Hydrograph']
 
 # Find unsteady files using restart
-restart_files = ras.unsteady_df[ras.unsteady_df['Use Restart'] == 'True']
+restart_files = ras.unsteady_df[ras.unsteady_df['Use Restart'] == '-1']
 ```
 
 ### HDF Entries Helper
