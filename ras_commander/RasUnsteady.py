@@ -77,7 +77,7 @@ class RasUnsteady:
     """
     @staticmethod
     @log_call
-    def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
+    def update_flow_title(unsteady_file: Union[str, Path], new_title: str, ras_object: Optional[Any] = None) -> None:
         """
         Update the Flow Title in an unsteady flow file (.u*).
 
@@ -85,7 +85,8 @@ class RasUnsteady:
         It appears in the HEC-RAS interface and helps differentiate between different flow files.
 
         Parameters:
-            unsteady_file (str): Path to the unsteady flow file or unsteady flow number
+            unsteady_file (Union[str, Path]): Path to the unsteady flow file (.u##),
+                or unsteady flow number (e.g., '01') when ras_object is provided
             new_title (str): New flow title (max 24 characters, will be truncated if longer)
             ras_object (optional): Custom RAS object to use instead of the global one
 
@@ -103,11 +104,19 @@ class RasUnsteady:
             new_title = "Modified Flow Scenario"
             RasUnsteady.update_flow_title(new_unsteady_file, new_title)
         """
+        from .RasPlan import RasPlan
+
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-        
+
+        # Resolve unsteady number to file path if needed (e.g. "01" -> full path)
         unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            resolved = RasPlan.get_unsteady_path(unsteady_file, ras_object)
+            if resolved is None or not Path(resolved).exists():
+                raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_file}")
+            unsteady_path = Path(resolved)
+
         new_title = new_title[:24]  # Truncate to 24 characters if longer
         
         try:
@@ -327,7 +336,7 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
-    def extract_boundary_and_tables(unsteady_file: str, ras_object: Optional[Any] = None) -> pd.DataFrame:
+    def extract_boundary_and_tables(unsteady_file: Union[str, Path], ras_object: Optional[Any] = None) -> pd.DataFrame:
         """
         Extract boundary conditions and their associated tables from an unsteady flow file.
 
@@ -336,7 +345,8 @@ class RasUnsteady:
         conditions and their data tables from the unsteady flow file.
 
         Parameters:
-            unsteady_file (str): Path to the unsteady flow file
+            unsteady_file (Union[str, Path]): Path to the unsteady flow file (.u##),
+                or unsteady flow number (e.g., '01') when ras_object is provided
             ras_object (optional): Custom RAS object to use instead of the global one
 
         Returns:
@@ -353,10 +363,19 @@ class RasUnsteady:
             boundaries_df = RasUnsteady.extract_boundary_and_tables(unsteady_file)
             print(f"Extracted {len(boundaries_df)} boundary conditions from the file.")
         """
+        from .RasPlan import RasPlan
+
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        
+
+        # Resolve unsteady number to file path if needed (e.g. "01" -> full path)
         unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            resolved = RasPlan.get_unsteady_path(unsteady_file, ras_object)
+            if resolved is None or not Path(resolved).exists():
+                raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_file}")
+            unsteady_path = Path(resolved)
+
         table_types = [
             'Flow Hydrograph=',
             'Gate Openings=',
