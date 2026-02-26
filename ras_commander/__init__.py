@@ -24,7 +24,7 @@ from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpacka
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
-from .sources.federal import RasEbfeModels, RasEbfeExamples
+from .sources.federal import RasEbfeModels
 from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
@@ -128,7 +128,7 @@ __all__ = [
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
-    'RasExamples', 'RasEbfeModels', 'RasEbfeExamples', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
@@ -277,23 +277,6 @@ class _DeprecatedEbfeModels:
         return getattr(RasEbfeModels, name)
 
 
-class _DeprecatedEbfeExamples:
-    """Backward compatibility shim for old ebfe_examples import path."""
-
-    def __getattr__(self, name):
-        warnings.warn(
-            "Importing from ras_commander.ebfe_examples is deprecated. "
-            "Use: from ras_commander.sources.federal import RasEbfeExamples",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        from .sources.federal import RasEbfeExamples
-        if name == 'RasEbfeExamples':
-            return RasEbfeExamples
-        return getattr(RasEbfeExamples, name)
-
-
-# Register deprecated module paths for M3Model, ebfe_models, ebfe_examples
+# Register deprecated module paths for M3Model, ebfe_models
 sys.modules['ras_commander.M3Model'] = _DeprecatedM3Model()
 sys.modules['ras_commander.ebfe_models'] = _DeprecatedEbfeModels()
-sys.modules['ras_commander.ebfe_examples'] = _DeprecatedEbfeExamples()
