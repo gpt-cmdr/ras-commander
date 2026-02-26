@@ -775,38 +775,75 @@ class GeomParser:
                 i += 1
                 values_read = 0
 
-                while values_read < total_values and i < len(lines):
-                    data_line = lines[i]  # Don't strip - preserve spacing for fixed-width
-                    data_stripped = data_line.strip()
+                # Collect raw data lines for this cut line section
+                data_lines_raw = []
+                scan_i = i
+                while scan_i < len(lines):
+                    data_line_raw = lines[scan_i]
+                    data_stripped = data_line_raw.strip()
 
                     if not data_stripped or data_stripped.startswith(
                         ('River', 'Type', 'Node', '#', 'XS', 'Levee', 'Bank')
                     ):
                         break
 
-                    # XS GIS Cut Lines use 16-character fixed-width format
-                    # Format: each coordinate is exactly 16 characters (padded with spaces if shorter)
-                    COORD_WIDTH = 16
+                    data_lines_raw.append(data_line_raw)
+                    scan_i += 1
 
-                    # Parse as fixed-width fields
-                    line_values = []
-                    for col_start in range(0, len(data_line), COORD_WIDTH):
-                        if values_read >= total_values:
+                i = scan_i  # Advance past data lines
+
+                # Strategy 1: 16-char fixed-width parsing
+                # HEC-RAS standard format uses 16-char columns for GIS
+                # coordinates. This correctly handles field overflow where
+                # large values fill all 16 chars with no whitespace gap.
+                COORD_WIDTH = 16
+                fw_coords = []
+                for raw_line in data_lines_raw:
+                    for col_start in range(0, len(raw_line.rstrip('\n\r')), COORD_WIDTH):
+                        if len(fw_coords) >= total_values:
                             break
-
-                        col_end = min(col_start + COORD_WIDTH, len(data_line))
-                        value_str = data_line[col_start:col_end].strip()
-
+                        col_end = min(col_start + COORD_WIDTH, len(raw_line.rstrip('\n\r')))
+                        value_str = raw_line[col_start:col_end].strip()
                         if value_str:
                             try:
-                                value = float(value_str)
-                                coords.append(value)
-                                values_read += 1
+                                fw_coords.append(float(value_str))
                             except ValueError:
-                                # Not a valid number, skip
                                 pass
 
-                    i += 1
+                # Strategy 2: Whitespace split parsing (fallback)
+                # Handles non-standard field widths but cannot separate
+                # concatenated values from field overflow.
+                split_coords = []
+                for raw_line in data_lines_raw:
+                    for token in raw_line.split():
+                        if len(split_coords) >= total_values:
+                            break
+                        try:
+                            split_coords.append(float(token))
+                        except ValueError:
+                            break
+
+                # Selection logic:
+                # - If fixed-width read MORE values, it handled concatenated
+                #   fields that split() couldn't separate. Use fixed-width.
+                # - If both read the same count (or split read more), prefer
+                #   split() because it correctly handles any field width,
+                #   while fixed-width with wrong width silently reads wrong
+                #   values from misaligned column boundaries.
+                if len(fw_coords) > len(split_coords):
+                    coords = fw_coords[:total_values]
+                    values_read = len(coords)
+                else:
+                    coords = split_coords[:total_values]
+                    values_read = len(coords)
+
+                if values_read < total_values and len(coords) > 0:
+                    logger.warning(
+                        f"Partial XS GIS Cut Line for "
+                        f"{current_river}/{current_reach}/{current_station}: "
+                        f"expected {num_points} points ({total_values} values), "
+                        f"got {values_read} values"
+                    )
 
                 if len(coords) >= 4:
                     points = [(coords[j], coords[j+1]) for j in range(0, len(coords)-1, 2)]
