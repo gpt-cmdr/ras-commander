@@ -42,6 +42,8 @@ from typing import Union, Optional, List, Dict, Any
 from datetime import datetime
 import shutil
 import platform
+import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -1488,3 +1490,497 @@ Step 5: Configure (optional — auto-detection usually works)
         finally:
             if xml_path.exists():
                 xml_path.unlink()
+
+    @staticmethod
+    @log_call
+    def apply_depth_threshold(
+        input_tiff: Union[str, Path],
+        output_tiff: Union[str, Path],
+        min_depth: float = 0.0,
+        reproject_wgs84: bool = False,
+        ras_object=None
+    ) -> Dict[str, Any]:
+        """
+        Apply depth threshold to a GeoTIFF and optionally reproject to WGS84.
+
+        Cells with values below min_depth are set to NoData. Optionally
+        reprojects the raster to EPSG:4326 (WGS84).
+
+        Parameters
+        ----------
+        input_tiff : str or Path
+            Path to input GeoTIFF
+        output_tiff : str or Path
+            Path for output GeoTIFF
+        min_depth : float, default 0.0
+            Minimum depth threshold. Cells below this value become NoData.
+        reproject_wgs84 : bool, default False
+            If True, reproject output to EPSG:4326 (WGS84)
+        ras_object : optional
+            Custom RAS object (unused, for API consistency)
+
+        Returns
+        -------
+        dict
+            Report with keys: input, output, cells_total, cells_filtered,
+            cells_remaining, reprojected
+
+        Example
+        -------
+        >>> result = RasProcess.apply_depth_threshold(
+        ...     'depth_max.tif', 'depth_filtered.tif', min_depth=0.75
+        ... )
+        >>> print(f"Filtered {result['cells_filtered']} cells below 0.75 ft")
+        """
+        if not HAS_RASTERIO:
+            raise ImportError(
+                "rasterio is required for apply_depth_threshold(). "
+                "Install with: pip install rasterio"
+            )
+
+        input_path = Path(input_tiff)
+        output_path = Path(output_tiff)
+
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input TIFF not found: {input_path}")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with rasterio.open(input_path) as src:
+            data = src.read(1)
+            profile = src.profile.copy()
+            nodata = src.nodata if src.nodata is not None else -9999.0
+
+            # Apply threshold
+            mask = (data < min_depth) | np.isnan(data)
+            if src.nodata is not None:
+                mask = mask | (data == src.nodata)
+
+            cells_total = int(data.size)
+            cells_filtered = int(mask.sum())
+            data[mask] = nodata
+
+            profile.update(nodata=nodata)
+
+            if reproject_wgs84:
+                from rasterio.warp import calculate_default_transform, reproject as rio_reproject
+                from rasterio.crs import CRS as RioCRS
+
+                dst_crs = RioCRS.from_epsg(4326)
+                transform, width, height = calculate_default_transform(
+                    src.crs, dst_crs, src.width, src.height, *src.bounds
+                )
+                profile.update(crs=dst_crs, transform=transform, width=width, height=height)
+
+                dst_data = np.full((height, width), nodata, dtype=data.dtype)
+                rio_reproject(
+                    source=data,
+                    destination=dst_data,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=dst_crs,
+                    src_nodata=nodata,
+                    dst_nodata=nodata,
+                )
+                data = dst_data
+
+            with rasterio.open(output_path, 'w', **profile) as dst:
+                dst.write(data, 1)
+
+        logger.info(
+            f"Threshold applied: {cells_filtered}/{cells_total} cells filtered "
+            f"(min_depth={min_depth}), output: {output_path.name}"
+        )
+
+        return {
+            'input': str(input_path),
+            'output': str(output_path),
+            'cells_total': cells_total,
+            'cells_filtered': cells_filtered,
+            'cells_remaining': cells_total - cells_filtered,
+            'reprojected': reproject_wgs84,
+        }
+
+    @staticmethod
+    @log_call
+    def batch_export_rasters(
+        plan_numbers: List[str],
+        output_dir: Union[str, Path],
+        min_depth: float = 0.0,
+        reproject_wgs84: bool = False,
+        naming_template: str = "{plan}_{map_type}",
+        profile: str = "Max",
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 600
+    ) -> pd.DataFrame:
+        """
+        Batch export depth rasters for multiple plans with post-processing.
+
+        Wraps store_maps() for multiple plans, then applies depth threshold
+        filtering and optional WGS84 reprojection.
+
+        Parameters
+        ----------
+        plan_numbers : list of str
+            Plan numbers to export (e.g., ['01', '02', '03'])
+        output_dir : str or Path
+            Directory for processed output rasters
+        min_depth : float, default 0.0
+            Minimum depth threshold. Cells below this become NoData.
+        reproject_wgs84 : bool, default False
+            If True, reproject outputs to EPSG:4326
+        naming_template : str, default '{plan}_{map_type}'
+            Template for output file names. Supports {plan}, {map_type}.
+        profile : str, default 'Max'
+            Profile to export ('Max', 'Min', or timestamp)
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+        ras_version : str, optional
+            HEC-RAS version for RasProcess.exe
+        timeout : int, default 600
+            Timeout for each store_maps call
+
+        Returns
+        -------
+        pd.DataFrame
+            Report with columns: plan, map_type, source, output,
+            cells_filtered, status
+
+        Example
+        -------
+        >>> report = RasProcess.batch_export_rasters(
+        ...     plan_numbers=['01', '02', '03'],
+        ...     output_dir='./exported_rasters',
+        ...     min_depth=0.75,
+        ...     reproject_wgs84=True
+        ... )
+        >>> print(report[['plan', 'cells_filtered', 'status']])
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        report_rows = []
+
+        for plan_num in plan_numbers:
+            plan_num = RasUtils.normalize_ras_number(plan_num)
+
+            # Generate raw TIFs via store_maps
+            try:
+                map_results = RasProcess.store_maps(
+                    plan_number=plan_num,
+                    profile=profile,
+                    depth=True,
+                    wse=True,
+                    velocity=False,
+                    ras_object=ras_obj,
+                    ras_version=ras_version,
+                    timeout=timeout
+                )
+            except Exception as e:
+                logger.error(f"store_maps failed for plan {plan_num}: {e}")
+                report_rows.append({
+                    'plan': plan_num,
+                    'map_type': 'all',
+                    'source': None,
+                    'output': None,
+                    'cells_filtered': 0,
+                    'status': f'error: {e}',
+                })
+                continue
+
+            # Post-process each generated TIF
+            for map_type, tif_list in map_results.items():
+                for tif_path in tif_list:
+                    tif_path = Path(tif_path)
+                    if not tif_path.exists():
+                        continue
+
+                    out_name = naming_template.format(
+                        plan=plan_num, map_type=map_type
+                    ) + '.tif'
+                    out_path = output_path / out_name
+
+                    try:
+                        if HAS_RASTERIO and (min_depth > 0 or reproject_wgs84):
+                            result = RasProcess.apply_depth_threshold(
+                                tif_path, out_path,
+                                min_depth=min_depth,
+                                reproject_wgs84=reproject_wgs84
+                            )
+                            cells_filtered = result['cells_filtered']
+                        else:
+                            # Just copy the file
+                            import shutil
+                            shutil.copy2(tif_path, out_path)
+                            cells_filtered = 0
+
+                        report_rows.append({
+                            'plan': plan_num,
+                            'map_type': map_type,
+                            'source': str(tif_path),
+                            'output': str(out_path),
+                            'cells_filtered': cells_filtered,
+                            'status': 'exported',
+                        })
+                    except Exception as e:
+                        logger.error(f"Post-processing failed for {tif_path.name}: {e}")
+                        report_rows.append({
+                            'plan': plan_num,
+                            'map_type': map_type,
+                            'source': str(tif_path),
+                            'output': None,
+                            'cells_filtered': 0,
+                            'status': f'error: {e}',
+                        })
+
+        report = pd.DataFrame(report_rows)
+        n_exported = len(report[report['status'] == 'exported']) if not report.empty else 0
+        logger.info(f"Batch export: {n_exported} rasters exported for {len(plan_numbers)} plans")
+        return report
+
+    @staticmethod
+    @log_call
+    def composite_rasters(
+        input_tiffs: List[Union[str, Path]],
+        output_path: Union[str, Path],
+        method: str = "max",
+        extent_mode: str = "intersection",
+        ras_object=None
+    ) -> Path:
+        """
+        Composite multiple rasters using max, min, or mean method.
+
+        Parameters
+        ----------
+        input_tiffs : list of str or Path
+            Paths to input GeoTIFF files
+        output_path : str or Path
+            Path for output composite raster
+        method : str, default 'max'
+            Compositing method: 'max', 'min', or 'mean'
+        extent_mode : str, default 'intersection'
+            How to handle differing extents: 'intersection' or 'union'
+        ras_object : optional
+            Custom RAS object (unused, for API consistency)
+
+        Returns
+        -------
+        Path
+            Path to the composite raster
+
+        Example
+        -------
+        >>> composite = RasProcess.composite_rasters(
+        ...     ['plan01_depth.tif', 'plan02_depth.tif', 'plan03_depth.tif'],
+        ...     'composite_max_depth.tif',
+        ...     method='max'
+        ... )
+        """
+        if not HAS_RASTERIO:
+            raise ImportError(
+                "rasterio is required for composite_rasters(). "
+                "Install with: pip install rasterio"
+            )
+        from rasterio.merge import merge
+
+        input_paths = [Path(p) for p in input_tiffs]
+        out_path = Path(output_path)
+
+        # Validate inputs exist
+        for p in input_paths:
+            if not p.exists():
+                raise FileNotFoundError(f"Input TIFF not found: {p}")
+
+        if len(input_paths) < 2:
+            raise ValueError("At least 2 input rasters are required for compositing")
+
+        # Validate CRS consistency
+        datasets = [rasterio.open(p) for p in input_paths]
+        try:
+            crs_set = {str(ds.crs) for ds in datasets if ds.crs is not None}
+            if len(crs_set) > 1:
+                logger.warning(
+                    f"CRS mismatch across inputs: {crs_set}. "
+                    f"Results may be unreliable."
+                )
+
+            # Map method name to rasterio merge method
+            if method == 'max':
+                merge_method = 'max'
+            elif method == 'min':
+                merge_method = 'min'
+            elif method == 'mean':
+                # rasterio doesn't have built-in mean, use manual approach
+                merge_method = 'max'  # placeholder, we'll handle mean separately
+            else:
+                raise ValueError(f"Unknown method '{method}'. Use 'max', 'min', or 'mean'.")
+
+            if method == 'mean':
+                # Manual mean compositing
+                # Read first raster for reference
+                ref = datasets[0]
+                bounds_list = [ds.bounds for ds in datasets]
+
+                if extent_mode == 'intersection':
+                    from rasterio.transform import from_bounds
+                    min_left = max(b.left for b in bounds_list)
+                    min_bottom = max(b.bottom for b in bounds_list)
+                    max_right = min(b.right for b in bounds_list)
+                    max_top = min(b.top for b in bounds_list)
+                else:
+                    min_left = min(b.left for b in bounds_list)
+                    min_bottom = min(b.bottom for b in bounds_list)
+                    max_right = max(b.right for b in bounds_list)
+                    max_top = max(b.top for b in bounds_list)
+
+                # Use first dataset's resolution
+                res_x = ref.res[0]
+                res_y = ref.res[1]
+                width = int((max_right - min_left) / res_x)
+                height = int((max_top - min_bottom) / res_y)
+
+                from rasterio.transform import from_bounds as fb
+                transform = fb(min_left, min_bottom, max_right, max_top, width, height)
+
+                sum_data = np.zeros((height, width), dtype=np.float64)
+                count_data = np.zeros((height, width), dtype=np.int32)
+
+                from rasterio.warp import reproject as rio_reproject
+                for ds in datasets:
+                    temp = np.full((height, width), np.nan, dtype=np.float64)
+                    rio_reproject(
+                        source=rasterio.band(ds, 1),
+                        destination=temp,
+                        dst_transform=transform,
+                        dst_crs=ref.crs,
+                        dst_nodata=np.nan,
+                    )
+                    valid = ~np.isnan(temp)
+                    if ds.nodata is not None:
+                        valid = valid & (temp != ds.nodata)
+                    sum_data[valid] += temp[valid]
+                    count_data[valid] += 1
+
+                mean_data = np.where(count_data > 0, sum_data / count_data, ref.nodata or -9999.0)
+
+                profile = ref.profile.copy()
+                profile.update(
+                    transform=transform, width=width, height=height,
+                    dtype='float64', count=1
+                )
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                with rasterio.open(out_path, 'w', **profile) as dst:
+                    dst.write(mean_data, 1)
+            else:
+                # Use rasterio merge for max/min
+                bounds_mode = 'intersection' if extent_mode == 'intersection' else 'union'
+                merged, transform = merge(datasets, method=merge_method, bounds=None)
+
+                profile = datasets[0].profile.copy()
+                profile.update(
+                    transform=transform,
+                    width=merged.shape[2],
+                    height=merged.shape[1],
+                    count=1
+                )
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                with rasterio.open(out_path, 'w', **profile) as dst:
+                    dst.write(merged[0], 1)
+
+        finally:
+            for ds in datasets:
+                ds.close()
+
+        logger.info(f"Composite raster ({method}): {len(input_paths)} inputs → {out_path.name}")
+        return out_path
+
+    @staticmethod
+    @log_call
+    def composite_rasters_from_plans(
+        plan_numbers: List[str],
+        map_type: str = "depth",
+        output_path: Union[str, Path] = None,
+        method: str = "max",
+        ras_object=None
+    ) -> Path:
+        """
+        Composite stored map TIFs from multiple plans.
+
+        Finds stored map GeoTIFFs for each plan in the project folder,
+        then delegates to composite_rasters().
+
+        Parameters
+        ----------
+        plan_numbers : list of str
+            Plan numbers to composite (e.g., ['01', '02', '03'])
+        map_type : str, default 'depth'
+            Map type to composite (e.g., 'depth', 'wse', 'velocity')
+        output_path : str or Path, optional
+            Path for output composite. If None, auto-generated in project folder.
+        method : str, default 'max'
+            Compositing method: 'max', 'min', or 'mean'
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        Path
+            Path to the composite raster
+
+        Example
+        -------
+        >>> composite = RasProcess.composite_rasters_from_plans(
+        ...     plan_numbers=['01', '02', '03'],
+        ...     map_type='depth',
+        ...     method='max'
+        ... )
+        >>> print(f"Composite saved to: {composite}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Search for TIFs matching map_type for each plan
+        input_tiffs = []
+        for plan_num in plan_numbers:
+            plan_num = RasUtils.normalize_ras_number(plan_num)
+
+            # Search in project folder and subdirectories
+            search_patterns = [
+                f"*{map_type}*{plan_num}*.tif",
+                f"*p{plan_num}*{map_type}*.tif",
+                f"*{map_type.capitalize()}*Max*.tif",
+            ]
+
+            found = False
+            for pattern in search_patterns:
+                matches = list(ras_obj.project_folder.rglob(pattern))
+                if matches:
+                    # Use the most recently modified match
+                    best = max(matches, key=lambda p: p.stat().st_mtime)
+                    input_tiffs.append(best)
+                    logger.info(f"Plan {plan_num}: found {best.name}")
+                    found = True
+                    break
+
+            if not found:
+                logger.warning(f"No {map_type} TIF found for plan {plan_num}")
+
+        if len(input_tiffs) < 2:
+            raise ValueError(
+                f"Need at least 2 TIFs for compositing, found {len(input_tiffs)}. "
+                f"Run store_maps() for each plan first."
+            )
+
+        if output_path is None:
+            output_path = ras_obj.project_folder / f"composite_{map_type}_{method}.tif"
+
+        return RasProcess.composite_rasters(
+            input_tiffs=input_tiffs,
+            output_path=output_path,
+            method=method
+        )
