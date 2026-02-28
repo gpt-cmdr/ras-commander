@@ -512,7 +512,7 @@ class GeomParser:
         Example:
             >>> from pathlib import Path
             >>> geom_file = Path("model.g01")
-            >>> with open(geom_file, 'r') as f:
+            >>> with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             ...     lines = f.readlines()
             >>> # Modify lines...
             >>> backup = GeomParser.safe_write_geometry(geom_file, lines)
@@ -538,7 +538,7 @@ class GeomParser:
                 logger.debug(f"Created backup: {backup_path}")
 
             # Step 2: Write to temp file
-            with open(temp_path, 'w') as f:
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 f.writelines(modified_lines)
 
             # Step 3: Basic validation - check temp file has content
@@ -649,7 +649,7 @@ class GeomParser:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find River Reach line
@@ -735,7 +735,7 @@ class GeomParser:
 
         logger.info(f"Extracting XS cut lines from: {geom_file}")
 
-        with open(geom_file, 'r') as f:
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         xs_list = []
@@ -915,7 +915,7 @@ class GeomParser:
 
         logger.info(f"Extracting river centerlines from: {geom_file}")
 
-        with open(geom_file, 'r') as f:
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         reaches = []

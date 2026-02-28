@@ -52,7 +52,7 @@ Need precipitation hyetograph for HEC-RAS?
 
 ## Module Organization
 
-The precip subpackage contains 3 native modules plus 2 HMS-equivalent imports from hms-commander:
+The precip subpackage contains 6 native modules plus 3 HMS-equivalent imports from hms-commander:
 
 ### PrecipAorc.py (AORC Data Integration)
 
@@ -353,11 +353,139 @@ results = Atlas14Variance.analyze(
 )
 ```
 
+### PrecipHrrr.py (HRRR Forecast Download)
+
+**PrecipHrrr** - Real-time HRRR forecast precipitation download from NOAA NOMADS (20 KB):
+
+**Purpose**: Download HRRR (High-Resolution Rapid Refresh) subhourly forecast GRIB2 files for operational flood forecasting workflows. HRRR provides 3-km resolution precipitation forecasts updated hourly.
+
+**Data Source**:
+- **URL**: `https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod`
+- **Resolution**: 3 km CONUS
+- **Cycles**: Hourly (00z-23z), extended cycles at 00z/06z/12z/18z
+- **Horizon**: 18 hours (standard), 48 hours (extended cycles)
+- **Latency**: ~2 hours from cycle time
+- **Format**: GRIB2
+
+**Public Methods** (all `@staticmethod @log_call`):
+
+| Method | Purpose | Returns |
+|--------|---------|---------|
+| `download_forecast(output_dir, date, cycle, hours, variables, bounds, overwrite)` | Download specific HRRR forecast cycle | `List[Path]` |
+| `get_latest_forecast(output_dir, hours, max_lookback_hours, overwrite)` | Auto-detect and download latest available cycle | `List[Path]` |
+| `check_availability(date, cycle)` | HEAD request to verify cycle exists on NOMADS | `bool` |
+| `get_info()` | Return dataset metadata dictionary | `Dict` |
+| `extract_precipitation(grib_files, bounds)` | Read GRIB2 files and clip to bounds | `xarray.Dataset` |
+| `get_basin_average(grib_files, geometry)` | Basin-average precipitation time series | `pd.DataFrame` |
+
+**Key Parameters**:
+- `date`: Date string "YYYY-MM-DD" (default: today UTC)
+- `cycle`: Hour 0-23 (default: auto-detect latest)
+- `hours`: Forecast hours to download (default: 18)
+- `bounds`: Optional (west, south, east, north) for spatial clipping
+- `geometry`: GeoDataFrame or Shapely polygon for basin averaging
+
+**Example**:
+```python
+from ras_commander.precip import PrecipHrrr
+
+# Download latest available HRRR forecast
+grib_files = PrecipHrrr.get_latest_forecast(
+    output_dir="./hrrr_data",
+    hours=18
+)
+
+# Extract precipitation and clip to watershed
+precip = PrecipHrrr.extract_precipitation(
+    grib_files,
+    bounds=(-95.5, 29.5, -95.0, 30.0)
+)
+
+# Get basin-average time series
+avg = PrecipHrrr.get_basin_average(grib_files, watershed_gdf)
+print(avg[['forecast_hour', 'precip_inches', 'cumulative_inches']])
+```
+
+**Dependencies**: `requests` (download), `cfgrib` + `xarray` (GRIB2 reading), `rasterstats` (basin averaging)
+
+### VortexCli.py (Gridded Met → DSS Conversion)
+
+**VortexCli** - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS (23 KB):
+
+**Purpose**: Automate the conversion of gridded meteorological data (HRRR GRIB2, MRMS, GFS, NetCDF) into HEC-DSS format for use in HEC-HMS and HEC-RAS rain-on-grid models. Wraps HEC-Vortex's `vortex.bat -s` Jython scripting interface.
+
+**Prerequisite**: HEC-Vortex must be installed (free download from USACE). Typical locations:
+- `C:\Program Files\HEC\HEC-Vortex`
+- `C:\Program Files (x86)\HEC\HEC-Vortex`
+
+**Public Methods** (all `@staticmethod @log_call`):
+
+| Method | Purpose | Returns |
+|--------|---------|---------|
+| `find_vortex(vortex_path)` | Locate HEC-Vortex installation | `Path` |
+| `import_gridded(input_files, output_dss, variables, clip_shp, ...)` | Core conversion: GRIB2/NetCDF → DSS | `Path` |
+| `clip_and_import(input_files, output_dss, clip_shp, ...)` | Convenience wrapper requiring clip shapefile | `Path` |
+| `batch_import(file_groups, output_dir, variables, ...)` | Process multiple file groups to separate DSS files | `Dict[str, Path]` |
+| `get_grib2_variables(grib_file, vortex_path, timeout)` | List variables in a GRIB2 file | `List[str]` |
+
+**Key Parameters for `import_gridded()`**:
+- `input_files`: List of GRIB2/NetCDF/ASC file paths
+- `output_dss`: Output DSS file path
+- `variables`: GRIB2 variable names (e.g., `HRRR_PRECIP_VARIABLES`)
+- `clip_shp`: Optional shapefile to clip grid extent
+- `target_wkt`: Target projection (default: "SHG" for Standard Hydrologic Grid)
+- `target_cell_size`: Grid cell size in meters (default: 2000)
+- `resampling_method`: "Bilinear", "NearestNeighbor", etc.
+- `dss_parts`: Dict for DSS pathname customization (A-F parts)
+- `timeout`: Seconds to wait for Vortex (default: 600)
+
+**Pre-Defined Variable Constants**:
+```python
+VortexCli.HRRR_PRECIP_VARIABLES   # ["Total_precipitation_surface_1_Hour_Accumulation"]
+VortexCli.MRMS_PRECIP_VARIABLES   # ["GaugeCorrQPE01H_altitude_above_msl"]
+VortexCli.GFS_PRECIP_VARIABLES    # ["Total_precipitation_surface_Mixed_intervals_Accumulation"]
+```
+
+**Example**:
+```python
+from ras_commander.precip import VortexCli, PrecipHrrr
+
+# Step 1: Download HRRR forecast
+grib_files = PrecipHrrr.get_latest_forecast("./hrrr_data", hours=18)
+
+# Step 2: Convert GRIB2 → DSS via Vortex
+dss_file = VortexCli.import_gridded(
+    input_files=grib_files,
+    output_dss="./precip.dss",
+    variables=VortexCli.HRRR_PRECIP_VARIABLES,
+    clip_shp="./watershed.shp",
+    target_wkt="SHG",
+    target_cell_size=2000
+)
+
+# Step 3: Batch convert multiple forecast groups
+results = VortexCli.batch_import(
+    file_groups={"cycle_00z": grib_00z, "cycle_06z": grib_06z},
+    output_dir="./dss_output",
+    variables=VortexCli.HRRR_PRECIP_VARIABLES,
+    clip_shp="./watershed.shp"
+)
+```
+
+**How it works internally**:
+1. `find_vortex()` locates `vortex.bat` in standard install paths
+2. Generates a Jython script using `BatchImporter` from HEC-Vortex's API
+3. Executes via `vortex.bat -s script.py` as a subprocess
+4. Returns path to output DSS file
+
 ### __init__.py (Package Interface)
 
 **Public API**:
 ```python
-from ras_commander.precip import PrecipAorc, StormGenerator
+from ras_commander.precip import PrecipAorc, PrecipHrrr, StormGenerator
+
+# Gridded met → DSS conversion
+from ras_commander.precip import VortexCli
 
 # Gridded PFE access and variance analysis
 from ras_commander.precip import Atlas14Grid, Atlas14Variance
@@ -368,12 +496,14 @@ from ras_commander.precip import Atlas14Storm, Atlas14Config, ATLAS14_AVAILABLE
 # Convenience imports
 from ras_commander.precip import (
     PrecipAorc,
+    PrecipHrrr,        # HRRR real-time forecast download
     StormGenerator,
-    Atlas14Grid,       # Remote access to NOAA Atlas 14 CONUS grids
-    Atlas14Variance,   # Spatial variance analysis for precipitation
-    Atlas14Storm,      # HMS-equivalent temporal distributions
-    Atlas14Config,     # Configuration dataclass
-    ATLAS14_AVAILABLE  # Boolean flag for availability check
+    VortexCli,          # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS
+    Atlas14Grid,        # Remote access to NOAA Atlas 14 CONUS grids
+    Atlas14Variance,    # Spatial variance analysis for precipitation
+    Atlas14Storm,       # HMS-equivalent temporal distributions
+    Atlas14Config,      # Configuration dataclass
+    ATLAS14_AVAILABLE   # Boolean flag for availability check
 )
 ```
 
@@ -592,15 +722,18 @@ print(f"Areal (500 sq mi): {reduced_precip:.2f} in")
 - pandas (time series handling)
 - numpy (numerical operations)
 - xarray (for AORC NetCDF data)
-- requests (Atlas 14 API access)
+- requests (Atlas 14 API access, HRRR download)
 
 **Optional**:
 - geopandas (spatial operations on watersheds)
 - rasterio (AORC grid processing)
+- cfgrib (HRRR GRIB2 reading via xarray engine)
+- rasterstats (basin-average precipitation from HRRR)
+- HEC-Vortex (external install, for VortexCli GRIB2 → DSS conversion)
 
 **Installation**:
 ```bash
-pip install xarray rasterio geopandas
+pip install xarray rasterio geopandas cfgrib rasterstats
 ```
 
 ## Data Sources
@@ -628,14 +761,29 @@ pip install xarray rasterio geopandas
 - **Resolution**: ~0.0083° (~830m)
 - **Data**: 10 durations (1-168 hr), 9 return periods (2-1000 yr)
 
+### HRRR (High-Resolution Rapid Refresh) (for PrecipHrrr)
+- **Provider**: NOAA/NCEP Environmental Modeling Center
+- **Access**: HTTPS from NOMADS (`nomads.ncep.noaa.gov`)
+- **Format**: GRIB2
+- **Resolution**: 3 km CONUS
+- **Cycles**: Hourly (00z-23z); extended at 00z/06z/12z/18z
+- **Horizon**: 18 hours (standard), 48 hours (extended cycles)
+- **Latency**: ~2 hours from cycle initialization
+- **File Size**: ~100-150 MB per forecast hour (full CONUS wrfsubhf)
+
 ## Example Notebooks
 
 Complete workflow demonstrations:
 
-- `examples/900_aorc_precipitation.ipynb` - AORC retrieval and processing
 - `examples/720_atlas14_aep_events.ipynb` - Single-project Atlas 14 workflow
 - `examples/722_atlas14_multi_project.ipynb` - Batch processing multiple projects
 - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis for uniform rainfall assessment
+- `examples/900_aorc_precipitation.ipynb` - AORC retrieval and processing
+- `examples/915_realtime_forecast_workflow.ipynb` - End-to-end real-time forecast workflow overview
+- `examples/916_hrrr_precipitation_forecast.ipynb` - HRRR forecast download and processing
+- `examples/917_stofs3d_coastal_boundary.ipynb` - STOFS-3D coastal boundary integration
+- `examples/918_hms_ras_coupled_forecast.ipynb` - Coupled HMS→RAS forecast execution
+- `examples/919_operational_forecast_cycling.ipynb` - Operational forecast cycling pipeline
 
 ## Common Use Cases
 

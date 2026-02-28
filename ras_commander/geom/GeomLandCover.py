@@ -71,7 +71,7 @@ class GeomLandCover:
         table_number = None
 
         # Read the geometry file
-        with open(geom_file_path, 'r') as f:
+        with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Parse the file
@@ -85,10 +85,23 @@ class GeomLandCover:
                 reading_base_table = True
                 continue
 
-            # Stop reading when we hit a line without a comma or starting with LCMann
-            if reading_base_table and (not ',' in line or line.startswith('LCMann')):
-                reading_base_table = False
-                continue
+            # Stop reading when we hit a line without a comma, starting with LCMann,
+            # or starting with a known non-land-cover directive (e.g. Chan Stop, Geom
+            # Raster, GIS, Use User, User Specified).  This prevents over-reading into
+            # background raster entries that also contain commas.
+            if reading_base_table:
+                _stop = (
+                    not ',' in line
+                    or line.startswith('LCMann')
+                    or line.startswith('Chan Stop')
+                    or line.startswith('Geom Raster')
+                    or line.startswith('GIS ')
+                    or line.startswith('Use User')
+                    or line.startswith('User Specified')
+                )
+                if _stop:
+                    reading_base_table = False
+                    continue
 
             # Parse data rows in base table
             if reading_base_table and ',' in line:
@@ -148,7 +161,7 @@ class GeomLandCover:
         shutil.copy2(geom_file_path, backup_path)
 
         # Read the entire file
-        with open(geom_file_path, 'r') as f:
+        with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Find the Manning's table section
@@ -156,12 +169,23 @@ class GeomLandCover:
         start_idx = None
         end_idx = None
 
+        _TABLE_END_PREFIXES = (
+            'LCMann',
+            'Chan Stop',
+            'Geom Raster',
+            'GIS ',
+            'Use User',
+            'User Specified',
+        )
+
         for i, line in enumerate(lines):
             if line.strip() == f"LCMann Table={table_number}":
                 start_idx = i
-                # Find the end of this table (next LCMann directive or end of file)
+                # Find the end of this table (next LCMann directive, a known
+                # non-land-cover line, or end of file)
                 for j in range(i+1, len(lines)):
-                    if lines[j].strip().startswith('LCMann'):
+                    stripped = lines[j].strip()
+                    if stripped and any(stripped.startswith(p) for p in _TABLE_END_PREFIXES):
                         end_idx = j
                         break
                 if end_idx is None:  # If we reached the end of the file
@@ -214,7 +238,7 @@ class GeomLandCover:
                 break
 
         # Write the updated file
-        with open(geom_file_path, 'w') as f:
+        with open(geom_file_path, 'w', encoding='utf-8') as f:
             f.writelines(updated_lines)
 
         return True
@@ -249,7 +273,7 @@ class GeomLandCover:
         current_table = None
 
         # Read the geometry file
-        with open(geom_file_path, 'r') as f:
+        with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Parse the file
@@ -329,7 +353,7 @@ class GeomLandCover:
         shutil.copy2(geom_file_path, backup_path)
 
         # Read the entire file
-        with open(geom_file_path, 'r') as f:
+        with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Group data by region
@@ -424,7 +448,7 @@ class GeomLandCover:
                 break
 
         # Write the updated file
-        with open(geom_file_path, 'w') as f:
+        with open(geom_file_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
 
         return True

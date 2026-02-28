@@ -349,7 +349,7 @@ class GeomCrossSection:
             raise ValueError("If reach is specified, river must also be specified")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             cross_sections = []
@@ -484,7 +484,7 @@ class GeomCrossSection:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section using helper
@@ -606,7 +606,7 @@ class GeomCrossSection:
             backup_path = GeomParser.create_backup(geom_file)
             logger.info(f"Created backup: {backup_path}")
 
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section using helper
@@ -720,7 +720,7 @@ class GeomCrossSection:
                             logger.warning(f"Bank Sta= line not found for XS {rs}, banks not updated in file")
 
                     # Write modified file
-                    with open(geom_file, 'w') as f:
+                    with open(geom_file, 'w', encoding='utf-8') as f:
                         f.writelines(modified_lines)
 
                     logger.info(
@@ -784,7 +784,7 @@ class GeomCrossSection:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section using helper
@@ -846,7 +846,7 @@ class GeomCrossSection:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section using helper
@@ -924,7 +924,7 @@ class GeomCrossSection:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section using helper
@@ -1249,7 +1249,7 @@ class GeomCrossSection:
         )
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section using helper
@@ -1515,7 +1515,7 @@ class GeomCrossSection:
             backup_path = GeomParser.create_backup(geom_file)
             logger.info(f"Created backup: {backup_path}")
 
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the cross section
@@ -1632,7 +1632,7 @@ class GeomCrossSection:
                             )
 
             # Write modified file
-            with open(geom_file, 'w') as f:
+            with open(geom_file, 'w', encoding='utf-8') as f:
                 f.writelines(modified_lines)
 
             logger.info(
@@ -1767,7 +1767,7 @@ class GeomCrossSection:
 
         try:
             # Step 1: Read entire file ONCE
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             logger.debug(f"Read {len(lines)} lines from {geom_file.name}")
@@ -2168,7 +2168,7 @@ class GeomCrossSection:
             raise IOError(f"Failed to read HDF results: {e}")
 
         # Step 3: Read geometry file once and prepare for modifications
-        with open(geom_file, 'r') as f:
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Regex patterns for HTAB lines
@@ -2365,7 +2365,7 @@ class GeomCrossSection:
         # Step 6: Write all modifications to geometry file
         if modifications:
             try:
-                with open(geom_file, 'w') as f:
+                with open(geom_file, 'w', encoding='utf-8') as f:
                     f.writelines(modified_lines)
 
                 logger.info(f"Wrote {len(modifications)} HTAB modifications to {geom_file.name}")

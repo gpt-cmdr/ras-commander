@@ -87,7 +87,6 @@ Mapping, visualization, and advanced spatial analysis.
 |----------|-------------|--------|
 | Floodplain Mapping GUI | RASMapper GUI automation (legacy) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/600_floodplain_mapping_gui.ipynb) |
 | Floodplain Mapping RasProcess | RasProcess CLI (recommended) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_floodplain_mapping_rasprocess.ipynb) |
-| Floodplain Mapping Python GIS | Pure Python mesh rasterization | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/602_floodplain_mapping_python_gis.ipynb) |
 | Fluvial-Pluvial Delineation | Classify flooding mechanism | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_fluvial_pluvial_delineation.ipynb) |
 | Map Layer Validation | Validate RASMapper layers | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) |
 

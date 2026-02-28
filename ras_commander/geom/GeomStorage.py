@@ -91,7 +91,7 @@ class GeomStorage:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             storage_areas = []
@@ -221,7 +221,7 @@ class GeomStorage:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the storage area
@@ -366,7 +366,7 @@ class GeomStorage:
             logger.info(f"Created backup: {backup_path}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find the storage area
@@ -446,7 +446,7 @@ class GeomStorage:
             )
 
             # Write modified file
-            with open(geom_file, 'w') as f:
+            with open(geom_file, 'w', encoding='utf-8') as f:
                 f.writelines(new_lines)
 
             logger.info(

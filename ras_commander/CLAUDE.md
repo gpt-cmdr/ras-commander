@@ -71,10 +71,6 @@ Each subpackage has its own CLAUDE.md or AGENTS.md file with detailed guidance:
 - AORC precipitation and Atlas 14 design storms
 - See `ras_commander/precip/CLAUDE.md` (after Phase 3 implementation)
 
-**mapping/** (3 modules):
-- Programmatic result mapping and rasterization
-- See `ras_commander/mapping/CLAUDE.md` (after Phase 3 implementation)
-
 **dss/** (3 modules):
 - DSS file operations for boundary conditions
 - See `ras_commander/dss/AGENTS.md`

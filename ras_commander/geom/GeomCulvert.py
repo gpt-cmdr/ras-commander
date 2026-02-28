@@ -144,7 +144,7 @@ class GeomCulvert:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomCulvert._find_bridge(lines, river, reach, rs)
@@ -305,7 +305,7 @@ class GeomCulvert:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             all_culverts = []

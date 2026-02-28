@@ -146,7 +146,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridges = []
@@ -298,7 +298,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
@@ -433,7 +433,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
@@ -560,7 +560,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
@@ -674,7 +674,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
@@ -824,7 +824,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
@@ -934,7 +934,7 @@ class GeomBridge:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
@@ -1371,7 +1371,7 @@ class GeomBridge:
             logger.info(f"Created backup: {backup_path}")
 
             # Read file
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find structure
@@ -1416,7 +1416,7 @@ class GeomBridge:
                 logger.info(f"Inserted {lines_inserted} new HTAB lines at line {insert_idx}")
 
             # Write modified file
-            with open(geom_file, 'w') as f:
+            with open(geom_file, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
 
             logger.info(f"Successfully wrote HTAB parameters for {river}/{reach}/RS {rs}")
@@ -1667,7 +1667,7 @@ class GeomBridge:
                 logger.info(f"Created backup: {backup_path}")
 
             # Read file once
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find all structures
@@ -1776,7 +1776,7 @@ class GeomBridge:
                 )
 
             # Write modified file once
-            with open(geom_file, 'w') as f:
+            with open(geom_file, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
 
             total_modified = bridges_modified + inline_weirs_modified
@@ -2107,7 +2107,7 @@ class GeomBridge:
         logger.info(f"Created backup: {backup_path}")
 
         # Read file and find all structures
-        with open(geom_file, 'r') as f:
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         structures = GeomBridge._find_all_structures(lines)

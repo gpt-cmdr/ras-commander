@@ -483,6 +483,38 @@ python -m ipykernel install --user --name rascmdr_local --display-name "Python (
 jupyter kernelspec uninstall rascmdr_local
 ```
 
+## Environment 3: rascmdr_piptest (PyPI Install Testing)
+
+**Purpose**: Test that the ras-commander package installs correctly from PyPI and that the installed package works as expected. Distinct from `RasCommander` in that `rascmdr_piptest` is used for pre-release validation and CI debugging — the interpreter path is referenced in `settings.local.json` for direct script execution without activating the environment.
+
+**Python Executable**: `C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\python.exe`
+
+**When to use**:
+- ✅ Testing `pip install ras-commander` from PyPI before a release
+- ✅ Debugging installation issues (dependency conflicts, wheel compatibility)
+- ✅ Running one-off scripts against the pip-installed package without activating the env
+- ✅ CI debugging: verifying a specific PyPI version behaves correctly
+
+**How it differs from `RasCommander`**:
+| Aspect | `RasCommander` | `rascmdr_piptest` |
+|--------|---------------|-------------------|
+| Purpose | User experience validation via Jupyter | PyPI install testing via scripts |
+| Usage pattern | Jupyter notebooks with kernel | Direct `python.exe` invocation |
+| Toggle cell | Uses `USE_LOCAL_SOURCE = False` | Not used (pip package only) |
+| Registered as Jupyter kernel | Yes | Not required |
+
+**Setup** (if recreating):
+```bash
+conda create -n rascmdr_piptest python=3.13
+conda activate rascmdr_piptest
+pip install ras-commander  # Install from PyPI
+```
+
+**Direct invocation** (no activation needed):
+```bash
+C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\python.exe script.py
+```
+
 ## See Also
 
 - **Import Patterns**: `.claude/rules/python/import-patterns.md` - Flexible imports for notebooks
@@ -493,4 +525,4 @@ jupyter kernelspec uninstall rascmdr_local
 
 ---
 
-**Key Takeaway**: Use `rascmdr_local` (dependencies only + toggle cell) when making code changes, `RasCommander` (published package) when testing user experience, and `uv` for agent scripts and tools. Never use `pip install -e .` - the toggle cell with `sys.path.insert(0, ...)` guarantees local source loading.
+**Key Takeaway**: Use `rascmdr_local` (dependencies only + toggle cell) when making code changes, `RasCommander` (published package) when testing user experience, `rascmdr_piptest` for PyPI install validation and direct script execution, and `uv` for agent scripts and tools. Never use `pip install -e .` - the toggle cell with `sys.path.insert(0, ...)` guarantees local source loading.
