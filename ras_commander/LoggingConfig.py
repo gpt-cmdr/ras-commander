@@ -27,14 +27,20 @@ def setup_logging(log_file=None, log_level=logging.INFO):
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # Configure console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(log_format)
-
     # Set up root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    root_logger.addHandler(console_handler)
+
+    # Only add console handler if root logger doesn't already have a StreamHandler
+    # (Jupyter/IPython adds its own StreamHandler; adding another causes duplicate output)
+    has_stream_handler = any(
+        isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        for h in root_logger.handlers
+    )
+    if not has_stream_handler:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_format)
+        root_logger.addHandler(console_handler)
 
     # Configure file handler if log_file is provided
     if log_file:

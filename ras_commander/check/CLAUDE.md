@@ -115,11 +115,9 @@ The check subpackage contains 5 modules organized by function:
 
 **RasCheckReport** - Compilation and output formatting (23 KB):
 
-**Report Types**:
-- `generate_summary_report()` - Executive summary with counts by severity
-- `generate_detailed_report()` - Complete findings with locations and values
-- `generate_csv_report()` - Tabular output for further analysis
-- `generate_html_report()` - Interactive HTML report with filtering
+**Report Methods**:
+- `generate_html()` - Interactive HTML report with filtering
+- `export_csv()` - Tabular output for further analysis
 
 **Report Sections**:
 1. Model metadata (project name, HEC-RAS version, check date)
@@ -128,14 +126,12 @@ The check subpackage contains 5 modules organized by function:
 4. Recommendations and next steps
 
 **Output Formats**:
-- Plain text (.txt)
-- CSV (.csv)
-- HTML (.html)
-- JSON (.json) - for programmatic processing
+- CSV (.csv) via `export_csv()`
+- HTML (.html) via `generate_html()`
 
 ### thresholds.py (Configurable Thresholds)
 
-**CheckThresholds** - Quality assurance threshold configuration (18 KB):
+**ValidationThresholds** - Quality assurance threshold configuration (18 KB):
 
 **Threshold Categories**:
 
@@ -160,7 +156,7 @@ The check subpackage contains 5 modules organized by function:
 
 **Functions**:
 - `get_default_thresholds()` - Load FEMA/USACE standard thresholds
-- `set_custom_thresholds()` - Override defaults for project-specific standards
+- `create_custom_thresholds()` - Override defaults for project-specific standards
 - `validate_thresholds()` - Ensure threshold values are reasonable
 
 ### __init__.py (Package Interface)
@@ -173,7 +169,7 @@ from ras_commander.check import RasCheck
 from ras_commander.check import (
     RasCheck,
     RasCheckReport,
-    CheckThresholds,
+    ValidationThresholds,
     CheckMessage
 )
 ```
@@ -261,18 +257,17 @@ mesh = RasCheck.check_mesh_quality("01", geom_hdf)    # 2D only
 
 Override default standards:
 ```python
-from ras_commander.check import RasCheck, CheckThresholds
+from ras_commander.check import RasCheck, ValidationThresholds
 
 # Set custom thresholds
-thresholds = CheckThresholds()
-thresholds.set_custom_thresholds({
+thresholds = create_custom_thresholds({
     'max_xs_spacing_warn': 800,  # More conservative than default 1000 ft
     'max_floodway_surcharge': 0.5,  # USACE standard
     'max_velocity_warn': 12  # Lower threshold for erosive soils
 })
 
 # Run with custom thresholds
-results = RasCheck.run_all_checks(
+results = RasCheck.run_all(
     "C:/Projects/MyModel",
     thresholds=thresholds
 )
@@ -280,15 +275,11 @@ results = RasCheck.run_all_checks(
 
 ### Report Generation
 
-Multiple output formats:
+Export results to HTML or CSV:
 ```python
-from ras_commander.check import RasCheckReport
-
-# Generate reports
-RasCheckReport.generate_summary_report(results, "summary.txt")
-RasCheckReport.generate_detailed_report(results, "detailed.txt")
-RasCheckReport.generate_html_report(results, "report.html")
-RasCheckReport.generate_csv_report(results, "findings.csv")
+# Generate reports (results is the RasCheckReport from run_all())
+results.generate_html("report.html")
+results.export_csv("findings.csv")
 ```
 
 ## Integration with RasFixit
@@ -296,7 +287,7 @@ RasCheckReport.generate_csv_report(results, "findings.csv")
 The check subpackage identifies issues; the fixit subpackage repairs them:
 
 **Workflow**:
-1. **Check**: Identify issues with `RasCheck.run_all_checks()`
+1. **Check**: Identify issues with `RasCheck.run_all()`
 2. **Fix**: Repair issues with `RasFixit.fix_blocked_obstructions()`, etc.
 3. **Verify**: Re-run checks to confirm fixes
 
@@ -306,14 +297,14 @@ from ras_commander.check import RasCheck
 from ras_commander.fixit import RasFixit
 
 # 1. Check for issues
-results = RasCheck.structure_check("C:/Projects/MyModel")
+results = RasCheck.run_all("01")
 
 # 2. Fix blocked obstructions (if found)
-if results.has_obstruction_issues():
-    fix_results = RasFixit.fix_blocked_obstructions("C:/Projects/MyModel")
+if results.get_error_count() > 0:
+    fix_results = RasFixit.fix_blocked_obstructions(geom_file)
 
 # 3. Verify fixes
-final_results = RasCheck.structure_check("C:/Projects/MyModel")
+final_results = RasCheck.run_all("01")
 ```
 
 ## FEMA/USACE Standards
@@ -364,10 +355,10 @@ All check functions return a `CheckResults` object with:
 - `passed` - List of checks that passed
 
 **Methods**:
-- `has_errors()` - Boolean indicating critical issues
-- `has_warnings()` - Boolean indicating warnings
-- `summary()` - Text summary with counts
-- `to_dict()` - Dictionary representation for JSON export
+- `get_error_count()` - Count of critical issues
+- `get_warning_count()` - Count of warnings
+- `generate_html()` - Export interactive HTML report
+- `export_csv()` - Export findings as CSV
 
 ## Performance
 
@@ -386,8 +377,8 @@ RasCheck reads HEC-RAS geometry and plan files directly (plain text parsing):
 
 Complete workflow demonstrations:
 
-- `examples/300_quality_assurance_rascheck.ipynb` - Complete RasCheck workflow
-- Integration with RasFixit shown in `examples/200_fixit_blocked_obstructions.ipynb`
+- `examples/800_quality_assurance_rascheck.ipynb` - Complete RasCheck workflow
+- Integration with RasFixit shown in `examples/801_advanced_structure_validation.ipynb`
 
 ## Common Checks Explained
 

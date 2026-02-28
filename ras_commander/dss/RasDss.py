@@ -117,14 +117,12 @@ class RasDss:
                 "Install with: pip install pyjnius"
             )
 
-        # Check if JVM already started
-        try:
-            from jnius import autoclass
-            # If this succeeds, JVM already started
+        # Check if JVM already started using jnius_config (does NOT start the JVM)
+        # IMPORTANT: Never import from jnius here - that would start the JVM with
+        # an empty classpath before we can call jnius_config.add_classpath()
+        if getattr(jnius_config, 'vm_running', False):
             RasDss._jvm_configured = True
             return
-        except:
-            pass
 
         # Get classpath and library path
         classpath = monolith.get_classpath()
@@ -134,15 +132,35 @@ class RasDss:
 
         # Set JAVA_HOME if not already set
         if 'JAVA_HOME' not in os.environ:
-            # Try to find Java
-            java_candidates = [
-                Path("C:/Program Files/Java/jre1.8.0_471"),
-                Path("C:/Program Files/Java/jdk-11"),
-                Path("C:/Program Files/Java/jdk-17"),
-                Path("C:/Program Files (x86)/Java/jre1.8.0_471"),
+            # Dynamically discover Java installations using glob patterns.
+            # Search standard Java install locations plus HEC application bundles.
+            java_search_roots = [
+                Path("C:/Program Files/Java"),
+                Path("C:/Program Files (x86)/Java"),
             ]
+            java_candidates = []
+            for root in java_search_roots:
+                if root.exists():
+                    # Collect all jre* and jdk* directories, sorted newest first
+                    java_candidates.extend(sorted(root.glob("jre*"), reverse=True))
+                    java_candidates.extend(sorted(root.glob("jdk*"), reverse=True))
+                    java_candidates.extend(sorted(root.glob("jdk-*"), reverse=True))
+
+            # Also check JREs bundled with HEC applications (HMS, RAS, etc.)
+            hec_apps = Path("C:/Program Files/HEC")
+            if hec_apps.exists():
+                java_candidates.extend(sorted(hec_apps.glob("*/*/jre"), reverse=True))
+                java_candidates.extend(sorted(hec_apps.glob("**/jre"), reverse=True))
+
+            def _has_jvm_lib(java_dir: Path) -> bool:
+                """Check that a Java directory contains a usable JVM library."""
+                if os.name == 'nt':
+                    return bool(list(java_dir.rglob("jvm.dll")))
+                else:
+                    return bool(list(java_dir.rglob("libjvm.so")))
+
             for java_home in java_candidates:
-                if java_home.exists():
+                if java_home.is_dir() and _has_jvm_lib(java_home):
                     os.environ['JAVA_HOME'] = str(java_home)
                     print(f"  Found Java: {java_home}")
                     break
@@ -203,9 +221,9 @@ class RasDss:
         dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
 
         # Open DSS file
-        dss = HecDss.open(dss_file)
-
+        dss = None
         try:
+            dss = HecDss.open(dss_file)
             # Get catalog (returns Java Vector of pathname strings)
             catalog_vector = dss.getCatalogedPathnames()
 
@@ -218,7 +236,8 @@ class RasDss:
             return pd.DataFrame({'pathname': paths})
 
         finally:
-            dss.done()
+            if dss is not None:
+                dss.done()
 
     @staticmethod
     @log_call
@@ -257,9 +276,9 @@ class RasDss:
         dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
 
         # Open DSS file
-        dss = HecDss.open(dss_file)
-
+        dss = None
         try:
+            dss = HecDss.open(dss_file)
             # Read time series
             # True = ignore D-part (date) for wildcards
             container = dss.get(pathname, True)
@@ -297,7 +316,8 @@ class RasDss:
             return df
 
         finally:
-            dss.done()
+            if dss is not None:
+                dss.done()
 
     @staticmethod
     @log_call
@@ -1045,6 +1065,231 @@ class RasDss:
         elif isinstance(report, dict):
             return report.get('is_valid', False)
         return False
+
+    # =========================================================================
+    # DSS Write Operations
+    # =========================================================================
+
+    @staticmethod
+    @log_call
+    def write_timeseries(
+        dss_file: Union[str, Path],
+        pathname: str,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        values: Union[List, np.ndarray],
+        units: str = "CFS",
+        data_type: str = "INST-VAL",
+        create_if_missing: bool = True,
+    ) -> None:
+        """
+        Write a time series to a DSS file.
+
+        Creates or updates a time series record in a DSS file using the
+        HEC Monolith Java bridge. Supports DSS V6 and V7 formats.
+
+        Args:
+            dss_file: Path to DSS file (created if missing and create_if_missing=True)
+            pathname: DSS pathname (e.g., "//BASIN/LOCATION/FLOW//1HOUR/FORECAST/")
+            times: Array of datetime values (datetime objects, DatetimeIndex, or
+                   numpy datetime64 array)
+            values: Array of numeric values (same length as times)
+            units: Data units string (e.g., "CFS", "FEET", "MM", "IN")
+            data_type: DSS data type string:
+                - "INST-VAL" - Instantaneous values (default)
+                - "PER-AVER" - Period average (e.g., precipitation)
+                - "PER-CUM"  - Period cumulative
+                - "INST-CUM" - Instantaneous cumulative
+            create_if_missing: Create DSS file if it doesn't exist (default True)
+
+        Raises:
+            FileNotFoundError: If DSS file doesn't exist and create_if_missing=False
+            ValueError: If times and values have different lengths
+            ImportError: If pyjnius is not installed
+            RuntimeError: If Java write operation fails
+
+        Example:
+            >>> import pandas as pd
+            >>> import numpy as np
+            >>> from ras_commander import RasDss
+            >>>
+            >>> # Create time series data
+            >>> times = pd.date_range("2024-01-01", periods=24, freq="h")
+            >>> values = np.random.uniform(100, 500, 24)
+            >>>
+            >>> # Write to DSS file
+            >>> RasDss.write_timeseries(
+            ...     "output.dss",
+            ...     "//BASIN/UPSTREAM/FLOW//1HOUR/FORECAST/",
+            ...     times, values,
+            ...     units="CFS",
+            ...     data_type="INST-VAL"
+            ... )
+
+        Note:
+            The Java bridge (pyjnius + HEC Monolith) is configured automatically
+            on first use. The HEC epoch is 1899-12-31 00:00:00; times are stored
+            as integer minutes since that epoch.
+        """
+        RasDss._configure_jvm()
+
+        from jnius import autoclass
+        from ras_commander.RasUtils import RasUtils
+
+        # Validate inputs
+        values = np.asarray(values, dtype=np.float64)
+        if len(times) != len(values):
+            raise ValueError(
+                f"times ({len(times)}) and values ({len(values)}) must have same length"
+            )
+        if len(times) == 0:
+            raise ValueError("times and values must not be empty")
+
+        # Resolve DSS file path
+        dss_path = Path(dss_file)
+        if not dss_path.exists():
+            if not create_if_missing:
+                raise FileNotFoundError(f"DSS file not found: {dss_path}")
+            # HecDss.open() will create the file
+            dss_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"DSS file will be created: {dss_path}")
+
+        dss_file_str = str(RasUtils.safe_resolve(dss_path))
+
+        # Convert times to HEC epoch (minutes since 1899-12-31)
+        hec_times = RasDss._datetimes_to_hec_times(times)
+
+        # Detect interval from time spacing
+        if len(hec_times) > 1:
+            intervals = np.diff(hec_times)
+            interval_minutes = int(np.median(intervals))
+        else:
+            interval_minutes = 60  # Default 1 hour
+
+        # Load Java classes
+        HecDss = autoclass('hec.heclib.dss.HecDss')
+        TimeSeriesContainer = autoclass('hec.io.TimeSeriesContainer')
+
+        # Create TimeSeriesContainer
+        tsc = TimeSeriesContainer()
+        tsc.fullName = pathname
+        tsc.units = units
+        tsc.type = data_type
+        tsc.interval = interval_minutes
+
+        # Set times array (Java int[])
+        n = len(values)
+        tsc.numberValues = n
+
+        # Convert numpy arrays to Java-compatible arrays
+        # pyjnius handles int[] and double[] conversion from Python lists
+        tsc.times = hec_times.tolist()
+        tsc.values = values.tolist()
+
+        # Open DSS file and write
+        dss = None
+        try:
+            dss = HecDss.open(dss_file_str)
+            dss.put(tsc)
+            logger.info(
+                f"Wrote {n} values to {pathname} in {Path(dss_file_str).name} "
+                f"(units={units}, type={data_type}, interval={interval_minutes}min)"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write time series to DSS: {e}\n"
+                f"  File: {dss_file_str}\n"
+                f"  Pathname: {pathname}\n"
+                f"  Values: {n} points, range [{values.min():.2f}, {values.max():.2f}]"
+            ) from e
+        finally:
+            if dss is not None:
+                dss.done()
+
+    @staticmethod
+    @log_call
+    def write_timeseries_from_dataframe(
+        dss_file: Union[str, Path],
+        pathname: str,
+        df: pd.DataFrame,
+        value_column: str = "value",
+        units: str = "CFS",
+        data_type: str = "INST-VAL",
+        create_if_missing: bool = True,
+    ) -> None:
+        """
+        Write a time series DataFrame to a DSS file.
+
+        Convenience wrapper around write_timeseries() that accepts a DataFrame
+        with a DatetimeIndex and a value column.
+
+        Args:
+            dss_file: Path to DSS file
+            pathname: DSS pathname
+            df: DataFrame with DatetimeIndex and value column
+            value_column: Name of column containing values (default "value")
+            units: Data units string
+            data_type: DSS data type string
+            create_if_missing: Create DSS file if it doesn't exist
+
+        Example:
+            >>> # Read from one DSS file, write to another
+            >>> df = RasDss.read_timeseries("input.dss", pathname)
+            >>> RasDss.write_timeseries_from_dataframe(
+            ...     "output.dss", new_pathname, df, units="CFS"
+            ... )
+        """
+        if not isinstance(df.index, pd.DatetimeIndex):
+            raise ValueError(
+                f"DataFrame must have DatetimeIndex, got {type(df.index).__name__}"
+            )
+        if value_column not in df.columns:
+            raise ValueError(
+                f"Column '{value_column}' not found. Available: {list(df.columns)}"
+            )
+
+        RasDss.write_timeseries(
+            dss_file=dss_file,
+            pathname=pathname,
+            times=df.index,
+            values=df[value_column].values,
+            units=units,
+            data_type=data_type,
+            create_if_missing=create_if_missing,
+        )
+
+    @staticmethod
+    def _datetimes_to_hec_times(
+        times: Union[List, np.ndarray, pd.DatetimeIndex]
+    ) -> np.ndarray:
+        """
+        Convert datetime values to HEC epoch times (minutes since 1899-12-31).
+
+        Args:
+            times: Array of datetime-like values
+
+        Returns:
+            numpy int array of minutes since HEC epoch (1899-12-31 00:00:00)
+        """
+        HEC_EPOCH = np.datetime64('1899-12-31T00:00:00')
+
+        if isinstance(times, pd.DatetimeIndex):
+            dt64 = times.values.astype('datetime64[m]')
+        elif isinstance(times, np.ndarray):
+            dt64 = times.astype('datetime64[m]')
+        else:
+            # List of datetime objects
+            dt64 = np.array(times, dtype='datetime64[m]')
+
+        # Calculate minutes since HEC epoch
+        delta = dt64 - HEC_EPOCH
+        minutes = delta.astype(np.int64)
+
+        if minutes.max() > np.iinfo(np.int32).max:
+            logger.warning(
+                f"HEC epoch minutes ({minutes.max()}) exceeds int32 range; "
+                "passing as int64 — verify HEC-DSS Java bridge accepts int64"
+            )
+        return minutes
 
 
 if __name__ == "__main__":

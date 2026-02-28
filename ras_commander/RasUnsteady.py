@@ -2914,3 +2914,232 @@ class RasUnsteady:
             logger.warning("No matching boundaries found for any updates")
 
         return total_updates
+
+    @staticmethod
+    @log_call
+    def preview_dss_references(
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Consolidated DataFrame of all DSS paths across all unsteady files in project.
+
+        Scans every unsteady flow file registered in ras.unsteady_df and extracts
+        all DSS-linked boundary conditions into a single DataFrame.
+
+        Parameters
+        ----------
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with all columns from get_dss_boundaries() plus:
+            - unsteady_number: The unsteady file number (e.g., '01')
+            - unsteady_file: Full path to the unsteady file
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> all_dss = RasUnsteady.preview_dss_references()
+        >>> print(f"Total DSS references: {len(all_dss)}")
+        >>> print(all_dss[['unsteady_number', 'dss_part_b', 'dss_path']].head())
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        all_boundaries = []
+
+        for _, row in ras_obj.unsteady_df.iterrows():
+            unsteady_path = Path(row['full_path'])
+            if not unsteady_path.exists():
+                logger.warning(f"Unsteady file not found: {unsteady_path}")
+                continue
+
+            try:
+                df = RasUnsteady.get_dss_boundaries(unsteady_path, ras_object=ras_obj)
+                if not df.empty:
+                    df['unsteady_number'] = row['unsteady_number']
+                    df['unsteady_file'] = str(unsteady_path)
+                    all_boundaries.append(df)
+            except Exception as e:
+                logger.warning(f"Error reading DSS boundaries from {unsteady_path.name}: {e}")
+
+        if not all_boundaries:
+            logger.info("No DSS references found across any unsteady files")
+            return pd.DataFrame()
+
+        result = pd.concat(all_boundaries, ignore_index=True)
+        logger.info(f"Found {len(result)} total DSS references across {len(all_boundaries)} unsteady files")
+        return result
+
+    @staticmethod
+    @log_call
+    def batch_update_dss_references(
+        path_mapping: Union[Dict[str, str], pd.DataFrame],
+        unsteady_filter: Optional[List[str]] = None,
+        dry_run: bool = True,
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Batch update DSS path substrings across multiple unsteady flow files.
+
+        Extends update_boundary_dss_paths() to operate across all unsteady flow files
+        in the project. Uses ras.unsteady_df for file discovery.
+
+        Parameters
+        ----------
+        path_mapping : dict or pd.DataFrame
+            If dict: {old_substring: new_substring} pairs for replacement.
+            If DataFrame: must have columns 'old_value' and 'new_value'.
+        unsteady_filter : list of str, optional
+            List of unsteady numbers to process (e.g., ['01', '03']).
+            If None, processes all unsteady files.
+        dry_run : bool, default True
+            If True, reports what would change without modifying files.
+            Set to False to apply changes.
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        pd.DataFrame
+            Report with columns:
+            - unsteady_number: File number
+            - unsteady_file: File path
+            - river: River name
+            - reach: Reach name
+            - station: River station
+            - dss_path_before: Original DSS path
+            - dss_path_after: New DSS path (or same if no match)
+            - line_number: Line number in file
+            - status: 'updated', 'unchanged', or 'error'
+
+        Example
+        -------
+        >>> from ras_commander import RasUnsteady
+        >>> # Preview what exists
+        >>> all_dss = RasUnsteady.preview_dss_references()
+        >>> # Define replacements
+        >>> mapping = {'RUN:1%_24HR': 'RUN:1%_48HR', 'OLD_PROJECT': 'NEW_PROJECT'}
+        >>> # Dry run first
+        >>> report = RasUnsteady.batch_update_dss_references(mapping, dry_run=True)
+        >>> print(report[report['status'] == 'updated'])
+        >>> # Apply changes
+        >>> report = RasUnsteady.batch_update_dss_references(mapping, dry_run=False)
+
+        Notes
+        -----
+        Always run with dry_run=True first to verify changes before applying.
+        The method validates results by re-reading DSS boundaries after updates.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Normalize path_mapping to dict
+        if isinstance(path_mapping, pd.DataFrame):
+            if 'old_value' not in path_mapping.columns or 'new_value' not in path_mapping.columns:
+                raise ValueError("DataFrame must have 'old_value' and 'new_value' columns")
+            mapping = dict(zip(path_mapping['old_value'], path_mapping['new_value']))
+        else:
+            mapping = dict(path_mapping)
+
+        if not mapping:
+            logger.warning("Empty path_mapping provided")
+            return pd.DataFrame()
+
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        report_rows = []
+
+        for _, row in ras_obj.unsteady_df.iterrows():
+            unsteady_num = row['unsteady_number']
+
+            # Apply filter if provided
+            if unsteady_filter is not None and unsteady_num not in unsteady_filter:
+                continue
+
+            unsteady_path = Path(row['full_path'])
+            if not unsteady_path.exists():
+                logger.warning(f"Unsteady file not found: {unsteady_path}")
+                continue
+
+            # Get current DSS boundaries
+            try:
+                boundaries_before = RasUnsteady.get_dss_boundaries(unsteady_path, ras_object=ras_obj)
+            except Exception as e:
+                logger.warning(f"Error reading {unsteady_path.name}: {e}")
+                continue
+
+            if boundaries_before.empty:
+                continue
+
+            # Check each boundary for matching substrings
+            updates_for_file = []
+            for _, bc in boundaries_before.iterrows():
+                original_path = bc.get('dss_path', '')
+                new_path = original_path
+
+                for old_sub, new_sub in mapping.items():
+                    if old_sub in new_path:
+                        new_path = new_path.replace(old_sub, new_sub)
+
+                status = 'updated' if new_path != original_path else 'unchanged'
+
+                report_rows.append({
+                    'unsteady_number': unsteady_num,
+                    'unsteady_file': str(unsteady_path),
+                    'river': bc.get('river', ''),
+                    'reach': bc.get('reach', ''),
+                    'station': bc.get('station', ''),
+                    'dss_path_before': original_path,
+                    'dss_path_after': new_path,
+                    'line_number': bc.get('line_number', ''),
+                    'status': status,
+                })
+
+                if status == 'updated':
+                    updates_for_file.append({
+                        'river_station': bc.get('station', ''),
+                        'new_dss_path': new_path,
+                    })
+
+            # Apply changes if not dry run
+            if not dry_run and updates_for_file:
+                try:
+                    # Read file, apply substring replacements directly
+                    with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+
+                    for old_sub, new_sub in mapping.items():
+                        content = content.replace(old_sub, new_sub)
+
+                    with open(unsteady_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+
+                    logger.info(f"Applied {len(updates_for_file)} updates to {unsteady_path.name}")
+
+                    # Validate by re-reading
+                    boundaries_after = RasUnsteady.get_dss_boundaries(unsteady_path, ras_object=ras_obj)
+                    logger.info(
+                        f"Validation: {unsteady_path.name} has "
+                        f"{len(boundaries_after)} DSS boundaries after update"
+                    )
+                except Exception as e:
+                    logger.error(f"Error applying updates to {unsteady_path.name}: {e}")
+                    # Mark affected rows as error
+                    for row_dict in report_rows:
+                        if (row_dict['unsteady_file'] == str(unsteady_path) and
+                                row_dict['status'] == 'updated'):
+                            row_dict['status'] = 'error'
+
+        report = pd.DataFrame(report_rows)
+
+        if dry_run:
+            n_updates = len(report[report['status'] == 'updated']) if not report.empty else 0
+            logger.info(f"Dry run: {n_updates} DSS paths would be updated across {len(report)} boundaries")
+        else:
+            n_updates = len(report[report['status'] == 'updated']) if not report.empty else 0
+            logger.info(f"Applied: {n_updates} DSS paths updated")
+
+        return report

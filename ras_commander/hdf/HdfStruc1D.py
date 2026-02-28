@@ -8,7 +8,6 @@ All methods are static and designed to be used without instantiation.
 
 List of Functions:
 - get_structure_max_values() - Extract max HW, TW, Flow for a structure from results
-- get_structure_timeseries() - Extract full time series for structure
 - list_1d_structures() - List all 1D structures with results in HDF file
 
 Example Usage:
@@ -20,11 +19,6 @@ Example Usage:
     ... )
     >>> print(f"Max HW: {max_vals['max_hw']}, Max Flow: {max_vals['max_flow']}")
     >>>
-    >>> # Get full time series
-    >>> ts_df = HdfStruc1D.get_structure_timeseries(
-    ...     "plan.p01.hdf", "White River", "Muncie", "5600"
-    ... )
-
 Technical Notes:
     - 1D structure results are stored in cross section output at structure locations
     - BR U (bridge upstream) and BR D (bridge downstream) sections store HW/TW

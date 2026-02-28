@@ -193,13 +193,6 @@ How agents should use notebooks
 - Notable cells: Fastest method (8-10 seconds), all variables (WSE, Depth, Velocity, Froude, Shear, D*V), time-series analysis, batch processing, georeferencing fix.
 - Performance: ⭐⭐⭐ Fastest, ⭐⭐⭐ Excellent reliability, 100% matches native HEC-RAS output.
 
-602_floodplain_mapping_python_gis.ipynb
-- Focus: Floodplain mapping via pure Python mesh rasterization (cloud-compatible, 2D only).
-- Functions: RasMap.map_ras_results (ras_commander/RasMap.py), HdfMesh.get_mesh_cell_polygons (ras_commander/hdf/HdfMesh.py), HdfResultsMesh.get_mesh_max_ws (ras_commander/hdf/HdfResultsMesh.py).
-- Notable cells: No HEC-RAS required after computation, horizontal interpolation algorithm, wet cell filtering, mesh boundary clipping. Works on Linux/Mac/Windows.
-- Performance: Moderate (15-20 seconds), matches HEC-RAS to 0.01' for 2D horizontal interpolation (99.93% pixel match, RMSE 0.000000).
-- Limitations: 2D mesh only (no 1D), WSE/Depth/Velocity only (no Froude/Shear yet), horizontal interpolation only.
-
 610_fluvial_pluvial_delineation.ipynb
 - Focus: Classify flooding mechanism by timing.
 - Functions: HdfResultsMesh.get_mesh_max_ws (ras_commander/HdfResultsMesh.py), plus HdfMesh/HdfBndry for polygons/lines.
@@ -607,7 +600,6 @@ RasMap.set_geometry_visibility("08", visible=True)
 | `parse_rasmap(ras_object=None)` | Parse .rasmap XML into dict |
 | `ensure_rasmap_compatible(ras_object=None)` | Upgrade 5.0.7 format to 6.x |
 | `postprocess_stored_maps(ras_object=None)` | Post-process stored map configurations |
-| `map_ras_results(...)` | Pure Python mesh rasterization |
 
 ---
 

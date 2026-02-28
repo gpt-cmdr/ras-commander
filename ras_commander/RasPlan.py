@@ -1739,7 +1739,8 @@ class RasPlan:
         Update the simulation date for a given plan.
 
         Args:
-            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            plan_number_or_path (Union[str, Number, Path]): The plan number (str, int, or float)
+                or path to the plan file.
             start_date (datetime): The start date and time for the simulation.
             end_date (datetime): The end date and time for the simulation.
             ras_object (Optional['RasPrj']): The RAS project object. Defaults to None.
@@ -1771,9 +1772,12 @@ class RasPlan:
                     updated = True
                     break
 
-            # If Simulation Date line not found, add it at the end
+            # If Simulation Date line not found, raise instead of silently appending
             if not updated:
-                lines.append(f"Simulation Date={formatted_date}\n")
+                raise ValueError(
+                    f"'Simulation Date=' line not found in plan file: {plan_file_path}. "
+                    "Cannot update simulation date."
+                )
 
             # Write the updated content back to the file
             with open(plan_file_path, 'w') as file:
@@ -1781,9 +1785,9 @@ class RasPlan:
 
             logger.info(f"Updated simulation date in plan file: {plan_file_path}")
 
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error updating simulation date in plan file {plan_file_path}: {e}")
-            raise ValueError(f"Error updating simulation date: {e}")
+            raise
 
         # Refresh RasPrj dataframes
         if ras_object:
@@ -2832,3 +2836,144 @@ class RasPlan:
         # Refresh all DataFrames
         RasPlan._refresh_all_dataframes(ras_obj)
         return new_number
+
+    @staticmethod
+    @log_call
+    def create_plan_variants(
+        base_plan: Union[str, Number],
+        variants: pd.DataFrame,
+        naming_template: str = "{variant_name}",
+        ras_object=None
+    ) -> pd.DataFrame:
+        """
+        Create multiple plan variants from a base plan driven by a DataFrame.
+
+        Wraps clone_plan() in a loop, applying per-variant settings from the
+        variants DataFrame. Each row creates one new plan.
+
+        Parameters
+        ----------
+        base_plan : str or Number
+            Plan number to use as template (e.g., '01' or 1)
+        variants : pd.DataFrame
+            DataFrame with variant specifications. Required column:
+            - variant_name: str — name/title for the new plan
+            Optional columns (applied if present):
+            - unsteady_flow: str or Number — unsteady flow file number
+            - steady_flow: str or Number — steady flow file number
+            - geometry: str or Number — geometry file number
+            - num_cores: int — number of computation cores
+            - computation_interval: str — e.g., '5MIN', '1MIN'
+            - output_interval: str — e.g., '15MIN', '1HOUR'
+            - description: str — plan description text
+        naming_template : str, default '{variant_name}'
+            Template for plan title. Supports {variant_name}, {index},
+            {base_plan} substitutions.
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        pd.DataFrame
+            Report with columns:
+            - variant_name: Name from input DataFrame
+            - plan_number: New plan number assigned
+            - plan_path: Full path to created plan file
+            - status: 'created' or 'error'
+            - message: Details or error message
+
+        Example
+        -------
+        >>> import pandas as pd
+        >>> from ras_commander import RasPlan
+        >>> variants = pd.DataFrame({
+        ...     'variant_name': ['6hr Storm', '12hr Storm', '24hr Storm'],
+        ...     'unsteady_flow': ['01', '02', '03'],
+        ...     'description': ['6-hour design storm', '12-hour design storm', '24-hour design storm']
+        ... })
+        >>> report = RasPlan.create_plan_variants('01', variants)
+        >>> print(report[['variant_name', 'plan_number', 'status']])
+
+        Notes
+        -----
+        Plans are created sequentially to ensure proper numbering. After all
+        variants are created, DataFrames are refreshed once via plan_df.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        base_plan = RasUtils.normalize_ras_number(base_plan)
+        report_rows = []
+
+        for idx, row in variants.iterrows():
+            variant_name = str(row.get('variant_name', f'Variant_{idx}'))
+
+            # Build title from template
+            title = naming_template.format(
+                variant_name=variant_name,
+                index=idx,
+                base_plan=base_plan
+            )
+            # Truncate to 32 chars (HEC-RAS limit)
+            if len(title) > 32:
+                title = title[:32]
+                logger.warning(f"Truncated plan title to 32 chars: '{title}'")
+
+            # Build clone_plan kwargs from variant row
+            clone_kwargs = {
+                'new_title': title,
+            }
+
+            if 'geometry' in row.index and pd.notna(row.get('geometry')):
+                clone_kwargs['geometry'] = row['geometry']
+            if 'unsteady_flow' in row.index and pd.notna(row.get('unsteady_flow')):
+                clone_kwargs['unsteady_flow'] = row['unsteady_flow']
+            if 'steady_flow' in row.index and pd.notna(row.get('steady_flow')):
+                clone_kwargs['steady_flow'] = row['steady_flow']
+            if 'num_cores' in row.index and pd.notna(row.get('num_cores')):
+                clone_kwargs['num_cores'] = int(row['num_cores'])
+            if 'description' in row.index and pd.notna(row.get('description')):
+                clone_kwargs['description'] = str(row['description'])
+
+            # Build intervals dict if interval columns present
+            intervals = {}
+            if 'computation_interval' in row.index and pd.notna(row.get('computation_interval')):
+                intervals['computation_interval'] = row['computation_interval']
+            if 'output_interval' in row.index and pd.notna(row.get('output_interval')):
+                intervals['output_interval'] = row['output_interval']
+            if intervals:
+                clone_kwargs['intervals'] = intervals
+
+            try:
+                new_plan_num = RasPlan.clone_plan(
+                    template_plan=base_plan,
+                    ras_object=ras_obj,
+                    **clone_kwargs
+                )
+
+                # Get the plan path
+                plan_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{new_plan_num}"
+
+                report_rows.append({
+                    'variant_name': variant_name,
+                    'plan_number': new_plan_num,
+                    'plan_path': str(plan_path),
+                    'status': 'created',
+                    'message': f"Created from plan {base_plan}"
+                })
+                logger.info(f"Created variant '{variant_name}' as plan p{new_plan_num}")
+
+            except Exception as e:
+                report_rows.append({
+                    'variant_name': variant_name,
+                    'plan_number': None,
+                    'plan_path': None,
+                    'status': 'error',
+                    'message': str(e)
+                })
+                logger.error(f"Failed to create variant '{variant_name}': {e}")
+
+        report = pd.DataFrame(report_rows)
+        n_created = len(report[report['status'] == 'created'])
+        logger.info(f"Created {n_created}/{len(variants)} plan variants from plan p{base_plan}")
+        return report

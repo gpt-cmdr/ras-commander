@@ -56,6 +56,13 @@ Public API:
         - calculate_volume_error: Total volume comparison
         - classify_performance: Classify model performance rating
         - calculate_all_metrics: Comprehensive metric calculation
+        - modified_kling_gupta_efficiency: Modified KGE (Kling 2012, CV ratio)
+        - rmse_stdev_ratio: RSR (RMSE/StdDev ratio)
+        - r_squared: Coefficient of determination (R²)
+        - log_nash_sutcliffe_efficiency: Log-transformed NSE
+        - normalized_nash_sutcliffe: Normalized NSE mapped to (0, 1]
+        - peak_weighted_rmse: Peak-Weighted RMSE
+        - index_of_agreement: Willmott Index of Agreement
 
     From real_time:
         - get_latest_value: Get most recent gauge reading
@@ -119,12 +126,16 @@ from .file_io import (
     RasUsgsFileIo,
 )
 
-# Import visualization functions
+# Import visualization class and backward-compatible function aliases
 from .visualization import (
+    RasUsgsVisualization,
     plot_timeseries_comparison,
     plot_scatter_comparison,
     plot_residuals,
-    plot_hydrograph
+    plot_hydrograph,
+    # Phase 5: New visualization plots
+    plot_flow_duration_curve,
+    plot_cumulative_comparison,
 )
 
 # Import initial conditions management
@@ -151,14 +162,28 @@ from .time_series import (
     TimeSeriesProcessor,
 )
 
-# Import metrics functions
+# Import metrics class and backward-compatible function aliases
 from .metrics import (
+    RasUsgsMetrics,
     nash_sutcliffe_efficiency,
     kling_gupta_efficiency,
     calculate_peak_error,
     calculate_volume_error,
     classify_performance,
-    calculate_all_metrics
+    calculate_all_metrics,
+    # Phase 3: HMS-parity metrics
+    modified_kling_gupta_efficiency,
+    rmse_stdev_ratio,
+    r_squared,
+    log_nash_sutcliffe_efficiency,
+    normalized_nash_sutcliffe,
+    peak_weighted_rmse,
+    index_of_agreement,
+    # Phase 4: CLB Innovation metrics
+    stage_to_depth,
+    calculate_stage_metrics,
+    normalized_rmse,
+    classify_performance_full,
 )
 
 # Import real-time monitoring functions
@@ -295,18 +320,35 @@ __all__ = [
     'match_gauge_to_cross_section',
     'match_gauge_to_2d_area',
     'auto_match_gauges',
-    # Visualization functions
+    # Visualization class and functions
+    'RasUsgsVisualization',
     'plot_timeseries_comparison',
     'plot_scatter_comparison',
     'plot_residuals',
     'plot_hydrograph',
-    # Metrics functions
+    # Phase 5: New visualization plots
+    'plot_flow_duration_curve',
+    'plot_cumulative_comparison',
+    # Metrics class and functions
+    'RasUsgsMetrics',
     'nash_sutcliffe_efficiency',
     'kling_gupta_efficiency',
     'calculate_peak_error',
     'calculate_volume_error',
     'classify_performance',
     'calculate_all_metrics',
+    'modified_kling_gupta_efficiency',
+    'rmse_stdev_ratio',
+    'r_squared',
+    'log_nash_sutcliffe_efficiency',
+    'normalized_nash_sutcliffe',
+    'peak_weighted_rmse',
+    'index_of_agreement',
+    # Phase 4: CLB Innovation metrics
+    'stage_to_depth',
+    'calculate_stage_metrics',
+    'normalized_rmse',
+    'classify_performance_full',
     # Real-time monitoring functions
     'get_latest_value',
     'get_recent_data',

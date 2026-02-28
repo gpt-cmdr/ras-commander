@@ -47,6 +47,8 @@ RasDss.get_catalog("file.dss")    # Loads pyjnius, starts JVM, downloads Monolit
 
 ### RasDss Class (Static Methods)
 
+#### Read Methods
+
 | Method | Purpose | Returns |
 |--------|---------|---------|
 | `get_catalog(dss_file)` | List all paths in DSS file | `List[str]` |
@@ -55,6 +57,85 @@ RasDss.get_catalog("file.dss")    # Loads pyjnius, starts JVM, downloads Monolit
 | `get_info(dss_file)` | Get file metadata | `Dict` |
 | `extract_boundary_timeseries(boundaries_df, ...)` | Extract BC data | `DataFrame` |
 | `shutdown_jvm()` | Placeholder (no-op) | `None` |
+
+#### Write Methods
+
+| Method | Purpose | Returns |
+|--------|---------|---------|
+| `write_timeseries(dss_file, pathname, times, values, ...)` | Write time series from arrays | `None` |
+| `write_timeseries_from_dataframe(dss_file, pathname, df, ...)` | Write time series from DataFrame | `None` |
+
+##### `write_timeseries()`
+
+```python
+RasDss.write_timeseries(
+    dss_file: Union[str, Path],        # Path to DSS file (created if missing)
+    pathname: str,                     # DSS pathname, e.g. "//BASIN/LOC/FLOW//1HOUR/FORECAST/"
+    times: Union[List, np.ndarray, pd.DatetimeIndex],  # Timestamps
+    values: Union[List, np.ndarray],   # Numeric values (same length as times)
+    units: str = "CFS",                # Units string (e.g. "CFS", "FEET", "MM")
+    data_type: str = "INST-VAL",       # Data type: "INST-VAL", "PER-AVER", "PER-CUM", "INST-CUM"
+    create_if_missing: bool = True,    # Create DSS file and parent dirs if absent
+) -> None
+```
+
+**DSS Pathname Format**: `"//A/B/C/D/E/F/"` — parts are Basin, Location, Parameter, Start Date, Interval, Version.
+Leave Part D blank when writing (HEC-DSS fills it automatically): `"//BASIN/UPSTREAM/FLOW//1HOUR/FORECAST/"`.
+
+**Time encoding**: Internally converts datetimes to integer minutes since HEC epoch (1899-12-31 00:00:00).
+Timestamps must be timezone-naive or UTC-equivalent.
+
+##### `write_timeseries_from_dataframe()`
+
+```python
+RasDss.write_timeseries_from_dataframe(
+    dss_file: Union[str, Path],        # Path to DSS file (created if missing)
+    pathname: str,                     # DSS pathname
+    df: pd.DataFrame,                  # DataFrame with DatetimeIndex
+    value_column: str = "value",       # Column name containing numeric values
+    units: str = "CFS",                # Units string
+    data_type: str = "INST-VAL",       # Data type (see above)
+    create_if_missing: bool = True,    # Create DSS file and parent dirs if absent
+) -> None
+```
+
+**DataFrame schema**: `df` must have a `DatetimeIndex` and at least one numeric column
+(named by `value_column`). Extra columns are ignored.
+
+**Example**:
+```python
+from ras_commander import RasDss
+import pandas as pd
+
+# Write from arrays
+RasDss.write_timeseries(
+    dss_file="boundary.dss",
+    pathname="//MyBasin/Upstream/FLOW//1HOUR/FORECAST/",
+    times=pd.date_range("2024-01-01", periods=24, freq="1h"),
+    values=[100, 120, 150, 200, 180, 160] + [100] * 18,
+    units="CFS",
+    data_type="INST-VAL",
+)
+
+# Write from DataFrame
+df = pd.DataFrame(
+    {"value": [100, 120, 150, 200]},
+    index=pd.date_range("2024-01-01", periods=4, freq="1h")
+)
+RasDss.write_timeseries_from_dataframe(
+    dss_file="boundary.dss",
+    pathname="//MyBasin/Upstream/FLOW//1HOUR/FORECAST/",
+    df=df,
+    value_column="value",
+    units="CFS",
+)
+```
+
+**Lazy-loading note**: Write methods trigger the same three-level lazy load as read methods —
+`_configure_jvm()` is called on first write, pyjnius starts the JVM, and HEC Monolith
+(~20 MB) is auto-downloaded if not already cached at `~/.ras-commander/dss/`.
+The JVM can only be started once per process; if `_configure_jvm()` has already been
+called (e.g., by a prior read call), write methods reuse the running JVM.
 
 ### Validation Methods
 
@@ -185,3 +266,4 @@ enhanced = RasDss.extract_boundary_timeseries(
 
 - **v0.82.0**: Initial RasDss implementation
 - **v0.86.0**: Moved to `dss/` subpackage with lazy loading
+- **v0.89.x**: Added `write_timeseries()` and `write_timeseries_from_dataframe()` write methods

@@ -8,6 +8,7 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - Atlas 14 (NOAA) - Design storm generation with HMS-equivalent temporal distributions
 - Atlas14Grid - Spatially distributed PFE grids with remote access (HTTP range requests)
 - Atlas14Variance - Spatial variance analysis for uniform vs. distributed rainfall decisions
+- VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
 - MRMS (Multi-Radar Multi-Sensor) - Real-time and historical radar (future)
 - QPF (Quantitative Precipitation Forecast) - NWS forecasts (future)
 
@@ -162,9 +163,11 @@ Dependencies:
 """
 
 from .PrecipAorc import PrecipAorc
+from .PrecipHrrr import PrecipHrrr
 from .StormGenerator import StormGenerator
 from .Atlas14Grid import Atlas14Grid
 from .Atlas14Variance import Atlas14Variance
+from .VortexCli import VortexCli
 
 # Import from hms-commander (HMS-equivalent hyetograph generation)
 try:
@@ -184,7 +187,9 @@ except ImportError:
 
 __all__ = [
     'PrecipAorc',
+    'PrecipHrrr',                  # HRRR real-time forecast download
     'StormGenerator',
+    'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS conversion
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids
     'Atlas14Variance',             # Spatial variance analysis for precipitation
     'Atlas14Storm',                # HMS-equivalent Atlas 14 hyetograph generation

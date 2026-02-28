@@ -431,7 +431,7 @@ class GeomMetadata:
         }
 
         try:
-            with open(geom_path, 'r') as f:
+            with open(geom_path, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
 
             # Find 2D Flow Area names

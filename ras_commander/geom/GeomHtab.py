@@ -695,12 +695,61 @@ class GeomHtab:
                     except Exception as e:
                         logger.debug(f"Could not process SA connections: {e}")
 
+                # Check for 1D lateral structures
+                lateral_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Lateral Structures"
+                if lateral_base in hdf:
+                    try:
+                        if "Lateral Structure Attributes" in hdf[lateral_base]:
+                            attrs = hdf[f"{lateral_base}/Lateral Structure Attributes"][:]
+
+                            flow_data = None
+                            if "Flow" in hdf[lateral_base]:
+                                flow_data = hdf[f"{lateral_base}/Flow"][:]
+                                max_flows = np.max(np.abs(flow_data), axis=0)
+
+                            for i, attr in enumerate(attrs):
+                                try:
+                                    name = attr['Name'].decode('utf-8').strip() if hasattr(attr['Name'], 'decode') else str(attr['Name'])
+                                except:
+                                    name = f"Lateral_{i}"
+
+                                structure_data[name] = {
+                                    'river': 'Lateral',
+                                    'reach': 'Lateral',
+                                    'station': name,
+                                    'max_hw': None,
+                                    'max_tw': None,
+                                    'max_flow': float(max_flows[i]) if flow_data is not None else None
+                                }
+                    except Exception as e:
+                        logger.debug(f"Could not process lateral structures: {e}")
+
                 # Check for 1D inline structures
-                inline_1d_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Lateral Structures"
+                inline_1d_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Inline Structures"
                 if inline_1d_base in hdf:
                     try:
-                        # Similar processing for lateral/inline structures
-                        pass  # Implement if needed
+                        if "Inline Structure Attributes" in hdf[inline_1d_base]:
+                            attrs = hdf[f"{inline_1d_base}/Inline Structure Attributes"][:]
+
+                            flow_data = None
+                            if "Flow" in hdf[inline_1d_base]:
+                                flow_data = hdf[f"{inline_1d_base}/Flow"][:]
+                                max_flows = np.max(np.abs(flow_data), axis=0)
+
+                            for i, attr in enumerate(attrs):
+                                try:
+                                    name = attr['Name'].decode('utf-8').strip() if hasattr(attr['Name'], 'decode') else str(attr['Name'])
+                                except:
+                                    name = f"Inline_{i}"
+
+                                structure_data[name] = {
+                                    'river': 'Inline',
+                                    'reach': 'Inline',
+                                    'station': name,
+                                    'max_hw': None,
+                                    'max_tw': None,
+                                    'max_flow': float(max_flows[i]) if flow_data is not None else None
+                                }
                     except Exception as e:
                         logger.debug(f"Could not process inline structures: {e}")
 

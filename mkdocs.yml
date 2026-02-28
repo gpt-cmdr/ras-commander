@@ -55,7 +55,7 @@ plugins:
             heading_level: 2
             separate_signature: true
             show_signature_annotations: true
-  # DISABLED for pre-rendered notebooks: # DISABLED for pre-rendered notebooks: - mkdocs-jupyter:
+  # DISABLED for pre-rendered notebooks: # DISABLED for pre-rendered notebooks: # DISABLED for pre-rendered notebooks: - mkdocs-jupyter:
   # include_source: true
   # execute: false
   # include: ["notebooks/*.md"]
@@ -171,7 +171,6 @@ nav:
     - Advanced Data Analysis (600s):
       - Floodplain Mapping GUI: notebooks/600_floodplain_mapping_gui.md
       - Floodplain Mapping RasProcess: notebooks/601_floodplain_mapping_rasprocess.md
-      - Floodplain Mapping Python GIS: notebooks/602_floodplain_mapping_python_gis.md
       - Fluvial-Pluvial Delineation: notebooks/610_fluvial_pluvial_delineation.md
       - Map Layer Validation: notebooks/611_validating_map_layers.md
     - Sensitivity & Benchmarking (700s):
@@ -186,6 +185,10 @@ nav:
     - Quality Assurance (800s):
       - RasCheck Validation: notebooks/800_quality_assurance_rascheck.md
       - Advanced Structure Validation: notebooks/801_advanced_structure_validation.md
+    - eBFE Model Organization (950s):
+      - Spring Creek eBFE: notebooks/950_ebfe_spring_creek.md
+      - North Galveston Bay eBFE: notebooks/951_ebfe_north_galveston_bay.md
+      - Upper Guadalupe Cascade: notebooks/952_ebfe_upper_guadalupe_cascade.md
     - External Data Integrations (900s):
       - AORC Precipitation: notebooks/900_aorc_precipitation.md
       - AORC Precipitation Catalog: notebooks/901_aorc_precipitation_catalog.md
@@ -194,6 +197,12 @@ nav:
       - USGS Real-Time Monitoring: notebooks/912_usgs_real_time_monitoring.md
       - BC from Live Gauge: notebooks/913_bc_generation_from_live_gauge.md
       - Model Validation with USGS: notebooks/914_model_validation_with_usgs.md
+    - Real-Time Forecast Workflows (915-919):
+      - Forecast Workflow Overview: notebooks/915_realtime_forecast_workflow.md
+      - HRRR Precipitation Forecast: notebooks/916_hrrr_precipitation_forecast.md
+      - STOFS-3D Coastal Boundary: notebooks/917_stofs3d_coastal_boundary.md
+      - HMS-RAS Coupled Forecast: notebooks/918_hms_ras_coupled_forecast.md
+      - Operational Forecast Cycling: notebooks/919_operational_forecast_cycling.md
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md

@@ -50,7 +50,7 @@ The `RasEbfeModels` class solves this problem by applying **3 critical automated
 ### Quick Start
 
 ```python
-from ras_commander.ebfe_models import RasEbfeModels
+from ras_commander.sources.federal import RasEbfeModels
 from ras_commander import init_ras_project
 from pathlib import Path
 
@@ -195,7 +195,7 @@ for hecras_file in hecras_files:
 
 **Usage**:
 ```python
-from ras_commander.ebfe_models import RasEbfeModels
+from ras_commander.sources.federal import RasEbfeModels
 from ras_commander import init_ras_project
 
 organized = RasEbfeModels.organize_spring_creek(
@@ -222,7 +222,7 @@ init_ras_project(organized / "RAS Model", "5.0.7")
 
 **Usage**:
 ```python
-from ras_commander.ebfe_models import RasEbfeModels
+from ras_commander.sources.federal import RasEbfeModels
 
 organized = RasEbfeModels.organize_north_galveston_bay(
     downloaded_folder,
@@ -253,7 +253,7 @@ hms_project = organized / "HMS Model/NorthGalvestonBay/NorthGalvestonBay.hms"
 
 **Usage**:
 ```python
-from ras_commander.ebfe_models import RasEbfeModels
+from ras_commander.sources.federal import RasEbfeModels
 from ras_commander import init_ras_project, RasCmdr, RasPrj
 
 # Organize (applies all 3 critical fixes × 4 models)

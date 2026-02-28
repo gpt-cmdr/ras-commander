@@ -162,7 +162,7 @@ class GeomInlineWeir:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             inline_weirs = []
@@ -331,7 +331,7 @@ class GeomInlineWeir:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             weir_idx = GeomInlineWeir._find_inline_weir(lines, river, reach, rs)
@@ -406,7 +406,7 @@ class GeomInlineWeir:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         try:
-            with open(geom_file, 'r') as f:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             weir_idx = GeomInlineWeir._find_inline_weir(lines, river, reach, rs)

@@ -793,8 +793,13 @@ class RasUtils:
             3.33333333
         """
         multiplier = 100 if as_percentage else 1
-        
-        percent_bias = multiplier * (np.mean(predicted_values) - np.mean(observed_values)) / np.mean(observed_values)
+
+        obs_mean = np.mean(observed_values)
+        if obs_mean == 0:
+            logger.warning("Percent bias undefined: mean of observed values is zero")
+            return np.nan
+
+        percent_bias = multiplier * (np.mean(predicted_values) - obs_mean) / obs_mean
         
         logger.debug(f"Calculated Percent Bias: {percent_bias}")
         return percent_bias
