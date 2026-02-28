@@ -26,7 +26,7 @@ Example:
 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from ..LoggingConfig import get_logger, log_call
@@ -143,7 +143,7 @@ class PrecipHrrr:
 
         # Resolve date
         if date is None:
-            forecast_date = datetime.utcnow()
+            forecast_date = datetime.now(timezone.utc).replace(tzinfo=None)
         else:
             forecast_date = datetime.strptime(date, "%Y-%m-%d")
 
@@ -183,7 +183,12 @@ class PrecipHrrr:
             url = f"{PrecipHrrr.BASE_URL}/hrrr.{date_str}/conus/{filename}"
             local_path = output_dir / filename
 
+            tmp_path = local_path.with_suffix(local_path.suffix + '.tmp')
+
             if local_path.exists() and not overwrite:
+                # Clean up stale .tmp files left by failed previous downloads
+                if tmp_path.exists():
+                    tmp_path.unlink()
                 logger.debug(f"Skipping existing file: {filename}")
                 downloaded_files.append(local_path)
                 continue
@@ -194,15 +199,20 @@ class PrecipHrrr:
                 response = requests.get(url, stream=True, timeout=120)
                 response.raise_for_status()
 
-                with open(local_path, 'wb') as f:
+                with open(tmp_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
+
+                # Atomic rename: only promote to final path on full success
+                tmp_path.rename(local_path)
 
                 file_size_mb = local_path.stat().st_size / (1024 * 1024)
                 logger.debug(f"Downloaded {filename} ({file_size_mb:.1f} MB)")
                 downloaded_files.append(local_path)
 
             except requests.exceptions.HTTPError as e:
+                if tmp_path.exists():
+                    tmp_path.unlink()
                 if e.response.status_code == 404:
                     logger.warning(
                         f"File not found (may not be available yet): {filename}"
@@ -213,10 +223,16 @@ class PrecipHrrr:
                         f"HTTP error downloading {filename}: {e}"
                     ) from e
             except requests.exceptions.ConnectionError as e:
+                if tmp_path.exists():
+                    tmp_path.unlink()
                 raise ConnectionError(
                     f"Cannot reach NOMADS server. Check internet connection. "
                     f"Error: {e}"
                 ) from e
+            except Exception:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+                raise
 
         logger.info(
             f"Downloaded {len(downloaded_files)} HRRR files for "
@@ -260,7 +276,7 @@ class PrecipHrrr:
         _check_hrrr_dependencies()
         import requests
 
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Try cycles from most recent to max_lookback_hours ago
         # Account for ~2 hour processing latency
@@ -319,10 +335,10 @@ class PrecipHrrr:
         import requests
 
         if date is None:
-            date = datetime.utcnow().strftime("%Y-%m-%d")
+            date = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
 
         if cycle is None:
-            cycle = (datetime.utcnow() - timedelta(hours=2)).hour
+            cycle = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)).hour
 
         forecast_date = datetime.strptime(date, "%Y-%m-%d")
         date_str = forecast_date.strftime("%Y%m%d")
@@ -349,6 +365,7 @@ class PrecipHrrr:
             return False
 
     @staticmethod
+    @log_call
     def get_info() -> Dict:
         """
         Return metadata about the HRRR dataset.
@@ -397,7 +414,7 @@ class PrecipHrrr:
         """
         import requests
 
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
         current_date_str = now_utc.strftime("%Y%m%d")
 
         # If checking today, start from ~2 hours ago (latency)
@@ -574,14 +591,48 @@ class PrecipHrrr:
         try:
             from rasterstats import zonal_stats
 
+            # Compute affine transform from HRRR 2D lat/lon coordinate arrays.
+            # HRRR uses Lambert Conformal native grid with 0-360 longitude convention;
+            # convert to -180/180 to match geometry CRS (WGS84/EPSG:4326).
+            try:
+                from affine import Affine as _AffineTransform
+                _tp0 = precip_ds['tp'].isel(step=0)
+                _lons = np.asarray(_tp0.coords['longitude'].values)
+                _lats = np.asarray(_tp0.coords['latitude'].values)
+                # Convert 0-360 → -180/180
+                _lons = np.where(_lons > 180, _lons - 360, _lons)
+                _ny = _lats.shape[0] if _lats.ndim == 2 else len(_lats)
+                _nx = _lons.shape[1] if _lons.ndim == 2 else len(_lons)
+                _res_x = (float(_lons.max()) - float(_lons.min())) / max(_nx - 1, 1)
+                _res_y = (float(_lats.max()) - float(_lats.min())) / max(_ny - 1, 1)
+                # Build north-up affine: west edge, north edge, positive dx, negative dy
+                _grid_transform = _AffineTransform(
+                    _res_x, 0.0, float(_lons.min()) - _res_x / 2,
+                    0.0, -_res_y, float(_lats.max()) + _res_y / 2,
+                )
+                # Detect south-up storage (row 0 has lower latitude than last row)
+                _row0_lat = float(_lats[0, 0]) if _lats.ndim == 2 else float(_lats[0])
+                _rowN_lat = float(_lats[-1, 0]) if _lats.ndim == 2 else float(_lats[-1])
+                _south_up = _row0_lat < _rowN_lat
+            except ImportError:
+                _grid_transform = None
+                _south_up = False
+                logger.warning(
+                    "affine package not available; zonal_stats will use pixel coordinates "
+                    "(results will be incorrect — install with: pip install affine)"
+                )
+
             results = []
             for step_idx in range(len(precip_ds.step)):
                 precip_slice = precip_ds['tp'].isel(step=step_idx).values
+                # Flip to north-up orientation if grid is stored south-up
+                if _south_up:
+                    precip_slice = precip_slice[::-1, :]
 
                 stats = zonal_stats(
                     geometry,
                     precip_slice,
-                    affine=None,  # Will be computed from coordinates
+                    affine=_grid_transform,
                     stats=['mean'],
                     nodata=np.nan,
                 )

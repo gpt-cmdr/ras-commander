@@ -117,14 +117,12 @@ class RasDss:
                 "Install with: pip install pyjnius"
             )
 
-        # Check if JVM already started
-        try:
-            from jnius import autoclass
-            # If this succeeds, JVM already started
+        # Check if JVM already started using jnius_config (does NOT start the JVM)
+        # IMPORTANT: Never import from jnius here - that would start the JVM with
+        # an empty classpath before we can call jnius_config.add_classpath()
+        if getattr(jnius_config, 'vm_running', False):
             RasDss._jvm_configured = True
             return
-        except:
-            pass
 
         # Get classpath and library path
         classpath = monolith.get_classpath()
@@ -134,15 +132,35 @@ class RasDss:
 
         # Set JAVA_HOME if not already set
         if 'JAVA_HOME' not in os.environ:
-            # Try to find Java
-            java_candidates = [
-                Path("C:/Program Files/Java/jre1.8.0_471"),
-                Path("C:/Program Files/Java/jdk-11"),
-                Path("C:/Program Files/Java/jdk-17"),
-                Path("C:/Program Files (x86)/Java/jre1.8.0_471"),
+            # Dynamically discover Java installations using glob patterns.
+            # Search standard Java install locations plus HEC application bundles.
+            java_search_roots = [
+                Path("C:/Program Files/Java"),
+                Path("C:/Program Files (x86)/Java"),
             ]
+            java_candidates = []
+            for root in java_search_roots:
+                if root.exists():
+                    # Collect all jre* and jdk* directories, sorted newest first
+                    java_candidates.extend(sorted(root.glob("jre*"), reverse=True))
+                    java_candidates.extend(sorted(root.glob("jdk*"), reverse=True))
+                    java_candidates.extend(sorted(root.glob("jdk-*"), reverse=True))
+
+            # Also check JREs bundled with HEC applications (HMS, RAS, etc.)
+            hec_apps = Path("C:/Program Files/HEC")
+            if hec_apps.exists():
+                java_candidates.extend(sorted(hec_apps.glob("*/*/jre"), reverse=True))
+                java_candidates.extend(sorted(hec_apps.glob("**/jre"), reverse=True))
+
+            def _has_jvm_lib(java_dir: Path) -> bool:
+                """Check that a Java directory contains a usable JVM library."""
+                if os.name == 'nt':
+                    return bool(list(java_dir.rglob("jvm.dll")))
+                else:
+                    return bool(list(java_dir.rglob("libjvm.so")))
+
             for java_home in java_candidates:
-                if java_home.exists():
+                if java_home.is_dir() and _has_jvm_lib(java_home):
                     os.environ['JAVA_HOME'] = str(java_home)
                     print(f"  Found Java: {java_home}")
                     break
@@ -203,9 +221,9 @@ class RasDss:
         dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
 
         # Open DSS file
-        dss = HecDss.open(dss_file)
-
+        dss = None
         try:
+            dss = HecDss.open(dss_file)
             # Get catalog (returns Java Vector of pathname strings)
             catalog_vector = dss.getCatalogedPathnames()
 
@@ -218,7 +236,8 @@ class RasDss:
             return pd.DataFrame({'pathname': paths})
 
         finally:
-            dss.done()
+            if dss is not None:
+                dss.done()
 
     @staticmethod
     @log_call
@@ -257,9 +276,9 @@ class RasDss:
         dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
 
         # Open DSS file
-        dss = HecDss.open(dss_file)
-
+        dss = None
         try:
+            dss = HecDss.open(dss_file)
             # Read time series
             # True = ignore D-part (date) for wildcards
             container = dss.get(pathname, True)
@@ -297,7 +316,8 @@ class RasDss:
             return df
 
         finally:
-            dss.done()
+            if dss is not None:
+                dss.done()
 
     @staticmethod
     @log_call
@@ -1166,8 +1186,9 @@ class RasDss:
         tsc.values = values.tolist()
 
         # Open DSS file and write
-        dss = HecDss.open(dss_file_str)
+        dss = None
         try:
+            dss = HecDss.open(dss_file_str)
             dss.put(tsc)
             logger.info(
                 f"Wrote {n} values to {pathname} in {Path(dss_file_str).name} "
@@ -1181,7 +1202,8 @@ class RasDss:
                 f"  Values: {n} points, range [{values.min():.2f}, {values.max():.2f}]"
             ) from e
         finally:
-            dss.done()
+            if dss is not None:
+                dss.done()
 
     @staticmethod
     @log_call
@@ -1262,7 +1284,12 @@ class RasDss:
         delta = dt64 - HEC_EPOCH
         minutes = delta.astype(np.int64)
 
-        return minutes.astype(np.int32)
+        if minutes.max() > np.iinfo(np.int32).max:
+            logger.warning(
+                f"HEC epoch minutes ({minutes.max()}) exceeds int32 range; "
+                "passing as int64 — verify HEC-DSS Java bridge accepts int64"
+            )
+        return minutes
 
 
 if __name__ == "__main__":

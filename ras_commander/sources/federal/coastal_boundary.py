@@ -31,7 +31,7 @@ Example:
 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ...LoggingConfig import get_logger, log_call
 
@@ -279,8 +279,6 @@ class CoastalBoundary:
         else:
             nc_files = sorted(stofs_path.glob("stofs_3d_atl.*.nc"))
             if date and cycle is not None:
-                date_obj = datetime.strptime(date, "%Y-%m-%d")
-                date_str = date_obj.strftime("%Y%m%d")
                 pattern = f"stofs_3d_atl.t{cycle:02d}z.*.cwl.nc"
                 nc_files = sorted(stofs_path.glob(pattern))
 
@@ -493,9 +491,9 @@ class CoastalBoundary:
         wse_values = df[wse_col].values + datum_adjustment_ft
         datetimes = pd.to_datetime(df['datetime'].values)
 
-        # Read unsteady file
+        # Read unsteady file (splitlines handles \r\n and \n uniformly)
         content = unsteady_file.read_text()
-        lines = content.split('\n')
+        lines = content.splitlines()
 
         # Find the boundary condition location
         bc_found = False
@@ -551,14 +549,19 @@ class CoastalBoundary:
             # Count of values is on the Stage Hydrograph= line
             num_values_line = lines[stage_start]
 
-            # Find where data ends (next section header or blank line)
+            # Find where data ends: skip the Interval= line that follows
+            # Stage Hydrograph=, then skip numeric value lines; stop at
+            # the next keyword line (starts with a letter) or end of file.
             data_end = stage_start + 1
+            # Skip Interval= line immediately after Stage Hydrograph= header
+            if (data_end < len(lines)
+                    and lines[data_end].strip().startswith('Interval=')):
+                data_end += 1
+            # Skip numeric value lines (start with digit, space, '-', or '.')
             while data_end < len(lines):
                 stripped = lines[data_end].strip()
-                if (stripped == '' or
-                    ('=' in stripped and not stripped[0].isdigit() and
-                     not stripped.startswith('-'))):
-                    break
+                if stripped and stripped[0].isalpha():
+                    break  # next keyword line ends this section
                 data_end += 1
 
             # Build replacement stage data
@@ -569,8 +572,9 @@ class CoastalBoundary:
             # Replace existing lines
             lines[stage_start:data_end] = [stage_block]
 
-        # Write updated file
-        unsteady_file.write_text('\n'.join(lines))
+        # Write updated file with normalized line endings; preserve trailing newline
+        trailing_newline = '\n' if content.endswith(('\n', '\r\n')) else ''
+        unsteady_file.write_text('\n'.join(lines) + trailing_newline)
 
         logger.info(
             f"Wrote stage BC for '{bc_location}' to {unsteady_file.name}: "
@@ -688,10 +692,10 @@ class CoastalBoundary:
         import requests
 
         if date is None:
-            date = datetime.utcnow().strftime("%Y-%m-%d")
+            date = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
 
         if cycle is None:
-            now_utc = datetime.utcnow()
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
             # Latest cycle considering ~6 hour latency
             candidate = now_utc - timedelta(hours=6)
             cycle = (candidate.hour // 6) * 6

@@ -1739,7 +1739,8 @@ class RasPlan:
         Update the simulation date for a given plan.
 
         Args:
-            plan_number_or_path (Union[str, Path]): The plan number or path to the plan file.
+            plan_number_or_path (Union[str, Number, Path]): The plan number (str, int, or float)
+                or path to the plan file.
             start_date (datetime): The start date and time for the simulation.
             end_date (datetime): The end date and time for the simulation.
             ras_object (Optional['RasPrj']): The RAS project object. Defaults to None.
@@ -1771,9 +1772,12 @@ class RasPlan:
                     updated = True
                     break
 
-            # If Simulation Date line not found, add it at the end
+            # If Simulation Date line not found, raise instead of silently appending
             if not updated:
-                lines.append(f"Simulation Date={formatted_date}\n")
+                raise ValueError(
+                    f"'Simulation Date=' line not found in plan file: {plan_file_path}. "
+                    "Cannot update simulation date."
+                )
 
             # Write the updated content back to the file
             with open(plan_file_path, 'w') as file:
@@ -1781,9 +1785,9 @@ class RasPlan:
 
             logger.info(f"Updated simulation date in plan file: {plan_file_path}")
 
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error updating simulation date in plan file {plan_file_path}: {e}")
-            raise ValueError(f"Error updating simulation date: {e}")
+            raise
 
         # Refresh RasPrj dataframes
         if ras_object:
