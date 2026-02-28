@@ -132,7 +132,10 @@ from .visualization import (
     plot_timeseries_comparison,
     plot_scatter_comparison,
     plot_residuals,
-    plot_hydrograph
+    plot_hydrograph,
+    # Phase 5: New visualization plots
+    plot_flow_duration_curve,
+    plot_cumulative_comparison,
 )
 
 # Import initial conditions management

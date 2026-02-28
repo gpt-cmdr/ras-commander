@@ -1031,6 +1031,360 @@ class RasUsgsMetrics:
         logger.debug(f"Index of Agreement: {d:.4f}")
         return d
 
+    # -------------------------------------------------------------------------
+    # Phase 4: CLB Innovations (added v0.90.0)
+    # CLB Engineering Corporation calibration innovations for riverine models
+    # Reference: CLB LWI Calibration Procedure (internal), Moriasi et al. (2007)
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def stage_to_depth(
+        stage: Union[np.ndarray, pd.Series],
+        datum: Optional[float] = None
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Convert stage (water surface elevation) to depth above datum.
+
+        CLB Innovation #1 supporting method: subtracts datum from raw stage values
+        to produce depth values suitable for physically meaningful error metrics.
+        Without conversion, RMSE on raw stage is misleadingly small because the
+        large datum elevation dominates the denominator in normalized metrics.
+
+        Parameters
+        ----------
+        stage : np.ndarray or pd.Series
+            Stage (water surface elevation) values, e.g. in ft NAVD88
+        datum : float, optional
+            Datum elevation to subtract (e.g. channel invert elevation).
+            If None, uses min(stage) as a proxy datum (assumes minimum
+            observed stage represents near-zero-depth condition).
+
+        Returns
+        -------
+        tuple of (np.ndarray, float)
+            - depth: Stage values minus datum (depth array)
+            - datum_used: The datum value that was subtracted
+
+        Notes
+        -----
+        If any stage values are below datum (negative depths), a warning is
+        logged but the calculation proceeds.
+
+        Examples
+        --------
+        >>> stage = np.array([950.2, 951.0, 952.5, 951.8, 950.5])
+        >>> depth, datum = RasUsgsMetrics.stage_to_depth(stage)
+        >>> print(f"Datum: {datum:.2f} ft, Max depth: {depth.max():.2f} ft")
+        Datum: 950.20 ft, Max depth: 2.30 ft
+        """
+        if isinstance(stage, pd.Series):
+            stage = stage.values
+        stage = np.asarray(stage, dtype=float)
+
+        valid = stage[~np.isnan(stage)]
+        if len(valid) == 0:
+            logger.warning("stage_to_depth: all-NaN array provided")
+            datum_used = datum if datum is not None else 0.0
+            return stage.copy(), datum_used
+
+        datum_used = float(datum) if datum is not None else float(np.nanmin(stage))
+
+        depth = stage - datum_used
+
+        n_negative = int(np.sum(depth[~np.isnan(depth)] < 0))
+        if n_negative > 0:
+            logger.warning(
+                f"stage_to_depth: {n_negative} depth values are negative "
+                f"(stage below datum {datum_used:.3f}). Check datum value."
+            )
+
+        logger.debug(f"stage_to_depth: datum={datum_used:.3f}, "
+                     f"depth range=[{np.nanmin(depth):.3f}, {np.nanmax(depth):.3f}]")
+        return depth, datum_used
+
+    @staticmethod
+    @log_call
+    def calculate_stage_metrics(
+        observed_stage: Union[np.ndarray, pd.Series],
+        modeled_stage: Union[np.ndarray, pd.Series],
+        datum: Optional[float] = None
+    ) -> Dict[str, float]:
+        """
+        Calculate RMSE and PBIAS after converting stage to depth.
+
+        CLB Innovation #1: Stage-to-depth conversion before metrics computation.
+        Prevents misleadingly small error metrics that arise when raw elevation
+        values are large relative to the actual water depth.
+
+        For example, a 0.5 ft stage error on a gauge at 950 ft NAVD88 looks like
+        a 0.05% error in raw magnitude but may represent 10% of the actual depth.
+        Converting to depth first exposes the physically meaningful error magnitude.
+
+        HMS does NOT perform this conversion (confirmed by HEC-HMS 4.13 decompilation).
+
+        Parameters
+        ----------
+        observed_stage : np.ndarray or pd.Series
+            Observed stage (water surface elevation) values from USGS gauge
+        modeled_stage : np.ndarray or pd.Series
+            Modeled stage values from HEC-RAS simulation
+        datum : float, optional
+            Datum elevation to subtract before computing metrics.
+            If None, uses min(observed_stage) as a proxy datum.
+
+        Returns
+        -------
+        dict
+            Dictionary with stage-based metric results:
+            - 'datum': Datum elevation used for conversion
+            - 'rmse_depth': RMSE computed on depth values (ft or m)
+            - 'pbias_depth': PBIAS (%) computed on depth values
+            - 'nrmse_depth': Normalized RMSE on depth (RMSE / mean_obs_depth, dimensionless)
+            - 'mean_obs_depth': Mean observed depth above datum
+
+        Notes
+        -----
+        PBIAS on depth values uses the same sign convention as the module:
+        positive = model overestimates depth (simulated > observed).
+
+        Examples
+        --------
+        >>> obs_stage = np.array([950.2, 951.0, 952.5, 951.8, 950.5])
+        >>> mod_stage = np.array([950.3, 950.9, 952.7, 951.6, 950.6])
+        >>> result = RasUsgsMetrics.calculate_stage_metrics(obs_stage, mod_stage)
+        >>> print(f"Datum: {result['datum']:.2f} ft")
+        >>> print(f"RMSE (depth): {result['rmse_depth']:.3f} ft")
+        >>> print(f"PBIAS (depth): {result['pbias_depth']:.2f}%")
+        """
+        if isinstance(observed_stage, pd.Series):
+            observed_stage = observed_stage.values
+        if isinstance(modeled_stage, pd.Series):
+            modeled_stage = modeled_stage.values
+        observed_stage = np.asarray(observed_stage, dtype=float)
+        modeled_stage = np.asarray(modeled_stage, dtype=float)
+
+        # Pairwise NaN removal
+        valid_mask = ~(np.isnan(observed_stage) | np.isnan(modeled_stage))
+        obs_clean = observed_stage[valid_mask]
+        mod_clean = modeled_stage[valid_mask]
+
+        if len(obs_clean) == 0:
+            logger.warning("calculate_stage_metrics: no valid data points")
+            return {
+                'datum': np.nan,
+                'rmse_depth': np.nan,
+                'pbias_depth': np.nan,
+                'nrmse_depth': np.nan,
+                'mean_obs_depth': np.nan,
+            }
+
+        # Convert to depth using observed minimum as datum if not provided
+        obs_depth, datum_used = RasUsgsMetrics.stage_to_depth(obs_clean, datum=datum)
+        mod_depth, _ = RasUsgsMetrics.stage_to_depth(mod_clean, datum=datum_used)
+
+        # RMSE on depth
+        rmse_depth = float(np.sqrt(np.mean((obs_depth - mod_depth) ** 2)))
+
+        # PBIAS on depth (positive = overestimation, same sign convention as module)
+        sum_obs_depth = np.sum(obs_depth)
+        if sum_obs_depth == 0:
+            logger.warning("calculate_stage_metrics: sum of observed depths is zero; PBIAS undefined")
+            pbias_depth = np.nan
+        else:
+            pbias_depth = float(100.0 * np.sum(mod_depth - obs_depth) / sum_obs_depth)
+
+        # Normalized RMSE (RMSE / mean depth)
+        mean_obs_depth = float(np.mean(obs_depth))
+        if mean_obs_depth == 0:
+            nrmse_depth = np.nan
+        else:
+            nrmse_depth = float(rmse_depth / mean_obs_depth)
+
+        result = {
+            'datum': datum_used,
+            'rmse_depth': rmse_depth,
+            'pbias_depth': pbias_depth,
+            'nrmse_depth': nrmse_depth,
+            'mean_obs_depth': mean_obs_depth,
+        }
+
+        logger.debug(
+            f"Stage metrics: datum={datum_used:.3f}, "
+            f"RMSE_depth={rmse_depth:.4f}, PBIAS_depth={pbias_depth:.2f}%"
+        )
+        return result
+
+    @staticmethod
+    @log_call
+    def normalized_rmse(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series],
+        normalization: str = 'peak'
+    ) -> float:
+        """
+        Calculate Normalized Root Mean Square Error (NRMSE).
+
+        CLB Innovation #2: Parameter-specific RMSE normalization.
+        Normalizes RMSE by a characteristic value of the observed series to
+        produce a dimensionless error metric suitable for cross-gauge comparison.
+
+        CLB normalization conventions:
+            - Flow: normalize by peak observed flow ('peak')
+            - Stage: normalize by mean observed stage ('mean')
+            - General: normalize by observed range ('range')
+
+        Parameters
+        ----------
+        observed : np.ndarray or pd.Series
+            Observed values from USGS gauge
+        modeled : np.ndarray or pd.Series
+            Modeled values from HEC-RAS
+        normalization : str, default='peak'
+            Normalization method:
+            - 'peak'  : RMSE / max(observed)  [recommended for flow]
+            - 'mean'  : RMSE / mean(observed) [recommended for stage]
+            - 'range' : RMSE / (max(observed) - min(observed))
+
+        Returns
+        -------
+        float
+            Normalized RMSE (dimensionless). Returns np.nan if normalization
+            denominator is zero or if insufficient valid data exists.
+
+        Notes
+        -----
+        The returned value is a ratio (not a percentage). Multiply by 100 for
+        percentage form. Values closer to 0 indicate better model performance.
+
+        For stage data, use this in conjunction with calculate_stage_metrics()
+        to first convert to depth before normalizing.
+
+        Examples
+        --------
+        >>> observed = np.array([100, 500, 1000, 800, 200])
+        >>> modeled = np.array([110, 480, 990, 820, 190])
+        >>> nrmse = RasUsgsMetrics.normalized_rmse(observed, modeled, normalization='peak')
+        >>> print(f"NRMSE (peak-normalized): {nrmse:.4f}  ({nrmse*100:.2f}%)")
+        """
+        if isinstance(observed, pd.Series):
+            observed = observed.values
+        if isinstance(modeled, pd.Series):
+            modeled = modeled.values
+        observed = np.asarray(observed, dtype=float)
+        modeled = np.asarray(modeled, dtype=float)
+
+        valid_mask = ~(np.isnan(observed) | np.isnan(modeled))
+        obs_clean = observed[valid_mask]
+        mod_clean = modeled[valid_mask]
+
+        if len(obs_clean) == 0:
+            logger.warning("normalized_rmse: no valid data points")
+            return np.nan
+
+        rmse = float(np.sqrt(np.mean((obs_clean - mod_clean) ** 2)))
+
+        if normalization == 'peak':
+            denom = float(np.max(obs_clean))
+        elif normalization == 'mean':
+            denom = float(np.mean(obs_clean))
+        elif normalization == 'range':
+            denom = float(np.max(obs_clean) - np.min(obs_clean))
+        else:
+            raise ValueError(
+                f"normalization must be 'peak', 'mean', or 'range'; got '{normalization}'"
+            )
+
+        if denom == 0:
+            logger.warning(
+                f"normalized_rmse: normalization denominator is zero "
+                f"(normalization='{normalization}')"
+            )
+            return np.nan
+
+        nrmse = rmse / denom
+        logger.debug(f"normalized_rmse: RMSE={rmse:.4f}, denom={denom:.4f}, NRMSE={nrmse:.4f}")
+        return nrmse
+
+    @staticmethod
+    @log_call
+    def classify_performance_full(
+        metrics_dict: Dict[str, float],
+        parameter_type: str = 'streamflow'
+    ) -> str:
+        """
+        Classify model performance using all three Moriasi et al. (2007) criteria.
+
+        Extends classify_performance() to incorporate RSR (RMSE-observations
+        standard deviation ratio) alongside NSE and |PBIAS|, matching the complete
+        three-criterion classification table from Moriasi et al. (2007), Table 4.
+
+        Performance Criteria (Moriasi et al., 2007, Table 4 — monthly streamflow):
+            - Very Good:    NSE > 0.75 AND RSR ≤ 0.50 AND |PBIAS| < 10%
+            - Good:         NSE > 0.65 AND RSR ≤ 0.60 AND |PBIAS| < 15%
+            - Satisfactory: NSE > 0.50 AND RSR ≤ 0.70 AND |PBIAS| < 25%
+            - Unsatisfactory: NSE ≤ 0.50 OR RSR > 0.70 OR |PBIAS| ≥ 25%
+
+        Note: classify_performance() uses only NSE and PBIAS. This method is
+        more stringent because it requires RSR to also meet its threshold.
+
+        Parameters
+        ----------
+        metrics_dict : dict
+            Dictionary containing metric values. Must include:
+            - 'nse'  : Nash-Sutcliffe Efficiency
+            - 'rsr'  : RMSE-observations standard deviation ratio
+            - 'pbias': Percent Bias (as percentage, positive=overestimation)
+        parameter_type : str, default='streamflow'
+            Parameter type for documentation purposes (currently only 'streamflow'
+            thresholds are defined in Moriasi et al., 2007).
+            Future: 'sediment', 'nutrients'
+
+        Returns
+        -------
+        str
+            Performance classification: 'Very Good', 'Good', 'Satisfactory',
+            or 'Unsatisfactory'
+
+        References
+        ----------
+        Moriasi, D. N., Arnold, J. G., Van Liew, M. W., Bingner, R. L., Harmel,
+        R. D., & Veith, T. L. (2007). Model evaluation guidelines for systematic
+        quantification of accuracy in watershed simulations. Transactions of the
+        ASABE, 50(3), 885-900.
+
+        Examples
+        --------
+        >>> metrics = {'nse': 0.82, 'rsr': 0.43, 'pbias': -5.2}
+        >>> rating = RasUsgsMetrics.classify_performance_full(metrics)
+        >>> print(rating)
+        Very Good
+
+        >>> # RSR fails threshold despite good NSE and PBIAS
+        >>> metrics = {'nse': 0.78, 'rsr': 0.65, 'pbias': 8.0}
+        >>> rating = RasUsgsMetrics.classify_performance_full(metrics)
+        >>> print(rating)
+        Good
+        """
+        nse = metrics_dict.get('nse', -999.0)
+        rsr = metrics_dict.get('rsr', 999.0)
+        pbias = abs(metrics_dict.get('pbias', 999.0))
+
+        if nse > 0.75 and rsr <= 0.50 and pbias < 10:
+            rating = 'Very Good'
+        elif nse > 0.65 and rsr <= 0.60 and pbias < 15:
+            rating = 'Good'
+        elif nse > 0.50 and rsr <= 0.70 and pbias < 25:
+            rating = 'Satisfactory'
+        else:
+            rating = 'Unsatisfactory'
+
+        logger.debug(
+            f"classify_performance_full ({parameter_type}): {rating} "
+            f"(NSE={nse:.3f}, RSR={rsr:.3f}, PBIAS={pbias:.1f}%)"
+        )
+        return rating
+
     @staticmethod
     @log_call
     def calculate_all_metrics(
@@ -1088,6 +1442,8 @@ class RasUsgsMetrics:
             - 'vol_mod': Modeled total volume
             - 'vol_error_pct': Volume percentage error
             - 'performance_rating': Overall performance classification
+            - 'nrmse_peak': Normalized RMSE (RMSE / peak observed, dimensionless)
+            - 'performance_rating_full': Full Moriasi 2007 classification using NSE + RSR + PBIAS
 
         Notes
         -----
@@ -1178,6 +1534,10 @@ class RasUsgsMetrics:
         metrics['pwrmse'] = RasUsgsMetrics.peak_weighted_rmse(obs_clean, mod_clean)
         metrics['index_of_agreement'] = RasUsgsMetrics.index_of_agreement(obs_clean, mod_clean)
 
+        # Phase 4 CLB innovations
+        metrics['nrmse_peak'] = RasUsgsMetrics.normalized_rmse(obs_clean, mod_clean, normalization='peak')
+        metrics['performance_rating_full'] = RasUsgsMetrics.classify_performance_full(metrics)
+
         # Peak analysis - filter time_index with same valid_mask to keep alignment
         filtered_time_index = time_index[valid_mask] if time_index is not None else None
         peak_metrics = RasUsgsMetrics.calculate_peak_error(obs_clean, mod_clean, time_index=filtered_time_index)
@@ -1198,6 +1558,203 @@ class RasUsgsMetrics:
 
         return metrics
 
+    @staticmethod
+    @log_call
+    def compute_calibration_report(
+        plan_number: str,
+        observed_data: Union[pd.DataFrame, Dict[str, pd.Series]],
+        locations: Optional[list] = None,
+        variable: str = 'Flow',
+        reftype: str = 'lines',
+        dt_hours: float = 1.0,
+        ras_object=None
+    ) -> pd.DataFrame:
+        """
+        Bridge HDF time series extraction to metric computation for calibration.
+
+        Extracts modeled time series from a computed plan HDF file, aligns them
+        with observed data, and computes all calibration metrics per location.
+
+        Parameters
+        ----------
+        plan_number : str
+            Plan number (e.g., '01') to extract results from
+        observed_data : pd.DataFrame or dict of pd.Series
+            Observed data for comparison. If DataFrame, columns are location names
+            and index is DatetimeIndex. If dict, keys are location names and values
+            are pd.Series with DatetimeIndex.
+        locations : list, optional
+            Subset of locations to evaluate. If None, uses all locations in
+            observed_data.
+        variable : str, default 'Flow'
+            Variable type to extract (e.g., 'Flow', 'Stage')
+        reftype : str, default 'lines'
+            Reference type for HDF extraction ('lines' or 'points')
+        dt_hours : float, default 1.0
+            Time step in hours for volume calculations
+        ras_object : optional
+            Custom RAS object to use instead of the global one
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per location with columns:
+            - location: Location/reference name
+            - n_points: Number of valid comparison points
+            - nse, kge, r_squared, rmse, pbias: Core metrics
+            - peak_obs, peak_mod, peak_error_pct: Peak metrics
+            - vol_error_pct: Volume error
+            - performance_rating: Moriasi classification
+            - All other metrics from calculate_all_metrics()
+
+        Example
+        -------
+        >>> from ras_commander import RasUsgsMetrics
+        >>> import pandas as pd
+        >>> obs = pd.DataFrame({
+        ...     'Gage_1': [100, 200, 300, 250, 150],
+        ...     'Gage_2': [50, 100, 150, 125, 75]
+        ... }, index=pd.date_range('2020-01-01', periods=5, freq='h'))
+        >>> report = RasUsgsMetrics.compute_calibration_report('01', obs)
+        >>> print(report[['location', 'nse', 'performance_rating']])
+        """
+        from ..hdf.HdfResultsPlan import HdfResultsPlan
+        from ..RasPrj import ras
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Normalize observed_data to dict of Series
+        if isinstance(observed_data, pd.DataFrame):
+            obs_dict = {col: observed_data[col] for col in observed_data.columns}
+        else:
+            obs_dict = dict(observed_data)
+
+        if locations is not None:
+            obs_dict = {k: v for k, v in obs_dict.items() if k in locations}
+
+        if not obs_dict:
+            logger.warning("No observed data locations to evaluate")
+            return pd.DataFrame()
+
+        # Extract modeled time series from HDF
+        plan_hdf = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}.hdf"
+        try:
+            modeled_df = HdfResultsPlan.get_reference_timeseries(plan_hdf, reftype=reftype)
+        except Exception as e:
+            logger.error(f"Failed to extract reference timeseries from plan {plan_number}: {e}")
+            return pd.DataFrame()
+
+        if modeled_df.empty:
+            logger.warning(f"No reference timeseries found in plan {plan_number} HDF")
+            return pd.DataFrame()
+
+        report_rows = []
+        for location, obs_series in obs_dict.items():
+            matching_cols = [c for c in modeled_df.columns if location in str(c)]
+            if not matching_cols:
+                logger.warning(f"No modeled data found for location '{location}'")
+                report_rows.append({'location': location, 'n_points': 0, 'performance_rating': 'no_match'})
+                continue
+
+            mod_series = modeled_df[matching_cols[0]]
+            obs_clean = obs_series.dropna()
+            mod_clean = mod_series.dropna()
+
+            # Find common timestamps
+            common_idx = obs_clean.index.intersection(mod_clean.index)
+            if len(common_idx) < 2:
+                try:
+                    mod_reindexed = mod_clean.reindex(obs_clean.index, method='nearest', tolerance=pd.Timedelta('30min'))
+                    valid = mod_reindexed.notna() & obs_clean.notna()
+                    obs_aligned = obs_clean[valid].values
+                    mod_aligned = mod_reindexed[valid].values
+                    common_idx = obs_clean.index[valid]
+                except Exception:
+                    obs_aligned = np.array([])
+                    mod_aligned = np.array([])
+            else:
+                obs_aligned = obs_clean.loc[common_idx].values
+                mod_aligned = mod_clean.loc[common_idx].values
+
+            if len(obs_aligned) < 2:
+                logger.warning(f"Insufficient overlapping data for '{location}' ({len(obs_aligned)} points)")
+                report_rows.append({'location': location, 'n_points': len(obs_aligned), 'performance_rating': 'insufficient_data'})
+                continue
+
+            try:
+                time_index = common_idx if len(common_idx) >= 2 else None
+                metrics = RasUsgsMetrics.calculate_all_metrics(
+                    observed=obs_aligned, modeled=mod_aligned,
+                    time_index=time_index, dt_hours=dt_hours
+                )
+                metrics['location'] = location
+                report_rows.append(metrics)
+            except Exception as e:
+                logger.error(f"Metric computation failed for '{location}': {e}")
+                report_rows.append({'location': location, 'n_points': len(obs_aligned), 'performance_rating': 'error'})
+
+        report = pd.DataFrame(report_rows)
+        if 'location' in report.columns:
+            cols = ['location'] + [c for c in report.columns if c != 'location']
+            report = report[cols]
+
+        logger.info(f"Calibration report: {len(report_rows)} locations evaluated for plan {plan_number}")
+        return report
+
+    @staticmethod
+    @log_call
+    def summarize_calibration(calibration_report: pd.DataFrame) -> Dict:
+        """
+        High-level summary of a calibration report.
+
+        Parameters
+        ----------
+        calibration_report : pd.DataFrame
+            Output from compute_calibration_report()
+
+        Returns
+        -------
+        dict
+            Summary with keys: n_locations, n_satisfactory, n_good, mean_nse,
+            mean_kge, mean_pbias, best_location, worst_location
+
+        Example
+        -------
+        >>> report = RasUsgsMetrics.compute_calibration_report('01', obs_data)
+        >>> summary = RasUsgsMetrics.summarize_calibration(report)
+        >>> print(f"Satisfactory: {summary['n_satisfactory']}/{summary['n_locations']}")
+        """
+        empty_result = {
+            'n_locations': 0, 'n_satisfactory': 0, 'n_good': 0,
+            'mean_nse': None, 'mean_kge': None, 'mean_pbias': None,
+            'best_location': None, 'worst_location': None,
+        }
+
+        if calibration_report.empty:
+            return empty_result
+
+        valid_ratings = ['Very Good', 'Good', 'Satisfactory', 'Unsatisfactory']
+        valid = calibration_report[calibration_report['performance_rating'].isin(valid_ratings)].copy()
+
+        if valid.empty:
+            empty_result['n_locations'] = len(calibration_report)
+            return empty_result
+
+        best_idx = valid['nse'].idxmax() if 'nse' in valid.columns else None
+        worst_idx = valid['nse'].idxmin() if 'nse' in valid.columns else None
+
+        return {
+            'n_locations': len(calibration_report),
+            'n_satisfactory': len(valid[valid['performance_rating'].isin(['Very Good', 'Good', 'Satisfactory'])]),
+            'n_good': len(valid[valid['performance_rating'].isin(['Very Good', 'Good'])]),
+            'mean_nse': float(valid['nse'].mean()) if 'nse' in valid.columns else None,
+            'mean_kge': float(valid['kge'].mean()) if 'kge' in valid.columns else None,
+            'mean_pbias': float(valid['pbias'].abs().mean()) if 'pbias' in valid.columns else None,
+            'best_location': valid.loc[best_idx, 'location'] if best_idx is not None else None,
+            'worst_location': valid.loc[worst_idx, 'location'] if worst_idx is not None else None,
+        }
+
 
 # Backward-compatible module-level aliases
 nash_sutcliffe_efficiency = RasUsgsMetrics.nash_sutcliffe_efficiency
@@ -1215,3 +1772,9 @@ log_nash_sutcliffe_efficiency = RasUsgsMetrics.log_nash_sutcliffe_efficiency
 normalized_nash_sutcliffe = RasUsgsMetrics.normalized_nash_sutcliffe
 peak_weighted_rmse = RasUsgsMetrics.peak_weighted_rmse
 index_of_agreement = RasUsgsMetrics.index_of_agreement
+
+# Phase 4: CLB Innovation aliases
+stage_to_depth = RasUsgsMetrics.stage_to_depth
+calculate_stage_metrics = RasUsgsMetrics.calculate_stage_metrics
+normalized_rmse = RasUsgsMetrics.normalized_rmse
+classify_performance_full = RasUsgsMetrics.classify_performance_full

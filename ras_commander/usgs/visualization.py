@@ -505,9 +505,228 @@ class RasUsgsVisualization:
 
         return fig
 
+    @staticmethod
+    @log_call
+    def plot_flow_duration_curve(
+        observed: 'pd.Series',
+        modeled: Optional['pd.Series'] = None,
+        title: Optional[str] = None,
+        save_path: Optional[Path] = None,
+        units: str = 'cfs',
+        log_scale: bool = True
+    ) -> 'Figure':
+        """
+        Create flow duration curve (exceedance probability) plot.
+
+        Plots observed (and optionally modeled) values sorted in descending order
+        against their exceedance probability. Useful for evaluating model
+        performance across the full range of flow or stage conditions, including
+        both high-flow (flood) and low-flow (baseflow) regimes.
+
+        Parameters
+        ----------
+        observed : pd.Series or np.ndarray
+            Observed values (flow or stage) from USGS gauge.
+            Index values are ignored; only the data values are used.
+        modeled : pd.Series or np.ndarray, optional
+            Modeled values from HEC-RAS. If None, only observed curve is shown.
+        title : str, optional
+            Plot title. If None, uses 'Flow Duration Curve'.
+        save_path : Path, optional
+            Path to save figure. If None, figure is not saved.
+        units : str, default='cfs'
+            Units label for y-axis (e.g. 'cfs', 'm³/s', 'ft').
+        log_scale : bool, default=True
+            If True, uses logarithmic y-axis scale. Recommended for flow;
+            set False for stage.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure object for further customization
+
+        Notes
+        -----
+        Exceedance probability is computed as rank / (n + 1) × 100%, using the
+        Weibull plotting position formula. NaN values are dropped before plotting.
+
+        Examples
+        --------
+        >>> fig = RasUsgsVisualization.plot_flow_duration_curve(
+        ...     observed=usgs_flow,
+        ...     modeled=ras_flow,
+        ...     title='Potomac River at Little Falls — Flow Duration Curve',
+        ...     units='cfs'
+        ... )
+        >>> plt.show()
+        """
+        # Lazy import
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        fig, ax = plt.subplots(figsize=(10, 7))
+
+        def _exceedance_curve(values):
+            """Return (exceedance_pct, sorted_values) dropping NaNs."""
+            arr = np.asarray(values, dtype=float)
+            arr = arr[~np.isnan(arr)]
+            arr_sorted = np.sort(arr)[::-1]  # descending
+            n = len(arr_sorted)
+            rank = np.arange(1, n + 1)
+            exceedance = rank / (n + 1) * 100.0  # Weibull plotting position
+            return exceedance, arr_sorted
+
+        exc_obs, vals_obs = _exceedance_curve(observed)
+        ax.plot(exc_obs, vals_obs, 'b-', linewidth=1.8, label='Observed (USGS)', zorder=3)
+
+        if modeled is not None:
+            exc_mod, vals_mod = _exceedance_curve(modeled)
+            ax.plot(exc_mod, vals_mod, 'r--', linewidth=1.8, label='Modeled (HEC-RAS)', zorder=2)
+
+        if log_scale:
+            ax.set_yscale('log')
+
+        ax.set_xlabel('Exceedance Probability (%)', fontsize=11)
+        ax.set_ylabel(f'{units.upper()} ({"log scale" if log_scale else "linear"})', fontsize=11)
+        ax.set_xlim(0, 100)
+        ax.grid(True, which='both', alpha=0.3)
+        ax.legend(fontsize=10)
+
+        plot_title = title if title else 'Flow Duration Curve'
+        ax.set_title(plot_title, fontsize=13, fontweight='bold')
+
+        fig.tight_layout()
+
+        if save_path:
+            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(save_path, dpi=150, bbox_inches='tight')
+
+        return fig
+
+    @staticmethod
+    @log_call
+    def plot_cumulative_comparison(
+        aligned_data: 'pd.DataFrame',
+        title: Optional[str] = None,
+        save_path: Optional[Path] = None,
+        units: str = 'cfs'
+    ) -> 'Figure':
+        """
+        Create cumulative flow (or stage) comparison plot.
+
+        Shows the cumulative sum of observed and modeled values over time.
+        Useful for identifying systematic volume bias — if the cumulative
+        modeled curve consistently runs above (or below) observed, the model
+        over- (or under-) estimates total volume.
+
+        Parameters
+        ----------
+        aligned_data : pd.DataFrame
+            Aligned time series data with columns:
+            - 'datetime' : datetime64[ns] — timestamps
+            - 'observed' : float — observed values (USGS)
+            - 'modeled'  : float — modeled values (HEC-RAS)
+        title : str, optional
+            Plot title. If None, uses 'Cumulative Flow Comparison'.
+        save_path : Path, optional
+            Path to save figure. If None, figure is not saved.
+        units : str, default='cfs'
+            Units label for y-axis annotation (e.g. 'cfs', 'm³/s', 'ft').
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure object for further customization
+
+        Notes
+        -----
+        Rows containing NaN in either 'observed' or 'modeled' are excluded
+        from the cumulative sum (pairwise removal). The cumulative error panel
+        shows modeled − observed cumulative, so positive values indicate
+        the model is accumulating more volume than observed.
+
+        Examples
+        --------
+        >>> fig = RasUsgsVisualization.plot_cumulative_comparison(
+        ...     aligned_data=df,
+        ...     title='Potomac River at Little Falls — Cumulative Flow',
+        ...     units='cfs'
+        ... )
+        >>> plt.show()
+        """
+        # Lazy import
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        # Validate required columns
+        required = {'datetime', 'observed', 'modeled'}
+        missing = required - set(aligned_data.columns)
+        if missing:
+            raise ValueError(f"aligned_data missing required columns: {missing}")
+
+        # Pairwise NaN removal
+        mask = ~(aligned_data['observed'].isna() | aligned_data['modeled'].isna())
+        df_clean = aligned_data[mask].reset_index(drop=True)
+
+        obs_cum = np.cumsum(df_clean['observed'].values)
+        mod_cum = np.cumsum(df_clean['modeled'].values)
+        cum_error = mod_cum - obs_cum  # positive = model accumulating more
+
+        dates = df_clean['datetime']
+
+        fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+        # Panel 1: Cumulative comparison
+        axes[0].plot(dates, obs_cum, 'b-', linewidth=1.8, label='Observed (USGS)', zorder=3)
+        axes[0].plot(dates, mod_cum, 'r--', linewidth=1.8, label='Modeled (HEC-RAS)', zorder=2)
+        axes[0].set_ylabel(f'Cumulative {units.upper()}', fontsize=11)
+        axes[0].legend(fontsize=10)
+        axes[0].grid(True, alpha=0.3)
+        axes[0].set_title(
+            title if title else 'Cumulative Flow Comparison',
+            fontsize=13, fontweight='bold'
+        )
+
+        # Panel 2: Cumulative error (modeled - observed)
+        axes[1].fill_between(dates, cum_error, 0,
+                             where=cum_error >= 0, alpha=0.4, color='red',
+                             label='Over-prediction')
+        axes[1].fill_between(dates, cum_error, 0,
+                             where=cum_error < 0, alpha=0.4, color='blue',
+                             label='Under-prediction')
+        axes[1].axhline(0, color='black', linewidth=0.8, linestyle='-')
+        axes[1].set_ylabel(f'Cumulative Error\n(Mod − Obs, {units.upper()})', fontsize=11)
+        axes[1].set_xlabel('Date', fontsize=11)
+        axes[1].legend(fontsize=10, loc='upper left')
+        axes[1].grid(True, alpha=0.3)
+
+        # Final volume error annotation
+        if len(obs_cum) > 0 and obs_cum[-1] != 0:
+            final_pct = (cum_error[-1] / obs_cum[-1]) * 100
+            axes[1].annotate(
+                f'Final volume error: {final_pct:+.1f}%',
+                xy=(0.99, 0.95),
+                xycoords='axes fraction',
+                ha='right', va='top',
+                fontsize=10,
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', alpha=0.8)
+            )
+
+        fig.tight_layout()
+
+        if save_path:
+            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(save_path, dpi=150, bbox_inches='tight')
+
+        return fig
+
 
 # Backward-compatible module-level aliases
 plot_timeseries_comparison = RasUsgsVisualization.plot_timeseries_comparison
 plot_scatter_comparison = RasUsgsVisualization.plot_scatter_comparison
 plot_residuals = RasUsgsVisualization.plot_residuals
 plot_hydrograph = RasUsgsVisualization.plot_hydrograph
+
+# Phase 5: New visualization aliases
+plot_flow_duration_curve = RasUsgsVisualization.plot_flow_duration_curve
+plot_cumulative_comparison = RasUsgsVisualization.plot_cumulative_comparison
