@@ -162,6 +162,7 @@ Dependencies:
 """
 
 from .PrecipAorc import PrecipAorc
+from .PrecipHrrr import PrecipHrrr
 from .StormGenerator import StormGenerator
 from .Atlas14Grid import Atlas14Grid
 from .Atlas14Variance import Atlas14Variance
@@ -184,6 +185,7 @@ except ImportError:
 
 __all__ = [
     'PrecipAorc',
+    'PrecipHrrr',                  # HRRR real-time forecast download
     'StormGenerator',
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids
     'Atlas14Variance',             # Spatial variance analysis for precipitation
