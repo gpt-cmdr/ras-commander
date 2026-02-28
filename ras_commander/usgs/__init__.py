@@ -179,6 +179,11 @@ from .metrics import (
     normalized_nash_sutcliffe,
     peak_weighted_rmse,
     index_of_agreement,
+    # Phase 4: CLB Innovation metrics
+    stage_to_depth,
+    calculate_stage_metrics,
+    normalized_rmse,
+    classify_performance_full,
 )
 
 # Import real-time monitoring functions
@@ -321,6 +326,9 @@ __all__ = [
     'plot_scatter_comparison',
     'plot_residuals',
     'plot_hydrograph',
+    # Phase 5: New visualization plots
+    'plot_flow_duration_curve',
+    'plot_cumulative_comparison',
     # Metrics class and functions
     'RasUsgsMetrics',
     'nash_sutcliffe_efficiency',
@@ -336,6 +344,11 @@ __all__ = [
     'normalized_nash_sutcliffe',
     'peak_weighted_rmse',
     'index_of_agreement',
+    # Phase 4: CLB Innovation metrics
+    'stage_to_depth',
+    'calculate_stage_metrics',
+    'normalized_rmse',
+    'classify_performance_full',
     # Real-time monitoring functions
     'get_latest_value',
     'get_recent_data',
