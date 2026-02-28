@@ -229,10 +229,6 @@
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/602_floodplain_mapping_python_gis/</loc>
-         <lastmod>2026-02-28</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/610_fluvial_pluvial_delineation/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
@@ -310,6 +306,26 @@
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/914_model_validation_with_usgs/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/915_realtime_forecast_workflow/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/916_hrrr_precipitation_forecast/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/917_stofs3d_coastal_boundary/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/918_hms_ras_coupled_forecast/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/919_operational_forecast_cycling/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
