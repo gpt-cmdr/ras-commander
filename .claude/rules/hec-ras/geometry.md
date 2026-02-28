@@ -66,14 +66,19 @@ right_bank = station + 0.02
 
 ## Cross Section Limits
 
-- **Maximum Points**: 450 per cross section (HEC-RAS hard limit)
+- **Maximum Points**: 500 per cross section (HEC-RAS computational limit)
 - **Minimum Points**: 3 (left bank, thalweg, right bank)
+- **GIS Cut Line Points**: Can exceed 500 (up to 5,000 pasted in GUI), but must be filtered before computation
 
 ```python
 # Check point count before writing
-if len(stations) > 450:
-    raise ValueError("Cross section exceeds 450-point limit")
+if len(stations) > 500:
+    raise ValueError("Cross section exceeds 500-point limit")
 ```
+
+## Dynamic Section Search
+
+Cross section parsing uses `_find_xs_section_end()` to dynamically search to the end of each XS section. There is no fixed search range limit — the parser searches until it finds the next `Type RM Length L Ch R =` header, `River Reach=` block, or end of file. This handles XS with arbitrarily many GIS cut line points (verified with 462-point real-world FEMA models).
 
 ## See Also
 
@@ -83,4 +88,4 @@ if len(stations) > 450:
 
 ---
 
-**Key Takeaway**: HEC-RAS geometry uses fixed-width format. Respect 450-point limit and 0.02-unit bank station precision.
+**Key Takeaway**: HEC-RAS geometry uses fixed-width format. Respect 500-point computational limit and 0.02-unit bank station precision. Section search is dynamic (no fixed range limit).

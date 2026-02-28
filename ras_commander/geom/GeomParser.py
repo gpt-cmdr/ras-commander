@@ -769,6 +769,13 @@ class GeomParser:
 
                 count_str = line.split("=")[1].strip()
                 num_points = int(count_str)
+                if num_points > 500:
+                    logger.warning(
+                        f"XS {current_river}/{current_reach}/RS {current_station} has "
+                        f"{num_points} GIS cut line points. HEC-RAS computational limit "
+                        f"is 500 station-elevation points per XS. Consider filtering "
+                        f"points before computation."
+                    )
                 total_values = num_points * 2
 
                 coords = []

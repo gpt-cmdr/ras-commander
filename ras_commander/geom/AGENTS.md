@@ -388,7 +388,7 @@ RasCmdr.compute_plan("01", clear_geompre=True)
 - **XS HTAB**: Starting elevation set to invert (no offset), 500 points max, increment auto-adjusted
 - **Structure HTAB**: Safety applied to RANGE above invert, not absolute elevation
 - **Backup**: Single backup created before any modifications
-- **Example Notebook**: `examples/830_htab_optimization.ipynb` (when created)
+- **Example Notebook**: `examples/203_htab_parameter_optimization.ipynb`
 
 See `feature_dev_notes/HTAB_Parameter_Modification/` for algorithm details.
 

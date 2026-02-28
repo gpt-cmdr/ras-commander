@@ -65,10 +65,9 @@ class GeomCrossSection:
     # HEC-RAS format constants
     FIXED_WIDTH_COLUMN = 8      # Character width for numeric data in geometry files
     VALUES_PER_LINE = 10        # Number of values per line in fixed-width format
-    MAX_XS_POINTS = 450         # HEC-RAS hard limit on cross section points
+    MAX_XS_POINTS = 500         # HEC-RAS computational limit on cross section points
 
     # Parsing constants
-    DEFAULT_SEARCH_RANGE = 50   # Default number of lines to search for keywords after XS header
     MAX_PARSE_LINES = 100       # Safety limit on lines to parse for data blocks
 
     # ========== PRIVATE HELPER METHODS ==========
@@ -118,23 +117,46 @@ class GeomCrossSection:
         return None
 
     @staticmethod
-    def _read_bank_stations(lines: List[str], start_idx: int,
-                           search_range: Optional[int] = None) -> Optional[Tuple[float, float]]:
+    def _find_xs_section_end(lines: List[str], xs_idx: int) -> int:
+        """
+        Find the end of the current cross section block in geometry file lines.
+
+        A cross section block ends at the FIRST occurrence (after xs_idx) of:
+        - "Type RM Length L Ch R =" (next XS header)
+        - "River Reach=" (new river/reach)
+        - End of file
+
+        Args:
+            lines: File lines (from readlines())
+            xs_idx: Starting index of the current XS (Type RM Length L Ch R = line)
+
+        Returns:
+            Line index of the first line PAST the current XS section
+            (i.e., the start of the next section, or len(lines) if at end)
+        """
+        for i in range(xs_idx + 1, len(lines)):
+            line = lines[i]
+            if line.startswith("Type RM Length L Ch R ="):
+                return i
+            if line.startswith("River Reach="):
+                return i
+        return len(lines)
+
+    @staticmethod
+    def _read_bank_stations(lines: List[str], start_idx: int) -> Optional[Tuple[float, float]]:
         """
         Read bank stations from XS block starting at start_idx.
 
         Args:
             lines: File lines (from readlines())
             start_idx: Index to start searching (typically from _find_cross_section)
-            search_range: Number of lines to search ahead (default: DEFAULT_SEARCH_RANGE)
 
         Returns:
             (left_bank, right_bank) tuple or None if no banks defined
         """
-        if search_range is None:
-            search_range = GeomCrossSection.DEFAULT_SEARCH_RANGE
+        section_end = GeomCrossSection._find_xs_section_end(lines, start_idx)
 
-        for k in range(start_idx, min(start_idx + search_range, len(lines))):
+        for k in range(start_idx, section_end):
             if lines[k].startswith("Bank Sta="):
                 bank_str = GeomParser.extract_keyword_value(lines[k], "Bank Sta")
                 bank_values = [v.strip() for v in bank_str.split(',')]
@@ -473,8 +495,8 @@ class GeomCrossSection:
                     f"Cross section not found: {river}/{reach}/RS {rs} in {geom_file.name}"
                 )
 
-            # Find #Sta/Elev= line within search range
-            for j in range(xs_idx, min(xs_idx + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(lines))):
+            # Find #Sta/Elev= line within XS section
+            for j in range(xs_idx, GeomCrossSection._find_xs_section_end(lines, xs_idx)):
                 if lines[j].startswith("#Sta/Elev="):
                     # Extract count
                     count_str = GeomParser.extract_keyword_value(lines[j], "#Sta/Elev")
@@ -635,7 +657,7 @@ class GeomCrossSection:
             )
 
             # Find #Sta/Elev= line
-            for j in range(i, min(i + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(lines))):
+            for j in range(i, GeomCrossSection._find_xs_section_end(lines, i)):
                 if lines[j].startswith("#Sta/Elev="):
                     # Extract old count
                     old_count_str = GeomParser.extract_keyword_value(lines[j], "#Sta/Elev")
@@ -686,7 +708,7 @@ class GeomCrossSection:
                     if bank_left is not None and bank_right is not None:
                         # Find Bank Sta= line in the modified lines
                         bank_sta_updated = False
-                        for k in range(i, min(i + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(modified_lines))):
+                        for k in range(i, GeomCrossSection._find_xs_section_end(modified_lines, i)):
                             if modified_lines[k].startswith("Bank Sta="):
                                 # Update with new bank stations (format: no spaces after comma)
                                 modified_lines[k] = f"Bank Sta={bank_left:g},{bank_right:g}\n"
@@ -833,8 +855,8 @@ class GeomCrossSection:
             if xs_idx is None:
                 raise ValueError(f"Cross section not found: {river}/{reach}/RS {rs}")
 
-            # Find Exp/Cntr= line within search range
-            for j in range(xs_idx, min(xs_idx + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(lines))):
+            # Find Exp/Cntr= line within XS section
+            for j in range(xs_idx, GeomCrossSection._find_xs_section_end(lines, xs_idx)):
                 if lines[j].startswith("Exp/Cntr="):
                     exp_cntr_str = GeomParser.extract_keyword_value(lines[j], "Exp/Cntr")
                     values = [v.strip() for v in exp_cntr_str.split(',')]
@@ -917,8 +939,8 @@ class GeomCrossSection:
             if banks:
                 bank_left, bank_right = banks
 
-            # Find #Mann= line
-            for j in range(xs_idx, min(xs_idx + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(lines))):
+            # Find #Mann= line within XS section
+            for j in range(xs_idx, GeomCrossSection._find_xs_section_end(lines, xs_idx)):
                 if lines[j].startswith("#Mann="):
                     # Extract count
                     mann_str = GeomParser.extract_keyword_value(lines[j], "#Mann")
@@ -1780,7 +1802,7 @@ class GeomCrossSection:
                 # Get station-elevation data to compute invert
                 invert = None
                 top = None
-                for j in range(xs_idx, min(xs_idx + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(lines))):
+                for j in range(xs_idx, GeomCrossSection._find_xs_section_end(lines, xs_idx)):
                     match = STA_ELEV_PATTERN.match(lines[j])
                     if match:
                         count = int(match.group(1))
@@ -2206,7 +2228,7 @@ class GeomCrossSection:
 
             # Get invert from station-elevation data
             invert = None
-            for j in range(xs_idx_adjusted, min(xs_idx_adjusted + GeomCrossSection.DEFAULT_SEARCH_RANGE, len(modified_lines))):
+            for j in range(xs_idx_adjusted, GeomCrossSection._find_xs_section_end(modified_lines, xs_idx_adjusted)):
                 match = STA_ELEV_PATTERN.match(modified_lines[j])
                 if match:
                     count = int(match.group(1))
