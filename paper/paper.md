@@ -47,7 +47,7 @@ Several open-source tools have addressed parts of this gap. PyRAS [@pyras] and r
 5. **Domain Expertise Accelerated**: H\&H knowledge translated efficiently into working code
 6. **Focus on LLMs Specifically**: LLMs excel at code generation and documentation---not general AI/ML
 
-This methodology is formalized at [engineeringwithllms.info](https://engineeringwithllms.info) [@llmforward2024] and was introduced to the professional hydraulic engineering community at the 2024 ASFPM Annual Conference [@katzenmeyer2024].
+This methodology was coined by [CLB Engineering Corporation](https://clbengineering.com/llm-forward) [@llmforward2024] and was introduced to the professional hydraulic engineering community at the 2024 ASFPM Annual Conference [@katzenmeyer2024].
 
 # Software Design
 
