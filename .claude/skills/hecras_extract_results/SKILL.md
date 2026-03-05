@@ -1,6 +1,5 @@
 ---
 name: hecras_extract_results
-allowed-tools: [Read, Grep, Glob]
 description: |
   Extract HEC-RAS hydraulic results from HDF files including water surface elevations (WSE),
   depths, velocities, and flows for both steady and unsteady simulations. Handles cross section
@@ -8,6 +7,10 @@ description: |
   extract, analyze, or post-process HEC-RAS simulation outputs, retrieve water levels, query
   velocity fields, get depth grids, extract flow data, analyze breach hydrographs, or pull
   hydraulic variables from .hdf result files.
+  Triggers: HDF results, extract WSE, water surface elevation, depth grid, velocity,
+  flow data, mesh results, cross section time series, maximum envelope, breach results,
+  HdfResultsPlan, HdfResultsMesh, HdfResultsBreach, steady results, unsteady results,
+  plan HDF, .p01.hdf, get_wse, get_depth, get_velocity, post-process, simulation output.
 ---
 
 # Extracting HEC-RAS Results
@@ -15,13 +18,13 @@ description: |
 **Purpose**: Lightweight skill index that navigates you to primary documentation sources. This skill does NOT duplicate content - it points you to where complete, authoritative information lives.
 
 **Primary Sources**:
-- **HDF Class Reference**: `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md` (215 lines) - Complete class hierarchy, lazy loading patterns, decorators
-- **Library Context**: `C:\GH\ras-commander\ras_commander\CLAUDE.md` - HDF architecture overview, subpackage organization
+- **HDF Class Reference**: `ras_commander/hdf/AGENTS.md` (215 lines) - Complete class hierarchy, lazy loading patterns, decorators
+- **Library Context**: `ras_commander/CLAUDE.md` - HDF architecture overview, subpackage organization
 - **Example Notebooks**:
-  - `C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb` - 1D cross section results (unsteady)
-  - `C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb` - 2D mesh results (comprehensive)
-  - `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb` - Steady state results (complete workflow)
-  - `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb` - Dam breach results
+  - `examples/400_1d_hdf_data_extraction.ipynb` - 1D cross section results (unsteady)
+  - `examples/410_2d_hdf_data_extraction.ipynb` - 2D mesh results (comprehensive)
+  - `examples/401_steady_flow_analysis.ipynb` - Steady state results (complete workflow)
+  - `examples/420_breach_results_extraction.ipynb` - Dam breach results
 - **Code Docstrings**: All HDF classes have comprehensive docstrings with parameter details
 
 ---
@@ -34,7 +37,7 @@ description: |
 from ras_commander import init_ras_project, HdfResultsPlan, HdfResultsMesh
 
 # Initialize project
-init_ras_project("C:/Projects/MyModel", "6.6")
+init_ras_project("path/to/project", "6.6")
 
 # Check simulation type
 is_steady = HdfResultsPlan.is_steady_plan("01")
@@ -53,7 +56,7 @@ else:
 
 ### 1. Architecture & Organization
 
-**Read First**: `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md`
+**Read First**: `ras_commander/hdf/AGENTS.md`
 
 This is the **definitive reference** for:
 - 18 HDF classes and their organization
@@ -74,7 +77,7 @@ This is the **definitive reference** for:
 
 ### 2. Complete Workflows
 
-**1D Unsteady Results**: `C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb`
+**1D Unsteady Results**: `examples/400_1d_hdf_data_extraction.ipynb`
 
 Navigate to this notebook for:
 - Cross section time series extraction (`HdfResultsXsec`)
@@ -82,7 +85,7 @@ Navigate to this notebook for:
 - Computation message extraction
 - 1D hydraulic variables
 
-**2D Unsteady Results**: `C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb`
+**2D Unsteady Results**: `examples/410_2d_hdf_data_extraction.ipynb`
 
 Navigate to this notebook for:
 - 2D mesh maximum envelopes (`HdfResultsMesh.get_mesh_maximum`)
@@ -90,7 +93,7 @@ Navigate to this notebook for:
 - Spatial grids and polygons
 - Complete working examples with real data
 
-**Steady Flow Results**: `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb`
+**Steady Flow Results**: `examples/401_steady_flow_analysis.ipynb`
 
 Navigate to this notebook for:
 - Profile detection (`get_steady_profile_names`)
@@ -99,7 +102,7 @@ Navigate to this notebook for:
 - Steady state metadata extraction
 - Variable discovery (`list_steady_variables`)
 
-**Dam Breach Results**: `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb`
+**Dam Breach Results**: `examples/420_breach_results_extraction.ipynb`
 
 Navigate to this notebook for:
 - Structure identification (`HdfStruc.list_sa2d_connections`)
@@ -125,7 +128,7 @@ Navigate to this notebook for:
 | **HdfStruc** | Structure geometry | SA/2D connections, breach capability info |
 | **HdfHydraulicTables** | HTAB extraction | Rating curves, property tables |
 
-**Read**: `C:\GH\ras-commander\ras_commander\hdf\AGENTS.md` lines 5-45 for complete class list and organization.
+**Read**: `ras_commander/hdf/AGENTS.md` lines 5-45 for complete class list and organization.
 
 ---
 
@@ -140,7 +143,7 @@ help(HdfResultsPlan.get_steady_wse)  # Complete parameter docs
 ```
 
 #### Strategy 2: Check Source Files
-Navigate to class files in `C:\GH\ras-commander\ras_commander\hdf\`:
+Navigate to class files in `ras_commander/hdf/`:
 - `HdfResultsPlan.py` - Lines 1-500 contain all steady/unsteady methods
 - `HdfResultsMesh.py` - Lines 1-400 contain mesh extraction methods
 - `HdfResultsXsec.py` - Lines 1-300 contain cross section methods
@@ -185,7 +188,7 @@ vars_dict = HdfResultsPlan.list_steady_variables("02")
 
 **Returns**: List of profile names, DataFrame with River/Reach/Station/WSE columns
 
-**Full Details**: `C:\GH\ras-commander\examples\19_steady_flow_analysis.ipynb`
+**Full Details**: `examples/401_steady_flow_analysis.ipynb`
 
 ---
 
@@ -206,7 +209,7 @@ wse_at_xs = wse_ts.sel(cross_section=target_xs)
 
 **Returns**: xarray Dataset with dimensions (time, cross_section), coordinates for River/Reach/Station
 
-**Full Details**: `C:\GH\ras-commander\examples\10_1d_hdf_data_extraction.ipynb`
+**Full Details**: `examples/400_1d_hdf_data_extraction.ipynb`
 
 ---
 
@@ -225,7 +228,7 @@ max_vel = HdfResultsMesh.get_mesh_maximum("01", variable="Velocity")
 
 **Returns**: GeoDataFrame with columns: cell_id, max_value, max_time, geometry (Polygon)
 
-**Full Details**: `C:\GH\ras-commander\examples\11_2d_hdf_data_extraction.ipynb`
+**Full Details**: `examples/410_2d_hdf_data_extraction.ipynb`
 
 ---
 
@@ -249,7 +252,7 @@ summary = HdfResultsBreach.get_breach_summary("02", "Dam")
 
 **Returns**: DataFrames with structure names, breach timing, flows, geometry evolution
 
-**Full Details**: `C:\GH\ras-commander\examples\18_breach_results_extraction.ipynb`
+**Full Details**: `examples/420_breach_results_extraction.ipynb`
 
 ---
 

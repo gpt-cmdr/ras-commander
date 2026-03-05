@@ -6,7 +6,6 @@ description: |
   creates audit trails. Use when fixing geometry errors, repairing obstructions,
   validating models, or ensuring FEMA compliance.
   Triggers: fix, repair, geometry, blocked obstruction, validate, check, RasCheck, RasFixit, FEMA, quality assurance, QA, overlapping, obstruction overlap, elevation envelope, geometry error.
-version: 2.0.0
 ---
 
 # Repairing Geometry Issues
@@ -18,26 +17,26 @@ This skill provides quick navigation to primary sources for RasCheck (validation
 ## Primary Sources (Read These First)
 
 ### Quality Validation (RasCheck)
-**C:\GH\ras-commander\ras_commander\check\CLAUDE.md** (262 lines)
+**`ras_commander/check/CLAUDE.md`** (262 lines)
 - 5 comprehensive checks (NT, XS, Structure, Floodway, Profiles)
 - FEMA/USACE standards implementation
 - Custom thresholds and state-specific surcharge limits
 - Report generation (HTML, CSV, JSON)
 
 ### Automated Repair (RasFixit)
-**C:\GH\ras-commander\ras_commander\fixit\AGENTS.md** (119 lines)
+**`ras_commander/fixit/AGENTS.md`** (119 lines)
 - Blocked obstruction repair algorithm
 - 0.02-unit gap insertion requirement
 - Elevation envelope details
 - Module organization and patterns
 
 ### Complete Workflows
-**C:\GH\ras-commander\examples\200_fixit_blocked_obstructions.ipynb**
+**`examples/200_fixit_blocked_obstructions.ipynb`**
 - RasFixit demonstration with visualizations
 - Before/after comparison workflow
 - Engineering review requirements
 
-**C:\GH\ras-commander\examples\300_quality_assurance_rascheck.ipynb**
+**`examples/300_quality_assurance_rascheck.ipynb`**
 - RasCheck validation workflow
 - Multi-check execution and reporting
 - Custom threshold configuration
@@ -130,7 +129,7 @@ df.to_csv("validation_messages.csv", index=False)
 
 ### Blocked Obstruction Algorithm (Elevation Envelope)
 
-**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (lines 40-60)
+**Source**: `ras_commander/fixit/AGENTS.md` (lines 40-60)
 
 **CRITICAL WARNING - 0.02-Unit Gap Requirement**:
 - HEC-RAS **REQUIRES** minimum 0.02-unit separation between adjacent obstructions
@@ -157,7 +156,7 @@ Fixed (elevation envelope with 0.02 gap):
 
 ### Fixed-Width FORTRAN Parsing
 
-**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (lines 53-56)
+**Source**: `ras_commander/fixit/AGENTS.md` (lines 53-56)
 
 - HEC-RAS geometry files use 8-character fixed-width columns
 - `FIELD_WIDTH = 8` constant must not be changed
@@ -184,7 +183,7 @@ Fixed (elevation envelope with 0.02 gap):
 
 ## RasCheck Validation Categories
 
-**Source**: `C:\GH\ras-commander\ras_commander\check\CLAUDE.md` (lines 13-60)
+**Source**: `ras_commander/check/CLAUDE.md` (lines 13-60)
 
 | Check Type | Function | Validates |
 |------------|----------|-----------|
@@ -212,7 +211,7 @@ xs_results = RasCheck.check_xs(geom_hdf)
 
 ## RasFixit Repair Capabilities
 
-**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (complete file)
+**Source**: `ras_commander/fixit/AGENTS.md` (complete file)
 
 **Current Fix Types**:
 - `fix_blocked_obstructions()` - Repair overlapping/adjacent blocked obstructions
@@ -339,7 +338,7 @@ xs_results = RasCheck.check_xs(geom_hdf, thresholds=custom)
 
 ## Log Parsing for Automated Workflows
 
-**Source**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (line 18)
+**Source**: `ras_commander/fixit/AGENTS.md` (line 18)
 
 ```python
 from ras_commander.fixit import log_parser
@@ -372,26 +371,26 @@ if log_parser.has_obstruction_errors(log_content):
 
 ## Navigation Map
 
-**For validation questions** → Read `C:\GH\ras-commander\ras_commander\check\CLAUDE.md`
+**For validation questions** → Read `ras_commander/check/CLAUDE.md`
 
-**For repair questions** → Read `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md`
+**For repair questions** → Read `ras_commander/fixit/AGENTS.md`
 
 **For workflow examples** → See notebooks:
-- `examples\200_fixit_blocked_obstructions.ipynb`
-- `examples\300_quality_assurance_rascheck.ipynb`
+- `examples/200_fixit_blocked_obstructions.ipynb`
+- `examples/300_quality_assurance_rascheck.ipynb`
 
 **For API details** → Read source code docstrings:
-- `ras_commander\check\RasCheck.py`
-- `ras_commander\fixit\RasFixit.py`
+- `ras_commander/check/RasCheck.py`
+- `ras_commander/fixit/RasFixit.py`
 
 ## Related Skills
 
-- **quality-assurance subagent**: `.claude\agents\quality-assurance\SUBAGENT.md`
-- **Testing approach**: `.claude\rules\testing\tdd-approach.md`
+- **quality-assurance subagent**: `.claude/agents/quality-assurance/SUBAGENT.md`
+- **Testing approach**: `.claude/rules/testing/tdd-approach.md`
 
 ## State-Specific Floodway Surcharge Limits
 
-**Source**: `C:\GH\ras-commander\ras_commander\check\CLAUDE.md` (lines 198-220)
+**Source**: `ras_commander/check/CLAUDE.md` (lines 198-220)
 
 States with non-standard surcharge limits (vs FEMA default 1.0 ft):
 - **IL**: 0.1 ft
@@ -410,8 +409,3 @@ results = RasCheck.run_all("01", surcharge=limit)
 ```
 
 ---
-
-**Total Lines**: ~390 (target: 300-400)
-
-**Primary sources contain**: 262 + 119 = 381 lines of authoritative documentation
-**This skill**: Lightweight index with critical warnings and navigation guidance

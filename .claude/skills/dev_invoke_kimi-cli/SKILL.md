@@ -3,7 +3,8 @@ name: dev_invoke_kimi-cli
 description: |
   Delegate testing, QA, and code review tasks to Opencode CLI using Kimi K2.5 model via markdown file handoff.
   Write test request to TASK.md, Opencode with Kimi K2.5 generates tests/reviews, outputs to OUTPUT.md.
-  Use for test generation, QA verification, edge case detection, code coverage analysis, security reviews.
+  Use for test generation, QA verification, edge case detection, code coverage analysis,
+  security reviews, regression testing, integration testing.
 
   Triggers: kimi, kimi k2.5, kimi cli, opencode kimi, test generation, QA, quality assurance,
   code review, unit tests, integration tests, edge cases, test coverage, testing, kimisubagent,
@@ -44,17 +45,6 @@ Claude Code                         Opencode CLI + Kimi K2.5
 - Explicit output structure
 - Supports both Opencode and Together.ai providers
 - Excellent for edge case detection
-
-## When to Use
-
-- **Test generation** - Create comprehensive test suites for existing code
-- **Test coverage analysis** - Identify gaps in test coverage
-- **Edge case detection** - Find boundary conditions and edge cases
-- **QA verification** - Validate implementations meet requirements
-- **Code review** - Secondary opinion on code quality and correctness
-- **Regression testing** - Generate regression test scenarios
-- **Integration testing** - Validate component interactions
-- **Security reviews** - Security-focused code analysis
 
 ## Model Selection
 
@@ -436,100 +426,6 @@ GEMINI_API_KEY=xxx        # Google Gemini models
 
 *Opencode may use built-in credits or require authentication via `opencode auth`
 
-## Comparison: When to Use Kimi vs Gemini vs Codex
+## Comparison, Tips, and Troubleshooting
 
-| Task | Kimi K2.5 | Gemini | Codex |
-|------|:---------:|:------:|:-----:|
-| Test generation | ✅ | ✅ | ✅ |
-| Edge case detection | ✅ | ✅ | ⚠️ |
-| Code coverage analysis | ✅ | ✅ | ⚠️ |
-| QA verification | ✅ | ✅ | ⚠️ |
-| Security-focused code review | ✅ | ✅ | ⚠️ |
-| General code review | ✅ | ✅ | ⚠️ |
-| Test maintenance | ✅ | ✅ | ✅ |
-| Implementation | ⚠️ | ⚠️ | ✅ |
-| Refactoring | ⚠️ | ⚠️ | ✅ |
-| Large codebase analysis | ✅ | ✅ | ⚠️ |
-| Documentation review | ✅ | ✅ | ⚠️ |
-
-**Legend:**
-- ✅ = Excellent choice
-- ⚠️ = Viable but not optimal
-
-### Decision Guide
-
-**Use Kimi K2.5 (via Opencode/Together.ai) when:**
-- Primary goal is generating comprehensive test suites
-- You need thorough edge case identification
-- QA verification of existing implementations
-- Security-focused code reviews
-- Testing TypeScript/JavaScript/Python code
-- Free tier with generous limits (2,000 req/day via Opencode)
-
-**Use Gemini (via Gemini CLI) when:**
-- Code review is the primary goal (not test generation)
-- You need 1M+ token context for large codebase analysis
-- Documentation review and knowledge extraction
-- Security audits without test generation
-- Maximum context window needed
-
-**Use Codex (via Codex CLI) when:**
-- Primary goal is implementation or refactoring
-- Test generation is secondary to code changes
-- Complex multi-file modifications needed
-- Heavy reasoning tasks beyond testing
-
-## Integration with Other Skills
-
-**Works well with:**
-- `dev_invoke_gemini-cli` - Cross-verify test coverage with Gemini
-- `dev_invoke_codex-cli` - Implement fixes after Kimi identifies issues
-- `using-git-worktrees` - Create isolated workspace for test development
-- `triple-model-code-review` - Multi-model validation
-
-**Sequence example:**
-```
-1. Kimi K2.5: Generate tests → Identify uncovered edge cases
-2. Codex: Implement missing edge case handling
-3. Kimi K2.5: Verify fixes and regenerate tests
-4. Gemini: Review final implementation
-```
-
-## Tips
-
-1. **Include full code** - Paste actual code in TASK.md, don't just reference files
-2. **Specify test framework** - Tell Opencode exactly which framework to use
-3. **Define coverage targets** - Set clear coverage expectations
-4. **List edge cases explicitly** - Ask Kimi K2.5 to identify additional edge cases
-5. **Request specific output** - Define exactly what OUTPUT.md should contain
-6. **Use full model path** - Use `opencode/kimi-k2.5-free` not just `kimi-k2.5`
-7. **Mock external dependencies** - Remind Opencode to mock databases, APIs, etc.
-8. **Test data examples** - Provide sample inputs/outputs for clarity
-9. **Try piping input** - If `run` command fails, use `cat prompt.txt | opencode run ...`
-10. **Use interactive mode** - Start with `opencode . -m <model>` for complex tasks
-
-## Troubleshooting
-
-### Issue: "Session not found" error
-**Solution:** Use interactive mode instead:
-```bash
-opencode . -m opencode/kimi-k2.5-free
-```
-
-### Issue: "DecimalError" with Together.ai
-**Solution:** This is cosmetic - the output is still generated. Use the interactive mode or piping method.
-
-### Issue: API key errors
-**Solution:** Set the appropriate environment variable:
-```bash
-export TOGETHER_API_KEY=your_key_here
-# or
-export MOONSHOT_API_KEY=your_key_here
-```
-
-## Session Management
-
-- Use `opencode --continue` to resume last session
-- Use `opencode -s <session_id>` to resume specific session
-- Sessions are stored locally by Opencode
-- Session IDs appear in OUTPUT.md for reference
+For model comparison guide (Kimi vs Gemini vs Codex), integration patterns, usage tips, troubleshooting, and session management, see [references/comparison-and-troubleshooting.md](references/comparison-and-troubleshooting.md).

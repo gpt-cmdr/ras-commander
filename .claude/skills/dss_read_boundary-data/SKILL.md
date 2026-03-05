@@ -1,13 +1,15 @@
 ---
 name: dss_read_boundary-data
-allowed-tools: [Read, Grep, Glob]
 description: |
   Reads HEC-DSS files (V6 and V7) for boundary condition extraction using
   RasDss class. Handles JVM configuration, HEC Monolith download, catalog
   reading, and time series extraction. Use when working with DSS files,
-  extracting boundary data, reading HEC-HMS output, or integrating DSS workflows.
-  Triggers: DSS, HEC-DSS, boundary condition, time series, JVM, Java, catalog, pathname, HEC-HMS, Monolith, pyjnius, read DSS, extract DSS, DSS boundary.
-version: 1.0.0
+  extracting boundary data, reading HEC-HMS output, integrating DSS workflows
+  with HEC-RAS, cataloging DSS file contents, or converting DSS data to
+  pandas DataFrames.
+  Triggers: DSS, HEC-DSS, boundary condition, time series, JVM, Java, catalog,
+  pathname, HEC-HMS, Monolith, pyjnius, read DSS, extract DSS, DSS boundary,
+  DSS catalog, DSS DataFrame, DSS V6, DSS V7.
 ---
 
 # Reading DSS Boundary Data
@@ -38,7 +40,7 @@ enhanced = RasDss.extract_boundary_timeseries(
 ## Primary Sources (Read These First)
 
 ### 1. Module Architecture & Developer Guidance
-**Location**: `C:\GH\ras-commander\ras_commander\dss\AGENTS.md`
+**Location**: `ras_commander/dss/AGENTS.md`
 
 Read this for:
 - Lazy loading architecture (no overhead until first use)
@@ -53,7 +55,7 @@ Read this for:
 **Why this is authoritative**: Written by maintainers, updated with code changes, read by developers working on the module.
 
 ### 2. Complete Workflow Example
-**Location**: `C:\GH\ras-commander\examples\310_dss_boundary_extraction.ipynb`
+**Location**: `examples/310_dss_boundary_extraction.ipynb`
 
 Read this for:
 - Step-by-step extraction workflow
@@ -68,7 +70,7 @@ Read this for:
 **Why this is authoritative**: Tested with real HEC-RAS projects, serves as functional test, maintained alongside library.
 
 ### 3. Source Code & Docstrings
-**Location**: `C:\GH\ras-commander\ras_commander\dss\RasDss.py`
+**Location**: `ras_commander/dss/RasDss.py`
 
 Read this for:
 - Complete method signatures
@@ -78,16 +80,6 @@ Read this for:
 - Implementation details
 
 **Why this is authoritative**: Source code is always correct, docstrings updated with each release.
-
-## When to Use This Skill
-
-Use when:
-- Working with HEC-DSS files (V6 or V7)
-- Extracting boundary conditions from DSS
-- Reading HEC-HMS model output
-- Integrating DSS workflows with HEC-RAS
-- Need to catalog DSS file contents
-- Converting DSS data to pandas DataFrames
 
 ## Technology Overview
 
@@ -302,8 +294,3 @@ except RuntimeError as e:
 6. **V6 and V7**: Both DSS versions supported
 7. **Primary Sources**: Always read AGENTS.md and notebook 310 for authoritative guidance
 
-## Version History
-
-- **v1.0.0**: Refactored to lightweight navigator (points to primary sources)
-- **v0.82.0**: Initial RasDss implementation
-- **v0.86.0**: Moved to `dss/` subpackage with lazy loading

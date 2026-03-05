@@ -7,7 +7,9 @@ description: |
   AORC data, calibration workflows, design storm generation, rainfall analysis,
   SCS Type II distributions, AEP events, 100-year storms, or generating
   precipitation boundary conditions for rain-on-grid models.
-  Triggers: precipitation, AORC, Atlas 14, design storm, rainfall, SCS Type II, AEP, 100-year, rain-on-grid, hyetograph, temporal distribution, areal reduction, calibration, historical precipitation.
+  Triggers: precipitation, AORC, Atlas 14, design storm, rainfall, SCS Type II, AEP, 100-year,
+  rain-on-grid, hyetograph, temporal distribution, areal reduction, calibration, historical precipitation,
+  identify storm events, storm event extraction, apply temporal distributions, DSS export.
 ---
 
 # Analyzing AORC Precipitation
@@ -114,18 +116,6 @@ StormGenerator.export_to_dss(
     pathname="/PROJECT/PRECIP/DESIGN//15MIN/SYN/"
 )
 ```
-
-## When to Use This Skill
-
-Use when you need to:
-
-1. **Retrieve historical precipitation** - AORC data for calibration and validation
-2. **Generate design storms** - Atlas 14 AEP events (10%, 2%, 1%, 0.2%, etc.)
-3. **Process precipitation spatially** - Watershed averaging, areal reduction factors
-4. **Aggregate precipitation temporally** - Match HEC-RAS/HMS timesteps
-5. **Export to HEC-RAS/HMS** - DSS files, CSV time series, or direct HDF integration
-6. **Identify storm events** - Extract individual storms from AORC record
-7. **Apply temporal distributions** - SCS Type II, IA, III for design storms
 
 ## Core Concepts (Brief)
 

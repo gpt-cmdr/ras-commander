@@ -1,6 +1,5 @@
 ---
 name: ebfe_validate_models
-model: sonnet
 description: |
   Validate organized eBFE/BLE model using ras-commander dataframes.
 
@@ -13,6 +12,11 @@ description: |
 
   Use after organizing eBFE model to verify it's actually runnable.
   Generates validation report and script for user re-verification.
+
+  Triggers: validate eBFE, validate BLE, verify model, check model, eBFE validation,
+  BLE validation, plan_df check, boundary_df check, rasmap_df check, DSS path validation,
+  terrain path validation, absolute path detection, GUI popup prevention, model verification,
+  organized model check, post-organize validation.
 ---
 
 # eBFE Model Validator Skill

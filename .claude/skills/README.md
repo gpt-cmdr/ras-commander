@@ -43,6 +43,7 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 - **hecras_extract_results** - HdfResultsPlan API, steady vs unsteady workflows
 - **hecras_parse_compute-messages** - HEC-RAS compute message diagnostics, error classification
 - **hecras_parse_geometry** - RasGeometry, RasStruct, fixed-width parsing
+- **hecras_export_cloud-native** - Export geometry/results to GeoParquet, PMTiles, DuckDB, PostGIS via rascmdr-parquet-cli
 
 ### HEC-RAS GUI (`hecras_explore_*`)
 - **hecras_explore_gui** - HEC-RAS GUI exploration and documentation

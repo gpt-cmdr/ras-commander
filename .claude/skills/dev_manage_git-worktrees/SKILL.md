@@ -1,17 +1,14 @@
 ---
 name: dev_manage_git-worktrees
-model: sonnet
-tools:
-  - Bash
-  - Read
-  - AskUserQuestion
 description: |
   Use when starting feature work that needs isolation from current workspace or
   before executing implementation plans - creates isolated git worktrees with
   smart directory selection and safety verification.
 
-  Triggers: "worktree", "isolated workspace", "feature branch isolation",
-  "multiple branches", "parallel development"
+  Triggers: worktree, git worktree, isolated workspace, feature branch isolation,
+  multiple branches, parallel development, branch workspace, create worktree,
+  manage worktree, close worktree, worktree cleanup, isolated branch, side branch,
+  concurrent development, worktree list, worktree status.
 ---
 
 # Using Git Worktrees

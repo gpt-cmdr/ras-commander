@@ -1,6 +1,5 @@
 ---
 name: usgs_integrate_gauges
-allowed-tools: [Read, Grep, Glob]
 description: |
   Complete USGS gauge data integration workflow from spatial discovery to
   model validation. Handles gauge finding, data retrieval, matching to HEC-RAS
@@ -8,6 +7,10 @@ description: |
   monitoring, and validation metrics (NSE, KGE). Use when working with USGS
   data, NWIS gauges, generating boundaries from observed flow, calibrating
   models, validating with observed data, or setting up operational forecasting.
+  Triggers: USGS, NWIS, gauge, streamflow, observed data, boundary condition from gauge,
+  calibration, validation, NSE, KGE, spatial discovery, gauge matching, real-time monitoring,
+  initial conditions, GaugeMatcher, UsgsGaugeSpatial, RasUsgsCore, flow data, stage data,
+  discharge, rating curve, observed flow, gauge near model.
 ---
 
 # Integrating USGS Gauges

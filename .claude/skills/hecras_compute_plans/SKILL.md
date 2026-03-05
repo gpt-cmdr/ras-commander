@@ -17,7 +17,7 @@ This skill helps you execute HEC-RAS plans using ras-commander. It serves as a n
 ## Primary Sources
 
 ### 1. Execution Patterns (CLAUDE.md)
-**Location**: `C:\GH\ras-commander\ras_commander\CLAUDE.md`
+**Location**: `ras_commander/CLAUDE.md`
 
 **See sections**:
 - **"Plan Execution"** - Core execution methods and parameters
@@ -51,14 +51,14 @@ RasCmdr.compute_test_mode(["01", "02"])
 
 ### 3. Code Documentation (Docstrings)
 
-**Location**: `C:\GH\ras-commander\ras_commander\RasCmdr.py`
+**Location**: `ras_commander/RasCmdr.py`
 
 **Read docstrings for**:
 - `RasCmdr.compute_plan()` - Lines 139-250+ (comprehensive parameter docs)
 - `RasCmdr.compute_parallel()` - Parallel execution details
 - `RasCmdr.compute_test_mode()` - Sequential debugging mode
 
-**Callback protocol**: `C:\GH\ras-commander\ras_commander\callbacks.py`
+**Callback protocol**: `ras_commander/callbacks.py`
 - `ExecutionCallback` - Protocol definition
 - `ConsoleCallback`, `FileLoggerCallback`, `ProgressBarCallback` - Implementations
 
@@ -71,7 +71,7 @@ RasCmdr.compute_test_mode(["01", "02"])
 from ras_commander import init_ras_project, RasCmdr
 
 # Initialize
-init_ras_project(r"C:\Models\MyProject", "6.6")
+init_ras_project("path/to/project", "6.6")
 
 # Execute
 RasCmdr.compute_plan("01")
@@ -135,27 +135,11 @@ RasCmdr.compute_test_mode(["01", "02", "03"])
 - Single test folder (not multiple workers)
 - Easier to debug issues
 
-## Mode Selection Guide
+## Mode Selection
 
-Use this decision matrix to select the appropriate execution mode:
+For choosing between execution modes (single, parallel, sequential, remote, legacy), see the **`hecras_plan_execution`** skill which provides decision trees, mode selection matrices, and parameter recommendations.
 
-| Scenario | Recommended Mode | Rationale |
-|----------|------------------|-----------|
-| Single plan, need full control | `compute_plan()` | Direct control, callback monitoring, parameter tuning |
-| Single plan, quick run | `compute_plan()` | Simplest API, minimal overhead |
-| Multiple plans, debugging issues | `compute_test_mode()` | Sequential execution, single folder, easier diagnosis |
-| Multiple plans, production runs | `compute_parallel()` | Fastest throughput, worker isolation, parallel HDF writes |
-| Distributed across machines | `compute_parallel_remote()` | Scale-out to multiple computers |
-| HEC-RAS 3.x-5.x legacy | `RasControl` | COM-based automation (see rascontrol documentation) |
-| Resume interrupted batch | `compute_parallel(..., skip_existing=True)` | Skips completed plans |
-| Scenario comparison study | `compute_parallel()` with dest_folder | Each scenario in separate folder |
-
-**Quick Decision Tree**:
-1. **How many plans?** Single → `compute_plan()`, Multiple → continue
-2. **Debugging?** Yes → `compute_test_mode()`, No → continue
-3. **Multiple machines?** Yes → `compute_parallel_remote()`, No → `compute_parallel()`
-
-**See**: `.claude/rules/hec-ras/execution.md` for complete mode documentation.
+**See also**: `.claude/rules/hec-ras/execution.md` for complete mode documentation.
 
 ## Orchestrator Integration
 
@@ -224,7 +208,7 @@ projects = {}
 for project_name in ["upstream", "downstream", "tributary"]:
     projects[project_name] = RasPrj()
     init_ras_project(
-        f"C:/Models/{project_name}",
+        f"path/to/{project_name}",
         "6.6",
         ras_object=projects[project_name]
     )

@@ -1,6 +1,5 @@
 ---
 name: hecras_parse_geometry
-allowed-tools: [Read, Grep, Glob]
 description: |
   Parses and modifies HEC-RAS plain text geometry files (.g##) using fixed-width
   FORTRAN format. Handles cross sections, storage areas, bridges, culverts,
@@ -196,12 +195,12 @@ See `ras_commander/geom/AGENTS.md` for complete API documentation.
 - If bank station missing: interpolates elevation and inserts point
 - You don't need to manually interpolate bank stations
 
-### 450 Point Limit
-HEC-RAS enforces maximum 450 points per cross section:
+### 500 Point Limit
+HEC-RAS enforces maximum 500 points per cross section:
 ```python
 # Validate before writing
-if len(df) > 450:
-    raise ValueError(f"Cross section has {len(df)} points (max 450)")
+if len(df) > 500:
+    raise ValueError(f"Cross section has {len(df)} points (max 500)")
 ```
 
 ### Case-Sensitive Identifiers
@@ -328,18 +327,18 @@ df = GeomCrossSection.get_station_elevation(
 ### Point Limit Exceeded
 ```python
 # Validate before writing
-if len(df) > 450:
+if len(df) > 500:
     # Option 1: Simplify geometry
     from scipy.interpolate import interp1d
     f = interp1d(df['Station'], df['Elevation'])
-    new_stations = np.linspace(df['Station'].min(), df['Station'].max(), 400)
+    new_stations = np.linspace(df['Station'].min(), df['Station'].max(), 450)
     df = pd.DataFrame({
         'Station': new_stations,
         'Elevation': f(new_stations)
     })
 
     # Option 2: Raise error for user to handle
-    raise ValueError(f"Cross section has {len(df)} points (max 450)")
+    raise ValueError(f"Cross section has {len(df)} points (max 500)")
 ```
 
 ## Primary Sources

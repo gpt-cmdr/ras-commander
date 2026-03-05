@@ -7,7 +7,8 @@ description: |
 
   Triggers: gemini, gemini cli, delegate to gemini, gemini subagent, code review,
   QAQC, quality check, security audit, documentation review, large context,
-  second opinion, architecture review, gemini-3-pro-preview, gemini-3-flash-preview
+  second opinion, architecture review, design validation, gemini-3-pro-preview,
+  gemini-3-flash-preview
 
   Prerequisites: Gemini CLI authenticated (gemini login or GEMINI_API_KEY)
   Models: gemini-3-pro-preview (default), gemini-3-flash-preview (large context)
@@ -43,14 +44,6 @@ Claude Code                         Gemini CLI
 - Full context in structured format
 - Explicit output structure
 - Session resume available
-
-## When to Use
-
-- **QAQC / Code review** - Second opinion on implementation
-- **Architecture review** - Validate design decisions
-- **Documentation review** - Check clarity and completeness
-- **Security audit** - Identify vulnerabilities
-- **Large context analysis** - 1M+ token context window
 
 ## Model Selection
 

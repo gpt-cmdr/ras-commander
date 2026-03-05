@@ -22,7 +22,6 @@ Decision support for selecting optimal HEC-RAS execution strategy. Analyzes Proj
 
 - **`.claude/rules/hec-ras/execution.md`** - Complete execution mode documentation
 - **`.claude/agents/hecras-project-inspector.md`** - Project Intelligence Report schema
-- **`.claude/skills/hecras_compute_plans/SKILL.md`** - Mode Selection Guide
 - **`.claude/skills/hecras_compute_rascontrol/SKILL.md`** - Legacy HEC-RAS (< 6.0)
 
 ---
