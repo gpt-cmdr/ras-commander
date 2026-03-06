@@ -1,5 +1,9 @@
 """
 ras-commander: A Python library for automating HEC-RAS operations
+
+An open-source project of CLB Engineering Corporation (https://clbengineering.com/)
+Docs: https://ras-commander.readthedocs.io
+GitHub: https://github.com/gpt-cmdr/ras-commander
 """
 
 from importlib.metadata import version, PackageNotFoundError

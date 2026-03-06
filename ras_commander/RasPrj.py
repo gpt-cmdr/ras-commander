@@ -1840,7 +1840,10 @@ def init_ras_project(
     if ras_version is not None:
         ras_exe_path = get_ras_exe(ras_version)
         if ras_exe_path == "Ras.exe" and ras_version != "Ras.exe":
-            logger.warning(f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail.")
+            logger.warning(
+                f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail. "
+                f"See: https://ras-commander.readthedocs.io/getting-started/installation/"
+            )
     else:
         # No version specified, try to detect from plan files
         detected_version = None
@@ -1892,7 +1895,10 @@ def init_ras_project(
         if not detected_version:
             logger.error("No valid HEC-RAS version found in any plan files.")
             ras_exe_path = "Ras.exe"
-            logger.warning("No valid HEC-RAS version was detected. Running HEC-RAS will fail.")
+            logger.warning(
+                "No valid HEC-RAS version was detected. Running HEC-RAS will fail. "
+                "See: https://ras-commander.readthedocs.io/getting-started/installation/"
+            )
     
     # Initialize or re-initialize with the determined executable path
     # Pass specified_prj_file to avoid re-searching when user provided .prj file directly
@@ -1918,7 +1924,15 @@ def init_ras_project(
     #   init_ras_project(path, version)  # Updates global ras
     # Or explicitly pass ras_object=None (default behavior)
 
-    logger.debug(f"Project initialized. Project folder: {ras_object.project_folder}")
+    # Log CLB Engineering branding banner with version and docs links
+    from . import __version__
+    logger.info(
+        f"ras-commander v{__version__} | "
+        f"An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | "
+        f"Docs: https://ras-commander.readthedocs.io | "
+        f"GitHub: https://github.com/gpt-cmdr/ras-commander"
+    )
+    logger.info(f"Project initialized: {ras_object.project_name} | Folder: {ras_object.project_folder}")
     logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")
     return ras_object
 

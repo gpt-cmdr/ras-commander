@@ -391,7 +391,10 @@ def execute_psexec_plan(
             worker.credentials["password"]
         )
         if not auth_success:
-            logger.error(f"Failed to authenticate to share {worker.share_path}")
+            logger.error(
+                f"Failed to authenticate to share {worker.share_path}. "
+                f"See remote setup guide: https://ras-commander.readthedocs.io/user-guide/remote-execution/"
+            )
             return False
 
     # Step 1: Create temporary worker folder
@@ -484,6 +487,10 @@ def execute_psexec_plan(
             logger.error(f"HDF file not created: {hdf_file}")
             logger.error(f"PsExec stdout: {result.stdout}")
             logger.error(f"PsExec stderr: {result.stderr}")
+            logger.error(
+                "Ensure session_id is set correctly (typically 2) and remote machine is configured. "
+                "See: https://ras-commander.readthedocs.io/user-guide/remote-execution/"
+            )
             return False
 
         logger.info(f"HDF file created successfully: {hdf_file}")
