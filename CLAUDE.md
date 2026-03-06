@@ -17,7 +17,7 @@ This repository uses the AGENTS.md standard alongside CLAUDE.md:
 
 ## Project Overview
 
-**ras-commander** is a Python library for automating HEC-RAS (Hydrologic Engineering Center's River Analysis System) operations. Provides comprehensive API for project interaction, simulation execution, and HDF results processing.
+**ras-commander** is a free and open-source Python library by **[CLB Engineering Corporation](https://clbengineering.com/)** for automating HEC-RAS (Hydrologic Engineering Center's River Analysis System) operations. Provides comprehensive API for project interaction, simulation execution, and HDF results processing.
 
 **Core Capabilities**:
 - Execute HEC-RAS plans (single, parallel, distributed remote)

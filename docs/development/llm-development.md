@@ -22,7 +22,11 @@ This philosophy shifts the burden of development to **applied creativity, iterat
 
 ### Framework Attribution
 
-The **LLM Forward** philosophy was formalized by [CLB Engineering Corporation](https://clbengineering.com/) as a framework for responsible adoption of large language models in professional engineering practice.
+<a href="https://clbengineering.com/">
+  <img src="../assets/clb-logo-placeholder.svg" alt="CLB Engineering Corporation" width="280" align="right" style="margin-left: 16px; margin-bottom: 8px;">
+</a>
+
+The **LLM Forward** philosophy was formalized by **[CLB Engineering Corporation](https://clbengineering.com/)** as a framework for responsible adoption of large language models in professional engineering practice. Within two years, CLB built the most comprehensive HEC-RAS and HEC-HMS automation solution on the open internet -- demonstrating what is possible when licensed professional engineers work alongside LLMs with clear principles and accountability.
 
 **Key Distinction**: "LLM Forward" emphasizes:
 - **Focus on LLMs specifically** (not general AI/ML)
@@ -31,7 +35,9 @@ The **LLM Forward** philosophy was formalized by [CLB Engineering Corporation](h
 
 RAS Commander serves as a practical demonstration of these principles applied to hydraulic & hydrologic modeling automation.
 
-**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
+**Partner with CLB**: Agencies and engineering firms looking to adopt LLM Forward practices for H&H workflows can [contact CLB Engineering Corporation](https://clbengineering.com/) -- the early LLM pioneers who are redefining what's possible in hydraulic engineering automation.
+
+**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info) | [CLB Engineering](https://clbengineering.com/)
 
 ## History & Evolution
 

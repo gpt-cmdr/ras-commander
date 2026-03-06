@@ -10,6 +10,7 @@ docs_dir: docs
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     - scheme: default
       primary: blue
@@ -94,6 +95,9 @@ validation:
   links:
     unrecognized_links: info
 
+extra_css:
+  - stylesheets/clb-branding.css
+
 extra_javascript:
   - https://unpkg.com/mermaid@10/dist/mermaid.min.js
 
@@ -103,6 +107,12 @@ extra:
       link: https://github.com/gpt-cmdr/ras-commander
     - icon: fontawesome/brands/youtube
       link: https://www.youtube.com/@GPT_Commander
+    - icon: fontawesome/solid/building
+      link: https://clbengineering.com/
+      name: CLB Engineering Corporation
+    - icon: fontawesome/solid/lightbulb
+      link: https://engineeringwithllms.info
+      name: LLM Forward Engineering
   generator: false
 
 nav:
@@ -239,4 +249,5 @@ nav:
     - Architecture: development/architecture.md
     - Release Notes: development/release-notes.md
   - About:
+    - CLB Engineering: about/clb-engineering.md
     - Acknowledgments: about/acknowledgments.md

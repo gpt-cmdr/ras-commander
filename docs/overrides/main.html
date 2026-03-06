@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block announce %}
+<style>
+  .md-banner {
+    background: linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%);
+    color: #fff;
+    font-size: 0.7rem;
+  }
+  .md-banner a {
+    color: #90cdf4;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .md-banner a:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+</style>
+<div style="text-align: center; padding: 4px 16px;">
+  An open-source project of <a href="https://clbengineering.com/">CLB Engineering Corporation</a> &nbsp;|&nbsp;
+  <a href="https://engineeringwithllms.info">LLM Forward Engineering</a> &nbsp;|&nbsp;
+  <a href="https://clbengineering.com/">Partner with CLB on your next H&H project</a>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ super() }}
+<div style="text-align: center; padding: 16px 24px; background: #1a365d; color: #cbd5e0; font-size: 0.8rem; line-height: 1.6;">
+  <div style="margin-bottom: 8px;">
+    <a href="https://clbengineering.com/" style="color: #90cdf4; text-decoration: none; font-weight: 600;">CLB Engineering Corporation</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://engineeringwithllms.info" style="color: #90cdf4; text-decoration: none;">LLM Forward Engineering</a>
+  </div>
+  <div>
+    RAS Commander is a free and open-source project maintained by
+    <a href="https://clbengineering.com/" style="color: #90cdf4; text-decoration: none;">CLB Engineering Corporation</a>.
+    For agencies and firms seeking to modernize H&H workflows with LLM Forward approaches,
+    <a href="https://clbengineering.com/" style="color: #90cdf4; text-decoration: none;">contact CLB</a>
+    to partner with the engineers who wrote the automation.
+  </div>
+</div>
+{% endblock %}

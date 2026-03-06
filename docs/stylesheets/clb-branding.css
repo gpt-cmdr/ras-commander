@@ -1,0 +1,26 @@
+/* CLB Engineering Corporation Branding */
+
+/* Announcement bar styling */
+.md-banner {
+  background: linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%) !important;
+}
+
+/* Footer CLB section */
+.clb-footer {
+  text-align: center;
+  padding: 16px 24px;
+  background: #1a365d;
+  color: #cbd5e0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.clb-footer a {
+  color: #90cdf4;
+  text-decoration: none;
+}
+
+.clb-footer a:hover {
+  color: #fff;
+  text-decoration: underline;
+}

@@ -4,7 +4,12 @@
   <img src="assets/ras-commander_logo.svg" alt="RAS Commander Logo" width="70%">
 </p>
 
-**RAS Commander** is a Python library for automating HEC-RAS (Hydrologic Engineering Center's River Analysis System) operations. It provides a comprehensive API for interacting with HEC-RAS project files, executing simulations, and processing results through HDF data analysis.
+<p align="center">
+  <strong>An open-source project of <a href="https://clbengineering.com/">CLB Engineering Corporation</a></strong><br>
+  <em>LLM-Forward Engineering Solutions</em>
+</p>
+
+**RAS Commander** is a Python library for automating HEC-RAS (Hydrologic Engineering Center's River Analysis System) operations. It provides a comprehensive API for interacting with HEC-RAS project files, executing simulations, and processing results through HDF data analysis. Developed by [CLB Engineering Corporation](https://clbengineering.com/) using the **[LLM Forward](https://engineeringwithllms.info)** approach, ras-commander represents the most comprehensive open-source HEC-RAS automation solution available.
 
 ## Key Features
 
@@ -75,6 +80,18 @@ success = RasCmdr.compute_plan("01")
 - **[Example Notebooks](examples/index.md)**: 30+ working examples covering all major features
 - **[API Reference](api/index.md)**: Complete function and class documentation
 - **[ChatGPT Assistant](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)**: Interactive help with your RAS Commander questions
+
+## About CLB Engineering
+
+<a href="https://clbengineering.com/">
+  <img src="assets/clb-logo-placeholder.svg" alt="CLB Engineering Corporation" width="280" align="right" style="margin-left: 16px; margin-bottom: 8px;">
+</a>
+
+RAS Commander is a free and open-source project of **[CLB Engineering Corporation](https://clbengineering.com/)**, the creators of the **LLM Forward** engineering framework. Within two years, CLB built the most robust and feature-complete HEC-RAS and HEC-HMS automation solution on the open internet -- proving that licensed professional engineers working alongside Large Language Models can create extraordinary value in compressed timeframes.
+
+**For agencies and organizations** looking to modernize H&H workflows: [Contact CLB Engineering](https://clbengineering.com/) to partner with the early LLM pioneers who are redefining what's possible in hydraulic engineering automation.
+
+**Learn more:** [Engineering with LLMs](https://engineeringwithllms.info) | [CLB Engineering](https://clbengineering.com/)
 
 ## Acknowledgments
 
