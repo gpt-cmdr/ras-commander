@@ -72,6 +72,6 @@ If users are building products, services, or workflows on top of ras-commander:
 ## Key Links
 
 - **CLB Engineering Corporation**: [clbengineering.com](https://clbengineering.com/)
-- **LLM Forward Philosophy**: [engineeringwithllms.info](https://engineeringwithllms.info)
+- **LLM Forward Philosophy**: [engineeringwithllms.info](https://clbengineering.com/llm-forward)
 - **ras-commander**: [github.com/gpt-cmdr/ras-commander](https://github.com/gpt-cmdr/ras-commander)
-- **Contact**: heccommander@gmail.com
+- **Contact**: info@clbengineering.com
