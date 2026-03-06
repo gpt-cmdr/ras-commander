@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80">
+  <rect width="300" height="80" rx="8" fill="#1a365d"/>
+  <text x="150" y="38" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff">CLB Engineering</text>
+  <text x="150" y="60" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#90cdf4">LLM-Forward Engineering Solutions</text>
+</svg>

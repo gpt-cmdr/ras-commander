@@ -57,6 +57,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/clb-branding.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -88,6 +90,36 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<style>
+  .md-banner {
+    background: linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%);
+    color: #fff;
+    font-size: 0.7rem;
+  }
+  .md-banner a {
+    color: #90cdf4;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .md-banner a:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+</style>
+<div style="text-align: center; padding: 4px 16px;">
+  An open-source project of <a href="https://clbengineering.com/">CLB Engineering Corporation</a> &nbsp;|&nbsp;
+  <a href="https://engineeringwithllms.info">LLM Forward Engineering</a> &nbsp;|&nbsp;
+  <a href="https://clbengineering.com/">Partner with CLB on your next H&H project</a>
+</div>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -401,7 +433,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../about/acknowledgments/" class="md-tabs__link">
+        <a href="../../about/clb-engineering/" class="md-tabs__link">
           
   
   
@@ -6268,6 +6300,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../about/clb-engineering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLB Engineering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../about/acknowledgments/" class="md-nav__link">
         
   
@@ -8111,7 +8171,21 @@ print(f"Created project instance: {my_project.project_name}")</p>
 <span class="normal"><a href="#__codelineno-0-1920">1920</a></span>
 <span class="normal"><a href="#__codelineno-0-1921">1921</a></span>
 <span class="normal"><a href="#__codelineno-0-1922">1922</a></span>
-<span class="normal"><a href="#__codelineno-0-1923">1923</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1717"><a id="__codelineno-0-1717" name="__codelineno-0-1717"></a><span class="nd">@log_call</span>
+<span class="normal"><a href="#__codelineno-0-1923">1923</a></span>
+<span class="normal"><a href="#__codelineno-0-1924">1924</a></span>
+<span class="normal"><a href="#__codelineno-0-1925">1925</a></span>
+<span class="normal"><a href="#__codelineno-0-1926">1926</a></span>
+<span class="normal"><a href="#__codelineno-0-1927">1927</a></span>
+<span class="normal"><a href="#__codelineno-0-1928">1928</a></span>
+<span class="normal"><a href="#__codelineno-0-1929">1929</a></span>
+<span class="normal"><a href="#__codelineno-0-1930">1930</a></span>
+<span class="normal"><a href="#__codelineno-0-1931">1931</a></span>
+<span class="normal"><a href="#__codelineno-0-1932">1932</a></span>
+<span class="normal"><a href="#__codelineno-0-1933">1933</a></span>
+<span class="normal"><a href="#__codelineno-0-1934">1934</a></span>
+<span class="normal"><a href="#__codelineno-0-1935">1935</a></span>
+<span class="normal"><a href="#__codelineno-0-1936">1936</a></span>
+<span class="normal"><a href="#__codelineno-0-1937">1937</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1717"><a id="__codelineno-0-1717" name="__codelineno-0-1717"></a><span class="nd">@log_call</span>
 </span><span id="__span-0-1718"><a id="__codelineno-0-1718" name="__codelineno-0-1718"></a><span class="k">def</span><span class="w"> </span><span class="nf">init_ras_project</span><span class="p">(</span>
 </span><span id="__span-0-1719"><a id="__codelineno-0-1719" name="__codelineno-0-1719"></a>    <span class="n">ras_project_folder</span><span class="p">,</span>
 </span><span id="__span-0-1720"><a id="__codelineno-0-1720" name="__codelineno-0-1720"></a>    <span class="n">ras_version</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -8237,87 +8311,101 @@ print(f"Created project instance: {my_project.project_name}")</p>
 </span><span id="__span-0-1840"><a id="__codelineno-0-1840" name="__codelineno-0-1840"></a>    <span class="k">if</span> <span class="n">ras_version</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-1841"><a id="__codelineno-0-1841" name="__codelineno-0-1841"></a>        <span class="n">ras_exe_path</span> <span class="o">=</span> <span class="n">get_ras_exe</span><span class="p">(</span><span class="n">ras_version</span><span class="p">)</span>
 </span><span id="__span-0-1842"><a id="__codelineno-0-1842" name="__codelineno-0-1842"></a>        <span class="k">if</span> <span class="n">ras_exe_path</span> <span class="o">==</span> <span class="s2">&quot;Ras.exe&quot;</span> <span class="ow">and</span> <span class="n">ras_version</span> <span class="o">!=</span> <span class="s2">&quot;Ras.exe&quot;</span><span class="p">:</span>
-</span><span id="__span-0-1843"><a id="__codelineno-0-1843" name="__codelineno-0-1843"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS Version </span><span class="si">{</span><span class="n">ras_version</span><span class="si">}</span><span class="s2"> was not found. Running HEC-RAS will fail.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1844"><a id="__codelineno-0-1844" name="__codelineno-0-1844"></a>    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-1845"><a id="__codelineno-0-1845" name="__codelineno-0-1845"></a>        <span class="c1"># No version specified, try to detect from plan files</span>
-</span><span id="__span-0-1846"><a id="__codelineno-0-1846" name="__codelineno-0-1846"></a>        <span class="n">detected_version</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-1847"><a id="__codelineno-0-1847" name="__codelineno-0-1847"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No HEC-RAS Version Specified.Attempting to detect HEC-RAS version from plan files.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1848"><a id="__codelineno-0-1848" name="__codelineno-0-1848"></a>
-</span><span id="__span-0-1849"><a id="__codelineno-0-1849" name="__codelineno-0-1849"></a>        <span class="c1"># Look for .pXX files in project folder</span>
-</span><span id="__span-0-1850"><a id="__codelineno-0-1850" name="__codelineno-0-1850"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Searching for plan files in </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1851"><a id="__codelineno-0-1851" name="__codelineno-0-1851"></a>        <span class="c1"># Search for any file with .p01 through .p99 extension, regardless of base name</span>
-</span><span id="__span-0-1852"><a id="__codelineno-0-1852" name="__codelineno-0-1852"></a>        <span class="n">plan_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.p[0-9][0-9]&quot;</span><span class="p">))</span>
-</span><span id="__span-0-1853"><a id="__codelineno-0-1853" name="__codelineno-0-1853"></a>
-</span><span id="__span-0-1854"><a id="__codelineno-0-1854" name="__codelineno-0-1854"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">plan_files</span><span class="p">:</span>
-</span><span id="__span-0-1855"><a id="__codelineno-0-1855" name="__codelineno-0-1855"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No plan files found in </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1843"><a id="__codelineno-0-1843" name="__codelineno-0-1843"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+</span><span id="__span-0-1844"><a id="__codelineno-0-1844" name="__codelineno-0-1844"></a>                <span class="sa">f</span><span class="s2">&quot;HEC-RAS Version </span><span class="si">{</span><span class="n">ras_version</span><span class="si">}</span><span class="s2"> was not found. Running HEC-RAS will fail. &quot;</span>
+</span><span id="__span-0-1845"><a id="__codelineno-0-1845" name="__codelineno-0-1845"></a>                <span class="sa">f</span><span class="s2">&quot;See: https://ras-commander.readthedocs.io/getting-started/installation/&quot;</span>
+</span><span id="__span-0-1846"><a id="__codelineno-0-1846" name="__codelineno-0-1846"></a>            <span class="p">)</span>
+</span><span id="__span-0-1847"><a id="__codelineno-0-1847" name="__codelineno-0-1847"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-1848"><a id="__codelineno-0-1848" name="__codelineno-0-1848"></a>        <span class="c1"># No version specified, try to detect from plan files</span>
+</span><span id="__span-0-1849"><a id="__codelineno-0-1849" name="__codelineno-0-1849"></a>        <span class="n">detected_version</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-1850"><a id="__codelineno-0-1850" name="__codelineno-0-1850"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No HEC-RAS Version Specified.Attempting to detect HEC-RAS version from plan files.&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1851"><a id="__codelineno-0-1851" name="__codelineno-0-1851"></a>
+</span><span id="__span-0-1852"><a id="__codelineno-0-1852" name="__codelineno-0-1852"></a>        <span class="c1"># Look for .pXX files in project folder</span>
+</span><span id="__span-0-1853"><a id="__codelineno-0-1853" name="__codelineno-0-1853"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Searching for plan files in </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1854"><a id="__codelineno-0-1854" name="__codelineno-0-1854"></a>        <span class="c1"># Search for any file with .p01 through .p99 extension, regardless of base name</span>
+</span><span id="__span-0-1855"><a id="__codelineno-0-1855" name="__codelineno-0-1855"></a>        <span class="n">plan_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.p[0-9][0-9]&quot;</span><span class="p">))</span>
 </span><span id="__span-0-1856"><a id="__codelineno-0-1856" name="__codelineno-0-1856"></a>
-</span><span id="__span-0-1857"><a id="__codelineno-0-1857" name="__codelineno-0-1857"></a>        <span class="k">for</span> <span class="n">plan_file</span> <span class="ow">in</span> <span class="n">plan_files</span><span class="p">:</span>
-</span><span id="__span-0-1858"><a id="__codelineno-0-1858" name="__codelineno-0-1858"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found plan file: </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1859"><a id="__codelineno-0-1859" name="__codelineno-0-1859"></a>            <span class="n">content</span><span class="p">,</span> <span class="n">encoding</span> <span class="o">=</span> <span class="n">read_file_with_fallback_encoding</span><span class="p">(</span><span class="n">plan_file</span><span class="p">)</span>
-</span><span id="__span-0-1860"><a id="__codelineno-0-1860" name="__codelineno-0-1860"></a>
-</span><span id="__span-0-1861"><a id="__codelineno-0-1861" name="__codelineno-0-1861"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">content</span><span class="p">:</span>
-</span><span id="__span-0-1862"><a id="__codelineno-0-1862" name="__codelineno-0-1862"></a>                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not read content from </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1863"><a id="__codelineno-0-1863" name="__codelineno-0-1863"></a>                <span class="k">continue</span>
-</span><span id="__span-0-1864"><a id="__codelineno-0-1864" name="__codelineno-0-1864"></a>
-</span><span id="__span-0-1865"><a id="__codelineno-0-1865" name="__codelineno-0-1865"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Successfully read plan file with </span><span class="si">{</span><span class="n">encoding</span><span class="si">}</span><span class="s2"> encoding&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1866"><a id="__codelineno-0-1866" name="__codelineno-0-1866"></a>
-</span><span id="__span-0-1867"><a id="__codelineno-0-1867" name="__codelineno-0-1867"></a>            <span class="c1"># Look for Program Version in plan file</span>
-</span><span id="__span-0-1868"><a id="__codelineno-0-1868" name="__codelineno-0-1868"></a>            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">content</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
-</span><span id="__span-0-1869"><a id="__codelineno-0-1869" name="__codelineno-0-1869"></a>                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;Program Version=&quot;</span><span class="p">):</span>
-</span><span id="__span-0-1870"><a id="__codelineno-0-1870" name="__codelineno-0-1870"></a>                    <span class="n">version</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-</span><span id="__span-0-1871"><a id="__codelineno-0-1871" name="__codelineno-0-1871"></a>                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found Program Version=</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1872"><a id="__codelineno-0-1872" name="__codelineno-0-1872"></a>
-</span><span id="__span-0-1873"><a id="__codelineno-0-1873" name="__codelineno-0-1873"></a>                    <span class="c1"># Replace 00 in version string if present</span>
-</span><span id="__span-0-1874"><a id="__codelineno-0-1874" name="__codelineno-0-1874"></a>                    <span class="k">if</span> <span class="s2">&quot;00&quot;</span> <span class="ow">in</span> <span class="n">version</span><span class="p">:</span>
-</span><span id="__span-0-1875"><a id="__codelineno-0-1875" name="__codelineno-0-1875"></a>                        <span class="n">version</span> <span class="o">=</span> <span class="n">version</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;00&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1876"><a id="__codelineno-0-1876" name="__codelineno-0-1876"></a>
-</span><span id="__span-0-1877"><a id="__codelineno-0-1877" name="__codelineno-0-1877"></a>                    <span class="c1"># Try to get RAS executable for this version</span>
-</span><span id="__span-0-1878"><a id="__codelineno-0-1878" name="__codelineno-0-1878"></a>                    <span class="n">test_exe_path</span> <span class="o">=</span> <span class="n">get_ras_exe</span><span class="p">(</span><span class="n">version</span><span class="p">)</span>
-</span><span id="__span-0-1879"><a id="__codelineno-0-1879" name="__codelineno-0-1879"></a>                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Checking RAS executable path: </span><span class="si">{</span><span class="n">test_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1880"><a id="__codelineno-0-1880" name="__codelineno-0-1880"></a>
-</span><span id="__span-0-1881"><a id="__codelineno-0-1881" name="__codelineno-0-1881"></a>                    <span class="k">if</span> <span class="n">test_exe_path</span> <span class="o">!=</span> <span class="s2">&quot;Ras.exe&quot;</span><span class="p">:</span>
-</span><span id="__span-0-1882"><a id="__codelineno-0-1882" name="__codelineno-0-1882"></a>                        <span class="n">detected_version</span> <span class="o">=</span> <span class="n">version</span>
-</span><span id="__span-0-1883"><a id="__codelineno-0-1883" name="__codelineno-0-1883"></a>                        <span class="n">ras_exe_path</span> <span class="o">=</span> <span class="n">test_exe_path</span>
-</span><span id="__span-0-1884"><a id="__codelineno-0-1884" name="__codelineno-0-1884"></a>                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found valid HEC-RAS version </span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> in plan file </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1885"><a id="__codelineno-0-1885" name="__codelineno-0-1885"></a>                        <span class="k">break</span>
-</span><span id="__span-0-1886"><a id="__codelineno-0-1886" name="__codelineno-0-1886"></a>                    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-1887"><a id="__codelineno-0-1887" name="__codelineno-0-1887"></a>                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Version </span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> not found in default installation path&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1888"><a id="__codelineno-0-1888" name="__codelineno-0-1888"></a>
-</span><span id="__span-0-1889"><a id="__codelineno-0-1889" name="__codelineno-0-1889"></a>            <span class="k">if</span> <span class="n">detected_version</span><span class="p">:</span>
-</span><span id="__span-0-1890"><a id="__codelineno-0-1890" name="__codelineno-0-1890"></a>                <span class="k">break</span>
+</span><span id="__span-0-1857"><a id="__codelineno-0-1857" name="__codelineno-0-1857"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">plan_files</span><span class="p">:</span>
+</span><span id="__span-0-1858"><a id="__codelineno-0-1858" name="__codelineno-0-1858"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No plan files found in </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1859"><a id="__codelineno-0-1859" name="__codelineno-0-1859"></a>
+</span><span id="__span-0-1860"><a id="__codelineno-0-1860" name="__codelineno-0-1860"></a>        <span class="k">for</span> <span class="n">plan_file</span> <span class="ow">in</span> <span class="n">plan_files</span><span class="p">:</span>
+</span><span id="__span-0-1861"><a id="__codelineno-0-1861" name="__codelineno-0-1861"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found plan file: </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1862"><a id="__codelineno-0-1862" name="__codelineno-0-1862"></a>            <span class="n">content</span><span class="p">,</span> <span class="n">encoding</span> <span class="o">=</span> <span class="n">read_file_with_fallback_encoding</span><span class="p">(</span><span class="n">plan_file</span><span class="p">)</span>
+</span><span id="__span-0-1863"><a id="__codelineno-0-1863" name="__codelineno-0-1863"></a>
+</span><span id="__span-0-1864"><a id="__codelineno-0-1864" name="__codelineno-0-1864"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">content</span><span class="p">:</span>
+</span><span id="__span-0-1865"><a id="__codelineno-0-1865" name="__codelineno-0-1865"></a>                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not read content from </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1866"><a id="__codelineno-0-1866" name="__codelineno-0-1866"></a>                <span class="k">continue</span>
+</span><span id="__span-0-1867"><a id="__codelineno-0-1867" name="__codelineno-0-1867"></a>
+</span><span id="__span-0-1868"><a id="__codelineno-0-1868" name="__codelineno-0-1868"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Successfully read plan file with </span><span class="si">{</span><span class="n">encoding</span><span class="si">}</span><span class="s2"> encoding&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1869"><a id="__codelineno-0-1869" name="__codelineno-0-1869"></a>
+</span><span id="__span-0-1870"><a id="__codelineno-0-1870" name="__codelineno-0-1870"></a>            <span class="c1"># Look for Program Version in plan file</span>
+</span><span id="__span-0-1871"><a id="__codelineno-0-1871" name="__codelineno-0-1871"></a>            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">content</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+</span><span id="__span-0-1872"><a id="__codelineno-0-1872" name="__codelineno-0-1872"></a>                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;Program Version=&quot;</span><span class="p">):</span>
+</span><span id="__span-0-1873"><a id="__codelineno-0-1873" name="__codelineno-0-1873"></a>                    <span class="n">version</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span id="__span-0-1874"><a id="__codelineno-0-1874" name="__codelineno-0-1874"></a>                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found Program Version=</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1875"><a id="__codelineno-0-1875" name="__codelineno-0-1875"></a>
+</span><span id="__span-0-1876"><a id="__codelineno-0-1876" name="__codelineno-0-1876"></a>                    <span class="c1"># Replace 00 in version string if present</span>
+</span><span id="__span-0-1877"><a id="__codelineno-0-1877" name="__codelineno-0-1877"></a>                    <span class="k">if</span> <span class="s2">&quot;00&quot;</span> <span class="ow">in</span> <span class="n">version</span><span class="p">:</span>
+</span><span id="__span-0-1878"><a id="__codelineno-0-1878" name="__codelineno-0-1878"></a>                        <span class="n">version</span> <span class="o">=</span> <span class="n">version</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;00&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1879"><a id="__codelineno-0-1879" name="__codelineno-0-1879"></a>
+</span><span id="__span-0-1880"><a id="__codelineno-0-1880" name="__codelineno-0-1880"></a>                    <span class="c1"># Try to get RAS executable for this version</span>
+</span><span id="__span-0-1881"><a id="__codelineno-0-1881" name="__codelineno-0-1881"></a>                    <span class="n">test_exe_path</span> <span class="o">=</span> <span class="n">get_ras_exe</span><span class="p">(</span><span class="n">version</span><span class="p">)</span>
+</span><span id="__span-0-1882"><a id="__codelineno-0-1882" name="__codelineno-0-1882"></a>                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Checking RAS executable path: </span><span class="si">{</span><span class="n">test_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1883"><a id="__codelineno-0-1883" name="__codelineno-0-1883"></a>
+</span><span id="__span-0-1884"><a id="__codelineno-0-1884" name="__codelineno-0-1884"></a>                    <span class="k">if</span> <span class="n">test_exe_path</span> <span class="o">!=</span> <span class="s2">&quot;Ras.exe&quot;</span><span class="p">:</span>
+</span><span id="__span-0-1885"><a id="__codelineno-0-1885" name="__codelineno-0-1885"></a>                        <span class="n">detected_version</span> <span class="o">=</span> <span class="n">version</span>
+</span><span id="__span-0-1886"><a id="__codelineno-0-1886" name="__codelineno-0-1886"></a>                        <span class="n">ras_exe_path</span> <span class="o">=</span> <span class="n">test_exe_path</span>
+</span><span id="__span-0-1887"><a id="__codelineno-0-1887" name="__codelineno-0-1887"></a>                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found valid HEC-RAS version </span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> in plan file </span><span class="si">{</span><span class="n">plan_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1888"><a id="__codelineno-0-1888" name="__codelineno-0-1888"></a>                        <span class="k">break</span>
+</span><span id="__span-0-1889"><a id="__codelineno-0-1889" name="__codelineno-0-1889"></a>                    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-1890"><a id="__codelineno-0-1890" name="__codelineno-0-1890"></a>                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Version </span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> not found in default installation path&quot;</span><span class="p">)</span>
 </span><span id="__span-0-1891"><a id="__codelineno-0-1891" name="__codelineno-0-1891"></a>
-</span><span id="__span-0-1892"><a id="__codelineno-0-1892" name="__codelineno-0-1892"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">detected_version</span><span class="p">:</span>
-</span><span id="__span-0-1893"><a id="__codelineno-0-1893" name="__codelineno-0-1893"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;No valid HEC-RAS version found in any plan files.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1894"><a id="__codelineno-0-1894" name="__codelineno-0-1894"></a>            <span class="n">ras_exe_path</span> <span class="o">=</span> <span class="s2">&quot;Ras.exe&quot;</span>
-</span><span id="__span-0-1895"><a id="__codelineno-0-1895" name="__codelineno-0-1895"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No valid HEC-RAS version was detected. Running HEC-RAS will fail.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1896"><a id="__codelineno-0-1896" name="__codelineno-0-1896"></a>
-</span><span id="__span-0-1897"><a id="__codelineno-0-1897" name="__codelineno-0-1897"></a>    <span class="c1"># Initialize or re-initialize with the determined executable path</span>
-</span><span id="__span-0-1898"><a id="__codelineno-0-1898" name="__codelineno-0-1898"></a>    <span class="c1"># Pass specified_prj_file to avoid re-searching when user provided .prj file directly</span>
-</span><span id="__span-0-1899"><a id="__codelineno-0-1899" name="__codelineno-0-1899"></a>    <span class="k">if</span> <span class="n">specified_prj_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-1900"><a id="__codelineno-0-1900" name="__codelineno-0-1900"></a>        <span class="n">ras_object</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">ras_exe_path</span><span class="p">,</span> <span class="n">prj_file</span><span class="o">=</span><span class="n">specified_prj_file</span><span class="p">,</span>
-</span><span id="__span-0-1901"><a id="__codelineno-0-1901" name="__codelineno-0-1901"></a>                              <span class="n">load_results_summary</span><span class="o">=</span><span class="n">load_results_summary</span><span class="p">)</span>
-</span><span id="__span-0-1902"><a id="__codelineno-0-1902" name="__codelineno-0-1902"></a>    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-1903"><a id="__codelineno-0-1903" name="__codelineno-0-1903"></a>        <span class="n">ras_object</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">ras_exe_path</span><span class="p">,</span>
-</span><span id="__span-0-1904"><a id="__codelineno-0-1904" name="__codelineno-0-1904"></a>                              <span class="n">load_results_summary</span><span class="o">=</span><span class="n">load_results_summary</span><span class="p">)</span>
-</span><span id="__span-0-1905"><a id="__codelineno-0-1905" name="__codelineno-0-1905"></a>
-</span><span id="__span-0-1906"><a id="__codelineno-0-1906" name="__codelineno-0-1906"></a>    <span class="c1"># Store version for RasControl (legacy COM interface support)</span>
-</span><span id="__span-0-1907"><a id="__codelineno-0-1907" name="__codelineno-0-1907"></a>    <span class="n">ras_object</span><span class="o">.</span><span class="n">ras_version</span> <span class="o">=</span> <span class="n">ras_version</span> <span class="k">if</span> <span class="n">ras_version</span> <span class="k">else</span> <span class="n">detected_version</span>
-</span><span id="__span-0-1908"><a id="__codelineno-0-1908" name="__codelineno-0-1908"></a>
-</span><span id="__span-0-1909"><a id="__codelineno-0-1909" name="__codelineno-0-1909"></a>    <span class="c1"># NOTE: Removed automatic global ras update for thread-safety</span>
-</span><span id="__span-0-1910"><a id="__codelineno-0-1910" name="__codelineno-0-1910"></a>    <span class="c1"># When ras_object is explicitly passed, we should NOT modify the global ras object</span>
-</span><span id="__span-0-1911"><a id="__codelineno-0-1911" name="__codelineno-0-1911"></a>    <span class="c1"># This allows multiple threads to use separate RasPrj instances without conflicts</span>
-</span><span id="__span-0-1912"><a id="__codelineno-0-1912" name="__codelineno-0-1912"></a>    <span class="c1">#</span>
-</span><span id="__span-0-1913"><a id="__codelineno-0-1913" name="__codelineno-0-1913"></a>    <span class="c1"># Previous behavior (removed):</span>
-</span><span id="__span-0-1914"><a id="__codelineno-0-1914" name="__codelineno-0-1914"></a>    <span class="c1">#   if ras_object is not ras:</span>
-</span><span id="__span-0-1915"><a id="__codelineno-0-1915" name="__codelineno-0-1915"></a>    <span class="c1">#       ras.initialize(project_folder, ras_exe_path, ...)  # This was NOT thread-safe</span>
-</span><span id="__span-0-1916"><a id="__codelineno-0-1916" name="__codelineno-0-1916"></a>    <span class="c1">#</span>
-</span><span id="__span-0-1917"><a id="__codelineno-0-1917" name="__codelineno-0-1917"></a>    <span class="c1"># If you need to update the global ras object, call init_ras_project without ras_object:</span>
-</span><span id="__span-0-1918"><a id="__codelineno-0-1918" name="__codelineno-0-1918"></a>    <span class="c1">#   init_ras_project(path, version)  # Updates global ras</span>
-</span><span id="__span-0-1919"><a id="__codelineno-0-1919" name="__codelineno-0-1919"></a>    <span class="c1"># Or explicitly pass ras_object=None (default behavior)</span>
-</span><span id="__span-0-1920"><a id="__codelineno-0-1920" name="__codelineno-0-1920"></a>
-</span><span id="__span-0-1921"><a id="__codelineno-0-1921" name="__codelineno-0-1921"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project initialized. Project folder: </span><span class="si">{</span><span class="n">ras_object</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1922"><a id="__codelineno-0-1922" name="__codelineno-0-1922"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using HEC-RAS executable: </span><span class="si">{</span><span class="n">ras_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-1923"><a id="__codelineno-0-1923" name="__codelineno-0-1923"></a>    <span class="k">return</span> <span class="n">ras_object</span>
+</span><span id="__span-0-1892"><a id="__codelineno-0-1892" name="__codelineno-0-1892"></a>            <span class="k">if</span> <span class="n">detected_version</span><span class="p">:</span>
+</span><span id="__span-0-1893"><a id="__codelineno-0-1893" name="__codelineno-0-1893"></a>                <span class="k">break</span>
+</span><span id="__span-0-1894"><a id="__codelineno-0-1894" name="__codelineno-0-1894"></a>
+</span><span id="__span-0-1895"><a id="__codelineno-0-1895" name="__codelineno-0-1895"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">detected_version</span><span class="p">:</span>
+</span><span id="__span-0-1896"><a id="__codelineno-0-1896" name="__codelineno-0-1896"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;No valid HEC-RAS version found in any plan files.&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1897"><a id="__codelineno-0-1897" name="__codelineno-0-1897"></a>            <span class="n">ras_exe_path</span> <span class="o">=</span> <span class="s2">&quot;Ras.exe&quot;</span>
+</span><span id="__span-0-1898"><a id="__codelineno-0-1898" name="__codelineno-0-1898"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+</span><span id="__span-0-1899"><a id="__codelineno-0-1899" name="__codelineno-0-1899"></a>                <span class="s2">&quot;No valid HEC-RAS version was detected. Running HEC-RAS will fail. &quot;</span>
+</span><span id="__span-0-1900"><a id="__codelineno-0-1900" name="__codelineno-0-1900"></a>                <span class="s2">&quot;See: https://ras-commander.readthedocs.io/getting-started/installation/&quot;</span>
+</span><span id="__span-0-1901"><a id="__codelineno-0-1901" name="__codelineno-0-1901"></a>            <span class="p">)</span>
+</span><span id="__span-0-1902"><a id="__codelineno-0-1902" name="__codelineno-0-1902"></a>
+</span><span id="__span-0-1903"><a id="__codelineno-0-1903" name="__codelineno-0-1903"></a>    <span class="c1"># Initialize or re-initialize with the determined executable path</span>
+</span><span id="__span-0-1904"><a id="__codelineno-0-1904" name="__codelineno-0-1904"></a>    <span class="c1"># Pass specified_prj_file to avoid re-searching when user provided .prj file directly</span>
+</span><span id="__span-0-1905"><a id="__codelineno-0-1905" name="__codelineno-0-1905"></a>    <span class="k">if</span> <span class="n">specified_prj_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-1906"><a id="__codelineno-0-1906" name="__codelineno-0-1906"></a>        <span class="n">ras_object</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">ras_exe_path</span><span class="p">,</span> <span class="n">prj_file</span><span class="o">=</span><span class="n">specified_prj_file</span><span class="p">,</span>
+</span><span id="__span-0-1907"><a id="__codelineno-0-1907" name="__codelineno-0-1907"></a>                              <span class="n">load_results_summary</span><span class="o">=</span><span class="n">load_results_summary</span><span class="p">)</span>
+</span><span id="__span-0-1908"><a id="__codelineno-0-1908" name="__codelineno-0-1908"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-1909"><a id="__codelineno-0-1909" name="__codelineno-0-1909"></a>        <span class="n">ras_object</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">ras_exe_path</span><span class="p">,</span>
+</span><span id="__span-0-1910"><a id="__codelineno-0-1910" name="__codelineno-0-1910"></a>                              <span class="n">load_results_summary</span><span class="o">=</span><span class="n">load_results_summary</span><span class="p">)</span>
+</span><span id="__span-0-1911"><a id="__codelineno-0-1911" name="__codelineno-0-1911"></a>
+</span><span id="__span-0-1912"><a id="__codelineno-0-1912" name="__codelineno-0-1912"></a>    <span class="c1"># Store version for RasControl (legacy COM interface support)</span>
+</span><span id="__span-0-1913"><a id="__codelineno-0-1913" name="__codelineno-0-1913"></a>    <span class="n">ras_object</span><span class="o">.</span><span class="n">ras_version</span> <span class="o">=</span> <span class="n">ras_version</span> <span class="k">if</span> <span class="n">ras_version</span> <span class="k">else</span> <span class="n">detected_version</span>
+</span><span id="__span-0-1914"><a id="__codelineno-0-1914" name="__codelineno-0-1914"></a>
+</span><span id="__span-0-1915"><a id="__codelineno-0-1915" name="__codelineno-0-1915"></a>    <span class="c1"># NOTE: Removed automatic global ras update for thread-safety</span>
+</span><span id="__span-0-1916"><a id="__codelineno-0-1916" name="__codelineno-0-1916"></a>    <span class="c1"># When ras_object is explicitly passed, we should NOT modify the global ras object</span>
+</span><span id="__span-0-1917"><a id="__codelineno-0-1917" name="__codelineno-0-1917"></a>    <span class="c1"># This allows multiple threads to use separate RasPrj instances without conflicts</span>
+</span><span id="__span-0-1918"><a id="__codelineno-0-1918" name="__codelineno-0-1918"></a>    <span class="c1">#</span>
+</span><span id="__span-0-1919"><a id="__codelineno-0-1919" name="__codelineno-0-1919"></a>    <span class="c1"># Previous behavior (removed):</span>
+</span><span id="__span-0-1920"><a id="__codelineno-0-1920" name="__codelineno-0-1920"></a>    <span class="c1">#   if ras_object is not ras:</span>
+</span><span id="__span-0-1921"><a id="__codelineno-0-1921" name="__codelineno-0-1921"></a>    <span class="c1">#       ras.initialize(project_folder, ras_exe_path, ...)  # This was NOT thread-safe</span>
+</span><span id="__span-0-1922"><a id="__codelineno-0-1922" name="__codelineno-0-1922"></a>    <span class="c1">#</span>
+</span><span id="__span-0-1923"><a id="__codelineno-0-1923" name="__codelineno-0-1923"></a>    <span class="c1"># If you need to update the global ras object, call init_ras_project without ras_object:</span>
+</span><span id="__span-0-1924"><a id="__codelineno-0-1924" name="__codelineno-0-1924"></a>    <span class="c1">#   init_ras_project(path, version)  # Updates global ras</span>
+</span><span id="__span-0-1925"><a id="__codelineno-0-1925" name="__codelineno-0-1925"></a>    <span class="c1"># Or explicitly pass ras_object=None (default behavior)</span>
+</span><span id="__span-0-1926"><a id="__codelineno-0-1926" name="__codelineno-0-1926"></a>
+</span><span id="__span-0-1927"><a id="__codelineno-0-1927" name="__codelineno-0-1927"></a>    <span class="c1"># Log CLB Engineering branding banner with version and docs links</span>
+</span><span id="__span-0-1928"><a id="__codelineno-0-1928" name="__codelineno-0-1928"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">__version__</span>
+</span><span id="__span-0-1929"><a id="__codelineno-0-1929" name="__codelineno-0-1929"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+</span><span id="__span-0-1930"><a id="__codelineno-0-1930" name="__codelineno-0-1930"></a>        <span class="sa">f</span><span class="s2">&quot;ras-commander v</span><span class="si">{</span><span class="n">__version__</span><span class="si">}</span><span class="s2"> | &quot;</span>
+</span><span id="__span-0-1931"><a id="__codelineno-0-1931" name="__codelineno-0-1931"></a>        <span class="sa">f</span><span class="s2">&quot;An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | &quot;</span>
+</span><span id="__span-0-1932"><a id="__codelineno-0-1932" name="__codelineno-0-1932"></a>        <span class="sa">f</span><span class="s2">&quot;Docs: https://ras-commander.readthedocs.io | &quot;</span>
+</span><span id="__span-0-1933"><a id="__codelineno-0-1933" name="__codelineno-0-1933"></a>        <span class="sa">f</span><span class="s2">&quot;GitHub: https://github.com/gpt-cmdr/ras-commander&quot;</span>
+</span><span id="__span-0-1934"><a id="__codelineno-0-1934" name="__codelineno-0-1934"></a>    <span class="p">)</span>
+</span><span id="__span-0-1935"><a id="__codelineno-0-1935" name="__codelineno-0-1935"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project initialized: </span><span class="si">{</span><span class="n">ras_object</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2"> | Folder: </span><span class="si">{</span><span class="n">ras_object</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1936"><a id="__codelineno-0-1936" name="__codelineno-0-1936"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using HEC-RAS executable: </span><span class="si">{</span><span class="n">ras_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-1937"><a id="__codelineno-0-1937" name="__codelineno-0-1937"></a>    <span class="k">return</span> <span class="n">ras_object</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -23492,6 +23580,7 @@ projection file using rasterio.</p>
         
       </main>
       
+
         <footer class="md-footer">
   
   <div class="md-footer-meta md-typeset">
@@ -23526,12 +23615,43 @@ projection file using rasterio.</p>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M549.7 124.1c-6.2-23.7-24.8-42.3-48.3-48.6C458.9 64 288.1 64 288.1 64S117.3 64 74.7 75.5c-23.5 6.3-42 24.9-48.3 48.6C15 167 15 256.4 15 256.4s0 89.4 11.4 132.3c6.3 23.6 24.8 41.5 48.3 47.8C117.3 448 288.1 448 288.1 448s170.8 0 213.4-11.5c23.5-6.3 42-24.2 48.3-47.8 11.4-42.9 11.4-132.3 11.4-132.3s0-89.4-11.4-132.3zM232.2 337.6V175.2l142.7 81.2z"/></svg>
     </a>
   
+    
+    
+    
+    
+    <a href="https://clbengineering.com/" target="_blank" rel="noopener" title="CLB Engineering Corporation" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M64 0C28.7 0 0 28.7 0 64v384c0 35.3 28.7 64 64 64h256c35.3 0 64-28.7 64-64V64c0-35.3-28.7-64-64-64zm112 352h32c17.7 0 32 14.3 32 32v80h-96v-80c0-17.7 14.3-32 32-32M96 112c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16v32c0 8.8-7.2 16-16 16h-32c-8.8 0-16-7.2-16-16zm144-16h32c8.8 0 16 7.2 16 16v32c0 8.8-7.2 16-16 16h-32c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16M96 240c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16v32c0 8.8-7.2 16-16 16h-32c-8.8 0-16-7.2-16-16zm144-16h32c8.8 0 16 7.2 16 16v32c0 8.8-7.2 16-16 16h-32c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://engineeringwithllms.info" target="_blank" rel="noopener" title="LLM Forward Engineering" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M292.9 384c7.3-22.3 21.9-42.5 38.4-59.9C364 289.7 384 243.2 384 192 384 86 298 0 192 0S0 86 0 192c0 51.2 20 97.7 52.7 132.1 16.5 17.4 31.2 37.6 38.4 59.9h201.7zm-4.9 48H96v16c0 44.2 35.8 80 80 80h32c44.2 0 80-35.8 80-80zM184 112c-39.8 0-72 32.2-72 72 0 13.3-10.7 24-24 24s-24-10.7-24-24c0-66.3 53.7-120 120-120 13.3 0 24 10.7 24 24s-10.7 24-24 24"/></svg>
+    </a>
+  
 </div>
       
     </div>
   </div>
 </footer>
       
+<div style="text-align: center; padding: 16px 24px; background: #1a365d; color: #cbd5e0; font-size: 0.8rem; line-height: 1.6;">
+  <div style="margin-bottom: 8px;">
+    <a href="https://clbengineering.com/" style="color: #90cdf4; text-decoration: none; font-weight: 600;">CLB Engineering Corporation</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://engineeringwithllms.info" style="color: #90cdf4; text-decoration: none;">LLM Forward Engineering</a>
+  </div>
+  <div>
+    RAS Commander is a free and open-source project maintained by
+    <a href="https://clbengineering.com/" style="color: #90cdf4; text-decoration: none;">CLB Engineering Corporation</a>.
+    For agencies and firms seeking to modernize H&H workflows with LLM Forward approaches,
+    <a href="https://clbengineering.com/" style="color: #90cdf4; text-decoration: none;">contact CLB</a>
+    to partner with the engineers who wrote the automation.
+  </div>
+</div>
+
     </div>
     <div class="md-dialog" data-md-component="dialog">
       <div class="md-dialog__inner md-typeset"></div>
