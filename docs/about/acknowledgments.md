@@ -3,7 +3,7 @@
 ## CLB Engineering Corporation
 
 <a href="https://clbengineering.com/">
-  <img src="../assets/clb-logo-placeholder.svg" alt="CLB Engineering Corporation" width="300">
+  <img src="../assets/CLBEngineeringHzLogo.png" alt="CLB Engineering Corporation" width="300">
 </a>
 
 RAS Commander is a **free and open-source project** of [CLB Engineering Corporation](https://clbengineering.com/). Within two years, CLB built the most robust and feature-complete HEC-RAS and HEC-HMS automation solution on the open internet using LLM Forward approaches -- proving that licensed professional engineers working alongside Large Language Models can create extraordinary value in compressed timeframes.
@@ -29,7 +29,7 @@ RAS Commander was developed using the **LLM Forward** approach, a framework for 
   - Visual outputs (plots/figures) at each calculation step for domain expert review
   - Code audit trails with @log_call decorators and comprehensive logging
 
-**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
+**Learn More**: [LLM Forward Engineering](https://clbengineering.com/llm-forward)
 
 ---
 
@@ -38,8 +38,8 @@ RAS Commander was developed using the **LLM Forward** approach, a framework for 
 **William Katzenmeyer, P.E., C.F.M.**
 Owner & Vice President
 [CLB Engineering Corporation](https://clbengineering.com/)
-Email: heccommander@gmail.com
-Website: [engineeringwithllms.info](https://engineeringwithllms.info)
+Email: info@clbengineering.com
+Website: [clbengineering.com/llm-forward](https://clbengineering.com/llm-forward)
 
 RAS Commander represents a practical demonstration of LLM Forward principles applied to hydraulic & hydrologic modeling automation. The library was built through iterative prompt-code-test cycles with multiple LLMs (Claude, GPT-4, Gemini, Cursor IDE) over a 4-month development period.
 

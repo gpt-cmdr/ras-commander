@@ -94,7 +94,7 @@ This repository embodies **LLM Forward** engineering principles:
 
 **Framework Origin**: The LLM Forward approach was formalized by [CLB Engineering Corporation](https://clbengineering.com/).
 
-**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
+**Learn More**: [LLM Forward Engineering](https://clbengineering.com/llm-forward)
 
 ## Orchestrator Pattern & Subagent Delegation
 

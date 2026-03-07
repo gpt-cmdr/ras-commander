@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://clbengineering.com/">
-    <img src="../assets/clb-logo-placeholder.svg" alt="CLB Engineering Corporation" width="400">
+    <img src="../assets/CLBEngineeringHzLogo.png" alt="CLB Engineering Corporation" width="400">
   </a>
 </p>
 
@@ -33,7 +33,7 @@ The **LLM Forward** philosophy is CLB's framework for responsible AI adoption in
 | **Human-in-the-Loop** | Licensed professionals in responsible charge at all times |
 | **Open Source** | Free and open-source tools that benefit the entire H&H community |
 
-**Learn More**: [Engineering with LLMs](https://engineeringwithllms.info)
+**Learn More**: [LLM Forward Engineering](https://clbengineering.com/llm-forward)
 
 ## Partner with CLB
 
@@ -69,8 +69,8 @@ Ready to adopt LLM Forward engineering practices? CLB Engineering developed the 
 Owner & Vice President, CLB Engineering Corporation
 
 - **Website**: [clbengineering.com](https://clbengineering.com/)
-- **LLM Forward**: [engineeringwithllms.info](https://engineeringwithllms.info)
-- **Email**: heccommander@gmail.com
+- **LLM Forward**: [clbengineering.com/llm-forward](https://clbengineering.com/llm-forward)
+- **Email**: info@clbengineering.com
 - **GitHub**: [github.com/gpt-cmdr](https://github.com/gpt-cmdr)
 
 ## Citing RAS Commander

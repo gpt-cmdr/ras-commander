@@ -537,6 +537,6 @@ The hierarchical knowledge system provides:
 
 ## References
 
-- [Engineering with LLMs](https://engineeringwithllms.info) - LLM Forward framework
+- [LLM Forward Engineering](https://clbengineering.com/llm-forward) - LLM Forward framework
 - [CLB Engineering Corporation](https://clbengineering.com/) - Framework origin
 - Claude Skills Framework - Native skill system implementation

@@ -39,7 +39,7 @@ setup(
     include_package_data=True,
     python_requires='>=3.10',
     author="William M. Katzenmeyer, P.E., C.F.M.",
-    author_email="heccommander@gmail.com",
+    author_email="info@clbengineering.com",
     description="A Python library for automating HEC-RAS 6.x operations",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",

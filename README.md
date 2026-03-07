@@ -21,10 +21,10 @@ This library was initially conceptualized in the Australian Water School course 
 ## LLM Forward Engineering
 
 <a href="https://clbengineering.com/">
-  <img src="docs/assets/clb-logo-placeholder.svg" alt="CLB Engineering Corporation" width="280" align="right" style="margin-left: 16px; margin-bottom: 8px;">
+  <img src="docs/assets/CLBEngineeringHzLogo.png" alt="CLB Engineering Corporation" width="280" align="right" style="margin-left: 16px; margin-bottom: 8px;">
 </a>
 
-This library was developed using the **[LLM Forward](https://engineeringwithllms.info)** approach -- a framework pioneered by [CLB Engineering Corporation](https://clbengineering.com/) for responsible adoption of Large Language Models in professional engineering practice. LLM Forward places professional responsibility first while positioning LLMs forward to accelerate insight and automation.
+This library was developed using the **[LLM Forward](https://clbengineering.com/llm-forward)** approach -- a framework pioneered by [CLB Engineering Corporation](https://clbengineering.com/) for responsible adoption of Large Language Models in professional engineering practice. LLM Forward places professional responsibility first while positioning LLMs forward to accelerate insight and automation.
 
 **Core Tenets:**
 - **Professional Responsibility First** -- Public safety, ethics, and licensure remain paramount
@@ -685,8 +685,8 @@ This software is released under the MIT license. RAS Commander is a free and ope
 ## Contact
 
 For questions, suggestions, or support, please contact:
-William Katzenmeyer, P.E., C.F.M. - heccommander@gmail.com
-[CLB Engineering Corporation](https://clbengineering.com/) | [Engineering with LLMs](https://engineeringwithllms.info)
+William Katzenmeyer, P.E., C.F.M. - info@clbengineering.com
+[CLB Engineering Corporation](https://clbengineering.com/) | [LLM Forward Engineering](https://clbengineering.com/llm-forward)
 
 
 
