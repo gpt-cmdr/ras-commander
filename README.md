@@ -7,6 +7,7 @@
 <p align="center">
   <strong>An open-source project of <a href="https://clbengineering.com/">CLB Engineering Corporation</a></strong><br>
   <em>LLM-Forward Engineering Solutions</em>
+  [📖 RAS Commander Documentation](https://ras-commander.readthedocs.io/)
 </p>
 
 ---
@@ -686,6 +687,7 @@ This software is released under the MIT license. RAS Commander is a free and ope
 For questions, suggestions, or support, please contact:
 William Katzenmeyer, P.E., C.F.M. - heccommander@gmail.com
 [CLB Engineering Corporation](https://clbengineering.com/) | [Engineering with LLMs](https://engineeringwithllms.info)
+
 
 
 
