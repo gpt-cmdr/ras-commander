@@ -57,6 +57,16 @@ How agents should use notebooks
 - Functions: RasCmdr.compute_parallel (ras_commander/RasCmdr.py) (`max_workers`, `num_cores`, `dest_folder`, `overwrite_dest`).
 - Pattern: Balance `max_workers * num_cores` to available cores/RAM.
 
+115_real_time_execution_monitoring.ipynb
+- Focus: Monitor HEC-RAS execution in real time using callback classes.
+- Functions: ConsoleCallback (ras_commander/callbacks.py), FileLoggerCallback (ras_commander/callbacks.py), ProgressBarCallback (ras_commander/callbacks.py), SynchronizedCallback (ras_commander/callbacks.py), ExecutionCallback subclass (ras_commander/callbacks.py).
+- Pattern: Pass callback instance to `stream_callback` parameter of any `RasCmdr.compute_*` call; subclass `ExecutionCallback` to build custom handlers.
+
+150_results_dataframe.ipynb
+- Focus: Inspect `ras.results_df` for execution status, error detection, volume accounting, and runtime data across all plans.
+- Functions: RasPrj.update_results_df (ras_commander/RasPrj.py), HdfResultsPlan.get_compute_messages_hdf_only (ras_commander/HdfResultsPlan.py), ResultsParser.parse_compute_messages (ras_commander/results/ResultsParser.py).
+- Pattern: Call `ras.update_results_df()` after execution to populate; filter by `status`, `vol_error_percent`, or `runtime_sec` to triage failures and outliers.
+
 120_automating_ras_with_win32com.ipynb
 - Focus: Open HEC‑RAS/RAS Mapper to refresh stored-map configs using win32 automation.
 - Functions: RasMap.parse_rasmap (ras_commander/RasMap.py), RasGuiAutomation.open_rasmapper (ras_commander/RasGuiAutomation.py), RasGuiAutomation.handle_already_running_dialog (ras_commander/RasGuiAutomation.py).
@@ -98,6 +108,11 @@ How agents should use notebooks
 - Key: Works with any HEC-RAS version (3.x-6.x); handles fixed-width concatenated coordinates; no version compatibility issues.
 - Use case: Legacy model data extraction, cross section inventory, GIS export without running models.
 
+206_structures_and_metadata.ipynb
+- Focus: Extract structure counts and geometry metadata from HEC-RAS geometry files.
+- Functions: GeomMetadata.get_geometry_counts (ras_commander/geom/GeomMetadata.py), GeomBridge.get_deck_and_road (ras_commander/geom/GeomBridge.py), GeomBridge.get_pier_data (ras_commander/geom/GeomBridge.py), GeomBridge.get_coefficients (ras_commander/geom/GeomBridge.py), GeomBridge.get_htab_params (ras_commander/geom/GeomBridge.py), GeomBridge.get_approach_sections (ras_commander/geom/GeomBridge.py), GeomCulvert.get_all (ras_commander/geom/GeomCulvert.py), GeomInlineWeir.get_profile (ras_commander/geom/GeomInlineWeir.py), GeomInlineWeir.get_gates (ras_commander/geom/GeomInlineWeir.py).
+- Pattern: Parse plain-text geometry files for bridges, culverts, and inline weirs; tabulate counts per geometry file; useful for model inventory without running HEC-RAS.
+
 210_fixit_blocked_obstructions.ipynb
 - Focus: Automatically detect and fix overlapping blocked obstructions.
 - Functions: RasFixit.check_blocked_obstructions (ras_commander/RasFixit.py), RasFixit.fix_blocked_obstructions (ras_commander/RasFixit.py).
@@ -121,6 +136,16 @@ How agents should use notebooks
 - Focus: Validate HEC-DSS pathnames and data availability.
 - Functions: RasDss.check_pathname (ras_commander/dss/RasDss.py), RasDss.is_valid_pathname (ras_commander/dss/RasDss.py).
 - Pattern: Pre-flight validation before model execution; use ValidationReport for diagnostics.
+
+312_boundary_df_qmult_dss_paths.ipynb
+- Focus: Enhanced `boundaries_df` with DSS path components and programmatic boundary condition updates.
+- Functions: RasUnsteady.update_dss_path_by_station (ras_commander/RasUnsteady.py), RasUnsteady.update_flow_multiplier_by_station (ras_commander/RasUnsteady.py), RasUnsteady.update_boundary_dss_paths (ras_commander/RasUnsteady.py), RasUnsteady.set_boundary_dss_link (ras_commander/RasUnsteady.py), RasUnsteady.set_boundary_inline_hydrograph (ras_commander/RasUnsteady.py).
+- Pattern: Inspect `boundaries_df` columns `dss_part_a` through `dss_part_f` and `qmult`/`qmin`; update DSS links or flow multipliers by station name; verify changes via `boundaries_df` refresh.
+
+313_hms_to_ras_boundary_matching.ipynb
+- Focus: Correlation-based matching of HMS hydrograph outputs to HEC-RAS boundary locations.
+- Functions: RasHydroCompare.compare_hydrographs (ras_commander/RasHydroCompare.py), RasHydroCompare.classify_match (ras_commander/RasHydroCompare.py), RasUnsteady.get_inline_hydrograph_boundaries (ras_commander/RasUnsteady.py), RasDss.get_catalog (ras_commander/dss/RasDss.py), GeomParser.get_xs_cut_lines (ras_commander/geom/GeomParser.py), M3Model (ras_commander/sources/), HmsM3Model (hms_commander/).
+- Pattern: Two examples — White Oak Bayou (inline hydrograph matching) and Brays Bayou (DSS catalog validation); compute correlation and NRMSE between HMS outlet flows and RAS boundary hydrographs to confirm correct linkage.
 
 320_1d_boundary_condition_visualization.ipynb
 - Focus: Visualize 1D boundary conditions in RASMapper with DSS path labels.
@@ -177,6 +202,11 @@ How agents should use notebooks
 - Pattern: session_id=2 for GUI apps; configure Group Policy on remote machines.
 - Key: See `.claude/rules/hec-ras/remote.md` for detailed configuration requirements.
 
+560_modpuls_routing_extraction.ipynb
+- Focus: Extract Modified Puls storage-outflow relationships from 2D HEC-RAS simulations for use in HEC-HMS routing.
+- Functions: RasModPuls.write_stepped_hydrograph (ras_commander/RasModPuls.py), RasModPuls.extract_storage_outflow (ras_commander/RasModPuls.py), RasModPuls.compute_subreach_count (ras_commander/RasModPuls.py), RasModPuls.add_reference_lines_from_bc_lines (ras_commander/RasModPuls.py), HmsBasin.set_modified_puls_routing (hms_commander/HmsBasin.py).
+- Pattern: Run stepped-inflow HEC-RAS simulations to generate storage-outflow curves; optionally write results directly to HMS basin file; requires reference lines co-located with BC lines.
+
 ---
 
 ## 600s: Advanced Data Analysis
@@ -203,14 +233,6 @@ How agents should use notebooks
 - Functions: RasMap.check_layer (ras_commander/RasMap.py), RasMap.is_valid_layer (ras_commander/RasMap.py).
 - Pattern: Pre-flight validation for terrain and layer files; use ValidationReport for diagnostics.
 
-600_discovering_hecras_models_from_usgs.ipynb
-- Focus: Discover and download HEC-RAS models from USGS ScienceBase and other sources.
-- Functions: get_catalog (ras_commander/sources/catalog.py), UsgsScienceBase (ras_commander/sources/federal/usgs_sciencebase.py), ModelFilter (ras_commander/sources/base.py).
-- Pattern: Unified catalog for 25+ documented model sources (federal, state, county, academic). Search by location/type/tags, advanced filtering with spatial/temporal constraints, download with validation.
-- Notable cells: ModelMetadata structure, ModelFilter matching, source status checking, download with auto-extract.
-- Dependencies: sciencebasepy (pip install sciencebasepy) for USGS access.
-- Note: USGS ScienceBase may require authentication; other sources in development (FEMA BLE, Virginia VFRIS, etc.).
-
 ---
 
 ## 700s: Sensitivity & Benchmarking
@@ -235,45 +257,32 @@ How agents should use notebooks
 - Functions: RasGeo.modify_mannings (ras_commander/RasGeo.py), RasCmdr.compute_parallel (ras_commander/RasCmdr.py).
 - Pattern: Test multiple n values across multiple flow intervals.
 
-720_atlas14_aep_events.ipynb
-- Focus: Generate hyetographs from NOAA Atlas 14 and batch scenarios.
-- Functions: RasPlan.clone_plan (ras_commander/RasPlan.py)/set_unsteady (ras_commander/RasPlan.py), RasUnsteady.* (ras_commander/RasUnsteady.py), RasCmdr.compute_parallel (ras_commander/RasCmdr.py), HdfResultsMesh (ras_commander/HdfResultsMesh.py)/HdfResultsPlan (ras_commander/HdfResultsPlan.py).
-- Notable cells:
-  - Read precipitation frequency from Atlas 14 CSVs in `examples/data` and generate balanced storm hyetographs via Alternating Block Method.
-  - Parameterize AEP events, clone plans, write unsteady settings, and compute in parallel.
-  - Aggregate key metrics from mesh/plan results; optional plots (disable to keep outputs light).
+720_precipitation_methods_comprehensive.ipynb
+- Focus: Comprehensive comparison of all ras-commander precipitation hyetograph methods.
+- Functions: StormGenerator.download_from_coordinates (ras_commander/precip/StormGenerator.py), StormGenerator.generate_hyetograph (ras_commander/precip/StormGenerator.py), Atlas14Storm.generate_hyetograph (hms_commander/Atlas14Storm.py), FrequencyStorm.generate_hyetograph (hms_commander/FrequencyStorm.py), ScsTypeStorm.generate_hyetograph (hms_commander/ScsTypeStorm.py).
+- Pattern: All four methods accept `total_depth_inches` as input and conserve depth exactly; compare temporal distributions side-by-side; verify HMS equivalence at 10^-6 precision.
 
-721_atlas14_caching_demo.ipynb
-- Focus: Demonstrate Atlas 14 data caching for efficiency.
-- Pattern: Cache downloaded Atlas 14 data to avoid repeated API calls.
+721_Precipitation_Hyetograph_Comparison.ipynb
+- Focus: Multi-method, multi-AEP hyetograph comparison and batch HEC-RAS plan execution.
+- Functions: Atlas14Storm.generate_hyetograph (hms_commander/Atlas14Storm.py), RasPlan.clone_plan (ras_commander/RasPlan.py), RasUnsteady.set_precipitation_hyetograph (ras_commander/RasUnsteady.py), RasCmdr.compute_parallel (ras_commander/RasCmdr.py), HdfResultsMesh.get_mesh_max_ws (ras_commander/HdfResultsMesh.py).
+- Pattern: Generate hyetographs for multiple AEP events, clone plans, write hyetographs to unsteady files, parallel compute, compare peak WSE results per AEP.
 
-722_atlas14_multi_project.ipynb
-- Focus: Run Atlas 14 AEP events across multiple projects.
-- Pattern: Batch processing workflow for multiple HEC-RAS projects.
+722_gridded_precipitation_atlas14.ipynb
+- Focus: Spatially gridded Atlas 14 precipitation for rain-on-grid HEC-RAS simulations.
+- Functions: Atlas14Grid.get_pfe_from_project (ras_commander/precip/Atlas14Grid.py), Atlas14Variance.analyze (ras_commander/precip/Atlas14Variance.py), AbmHyetographGrid.generate (ras_commander/precip/AbmHyetographGrid.py), HdfResultsMesh.get_mesh_max_ws (ras_commander/HdfResultsMesh.py), HdfMesh.get_mesh_cell_polygons (ras_commander/HdfMesh.py).
+- Pattern: Download gridded PFE via HTTP byte-range requests; compute per-pixel ABM hyetographs; visualize spatial variance in max WSE results; use dynamic return-period indexing (never hardcode array indices).
 
-723_atlas14_stormgenerator_validation.ipynb
-- Focus: Validate StormGenerator (Alternating Block Method) implementation.
-- Functions: StormGenerator.download_from_coordinates (ras_commander/precip/StormGenerator.py), StormGenerator.generate_hyetograph.
-- Pattern: Cross-validation against HMS-Commander alternating block implementation (~1% tolerance).
-- Note: For HMS-equivalent hyetographs see 724.
+725_atlas14_spatial_variance.ipynb
+- Focus: Analyze spatial variability of NOAA Atlas 14 precipitation across HEC-RAS model domains.
+- Functions: Atlas14Grid.get_pfe_from_project (ras_commander/precip/Atlas14Grid.py), Atlas14Variance.analyze (ras_commander/precip/Atlas14Variance.py), Atlas14Variance.is_uniform_rainfall_appropriate.
+- Pattern: Extract 2D flow area bounds, download gridded PFE via HTTP byte-range requests, compute variance statistics.
+- Key output: range_pct — if > 10%, spatially variable rainfall should be considered over uniform.
 
-724_atlas14_hms_equivalent_hyetographs.ipynb
-- Focus: Demonstrate Atlas14Storm HMS-equivalent hyetograph generation (10^-6 precision).
-- Functions: Atlas14Storm.generate_hyetograph (hms_commander/Atlas14Storm.py).
-- Pattern: Generate official NOAA temporal distribution hyetographs matching HEC-HMS exactly.
-- Notable: All 5 quartiles, multi-AEP suite, comparison with StormGenerator.
-
-723_atlas14_stormgenerator_validation.ipynb
-- Focus: Validate StormGenerator (Alternating Block Method) implementation.
-- Functions: StormGenerator.download_from_coordinates (ras_commander/precip/StormGenerator.py), StormGenerator.generate_hyetograph.
-- Pattern: Cross-validation against HMS-Commander alternating block implementation (~1% tolerance).
-- Note: For HMS-equivalent hyetographs see 724.
-
-724_atlas14_hms_equivalent_hyetographs.ipynb
-- Focus: Demonstrate Atlas14Storm HMS-equivalent hyetograph generation (10^-6 precision).
-- Functions: Atlas14Storm.generate_hyetograph (hms_commander/Atlas14Storm.py).
-- Pattern: Generate official NOAA temporal distribution hyetographs matching HEC-HMS exactly.
-- Notable: All 5 quartiles, multi-AEP suite, comparison with StormGenerator.
+726_abm_hyetograph_grid.ipynb
+- Focus: Generate per-pixel ABM hyetograph grids from NOAA Atlas 14 for HEC-RAS rain-on-grid 2D simulations.
+- Functions: AbmHyetographGrid.generate (ras_commander/precip/AbmHyetographGrid.py), AbmHyetographGrid.generate_from_asc_files, AbmHyetographGrid.verify_pixel; Atlas14Grid.get_pfe_from_project; StormGenerator.download_from_coordinates.
+- Pattern: Two workflows — (1) auto-download NOAA Atlas 14 by bounds, (2) project-derived bounds from HEC-RAS geometry HDF via Atlas14Grid.get_pfe_from_project.
+- Notable: Vectorized per-pixel ABM (numpy fancy indexing); sub-hourly depths via centroid DDF ratios; CF-1.8 NetCDF output with precip_incremental and precip_cumulative; peak position comparison (25/50/67%); QC via verify_pixel().
 
 ---
 
@@ -288,10 +297,6 @@ How agents should use notebooks
 - Focus: Advanced validation for hydraulic structures.
 - Functions: RasCheck.check_structures (ras_commander/check/).
 - Pattern: Structure-specific validation rules for bridges, culverts, weirs.
-
-802_custom_workflows_and_standards.ipynb
-- Focus: Implement custom QA workflows and standards.
-- Pattern: Create organization-specific QA rules and reporting.
 
 ---
 
@@ -335,12 +340,67 @@ How agents should use notebooks
 - Functions: GaugeMatcher.* (ras_commander/usgs/), RasUsgsValidation.* (ras_commander/usgs/).
 - Pattern: Compare model outputs to observed data, calculate error metrics.
 
+914_historical_event_validation.ipynb
+- Focus: End-to-end historical flood event validation using AORC precipitation and USGS gauge boundary conditions.
+- Functions: PrecipAorc.download (ras_commander/precip/PrecipAorc.py), RasUnsteady.set_gridded_precipitation (ras_commander/RasUnsteady.py), RasUsgsBoundaryGeneration.generate_bc_from_gauge (ras_commander/usgs/), HdfResultsMesh.get_mesh_max_ws (ras_commander/HdfResultsMesh.py), GaugeMatcher.match_gauges_to_xs (ras_commander/usgs/).
+- Pattern: BaldEagleCrkMulti2D December 2020 storm; download AORC for event window, set gauge-based BCs, execute, compare results to observed peak stages.
+
+915_realtime_forecast_workflow.ipynb
+- Focus: Operational real-time forecast pipeline combining HRRR precipitation and STOFS-3D coastal boundary conditions.
+- Functions: PrecipHrrr.get_latest_forecast (ras_commander/precip/PrecipHrrr.py), CoastalBoundary.download_stofs3d (ras_commander/CoastalBoundary.py), CoastalBoundary.extract_wse_at_point (ras_commander/CoastalBoundary.py), CoastalBoundary.generate_stage_bc (ras_commander/CoastalBoundary.py), RasPlan.update_simulation_date (ras_commander/RasPlan.py), RasCmdr.compute_plan (ras_commander/RasCmdr.py).
+- Pattern: Replaces rtsPy-style operational workflows; auto-discovers latest available HRRR cycle; downloads coastal WSE from STOFS-3D; runs with `force_rerun=True` for operational re-execution.
+
+916_hrrr_precipitation_forecast.ipynb
+- Focus: Download and process NOAA HRRR precipitation forecasts for HEC-RAS forcing.
+- Functions: PrecipHrrr.get_info (ras_commander/precip/PrecipHrrr.py), PrecipHrrr.check_availability (ras_commander/precip/PrecipHrrr.py), PrecipHrrr.get_latest_forecast (ras_commander/precip/PrecipHrrr.py), PrecipHrrr.download_forecast (ras_commander/precip/PrecipHrrr.py), PrecipHrrr.extract_precipitation (ras_commander/precip/PrecipHrrr.py), PrecipHrrr.get_basin_average (ras_commander/precip/PrecipHrrr.py).
+- Pattern: Check NOMADS availability → download GRIB2 files → extract precipitation with spatial bounds clipping → compute basin-average hyetograph; NOMADS retains ~48 hours; use AWS HRRR archive for older data.
+
+917_stofs3d_coastal_boundary.ipynb
+- Focus: Integrate NOAA STOFS-3D coastal surge forecasts as HEC-RAS stage boundary conditions.
+- Functions: CoastalBoundary.download_stofs3d (ras_commander/CoastalBoundary.py), CoastalBoundary.extract_wse_at_point (ras_commander/CoastalBoundary.py), CoastalBoundary.generate_stage_bc (ras_commander/CoastalBoundary.py).
+- Pattern: Two locations demonstrated (Galveston Bay and Charleston Harbor); download NetCDF forecast → extract WSE time series at nearest grid node → generate stage boundary condition for unsteady file.
+
+918_hms_ras_coupled_forecast.ipynb
+- Focus: Coupled HEC-HMS + HEC-RAS forecast workflow passing HMS outflow hydrographs as RAS boundary conditions.
+- Functions: HmsControl.set_time_window (hms_commander/HmsControl.py), HmsCmdr.compute_run (hms_commander/HmsCmdr.py), HmsResults.get_outflow_timeseries (hms_commander/HmsResults.py), RasUnsteady.set_boundary_inline_hydrograph (ras_commander/RasUnsteady.py), RasPlan.update_simulation_date (ras_commander/RasPlan.py), RasCmdr.compute_plan (ras_commander/RasCmdr.py).
+- Pattern: Single HMS run → extract outlet hydrographs → write to RAS unsteady file → execute RAS; demonstrates both single-element and multi-element HMS configurations.
+
+919_operational_forecast_cycling.ipynb
+- Focus: Automated multi-cycle HRRR forecast workflow with archive directory management.
+- Functions: PrecipHrrr.download_forecast (ras_commander/precip/PrecipHrrr.py), RasPlan.update_simulation_date (ras_commander/RasPlan.py), RasCmdr.compute_plan (ras_commander/RasCmdr.py).
+- Pattern: Loop over forecast cycles (e.g., 3 retrospective cycles); archive GRIB2 files and results to `forecast_archive/{date}_{cycle}/hrrr|results/`; reusable `run_forecast_cycle()` template for production deployment; use `force_rerun=True` per cycle.
+
+920_terrain_creation.ipynb
+- Focus: Download USGS 3DEP elevation tiles and create HEC-RAS terrain HDF files programmatically.
+- Functions: Usgs3depAws.find_tiles_for_bbox (ras_commander/terrain/Usgs3depAws.py), Usgs3depAws.download_tiles (ras_commander/terrain/Usgs3depAws.py), Usgs3depAws.create_vrt (ras_commander/terrain/Usgs3depAws.py), RasTerrain.vrt_to_tiff (ras_commander/terrain/RasTerrain.py), RasTerrain.create_terrain_hdf (ras_commander/terrain/RasTerrain.py), RasMap.add_terrain_layer (ras_commander/RasMap.py).
+- Pattern: Query 3DEP tiles for project bbox → download GeoTIFF tiles → build VRT mosaic → convert to single GeoTIFF → create terrain HDF via RasProcess.exe → register layer in .rasmap; uses BaldEagleCrkMulti2D as example project.
+
+---
+
+## 950s: FEMA eBFE Model Organization
+
+950_ebfe_spring_creek.ipynb
+- Focus: Organize FEMA eBFE Spring Creek model (Pattern 3a: single large 2D, nested zip, 9.7 GB) into a runnable HEC-RAS project.
+- Functions: RasEbfeModels.organize_spring_creek (ras_commander/ebfe_models/RasEbfeModels.py), HdfResultsMesh.get_mesh_max_ws (ras_commander/HdfResultsMesh.py), HdfMesh.get_mesh_cell_points (ras_commander/HdfMesh.py), RasMap.get_terrain_names (ras_commander/RasMap.py).
+- Pattern: Applies 3 critical fixes automatically — moves Output/ HDF files into project, moves Terrain/ into project, corrects all paths to relative references; results in a model that opens without GUI popups and provides access to pre-run results.
+
+951_ebfe_north_galveston_bay.ipynb
+- Focus: Organize FEMA eBFE North Galveston Bay compound HMS+RAS model (Pattern 4: compound model, 8.2 GB) with 7 storm frequency runs.
+- Functions: RasEbfeModels.organize_north_galveston_bay (ras_commander/ebfe_models/RasEbfeModels.py), RasDss.get_catalog (ras_commander/dss/RasDss.py), RasDss.check_pathname (ras_commander/dss/RasDss.py).
+- Pattern: Compound HMS+RAS delivery with 7 storm frequencies plus sensitivity; validate DSS pathnames after organization; HMS has boundary conditions linked to RAS via DSS.
+
+952_ebfe_upper_guadalupe_cascade.ipynb
+- Focus: Organize FEMA eBFE Upper Guadalupe cascaded watershed models (Pattern 3b: 4 cascaded 2D models, 55 GB) with sequential execution dependency.
+- Functions: RasEbfeModels.organize_upper_guadalupe (ras_commander/ebfe_models/RasEbfeModels.py), RasPrj (ras_commander/RasPrj.py) per watershed.
+- Pattern: Four cascaded models (UPGU1→UPGU2→UPGU3→UPGU4) must execute in sequence; 10,248 DSS pathnames validated; each watershed initialized with separate `RasPrj` instance; validate_dss=True recommended.
+
 ---
 
 ## Notebook-Only Utilities and Unique Logic
 
 - `calculate_discharge_weighted_velocity(...)` (412_2d_detail_face_data_extraction): discharge-weighted velocity aggregation (Vw = Sum(|Q|*V)/Sum(|Q|)); candidate for library API.
 - `convert_to_positive_values(...)` (412_2d_detail_face_data_extraction): positive flow direction normalization; candidate for library API.
+- `run_forecast_cycle(...)` (919_operational_forecast_cycling): reusable forecast cycle template combining HRRR download, plan date update, and compute; candidate for library API.
 - Hyetograph generation for Atlas 14 AEP events (720_*): end‑to‑end pattern from CSV → plan clones → batch compute.
 
 ---

@@ -192,6 +192,7 @@ nav:
       - Hyetograph Comparison: notebooks/721_Precipitation_Hyetograph_Comparison.md
       - Gridded Precipitation Atlas14: notebooks/722_gridded_precipitation_atlas14.md
       - Atlas 14 Spatial Variance: notebooks/725_atlas14_spatial_variance.md
+      - ABM Hyetograph Grid: notebooks/726_abm_hyetograph_grid.md
     - Quality Assurance (800s):
       - RasCheck Validation: notebooks/800_quality_assurance_rascheck.md
       - Advanced Structure Validation: notebooks/801_advanced_structure_validation.md
