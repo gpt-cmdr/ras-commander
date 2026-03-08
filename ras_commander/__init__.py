@@ -69,7 +69,7 @@ from .hdf import (
     HdfResultsPlan, HdfResultsMesh, HdfResultsXsec, HdfResultsBreach,
     HdfPipe, HdfPump, HdfInfiltration,
     HdfPlot, HdfResultsPlot,
-    HdfFluvialPluvial, HdfBenefitAreas, HdfResultsAnalysis,
+    HdfFluvialPluvial, HdfBenefitAreas, HdfChannelCapacity, HdfResultsAnalysis,
     HdfProject,
 )
 
