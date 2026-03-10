@@ -260,6 +260,111 @@ class HdfChannelCapacity:
 
     @staticmethod
     @log_call
+    def extract_steady_profile_wse(
+        plan_hdf: Union[str, Path],
+        profile_names: Optional[List[str]] = None,
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Extract individual steady-state profile WSE from a single plan HDF.
+
+        Unlike extract_max_wse() which collapses all profiles to a single max,
+        this method preserves each profile as a separate column — required for
+        channel capacity analysis on steady-state plans with multiple AEP profiles.
+
+        Typical use case: FEMA BLE models with 7 steady-state profiles
+        (10-yr, 25-yr, 50-yr, etc.) stored in one plan.
+
+        Args:
+            plan_hdf: Path to plan HDF file, plan number, or HDF filename.
+            profile_names: Optional list of names for the WSE columns. If None,
+                          reads profile names from the HDF file (e.g.,
+                          ['10-year', '25-year', '50-year', ...]).
+                          If provided, must match the number of profiles in the HDF.
+            ras_object: Optional RAS project object for multi-project workflows.
+
+        Returns:
+            DataFrame with columns:
+                River, Reach, RS, plus one WSE column per steady-state profile
+
+        Raises:
+            FileNotFoundError: If the HDF file does not exist.
+            ValueError: If the HDF contains no steady-state results,
+                       or profile_names length doesn't match profile count.
+        """
+        import h5py
+        from ras_commander import ras as global_ras
+
+        _ras = ras_object if ras_object is not None else global_ras
+
+        hdf_path = HdfChannelCapacity._standardize_hdf_input(
+            plan_hdf, "plan (steady profiles)", _ras
+        )
+
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"HDF file not found: {hdf_path}")
+
+        logger.info(f"Extracting steady-state profiles from: {hdf_path.name}")
+
+        base_steady = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+
+        with h5py.File(hdf_path, 'r') as hdf:
+            # Read water surface data: shape (n_profiles, n_xs)
+            ws_path = f"{base_steady}/Cross Sections/Water Surface"
+            if ws_path not in hdf:
+                raise ValueError(
+                    f"No steady-state Water Surface data found in {hdf_path.name}. "
+                    f"This method requires a steady-state plan HDF."
+                )
+
+            ws_data = hdf[ws_path][:]  # shape: (n_profiles, n_xs)
+            n_profiles, n_xs = ws_data.shape
+
+            # Read profile names from HDF if not provided
+            names_path = f"{base_steady}/Profile Names"
+            if profile_names is None:
+                if names_path in hdf:
+                    hdf_names = [n.decode().strip() for n in hdf[names_path][:]]
+                    profile_names = hdf_names
+                else:
+                    profile_names = [f"Profile_{i+1:02d}" for i in range(n_profiles)]
+
+            if len(profile_names) != n_profiles:
+                raise ValueError(
+                    f"profile_names has {len(profile_names)} entries but HDF "
+                    f"contains {n_profiles} profiles"
+                )
+
+            # Read cross section attributes
+            attrs_path = f"{base_steady}/Cross Sections/Cross Section Attributes"
+            if attrs_path not in hdf:
+                # Fallback: try geometry info
+                attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
+
+            attrs = hdf[attrs_path][:]
+            xs_rivers = [a['River'].decode().strip() for a in attrs]
+            xs_reaches = [a['Reach'].decode().strip() for a in attrs]
+            xs_stations = [a['Station'].decode().strip() for a in attrs]
+
+        # Build DataFrame with one column per profile
+        result = {
+            'River': xs_rivers,
+            'Reach': xs_reaches,
+            'RS': xs_stations,
+        }
+        for i, pname in enumerate(profile_names):
+            result[pname] = ws_data[i, :]
+
+        result_df = pd.DataFrame(result)
+
+        logger.info(
+            f"Extracted {n_profiles} steady profiles for {n_xs} cross sections "
+            f"from {hdf_path.name}"
+        )
+        return result_df
+
+    @staticmethod
+    @log_call
     def extract_max_wse(
         plan_inputs: Union[str, Path, List[Union[str, Path]]],
         profile_names: Optional[List[str]] = None,
@@ -757,8 +862,18 @@ class HdfChannelCapacity:
 
         comparison = existing_cap.merge(proposed_cap, on=['River', 'Reach', 'RS'], how='outer')
 
-        # Positive change = improvement (higher level = more capacity)
-        comparison['change'] = comparison['proposed_level'] - comparison['existing_level']
+        # Map levels to effective ordering for comparison.
+        # Level 7 (overtopped by smallest storm) is WORSE than Level 1,
+        # so map it to 0 for correct change calculation.
+        # Ordering: 7(worst=0) < 1 < 2 < 3 < 4 < 5 < 6(best)
+        def _effective(level):
+            return 0 if level == 7 else level
+
+        eff_existing = comparison['existing_level'].apply(_effective)
+        eff_proposed = comparison['proposed_level'].apply(_effective)
+
+        # Positive change = improvement (higher effective level = more capacity)
+        comparison['change'] = eff_proposed - eff_existing
         comparison['improved'] = comparison['change'] > 0
 
         n_improved = comparison['improved'].sum()

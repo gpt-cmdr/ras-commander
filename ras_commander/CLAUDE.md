@@ -32,12 +32,15 @@ The ras_commander library is organized into core modules and specialized subpack
   - `ValidationReport` - Comprehensive validation report
   - Used by `RasDss`, `RasMap`, and other modules for pre-flight checks
 
-**HDF Data Access** (14+ modules):
+**HDF Data Access** (20+ modules):
 - `HdfBase`, `HdfUtils` - Shared HDF helpers and utilities
 - `HdfMesh`, `HdfBndry`, `HdfXsec`, `HdfStruc`, `HdfPlan` - Geometry and metadata extraction
 - `HdfResultsMesh`, `HdfResultsPlan`, `HdfResultsXsec` - Results time series extraction
+- `HdfResultsBreach` - Breach results extraction
 - `HdfPipe`, `HdfPump` - Infrastructure analysis (HEC-RAS 6.6+)
 - `HdfPlot`, `HdfResultsPlot` - Visualization helpers
+- `HdfBenefitAreas`, `HdfFluvialPluvial`, `HdfChannelCapacity` - Analysis tools
+- `HdfResultsAnalysis` - Results analysis utilities
 
 ### Specialized Subpackages
 

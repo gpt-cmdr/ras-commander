@@ -172,7 +172,7 @@ __all__ = [
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
-    'HdfBenefitAreas', 'HdfResultsAnalysis',
+    'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
 
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',

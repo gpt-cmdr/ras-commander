@@ -176,6 +176,7 @@ nav:
       - Pipes and Pumps: notebooks/411_2d_hdf_pipes_and_pumps.md
       - 2D Face Data Extraction: notebooks/412_2d_detail_face_data_extraction.md
       - Breach Results Extraction: notebooks/420_breach_results_extraction.md
+      - Channel Capacity Analysis: notebooks/430_1d_channel_capacity_analysis.md
     - Remote Plan Execution (500s):
       - Remote Execution (PsExec): notebooks/500_remote_execution_psexec.md
     - Advanced Data Analysis (600s):
