@@ -1,8 +1,10 @@
 # Contributing Guide
 
-Thank you for your interest in contributing to RAS Commander!
+Thank you for your interest in contributing to ras-commander!
 
-RAS Commander was built using LLM-driven development and welcomes contributions created with AI assistance. See the [LLM-Driven Development Overview](llm-development.md) for guidance on using coding agents effectively with this repository.
+**Our philosophy: Don't Ask Me, Ask a GPT!** -- ras-commander was built with LLMs and welcomes contributions prepared with LLM agent assistance. See [CONTRIBUTING.md](../../CONTRIBUTING.md) at the repo root for the quick-start guide and self-review checklist, and [LLM-Driven Development](llm-development.md) for the full philosophy.
+
+This page covers detailed development setup, coding patterns, and the complete style guide reference for LLM agents.
 
 ## Development Setup
 
@@ -207,16 +209,11 @@ def my_function(param: str) -> bool:
     return True
 ```
 
-## LLM-Assisted Contributions
+## LLM Agent Contributions: Step-by-Step
 
-RAS Commander encourages contributions developed with AI coding assistants. When submitting LLM-assisted code:
+ras-commander encourages ALL contributions to be prepared with LLM agent assistance. The repository has machine-readable style rules that any LLM can consume.
 
-1. **Test thoroughly** - LLMs can miss edge cases; verify with real HEC-RAS projects
-2. **Follow existing patterns** - Match the static class structure and naming conventions
-3. **Review generated code** - Ensure it follows the style guide and doesn't introduce security issues
-4. **Document your work** - Include docstrings with Args, Returns, and Examples sections
-
-Recommended workflow:
+### Step 1: Set Up and Launch Your Agent
 
 ```bash
 # Clone and set up environment
@@ -225,15 +222,167 @@ cd ras-commander
 uv venv .venv && uv pip install -e .
 
 # Launch your preferred coding agent
-claude          # Claude Code
-codex           # OpenAI Codex
+claude          # Claude Code -- reads CLAUDE.md and .claude/rules/ automatically
+codex           # OpenAI Codex CLI
 aider           # Aider
+cursor .        # Cursor IDE
+gemini          # Google Gemini CLI
 ```
 
-The repository includes `AGENTS.md` files that provide context to coding agents about repository structure and conventions.
+### Step 2: Have Your Agent Read the Style Rules
+
+The style guide is stored as plain markdown files that any LLM can read:
+
+```
+# Tell your agent:
+"Read the files in .claude/rules/python/ to understand the coding conventions."
+"Read AGENTS.md in the root directory for codebase context."
+```
+
+**Claude Code** reads these automatically via `CLAUDE.md`. Other agents need explicit instructions to read the rule files.
+
+### Step 3: Write Code Following Patterns
+
+Your agent should follow the patterns described in the style rules. The key patterns are summarized in the Style Guide Reference below.
+
+### Step 4: Self-Review Before PR
+
+Run through the [LLM Self-Review Checklist](../../CONTRIBUTING.md#llm-self-review-checklist) in `CONTRIBUTING.md`. Your agent can verify each item programmatically.
+
+### Step 5: Submit PR Using Template
+
+The [PR template](../../.github/pull_request_template.md) includes the self-review checklist. Fill it out honestly -- it helps the maintainer review your PR quickly.
+
+---
+
+## Style Guide Reference for LLM Agents
+
+These files contain the complete style rules. Have your agent read the ones relevant to your contribution:
+
+### Python Patterns
+
+| Rule File | What It Covers |
+|-----------|---------------|
+| `.claude/rules/python/static-classes.md` | No instantiation pattern -- call methods directly on class |
+| `.claude/rules/python/decorators.md` | `@staticmethod` then `@log_call` stacking order |
+| `.claude/rules/python/naming-conventions.md` | `snake_case` functions, `PascalCase` classes, approved abbreviations |
+| `.claude/rules/python/path-handling.md` | `pathlib.Path` internally, accept both `str` and `Path` |
+| `.claude/rules/python/dataframe-first-principle.md` | Use `ras.plan_df` for file paths, never glob patterns |
+| `.claude/rules/python/error-handling.md` | Logging, exceptions, `LoggingConfig` |
+| `.claude/rules/python/import-patterns.md` | Flexible imports for dev vs installed package |
+| `.claude/rules/python/ras-commander-patterns.md` | `ras_object` parameter discipline for multi-project support |
+
+### HEC-RAS Domain
+
+| Rule File | What It Covers |
+|-----------|---------------|
+| `.claude/rules/hec-ras/execution.md` | `RasCmdr.compute_plan()`, parallel modes, smart skip |
+| `.claude/rules/hec-ras/hdf-files.md` | HDF results extraction, steady vs unsteady detection |
+| `.claude/rules/hec-ras/geometry.md` | Fixed-width parsing, 500-point limit, bank stations |
+| `.claude/rules/hec-ras/dss-files.md` | DSS pathname validation, lazy-loaded Java bridge |
+| `.claude/rules/hec-ras/remote.md` | `session_id=2`, Group Policy, Registry configuration |
+| `.claude/rules/hec-ras/usgs.md` | Gauge discovery, data retrieval, boundary generation |
+| `.claude/rules/hec-ras/precipitation.md` | AORC historic data, Atlas 14 design storms |
+
+### Testing
+
+| Rule File | What It Covers |
+|-----------|---------------|
+| `.claude/rules/testing/tdd-approach.md` | Test with real HEC-RAS projects, not mocks |
+| `.claude/rules/testing/environment-management.md` | uv for agents, Anaconda for notebooks |
+
+### Documentation
+
+| Rule File | What It Covers |
+|-----------|---------------|
+| `.claude/rules/documentation/notebook-standards.md` | H1 title required, run before commit |
+| `.claude/rules/documentation/mkdocs-config.md` | ReadTheDocs strips symlinks, use `cp` not `ln -s` |
+
+---
+
+## Using the API Consistency Auditor
+
+For PRs that add or modify public API methods, the API consistency auditor defines 5 critical rules. See `.claude/agents/api-consistency-auditor.md` for the complete specification.
+
+### The 5 Critical Rules
+
+**Rule 1: Static Class Pattern**
+
+```python
+# WRONG -- don't instantiate
+class MyAnalyzer:
+    def __init__(self):
+        self.data = []
+
+# RIGHT -- static methods
+class MyAnalyzer:
+    @staticmethod
+    @log_call
+    def analyze(file_path):
+        ...
+```
+
+**Rule 2: @log_call on All Public Methods**
+
+```python
+# WRONG -- missing decorator
+def get_results(plan_number):
+    ...
+
+# RIGHT -- decorated
+@staticmethod
+@log_call
+def get_results(plan_number):
+    ...
+```
+
+**Rule 3: @staticmethod on Static Class Methods**
+
+```python
+# WRONG -- missing @staticmethod
+class RasExample:
+    @log_call
+    def my_method(param):  # Looks like instance method
+        ...
+
+# RIGHT -- both decorators, correct order
+class RasExample:
+    @staticmethod  # Outer
+    @log_call      # Inner
+    def my_method(param):
+        ...
+```
+
+**Rule 4: Parameter Naming**
+
+```python
+# WRONG
+def get_data(plan_num, geom_path, ras=None):
+    ...
+
+# RIGHT
+def get_data(plan_number, geom_file, ras_object=None):
+    ...
+```
+
+**Rule 5: Path Handling**
+
+```python
+# WRONG -- rigid typing
+def read_file(filepath: Path):
+    ...
+
+# RIGHT -- flexible, converts internally
+def read_file(filepath):
+    filepath = Path(filepath)  # Accepts str or Path
+    ...
+```
+
+---
 
 ## Questions?
 
-- Open an issue for questions
-- Tag maintainers for review
-- Join discussions in GitHub Discussions
+- **Open an issue** for questions, bug reports, or feature requests
+- **Read `AGENTS.md` files** in each subpackage for codebase context
+- **Check `examples/`** for working patterns and usage demonstrations
+- **Your LLM agent can explore the codebase** -- that's exactly what it's designed for
