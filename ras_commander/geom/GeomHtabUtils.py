@@ -39,8 +39,10 @@ Technical Notes:
     - Safety factors prevent extrapolation errors during simulation
     - XS HTAB: 30% safety factor (1.3x) on depth is recommended
     - Structure HTAB: 100% safety factor (2.0x) on HW/TW/flow is recommended
-    - Maximum 500 points for XS (HEC-RAS limit)
+    - Maximum 500 points for XS (HEC-RAS limit); using 500 points does not
+      affect computation time and provides additional stability and internal resolution
     - Increment is adjusted if 500 points insufficient for range
+    - Optimal structure HTAB: 100 free flow points, 60 submerged curves, 50 points per curve
 
 References:
     - HEC-RAS User's Manual: Geometric Preprocessor
@@ -75,14 +77,16 @@ class GeomHtabUtils:
     MIN_XS_INCREMENT = 0.01     # Minimum reasonable increment
     MAX_XS_INCREMENT = 2.0      # Maximum reasonable increment
 
-    # Structure HTAB defaults
-    DEFAULT_FREE_FLOW_POINTS = 20     # Default free flow curve points
-    DEFAULT_SUBMERGED_CURVES = 30     # Default number of submerged curves
-    DEFAULT_POINTS_PER_CURVE = 20     # Default points per submerged curve
+    # Structure HTAB defaults (optimal values for best rating curve resolution)
+    DEFAULT_FREE_FLOW_POINTS = 100    # Optimal: 100 points on free flow curve
+    DEFAULT_SUBMERGED_CURVES = 60     # Optimal: 60 submerged rating curves
+    DEFAULT_POINTS_PER_CURVE = 50     # Optimal: 50 points per submerged curve
     MIN_FREE_FLOW_POINTS = 10         # Minimum free flow points
-    MAX_FREE_FLOW_POINTS = 20         # Maximum free flow points
+    MAX_FREE_FLOW_POINTS = 100        # Maximum free flow points
     MIN_SUBMERGED_CURVES = 10         # Minimum submerged curves
-    MAX_SUBMERGED_CURVES = 30         # Maximum submerged curves
+    MAX_SUBMERGED_CURVES = 60         # Maximum submerged curves
+    MIN_POINTS_PER_CURVE = 10         # Minimum points per submerged curve
+    MAX_POINTS_PER_CURVE = 50         # Maximum points per submerged curve
 
     # Safety factor defaults
     DEFAULT_XS_SAFETY_FACTOR = 1.3    # 30% safety on XS depth
@@ -272,9 +276,9 @@ class GeomHtabUtils:
         hw_safety: float = 2.0,
         flow_safety: float = 2.0,
         tw_safety: float = 2.0,
-        free_flow_points: int = 20,
-        submerged_curves: int = 30,
-        points_per_curve: int = 20
+        free_flow_points: int = 100,
+        submerged_curves: int = 60,
+        points_per_curve: int = 50
     ) -> Dict[str, Union[float, int]]:
         """
         Calculate optimal structure HTAB parameters.
@@ -303,9 +307,9 @@ class GeomHtabUtils:
             hw_safety: Safety factor on headwater range (default 2.0 = 100%)
             flow_safety: Safety factor on flow (default 2.0 = 100%)
             tw_safety: Safety factor on tailwater range (default 2.0 = 100%)
-            free_flow_points: Points on free flow rating curve (default 20, max 20)
-            submerged_curves: Number of submerged flow curves (default 30, max 30)
-            points_per_curve: Points per submerged curve (default 20, max 20)
+            free_flow_points: Points on free flow rating curve (default 100, optimal 100)
+            submerged_curves: Number of submerged flow curves (default 60, optimal 60)
+            points_per_curve: Points per submerged curve (default 50, optimal 50)
 
         Returns:
             dict: Optimal structure HTAB parameters with keys:
@@ -390,8 +394,8 @@ class GeomHtabUtils:
             min(submerged_curves, GeomHtabUtils.MAX_SUBMERGED_CURVES)
         )
         points_per_curve = max(
-            GeomHtabUtils.MIN_FREE_FLOW_POINTS,  # Same limits
-            min(points_per_curve, GeomHtabUtils.MAX_FREE_FLOW_POINTS)
+            GeomHtabUtils.MIN_POINTS_PER_CURVE,
+            min(points_per_curve, GeomHtabUtils.MAX_POINTS_PER_CURVE)
         )
 
         # Calculate headwater max (safety applied to range above invert)
@@ -727,9 +731,9 @@ class GeomHtabUtils:
                 - 'hw_safety': Default headwater safety factor (2.0)
                 - 'tw_safety': Default tailwater safety factor (2.0)
                 - 'flow_safety': Default flow safety factor (2.0)
-                - 'free_flow_points': Default free flow points (20)
-                - 'submerged_curves': Default submerged curves (30)
-                - 'points_per_curve': Default points per curve (20)
+                - 'free_flow_points': Default free flow points (100)
+                - 'submerged_curves': Default submerged curves (60)
+                - 'points_per_curve': Default points per curve (50)
         """
         return {
             'hw_safety': GeomHtabUtils.DEFAULT_HW_SAFETY_FACTOR,
@@ -741,5 +745,7 @@ class GeomHtabUtils:
             'min_free_flow_points': GeomHtabUtils.MIN_FREE_FLOW_POINTS,
             'max_free_flow_points': GeomHtabUtils.MAX_FREE_FLOW_POINTS,
             'min_submerged_curves': GeomHtabUtils.MIN_SUBMERGED_CURVES,
-            'max_submerged_curves': GeomHtabUtils.MAX_SUBMERGED_CURVES
+            'max_submerged_curves': GeomHtabUtils.MAX_SUBMERGED_CURVES,
+            'min_points_per_curve': GeomHtabUtils.MIN_POINTS_PER_CURVE,
+            'max_points_per_curve': GeomHtabUtils.MAX_POINTS_PER_CURVE
         }

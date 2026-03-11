@@ -1273,9 +1273,9 @@ class GeomBridge:
             tw_max: Maximum tailwater elevation (optional)
             max_flow: Maximum flow through structure
             use_user_curves: -1 to enable custom settings, 0 for defaults
-            free_flow_points: Number of points on free flow curve (max ~20)
-            submerged_curves: Number of submerged rating curves (max ~30)
-            points_per_curve: Points per submerged curve (max ~20)
+            free_flow_points: Number of points on free flow curve (optimal 100)
+            submerged_curves: Number of submerged rating curves (optimal 60)
+            points_per_curve: Points per submerged curve (optimal 50)
             validate: If True, validate parameters before writing (default: True)
 
         Returns:
@@ -1303,8 +1303,8 @@ class GeomBridge:
             >>> GeomBridge.set_htab(
             ...     "model.g01", "River", "Reach", "5280",
             ...     hw_max=620.0, max_flow=75000.0,
-            ...     free_flow_points=20, submerged_curves=30,
-            ...     points_per_curve=20
+            ...     free_flow_points=100, submerged_curves=60,
+            ...     points_per_curve=50
             ... )
 
         See Also:
@@ -1576,9 +1576,9 @@ class GeomBridge:
     def set_all_structures_htab(geom_file: Union[str, Path],
                                  hw_max_multiplier: Optional[float] = None,
                                  max_flow_multiplier: Optional[float] = None,
-                                 free_flow_points: int = 20,
-                                 submerged_curves: int = 30,
-                                 points_per_curve: int = 20,
+                                 free_flow_points: int = 100,
+                                 submerged_curves: int = 60,
+                                 points_per_curve: int = 50,
                                  create_backup: bool = True) -> Dict[str, Any]:
         """
         Set HTAB parameters for ALL structures (bridges, culverts, inline weirs) in geometry file.
@@ -1595,11 +1595,11 @@ class GeomBridge:
             max_flow_multiplier: Optional multiplier for existing MaxFlow values.
                                 If provided, new_max_flow = existing_max_flow * multiplier.
                                 If None, MaxFlow is not modified (existing value kept).
-            free_flow_points: Number of points on free flow curve (default 20, max 20).
+            free_flow_points: Number of points on free flow curve (default 100, optimal 100).
                              Applied to all structures.
-            submerged_curves: Number of submerged rating curves (default 30, max 30).
+            submerged_curves: Number of submerged rating curves (default 60, optimal 60).
                              Applied to all structures.
-            points_per_curve: Points per submerged curve (default 20, max 20).
+            points_per_curve: Points per submerged curve (default 50, optimal 50).
                              Applied to all structures.
             create_backup: If True (default), create .bak backup before modification.
 
@@ -1629,9 +1629,9 @@ class GeomBridge:
             ...     "model.g01",
             ...     hw_max_multiplier=2.0,
             ...     max_flow_multiplier=2.0,
-            ...     free_flow_points=20,
-            ...     submerged_curves=30,
-            ...     points_per_curve=20
+            ...     free_flow_points=100,
+            ...     submerged_curves=60,
+            ...     points_per_curve=50
             ... )
             >>> print(f"Modified {result['total']} structures")
             >>> print(f"Bridges: {result['bridges']}, Inline weirs: {result['inline_weirs']}")
@@ -1639,9 +1639,9 @@ class GeomBridge:
             >>> # Update curve points only (don't change HWMax/MaxFlow)
             >>> result = GeomBridge.set_all_structures_htab(
             ...     "model.g01",
-            ...     free_flow_points=20,
-            ...     submerged_curves=30,
-            ...     points_per_curve=20
+            ...     free_flow_points=100,
+            ...     submerged_curves=60,
+            ...     points_per_curve=50
             ... )
 
         See Also:
@@ -1654,10 +1654,11 @@ class GeomBridge:
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
-        # Validate curve point counts (clamp to valid ranges)
-        free_flow_points = max(10, min(free_flow_points, 20))
-        submerged_curves = max(10, min(submerged_curves, 30))
-        points_per_curve = max(10, min(points_per_curve, 20))
+        # Validate curve point counts (clamp to valid ranges using GeomHtabUtils constants)
+        from .GeomHtabUtils import GeomHtabUtils
+        free_flow_points = max(GeomHtabUtils.MIN_FREE_FLOW_POINTS, min(free_flow_points, GeomHtabUtils.MAX_FREE_FLOW_POINTS))
+        submerged_curves = max(GeomHtabUtils.MIN_SUBMERGED_CURVES, min(submerged_curves, GeomHtabUtils.MAX_SUBMERGED_CURVES))
+        points_per_curve = max(GeomHtabUtils.MIN_POINTS_PER_CURVE, min(points_per_curve, GeomHtabUtils.MAX_POINTS_PER_CURVE))
 
         backup_path = None
         try:
@@ -1817,9 +1818,9 @@ class GeomBridge:
         hw_safety_factor: float = 2.0,
         flow_safety_factor: float = 2.0,
         tw_safety_factor: float = 2.0,
-        free_flow_points: int = 20,
-        submerged_curves: int = 30,
-        points_per_curve: int = 20,
+        free_flow_points: int = 100,
+        submerged_curves: int = 60,
+        points_per_curve: int = 50,
         validate: bool = True,
         ras_object=None
     ) -> Dict[str, Any]:
@@ -1839,7 +1840,7 @@ class GeomBridge:
                - hw_max = invert + (max_hw - invert) * hw_safety_factor
                - tw_max = invert + (max_tw - invert) * tw_safety_factor
                - max_flow = max_flow * flow_safety_factor
-            6. Set all curve point counts to maximum for best resolution
+            6. Set all curve point counts to optimal for best resolution
             7. Write parameters to geometry file
 
         Parameters:
@@ -1852,9 +1853,9 @@ class GeomBridge:
                              Safety is applied to range, not absolute value.
             flow_safety_factor: Multiplier for maximum flow (default 2.0 = 100%)
             tw_safety_factor: Multiplier for tailwater range above invert (default 2.0 = 100%)
-            free_flow_points: Points on free flow curve (default 20, max 20)
-            submerged_curves: Number of submerged curves (default 30, max 30)
-            points_per_curve: Points per submerged curve (default 20, max 20)
+            free_flow_points: Points on free flow curve (default 100, optimal 100)
+            submerged_curves: Number of submerged curves (default 60, optimal 60)
+            points_per_curve: Points per submerged curve (default 50, optimal 50)
             validate: If True, validate parameters before writing (default: True)
             ras_object: RasPrj object for multi-project workflows
 
@@ -2037,9 +2038,9 @@ class GeomBridge:
         hw_safety_factor: float = 2.0,
         flow_safety_factor: float = 2.0,
         tw_safety_factor: float = 2.0,
-        free_flow_points: int = 20,
-        submerged_curves: int = 30,
-        points_per_curve: int = 20,
+        free_flow_points: int = 100,
+        submerged_curves: int = 60,
+        points_per_curve: int = 50,
         ras_object=None
     ) -> Dict[str, Any]:
         """
@@ -2055,9 +2056,9 @@ class GeomBridge:
             hw_safety_factor: Multiplier for headwater range (default 2.0 = 100% safety)
             flow_safety_factor: Multiplier for flow (default 2.0 = 100% safety)
             tw_safety_factor: Multiplier for tailwater range (default 2.0 = 100% safety)
-            free_flow_points: Points on free flow curve (default 20)
-            submerged_curves: Number of submerged curves (default 30)
-            points_per_curve: Points per submerged curve (default 20)
+            free_flow_points: Points on free flow curve (optimal 100)
+            submerged_curves: Number of submerged curves (optimal 60)
+            points_per_curve: Points per submerged curve (optimal 50)
             ras_object: RasPrj object for multi-project workflows
 
         Returns:

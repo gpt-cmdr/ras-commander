@@ -34,8 +34,10 @@ Example Usage:
 
 Technical Notes:
     - Safety factors prevent extrapolation errors during simulation
-    - XS HTAB: 30% safety factor (1.3x) on depth is recommended
+    - XS HTAB: 30% safety factor (1.3x) on depth is recommended; 500 points always
+      (does not affect computation time, provides additional stability and internal resolution)
     - Structure HTAB: 100% safety factor (2.0x) on HW/TW/flow is recommended
+    - Optimal structure HTAB: 100 free flow points, 60 submerged curves, 50 points per curve
     - Creates single backup before any modifications
     - If any step fails, backup can be used for manual recovery
 
@@ -99,9 +101,9 @@ class GeomHtab:
         structure_flow_safety: float = 2.0,
         xs_target_increment: float = 0.1,
         xs_max_points: int = 500,
-        structure_free_flow_points: int = 20,
-        structure_submerged_curves: int = 30,
-        structure_points_per_curve: int = 20,
+        structure_free_flow_points: int = 100,
+        structure_submerged_curves: int = 60,
+        structure_points_per_curve: int = 50,
         create_backup: bool = True
     ) -> Dict[str, Any]:
         """
@@ -129,9 +131,9 @@ class GeomHtab:
             structure_flow_safety: Safety factor for structure flow (default 2.0 = 100%)
             xs_target_increment: Target elevation increment for XS HTAB (default 0.1 ft)
             xs_max_points: Maximum points in XS HTAB (HEC-RAS limit is 500)
-            structure_free_flow_points: Points on free flow rating curve (max 20)
-            structure_submerged_curves: Number of submerged rating curves (max 30)
-            structure_points_per_curve: Points per submerged curve (max 20)
+            structure_free_flow_points: Points on free flow rating curve (optimal 100)
+            structure_submerged_curves: Number of submerged rating curves (optimal 60)
+            structure_points_per_curve: Points per submerged curve (optimal 50)
             create_backup: Whether to create .bak backup file (default True)
 
         Returns:
@@ -467,9 +469,9 @@ class GeomHtab:
         hw_safety_factor: float = 2.0,
         flow_safety_factor: float = 2.0,
         tw_safety_factor: float = 2.0,
-        free_flow_points: int = 20,
-        submerged_curves: int = 30,
-        points_per_curve: int = 20,
+        free_flow_points: int = 100,
+        submerged_curves: int = 60,
+        points_per_curve: int = 50,
         create_backup: bool = True
     ) -> Dict[str, Any]:
         """
@@ -485,9 +487,9 @@ class GeomHtab:
             hw_safety_factor: Safety factor for headwater (default 2.0 = 100%)
             flow_safety_factor: Safety factor for flow (default 2.0 = 100%)
             tw_safety_factor: Safety factor for tailwater (default 2.0 = 100%)
-            free_flow_points: Points on free flow curve (default 20, max 20)
-            submerged_curves: Number of submerged curves (default 30, max 30)
-            points_per_curve: Points per submerged curve (default 20, max 20)
+            free_flow_points: Points on free flow curve (default 100, optimal 100)
+            submerged_curves: Number of submerged curves (default 60, optimal 60)
+            points_per_curve: Points per submerged curve (default 50, optimal 50)
             create_backup: Whether to create .bak backup (default True)
 
         Returns:

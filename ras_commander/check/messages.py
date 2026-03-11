@@ -598,6 +598,45 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "type": MessageType.XSCHECK
     },
 
+    # Suboptimal XS HTAB
+    "HTAB_PTS_02": {
+        "message": "HTAB has {num_points} points at {river}/{reach}/RS {station} (optimal is {optimal_points}). "
+                   "Using 500 points does not affect computation time and provides additional stability and internal resolution.",
+        "help_text": "While the model will run correctly with fewer points, using 500 points provides "
+                     "the best interpolation resolution in the hydraulic property tables at no performance cost.",
+        "type": MessageType.XSCHECK
+    },
+    "HTAB_INC_02": {
+        "message": "HTAB increment is {increment} ft with {num_points} points, covering {depth_range:.1f} ft depth range at {river}/{reach}/RS {station}. "
+                   "Recommended: 0.1 ft increment x 500 points = 50 ft depth range.",
+        "help_text": "The implied depth range is points x increment. Default 500 x 0.1 = 50 ft. "
+                     "Adjust increment if anticipated depths exceed 50 ft (e.g., 0.2 ft x 500 = 100 ft range).",
+        "type": MessageType.XSCHECK
+    },
+
+    # Suboptimal Structure HTAB
+    "HTAB_STR_FF_01": {
+        "message": "Structure '{structure_name}' has {ff_points} free flow curve points (optimal is {optimal_ff}). "
+                   "Higher values improve rating curve interpolation.",
+        "help_text": "Increasing free flow curve points to 100 provides better resolution for the "
+                     "structure's free flow rating curve at no significant performance cost.",
+        "type": MessageType.STRUCCHECK
+    },
+    "HTAB_STR_RC_01": {
+        "message": "Structure '{structure_name}' has {sub_curves} submerged rating curves (optimal is {optimal_rc}). "
+                   "Higher values improve interpolation under submergence.",
+        "help_text": "Increasing submerged rating curves to 60 provides better resolution for the "
+                     "structure's submerged flow conditions.",
+        "type": MessageType.STRUCCHECK
+    },
+    "HTAB_STR_PRC_01": {
+        "message": "Structure '{structure_name}' has {pts_per_curve} points per rating curve (optimal is {optimal_prc}). "
+                   "Higher values improve rating curve resolution.",
+        "help_text": "Increasing points per rating curve to 50 provides finer resolution on each "
+                     "submerged rating curve.",
+        "type": MessageType.STRUCCHECK
+    },
+
     # =========================================================================
     # STRUCTURE CHECK MESSAGES
     # =========================================================================
