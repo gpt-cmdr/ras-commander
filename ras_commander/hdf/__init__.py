@@ -36,6 +36,7 @@ Visualization:
 Analysis:
     - HdfFluvialPluvial: Fluvial-pluvial boundary analysis
     - HdfBenefitAreas: Benefit/rise area analysis (2D plan comparison)
+    - HdfChannelCapacity: 1D channel capacity analysis (multi-AEP storm comparison)
     - HdfResultsAnalysis: Critical duration and cross-plan comparison
 
 Lazy Loading:
@@ -84,6 +85,7 @@ from .HdfResultsPlot import HdfResultsPlot
 # Analysis classes
 from .HdfFluvialPluvial import HdfFluvialPluvial
 from .HdfBenefitAreas import HdfBenefitAreas
+from .HdfChannelCapacity import HdfChannelCapacity
 from .HdfResultsAnalysis import HdfResultsAnalysis
 
 # Project-level classes
@@ -101,7 +103,7 @@ __all__ = [
     # Visualization
     'HdfPlot', 'HdfResultsPlot',
     # Analysis
-    'HdfFluvialPluvial', 'HdfBenefitAreas', 'HdfResultsAnalysis',
+    'HdfFluvialPluvial', 'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
     # Project-level
     'HdfProject',
 ]

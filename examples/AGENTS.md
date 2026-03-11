@@ -192,6 +192,12 @@ How agents should use notebooks
 - Functions: HdfResultsBreach (ras_commander/HdfResultsBreach.py).
 - Pattern: Locate breach plans, extract hydrographs, summarize peak values.
 
+430_1d_channel_capacity_analysis.ipynb
+- Focus: 1D channel capacity analysis comparing multi-AEP WSE against bank elevations (HCFCD methodology).
+- Functions: HdfChannelCapacity.extract_bank_elevations (ras_commander/hdf/HdfChannelCapacity.py), HdfChannelCapacity.extract_max_wse, HdfChannelCapacity.extract_steady_profile_wse, HdfChannelCapacity.determine_capacity, HdfChannelCapacity.segment_channel, HdfChannelCapacity.system_capacity_summary, HdfChannelCapacity.analyze_channel_capacity, HdfChannelCapacity.compare_conditions.
+- Pattern: Extract bank elevations and multi-profile WSE from steady-state plans; determine capacity levels 1-7; aggregate into segments; compare existing vs proposed conditions.
+- Notable: Uses FEMA BLE model (SHILOH BRANCH); 7 capacity levels from 10-yr contained to smallest-storm overtopping; conservative FLOOR weighting for segments.
+
 ---
 
 ## 500s: Remote Plan Execution

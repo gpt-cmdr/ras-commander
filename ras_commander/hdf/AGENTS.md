@@ -4,7 +4,7 @@ This document provides guidance for AI agents and developers working with the `r
 
 ## Overview
 
-The HDF subpackage provides comprehensive HDF5 file operations for HEC-RAS plan files (.p##.hdf) and geometry files (.g##.hdf). It contains 18 classes organized by function.
+The HDF subpackage provides comprehensive HDF5 file operations for HEC-RAS plan files (.p##.hdf) and geometry files (.g##.hdf). It contains 19 classes organized by function.
 
 ## Module Structure
 
@@ -42,6 +42,7 @@ ras_commander/hdf/
 │
 └── # Analysis
     ├── HdfBenefitAreas.py    # 2D benefit area polygons (WSE reduction analysis)
+    ├── HdfChannelCapacity.py  # 1D channel capacity analysis (HCFCD methodology)
     └── HdfFluvialPluvial.py  # Fluvial-pluvial analysis
 ```
 
@@ -103,6 +104,7 @@ HdfBase (foundation)
   ├── HdfResultsXsec (uses HdfBase)
   ├── HdfResultsBreach (uses HdfBase)
   ├── HdfBenefitAreas (uses HdfMesh, HdfResultsMesh)
+  ├── HdfChannelCapacity (uses HdfBase, HdfResultsPlan, HdfXsec)
   ├── HdfFluvialPluvial (uses HdfMesh, HdfResultsMesh)
   └── HdfUtils (standalone utilities)
 

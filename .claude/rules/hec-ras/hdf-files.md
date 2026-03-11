@@ -24,6 +24,7 @@ HEC-RAS stores simulation results in HDF5 files (`.p##.hdf`). ras-commander prov
 | `HdfResultsBreach` | Breach progression data |
 | `HdfStruc` | Structure data (bridges, culverts) |
 | `HdfHydraulicTables` | Cross section property tables |
+| `HdfChannelCapacity` | 1D channel capacity analysis (multi-AEP) |
 
 ## Critical Pattern: Steady vs Unsteady Detection
 
@@ -78,7 +79,7 @@ See `.claude/rules/python/ras-commander-patterns.md` for complete context object
 ## See Also
 
 - **Complete Documentation**: `ras_commander/hdf/AGENTS.md`
-- **Example Notebooks**: `examples/400_1d_hdf_data_extraction.ipynb`, `examples/410_2d_hdf_data_extraction.ipynb`
+- **Example Notebooks**: `examples/400_1d_hdf_data_extraction.ipynb`, `examples/410_2d_hdf_data_extraction.ipynb`, `examples/430_1d_channel_capacity_analysis.ipynb`
 - **Context Object Discipline**: `.claude/rules/python/ras-commander-patterns.md`
 
 ---

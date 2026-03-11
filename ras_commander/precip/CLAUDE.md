@@ -52,7 +52,7 @@ Need precipitation hyetograph for HEC-RAS?
 
 ## Module Organization
 
-The precip subpackage contains 6 native modules plus 3 HMS-equivalent imports from hms-commander:
+The precip subpackage contains 7 native modules plus 3 HMS-equivalent imports from hms-commander:
 
 ### PrecipAorc.py (AORC Data Integration)
 
@@ -353,6 +353,102 @@ results = Atlas14Variance.analyze(
 )
 ```
 
+### AbmHyetographGrid.py (Gridded ABM Hyetograph Generation)
+
+**AbmHyetographGrid** - Per-pixel Alternating Block Method hyetograph grids for HEC-RAS rain-on-grid 2D simulations:
+
+**Algorithm** (Chow, Maidment, Mays 1988 — extended to spatial grids):
+1. Download NOAA Atlas 14 CONUS NetCDF grids for the target bounds and ARI
+2. Derive sub-hourly grids via centroid DDF ratio scaling (`D(sub_hr)/D(1hr)`)
+3. Log-log interpolate cumulative depth at each timestep for every pixel simultaneously
+4. Compute incremental depths; sort descending per pixel
+5. Place peak block at user-specified position; arrange remaining blocks alternately left/right
+6. Apply per-pixel depth conservation scaling
+
+**Public Methods** (all `@staticmethod @log_call`):
+
+| Method | Purpose | Returns |
+|--------|---------|---------|
+| `generate(bounds, ari_years, storm_duration_hours, timestep_minutes, peak_position_percent, output_netcdf, buffer_percent, include_subhourly)` | Auto-download Atlas 14, compute ABM grid | `Path` |
+| `generate_from_asc_files(asc_files, ari_years, storm_duration_hours, timestep_minutes, peak_position_percent, output_netcdf, nodata_value, scale_factor)` | Use pre-downloaded NOAA Atlas 14 .asc rasters | `Path` |
+| `verify_pixel(netcdf_path, lat, lon, ddf_data, ari_years, storm_duration_hours, tolerance_pct)` | QC: compare pixel total to Atlas 14 DDF reference | `dict` |
+
+**Key Parameters for `generate()`**:
+- `bounds`: `(west, south, east, north)` decimal degrees WGS84
+- `ari_years`: Return period — valid: `[2, 5, 10, 25, 50, 100, 200, 500, 1000]`
+- `storm_duration_hours`: Total storm duration (≥ 1hr; must evenly divide by `timestep_minutes`)
+- `timestep_minutes`: Computation interval in minutes (default: 15)
+- `peak_position_percent`: Peak block position as % of storm duration — typical: 25, 33, 50, 67, 75 (default: 50)
+- `buffer_percent`: Fractional buffer beyond bounds for Atlas 14 download (default: 0.05)
+- `include_subhourly`: Derive sub-hourly grids via centroid DDF ratios (default: True; required when `timestep_minutes < 60`)
+
+**Key Parameters for `generate_from_asc_files()`**:
+- `asc_files`: `Dict[duration_hours, Path]` — keys are durations in hours, e.g., `{5/60: "5min.asc", 1.0: "1hr.asc", 24.0: "24hr.asc"}`
+- `scale_factor`: Raw→inches multiplier (default: 0.01 for NOAA hundredths-of-inches format)
+- `nodata_value`: Override header NODATA sentinel (post scale_factor); reads from .asc header if None
+
+**`verify_pixel()` return dict**:
+- `pixel_total_in`: Sum of incremental depths at nearest grid cell
+- `reference_depth_in`: Atlas 14 DDF depth at `storm_duration_hours` for `ari_years`
+- `error_pct`: Absolute percentage deviation from reference
+- `passed`: True if `error_pct` ≤ `tolerance_pct` (default 1.0%)
+- `time_series`: Full incremental depth array (numpy.ndarray)
+
+**Data Sources**:
+- **Hourly durations (≥ 1hr)**: NOAA Atlas 14 CONUS NetCDF via `Atlas14Grid` HTTP byte-range requests (~5–15 s)
+- **Sub-hourly durations (< 1hr)**: One NOAA HDSC API call at domain centroid; ratio `D(sub_hr)/D(1hr)` applied spatially
+
+**Output Format (NetCDF, CF-1.8)**:
+- **Dimensions**: `(time, lat, lon)`
+- **Variables**: `precip_incremental` (inches/interval), `precip_cumulative` (inches)
+- **Compression**: zlib level 4, float32, `_FillValue = -9999.0`
+- **Global attributes**: ARI, duration, timestep, peak position, source, references
+
+**Usage**:
+```python
+from ras_commander.precip import AbmHyetographGrid
+
+# Auto-download: 100-year, 24-hour storm at 15-minute intervals
+nc_path = AbmHyetographGrid.generate(
+    bounds=(-95.5, 29.5, -95.0, 30.0),  # (west, south, east, north)
+    ari_years=100,
+    storm_duration_hours=24.0,
+    timestep_minutes=15,
+    peak_position_percent=50.0,
+    output_netcdf="abm_100yr_24hr.nc"
+)
+
+# Pre-downloaded .asc files (multi-duration, same return period)
+asc_files = {
+    5/60: "atlas14_5min_100yr.asc",
+    1.0:  "atlas14_1hr_100yr.asc",
+    6.0:  "atlas14_6hr_100yr.asc",
+    24.0: "atlas14_24hr_100yr.asc",
+}
+nc_path = AbmHyetographGrid.generate_from_asc_files(
+    asc_files=asc_files,
+    ari_years=100,
+    storm_duration_hours=24.0,
+    timestep_minutes=15,
+)
+
+# QC: verify a pixel against Atlas 14 reference depth
+from ras_commander.precip import StormGenerator
+ddf = StormGenerator.download_from_coordinates(29.76, -95.37)
+result = AbmHyetographGrid.verify_pixel(
+    netcdf_path=nc_path, lat=29.76, lon=-95.37,
+    ddf_data=ddf, ari_years=100, storm_duration_hours=24.0
+)
+print(f"Error: {result['error_pct']:.4f}% — {'PASS' if result['passed'] else 'FAIL'}")
+```
+
+**Performance**:
+- Atlas 14 download: ~5–15 seconds via HTTP byte-range requests
+- Vectorized ABM: ~1–5 seconds for typical 0.5°×0.5° grids (~3,600 pixels at ~830m resolution)
+- Sub-hourly DDF: one NOAA API call per run (centroid point only)
+
+**Dependencies**: `xarray`, `netCDF4` (NetCDF output); `numpy` (vectorized ABM)
+
 ### PrecipHrrr.py (HRRR Forecast Download)
 
 **PrecipHrrr** - Real-time HRRR forecast precipitation download from NOAA NOMADS (20 KB):
@@ -487,8 +583,8 @@ from ras_commander.precip import PrecipAorc, PrecipHrrr, StormGenerator
 # Gridded met → DSS conversion
 from ras_commander.precip import VortexCli
 
-# Gridded PFE access and variance analysis
-from ras_commander.precip import Atlas14Grid, Atlas14Variance
+# Gridded PFE access, variance analysis, and ABM hyetograph grids
+from ras_commander.precip import Atlas14Grid, Atlas14Variance, AbmHyetographGrid
 
 # HMS-equivalent Atlas 14 (from hms-commander)
 from ras_commander.precip import Atlas14Storm, Atlas14Config, ATLAS14_AVAILABLE
@@ -496,14 +592,15 @@ from ras_commander.precip import Atlas14Storm, Atlas14Config, ATLAS14_AVAILABLE
 # Convenience imports
 from ras_commander.precip import (
     PrecipAorc,
-    PrecipHrrr,        # HRRR real-time forecast download
+    PrecipHrrr,           # HRRR real-time forecast download
     StormGenerator,
-    VortexCli,          # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS
-    Atlas14Grid,        # Remote access to NOAA Atlas 14 CONUS grids
-    Atlas14Variance,    # Spatial variance analysis for precipitation
-    Atlas14Storm,       # HMS-equivalent temporal distributions
-    Atlas14Config,      # Configuration dataclass
-    ATLAS14_AVAILABLE   # Boolean flag for availability check
+    VortexCli,             # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS
+    Atlas14Grid,           # Remote access to NOAA Atlas 14 CONUS grids
+    Atlas14Variance,       # Spatial variance analysis for precipitation
+    AbmHyetographGrid,     # Per-pixel ABM hyetograph grid (NetCDF for HEC-RAS rain-on-grid)
+    Atlas14Storm,          # HMS-equivalent temporal distributions
+    Atlas14Config,         # Configuration dataclass
+    ATLAS14_AVAILABLE      # Boolean flag for availability check
 )
 ```
 
@@ -778,6 +875,7 @@ Complete workflow demonstrations:
 - `examples/720_atlas14_aep_events.ipynb` - Single-project Atlas 14 workflow
 - `examples/722_atlas14_multi_project.ipynb` - Batch processing multiple projects
 - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis for uniform rainfall assessment
+- `examples/726_abm_hyetograph_grid.ipynb` - Per-pixel ABM hyetograph grid generation for HEC-RAS rain-on-grid
 - `examples/900_aorc_precipitation.ipynb` - AORC retrieval and processing
 - `examples/915_realtime_forecast_workflow.ipynb` - End-to-end real-time forecast workflow overview
 - `examples/916_hrrr_precipitation_forecast.ipynb` - HRRR forecast download and processing

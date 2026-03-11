@@ -25,6 +25,7 @@ ras-commander supports multiple precipitation data sources and hyetograph genera
 | `Atlas14Storm` | HMS-equivalent temporal distributions (10^-6 precision, exact depth conservation) |
 | `Atlas14Grid` | Remote access to NOAA Atlas 14 CONUS grids (HTTP range requests) |
 | `Atlas14Variance` | Spatial variance analysis for uniform rainfall assessment |
+| `AbmHyetographGrid` | Per-pixel ABM hyetograph grid generation (NetCDF for rain-on-grid) |
 
 ## HMS-Equivalent Hyetograph Generation
 
@@ -171,6 +172,29 @@ else:
 
 **Performance**: ~5-15 seconds for typical extent, ~250 KB data transfer.
 
+## ABM Hyetograph Grid Workflow (Gridded ABM)
+
+**New in v0.88.x**: Generate per-pixel Alternating Block Method hyetographs for rain-on-grid 2D HEC-RAS simulations:
+
+```python
+from ras_commander.precip import AbmHyetographGrid
+
+# Generate gridded ABM hyetograph (auto-downloads Atlas 14)
+output = AbmHyetographGrid.generate(
+    bounds=(-95.5, 29.5, -95.0, 30.0),  # (west, south, east, north)
+    ari_years=100,
+    storm_duration_hours=24,
+    timestep_minutes=5,
+    peak_position_percent=50,
+    output_netcdf="storm_100yr_24hr.nc"
+)
+
+# QC verification
+result = AbmHyetographGrid.verify_pixel(output, lat=29.76, lon=-95.37)
+```
+
+**Key Features**: Vectorized per-pixel ABM, CF-1.8 NetCDF output, sub-hourly support, depth conservation.
+
 ## Internet Dependency
 
 AORC and Atlas 14 require internet access:
@@ -196,6 +220,7 @@ except requests.ConnectionError:
   - `examples/720_atlas14_aep_events.ipynb` - Atlas 14 workflow
   - `examples/722_atlas14_multi_project.ipynb` - Batch processing
   - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis
+  - `examples/726_abm_hyetograph_grid.ipynb` - Gridded ABM hyetograph workflow
 - **Skill**: `.claude/skills/precip_analyze_aorc/SKILL.md`
 
 ---

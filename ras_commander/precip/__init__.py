@@ -8,6 +8,7 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - Atlas 14 (NOAA) - Design storm generation with HMS-equivalent temporal distributions
 - Atlas14Grid - Spatially distributed PFE grids with remote access (HTTP range requests)
 - Atlas14Variance - Spatial variance analysis for uniform vs. distributed rainfall decisions
+- AbmHyetographGrid - Per-pixel Alternating Block Method hyetograph grids (NetCDF for HEC-RAS rain-on-grid)
 - VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
 - MRMS (Multi-Radar Multi-Sensor) - Real-time and historical radar (future)
 - QPF (Quantitative Precipitation Forecast) - NWS forecasts (future)
@@ -105,6 +106,27 @@ Example (StormGenerator - Alternating Block):
     >>> # Generate hyetograph using static method
     >>> hyeto = StormGenerator.generate_hyetograph(ddf, total_depth_inches=10.0, duration_hours=24, position_percent=50)
 
+Example (AbmHyetographGrid - Per-Pixel ABM Hyetograph Grid):
+    >>> from ras_commander.precip import AbmHyetographGrid
+    >>>
+    >>> # Generate gridded ABM hyetograph from NOAA Atlas 14 (auto-download)
+    >>> nc_path = AbmHyetographGrid.generate(
+    ...     bounds=(-95.5, 29.5, -95.0, 30.0),  # (west, south, east, north)
+    ...     ari_years=100,
+    ...     storm_duration_hours=24.0,
+    ...     timestep_minutes=15,
+    ...     peak_position_percent=50.0,
+    ...     output_netcdf="abm_100yr_24hr.nc"
+    ... )
+    >>>
+    >>> # Or use pre-downloaded NOAA Atlas 14 .asc files
+    >>> asc_files = {1.0: Path("pfds_1hr.asc"), 24.0: Path("pfds_24hr.asc")}
+    >>> nc_path = AbmHyetographGrid.generate_from_asc_files(
+    ...     asc_files=asc_files,
+    ...     ari_years=100,
+    ...     storm_duration_hours=24.0,
+    ... )
+
 Example (Atlas14Grid - Spatial PFE):
     >>> from ras_commander.precip import Atlas14Grid
     >>>
@@ -167,6 +189,7 @@ from .PrecipHrrr import PrecipHrrr
 from .StormGenerator import StormGenerator
 from .Atlas14Grid import Atlas14Grid
 from .Atlas14Variance import Atlas14Variance
+from .AbmHyetographGrid import AbmHyetographGrid
 from .VortexCli import VortexCli
 
 # Import from hms-commander (HMS-equivalent hyetograph generation)
@@ -192,6 +215,7 @@ __all__ = [
     'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS conversion
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids
     'Atlas14Variance',             # Spatial variance analysis for precipitation
+    'AbmHyetographGrid',           # Per-pixel ABM hyetograph grid generation (NetCDF for HEC-RAS rain-on-grid)
     'Atlas14Storm',                # HMS-equivalent Atlas 14 hyetograph generation
     'Atlas14Config',               # Configuration dataclass for Atlas14Storm
     'FrequencyStorm',              # HMS-equivalent TP-40 hyetograph generation

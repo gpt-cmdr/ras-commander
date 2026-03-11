@@ -7,6 +7,7 @@ These functions provide tested, deterministic organization for:
 - Spring Creek (12040102) - Pattern 3a: Single 2D model with nested zip
 - North Galveston Bay (12040203) - Pattern 4: Compound HMS + RAS
 - Upper Guadalupe (12100201) - Pattern 3b: Cascaded watershed models
+- Lower Colorado-Cummins (12090301) - Pattern 1D-BLE: Multiple 1D steady-state reach models
 
 For organizing other eBFE models, use the organizing-ebfe-models agent skill which
 handles all patterns dynamically and generates new functions as needed.
@@ -609,6 +610,290 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
 
         print(f"\n✓ Upper Guadalupe organized to: {output_folder}")
         print(f"\nCascade: UPGU1 → UPGU2 → UPGU3 → UPGU4 (sequential execution required)")
+
+        return output_folder
+
+    @staticmethod
+    @log_call
+    def organize_lower_colorado_cummins(
+        downloaded_folder: Optional[Path] = None,
+        output_folder: Optional[Path] = None,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        validate: bool = False
+    ) -> Path:
+        """
+        Organize Lower Colorado-Cummins (12090301) eBFE model with automatic download.
+
+        Pattern 1D-BLE: Multiple 1D steady-state reach models.
+
+        **Automatic Download**: If source data not found, automatically downloads 290.7 MB
+        from eBFE S3 bucket. Download includes progress tracking and is resume-safe.
+
+        Model characteristics:
+        - 2,378 separate 1D steady-state reach models
+        - Organized as Model/{River Name}/{Reach Name}/ inside the archive
+        - Each reach is a standalone HEC-RAS project (.prj, .p01, .f01, .g01, etc.)
+        - 7 steady flow profiles per reach: 10-year, 25-year, 50-year, 1pct_min,
+          100-year, 1pct_plu, 500-year
+        - HEC-RAS 4.x era (needs re-run with 6.x for HDF output)
+        - No Output/, Terrain/, or DSS files
+
+        Args:
+            downloaded_folder: Path where data should be (will auto-download if missing).
+                Default: ./ebfe_downloads/12090301_LowerColoradoCummins
+            output_folder: Output location.
+                Default: ./ebfe_organized/LowerColoradoCummins_12090301/
+            river: If specified, only extract reaches from this river
+                (e.g., "Rabbs Creek-Colorado River")
+            reach: If specified, only extract this specific reach
+                (e.g., "SHILOH BRANCH"). Requires river to also be specified.
+            validate: If True, validate with init_ras_project() on the first
+                (or specified) reach
+
+        Returns:
+            Path to organized output folder with structure:
+                LowerColoradoCummins_12090301/
+                ├── HMS Model/        (empty - no HMS for 1D steady models)
+                ├── RAS Model/        (reach models: {River}/{Reach}/)
+                ├── Spatial Data/     (empty - no terrain for 1D models)
+                ├── Documentation/    (empty placeholder)
+                └── agent/model_log.md
+
+        Example:
+            >>> from ras_commander.sources.federal.ebfe_models import RasEbfeModels
+            >>> from pathlib import Path
+            >>>
+            >>> # Extract single reach (fast, good for testing)
+            >>> organized = RasEbfeModels.organize_lower_colorado_cummins(
+            ...     river="Rabbs Creek-Colorado River",
+            ...     reach="SHILOH BRANCH"
+            ... )
+            >>>
+            >>> # Extract all 2,378 reaches
+            >>> organized = RasEbfeModels.organize_lower_colorado_cummins()
+        """
+        if downloaded_folder is None:
+            downloaded_folder = Path("./ebfe_downloads/12090301_LowerColoradoCummins")
+        else:
+            downloaded_folder = Path(downloaded_folder)
+
+        if output_folder is None:
+            output_folder = Path("./ebfe_organized/LowerColoradoCummins_12090301")
+        else:
+            output_folder = Path(output_folder)
+
+        if reach is not None and river is None:
+            raise ValueError("'reach' parameter requires 'river' to also be specified.")
+
+        # Create 4-folder structure + agent folder
+        folders = {
+            'hms': output_folder / "HMS Model",
+            'ras': output_folder / "RAS Model",
+            'spatial': output_folder / "Spatial Data",
+            'docs': output_folder / "Documentation",
+            'agent': output_folder / "agent"
+        }
+
+        for folder in folders.values():
+            folder.mkdir(parents=True, exist_ok=True)
+
+        print(f"Organizing Lower Colorado-Cummins (12090301) - Pattern 1D-BLE")
+        print(f"Source: {downloaded_folder}")
+        print(f"Output: {output_folder}\n")
+
+        # Download source data if not present
+        if not downloaded_folder.exists():
+            print("Source data not found - downloading from eBFE S3...")
+            url = "https://ebfedata.s3.amazonaws.com/12090301_LowerColoradoCummins/12090301_Models.zip"
+
+            downloaded_folder = RasEbfeModels._download_and_extract(
+                url=url,
+                output_folder=downloaded_folder.parent,
+                description="Lower Colorado-Cummins Models (290.7 MB)"
+            )
+
+        # Locate the Model/ directory inside the extracted content
+        # _download_and_extract creates: downloaded_folder / "12090301_Models_extracted" / ...
+        # The Model/ directory may be at top level or nested
+        model_dir = None
+        candidates = [
+            downloaded_folder / "Model",
+            downloaded_folder / "12090301_Models" / "Model",
+        ]
+
+        # Also check for any subdirectory that contains Model/
+        if downloaded_folder.exists():
+            for child in downloaded_folder.iterdir():
+                if child.is_dir():
+                    candidate = child / "Model"
+                    if candidate.exists():
+                        candidates.append(candidate)
+
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_dir():
+                model_dir = candidate
+                break
+
+        if model_dir is None:
+            # Fallback: search recursively for a Model/ directory
+            for found_dir in downloaded_folder.rglob("Model"):
+                if found_dir.is_dir():
+                    # Verify it contains river/reach subdirectories (not a random "Model" folder)
+                    subdirs = [d for d in found_dir.iterdir() if d.is_dir()]
+                    if len(subdirs) > 0:
+                        model_dir = found_dir
+                        break
+
+        if model_dir is None:
+            raise FileNotFoundError(
+                f"Model/ directory not found in: {downloaded_folder}\n\n"
+                f"Expected structure: {downloaded_folder}/Model/{{River}}/{{Reach}}/\n"
+                f"Downloaded archive may have unexpected structure."
+            )
+
+        # [1/3] Scan reach models
+        print("[1/3] Scanning reach models...")
+        all_rivers = {}
+        for river_dir in sorted(model_dir.iterdir()):
+            if not river_dir.is_dir():
+                continue
+            reaches = []
+            for reach_dir in sorted(river_dir.iterdir()):
+                if not reach_dir.is_dir():
+                    continue
+                # Verify this is a HEC-RAS project (has .prj file)
+                prj_files = list(reach_dir.glob("*.prj"))
+                if prj_files:
+                    reaches.append(reach_dir)
+            if reaches:
+                all_rivers[river_dir.name] = reaches
+
+        total_reaches = sum(len(v) for v in all_rivers.values())
+        print(f"  Found {total_reaches:,} reach models across {len(all_rivers)} rivers")
+
+        # Apply river/reach filter
+        if river is not None:
+            # Case-insensitive matching for river name
+            matched_river = None
+            for r_name in all_rivers:
+                if r_name.lower() == river.lower():
+                    matched_river = r_name
+                    break
+            if matched_river is None:
+                available = ", ".join(sorted(all_rivers.keys())[:10])
+                raise ValueError(
+                    f"River '{river}' not found. Available rivers (first 10): {available}"
+                )
+
+            filtered_reaches = all_rivers[matched_river]
+
+            if reach is not None:
+                # Case-insensitive matching for reach name
+                matched_reach = None
+                for reach_dir in filtered_reaches:
+                    if reach_dir.name.lower() == reach.lower():
+                        matched_reach = reach_dir
+                        break
+                if matched_reach is None:
+                    available = ", ".join(d.name for d in filtered_reaches[:10])
+                    raise ValueError(
+                        f"Reach '{reach}' not found in river '{matched_river}'. "
+                        f"Available reaches (first 10): {available}"
+                    )
+                filtered = {matched_river: [matched_reach]}
+            else:
+                filtered = {matched_river: filtered_reaches}
+
+            filtered_count = sum(len(v) for v in filtered.values())
+            print(f"  Filtered to: {filtered_count} reach(es)")
+        else:
+            filtered = all_rivers
+
+        # [2/3] Organize reach models
+        print("\n[2/3] Organizing reach models...")
+        total_files_copied = 0
+        reaches_organized = 0
+
+        for river_name, reach_dirs in sorted(filtered.items()):
+            for reach_dir in reach_dirs:
+                reach_name = reach_dir.name
+                dest_dir = folders['ras'] / river_name / reach_name
+                dest_dir.mkdir(parents=True, exist_ok=True)
+
+                files_copied = 0
+                for src_file in reach_dir.iterdir():
+                    if src_file.is_file():
+                        shutil.copy2(src_file, dest_dir / src_file.name)
+                        files_copied += 1
+
+                total_files_copied += files_copied
+                reaches_organized += 1
+
+        print(f"  Organized {reaches_organized:,} reach(es), {total_files_copied:,} files total")
+
+        # [3/3] Create model log
+        print("\n[3/3] Creating model log...")
+        RasEbfeModels._create_lower_colorado_cummins_log(
+            agent_folder=folders['agent'],
+            source=downloaded_folder,
+            dest=output_folder,
+            total_reaches=total_reaches,
+            reaches_organized=reaches_organized,
+            files_count=total_files_copied,
+            river_count=len(all_rivers),
+            river_filter=river,
+            reach_filter=reach
+        )
+
+        # Validate with init_ras_project if requested
+        if validate:
+            print("\n[Validation] Testing init_ras_project on first reach...")
+            try:
+                from ras_commander import init_ras_project
+
+                # Find first reach in organized output
+                first_reach = None
+                for river_dir in sorted(folders['ras'].iterdir()):
+                    if not river_dir.is_dir():
+                        continue
+                    for reach_dir in sorted(river_dir.iterdir()):
+                        if not reach_dir.is_dir():
+                            continue
+                        prj_files = list(reach_dir.glob("*.prj"))
+                        if prj_files:
+                            first_reach = reach_dir
+                            break
+                    if first_reach is not None:
+                        break
+
+                if first_reach is not None:
+                    init_ras_project(first_reach, "6.6")
+                    print(f"  ✓ init_ras_project succeeded for: {first_reach.name}")
+                else:
+                    print("  ⚠ No reach with .prj file found for validation")
+
+            except Exception as e:
+                print(f"  ⚠ Validation failed: {e}")
+
+        # Create HMS Model README
+        hms_readme = folders['hms'] / "README.md"
+        hms_readme.write_text("""# No HMS Model
+
+Lower Colorado-Cummins uses 1D steady-state HEC-RAS models (version 4.x).
+No separate HEC-HMS hydrologic model is included.
+
+Flow data is contained in steady flow files (.f##) within each reach model.
+""", encoding='utf-8')
+
+        print(f"\n✓ Lower Colorado-Cummins organized to: {output_folder}")
+        if river is not None:
+            filter_desc = f"  River: {river}"
+            if reach is not None:
+                filter_desc += f", Reach: {reach}"
+            print(filter_desc)
+        print(f"  Reaches: {reaches_organized:,} of {total_reaches:,}")
+        print(f"  Files: {total_files_copied:,}")
 
         return output_folder
 
@@ -1235,5 +1520,83 @@ for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
 
 **Organization Status**: ✓ Complete
 **See Also**: examples/952_ebfe_upper_guadalupe_cascade.ipynb
+"""
+        (agent_folder / "model_log.md").write_text(log_content, encoding='utf-8')
+
+    @staticmethod
+    def _create_lower_colorado_cummins_log(
+        agent_folder: Path,
+        source: Path,
+        dest: Path,
+        total_reaches: int,
+        reaches_organized: int,
+        files_count: int,
+        river_count: int,
+        river_filter: Optional[str] = None,
+        reach_filter: Optional[str] = None
+    ):
+        """Create agent/model_log.md for Lower Colorado-Cummins."""
+        filter_section = ""
+        if river_filter is not None or reach_filter is not None:
+            filter_section = f"""
+### Filter Applied
+**River**: {river_filter or 'All'}
+**Reach**: {reach_filter or 'All'}
+**Reaches Organized**: {reaches_organized:,} of {total_reaches:,}
+"""
+
+        log_content = f"""# Agent Work Log - Lower Colorado-Cummins
+
+**Model**: Lower Colorado-Cummins (12090301)
+**Pattern**: 1D-BLE - Multiple 1D steady-state reach models
+**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generated Function**: RasEbfeModels.organize_lower_colorado_cummins()
+
+## Organization Summary
+
+**Source**: {source}
+**Output**: {dest}
+**Total Reaches Available**: {total_reaches:,} across {river_count} rivers
+**Reaches Organized**: {reaches_organized:,}
+**Files Organized**: {files_count:,}
+{filter_section}
+### Structure Created
+- HMS Model/ (README - no HMS for 1D steady models)
+- RAS Model/ ({reaches_organized:,} reach models, {files_count:,} files)
+- Spatial Data/ (empty - no terrain for 1D models)
+- Documentation/ (empty placeholder)
+- agent/model_log.md (this file)
+
+## Model Details
+
+**Type**: 1D steady-state reach models
+**HEC-RAS Version**: 4.x (needs re-run with 6.x for HDF output)
+**Flow Profiles**: 7 per reach (10-year, 25-year, 50-year, 1pct_min, 100-year, 1pct_plu, 500-year)
+**No DSS Files**: Steady flow uses .f## files
+**No Terrain**: 1D cross-section models
+**No Pre-Run Output**: Steady-state, no pre-run HDF results
+
+### Notes
+- Each reach is a standalone HEC-RAS project
+- Models are organized as RAS Model/{{River}}/{{Reach}}/
+- To get HDF output, re-run with HEC-RAS 6.x using RasCmdr.compute_plan()
+- No DSS path correction or terrain integration needed
+
+## Usage
+
+```python
+from ras_commander import init_ras_project, RasCmdr
+from pathlib import Path
+
+# Single reach
+project = Path(r"{dest / 'RAS Model'}") / "Rabbs Creek-Colorado River" / "SHILOH BRANCH"
+init_ras_project(project, "6.6")
+
+# View plan info
+from ras_commander import ras
+print(ras.plan_df)
+```
+
+**Organization Status**: ✓ Complete
 """
         (agent_folder / "model_log.md").write_text(log_content, encoding='utf-8')
