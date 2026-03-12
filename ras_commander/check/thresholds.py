@@ -316,6 +316,24 @@ class UnsteadyThresholds:
 
 
 # ============================================================================
+# HTAB Parameter Thresholds
+# ============================================================================
+
+@dataclass
+class HtabThresholds:
+    """Thresholds for HTAB parameter quality checks."""
+    # Cross section HTAB optimal values
+    xs_optimal_points: int = 500
+    xs_optimal_increment: float = 0.1
+    xs_se_above_invert_threshold: float = 1.0  # ft above invert triggers warning
+
+    # Structure/Internal boundary HTAB optimal values
+    structure_optimal_ff_points: int = 100     # Free flow curve points
+    structure_optimal_sub_curves: int = 60     # Submerged rating curves
+    structure_optimal_pts_per_curve: int = 50  # Points per submerged curve
+
+
+# ============================================================================
 # Default Threshold Instance
 # ============================================================================
 
@@ -335,6 +353,7 @@ class ValidationThresholds:
     profiles: ProfileThresholds = field(default_factory=ProfileThresholds)
     geometry: GeometryThresholds = field(default_factory=GeometryThresholds)
     unsteady: UnsteadyThresholds = field(default_factory=UnsteadyThresholds)
+    htab: HtabThresholds = field(default_factory=HtabThresholds)
 
 
 # Global default thresholds instance

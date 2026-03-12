@@ -301,6 +301,15 @@ class RasCheck:
                 results.messages.extend(prof_results.messages)
                 results.profiles_summary = prof_results.profiles_summary
 
+        # HTAB parameter checks (geometry-only, uses plain text .g## file)
+        geom_file = geom_hdf.parent / geom_hdf.stem  # model.g01.hdf -> model.g01
+        if geom_file.exists():
+            htab_results = RasCheck.check_htab_params(geom_file, thresholds)
+            results.messages.extend(htab_results.messages)
+
+            struct_htab_results = RasCheck.check_structure_htab_params(geom_file, thresholds)
+            results.messages.extend(struct_htab_results.messages)
+
         # Calculate statistics
         results.statistics = RasCheck._calculate_statistics(results)
 
@@ -381,6 +390,15 @@ class RasCheck:
         # ineffective areas, reach lengths) that are flow-type agnostic and could
         # be useful for unsteady models. These could be extracted and called here.
         # For now, the peaks validation covers the critical 1D results validation.
+
+        # HTAB parameter checks (geometry-only, uses plain text .g## file)
+        geom_file = geom_hdf.parent / geom_hdf.stem  # model.g01.hdf -> model.g01
+        if geom_file.exists():
+            htab_results = RasCheck.check_htab_params(geom_file, thresholds)
+            results.messages.extend(htab_results.messages)
+
+            struct_htab_results = RasCheck.check_structure_htab_params(geom_file, thresholds)
+            results.messages.extend(struct_htab_results.messages)
 
         # Calculate statistics
         results.statistics = RasCheck._calculate_statistics(results)
@@ -1643,10 +1661,11 @@ class RasCheck:
             results.messages.append(msg)
             return results
 
-        # Default thresholds for HTAB validation
-        se_above_invert_threshold = 1.0  # ft - warn if starting_el > invert + this
+        # Use configurable thresholds from HtabThresholds
+        se_above_invert_threshold = thresholds.htab.xs_se_above_invert_threshold
         increment_warn_threshold = 1.0   # ft - warn if increment > this
-        min_points_info = 100            # warn if num_points < this
+        optimal_points = thresholds.htab.xs_optimal_points  # 500
+        optimal_increment = thresholds.htab.xs_optimal_increment  # 0.1
 
         try:
             # Get all cross sections from geometry file
@@ -1754,29 +1773,56 @@ class RasCheck:
                         messages.append(msg)
                         issues.append("large_increment")
 
-                    # Check 4: num_points < min (INFO)
-                    if num_points is not None and num_points < min_points_info:
+                    # Check 4: num_points < optimal (INFO)
+                    if num_points is not None and num_points < optimal_points:
                         msg = CheckMessage(
-                            message_id="HTAB_PTS_01",
+                            message_id="HTAB_PTS_02",
                             severity=Severity.INFO,
                             check_type="HTAB",
                             river=river,
                             reach=reach,
                             station=str(rs),
                             message=format_message(
-                                "HTAB_PTS_01",
+                                "HTAB_PTS_02",
                                 num_points=num_points,
-                                min_points=min_points_info,
+                                optimal_points=optimal_points,
                                 river=river,
                                 reach=reach,
                                 station=rs
                             ),
                             value=num_points,
-                            threshold=min_points_info,
-                            help_text=get_help_text("HTAB_PTS_01")
+                            threshold=optimal_points,
+                            help_text=get_help_text("HTAB_PTS_02")
                         )
                         messages.append(msg)
-                        issues.append("low_points")
+                        issues.append("suboptimal_points")
+
+                    # Check 5: non-optimal increment (INFO)
+                    if increment is not None and num_points is not None:
+                        if abs(increment - optimal_increment) > 1e-6:
+                            depth_range = num_points * increment
+                            msg = CheckMessage(
+                                message_id="HTAB_INC_02",
+                                severity=Severity.INFO,
+                                check_type="HTAB",
+                                river=river,
+                                reach=reach,
+                                station=str(rs),
+                                message=format_message(
+                                    "HTAB_INC_02",
+                                    increment=increment,
+                                    num_points=num_points,
+                                    depth_range=depth_range,
+                                    river=river,
+                                    reach=reach,
+                                    station=rs
+                                ),
+                                value=increment,
+                                threshold=optimal_increment,
+                                help_text=get_help_text("HTAB_INC_02")
+                            )
+                            messages.append(msg)
+                            issues.append("non_optimal_increment")
 
                     # Add to summary
                     summary_data.append({
@@ -1817,6 +1863,182 @@ class RasCheck:
                 severity=Severity.ERROR,
                 check_type="SYSTEM",
                 message=f"Failed to check HTAB parameters: {e}"
+            )
+            results.messages.append(msg)
+
+        return results
+
+    @staticmethod
+    @log_call
+    def check_structure_htab_params(
+        geom_file: Union[str, Path],
+        thresholds: Optional[ValidationThresholds] = None
+    ) -> CheckResults:
+        """
+        Check HTAB parameters for internal boundary structures (bridges, culverts, inline weirs).
+
+        Validates structure HTAB parameters against optimal values:
+        - Free flow curve points (optimal 100)
+        - Number of submerged rating curves (optimal 60)
+        - Points per submerged curve (optimal 50)
+
+        All findings are INFO severity - suboptimal values are improvement opportunities,
+        not modeling errors.
+
+        Args:
+            geom_file: Path to geometry file (.g##) - NOT HDF file
+            thresholds: Custom ValidationThresholds (uses defaults if None)
+
+        Returns:
+            CheckResults with structure HTAB validation messages
+
+        Example:
+            >>> from ras_commander.check import RasCheck
+            >>> results = RasCheck.check_structure_htab_params("model.g01")
+            >>> for msg in results.messages:
+            ...     print(f"[{msg.severity.name}] {msg.message}")
+
+        Note:
+            Roadmap: A future enhancement could fit recommended HTAB values to
+            current 1D results — e.g., set hw_max/tw_max from observed envelopes.
+            This would only apply to models with existing HDF results.
+        """
+        from ..geom.GeomBridge import GeomBridge
+
+        results = CheckResults()
+        messages = []
+
+        if thresholds is None:
+            thresholds = get_default_thresholds()
+
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            msg = CheckMessage(
+                message_id="SYS_002",
+                severity=Severity.ERROR,
+                check_type="HTAB",
+                message=f"Geometry file not found: {geom_file}"
+            )
+            results.messages.append(msg)
+            return results
+
+        # Optimal values from thresholds
+        optimal_ff = thresholds.htab.structure_optimal_ff_points
+        optimal_rc = thresholds.htab.structure_optimal_sub_curves
+        optimal_prc = thresholds.htab.structure_optimal_pts_per_curve
+
+        try:
+            # Get all bridges from geometry file
+            bridges_df = GeomBridge.get_bridges(geom_file)
+
+            if bridges_df is None or bridges_df.empty:
+                logger.info(f"No bridges/structures found in {geom_file.name}")
+                results.messages = messages
+                return results
+
+            logger.info(f"Checking structure HTAB parameters for {len(bridges_df)} structures")
+
+            for _, row in bridges_df.iterrows():
+                river = row.get('River', '')
+                reach = row.get('Reach', '')
+                rs = row.get('RS', '')
+                structure_name = f"{river}/{reach}/RS {rs}"
+
+                try:
+                    # Get HTAB parameters for this structure
+                    htab_params = GeomBridge.get_htab(geom_file, river, reach, rs)
+
+                    if htab_params is None:
+                        continue
+
+                    ff_points = htab_params.get('free_flow_points')
+                    sub_curves = htab_params.get('submerged_curves')
+                    pts_per_curve = htab_params.get('points_per_curve')
+
+                    # Check free flow points
+                    if ff_points is not None and ff_points < optimal_ff:
+                        msg = CheckMessage(
+                            message_id="HTAB_STR_FF_01",
+                            severity=Severity.INFO,
+                            check_type="HTAB",
+                            river=river,
+                            reach=reach,
+                            station=str(rs),
+                            structure=structure_name,
+                            message=format_message(
+                                "HTAB_STR_FF_01",
+                                structure_name=structure_name,
+                                ff_points=ff_points,
+                                optimal_ff=optimal_ff
+                            ),
+                            value=ff_points,
+                            threshold=optimal_ff,
+                            help_text=get_help_text("HTAB_STR_FF_01")
+                        )
+                        messages.append(msg)
+
+                    # Check submerged rating curves
+                    if sub_curves is not None and sub_curves < optimal_rc:
+                        msg = CheckMessage(
+                            message_id="HTAB_STR_RC_01",
+                            severity=Severity.INFO,
+                            check_type="HTAB",
+                            river=river,
+                            reach=reach,
+                            station=str(rs),
+                            structure=structure_name,
+                            message=format_message(
+                                "HTAB_STR_RC_01",
+                                structure_name=structure_name,
+                                sub_curves=sub_curves,
+                                optimal_rc=optimal_rc
+                            ),
+                            value=sub_curves,
+                            threshold=optimal_rc,
+                            help_text=get_help_text("HTAB_STR_RC_01")
+                        )
+                        messages.append(msg)
+
+                    # Check points per curve
+                    if pts_per_curve is not None and pts_per_curve < optimal_prc:
+                        msg = CheckMessage(
+                            message_id="HTAB_STR_PRC_01",
+                            severity=Severity.INFO,
+                            check_type="HTAB",
+                            river=river,
+                            reach=reach,
+                            station=str(rs),
+                            structure=structure_name,
+                            message=format_message(
+                                "HTAB_STR_PRC_01",
+                                structure_name=structure_name,
+                                pts_per_curve=pts_per_curve,
+                                optimal_prc=optimal_prc
+                            ),
+                            value=pts_per_curve,
+                            threshold=optimal_prc,
+                            help_text=get_help_text("HTAB_STR_PRC_01")
+                        )
+                        messages.append(msg)
+
+                except Exception as e:
+                    logger.warning(f"Error checking structure HTAB for {structure_name}: {e}")
+                    continue
+
+            results.messages = messages
+
+            logger.info(
+                f"Structure HTAB check complete: {len(messages)} info items found"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to check structure HTAB parameters: {e}")
+            msg = CheckMessage(
+                message_id="SYS_002",
+                severity=Severity.ERROR,
+                check_type="SYSTEM",
+                message=f"Failed to check structure HTAB parameters: {e}"
             )
             results.messages.append(msg)
 
