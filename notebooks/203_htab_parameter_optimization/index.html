@@ -5112,6 +5112,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#optimal-htab-parameter-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimal HTAB Parameter Values
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optimal HTAB Parameter Values">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cross-section-table-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross Section Table Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internal-boundary-htab-parameters-bridges-culverts-inline-weirs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Boundary HTAB Parameters (Bridges, Culverts, Inline Weirs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#setup-and-imports" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5388,6 +5427,90 @@
 <li><strong>Visual Outputs</strong>: Bar charts and coverage plots for HTAB parameters</li>
 <li><strong>Audit Trail</strong>: Automatic backups of modified geometry files</li>
 </ul>
+<h2 id="optimal-htab-parameter-values">Optimal HTAB Parameter Values<a class="headerlink" href="#optimal-htab-parameter-values" title="Permanent link">&para;</a></h2>
+<h3 id="cross-section-table-properties">Cross Section Table Properties<a class="headerlink" href="#cross-section-table-properties" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>HEC-RAS Label</th>
+<th>Optimal Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Starting El</td>
+<td>Starting El</td>
+<td>Lowest elevation (rounded up to 0.01)</td>
+<td>Set at or just above cross section invert</td>
+</tr>
+<tr>
+<td>Increment</td>
+<td>Incr</td>
+<td>0.1 ft</td>
+<td>Adjust higher for deep channels (e.g., 0.2 for 100 ft range)</td>
+</tr>
+<tr>
+<td>Points</td>
+<td>Number of Points</td>
+<td><strong>500</strong></td>
+<td>Does not affect computation time; provides additional stability and internal resolution</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implied depth range</strong>: Points x Increment = depth coverage. Default 500 x 0.1 = 50 ft depth range.<br />
+Adjust increment if anticipated depths exceed 50 ft (e.g., 0.2 ft x 500 = 100 ft range).</p>
+<h3 id="internal-boundary-htab-parameters-bridges-culverts-inline-weirs">Internal Boundary HTAB Parameters (Bridges, Culverts, Inline Weirs)<a class="headerlink" href="#internal-boundary-htab-parameters-bridges-culverts-inline-weirs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>HEC-RAS Label</th>
+<th>Optimal Value</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>free_flow_points</td>
+<td>#Pt FF Curve</td>
+<td><strong>100</strong></td>
+<td>Points on free flow rating curve</td>
+</tr>
+<tr>
+<td>submerged_curves</td>
+<td># RC</td>
+<td><strong>60</strong></td>
+<td>Number of submerged rating curves</td>
+</tr>
+<tr>
+<td>points_per_curve</td>
+<td>#Pt on RC</td>
+<td><strong>50</strong></td>
+<td>Points per submerged curve</td>
+</tr>
+<tr>
+<td>hw_max</td>
+<td>HW Max</td>
+<td>From results + safety factor</td>
+<td>Max headwater elevation</td>
+</tr>
+<tr>
+<td>tw_max</td>
+<td>TW Max (Opt.)</td>
+<td>From results + safety factor</td>
+<td>Max tailwater elevation</td>
+</tr>
+<tr>
+<td>max_flow</td>
+<td>Max Flow (Rec.)</td>
+<td>From results + safety factor</td>
+<td>Max flow through structure</td>
+</tr>
+</tbody>
+</table>
+<p>These optimal values provide the best interpolation resolution for structure rating curves at no significant performance cost. The  function uses these as defaults.</p>
 <h2 id="setup-and-imports">Setup and Imports<a class="headerlink" href="#setup-and-imports" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
@@ -5733,7 +5856,7 @@ Original HTAB Parameters (first 10 cross sections):
 </span><span id="__span-4-47"><a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-4-48"><a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_10_0.png" /></p>
+<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_11_0.png" /></p>
 <h2 id="section-3-baseline-run-and-compute-messages">Section 3: Baseline Run and Compute Messages<a class="headerlink" href="#section-3-baseline-run-and-compute-messages" title="Permanent link">&para;</a></h2>
 <p>Execute the plan with default HTAB parameters and check for extrapolation warnings.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Execute baseline plan</span>
@@ -6050,7 +6173,7 @@ First 10 cross sections:
 </span><span id="__span-8-52"><a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;- Green triangles: Target WSE with safety factor&quot;</span><span class="p">)</span>
 </span><span id="__span-8-53"><a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">If red dots approach or exceed the blue bars, HTAB optimization is needed.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_16_0.png" /></p>
+<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_17_0.png" /></p>
 <div class="language-text highlight"><pre><span></span><code>Coverage Analysis:
 - Blue bars: Current HTAB elevation range
 - Red dots: Maximum observed water surface elevation
@@ -7473,7 +7596,7 @@ Optimized HTAB Parameters from cloned geometry (g03):
 </span><span id="__span-16-53"><a id="__codelineno-16-53" name="__codelineno-16-53" href="#__codelineno-16-53"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-16-54"><a id="__codelineno-16-54" name="__codelineno-16-54" href="#__codelineno-16-54"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_27_0.png" /></p>
+<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_28_0.png" /></p>
 <h2 id="section-7-run-optimized-plan">Section 7: Run Optimized Plan<a class="headerlink" href="#section-7-run-optimized-plan" title="Permanent link">&para;</a></h2>
 <p>Execute the cloned plan with optimized HTAB parameters. The original baseline plan remains unchanged for comparison.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Run the CLONED plan with optimized HTAB parameters</span>
@@ -8322,7 +8445,7 @@ Detailed Comparison (first 15 cross sections):
 </span><span id="__span-22-71"><a id="__codelineno-22-71" name="__codelineno-22-71" href="#__codelineno-22-71"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-22-72"><a id="__codelineno-22-72" name="__codelineno-22-72" href="#__codelineno-22-72"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WSEL comparison data not available for visualization.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_35_0.png" /></p>
+<p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_36_0.png" /></p>
 <div class="language-text highlight"><pre><span></span><code>Interpretation:
 - Top-left: Points on the 1:1 line indicate identical results
 - Top-right: Histogram shows distribution of differences (centered at 0 = no impact)
@@ -8596,7 +8719,7 @@ Backup file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Munci
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 11, 2026 17:51:03 UTC">March 11, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 12, 2026 19:53:25 UTC">March 12, 2026</span>
   </span>
 
     
@@ -8606,7 +8729,7 @@ Backup file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Munci
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 11, 2026 17:51:03 UTC">March 11, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 12, 2026 19:53:25 UTC">March 12, 2026</span>
   </span>
 
     
