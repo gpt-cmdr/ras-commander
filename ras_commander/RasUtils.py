@@ -1167,7 +1167,7 @@ class RasUtils:
         if n_dimensional:
             result = dataframe.pivot_table(group_by, pivot_columns, aggfunc=agg_func)
         else:
-            result = dataframe.groupby(group_by, level=level).agg(agg_func).applymap(list)
+            result = dataframe.groupby(group_by, level=level).agg(agg_func).map(list)
 
         return result
 
