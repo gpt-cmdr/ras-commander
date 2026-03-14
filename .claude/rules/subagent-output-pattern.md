@@ -8,9 +8,9 @@
 
 ### Principle 1: Subagents Write Files, Return Paths
 
-**Subagents MUST write markdown files and return the file path to the main agent for reading.**
+**Always write markdown files and return the file path to the main agent for reading.**
 
-This ensures:
+This guarantees:
 1. **Knowledge Persistence** - Outputs survive session boundaries
 2. **Filterable Results** - Main agent can selectively read relevant sections
 3. **Consolidation Path** - Hierarchical knowledge agent can organize and prune
@@ -19,9 +19,9 @@ This ensures:
 
 ### Principle 2: Orchestrator Passes Context via File Paths
 
-**The orchestrator MUST pass context to subagents via markdown file paths (relative paths), not raw text.**
+**Pass context to subagents via markdown file paths (relative paths), never raw text.**
 
-This ensures:
+This guarantees:
 1. **Context Availability** - Subagent reads files, gets full context
 2. **No Prompt Bloat** - Large context doesn't inflate prompts
 3. **Reusable Context** - Same context files work across multiple subagent calls
@@ -74,7 +74,7 @@ Task(
 
 ### Output Location
 
-**Working outputs**: Write to task-specific location or `.claude/outputs/`
+**Write working outputs** to a task-specific location or `.claude/outputs/`
 
 ```
 .claude/outputs/
@@ -102,7 +102,7 @@ Examples:
 
 ## Implementation
 
-### For Subagents (How to Output)
+### For Subagents (Follow This Output Pattern)
 
 ```python
 # ✅ CORRECT: Write results to markdown file
@@ -139,7 +139,7 @@ Found 15 cross sections with water surface elevation data...
 """
 ```
 
-### For Main Agent (How to Consume)
+### For Main Agent (Consume Outputs This Way)
 
 ```python
 # ✅ CORRECT: Read subagent output file
@@ -156,7 +156,7 @@ result = Task(
 
 ### Structured Output Template
 
-Subagents should use consistent markdown structure:
+Use this consistent markdown structure in all subagent outputs:
 
 ```markdown
 # {Task Title}
@@ -217,31 +217,31 @@ Subagents should use consistent markdown structure:
 
 ### Two-Phase Cleanup Model
 
-**Phase 1: Task Close (`/agent-taskclose`)** - AGGRESSIVE
+**Phase 1: Task Close (`/agent-taskclose`)** - Apply AGGRESSIVELY
 - Agent has MAXIMUM CONTEXT about task-specific files
-- Knows exactly which outputs are working artifacts
-- Pre-consolidates related findings into summaries
-- Extracts knowledge to permanent hierarchy while context is fresh
-- Moves task artifacts to `.old/` hierarchy immediately
+- Identify exactly which outputs are working artifacts
+- Pre-consolidate related findings into summaries
+- Extract knowledge to permanent hierarchy while context is fresh
+- Move task artifacts to `.old/` hierarchy immediately
 
-**Phase 2: Periodic Cleanup (`/agent-cleanfiles`)** - CONSERVATIVE
+**Phase 2: Periodic Cleanup (`/agent-cleanfiles`)** - Apply CONSERVATIVELY
 - Agent has LIMITED CONTEXT (general scan)
-- Identifies obviously stale files (30+ days, no references)
-- Flags uncertain files for user decision
-- Notes consolidation opportunities without executing
+- Identify obviously stale files (30+ days, no references)
+- Flag uncertain files for user decision
+- Note consolidation opportunities without executing
 
 **Why This Matters**: Task close is the moment of maximum context. An agent ending a task knows exactly which files were scratch work vs deliverables. That context is LOST after the session ends. Waiting for periodic cleanup means guessing about file purpose.
 
 ### Hierarchical Knowledge Agent Responsibilities
 
-The hierarchical-knowledge-agent-skill-memory-curator:
+The hierarchical-knowledge-agent-skill-memory-curator must:
 
-1. **Monitors** `.claude/outputs/` for accumulated outputs
-2. **Consolidates** related findings into summaries (when context permits)
-3. **Moves** clearly outdated files to `.old/`
-4. **Recommends deletion** for obviously stale content
-5. **Improves knowledge density** by identifying placement opportunities
-6. **Never auto-deletes** - user makes final decision
+1. **Monitor** `.claude/outputs/` for accumulated outputs
+2. **Consolidate** related findings into summaries (when context permits)
+3. **Move** clearly outdated files to `.old/`
+4. **Recommend deletion** for obviously stale content
+5. **Improve knowledge density** by identifying placement opportunities
+6. **Never auto-delete** -- the user makes the final decision
 
 ## Benefits
 
@@ -314,30 +314,28 @@ return f"Analysis complete. Results: {output_path}"
 
 ### agent_tasks/ Memory System
 
-For multi-session tasks:
-- STATE.md, BACKLOG.md, PROGRESS.md continue as primary coordination
-- Subagent outputs supplement with detailed findings
-- Cross-reference: "See `.claude/outputs/hdf-analyst/2025-12-15-analysis.md`"
+For multi-session tasks, continue using STATE.md, BACKLOG.md, PROGRESS.md as primary coordination. Supplement with detailed subagent outputs. Cross-reference: "See `.claude/outputs/hdf-analyst/2025-12-15-analysis.md`"
 
 ### feature_dev_notes/
 
-For feature development:
-- Subagent research outputs can write to feature-specific folders
-- Maintains feature context alongside development notes
+For feature development, write subagent research outputs to feature-specific folders to maintain feature context alongside development notes.
 
 ### .claude/rules/
 
-Subagent outputs may inform rule updates:
-- Pattern observed → New rule created
-- Best practice extracted → Rule documented
+Extract rules from subagent outputs when patterns emerge. Pattern observed leads to new rule created. Best practice extracted leads to rule documented.
 
-## See Also
+## Cross-References
 
-- **Hierarchical Knowledge Best Practices**: `.claude/rules/documentation/hierarchical-knowledge-best-practices.md`
-- **Governance Rules**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator/reference/governance-rules.md`
-- **Agent Memory System**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator/reference/agent-memory-system.md`
-- **Task Close Command**: `.claude/commands/agent-taskclose.md`
+**Rules** (related):
+- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
+
+**Agents** (follow this pattern):
+- `hierarchical-knowledge-agent-skill-memory-curator` -- Consolidates subagent outputs
+
+**Commands** (related):
+- `/agent-taskclose` -- End-of-task cleanup using this pattern
+- `/agent-cleanfiles` -- Periodic cleanup of outputs
 
 ---
 
-**Key Takeaway**: Subagents write markdown files, return paths. Main agent reads files. Knowledge persists. Hierarchical knowledge agent consolidates and prunes to `.old/`.
+**Key Takeaway**: Subagents write markdown files and return paths. Main agent reads files. Knowledge persists across sessions. The hierarchical knowledge agent consolidates and prunes to `.old/`.

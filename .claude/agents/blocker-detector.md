@@ -10,11 +10,11 @@ description: |
 
 # Blocker Detector
 
-Identifies recurring issues and their resolutions from conversation history.
+Detect recurring blockers and their resolutions from conversation history.
 
 ## Purpose
 
-Analyze conversations to find:
+Analyze conversations to extract:
 - Blocking issues encountered
 - Solutions that worked
 - Recurring problem patterns
@@ -103,7 +103,7 @@ def categorize(text):
 
 ## Known Blockers Reference
 
-Common blockers to watch for:
+Watch for these common blockers:
 
 ### Remote Execution
 - PsExec session_id requirement
@@ -125,8 +125,14 @@ Common blockers to watch for:
 
 ## Prevention Recommendations
 
-For each identified blocker, suggest:
+For each identified blocker, recommend:
 1. Documentation update location
 2. Rule file to create/modify
 3. Warning to add to relevant code
 4. Test case to add
+
+## Cross-References
+
+**Agents** (collaborate with):
+- `conversation-insights-orchestrator` -- Coordinates your analysis
+- `best-practice-extractor` -- Complementary: successes vs problems

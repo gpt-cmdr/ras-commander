@@ -23,7 +23,7 @@ description: |
 
 # Git Operations Subagent
 
-Handles git operations with safety checks and proper formatting.
+Handle git operations with safety checks and proper formatting.
 
 ## Primary Sources
 
@@ -109,7 +109,7 @@ EOF
 
 ### 3. Git Worktree Management
 
-**Delegates to dev_manage_git-worktrees skill for full workflow**
+**Delegate to dev_manage_git-worktrees skill for the full workflow.**
 
 **Quick reference**:
 ```bash
@@ -195,7 +195,7 @@ EOF
 
 ### Workflow 3: Setup Isolated Worktree
 
-**Delegates to dev_manage_git-worktrees skill**
+**Delegate to dev_manage_git-worktrees skill.**
 
 ```bash
 # Announce usage
@@ -255,7 +255,7 @@ fi
 **Main branch** = Clean user-facing codebase
 **Dev branch** = Includes development coordination files
 
-This ensures users who clone/sync main get a clean workspace without active development task files.
+Ensure users who clone/sync main get a clean workspace without active development task files.
 
 ### Development-Only Files (Untracked on Main)
 
@@ -610,20 +610,14 @@ git add .gitignore
 | **Check secrets** | `git diff \| grep -i "password\|secret"` |
 | **View commits** | `git log --oneline -10` |
 
-## Navigation Map
+## Cross-References
 
-**For detailed workflows**:
-- Git worktrees → `.claude/skills/dev_manage_git-worktrees/` (complete workflow)
-- Commit guidelines → Root `CLAUDE.md` (Git Safety Protocol section)
-- GitHub CLI → `gh --help` or https://cli.github.com/manual/
+**Skills** (invoke these):
+- `dev_manage_git-worktrees` -- Worktree management patterns
 
-**For safety rules**:
-- Never commit secrets → Check diff before staging
-- Never force push to main → Warn user first
-- Never skip hooks → Use `--no-verify` only with user permission
-- Always use heredoc → For multi-line messages
+**Commands** (user triggers):
+- `/agents-start-gitworktree` -- Create isolated worktree
+- `/agents-close-gitworktree` -- Close worktree
 
-**For integration**:
-- Worktree setup → Delegates to `dev_manage_git-worktrees` skill
-- Worktree cleanup → Delegates to `finishing-a-development-branch` skill
-- PR creation → Uses `gh pr create` with formatted body
+**Rules** (follow these):
+- `.claude/rules/documentation/mkdocs-config.md` -- Read before pushing docs changes

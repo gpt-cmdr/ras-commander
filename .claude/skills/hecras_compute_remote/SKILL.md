@@ -12,9 +12,9 @@ description: |
 
 # Executing Remote Plans
 
-Execute HEC-RAS plans across multiple remote machines using distributed workers.
+Use `compute_parallel_remote()` to distribute HEC-RAS plans across multiple remote machines. Read the primary sources below for complete configuration requirements.
 
-> **PRIMARY SOURCES**: This skill is a lightweight navigator. For complete details, see:
+> **PRIMARY SOURCES** (read these for complete details):
 > - `ras_commander/remote/AGENTS.md` - Coding conventions, architecture
 > - `.claude/rules/hec-ras/remote.md` - Machine setup (Group Policy, Registry, session_id)
 > - `examples/500_remote_execution_psexec.ipynb` - Complete PsExec workflow
@@ -55,7 +55,7 @@ for plan_num, result in results.items():
 
 ## CRITICAL: Session-Based Execution
 
-**HEC-RAS is a GUI application** and REQUIRES session-based execution:
+**HEC-RAS is a GUI application** -- always use session-based execution:
 
 ```python
 worker = init_ras_worker(
@@ -88,7 +88,7 @@ query session /server:192.168.1.100
 - **Session 2**: Typical interactive user (MOST COMMON)
 - Session 3+: Additional RDP sessions
 
-See `ras_commander/remote/AGENTS.md` lines 97-101 for critical implementation notes.
+Read `ras_commander/remote/AGENTS.md` lines 97-101 for critical implementation notes.
 
 ## Worker Types
 
@@ -333,7 +333,7 @@ ssh user@192.168.1.100 "docker info"
 ## Architecture Overview
 
 ### Module Structure
-See `ras_commander/remote/AGENTS.md` for complete module structure and coding conventions.
+Read `ras_commander/remote/AGENTS.md` for complete module structure and coding conventions.
 
 ```
 ras_commander/remote/
@@ -361,38 +361,27 @@ worker = init_ras_worker(worker_type, **config)
 ```
 
 ### Lazy Loading
-Workers with optional dependencies implement `check_*_dependencies()`:
+Workers with optional dependencies use `check_*_dependencies()` for lazy loading:
 - Docker: `pip install docker paramiko`
 - SSH: `pip install paramiko`
 - AWS: `pip install boto3`
 
-See `ras_commander/remote/AGENTS.md` lines 58-68 for lazy loading pattern.
+Read `ras_commander/remote/AGENTS.md` lines 58-68 for the lazy loading pattern.
 
-## Primary Sources
+## Cross-References
 
-1. **`ras_commander/remote/AGENTS.md`** (156 lines)
-   - Module structure and naming conventions
-   - Import patterns and coding standards
-   - Critical implementation notes (session_id, UNC paths, etc.)
-   - Worker implementation pattern
-   - Adding new workers
+**Rules** (follow these):
+- `.claude/rules/hec-ras/remote.md` -- CRITICAL: session_id=2, Group Policy, Registry config
+- `.claude/rules/hec-ras/execution.md` -- General execution parameters
 
-2. **`examples/500_remote_execution_psexec.ipynb`**
-   - Complete PsExec workflow
-   - Session ID determination
-   - Network share setup
-   - Error handling and debugging
+**Agents** (delegate when needed):
+- `remote-executor` -- Delegate for remote worker setup and management
 
-3. **`.claude/rules/hec-ras/remote.md`**
-   - Critical configuration requirements
-   - Group Policy configuration
-   - Registry key setup
-   - Troubleshooting common issues
-   - Session ID determination
+**Skills** (related workflows):
+- `hecras_plan_execution` -- Upstream: mode selection (decides if remote is needed)
+- `hecras_compute_plans` -- Alternative: local execution
+- `hecras_extract_results` -- Downstream: extract results after remote execution
 
-## See Also
-
-- **Skill**: `executing-plans` - Local plan execution
-- **Skill**: `processing-hdf-results` - Results analysis
-- **CLAUDE.md**: Remote Execution Subpackage section
-- **Documentation**: ras-commander.readthedocs.io (remote execution)
+**Primary sources**:
+- `ras_commander/remote/AGENTS.md` -- Remote execution architecture
+- `examples/500_remote_execution_psexec.ipynb` -- PsExec remote execution

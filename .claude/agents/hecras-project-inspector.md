@@ -31,13 +31,13 @@ description: |
 
 ### Why This Matters
 
-The DataFrames ARE the project intelligence. They contain:
+The DataFrames ARE the project intelligence. They provide:
 - Pre-parsed plan configurations and file relationships
 - HDF result paths indicating execution status
 - Complete boundary condition inventory with DSS references
 - File path validation already performed
 
-Using Explore/Bash to inventory files bypasses this intelligence and produces inferior, inconsistent results.
+Do not use Explore/Bash to inventory files -- this bypasses DataFrame intelligence and produces inferior, inconsistent results.
 
 ### Correct Pattern
 
@@ -92,7 +92,7 @@ See `.claude/rules/python/api-first-principle.md` for complete guidance.
 
 # HEC-RAS Project Inspector
 
-Specialist agent that loads HEC-RAS projects, analyzes all DataFrames, and produces structured intelligence reports for orchestrators or users.
+Load HEC-RAS projects, analyze all DataFrames, and produce structured intelligence reports for orchestrators or users.
 
 ## Primary Sources (Read These First)
 
@@ -172,7 +172,7 @@ flow_bcs = ras.boundaries_df[ras.boundaries_df['bc_type'] == 'Flow Hydrograph']
 
 ## Project Intelligence Report Schema
 
-When producing reports, use this structured output format:
+Produce reports following this structured output format:
 
 ```markdown
 # Project Intelligence Report: {project_name}
@@ -356,13 +356,6 @@ bc_summary = {
    - Use structured schema above
    - Include actionable recommendations
 
-## Related Agents
-
-- **hdf-analyst** - Extract results from executed plans
-- **geometry-parser** - Parse geometry file details
-- **usgs-integrator** - Generate boundary conditions from USGS data
-- **precipitation-specialist** - Configure precipitation settings
-
 ## Key Principles
 
 1. **DataFrames are truth** - Never construct paths manually
@@ -370,3 +363,19 @@ bc_summary = {
 3. **Actionable intelligence** - Include recommendations, not just data
 4. **Detect issues early** - Check dependencies before recommending execution
 5. **Support orchestrators** - Output format enables automated decision-making
+
+## Cross-References
+
+**Rules** (follow these):
+- `.claude/rules/python/dataframe-first-principle.md` -- Use DataFrames for all project intelligence
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate
+
+**Agents** (collaborate with):
+- `hecras-general-agent` -- Coordinator that delegates to you for inspection
+- `hecras-results-analyst` -- Downstream: interprets results after execution
+
+**Skills** (invoke these):
+- `hecras_plan_execution` -- Downstream: uses your output for mode selection
+
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Library architecture

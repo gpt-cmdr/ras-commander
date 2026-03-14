@@ -10,7 +10,7 @@
 
 ## Overview
 
-ras-commander integrates with USGS NWIS (National Water Information System) for gauge discovery, data retrieval, validation, and boundary condition generation.
+Use ras-commander to integrate with USGS NWIS (National Water Information System) for gauge discovery, data retrieval, validation, and boundary condition generation.
 
 ## Key Classes
 
@@ -98,10 +98,7 @@ matches = GaugeMatcher.match_gauges_to_xs(gauges, cross_sections)
 
 ## Internet Dependency
 
-**Note**: USGS workflows require internet access:
-- Gauge discovery queries USGS servers
-- Data retrieval fetches from NWIS
-- Real-time monitoring polls live data
+**Note**: USGS workflows require internet access. Gauge discovery queries USGS servers, data retrieval fetches from NWIS, and real-time monitoring polls live data.
 
 Handle offline scenarios gracefully:
 
@@ -113,12 +110,20 @@ except requests.ConnectionError:
     data = load_cached_data(site)
 ```
 
-## See Also
+## Cross-References
 
-- **Complete Documentation**: `ras_commander/usgs/CLAUDE.md`
-- **Example Notebooks**: `examples/` (USGS integration notebooks)
-- **Skill**: `.claude/skills/usgs_integrate_gauges/SKILL.md`
+**Agents** (delegate when needed):
+- `usgs-integrator` -- Delegate for end-to-end USGS gauge workflows
+
+**Skills** (related workflows):
+- `usgs_integrate_gauges` -- Complete USGS integration workflow
+
+**Rules** (auto-loaded context):
+- `.claude/rules/hec-ras/dss-files.md` -- Read when generating DSS boundary conditions from gauge data
+
+**Primary sources**:
+- `ras_commander/usgs/CLAUDE.md` -- Complete USGS documentation
 
 ---
 
-**Key Takeaway**: USGS integration provides spatial discovery, data retrieval, and boundary generation. Requires internet access - handle offline scenarios gracefully.
+**Key Takeaway**: Use ras-commander USGS integration for spatial discovery, data retrieval, and boundary generation. Requires internet access -- handle offline scenarios gracefully.

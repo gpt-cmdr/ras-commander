@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # HEC-RAS Plan Execution
 
 **Context**: Running HEC-RAS simulations via ras-commander
@@ -6,13 +10,13 @@
 
 ## Overview
 
-ras-commander provides four execution modes for running HEC-RAS plans: single plan, parallel local, sequential test mode, and distributed remote execution.
+Choose from four execution modes for running HEC-RAS plans: single plan, parallel local, sequential test mode, and distributed remote execution.
 
 ## Execution Modes
 
 ### 1. Single Plan Execution
 
-**Purpose**: Execute one HEC-RAS plan with full parameter control
+**Use this to**: Execute one HEC-RAS plan with full parameter control
 
 **Primary Method**: `RasCmdr.compute_plan()`
 
@@ -46,7 +50,7 @@ RasCmdr.compute_plan("01")
 
 ### 2. Parallel Local Execution
 
-**Purpose**: Run multiple plans simultaneously using worker folders
+**Use this to**: Run multiple plans simultaneously using worker folders
 
 **Method**: `RasCmdr.compute_parallel()`
 
@@ -81,7 +85,7 @@ RasCmdr.compute_parallel(["01", "02", "03"])
 
 ### 3. Sequential Test Mode
 
-**Purpose**: Run multiple plans in order in test folder
+**Use this to**: Run multiple plans in order in a test folder
 
 **Method**: `RasCmdr.compute_test_mode()`
 
@@ -114,7 +118,7 @@ RasCmdr.compute_test_mode(["01", "02", "03"])
 
 ### 4. Distributed Remote Execution
 
-**Purpose**: Execute plans across remote machines via PsExec/SSH/cloud
+**Use this to**: Execute plans across remote machines via PsExec/SSH/cloud
 
 **Function**: `compute_parallel_remote()`
 
@@ -639,7 +643,7 @@ RasCmdr.compute_plan("01", force_geompre=True)
 
 ### Plan Doesn't Execute
 
-**Check**:
+**Diagnose by checking**:
 1. Project initialized? `init_ras_project()` called?
 2. Plan exists? Check `ras.plan_df`
 3. HEC-RAS installed? Correct version?
@@ -647,7 +651,7 @@ RasCmdr.compute_plan("01", force_geompre=True)
 
 ### HDF File Not Created
 
-**Diagnosis**:
+**Diagnose by checking**:
 1. Check compute messages (if HDF partially exists)
 2. Check Windows Event Log
 3. Enable `stream_callback` for real-time monitoring
@@ -655,7 +659,7 @@ RasCmdr.compute_plan("01", force_geompre=True)
 
 ### Performance Issues
 
-**Optimization**:
+**Optimize by**:
 1. Reduce `num_cores` (too many causes overhead)
 2. Use `compute_parallel()` for multiple plans
 3. Enable `clear_geompre=False` if geometry unchanged
@@ -690,13 +694,24 @@ RasCmdr.compute_plan("01", force_geompre=True)
 
 **Manual override**: Not currently supported (flag always enabled)
 
-## See Also
+## Cross-References
 
-- **Remote Execution**: `.claude/rules/hec-ras/remote.md` - Distributed execution
-- **Static Classes**: `.claude/rules/python/static-classes.md` - RasCmdr pattern
-- **Error Handling**: `.claude/rules/python/error-handling.md` - Exception patterns
-- **HDF Results**: `ras_commander/hdf/CLAUDE.md` - Results extraction
-- **Results DataFrame**: `ras_commander/results/ResultsSummary.py` - Fallback mechanism
+**Skills** (invoke these):
+- `hecras_compute_plans` -- Plan execution patterns
+- `hecras_plan_execution` -- Execution mode selection
+- `hecras_compute_remote` -- Remote distributed execution
+
+**Agents** (delegate when needed):
+- `hecras-general-agent` -- Full workflow coordinator
+- `remote-executor` -- Remote execution setup
+
+**Rules** (related):
+- `.claude/rules/hec-ras/remote.md` -- Remote execution specifics
+- `.claude/rules/python/static-classes.md` -- RasCmdr static pattern
+
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Execution modes overview
+- `ras_commander/RasCmdr.py` -- Implementation
 
 ---
 

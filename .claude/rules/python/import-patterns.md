@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Import Patterns
 
 **Context**: Flexible imports for development vs installed package
@@ -6,7 +10,7 @@
 
 ## Overview
 
-ras-commander uses a flexible import pattern that works in both development (local repository) and production (installed package) scenarios. This pattern is especially important for example notebooks that need to run in various environments.
+Use the flexible import pattern below to ensure code works in both development (local repository) and production (installed package) scenarios. Apply this pattern in example notebooks that need to run in various environments.
 
 ## Standard Import Pattern
 
@@ -297,11 +301,10 @@ jupyter notebook examples/01_basic_usage.ipynb
 
 **Both should work without modification**
 
-## See Also
+## Cross-References
 
-- **Development Environment**: Root CLAUDE.md - Environment Management section
-- **Testing Strategy**: `.claude/rules/testing/tdd-approach.md` - Testing with example projects
-- **Path Handling**: `.claude/rules/python/path-handling.md` - pathlib.Path usage
+**Rules** (related):
+- `.claude/rules/python/static-classes.md` -- What gets imported
 
 ---
 

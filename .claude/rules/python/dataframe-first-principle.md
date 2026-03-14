@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # DataFrame-First Principle
 
 **Context**: Core architectural pattern for ras-commander data access
@@ -11,7 +15,7 @@
 
 **ras-commander DataFrames are the SINGLE SOURCE OF TRUTH for project metadata.**
 
-All file paths, execution status, and project configuration should be queried from:
+Query all file paths, execution status, and project configuration from:
 - `ras.plan_df` - Plan files, HDF paths, titles, execution status
 - `ras.geom_df` - Geometry files, mesh info, structure counts
 - `ras.flow_df` - Flow files, boundary conditions
@@ -268,10 +272,14 @@ When implementing new functions that execute HEC-RAS or modify project files:
 
 ---
 
-## See Also
+## Cross-References
 
-- **Context Object Discipline**: `.claude/rules/python/ras-commander-patterns.md` - ras_object parameter pattern
-- **Static Classes**: `.claude/rules/python/static-classes.md` - DataFrame refresh in static methods
+**Rules** (related):
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate
+- `.claude/rules/python/ras-commander-patterns.md` -- RasPrj DataFrame columns
+
+**Agents** (enforce this):
+- `hecras-project-inspector` -- Uses DataFrames for all project intelligence
 
 ---
 

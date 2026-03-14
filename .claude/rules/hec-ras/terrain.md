@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # HEC-RAS Terrain Creation
 
 **Context**: Creating terrain HDF files programmatically via CLI
@@ -13,7 +17,7 @@
 
 ## Overview
 
-HEC-RAS terrain files (`.hdf`) store multi-resolution elevation data with pyramid levels and multi-source stitching. ras-commander provides CLI-based terrain creation via `RasProcess.exe` (HEC-RAS 6.6+).
+Create HEC-RAS terrain files (`.hdf`) programmatically. These files store multi-resolution elevation data with pyramid levels and multi-source stitching. Use CLI-based terrain creation via `RasProcess.exe` (HEC-RAS 6.6+).
 
 ## Key Class
 
@@ -161,14 +165,11 @@ subprocess.run(cmd_str, shell=True)
 3. TerrainDestinationFolder set in .rasmap?
 4. Projection file referenced in .rasmap?
 
-## See Also
+## Cross-References
 
-- **Implementation**: `ras_commander/terrain/RasTerrain.py` - Complete terrain API
-- **Example Notebook**: `examples/920_terrain_creation.ipynb` - Complete workflow
-- **Feature Design**: `feature_dev_notes/HEC-RAS_Terrain_CLI/CLAUDE.md` - All phases
-- **Bathymetric Algorithm**: `feature_dev_notes/HEC-RAS_Terrain_CLI/BATHYMETRIC_WORKFLOW.md`
-- **RasMap Integration**: `ras_commander/RasMap.py` - `add_terrain_layer()` method
+**Primary sources**:
+- `ras_commander/terrain/` -- Terrain module implementation
 
 ---
 
-**Key Takeaway**: Use `RasTerrain.create_terrain_hdf()` to create terrain HDF files via `RasProcess.exe CreateTerrain`. Register in RasMapper with `RasMap.add_terrain_layer()`. Input files processed in priority order (first = highest).
+**Key Takeaway**: Use `RasTerrain.create_terrain_hdf()` to create terrain HDF files via `RasProcess.exe CreateTerrain`. Register in RasMapper with `RasMap.add_terrain_layer()`. Input files are processed in priority order (first = highest).

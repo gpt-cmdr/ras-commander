@@ -12,7 +12,7 @@ description: |
 
 **Lightweight skill for navigating ras-commander's geometry checking and repair capabilities.**
 
-This skill provides quick navigation to primary sources for RasCheck (validation) and RasFixit (repair). **Do not duplicate content from primary sources** - this file serves as an index only.
+When the user asks to fix geometry errors, repair obstructions, validate a model, or ensure FEMA compliance, use this skill. Navigate to primary sources for RasCheck (validation) and RasFixit (repair). **Do not duplicate content from primary sources** -- this file serves as an index only.
 
 ## Primary Sources (Read These First)
 
@@ -163,9 +163,9 @@ Fixed (elevation envelope with 0.02 gap):
 - Overflow handled with asterisks (`********`)
 - Section terminators: `Bank Sta=`, `#XS Ineff=`, `#Mann=`, `XS Rating Curve=`, `XS HTab`, `Exp/Cntr=`
 
-## When to Use This Skill
+## When to Invoke This Skill
 
-**Use for**:
+**Invoke for**:
 - HEC-RAS geometry preprocessing failures
 - FEMA/USACE model validation
 - Fixing overlapping blocked obstructions
@@ -371,22 +371,34 @@ if log_parser.has_obstruction_errors(log_content):
 
 ## Navigation Map
 
-**For validation questions** → Read `ras_commander/check/CLAUDE.md`
+**For validation questions** -- Read `ras_commander/check/CLAUDE.md`
 
-**For repair questions** → Read `ras_commander/fixit/AGENTS.md`
+**For repair questions** -- Read `ras_commander/fixit/AGENTS.md`
 
-**For workflow examples** → See notebooks:
+**For workflow examples** -- Read these notebooks:
 - `examples/200_fixit_blocked_obstructions.ipynb`
 - `examples/300_quality_assurance_rascheck.ipynb`
 
-**For API details** → Read source code docstrings:
+**For API details** -- Read source code docstrings:
 - `ras_commander/check/RasCheck.py`
 - `ras_commander/fixit/RasFixit.py`
 
-## Related Skills
+## Cross-References
 
-- **quality-assurance subagent**: `.claude/agents/quality-assurance/SUBAGENT.md`
-- **Testing approach**: `.claude/rules/testing/tdd-approach.md`
+**Rules** (follow these):
+- `.claude/rules/hec-ras/geometry.md` -- Geometry domain overview
+- `.claude/rules/validation/validation-patterns.md` -- Validation patterns
+
+**Agents** (delegate when needed):
+- `quality-assurance` -- Delegate for full QA workflows
+- `geometry-parser` -- Delegate for geometry analysis before repair
+
+**Skills** (related workflows):
+- `hecras_parse_geometry` -- Use for geometry parsing before repair
+- `hecras_compute_plans` -- Use downstream to re-run after repair
+
+**Primary sources**:
+- `ras_commander/fixit/AGENTS.md` -- RasFixit documentation
 
 ## State-Specific Floodway Surcharge Limits
 

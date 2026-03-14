@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Validation Framework - Patterns and Best Practices
 
 **Context**: Validation framework for pre-flight checks and data quality assurance
@@ -6,7 +10,7 @@
 
 ## Overview
 
-The validation framework provides comprehensive validation capabilities for HEC-RAS data files and configurations. It is built on three core classes:
+Use the validation framework for comprehensive validation of HEC-RAS data files and configurations. Build on three core classes:
 
 - **ValidationSeverity** - Enumeration of severity levels (INFO < WARNING < ERROR < CRITICAL)
 - **ValidationResult** - Single validation check result with severity and context
@@ -22,7 +26,7 @@ The validation framework provides comprehensive validation capabilities for HEC-
 
 ### Pre-Flight Checks
 
-**Use validation BEFORE executing HEC-RAS plans** to catch issues early:
+**Run validation BEFORE executing HEC-RAS plans** to catch issues early:
 
 ```python
 from ras_commander.dss import RasDss
@@ -43,7 +47,7 @@ else:
 
 ### Data Quality Assurance
 
-**Use validation to assess data quality** and identify potential issues:
+**Assess data quality through validation** to identify potential issues:
 
 ```python
 from ras_commander import RasMap
@@ -60,7 +64,7 @@ if report.has_warnings:
 
 ### Graceful Degradation
 
-**Use validation to enable graceful degradation** when optional data is missing:
+**Enable graceful degradation through validation** when optional data is missing:
 
 ```python
 # Check if optional land cover layer is available
@@ -76,7 +80,7 @@ else:
 
 ## ValidationSeverity Levels
 
-### Level Definitions
+### Level Definitions (Use These Consistently)
 
 ```python
 from ras_commander.RasValidation import ValidationSeverity
@@ -96,7 +100,7 @@ ValidationSeverity.CRITICAL  # e.g., "File format corrupted"
 
 ### Severity Comparison
 
-Severities support comparison operations:
+Compare severities using standard operators:
 
 ```python
 if severity >= ValidationSeverity.WARNING:
@@ -190,7 +194,7 @@ report.print_report(show_passed=False)  # Only show failures
 
 ### Pattern: check_* Methods Return Details
 
-**Detailed methods** (`check_*`) return ValidationResult or ValidationReport:
+**Use detailed methods** (`check_*`) to get ValidationResult or ValidationReport:
 
 ```python
 # Returns ValidationResult with full context
@@ -205,7 +209,7 @@ if 'part_count' in result.details:
     print(f"Found {result.details['part_count']} parts")
 ```
 
-**Use detailed methods when**:
+**Choose detailed methods when**:
 - Need diagnostic information for failures
 - Building UI with validation feedback
 - Logging validation results
@@ -213,7 +217,7 @@ if 'part_count' in result.details:
 
 ### Pattern: is_valid_* Methods Return Boolean
 
-**Boolean methods** (`is_valid_*`, `is_*_available`) return True/False:
+**Use boolean methods** (`is_valid_*`, `is_*_available`) for simple True/False checks:
 
 ```python
 # Returns simple boolean
@@ -225,7 +229,7 @@ else:
     print("✗ Invalid")
 ```
 
-**Use boolean methods when**:
+**Choose boolean methods when**:
 - Simple pass/fail decision needed
 - Quick pre-checks
 - Conditional logic
@@ -294,7 +298,7 @@ for bc_name, bc_pathname in boundary_pathnames.items():
 
 ### Adding Validation to New Domains
 
-**Step 1: Import validation base classes**
+**Step 1: Import the validation base classes**
 
 ```python
 from ras_commander.RasValidation import (
@@ -305,7 +309,7 @@ from ras_commander.RasValidation import (
 from datetime import datetime
 ```
 
-**Step 2: Create detailed validation methods**
+**Step 2: Create detailed validation methods following this pattern**
 
 ```python
 @staticmethod
@@ -356,7 +360,7 @@ def check_geometry_file_format(geom_file: Union[str, Path]) -> ValidationResult:
     )
 ```
 
-**Step 3: Create comprehensive validation method**
+**Step 3: Create a comprehensive validation method that aggregates checks**
 
 ```python
 @staticmethod
@@ -398,7 +402,7 @@ def check_geometry_file(geom_file: Union[str, Path]) -> ValidationReport:
     )
 ```
 
-**Step 4: Add boolean convenience method**
+**Step 4: Add a boolean convenience method**
 
 ```python
 @staticmethod
@@ -675,17 +679,19 @@ def test_validation_report():
 - Use boolean methods when need diagnostics
 - Skip validation for "trusted" data
 
-## See Also
+## Cross-References
 
-- **RasValidation.py** - Core validation classes
-- **RasDss validation** - `ras_commander/dss/RasDss.py` (check_pathname, etc.)
-- **RasMap validation** - `ras_commander/RasMap.py` (check_layer, etc.)
-- **Example notebooks**:
-  - `examples/33_validating_dss_paths.ipynb` - DSS validation examples
-  - `examples/34_validating_map_layers.ipynb` - Map layer validation examples
-- **Error Handling**: `.claude/rules/python/error-handling.md` - Exception patterns
-- **Static Classes**: `.claude/rules/python/static-classes.md` - Validation method patterns
+**Rules** (related):
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate includes validation
+
+**Agents** (use this):
+- `hecras-results-analyst` -- Uses validation severity levels
+- `quality-assurance` -- Applies validation patterns
+
+**Skills** (use this):
+- `ebfe_validate_models` -- eBFE model validation
+- `qa_repair_geometry` -- Geometry validation and repair
 
 ---
 
-**Key Takeaway**: Use validation framework for pre-flight checks and data quality assurance. Detailed methods (`check_*`) return ValidationResult/ValidationReport for diagnostics. Boolean methods (`is_valid_*`) return True/False for simple checks. Severity levels: INFO < WARNING < ERROR < CRITICAL.
+**Key Takeaway**: Use the validation framework for pre-flight checks and data quality assurance. Call detailed methods (`check_*`) for diagnostics (ValidationResult/ValidationReport). Call boolean methods (`is_valid_*`) for simple pass/fail checks. Severity levels: INFO < WARNING < ERROR < CRITICAL.

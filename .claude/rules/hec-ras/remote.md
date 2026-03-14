@@ -1,3 +1,7 @@
+---
+paths: ras_commander/remote/**
+---
+
 # Remote Execution - Critical Configuration
 
 **Context**: HEC-RAS remote execution requirements
@@ -7,7 +11,7 @@
 
 ## Critical Requirement Summary
 
-**HEC-RAS is a GUI application** and requires session-based execution when run remotely. Using system account causes silent failure.
+**HEC-RAS is a GUI application** -- always use session-based execution when running remotely. Using system account causes silent failure.
 
 ## The Golden Rules
 
@@ -29,7 +33,7 @@
 
 ### Group Policy Settings
 
-Remote machine requires these Group Policy rights:
+Configure these Group Policy rights on the remote machine:
 
 **Computer Configuration → Windows Settings → Security Settings → Local Policies → User Rights Assignment**:
 
@@ -99,7 +103,7 @@ net localgroup Administrators
 
 ### Determining Correct Session ID
 
-**Method 1: Query Session (Recommended)**:
+**Method 1: Query the session (Recommended)**:
 ```bash
 # From controlling machine, query remote sessions
 query session /server:REMOTE_MACHINE_NAME
@@ -123,7 +127,7 @@ On a standard workstation with one logged-in user:
 - Session 1: Sometimes used by system (varies by Windows version)
 - **Session 2**: Typical interactive user session (MOST COMMON)
 
-**Best Practice**: Always query session ID, don't assume
+**Best Practice**: Always query session ID. Never assume a value.
 
 ## PsExec Worker Configuration
 
@@ -174,7 +178,7 @@ worker = init_ras_worker(
 
 ### UNC Path Format
 
-**Requirement**: Remote share must be accessible via UNC path
+**Requirement**: Always specify remote shares as UNC paths
 
 ```python
 # ✅ CORRECT: UNC path
@@ -187,7 +191,7 @@ remote_share = r'Z:\RAS_Share'  # Only works on machine with mapping
 
 ### Share Permissions
 
-Remote share folder requires:
+Grant the remote share folder these permissions:
 - **Read/Write** permissions for user account
 - **Share permissions**: Read/Write for user
 - **NTFS permissions**: Modify for user
@@ -373,9 +377,7 @@ compute_parallel_remote(
 
 ## DataFrame Updates
 
-**Important**: `compute_parallel_remote()` does NOT automatically update `plan_df` or `results_df`.
-
-This is by design because:
+**Important**: `compute_parallel_remote()` does NOT automatically update `plan_df` or `results_df`. Understand this is by design because:
 - Results stay on remote workers (not consolidated to local project)
 - User receives `ExecutionResult` objects with HDF paths on remote systems
 - Manual DataFrame refresh requires copying results back first
@@ -389,12 +391,20 @@ ras.plan_df = ras.get_plan_entries()
 ras.update_results_df(list(results.keys()))
 ```
 
-## See Also
+## Cross-References
 
-- **Remote Subpackage**: `ras_commander/remote/AGENTS.md` - Complete remote execution documentation
-- **Worker Setup Guide**: `feature_dev_notes/RasRemote/REMOTE_WORKER_SETUP_GUIDE.md`
-- **Example Notebook**: `examples/500_remote_execution_psexec.ipynb`
+**Skills** (invoke these):
+- `hecras_compute_remote` -- Remote execution workflow
+
+**Agents** (delegate when needed):
+- `remote-executor` -- Remote execution specialist
+
+**Rules** (related):
+- `.claude/rules/hec-ras/execution.md` -- General execution context
+
+**Primary sources**:
+- `ras_commander/remote/AGENTS.md` -- Remote architecture
 
 ---
 
-**Key Takeaway**: HEC-RAS remote execution REQUIRES session-based execution (`session_id=2`). Never use `system_account=True`. Configure Group Policy, Registry, Remote Registry service, and ensure user is Administrator.
+**Key Takeaway**: HEC-RAS remote execution REQUIRES session-based execution (`session_id=2`). Never use `system_account=True`. Configure Group Policy, Registry, Remote Registry service, and ensure the user is Administrator.

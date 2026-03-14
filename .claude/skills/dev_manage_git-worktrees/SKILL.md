@@ -15,9 +15,9 @@ description: |
 
 ## Overview
 
-Git worktrees create isolated workspaces sharing the same repository, allowing work on multiple branches simultaneously without switching.
+Use git worktrees to create isolated workspaces sharing the same repository, enabling work on multiple branches simultaneously without switching.
 
-**Core principle:** Systematic directory selection + safety verification = reliable isolation.
+**Core principle:** Apply systematic directory selection + safety verification to ensure reliable isolation.
 
 **Announce at start:** "I'm using the dev_manage_git-worktrees skill to set up an isolated workspace."
 
@@ -44,7 +44,7 @@ ls -d .worktrees 2>/dev/null     # Preferred (hidden)
 ls -d worktrees 2>/dev/null      # Alternative
 ```
 
-**If found:** Use that directory. If both exist, `.worktrees` wins.
+**If found:** Use that directory. If both exist, prefer `.worktrees`.
 
 ### 2. Check CLAUDE.md
 
@@ -258,7 +258,7 @@ echo "Ready to implement auth feature"
 
 ## Worktree Cleanup
 
-**After work complete**, use `finishing-a-development-branch` skill or manual cleanup:
+**After completing work**, invoke `finishing-a-development-branch` skill or perform manual cleanup:
 
 ```bash
 # 1. Return to main worktree
@@ -290,20 +290,11 @@ git worktree list
 - Verify clean test baseline
 - Announce skill usage at start
 
-## Navigation Map
+## Cross-References
 
-**For git operations**:
-- Commit preparation → `.claude/agents/git-operations/`
-- Pull request creation → `.claude/agents/git-operations/`
-- General git workflow → `git --help`
+**Agents** (delegate when needed):
+- `git-operations` -- Delegate for complex git workflows
 
-**For worktree management**:
-- Create worktree → This skill
-- Remove worktree → `git worktree remove` or `finishing-a-development-branch` skill
-- List worktrees → `git worktree list`
-
-**For project setup**:
-- Python projects → `pip install -r requirements.txt` or `poetry install`
-- Node.js → `npm install` or `yarn install`
-- Rust → `cargo build`
-- Go → `go mod download`
+**Commands** (user triggers):
+- `/agents-start-gitworktree` -- Create isolated worktree for feature work
+- `/agents-close-gitworktree` -- Close worktree after completing work

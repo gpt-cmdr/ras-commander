@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Error Handling and Logging
 
 **Context**: Centralized logging with LoggingConfig
@@ -6,7 +10,7 @@
 
 ## Overview
 
-ras-commander uses a centralized logging system via `LoggingConfig` class. All errors, warnings, and informational messages are logged consistently using Python's logging module with automatic configuration.
+Use the centralized logging system via `LoggingConfig` class. Log all errors, warnings, and informational messages consistently using Python's logging module with automatic configuration.
 
 ## LoggingConfig - Centralized Logging
 
@@ -301,10 +305,10 @@ def test_file_not_found():
         RasGeometry.read_file(Path("/nonexistent/file.g01"))
 ```
 
-## See Also
+## Cross-References
 
-- **Decorators**: `.claude/rules/python/decorators.md` - @log_call decorator
-- **Path Handling**: `.claude/rules/python/path-handling.md` - FileNotFoundError patterns
+**Rules** (related):
+- `.claude/rules/python/decorators.md` -- @log_call decorator for automatic logging
 
 ---
 

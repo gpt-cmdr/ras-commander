@@ -15,7 +15,7 @@ Production Scripts     ->     Library Primitives     ->     Example Notebooks
      |------ Full Workflows ----------------------------------------|
 ```
 
-This cycle ensures that valuable patterns discovered in real projects become reusable library functions and educational examples. The key insight: **production scripts are a mine for general-purpose primitives**, but you must actively extract them or they stay buried in project-specific code.
+Follow this cycle to ensure valuable patterns discovered in real projects become reusable library functions and educational examples. The key insight: **production scripts are a mine for general-purpose primitives** -- actively extract them or they stay buried in project-specific code.
 
 ---
 
@@ -23,7 +23,7 @@ This cycle ensures that valuable patterns discovered in real projects become reu
 
 ### Discovery Signals
 
-Review production scripts for these indicators:
+Scan production scripts for these indicators:
 
 | Signal | What It Means |
 |--------|---------------|
@@ -34,7 +34,7 @@ Review production scripts for these indicators:
 
 ### Decision Framework: Extract or Leave?
 
-**Extract** when the function:
+**Extract** the function when it:
 - Solves a problem ANY user of the library might face
 - Has clear inputs/outputs independent of the project
 - Has been validated with real data in production
@@ -43,7 +43,7 @@ Review production scripts for these indicators:
 **Leave in the script** when the function:
 - Contains project-specific business logic
 - References domain knowledge not relevant to the library
-- Is a thin wrapper around already-extracted primitives
+- Wraps already-extracted primitives thinly
 - Would add complexity without broad reuse potential
 
 ```python
@@ -139,7 +139,7 @@ def get_xs_cut_lines(geom_file: Path) -> gpd.GeoDataFrame:
 
 ### Extraction Checklist
 
-When moving a function from script to library:
+Complete each item when moving a function from script to library:
 
 - [ ] Remove hardcoded paths/project names (parameterize everything)
 - [ ] Add type hints to all parameters and return value
@@ -161,13 +161,13 @@ Use **feature-dev:code-explorer** to find all call sites of the function being e
 
 ### The Two-Example Pattern
 
-**Always include 2 examples** in each notebook. This is the single most important structural decision because it demonstrates:
+**Include 2 examples** in each notebook. This is the single most important structural decision because it demonstrates:
 
 1. **Generalizability**: The primitives work on different data, not just one lucky case
 2. **Variation**: Different workflows, data sizes, or use cases
 3. **Robustness**: Handles different data structures gracefully
 
-Choose example pairs that contrast meaningfully:
+Select example pairs that contrast meaningfully:
 - Small dataset + large dataset
 - Simple workflow + complex workflow
 - One analysis type + another analysis type
@@ -255,7 +255,7 @@ docs(examples): Add [workflow] notebook
 
 ### Documentation Updates
 
-Update these for each extraction:
+Update these locations for each extraction:
 1. **Module docstring** at top of file (what the module provides, quick example)
 2. **README examples section** (3-5 line usage snippet)
 3. **CHANGELOG** (Added section with primitives and notebooks)
@@ -264,7 +264,7 @@ Update these for each extraction:
 
 ## Phase 5: Publication Decision Gate
 
-Before publishing notebooks with real project data:
+Complete all items before publishing notebooks with real project data:
 
 - [ ] Verify data permissions (is it public or publishable?)
 - [ ] Check for sensitive information (internal paths, credentials, metadata)
@@ -274,6 +274,16 @@ Before publishing notebooks with real project data:
 - [ ] Documentation updated (README, CHANGELOG)
 
 **Strategy**: Keep notebooks gitignored until approved, then remove exclusions and commit.
+
+## Cross-References
+
+**Rules** (related):
+- `.claude/rules/documentation/notebook-standards.md` -- Notebook conventions for Phase 3
+- `.claude/rules/documentation/notebook-to-agent-conversion.md` -- Converting to agents/skills
+
+**Agents** (use during extraction):
+- `example-notebook-librarian` -- Notebook management
+- `ras-commander-api-expert` -- API design guidance
 
 ---
 
@@ -318,21 +328,22 @@ def compare_hydrographs(ts1, ts2,
 
 ### When Is a Primitive "Ready"?
 
-A primitive is ready for the library when it meets ALL of these:
+Consider a primitive ready for the library when it meets ALL of these:
 
-- **Reusable**: You can describe a second use case beyond the original project
+- **Reusable**: Describe a second use case beyond the original project
 - **Clear**: A developer understands the docstring without reading the implementation
 - **Robust**: Handles edge cases (empty data, mismatched lengths, missing values)
 - **Tested**: Validated in production with real data, ideally with a unit test
 
-If you can't articulate a second use case, the function probably belongs in the script, not the library.
+If a second use case cannot be articulated, keep the function in the script rather than the library.
 
 ### Notebook Quality
 
-- **Educational**: Teaches primitives through realistic examples
+Ensure notebooks meet these criteria:
+- **Educational**: Teach primitives through realistic examples
 - **Complete**: Both examples execute without errors
-- **Reproducible**: Works in a clean environment with published data
-- **Readable**: Clear narrative flow connecting code cells
+- **Reproducible**: Work in a clean environment with published data
+- **Readable**: Maintain clear narrative flow connecting code cells
 
 ---
 

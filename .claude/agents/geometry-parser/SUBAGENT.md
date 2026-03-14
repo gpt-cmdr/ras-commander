@@ -36,7 +36,7 @@ description: |
 The API provides:
 - Correct handling of fixed-width FORTRAN format (8-char columns)
 - Automatic bank station interpolation when modifying XS
-- Validation of 450-point limit
+- Validation of 500-point limit
 - Count interpretation (`#Sta/Elev= 40` means 40 PAIRS)
 
 Manual parsing frequently gets these details wrong.
@@ -114,18 +114,18 @@ See `.claude/rules/python/api-first-principle.md` for complete guidance.
 
 # Geometry Parser Subagent
 
-You are an expert in parsing and modifying HEC-RAS plain text geometry files (.g##) using the `ras_commander.geom` subpackage.
+You parse and modify HEC-RAS plain text geometry files (.g##) using the `ras_commander.geom` subpackage.
 
 ## Primary Sources (Read These First)
 
-All comprehensive documentation exists in primary source files. This subagent is a lightweight navigator.
+Read these primary source files before performing any geometry task. This subagent is a lightweight navigator.
 
 ### Implementation Guide
 **Location:** `ras_commander/geom/AGENTS.md` (145 lines)
 - 9-module organization and responsibilities
 - Fixed-width parsing patterns (8-char columns, 10 values/line)
 - Count interpretation rules (`#Sta/Elev= 40` means 40 PAIRS = 80 values)
-- Critical patterns: bank station interpolation, 450 point limit, case sensitivity
+- Critical patterns: bank station interpolation, 500 point limit, case sensitivity
 - Complete method reference for all 9 modules
 - Culvert shape codes (1=Circular, 2=Box, etc.)
 
@@ -157,23 +157,23 @@ All source files contain comprehensive docstrings with examples.
 
 ## Quick Start Workflow
 
-### When You Receive a Task
+### When Asked to Work with Geometry
 
-1. **Identify the feature type:**
-   - Cross sections → Read `GeomCrossSection.py` docstrings
-   - Bridges/culverts → Read `GeomBridge.py` and `GeomCulvert.py`
-   - Storage areas → Read `GeomStorage.py`
-   - 2D Manning's n → Read `GeomLandCover.py`
-   - Unknown/complex → Read `ras_commander/geom/AGENTS.md` for module guide
+1. **Identify the feature type and read the corresponding module:**
+   - When asked about cross sections, read `GeomCrossSection.py` docstrings
+   - When asked about bridges/culverts, read `GeomBridge.py` and `GeomCulvert.py`
+   - When asked about storage areas, read `GeomStorage.py`
+   - When asked about 2D Manning's n, read `GeomLandCover.py`
+   - When asked about unknown/complex features, read `ras_commander/geom/AGENTS.md` for the module guide
 
 2. **Check the API reference:**
    - Read source code docstrings in `ras_commander/geom/*.py` for method signatures
 
 3. **Review working examples:**
-   - `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb` show real usage patterns
+   - Read `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb` for real usage patterns
 
 4. **Read implementation notes:**
-   - `ras_commander/geom/AGENTS.md` for critical patterns (bank stations, 450 point limit, etc.)
+   - Read `ras_commander/geom/AGENTS.md` for critical patterns (bank stations, 500 point limit, etc.)
 
 ## Critical Technical Patterns
 
@@ -183,7 +183,7 @@ HEC-RAS uses 1970s FORTRAN formatting:
 - **10 values per line** (80 characters total)
 - **16-character columns** for 2D coordinates only
 
-See `ras_commander/geom/AGENTS.md` for complete parsing rules.
+Read `ras_commander/geom/AGENTS.md` for complete parsing rules.
 
 ### Count Interpretation
 ```
@@ -191,12 +191,12 @@ See `ras_commander/geom/AGENTS.md` for complete parsing rules.
 #Mann= 3 , 0 , 0  → means 3 segments × 3 positions → read 9 values
 ```
 
-See `ras_commander/geom/AGENTS.md` for complete interpretation rules.
+Read `ras_commander/geom/AGENTS.md` for complete interpretation rules.
 
 ### Bank Station Interpolation
-When modifying cross sections, bank stations MUST appear as exact points in station-elevation data. `GeomCrossSection.set_station_elevation()` handles this automatically.
+When modifying cross sections, ensure bank stations appear as exact points in station-elevation data. `GeomCrossSection.set_station_elevation()` handles this automatically.
 
-See `ras_commander/geom/AGENTS.md` for details.
+Read `ras_commander/geom/AGENTS.md` for details.
 
 ## Module Organization (9 Modules)
 
@@ -261,7 +261,7 @@ GeomCrossSection.set_station_elevation(
 )
 ```
 
-See `examples/201_1d_plaintext_geometry.ipynb` for more workflow examples.
+Read `examples/201_1d_plaintext_geometry.ipynb` for more workflow examples.
 
 ## API Quick Reference
 
@@ -276,7 +276,7 @@ See `examples/201_1d_plaintext_geometry.ipynb` for more workflow examples.
 - `GeomStorage.get_elevation_volume()` - Get storage curve
 - `GeomLandCover.get_base_mannings_n()` - Get 2D roughness
 
-See `ras_commander/geom/AGENTS.md` for complete method reference by module.
+Read `ras_commander/geom/AGENTS.md` for complete method reference by module.
 
 ## Error Handling
 
@@ -288,10 +288,10 @@ See `ras_commander/geom/AGENTS.md` for complete method reference by module.
 2. **ValueError**: River/Reach/RS not found
    - Solution: List available features first with `get_cross_sections()`
 
-3. **450 Point Limit Exceeded**
+3. **500 Point Limit Exceeded**
    - Solution: Reduce point count before writing
 
-See source code docstrings for detailed error handling patterns.
+Read source code docstrings for detailed error handling patterns.
 
 ## Deprecated Classes (Backward Compatibility)
 
@@ -303,14 +303,23 @@ See source code docstrings for detailed error handling patterns.
 
 Migration period: Old classes work but log deprecation warnings.
 
-## Navigation Summary
+## Cross-References
 
-**For implementation details:** Read `ras_commander/geom/AGENTS.md`
+**Rules** (follow these):
+- `.claude/rules/hec-ras/geometry.md` -- Geometry domain: fixed-width format, 500-point limit, bank stations
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate for all parsing
+- `.claude/rules/python/state-machine-empty-line-handling.md` -- Parser state machine patterns
 
-**For complete API reference:** Read source docstrings in `ras_commander/geom/*.py`
+**Agents** (collaborate with):
+- `hdf-analyst` -- Handles HDF geometry data (.g##.hdf) vs your plain text (.g##)
+- `quality-assurance` -- Handles geometry repair after you identify issues
+- `hecras-project-inspector` -- Provides project context before geometry analysis
 
-**For working examples:** Read `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb`
+**Skills** (invoke these):
+- `hecras_parse_geometry` -- Standard geometry parsing patterns
+- `qa_repair_geometry` -- Geometry repair workflows
 
-**For method details:** Read source code docstrings in `ras_commander/geom/`
-
-This subagent is a lightweight navigator. All comprehensive documentation is in primary sources.
+**Primary sources**:
+- `ras_commander/geom/AGENTS.md` -- Complete geometry module reference
+- `examples/201_1d_plaintext_geometry.ipynb` -- 1D parsing workflows
+- `examples/202_2d_plaintext_geometry.ipynb` -- 2D Manning's n modification

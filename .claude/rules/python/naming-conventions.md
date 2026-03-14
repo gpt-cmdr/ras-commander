@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Naming Conventions
 
 **Context**: Consistent naming across ras-commander codebase
@@ -6,7 +10,7 @@
 
 ## Overview
 
-ras-commander follows Python PEP 8 naming conventions with specific domain abbreviations for HEC-RAS terminology. Consistency in naming makes the code more readable and maintainable.
+Follow Python PEP 8 naming conventions with the specific domain abbreviations listed below for HEC-RAS terminology. Maintain consistency in naming to keep code readable and maintainable.
 
 ## Core Rules
 
@@ -369,11 +373,14 @@ def compute_plan(plan_number):  # snake_case function
 # Result: GOOD NAME
 ```
 
-## See Also
+## Cross-References
 
-- **Function Naming Technological Lineage**: `CLAUDE.md` (root) - Legacy vs modern naming rationale
-- **Static Classes**: `.claude/rules/python/static-classes.md` - Class organization patterns
-- **Documentation Standards**: `.claude/rules/documentation/` - Docstring conventions
+**Rules** (related):
+- `.claude/rules/python/static-classes.md` -- Class naming conventions
+- `.claude/rules/python/import-patterns.md` -- Module naming conventions
+
+**Agents** (enforce this):
+- `api-consistency-auditor` -- Detects naming violations
 
 ---
 

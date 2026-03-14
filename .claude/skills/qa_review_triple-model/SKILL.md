@@ -16,7 +16,7 @@ description: |
 
 ## Overview
 
-This skill launches four independent AI subagents (Opus, Gemini, Codex, and **Kimi K2.5**) to perform parallel code review. Each agent writes findings to markdown files in a workspace directory, then the orchestrator synthesizes a final report with consensus findings.
+When the user requests a multi-model code review, QA/QC analysis, or critical bug investigation, invoke this skill. Launch four independent AI subagents (Opus, Gemini, Codex, and **Kimi K2.5**) to perform parallel code review. Each agent writes findings to markdown files in a workspace directory, then the orchestrator synthesizes a final report with consensus findings.
 
 ## Usage
 
@@ -233,15 +233,19 @@ For graceful degradation protocols, example sessions, model failure troubleshoot
 
 ## Integration with Other Skills
 
-**Works with:**
-- `dev_invoke_kimi-cli` - Follow up with Kimi-specific testing
-- `dev_invoke_gemini-cli` - Deep dive on Gemini findings
-- `dev_invoke_codex-cli` - Implement fixes identified
-- `using-git-worktrees` - Create isolated workspace for fixes
+Use these for follow-up after the multi-model review:
+- `dev_invoke_kimi-cli` -- Follow up with Kimi-specific testing
+- `dev_invoke_gemini-cli` -- Deep dive on Gemini findings
+- `dev_invoke_codex-cli` -- Implement fixes identified
+- `using-git-worktrees` -- Create isolated workspace for fixes
 
-## See Also
+## Cross-References
 
-- **Kimi CLI Skill**: `.claude/skills/dev_invoke_kimi-cli/SKILL.md`
-- **Subagent Output Pattern**: `.claude/rules/subagent-output-pattern.md`
-- **Agent Integration Testing**: `.claude/rules/testing/agent-integration-testing.md`
-- **Orchestrator Pattern**: Root `CLAUDE.md` - Orchestrator section
+**Skills** (related workflows):
+- `dev_invoke_codex-cli` -- Codex CLI for one of the review models
+- `dev_invoke_gemini-cli` -- Gemini CLI for one of the review models
+- `dev_invoke_kimi-cli` -- Kimi CLI for one of the review models
+
+**Agents** (delegate when needed):
+- `code-oracle-codex` -- Codex oracle agent
+- `code-oracle-gemini` -- Gemini oracle agent

@@ -1,3 +1,7 @@
+---
+paths: tests/**
+---
+
 # Test Driven Development with Real HEC-RAS Projects
 
 **Context**: Testing strategy for ras-commander
@@ -6,13 +10,13 @@
 
 ## Core Philosophy
 
-**ras-commander uses real HEC-RAS example projects instead of traditional unit tests with mocks.**
+**Always test with real HEC-RAS example projects instead of traditional unit tests with mocks.**
 
 ## Why Real Projects, Not Mocks?
 
 ### HEC-RAS is Complex
 
-**Problem with Mocks**:
+**Do not use mocks** because:
 - HEC-RAS file formats are intricate and version-specific
 - Fixed-width parsing with subtle edge cases
 - Behavior varies by HEC-RAS version (3.x, 4.x, 5.x, 6.x)
@@ -27,7 +31,7 @@
 
 ### Examples Are Living Tests
 
-**Dual Purpose**:
+**Leverage the dual purpose of examples**:
 1. **Documentation**: Show users how to use ras-commander
 2. **Functional Tests**: Validate library actually works
 
@@ -40,7 +44,7 @@
 
 ### Purpose
 
-**Manage HEC-RAS example projects** that ship with ras-commander or are extracted for testing.
+Use `RasExamples` to **manage HEC-RAS example projects** that ship with ras-commander or need extraction for testing.
 
 **Location**: `ras_commander/examples.py`
 
@@ -167,7 +171,7 @@ def test_project_initialization(project_name):
 
 ### Notebook Testing
 
-**All notebooks in `examples/` serve as functional tests**:
+**Treat all notebooks in `examples/` as functional tests**:
 - `01_project_initialization.ipynb` - Tests basic project API
 - `08_parallel_execution.ipynb` - Tests parallel mode
 - `10_1d_hdf_data_extraction.ipynb` - Tests results extraction
@@ -201,7 +205,7 @@ pytest --nbmake examples/*.ipynb
 
 ### Version-Specific Projects
 
-Some projects test version-specific features:
+Use specific projects to test version-specific features:
 
 **HEC-RAS 6.x**:
 - 2D unsteady flow
@@ -444,11 +448,14 @@ def temp_project(tmp_path):
     return path
 ```
 
-## See Also
+## Cross-References
 
-- **Example Projects**: `examples/README.md` - Notebook index
-- **Error Handling**: `.claude/rules/python/error-handling.md` - Test assertions
-- **Path Handling**: `.claude/rules/python/path-handling.md` - Temp folders
+**Rules** (related):
+- `.claude/rules/testing/environment-management.md` -- Environment setup for testing
+
+**Agents** (follow this):
+- `example-notebook-librarian` -- Notebook-based testing
+- `notebook-runner` -- Notebook execution
 
 ---
 

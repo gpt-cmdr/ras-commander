@@ -2,7 +2,7 @@ Test the notebook currently being worked on using the notebook-runner subagent a
 
 ## Purpose
 
-This command forces delegation to the `notebook-runner` subagent for **development testing**. Use it inline when working on a notebook to get comprehensive error reporting back to the main conversation.
+Force delegation to the `notebook-runner` subagent for **development testing**. Use inline when working on a notebook to get comprehensive error reporting back to the main conversation.
 
 ## When to Use
 
@@ -100,7 +100,11 @@ Agent identifies notebook from context, delegates to notebook-runner, receives r
 - All stderr output
 - Anything that indicates the notebook isn't working perfectly
 
-## See Also
+## Cross-References
 
-- `.claude/agents/notebook-runner.md` - The subagent being invoked
-- `.claude/rules/testing/environment-management.md` - Environment setup
+**Agents** (delegate to):
+- `notebook-runner` -- Notebook execution
+- `notebook-output-auditor` -- Output review
+
+**Rules** (follow these):
+- `.claude/rules/documentation/notebook-standards.md` -- Notebook conventions

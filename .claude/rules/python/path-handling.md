@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Path Handling
 
 **Context**: Consistent path handling with pathlib.Path
@@ -6,7 +10,7 @@
 
 ## Overview
 
-ras-commander uses `pathlib.Path` consistently for all path operations. This provides cross-platform compatibility, cleaner code, and better type safety than string-based paths.
+Use `pathlib.Path` consistently for all path operations. This provides cross-platform compatibility, cleaner code, and better type safety than string-based paths.
 
 ## Core Principle
 
@@ -430,11 +434,11 @@ def safe_read(file_path):
     return file_path.read_text()
 ```
 
-## See Also
+## Cross-References
 
-- **Decorators**: `.claude/rules/python/decorators.md` - @standardize_input decorator
-- **Error Handling**: `.claude/rules/python/error-handling.md` - FileNotFoundError patterns
-- **Testing**: `.claude/rules/testing/tdd-approach.md` - Path handling in tests
+**Rules** (related):
+- `.claude/rules/python/windows-reserved-names.md` -- Windows path name restrictions
+- `.claude/rules/python/ras-commander-patterns.md` -- RasPrj path handling
 
 ---
 

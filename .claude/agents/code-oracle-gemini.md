@@ -35,7 +35,7 @@ description: |
 
 ## Purpose
 
-Provide **fast, large-context code analysis** using Google's Gemini models via the installed `gemini-cli` plugin. Specializes in scanning many files, pattern extraction, and documentation review.
+Use this agent to perform **fast, large-context code analysis** via Google's Gemini models through the installed `gemini-cli` plugin. Specialize in scanning many files, pattern extraction, and documentation review.
 
 ---
 
@@ -817,25 +817,19 @@ cd "C:/GH/ras-commander" && gemini -y "Analyze static method patterns in: [list 
 
 ---
 
-## See Also
+## Cross-References
 
-**Skill Documentation** (preferred patterns):
-- `.claude/skills/dev_invoke_gemini-cli/SKILL.md` - Markdown file handoff pattern and templates
+**Skills** (invoke these):
+- `dev_invoke_gemini-cli` -- Gemini CLI invocation patterns
+- `qa_review_triple-model` -- Multi-model review orchestration
 
-**Research Documents**:
-- `feature_dev_notes/Code_Oracle_Multi_LLM/github-examples-research.md`
-- `feature_dev_notes/Code_Oracle_Multi_LLM/DESIGN.md`
+**Agents** (collaborate with):
+- `code-oracle-codex` -- Alternative oracle for deep reasoning tasks
 
-**Related Agents**:
-- `code-oracle-codex` - For deep analysis (Codex with extended thinking)
-- `hdf-analyst` - For HDF-specific analysis (Sonnet)
-- `usgs-integrator` - For USGS-specific analysis (Sonnet)
-
-**Rules**:
-- `.claude/rules/validation/validation-patterns.md`
-- `.claude/rules/subagent-output-pattern.md`
+**Rules** (follow these):
+- `.claude/rules/validation/validation-patterns.md` -- Output format validation
 
 ---
 
-**Key Takeaway**: Use markdown file handoff pattern (REVIEW.md -> FINDINGS.md) for complex QAQC tasks, or `gemini -y` for quick tasks. Default model is `gemini-3-pro-preview`; use `gemini-3-flash-preview` for large context (>100K tokens) via `-m` flag. See `.claude/skills/dev_invoke_gemini-cli/SKILL.md` for templates. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
+**Key Takeaway**: Use markdown file handoff pattern (REVIEW.md -> FINDINGS.md) for complex QAQC tasks, or `gemini -y` for quick tasks. Default model is `gemini-3-pro-preview`; use `gemini-3-flash-preview` for large context (>100K tokens) via `-m` flag. Consult `.claude/skills/dev_invoke_gemini-cli/SKILL.md` for templates. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
 

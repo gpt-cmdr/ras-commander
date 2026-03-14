@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # HTAB Optimization - Key Learnings
 
 **Context**: Lessons from implementing HTAB parameter modification (2026-01-11)
@@ -281,13 +285,11 @@ Use for:
 
 ---
 
-## See Also
+## Cross-References
 
-- **Task Closeout**: `.claude/outputs/2026-01-11_htab_implementation_session_closeout.md`
-- **Implementation Summary**: `.claude/outputs/htab-implementation/IMPLEMENTATION_COMPLETE.md`
-- **Feature Specs**: `feature_dev_notes/HTAB_Parameter_Modification/`
-- **Production Code**: `ras_commander/geom/{GeomHtab, GeomHtabUtils}.py`
+**Primary sources**:
+- `ras_commander/geom/AGENTS.md` -- GeomHtab documentation
 
 ---
 
-**Key Takeaway**: Range-based safety factors, dual format compatibility, single read/write batching, notebook execution testing, and phase-gated parallel subagents are patterns worth remembering.
+**Key Takeaway**: Apply range-based safety factors, support dual format compatibility, use single read/write batching, validate with notebook execution testing, and phase-gate parallel subagents.

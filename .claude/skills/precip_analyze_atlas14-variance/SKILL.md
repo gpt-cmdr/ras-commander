@@ -25,7 +25,7 @@ description: |
 
 # Atlas 14 Spatial Variance Analysis
 
-**User-invocable skill for assessing precipitation spatial variability in HEC-RAS models**
+**Invoke this skill to assess precipitation spatial variability in HEC-RAS models**
 
 ## Primary Sources (Read These First)
 
@@ -447,45 +447,24 @@ When user asks to:
 
 ---
 
-## Related Skills and Agents
-
-**Related Skills**:
-- `/precip_analyze_aorc` - Historic gridded precipitation
-- (Future) `/atlas14-design-storms` - Hyetograph generation
-
-**Relevant Agents**:
-- `precipitation-specialist` - General precipitation workflows
-- `hdf-analyst` - Extract HEC-RAS geometry for extent
-
-**Complementary Classes**:
-- `StormGenerator` - Point-based design storms (see `ras_commander/precip/CLAUDE.md` lines 44-77)
-- `Atlas14Storm` - HMS-equivalent hyetographs (lines 79-116)
-- `PrecipAorc` - Historic AORC data (lines 13-42)
-
----
-
 ## Examples, Troubleshooting, and Performance
 
-For use case examples, troubleshooting common errors, and performance tips, see [references/examples-and-troubleshooting.md](references/examples-and-troubleshooting.md).
+For use case examples, troubleshooting common errors, and performance tips, read [references/examples-and-troubleshooting.md](references/examples-and-troubleshooting.md).
 
 ---
 
-## See Also
+## Cross-References
 
-**Primary Documentation**:
-- `ras_commander/precip/CLAUDE.md` - Complete precipitation workflows
-- `.claude/rules/hec-ras/precipitation.md` - Quick reference guide
+**Rules** (follow these):
+- `.claude/rules/hec-ras/precipitation.md` -- Precipitation domain overview
+- `.claude/rules/testing/precipitation-method-validation.md` -- Testing precipitation methods
 
-**Related Features**:
-- `StormGenerator` - Point-based Atlas 14 queries and hyetograph generation
-- `Atlas14Storm` - HMS-equivalent temporal distributions
-- `PrecipAorc` - Historic gridded precipitation data
+**Agents** (delegate when needed):
+- `precipitation-specialist` -- Delegate for complex precipitation workflows
 
-**Example Notebooks**:
-- `examples/725_atlas14_spatial_variance.ipynb` - This workflow
-- `examples/720_atlas14_aep_events.ipynb` - Point-based design storms
-- `examples/900_aorc_precipitation.ipynb` - Historic precipitation
+**Skills** (related workflows):
+- `precip_analyze_aorc` -- Use for historical AORC precipitation analysis
+- `dss_read_boundary-data` -- Use when exporting design storms to DSS format
 
-**Research**:
-- `.claude/outputs/atlas14-variance-research-summary.md` - Discovery of CONUS NetCDF approach
-- `.claude/outputs/atlas14-variance-implementation-summary.md` - Implementation details
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Precipitation section

@@ -13,8 +13,7 @@ description: |
 
 # Exporting HEC-RAS to Cloud-Native Formats
 
-**Tool**: `ras2cng` (RAS to Cloud Native GIS) — CLI wrapper over ras-commander that exports HEC-RAS
-geometry and results to GeoParquet, vector/raster PMTiles, and PostGIS.
+When the user asks to export HEC-RAS results to GeoParquet, PMTiles, or PostGIS, use this skill with the `ras2cng` CLI (RAS to Cloud Native GIS). This CLI wraps ras-commander parsers to export HEC-RAS geometry and results to GeoParquet, vector/raster PMTiles, and PostGIS.
 
 **Repo**: `C:\GH\ras2cng`
 
@@ -271,7 +270,11 @@ with DuckSession() as duck:
 
 ---
 
-## See Also
+## Cross-References
 
-- **hecras_extract_results**: Extract raw ras-commander HDF results (lower-level, no cloud-native output)
-- **hecras_parse_geometry**: Parse text geometry files with ras-commander directly
+**Skills** (related workflows):
+- `hecras_extract_results` -- Use upstream to extract HDF results before export
+- `hecras_parse_geometry` -- Use for geometry data to export
+
+**Primary sources**:
+- ras2cng CLI documentation

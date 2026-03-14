@@ -1,4 +1,4 @@
-We are ending the conversation after this message. Ultrathink and use your remaining output to perform comprehensive task closeout.
+End the conversation after this message. Ultrathink and use your remaining output to perform comprehensive task closeout.
 
 **CRITICAL**: You have maximum context RIGHT NOW about this task's working files, findings, and learnings. This context will be lost after this session. Extract and consolidate aggressively.
 
@@ -7,7 +7,7 @@ We are ending the conversation after this message. Ultrathink and use your remai
 While you still have full context, extract valuable knowledge to persistent locations:
 
 ### Write Task Findings
-Write a consolidated markdown file capturing:
+Write a consolidated markdown file that captures:
 - What was accomplished
 - Key findings and decisions made
 - Patterns discovered that could benefit future work
@@ -116,4 +116,12 @@ Before ending:
 
 ---
 
-**Remember**: The `/agent-cleanfiles` command exists for general cleanup passes, but THIS moment is when you have the context to properly classify and consolidate YOUR task's artifacts. Be aggressive about extraction and cleanup now.
+**Remember**: The `/agent-cleanfiles` command handles general cleanup passes, but THIS moment is when you have the context to properly classify and consolidate YOUR task's artifacts. Be aggressive about extraction and cleanup now.
+
+## Cross-References
+
+**Rules** (follow these):
+- `.claude/rules/subagent-output-pattern.md` -- Output lifecycle management
+
+**Agents** (coordinate with):
+- `hierarchical-knowledge-agent-skill-memory-curator` -- Knowledge consolidation

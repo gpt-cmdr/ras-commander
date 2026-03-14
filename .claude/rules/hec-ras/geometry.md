@@ -10,7 +10,7 @@
 
 ## Overview
 
-HEC-RAS geometry files (`.g##`) use fixed-width text format. ras-commander provides parsing and modification capabilities through static class methods.
+HEC-RAS geometry files (`.g##`) use fixed-width text format. Use ras-commander's static class methods to parse and modify geometry data.
 
 ## Key Classes
 
@@ -23,7 +23,7 @@ HEC-RAS geometry files (`.g##`) use fixed-width text format. ras-commander provi
 
 ## Critical Pattern: Fixed-Width Parsing
 
-HEC-RAS geometry files use **fixed-width columns**, not delimiters:
+Always parse geometry files using **fixed-width columns**, not delimiters:
 
 ```
 # Example cross section header (fixed positions)
@@ -35,9 +35,11 @@ Type RM Length L Ch R  = 1 ,12345.67,   100.0,   100.0,   100.0
 # etc.
 ```
 
-**Warning**: Incorrect parsing can corrupt geometry files.
+**Warning**: Incorrect parsing will corrupt geometry files. Never attempt manual fixed-width parsing -- use the API classes instead.
 
 ## Quick Reference
+
+Call these static methods directly for common geometry operations:
 
 ```python
 from ras_commander import RasGeometry, RasGeo
@@ -54,7 +56,7 @@ RasGeo.set_2d_mannings_n(geom_file, new_n_values)
 
 ## Bank Station Interpolation
 
-The 0.02-unit gap constant is critical for bank station interpolation:
+Apply the 0.02-unit gap constant for bank station interpolation:
 
 ```python
 # Bank stations use 0.02-unit offset for HEC-RAS format compliance
@@ -78,14 +80,26 @@ if len(stations) > 500:
 
 ## Dynamic Section Search
 
-Cross section parsing uses `_find_xs_section_end()` to dynamically search to the end of each XS section. There is no fixed search range limit — the parser searches until it finds the next `Type RM Length L Ch R =` header, `River Reach=` block, or end of file. This handles XS with arbitrarily many GIS cut line points (verified with 462-point real-world FEMA models).
+Use `_find_xs_section_end()` to dynamically search to the end of each XS section. Do not impose a fixed search range limit -- the parser searches until it finds the next `Type RM Length L Ch R =` header, `River Reach=` block, or end of file. This handles XS with arbitrarily many GIS cut line points (verified with 462-point real-world FEMA models).
 
-## See Also
+## Cross-References
 
-- **Complete Documentation**: `ras_commander/geom/AGENTS.md`
-- **Example Notebooks**: `examples/201_1d_plaintext_geometry.ipynb`, `examples/202_2d_plaintext_geometry.ipynb`
-- **Geometry Repair**: `ras_commander/fixit/AGENTS.md`
+**Agents** (delegate when needed):
+- `geometry-parser` -- Delegate for geometry file parsing and cross-section analysis
+- `quality-assurance` -- Delegate for geometry repair with RasFixit
+
+**Skills** (related workflows):
+- `hecras_parse_geometry` -- Use for geometry parsing workflows
+- `qa_repair_geometry` -- Use to fix blocked obstructions and geometry errors
+
+**Rules** (auto-loaded context):
+- `.claude/rules/python/state-machine-empty-line-handling.md` -- Read when parsing multi-line geometry blocks
+
+**Primary sources**:
+- `ras_commander/geom/AGENTS.md` -- Complete geometry subpackage documentation
+- `examples/201_1d_plaintext_geometry.ipynb` -- 1D geometry parsing examples
+- `examples/202_2d_plaintext_geometry.ipynb` -- 2D Manning's n modification
 
 ---
 
-**Key Takeaway**: HEC-RAS geometry uses fixed-width format. Respect 500-point computational limit and 0.02-unit bank station precision. Section search is dynamic (no fixed range limit).
+**Key Takeaway**: HEC-RAS geometry uses fixed-width format. Respect the 500-point computational limit and 0.02-unit bank station precision. Section search is dynamic (no fixed range limit).

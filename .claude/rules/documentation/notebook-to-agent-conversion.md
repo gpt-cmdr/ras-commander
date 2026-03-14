@@ -1,3 +1,7 @@
+---
+paths: .claude/**
+---
+
 # Notebook-to-Agent/Skill Conversion Pattern
 
 **Context**: Converting example notebooks into reusable agents and skills
@@ -9,13 +13,13 @@
 
 ## Overview
 
-Example notebooks in `examples/` are excellent sources for creating agents and skills. This document provides the pattern for extracting workflows from notebooks into the hierarchical knowledge system.
+Use example notebooks in `examples/` as primary sources when creating agents and skills. Follow this pattern to extract workflows from notebooks into the hierarchical knowledge system.
 
 ## Core Principle
 
-**Notebooks are PRIMARY SOURCES, not duplication targets.**
+**Treat notebooks as PRIMARY SOURCES, not duplication targets.**
 
-Agents and skills should NAVIGATE TO notebooks, not copy from them.
+Navigate agents and skills TO notebooks. Do not copy notebook content into them.
 
 ---
 
@@ -23,7 +27,7 @@ Agents and skills should NAVIGATE TO notebooks, not copy from them.
 
 ### When to Create an Agent
 
-Create an agent when the notebook demonstrates:
+Create an agent when a notebook demonstrates:
 - ✅ Complex multi-step analysis requiring domain expertise
 - ✅ Data extraction and interpretation patterns
 - ✅ Specialized knowledge in a subdomain
@@ -36,7 +40,7 @@ Create an agent when the notebook demonstrates:
 
 ### When to Create a Skill
 
-Create a skill when the notebook demonstrates:
+Create a skill when a notebook demonstrates:
 - ✅ Repeatable workflow users frequently need
 - ✅ API usage patterns with common parameters
 - ✅ Clear happy path with variations
@@ -53,7 +57,7 @@ Create a skill when the notebook demonstrates:
 
 ### Step 1: Identify the Workflow
 
-**Read the notebook** and extract:
+**Read the notebook** and extract these elements:
 1. **What problem it solves** (Quick Start summary)
 2. **Key API methods used** (Quick Reference)
 3. **Common variations** (Common Patterns)
@@ -188,7 +192,7 @@ RasCmdr.compute_plan("01", stream_callback=ConsoleCallback())
 
 ### Extract from Notebook Analysis Cells
 
-Notebooks often have summary/analysis cells at the end. Extract the output format:
+Look for summary/analysis cells at the end of notebooks. Extract the output format from them:
 
 **Notebook Cell**:
 ```python
@@ -209,7 +213,7 @@ print(f"Execution time: {duration:.1f} seconds")
 
 ### Structured Reports for Orchestrators
 
-Agents should produce **structured markdown** that orchestrators can parse:
+Produce **structured markdown** from agents that orchestrators can parse:
 
 ```markdown
 # {Report Type}: {Subject}
@@ -289,7 +293,7 @@ See `examples/110_single_plan_execution.ipynb` for complete tutorial.
 
 ## Quality Checklist
 
-When converting notebooks to agents/skills:
+Complete this checklist when converting notebooks to agents/skills:
 
 - [ ] Identified primary source notebook(s)
 - [ ] Extracted minimal Quick Start (30-50 lines)
@@ -341,14 +345,15 @@ See `examples/{notebook}.ipynb` cells XX-XX for common issues.
 
 ---
 
-## See Also
+## Cross-References
 
-- **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md`
-- **Hierarchical Knowledge**: `.claude/rules/documentation/hierarchical-knowledge-best-practices.md`
-- **Agent README**: `.claude/agents/README.md`
-- **Skills README**: `.claude/skills/README.md`
-- **Implementation Example**: HEC-RAS Operations System (this task)
+**Rules** (related):
+- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
+- `.claude/rules/documentation/notebook-standards.md` -- Source notebook conventions
+
+**Agents** (use this):
+- `example-notebook-librarian` -- Notebook management
 
 ---
 
-**Key Takeaway**: Notebooks are PRIMARY SOURCES. Agents and skills NAVIGATE TO them, providing minimal Quick Start patterns and references to notebook sections. Never duplicate tutorial content.
+**Key Takeaway**: Treat notebooks as PRIMARY SOURCES. Navigate agents and skills TO them, providing minimal Quick Start patterns and references to notebook sections. Never duplicate tutorial content.

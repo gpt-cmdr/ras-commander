@@ -1,12 +1,16 @@
+---
+paths: .claude/**
+---
+
 # Hierarchical Knowledge - Best Practices
 
 **Lesson Learned**: 2025-12-11 Phase 4 Refactoring
 
-## The Anti-Pattern (What NOT to Do)
+## The Anti-Pattern (Do NOT Do This)
 
 ### ❌ Phase 4 Initial Implementation (Bloated)
 
-Created ~30,000 lines of duplicated content:
+Avoid creating bloated duplicated content like the ~30,000 lines produced initially:
 
 ```
 .claude/agents/{name}/
@@ -37,7 +41,7 @@ Created ~30,000 lines of duplicated content:
 
 ### ✅ Phase 4 Refactored (Efficient)
 
-Created ~4,937 lines of primary source navigators:
+Follow the lightweight navigator pattern (~4,937 lines of primary source navigators):
 
 ```
 .claude/agents/{name}/
@@ -58,7 +62,7 @@ Created ~4,937 lines of primary source navigators:
 
 ### 1. Primary Source Navigation
 
-**Subagents and skills are NAVIGATORS, not documentation repositories.**
+**Treat subagents and skills as NAVIGATORS, not documentation repositories.**
 
 **DO**:
 - ✅ Point to existing primary sources
@@ -76,7 +80,7 @@ Created ~4,937 lines of primary source navigators:
 
 ### 2. Single Source of Truth
 
-**Every piece of information has ONE authoritative location:**
+**Maintain exactly ONE authoritative location for every piece of information:**
 
 | Content Type | Authoritative Location | Navigator Role |
 |--------------|------------------------|----------------|
@@ -88,7 +92,7 @@ Created ~4,937 lines of primary source navigators:
 
 ### 3. Progressive Disclosure via References
 
-**Hierarchy uses POINTERS instead of DUPLICATION:**
+**Build the hierarchy with POINTERS, not DUPLICATION:**
 
 ```
 Root CLAUDE.md (strategic)
@@ -102,7 +106,7 @@ Subagent/Skill (lightweight navigator) ← POINTS TO ABOVE
 
 ### 4. Critical Warnings Exception
 
-**Some content MUST be in navigators** (not buried in primary sources):
+**Always include critical configuration warnings directly in navigators** (do not bury them in primary sources):
 
 ✅ **Include in navigators**:
 - `session_id=2` requirement (remote execution) - critical configuration
@@ -110,11 +114,11 @@ Subagent/Skill (lightweight navigator) ← POINTS TO ABOVE
 - ReadTheDocs symlink stripping (documentation) - deployment blocker
 - Fixed-width parsing patterns (geometry) - data corruption risk
 
-**Rationale**: These are too critical to risk users missing them by not reading primary sources.
+**Rationale**: These are too critical to risk agents or users missing them by not reading primary sources.
 
 ### 5. Legitimate reference/ Folder Exceptions
 
-**TWO agents are permitted to have reference/ folders with substantial content:**
+**Permit only TWO agents to have reference/ folders with substantial content:**
 
 ✅ **Exception 1: hierarchical-knowledge-agent-skill-memory-curator**
 - **File**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md` (468 lines + 104KB reference/)
@@ -195,7 +199,7 @@ For complete details, always read the primary sources listed above.
 
 ## Real-World Examples
 
-### Before Refactoring: usgs-integrator (❌ Bloated)
+### Before Refactoring: usgs-integrator (Bloated -- Do NOT Replicate)
 
 ```
 .claude/agents/usgs-integrator/
@@ -226,7 +230,7 @@ Total: 255 lines (84.5% reduction, 0% duplication)
 
 ## Refactoring Checklist
 
-When creating or updating agents/skills:
+Follow this checklist when creating or updating agents/skills:
 
 ### Planning
 - [ ] Identify all primary sources (CLAUDE.md, AGENTS.md, notebooks, code)
@@ -276,7 +280,7 @@ When creating or updating agents/skills:
 
 ### Mistake 1: "Complete Reference" in Subagents
 
-❌ **Wrong**: Creating comprehensive API documentation in subagent reference/ folder
+❌ **Wrong**: Do not create comprehensive API documentation in subagent reference/ folders
 
 ```
 .claude/agents/hdf-analyst/reference/api-patterns.md (389 lines)
@@ -297,7 +301,7 @@ Primary Sources:
 
 ### Mistake 2: "Complete Workflow" in Skills
 
-❌ **Wrong**: Duplicating step-by-step workflows from CLAUDE.md
+❌ **Wrong**: Do not duplicate step-by-step workflows from CLAUDE.md
 
 ```
 .claude/skills/usgs_integrate_gauges/reference/workflow.md (631 lines)
@@ -320,7 +324,7 @@ Common Workflows:
 
 ### Mistake 3: "Duplicate Examples" in Skills
 
-❌ **Wrong**: Creating example scripts that duplicate notebook content
+❌ **Wrong**: Do not create example scripts that duplicate notebook content
 
 ```
 .claude/skills/dss_read_boundary-data/examples/read-catalog.py (120 lines)
@@ -346,20 +350,20 @@ Working Examples:
 
 ### When Primary Sources Change
 
-**Scenario**: Update workflow in `ras_commander/usgs/CLAUDE.md`
+**Scenario**: Updating a workflow in `ras_commander/usgs/CLAUDE.md`
 
-✅ **With lightweight navigators**:
+✅ **With lightweight navigators** -- update ONE file:
 1. Update `ras_commander/usgs/CLAUDE.md` (1 file)
 2. Navigator still points to CLAUDE.md
 3. No additional updates needed
 
-❌ **With duplicated content** (old approach):
+❌ **With duplicated content** (old approach) -- update FIVE files, risk drift:
 1. Update `ras_commander/usgs/CLAUDE.md`
 2. Update `.claude/agents/usgs-integrator/SUBAGENT.md`
 3. Update `.claude/agents/usgs-integrator/reference/end-to-end.md`
 4. Update `.claude/skills/usgs_integrate_gauges/SKILL.md`
 5. Update `.claude/skills/usgs_integrate_gauges/reference/workflow.md`
-6. Risk: Miss one location → version drift
+6. Risk: Miss one location and version drift occurs
 
 ### When Adding New Functionality
 
@@ -375,7 +379,7 @@ Working Examples:
 
 ## Success Criteria
 
-Your hierarchical knowledge structure is correctly implemented if:
+Verify the hierarchical knowledge structure meets all of these conditions:
 
 - ✅ Each concept documented in exactly ONE authoritative location
 - ✅ Subagents/skills are 200-400 lines (navigators, not documentation)
@@ -391,30 +395,31 @@ Your hierarchical knowledge structure is correctly implemented if:
 
 ### ras_agents/ vs feature_dev_notes/
 
-**Important Distinction**:
+**Distinguish between these two locations**:
 
-**ras_agents/** - Production-ready, tracked agent reference data:
+**ras_agents/** - Use for production-ready, tracked agent reference data:
 - ✅ Tracked in git for version control
 - ✅ Organized following hierarchical knowledge principles
 - ✅ Production-ready for automated agent operation
 - ✅ Agents can safely reference this location
 
-**feature_dev_notes/** - Experimental, gitignored development space:
+**feature_dev_notes/** - Use for experimental, gitignored development only:
 - ❌ Gitignored (not tracked)
 - ❌ Unorganized experimentation
-- ❌ Agents cannot reference this location
+- ❌ Agents must NOT reference this location
 - ✅ Used for testing before formalizing in ras_agents/
 
-**Migration Path**: When feature_dev_notes/ agents are ready, migrate to ras_agents/ following hierarchical knowledge principles.
+**Migration Path**: Migrate feature_dev_notes/ agents to ras_agents/ when ready, following hierarchical knowledge principles.
 
 **Example**: Decompilation Agent
 - **Development**: `feature_dev_notes/Decompilation Agent/` (gitignored, local only)
 - **Production**: `ras_agents/decompilation-agent/` (tracked, agents can reference)
 
-## See Also
+## Cross-References
 
-- `.claude/rules/documentation/mkdocs-config.md` - Documentation deployment
-- `.claude/rules/documentation/notebook-standards.md` - Example notebook standards
-- `planning_docs/PHASE_4_REFACTOR_SUMMARY.md` - Complete refactoring analysis
-- Root `CLAUDE.md` - Strategic overview and hierarchical knowledge philosophy
-- `ras_agents/README.md` - Production agent reference data structure
+**Rules** (related):
+- `.claude/rules/documentation/notebook-to-agent-conversion.md` -- Converting notebooks to agents/skills
+- `.claude/rules/documentation/notebook-standards.md` -- Notebook conventions
+
+**Agents** (enforce this):
+- `hierarchical-knowledge-agent-skill-memory-curator` -- Manages the hierarchical knowledge system

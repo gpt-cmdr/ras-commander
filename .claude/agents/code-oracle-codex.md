@@ -34,7 +34,7 @@ description: |
 
 ## Purpose
 
-Provide **deep code planning and review** capabilities using OpenAI's `gpt-5.2-codex` model via the installed `codex-cli` plugin. Specializes in tasks requiring extended thinking (20-30 minutes) for architecture, security, and refactoring.
+Use this agent to perform **deep code planning and review** via OpenAI's `gpt-5.2-codex` model through the installed `codex-cli` plugin. Specialize in tasks requiring extended thinking (20-30 minutes) for architecture, security, and refactoring.
 
 ---
 
@@ -529,7 +529,7 @@ severity_map = {
 # (Implementation example in research docs)
 ```
 
-**Note**: This integration is optional. Codex output can remain as markdown without validation framework mapping.
+**Note**: This integration is optional. Keep Codex output as markdown without validation framework mapping when sufficient.
 
 ---
 
@@ -704,7 +704,7 @@ codex login
 export OPENAI_API_KEY="sk-..."
 ```
 
-**Subagent behavior**: If codex CLI fails with auth error, provide clear instructions to user.
+**Subagent behavior**: If codex CLI fails with auth error, inform the user with clear instructions.
 
 ### Timeout Management
 
@@ -979,25 +979,19 @@ If Code Oracle Codex doesn't provide sufficient depth, escalate to:
 
 ---
 
-## See Also
+## Cross-References
 
-**Skill Documentation** (preferred patterns):
-- `.claude/skills/dev_invoke_codex-cli/SKILL.md` - Markdown file handoff pattern and templates
+**Skills** (invoke these):
+- `dev_invoke_codex-cli` -- Codex CLI invocation patterns
+- `qa_review_triple-model` -- Multi-model review orchestration
 
-**Research Documents**:
-- `feature_dev_notes/Code_Oracle_Multi_LLM/2026-01-05-codex-cli-research.md`
-- `feature_dev_notes/Code_Oracle_Multi_LLM/DESIGN.md`
+**Agents** (collaborate with):
+- `code-oracle-gemini` -- Alternative oracle for large context tasks
 
-**Related Agents**:
-- `code-oracle-gemini` - For large context analysis (Gemini)
-- `hdf-analyst` - For HDF-specific analysis (Sonnet)
-- `geometry-parser` - For geometry-specific analysis (Sonnet)
-
-**Rules**:
-- `.claude/rules/validation/validation-patterns.md`
-- `.claude/rules/subagent-output-pattern.md`
+**Rules** (follow these):
+- `.claude/rules/validation/validation-patterns.md` -- Output format validation
 
 ---
 
-**Key Takeaway**: Use markdown file handoff pattern (TASK.md -> OUTPUT.md) for complex tasks, or `codex e` with HEREDOC for quick tasks. See `.claude/skills/dev_invoke_codex-cli/SKILL.md` for templates. Default 2-hour timeout supports extended thinking. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
+**Key Takeaway**: Use markdown file handoff pattern (TASK.md -> OUTPUT.md) for complex tasks, or `codex e` with HEREDOC for quick tasks. Consult `.claude/skills/dev_invoke_codex-cli/SKILL.md` for templates. Default 2-hour timeout supports extended thinking. Write findings to `feature_dev_notes/Code_Oracle_Multi_LLM/`.
 

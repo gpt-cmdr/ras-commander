@@ -15,7 +15,7 @@ description: |
 
 # Extracting HEC-RAS Results
 
-**Purpose**: Lightweight skill index that navigates you to primary documentation sources. This skill does NOT duplicate content - it points you to where complete, authoritative information lives.
+When the user asks to extract HEC-RAS results, use the patterns below. Read the primary sources for complete details -- do not duplicate their content here.
 
 **Primary Sources**:
 - **HDF Class Reference**: `ras_commander/hdf/AGENTS.md` (215 lines) - Complete class hierarchy, lazy loading patterns, decorators
@@ -58,7 +58,7 @@ else:
 
 **Read First**: `ras_commander/hdf/AGENTS.md`
 
-This is the **definitive reference** for:
+Read this first for:
 - 18 HDF classes and their organization
 - Module structure (Core, Geometry, Results, Infrastructure, Visualization)
 - Class hierarchy and dependencies
@@ -79,7 +79,7 @@ This is the **definitive reference** for:
 
 **1D Unsteady Results**: `examples/400_1d_hdf_data_extraction.ipynb`
 
-Navigate to this notebook for:
+Read this notebook when you need:
 - Cross section time series extraction (`HdfResultsXsec`)
 - Output time handling
 - Computation message extraction
@@ -87,7 +87,7 @@ Navigate to this notebook for:
 
 **2D Unsteady Results**: `examples/410_2d_hdf_data_extraction.ipynb`
 
-Navigate to this notebook for:
+Read this notebook when you need:
 - 2D mesh maximum envelopes (`HdfResultsMesh.get_mesh_maximum`)
 - Time series at specific locations
 - Spatial grids and polygons
@@ -95,7 +95,7 @@ Navigate to this notebook for:
 
 **Steady Flow Results**: `examples/401_steady_flow_analysis.ipynb`
 
-Navigate to this notebook for:
+Read this notebook when you need:
 - Profile detection (`get_steady_profile_names`)
 - Water surface elevation extraction by profile
 - Multiple profile comparison
@@ -104,7 +104,7 @@ Navigate to this notebook for:
 
 **Dam Breach Results**: `examples/420_breach_results_extraction.ipynb`
 
-Navigate to this notebook for:
+Read this notebook when you need:
 - Structure identification (`HdfStruc.list_sa2d_connections`)
 - Breach time series (`HdfResultsBreach.get_breach_timeseries`)
 - Summary statistics and peak values
@@ -260,9 +260,7 @@ summary = HdfResultsBreach.get_breach_summary("02", "Dam")
 
 ### With hdf-analyst Skill
 
-**Division of Responsibility**:
-- **This skill (hecras_extract_results)**: Standard HEC-RAS result extraction using documented API
-- **hdf-analyst skill**: Custom HDF path navigation, advanced xarray operations, performance optimization
+Use this skill for standard API-based extraction. Delegate to `hdf-analyst` agent for custom HDF path navigation, advanced xarray operations, or performance optimization.
 
 **Example Handoff**:
 ```python
@@ -306,35 +304,23 @@ max_wse = HdfResultsMesh.get_mesh_maximum("01", variable="Water Surface")
 
 ---
 
-## Related Skills
+## Cross-References
 
-- **hecras_compute_plans**: Run simulations to generate HDF results (prerequisite)
-- **hdf-analyst**: Advanced HDF operations and custom analysis (advanced use cases)
+**Rules** (auto-loaded context):
+- `.claude/rules/hec-ras/hdf-files.md` -- Read for HDF domain overview and steady/unsteady detection
+- `.claude/rules/python/api-first-principle.md` -- Follow the API-first mandate for all extraction
 
----
+**Agents** (delegate when needed):
+- `hdf-analyst` -- Delegate for advanced HDF analysis beyond standard API
+- `hecras-results-analyst` -- Delegate for results interpretation and quality assessment
 
-## Navigation Checklist
+**Skills** (related workflows):
+- `hecras_compute_plans` -- Upstream: run simulations that produce HDF results
+- `hecras_parse_compute-messages` -- Use to verify execution completed before extracting
 
-When a user asks about HEC-RAS result extraction:
-
-1. **Start Here**: Determine if they need steady or unsteady extraction
-2. **Navigate to Example**: Point to relevant notebook (10, 11, 18, or 19)
-3. **Check Class Reference**: If they need architectural details, point to `hdf/AGENTS.md`
-4. **Read Docstrings**: For parameter details, use `help()` or read source files
-5. **Avoid Duplication**: Never replicate content that exists in primary sources
-
-**Primary Sources Are Always More Current**: This skill is a navigation aid. When in doubt, trust the example notebooks and code docstrings over this file.
-
----
-
-## Summary
-
-**Total Lines**: ~350 (lightweight index)
-**Purpose**: Navigate to primary sources, not duplicate them
-**When to Use**: User needs HEC-RAS result extraction guidance
-**Primary Sources**:
-- Architecture: `ras_commander/hdf/AGENTS.md`
-- Workflows: `examples/400_1d_hdf_data_extraction.ipynb`, `examples/410_2d_hdf_data_extraction.ipynb`, `examples/401_steady_flow_analysis.ipynb`, `examples/420_breach_results_extraction.ipynb`
-- API Details: Code docstrings in `ras_commander/hdf/*.py`
-
-**Key Principle**: Point to authoritative sources, don't replicate them.
+**Primary sources**:
+- `ras_commander/hdf/AGENTS.md` -- Complete class hierarchy and architecture
+- `examples/400_1d_hdf_data_extraction.ipynb` -- 1D unsteady extraction workflow
+- `examples/410_2d_hdf_data_extraction.ipynb` -- 2D mesh results workflow
+- `examples/401_steady_flow_analysis.ipynb` -- Steady state extraction workflow
+- `examples/420_breach_results_extraction.ipynb` -- Dam breach results workflow

@@ -11,19 +11,19 @@ description: |
 
 # Conversation Insights Orchestrator
 
-Coordinates comprehensive analysis of Claude Code conversation history.
+Coordinate comprehensive analysis of Claude Code conversation history by dispatching to specialized sub-agents.
 
 ## Primary Sources
 
 **Conversation Data**:
-- `~/.claude/history.jsonl` - Prompt index (lightweight, all projects)
-- `~/.claude/projects/{encoded-path}/*.jsonl` - Full conversation files
+- `~/.claude/history.jsonl` -- Prompt index (lightweight, all projects)
+- `~/.claude/projects/{encoded-path}/*.jsonl` -- Full conversation files
 
 **Python Utilities**:
-- `scripts/conversation_insights/conversation_parser.py` - Parsing utilities
-- `scripts/conversation_insights/pattern_analyzer.py` - Pattern detection
-- `scripts/conversation_insights/insight_extractor.py` - Insight extraction
-- `scripts/conversation_insights/report_generator.py` - Report generation
+- `scripts/conversation_insights/conversation_parser.py` -- Parsing utilities
+- `scripts/conversation_insights/pattern_analyzer.py` -- Pattern detection
+- `scripts/conversation_insights/insight_extractor.py` -- Insight extraction
+- `scripts/conversation_insights/report_generator.py` -- Report generation
 
 ## Architecture
 
@@ -112,10 +112,19 @@ KNOWN_PATTERNS = {
 
 ## Error Handling
 
-- **Large file**: Stream and chunk, don't load entirely
-- **Malformed JSON**: Skip line, log warning, continue
-- **Missing conversation**: Log, exclude from analysis
+- **Large file**: Stream and chunk; do not load entirely
+- **Malformed JSON**: Skip the line, log a warning, continue
+- **Missing conversation**: Log it, exclude from analysis
 - **Context overflow**: Reduce chunk size, summarize more aggressively
+
+## Cross-References
+
+**Agents** (coordinate these):
+- `conversation-deep-researcher` -- Deep analysis
+- `conversation-index-scanner` -- Fast scanning
+- `best-practice-extractor` -- Pattern extraction
+- `blocker-detector` -- Problem identification
+- `slash-command-finder` -- Command pattern detection
 
 ## Quick Reference
 

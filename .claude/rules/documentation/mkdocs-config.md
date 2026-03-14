@@ -1,3 +1,7 @@
+---
+paths: docs/**
+---
+
 # MkDocs Configuration - Unified Build Approach
 
 **Context**: Documentation build for GitHub Pages and ReadTheDocs
@@ -7,13 +11,13 @@
 
 ## Overview: Pre-Converted Markdown Approach
 
-Both documentation platforms now use the **same unified approach**: pre-convert notebooks to markdown before MkDocs build. This is ~30x faster than using mkdocs-jupyter and ensures consistency.
+Use the **same unified approach** on both documentation platforms: pre-convert notebooks to markdown before MkDocs build. This achieves ~30x faster builds than mkdocs-jupyter and ensures consistency.
 
-**Key insight**: `mkdocs-jupyter` plugin is slow with many notebooks. Pre-converting with `nbconvert` in batch mode is much faster.
+**Key insight**: `mkdocs-jupyter` plugin is slow with many notebooks. Pre-convert with `nbconvert` in batch mode instead.
 
 ## Dual-Platform Deployment
 
-ras-commander documentation deploys to TWO platforms:
+Deploy ras-commander documentation to TWO platforms:
 
 1. **GitHub Pages**: https://gpt-cmdr.github.io/ras-commander/
    - Build: `.github/workflows/docs.yml`
@@ -172,7 +176,7 @@ This allows AGENTS.md files with relative links to source code without breaking 
 
 ### No Markdown Maintenance Needed
 
-Since markdown is **generated at build time**:
+Markdown is **generated at build time**, so follow these rules:
 - ✅ Update notebooks in `examples/` normally
 - ✅ Commit `.ipynb` changes
 - ✅ Push triggers doc rebuild
@@ -182,6 +186,7 @@ Since markdown is **generated at build time**:
 
 ### When Updating Notebooks
 
+Follow this workflow:
 1. Edit the `.ipynb` file in `examples/`
 2. Commit and push
 3. GitHub Actions / ReadTheDocs rebuild docs
@@ -299,14 +304,15 @@ Brief introduction...
 | **Pre-conversion** | ~15-30 seconds | Batch nbconvert + plain markdown |
 | **Improvement** | **~20-30x faster** | Significant CI/CD savings |
 
-## See Also
+## Cross-References
 
-- **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md`
-- **Conversion Script**: `.claude/scripts/prepare_notebooks_for_docs.py`
-- **GitHub Workflow**: `.github/workflows/docs.yml`
-- **ReadTheDocs Config**: `.readthedocs.yaml`
-- **MkDocs Config**: `mkdocs.yml` in root
+**Rules** (related):
+- `.claude/rules/documentation/notebook-standards.md` -- Notebook standards for mkdocs-jupyter
+
+**Agents** (use this):
+- `documentation-generator` -- Follows these mkdocs conventions
+- `git-operations` -- Read this before pushing docs changes
 
 ---
 
-**Key Takeaway**: Both platforms use `prepare_notebooks_for_docs.py` to pre-convert notebooks to markdown before build. This is ~30x faster than mkdocs-jupyter. Notebooks are edited in `examples/`, markdown is generated at build time, nothing in `docs/notebooks/` should be committed.
+**Key Takeaway**: Both platforms use `prepare_notebooks_for_docs.py` to pre-convert notebooks to markdown before build. This achieves ~30x faster builds than mkdocs-jupyter. Edit notebooks in `examples/`, markdown generates at build time, never commit anything to `docs/notebooks/`.

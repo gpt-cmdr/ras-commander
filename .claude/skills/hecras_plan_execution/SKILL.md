@@ -14,11 +14,11 @@ description: |
 
 # Planning HEC-RAS Execution
 
-Decision support for selecting optimal HEC-RAS execution strategy. Analyzes Project Inspector output and generates actionable execution plans.
+Analyze the Project Inspector output and generate an actionable execution plan. Select the optimal execution mode, recommend parameters, and identify blockers.
 
 ## Primary Sources
 
-**DO NOT duplicate content from primary sources. This skill is a lightweight navigator.**
+**Read the primary sources below; do not duplicate their content.**
 
 - **`.claude/rules/hec-ras/execution.md`** - Complete execution mode documentation
 - **`.claude/agents/hecras-project-inspector.md`** - Project Intelligence Report schema
@@ -60,7 +60,7 @@ Decision support for selecting optimal HEC-RAS execution strategy. Analyzes Proj
 
 ## Input: Project Intelligence Report
 
-Expected input from Project Inspector Agent:
+Expect this input format from the Project Inspector Agent:
 
 ```markdown
 ## Plans Analysis
@@ -78,7 +78,7 @@ Expected input from Project Inspector Agent:
 
 ## Output: Execution Plan
 
-Generate structured execution plans in this format:
+Generate structured execution plans in this format and return to the orchestrator:
 
 ```markdown
 # Execution Plan
@@ -228,23 +228,22 @@ RasCmdr.compute_plan(
 
 ---
 
-## Integration
+## Cross-References
 
-### Upstream Skills
-- **hecras-project-inspector** - Generates intelligence report
-- **dss_read_boundary-data** - Validates boundary conditions
-- **qa_repair_geometry** - Fixes geometry blockers
+**Rules** (follow these):
+- `.claude/rules/hec-ras/execution.md` -- Detailed execution mode parameters
+- `.claude/rules/hec-ras/remote.md` -- Read when remote execution is needed
 
-### Downstream Skills
-- **hecras_compute_plans** - Runs the execution plan
-- **hecras_compute_remote** - Distributed execution
-- **hecras_extract_results** - Post-execution analysis
-- **hecras_parse_compute-messages** - Interpret execution results
+**Agents** (delegate when needed):
+- `hecras-general-agent` -- Full workflow coordinator
+- `hecras-project-inspector` -- Project analysis to inform mode selection
+- `remote-executor` -- Remote execution setup and management
 
----
+**Skills** (related workflows):
+- `hecras_compute_plans` -- Downstream: execute plans using the selected mode
+- `hecras_compute_remote` -- Downstream: distributed execution across workers
+- `hecras_compute_rascontrol` -- Downstream: legacy COM execution
 
-## See Also
-
-- **`.claude/rules/hec-ras/execution.md`** - Complete parameter documentation
-- **`.claude/agents/hecras-project-inspector.md`** - Input format details
-- **`examples/113_parallel_execution.ipynb`** - Working parallel example
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Execution modes overview
+- `ras_commander/RasCmdr.py` -- compute_plan, compute_parallel, compute_test_mode

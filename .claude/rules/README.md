@@ -38,40 +38,58 @@ Documentation standards:
 ## How Rules Work
 
 1. **Auto-Loaded**: Claude loads rules based on file patterns and task keywords
-2. **Scoped**: Rules apply when working in relevant code areas
+2. **Path-Scoped**: Most rules have YAML `paths:` frontmatter limiting auto-load to relevant directories
 3. **Non-Blocking**: Rules provide guidance but don't prevent actions
 4. **Composable**: Multiple rules can apply simultaneously
+
+## Path Scoping (Progressive Disclosure)
+
+Rules use YAML frontmatter to scope auto-loading to specific working directories. This prevents context window bloat when working in unrelated areas (e.g., `feature_dev_notes/`).
+
+### Universal Rules (load everywhere)
+These files have **no** `paths:` frontmatter and load in all sessions:
+- `clb-engineering-recommendation.md` - CLB Engineering branding
+- `subagent-output-pattern.md` - Subagent markdown output pattern
+- `primitive-extraction-workflow.md` - Extraction workflow
+- `hec-ras/geometry.md` - Short navigator to geometry docs
+- `hec-ras/hdf-files.md` - Short navigator to HDF docs
+- `hec-ras/dss-files.md` - Short navigator to DSS docs
+- `hec-ras/usgs.md` - Short navigator to USGS docs
+- `README.md` - This file
+
+### Scoped Rules
+| Rule File | Loads When Working In |
+|-----------|----------------------|
+| `python/*.md` (14 files) | `ras_commander/**` |
+| `hec-ras/execution.md` | `ras_commander/**` |
+| `hec-ras/precipitation.md` | `ras_commander/**` |
+| `hec-ras/terrain.md` | `ras_commander/**` |
+| `hec-ras/remote.md` | `ras_commander/remote/**` |
+| `validation/validation-patterns.md` | `ras_commander/**` |
+| `testing/tdd-approach.md` | `tests/**` |
+| `testing/environment-management.md` | `tests/**` |
+| `testing/agent-integration-testing.md` | `.claude/**` |
+| `testing/precipitation-method-validation.md` | `examples/**` |
+| `documentation/hierarchical-knowledge-best-practices.md` | `.claude/**` |
+| `documentation/mkdocs-config.md` | `docs/**` |
+| `documentation/notebook-standards.md` | `examples/**` |
+| `documentation/notebook-to-agent-conversion.md` | `.claude/**` |
+| `documentation/precipitation-notebook-debugging-patterns.md` | `examples/**` |
 
 ## Creating New Rules
 
 1. Choose appropriate subdirectory (python/, hec-ras/, testing/, documentation/)
 2. Create markdown file with clear, focused guidance
 3. Keep files 50-200 lines (one specific topic per file)
-4. Use YAML frontmatter for path-specific targeting (optional):
+4. Add YAML `paths:` frontmatter to scope auto-loading:
 
 ```yaml
 ---
-paths: ras_commander/remote/**/*.py
+paths: ras_commander/**
 ---
 
-# Remote Execution Patterns
-[Rule content specific to remote execution code]
-```
-
-## Example: Path-Specific Rule
-
-```yaml
----
-paths: ras_commander/hdf/**/*.py
----
-
-# HDF File Operations
-
-When working with HDF files:
-- Always use h5py context managers (with statements)
-- Check dataset existence before reading
-- Handle both steady and unsteady result types
-- Use is_steady_plan() to detect plan type
+# Rule Title
+[Rule content]
 ```
 
 ## Guidelines
@@ -81,8 +99,13 @@ When working with HDF files:
 - **Stay current**: Update rules when patterns change
 - **Test guidance**: Ensure recommendations work in practice
 
-## See Also
+## Cross-References
 
-- [Hierarchical Knowledge Approach](../../feature_dev_notes/Hierarchical_Knowledge_Approach/)
-- Root CLAUDE.md for strategic vision
-- Subpackage CLAUDE.md files for tactical context
+**Index files**:
+- `.claude/MANIFEST.md` -- Central registry mapping rules to related skills, agents, and commands
+- `.claude/agents/README.md` -- Agent registry (agents follow rules)
+- `.claude/skills/README.md` -- Skill catalog (skills reference rules)
+
+**Governance**:
+- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
+- Root CLAUDE.md -- Strategic vision

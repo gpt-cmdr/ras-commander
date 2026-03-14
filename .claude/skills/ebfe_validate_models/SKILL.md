@@ -23,9 +23,9 @@ description: |
 
 ## Purpose
 
-Validate organized eBFE models using ras-commander's built-in dataframe validation capabilities.
+When the user asks to validate an organized eBFE or BLE model, use this skill to verify the model is actually runnable via ras-commander's built-in dataframe validation capabilities.
 
-**Why This Matters**: Not enough to just organize files - must verify the HEC-RAS project is actually runnable using ras-commander's own validation.
+**Why This Matters**: Organizing files alone is insufficient -- verify the HEC-RAS project is actually runnable using ras-commander's own validation.
 
 ## Validation Using ras-commander Dataframes
 
@@ -213,6 +213,8 @@ return summary
 
 ## Output Format
 
+Generate the following deliverables after validation completes.
+
 ### Validation Report (agent/validation_report.md)
 
 ```markdown
@@ -253,11 +255,17 @@ return summary
 
 ### Validation Script (validate_{model}_{huc8}.py)
 
-**Agent generates standalone script** for user to re-run validation
+Generate a standalone script for the user to re-run validation independently.
 
-## See Also
+## Cross-References
 
-- **eBFE Agent**: `.claude/agents/ebfe-organizer/SUBAGENT.md` - Complete agent
-- **Path Validation**: `.claude/rules/validation/validation-patterns.md`
-- **DSS Validation**: `.claude/rules/hec-ras/dss-files.md`
-- **Critical Fixes**: `feature_dev_notes/eBFE_Integration/CRITICAL_FIXES.md`
+**Skills** (related workflows):
+- `ebfe_organize_models` -- Use upstream to organize models before validation
+- `hecras_compute_plans` -- Use downstream to execute validated models
+
+**Rules** (follow these):
+- `.claude/rules/python/dataframe-first-principle.md` -- Use DataFrames for all validation checks
+- `.claude/rules/validation/validation-patterns.md` -- Validation severity levels
+
+**Primary sources**:
+- `ras_commander/ebfe_models.py` -- Validation implementation

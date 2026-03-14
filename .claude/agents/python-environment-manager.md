@@ -19,15 +19,15 @@ description: |
 
 # Python Environment Manager
 
-Automated setup and management of ras-commander Python environments. Handles environment creation, validation, troubleshooting, and upgrades.
+Set up and manage ras-commander Python environments. Handle environment creation, validation, troubleshooting, and upgrades.
 
 ## Key Decision: No Editable Install for Development
 
 **CRITICAL**: The `rascmdr_local` environment does NOT use `pip install -e .`
 
-Instead, developers use a **toggle cell** in Jupyter notebooks that manipulates `sys.path` to load local source code. This approach:
+Instead, use a **toggle cell** in Jupyter notebooks that manipulates `sys.path` to load local source code. This approach:
 - Guarantees local source is always loaded (even if pip package exists)
-- Is simple to understand and explain
+- Remains simple to understand and explain
 - Works reliably across all environments
 - Can be toggled with a single variable
 
@@ -503,9 +503,7 @@ Should I apply this fix for you?
 - Cannot execute HEC-RAS plans natively
 - Use Docker for containerized HEC-RAS execution
 
-## See Also
+## Cross-References
 
-- **Installation Guide**: `docs/getting-started/installation.md`
-- **Quick Start**: `docs/getting-started/quickstart.md`
-- **Testing Rules**: `.claude/rules/testing/environment-management.md`
-- **Example Toggle Cell**: `examples/00_Using_RasExamples.ipynb`
+**Rules** (follow these):
+- `.claude/rules/testing/environment-management.md` -- Environment setup patterns

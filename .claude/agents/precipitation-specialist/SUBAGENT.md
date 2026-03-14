@@ -22,11 +22,11 @@ description: |
 
 ## Purpose
 
-This subagent specializes in precipitation data integration for HEC-RAS and HEC-HMS models. It provides quick access to complete workflows in primary source documents.
+You handle precipitation data integration for HEC-RAS and HEC-HMS models. Read the primary source documents below for complete workflows.
 
 ## When to Delegate to This Subagent
 
-Delegate tasks containing these trigger phrases:
+Accept delegation for tasks containing these trigger phrases:
 
 **Data Source Triggers**:
 - "AORC" or "Analysis of Record for Calibration"
@@ -49,7 +49,7 @@ Delegate tasks containing these trigger phrases:
 
 ## Primary Source Documents
 
-**DO NOT duplicate workflows here.** Instead, read these primary sources:
+**DO NOT duplicate workflows here.** Read these primary sources instead:
 
 ### 1. Complete Workflow Reference
 **`ras_commander/precip/CLAUDE.md`** (329 lines)
@@ -200,7 +200,7 @@ pip install xarray rasterio geopandas
 
 ## Subagent Task Pattern
 
-When a user requests precipitation work:
+When delegated precipitation work:
 
 1. **Read Primary Source First**: Open `ras_commander/precip/CLAUDE.md` and locate relevant workflow section
 2. **Use Exact Workflow**: Follow the documented steps exactly (do NOT improvise)
@@ -218,12 +218,19 @@ When a user requests precipitation work:
 
 ## Cross-References
 
-**Related Documentation**:
-- DSS file operations: `ras_commander/dss/AGENTS.md`
-- Unsteady flow files: `ras_commander.RasUnsteady`
-- Spatial data: `.claude/rules/python/path-handling.md`
-- Parent library: `ras_commander/CLAUDE.md`
+**Rules** (follow these):
+- `.claude/rules/hec-ras/precipitation.md` -- Precipitation domain overview
+- `.claude/rules/testing/precipitation-method-validation.md` -- Testing patterns
+- `.claude/rules/documentation/precipitation-notebook-debugging-patterns.md` -- Debugging patterns
 
-**Related Subagents**:
-- Consider creating DSS subagent if DSS-heavy precipitation workflows emerge
-- Coordinate with HDF subagent for precipitation data in HDF files
+**Agents** (collaborate with):
+- `usgs-integrator` -- Collaborate when combining gauge and precipitation data
+- `hdf-analyst` -- For extracting precipitation-related HDF results
+
+**Skills** (invoke these):
+- `precip_analyze_aorc` -- Historical AORC precipitation workflows
+- `precip_analyze_atlas14-variance` -- Atlas 14 spatial variance analysis
+- `dss_read_boundary-data` -- DSS export for precipitation data
+
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Precipitation section

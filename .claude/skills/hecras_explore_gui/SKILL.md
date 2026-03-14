@@ -12,7 +12,7 @@ description: |
 
 # Exploring HEC-RAS GUI
 
-This skill enables agents to explore the HEC-RAS graphical interface, capture screenshots, and document menus/dialogs for automation development and documentation.
+When the user asks to explore HEC-RAS menus, capture GUI screenshots, or document dialog controls, use this skill. It enables agents to explore the HEC-RAS graphical interface, capture screenshots, and document menus/dialogs for automation development and documentation.
 
 ## Prerequisites
 
@@ -301,7 +301,7 @@ Example: `20251221_143025_123_Unsteady_Flow_Analysis.png`
 
 ## Agent Viewing Screenshots
 
-The agent can "see" captured screenshots using Claude's multimodal capability:
+View captured screenshots using Claude's multimodal capability:
 
 ```python
 # After capturing
@@ -386,18 +386,18 @@ else:
 8. **Close dialogs cleanly**: Use Cancel button or ESC key
 9. **Custom toolbar buttons**: HEC-RAS uses owner-drawn controls - may need position-based clicking
 
-## Primary Sources
+## Cross-References
 
-- **RasScreenshot module**: `ras_commander/RasScreenshot.py`
-- **RasGuiAutomation module**: `ras_commander/RasGuiAutomation.py`
-- **Win32 automation notebook**: `examples/120_automating_ras_with_win32com.ipynb`
-- **Win32com automation agent**: `.claude/agents/win32com-automation-expert.md`
+**Agents** (delegate when needed):
+- `win32com-automation-expert` -- Delegate for COM and GUI automation
+- `hecras-code-archaeologist` -- Delegate for reverse-engineering HEC-RAS internals
 
-## Related Skills
+**Skills** (related workflows):
+- `hecras_compute_rascontrol` -- Use for COM-based execution
 
-- `hecras_compute_plans` - After documenting GUI, automate plan execution
-- `win32com-automation-expert` - Agent for developing GUI automation workflows
+**Primary sources**:
+- `ras_commander/RasGuiAutomation.py` -- GUI automation implementation
 
 ---
 
-**Remember**: This skill enables GUI exploration for documentation and automation development. For production automation workflows, use the deterministic functions in `RasGuiAutomation` that were developed from exploration findings.
+**Remember**: Use this skill for GUI exploration and documentation. For production automation workflows, use the deterministic functions in `RasGuiAutomation` that were developed from exploration findings.

@@ -1,3 +1,7 @@
+---
+paths: tests/**
+---
+
 # Testing Environment Management
 
 **Context**: Virtual environment setup for testing notebooks and scripts
@@ -6,16 +10,16 @@
 
 ## Overview
 
-ras-commander uses specific environment management approaches for different development and testing scenarios:
+Apply these specific environment management approaches for different development and testing scenarios:
 
 - **Agent scripts and tools**: Use `uv` and `python`
 - **Jupyter notebook testing**: Use dedicated Anaconda environments
 
 ## Key Decision: No Editable Install for Development
 
-**CRITICAL**: The `rascmdr_local` environment does NOT use `pip install -e .`
+**CRITICAL**: Never use `pip install -e .` in the `rascmdr_local` environment.
 
-Instead, developers use a **toggle cell** in Jupyter notebooks that manipulates `sys.path` to load local source code. This approach:
+Instead, use a **toggle cell** in Jupyter notebooks that manipulates `sys.path` to load local source code. This approach:
 - Guarantees local source is always loaded (even if pip package exists)
 - Is simple to understand and explain
 - Works reliably across all environments
@@ -32,7 +36,7 @@ Python searches `sys.path` in order (index 0 first). By inserting the local repo
 
 ### Use uv for Development
 
-**All agent scripts, tools, and utilities should use `uv` for environment management:**
+**Use `uv` for all agent scripts, tools, and utilities:**
 
 ```bash
 # Create virtual environment with uv
@@ -64,7 +68,7 @@ uv pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm 
 
 ### Two Testing Environments
 
-ras-commander uses **two dedicated Anaconda environments** for notebook testing:
+Set up **two dedicated Anaconda environments** for notebook testing:
 
 1. **`rascmdr_local`** - Dependencies only (uses toggle cell to load local source)
 2. **`RasCommander`** - Published pip package version (standard user environment)
@@ -515,14 +519,14 @@ pip install ras-commander  # Install from PyPI
 C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\python.exe script.py
 ```
 
-## See Also
+## Cross-References
 
-- **Import Patterns**: `.claude/rules/python/import-patterns.md` - Flexible imports for notebooks
-- **Testing Approach**: `.claude/rules/testing/tdd-approach.md` - Testing with example projects
-- **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md` - Notebook best practices
-- **Environment Manager Subagent**: `.claude/agents/python-environment-manager.md` - Automated setup
-- **Example Toggle Cell**: `examples/00_Using_RasExamples.ipynb`
+**Rules** (related):
+- `.claude/rules/testing/tdd-approach.md` -- TDD patterns using these environments
+
+**Agents** (use this):
+- `python-environment-manager` -- Environment setup and troubleshooting
 
 ---
 
-**Key Takeaway**: Use `rascmdr_local` (dependencies only + toggle cell) when making code changes, `RasCommander` (published package) when testing user experience, `rascmdr_piptest` for PyPI install validation and direct script execution, and `uv` for agent scripts and tools. Never use `pip install -e .` - the toggle cell with `sys.path.insert(0, ...)` guarantees local source loading.
+**Key Takeaway**: Use `rascmdr_local` (dependencies only + toggle cell) when making code changes, `RasCommander` (published package) when testing user experience, `rascmdr_piptest` for PyPI install validation and direct script execution, and `uv` for agent scripts and tools. Never use `pip install -e .` -- the toggle cell with `sys.path.insert(0, ...)` guarantees local source loading.

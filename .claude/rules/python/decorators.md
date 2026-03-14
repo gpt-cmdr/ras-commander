@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Python Decorators
 
 **Context**: Function decorators for logging and input standardization
@@ -6,7 +10,7 @@
 
 ## Overview
 
-ras-commander uses Python decorators for cross-cutting concerns like automatic logging and input standardization. Understanding these decorators is essential for maintaining consistency and following established patterns.
+Apply Python decorators for cross-cutting concerns like automatic logging and input standardization. Follow these decorator patterns to maintain consistency across the codebase.
 
 ## Core Decorators
 
@@ -148,7 +152,7 @@ def my_function():
     pass  # Logs to file and console based on LoggingConfig
 ```
 
-**See Also**: `.claude/rules/python/error-handling.md` for complete LoggingConfig usage
+**Refer to**: `.claude/rules/python/error-handling.md` for complete LoggingConfig usage
 
 ## Custom Decorators
 
@@ -382,12 +386,11 @@ def my_new_function(file_path, output_folder=None):
     pass
 ```
 
-## See Also
+## Cross-References
 
-- **Static Classes**: `.claude/rules/python/static-classes.md` - @staticmethod pattern
-- **Error Handling**: `.claude/rules/python/error-handling.md` - LoggingConfig setup
-- **Path Handling**: `.claude/rules/python/path-handling.md` - pathlib.Path usage
-- **Naming Conventions**: `.claude/rules/python/naming-conventions.md` - Function naming
+**Rules** (related):
+- `.claude/rules/python/static-classes.md` -- Static class pattern requiring @staticmethod
+- `.claude/rules/python/error-handling.md` -- Error handling within decorated methods
 
 ---
 

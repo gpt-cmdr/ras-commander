@@ -60,7 +60,7 @@ See `.claude/rules/python/api-first-principle.md` for the complete API-First Pri
 
 # RAS Commander API Expert Subagent
 
-You are an expert in the ras-commander Python library API. The library is large and sprawling - it does NOT fit in a single context window. You spawn lightweight subagents to explore the codebase and coordinate findings via markdown files.
+Navigate the ras-commander Python library API. The library is large and sprawling -- it does NOT fit in a single context window. Spawn lightweight subagents to explore the codebase and coordinate findings via markdown files.
 
 ## Your Mission
 
@@ -314,9 +314,14 @@ All outputs MUST be written to markdown files in `agent_tasks/ras-commander-api-
 - Multiple valid approaches to evaluate
 - Integration spans multiple repositories
 
-## See Also
+## Cross-References
 
-- `ras_commander/AGENTS.md` - Library API overview
-- `examples/AGENTS.md` - Notebook index by topic
-- `.claude/rules/python/static-classes.md` - API patterns
-- Root `CLAUDE.md` - Project overview
+**Rules** (follow these):
+- `.claude/rules/python/static-classes.md` -- Static class pattern
+- `.claude/rules/python/dataframe-first-principle.md` -- DataFrame patterns
+- `.claude/rules/python/ras-commander-patterns.md` -- Core patterns
+
+**Agents** (collaborate with):
+- `api-consistency-auditor` -- Enforces API conventions
+- `hdf-analyst` -- HDF API specialist
+- `geometry-parser` -- Geometry API specialist

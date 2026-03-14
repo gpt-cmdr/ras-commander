@@ -13,11 +13,11 @@ description: |
 
 # Parsing HEC-RAS Geometry Files
 
-**Primary Sources (navigate to these for details)**:
+**Primary Sources (read these for details)**:
 - **Implementation guide**: `ras_commander/geom/AGENTS.md` (parsing algorithms, API reference)
 - **Working examples**: `examples/201_1d_plaintext_geometry.ipynb` and `examples/202_2d_plaintext_geometry.ipynb` (comprehensive demonstrations)
 
-This skill provides quick-reference patterns for common tasks. For implementation details, parsing algorithms, and complete API documentation, see the primary sources above.
+Follow these quick-reference patterns for common tasks. Read the primary sources above for implementation details, parsing algorithms, and complete API documentation.
 
 ## Quick Start Patterns
 
@@ -185,15 +185,15 @@ culverts_df = GeomCulvert.get_all(
 | GeomCulvert | `GeomCulvert` | Culvert data extraction |
 | GeomPreprocessor | `GeomPreprocessor` | Geometry preprocessor file management |
 
-See `ras_commander/geom/AGENTS.md` for complete API documentation.
+Read `ras_commander/geom/AGENTS.md` for complete API documentation.
 
 ## Critical Implementation Notes
 
 ### Bank Station Interpolation
-**Handled automatically** - `set_station_elevation()` ensures bank stations appear as exact points:
+Rely on `set_station_elevation()` to ensure bank stations appear as exact points automatically:
 - If bank station exists in data: uses it directly
 - If bank station missing: interpolates elevation and inserts point
-- You don't need to manually interpolate bank stations
+- Do not manually interpolate bank stations -- the API handles this
 
 ### 500 Point Limit
 HEC-RAS enforces maximum 500 points per cross section:
@@ -343,7 +343,7 @@ if len(df) > 500:
 
 ## Primary Sources
 
-**For complete details, navigate to**:
+**Read these for complete details**:
 
 1. **`ras_commander/geom/AGENTS.md`**
    - Parsing algorithms (fixed-width format, count interpretation)
@@ -374,7 +374,23 @@ from ras_commander.geom.GeomLandCover import GeomLandCover
 xs_df = GeomCrossSection.get_cross_sections("model.g01")
 ```
 
-## See Also
+## Cross-References
 
-- **CLAUDE.md**: Architecture section on geometry parsing (lines 165-220)
-- **Subagent**: `.claude/agents/geometry-parser/SUBAGENT.md` - For delegation
+**Rules** (follow these):
+- `.claude/rules/hec-ras/geometry.md` -- Geometry domain overview, fixed-width format, bank stations
+- `.claude/rules/python/state-machine-empty-line-handling.md` -- Empty line handling in parsers
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate
+
+**Agents** (delegate when needed):
+- `geometry-parser` -- Delegate for complex geometry analysis
+- `quality-assurance` -- Delegate for geometry repair
+
+**Skills** (related workflows):
+- `qa_repair_geometry` -- Use downstream for fixing geometry errors found during parsing
+- `hecras_extract_results` -- Use when parsing geometry alongside HDF results
+
+**Primary sources**:
+- `ras_commander/geom/AGENTS.md` -- Complete geometry module documentation
+- `examples/201_1d_plaintext_geometry.ipynb` -- 1D cross section parsing
+- `examples/202_2d_plaintext_geometry.ipynb` -- 2D Manning's n tables
+- `examples/205_extract_xs_xyz_from_geometry.ipynb` -- XS coordinate extraction

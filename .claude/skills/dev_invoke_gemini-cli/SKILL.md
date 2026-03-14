@@ -16,7 +16,7 @@ description: |
 
 # Invoking Gemini CLI
 
-Delegate QAQC, code review, and analysis tasks to Gemini CLI using markdown files for input and output.
+Delegate QAQC, code review, and analysis tasks to Gemini CLI using markdown files for input and output. Write review criteria to REVIEW.md, invoke Gemini, then read FINDINGS.md for results.
 
 ## Pattern: Markdown File Handoff
 
@@ -40,10 +40,10 @@ Claude Code                         Gemini CLI
 ```
 
 **Benefits**:
-- No shell escaping issues
-- Full context in structured format
-- Explicit output structure
-- Session resume available
+- Eliminates shell escaping issues
+- Keeps context structured in reviewable files
+- Enforces explicit output structure
+- Supports session resume
 
 ## Model Selection
 
@@ -52,7 +52,7 @@ Claude Code                         Gemini CLI
 | `gemini-3-pro-preview` | **Default.** Strong reasoning | CLI default |
 | `gemini-3-flash-preview` | Large context, fast analysis | For big codebases |
 
-**Recommendation**: Use default `gemini-3-pro-preview` for most tasks. Use `gemini-3-flash-preview` for very large context (>100K tokens) via `-m` flag.
+**Recommendation**: Use default `gemini-3-pro-preview` for most tasks. Switch to `gemini-3-flash-preview` for very large context (>100K tokens) via `-m` flag.
 
 **Note**: If you encounter 429 capacity errors with `gemini-3-pro-preview`, retry or wait briefly.
 
@@ -145,7 +145,7 @@ Write to FINDINGS.md with:
 
 ## Findings Template (FINDINGS.md)
 
-Gemini should produce:
+Instruct Gemini to produce:
 
 ```markdown
 # Review Findings: [Title]
@@ -229,7 +229,7 @@ cd "C:/GH/ras-commander" && gemini -y "Read REVIEW.md, perform security review p
 
 ### 3. Read FINDINGS.md
 
-Review findings, address issues, continue development.
+Review the findings, address issues, and continue development.
 
 ## Environment Variables
 
@@ -289,8 +289,12 @@ GOOGLE_API_KEY=xxx         # Alternative (takes precedence)
 - Geometry parsing -> `geometry-parser`
 - USGS integration -> `usgs-integrator`
 
----
+## Cross-References
 
-**See Also**:
-- `code-oracle-gemini` agent - Full orchestration capabilities
-- `.claude/rules/subagent-output-pattern.md` - Output format standards
+**Agents** (delegate when needed):
+- `code-oracle-gemini` -- Delegate for large context Gemini analysis
+
+**Skills** (related workflows):
+- `dev_invoke_codex-cli` -- Alternative: Codex CLI for deep reasoning
+- `dev_invoke_kimi-cli` -- Alternative: Kimi CLI for test generation
+- `qa_review_triple-model` -- Uses this skill as one of three reviewers

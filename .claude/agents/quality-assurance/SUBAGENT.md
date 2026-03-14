@@ -22,9 +22,9 @@ description: |
 
 ## Purpose
 
-Automated validation and repair of HEC-RAS models using:
-- **RasCheck** - Quality assurance (5 check types, FEMA/USACE standards)
-- **RasFixit** - Geometry repair (blocked obstructions, elevation envelope algorithm)
+You perform automated validation and repair of HEC-RAS models using:
+- **RasCheck** -- Quality assurance (5 check types, FEMA/USACE standards)
+- **RasFixit** -- Geometry repair (blocked obstructions, elevation envelope algorithm)
 
 ## When to Delegate
 
@@ -343,18 +343,26 @@ RasCheck implements validation from:
 
 ## Cross-References
 
-- **RasCheck Complete Docs**: `ras_commander/check/CLAUDE.md` (262 lines)
-- **RasFixit Complete Docs**: `ras_commander/fixit/AGENTS.md` (119 lines)
-- **RasFixit Workflow**: `examples/210_fixit_blocked_obstructions.ipynb`
-- **RasCheck Workflow**: `examples/800_quality_assurance_rascheck.ipynb`
-- **Testing Patterns**: `.claude/rules/testing/tdd-approach.md`
-- **Parent Library**: `ras_commander/CLAUDE.md`
+**Rules** (follow these):
+- `.claude/rules/hec-ras/geometry.md` -- Geometry domain overview
+- `.claude/rules/validation/validation-patterns.md` -- Validation severity levels
+
+**Agents** (collaborate with):
+- `geometry-parser` -- Geometry analysis before repair
+- `hecras-project-inspector` -- Project context for QA
+
+**Skills** (invoke these):
+- `qa_repair_geometry` -- Geometry repair workflows
+- `hecras_parse_geometry` -- Geometry parsing for analysis
+
+**Primary sources**:
+- `ras_commander/fixit/AGENTS.md` -- RasFixit documentation
 
 ## Summary
 
-This subagent is a **navigator to primary sources**. The complete documentation lives in:
-1. `ras_commander/check/CLAUDE.md` - All RasCheck details
-2. `ras_commander/fixit/AGENTS.md` - All RasFixit details
-3. Example notebooks 210 and 800 - Complete workflows
+This subagent navigates to primary sources. Read the complete documentation in:
+1. `ras_commander/check/CLAUDE.md` -- All RasCheck details
+2. `ras_commander/fixit/AGENTS.md` -- All RasFixit details
+3. Example notebooks 210 and 800 -- Complete workflows
 
 **Always read the primary sources before implementing quality assurance features.**

@@ -18,9 +18,9 @@ description: |
 
 ## Purpose
 
-This subagent is a **lightweight navigator** to the USGS integration documentation. All detailed workflows, API references, and examples are maintained in primary sources.
+You handle USGS gauge data integration as a **lightweight navigator** to the USGS integration documentation. All detailed workflows, API references, and examples live in primary sources.
 
-**DO NOT duplicate workflow details here.** Point to primary sources instead.
+**DO NOT duplicate workflow details here.** Read primary sources instead.
 
 ## Primary Documentation Sources
 
@@ -89,7 +89,7 @@ This subagent is a **lightweight navigator** to the USGS integration documentati
 
 ## Quick Reference: Workflow Stages
 
-This subagent supports these workflow stages (details in `usgs/CLAUDE.md`):
+Follow these workflow stages (read `usgs/CLAUDE.md` for details):
 
 1. **Spatial Discovery** - Find gauges in project area
 2. **Data Retrieval** - Download flow/stage from USGS NWIS
@@ -105,7 +105,7 @@ See `ras_commander/usgs/CLAUDE.md` for complete workflow documentation.
 
 ## Module Organization (14 Modules)
 
-Brief overview - see `usgs/CLAUDE.md` for complete details:
+Brief overview -- read `usgs/CLAUDE.md` for complete details:
 
 ### Data Operations
 - **RasUsgsCore** - Primary data retrieval from USGS NWIS
@@ -218,15 +218,22 @@ Boundary tables use HEC-RAS fixed-width format (Fortran-style). Functions handle
 ### Time Zone Handling
 USGS data is in UTC. Functions handle timezone conversions automatically when aligning with HEC-RAS simulation windows.
 
-## Related Components
+## Cross-References
 
-**HEC-RAS Integration**:
-- `ras_commander.RasUnsteady` - Boundary condition utilities
-- `ras_commander.HdfResultsXsec` - Extract modeled 1D results for validation
-- `ras_commander.HdfResultsMesh` - Extract modeled 2D results for validation
+**Rules** (follow these):
+- `.claude/rules/hec-ras/usgs.md` -- USGS domain overview
+- `.claude/rules/hec-ras/dss-files.md` -- Read when generating DSS from gauge data
 
-**Real-time execution**:
-- `.claude/rules/hec-ras/execution.md` - Real-time computation callbacks
+**Agents** (collaborate with):
+- `precipitation-specialist` -- Collaborate when combining gauge and precipitation data
+- `hecras-project-inspector` -- Get project context before gauge matching
+
+**Skills** (invoke these):
+- `usgs_integrate_gauges` -- Standard USGS integration workflows
+- `dss_read_boundary-data` -- DSS boundary condition handling
+
+**Primary sources**:
+- `ras_commander/usgs/CLAUDE.md` -- Complete USGS module documentation (14 modules)
 
 ## Subagent Workflow
 
@@ -236,7 +243,7 @@ When delegated a task:
 2. **Check example notebooks** for working demonstrations
 3. **Read code docstrings** for precise API details
 4. **Implement the workflow** based on primary sources
-5. **DO NOT create new workflow documentation** - point to existing sources
+5. **DO NOT create new workflow documentation** -- read existing sources
 
 ## Maintenance Notes
 
@@ -245,7 +252,7 @@ When delegated a task:
 **If you find yourself duplicating workflows**:
 1. Stop immediately
 2. Check if the workflow exists in `usgs/CLAUDE.md`
-3. If yes: Point to it instead of duplicating
+3. If yes: Read it instead of duplicating
 4. If no: Add it to `usgs/CLAUDE.md` (primary source), then reference it here
 
 **Primary source hierarchy**:

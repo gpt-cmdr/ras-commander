@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Windows Reserved Device Names in File Operations
 
 **Context**: Handling Windows virtual device names during file copy/iteration
@@ -7,7 +11,7 @@
 
 ## The Problem
 
-Windows has 22 reserved device names that appear in directory listings (`os.listdir()`, `Path.iterdir()`) even though they are virtual devices, not real files:
+Handle Windows' 22 reserved device names that appear in directory listings (`os.listdir()`, `Path.iterdir()`) even though they are virtual devices, not real files:
 
 ```
 CON, PRN, AUX, NUL
@@ -46,7 +50,7 @@ The check uses `Path(name).stem.upper()` which catches:
 
 ## When to Apply
 
-Apply this filter to ANY `shutil.copytree()` or `iterdir()` + copy/move loop that operates on user-provided directories (HEC-RAS project folders). These directories may contain reserved names depending on the user's environment.
+Apply this filter to ANY `shutil.copytree()` or `iterdir()` + copy/move loop operating on user-provided directories (HEC-RAS project folders). Expect that these directories may contain reserved names depending on the user's environment.
 
 ## Implementation
 
@@ -54,7 +58,7 @@ Apply this filter to ANY `shutil.copytree()` or `iterdir()` + copy/move loop tha
 - `RasUtils.ignore_windows_reserved(directory, contents)` - copytree ignore function
 - `RasUtils.is_windows_reserved_name(name)` - boolean check
 
-## See Also
+## Cross-References
 
-- `ras_commander/RasUtils.py` - Implementation
-- `.claude/outputs/2026-02-04-windows-reserved-names-fix-closeout.md` - Full task details
+**Rules** (related):
+- `.claude/rules/python/path-handling.md` -- General path handling patterns

@@ -21,7 +21,7 @@ description: |
 
 ## Purpose
 
-Creates comprehensive, high-quality documentation for ras-commander including:
+Create and maintain comprehensive documentation for ras-commander:
 - Example Jupyter notebooks demonstrating library features
 - API reference documentation using mkdocstrings
 - User guide content in markdown
@@ -29,7 +29,7 @@ Creates comprehensive, high-quality documentation for ras-commander including:
 
 ## When to Delegate
 
-Trigger phrases and scenarios:
+Activate for these trigger phrases and scenarios:
 - "Create a notebook showing..."
 - "Write an example demonstrating..."
 - "Add documentation for..."
@@ -44,22 +44,20 @@ Trigger phrases and scenarios:
 ## Primary Sources (Read These First)
 
 ### Standards and Configuration
-- **`.claude/rules/documentation/notebook-standards.md`** - Complete notebook requirements
-- **`.claude/rules/documentation/mkdocs-config.md`** - MkDocs platform-specific configuration
-- **`examples/AGENTS.md`** - Notebook index and extraction workflow
-- **`mkdocs.yml`** - Site configuration (navigation, plugins, theme)
+- **`.claude/rules/documentation/notebook-standards.md`** -- Complete notebook requirements
+- **`.claude/rules/documentation/mkdocs-config.md`** -- MkDocs platform-specific configuration
+- **`examples/AGENTS.md`** -- Notebook index and extraction workflow
+- **`mkdocs.yml`** -- Site configuration (navigation, plugins, theme)
 
 ### Deployment Configuration
-- **`.readthedocs.yaml`** - ReadTheDocs build config (CRITICAL: uses `cp`, not symlinks)
-- **`.github/workflows/docs.yml`** - GitHub Pages deployment workflow
+- **`.readthedocs.yaml`** -- ReadTheDocs build config (CRITICAL: uses `cp`, not symlinks)
+- **`.github/workflows/docs.yml`** -- GitHub Pages deployment workflow
 
 ## CRITICAL: ReadTheDocs Symlink Issue
 
-**THE PROBLEM**: ReadTheDocs uses `rsync --safe-links` which **STRIPS SYMLINKS**.
+ReadTheDocs uses `rsync --safe-links` which **STRIPS SYMLINKS**. Symlinks work during build but content is **NOT uploaded** to the live site.
 
-Symlinks work during build but content is **NOT uploaded** to the live site.
-
-**THE SOLUTION**: Always use `cp -r` in `.readthedocs.yaml`, NEVER `ln -s`.
+Always use `cp -r` in `.readthedocs.yaml`. NEVER use `ln -s`.
 
 ### ❌ WRONG
 ```yaml
@@ -79,7 +77,7 @@ build:
       - cp -r examples docs/notebooks  # ✅ Works on ReadTheDocs
 ```
 
-**Note**: GitHub Actions can use either symlink or copy, but we use `cp -r` in both for consistency.
+GitHub Actions can use either symlink or copy, but use `cp -r` in both for consistency.
 
 ## Documentation Types
 
@@ -87,17 +85,17 @@ build:
 
 **Location**: `examples/##_descriptive_name.ipynb`
 
-**Purpose**: Dual-function as user documentation AND functional tests
+**Purpose**: Serve dual function as user documentation AND functional tests.
 
 **Key Requirements**:
-1. **MANDATORY**: First cell must be markdown with H1 title
+1. **MANDATORY**: Start first cell with markdown containing H1 title
 2. Use `RasExamples.extract_project()` for reproducibility (never hard-coded paths)
 3. Follow 2-cell import pattern (Cell 0: pip mode, Cell 1: dev mode markdown)
 4. Run all cells before committing (outputs needed for documentation)
-5. Clear, explanatory markdown cells between code sections
+5. Write clear, explanatory markdown cells between code sections
 6. Include verification/assertions to show expected behavior
 
-**See**: `.claude/rules/documentation/notebook-standards.md` for complete standards
+Consult `.claude/rules/documentation/notebook-standards.md` for complete standards.
 
 ### 2. API Documentation
 
@@ -198,7 +196,7 @@ validation:
     unrecognized_links: info  # Permissive for AGENTS.md relative links
 ```
 
-**See**: `.claude/rules/documentation/mkdocs-config.md` for complete configuration guide
+Consult `.claude/rules/documentation/mkdocs-config.md` for the complete configuration guide.
 
 ## Common Workflows
 
@@ -282,31 +280,31 @@ mkdocs serve
 **Problem**: First cell is code, not markdown with H1
 **Result**: Documentation title becomes filename
 **Fix**: Always start with markdown cell containing H1
-**See**: `.claude/rules/documentation/notebook-standards.md` section "Required: H1 Title in First Cell"
+Consult `.claude/rules/documentation/notebook-standards.md` section "Required: H1 Title in First Cell".
 
 ### ❌ Hard-Coded Paths
 **Problem**: `project_path = Path("/Users/me/Projects/Muncie")`
 **Result**: Notebook only works on your machine
 **Fix**: Use `RasExamples.extract_project("Muncie")`
-**See**: `.claude/rules/documentation/notebook-standards.md` section "Use RasExamples"
+Consult `.claude/rules/documentation/notebook-standards.md` section "Use RasExamples".
 
 ### ❌ Symlinks in ReadTheDocs Config
 **Problem**: `.readthedocs.yaml` uses `ln -s`
 **Result**: Notebooks appear in build but stripped from live site
 **Fix**: Use `cp -r examples docs/notebooks`
-**See**: `.claude/rules/documentation/mkdocs-config.md` section "Critical Issue: ReadTheDocs Strips Symlinks"
+Consult `.claude/rules/documentation/mkdocs-config.md` section "Critical Issue: ReadTheDocs Strips Symlinks".
 
 ### ❌ Not Running Before Committing
 **Problem**: Committed notebook has no outputs
 **Result**: Documentation shows code but no results (execute: false)
 **Fix**: Run `Kernel → Restart & Run All` before committing
-**See**: `.claude/rules/documentation/notebook-standards.md` section "Updating Notebooks"
+Consult `.claude/rules/documentation/notebook-standards.md` section "Updating Notebooks".
 
 ### ❌ Out-of-Sync Configs
 **Problem**: GitHub Actions and ReadTheDocs configs differ
 **Result**: Builds succeed on one platform but fail on the other
 **Fix**: Keep dependency lists synchronized, only differ in notebook handling
-**See**: `.claude/rules/documentation/mkdocs-config.md` section "Best Practices"
+Consult `.claude/rules/documentation/mkdocs-config.md` section "Best Practices".
 
 ## Git Ignore Configuration
 
@@ -340,23 +338,12 @@ Before completing documentation tasks:
 
 ## Cross-References
 
-**Primary Documentation Standards**:
-- `.claude/rules/documentation/notebook-standards.md` - Detailed notebook requirements
-- `.claude/rules/documentation/mkdocs-config.md` - Platform-specific build configuration
+**Rules** (follow these):
+- `.claude/rules/documentation/mkdocs-config.md` -- MkDocs configuration
+- `.claude/rules/documentation/notebook-standards.md` -- Notebook conventions
 
-**Code Location Guidance**:
-- `examples/AGENTS.md` - Notebook index and extraction workflow
-- `CLAUDE.md` - Section "Documentation Build Configuration"
-
-**Configuration Files**:
-- `mkdocs.yml` - Site configuration
-- `.readthedocs.yaml` - ReadTheDocs build config
-- `.github/workflows/docs.yml` - GitHub Pages deployment
-- `docs/requirements-docs.txt` - Documentation dependencies
-
-**Example Notebooks**:
-- `examples/100_using_ras_examples.ipynb` - RasExamples pattern reference
-- `examples/101_project_initialization.ipynb` - Standard notebook structure
+**Agents** (collaborate with):
+- `example-notebook-librarian` -- Notebook management
 
 ## Debugging
 
@@ -375,7 +362,7 @@ Before completing documentation tasks:
 
 **Fix**: Update `.readthedocs.yaml` to use `cp -r`.
 
-**See**: `.claude/rules/documentation/mkdocs-config.md` section "Debugging"
+Consult `.claude/rules/documentation/mkdocs-config.md` section "Debugging".
 
 ### Validation Errors
 
@@ -390,8 +377,8 @@ validation:
 
 **Why**: AGENTS.md files contain relative links to Python source files
 
-**See**: `.claude/rules/documentation/mkdocs-config.md` section "Validation Configuration"
+Consult `.claude/rules/documentation/mkdocs-config.md` section "Validation Configuration".
 
 ---
 
-**Key Principle**: Documentation serves dual purpose - user education AND functional validation. Every notebook must be reproducible on any machine using RasExamples. ReadTheDocs STRIPS symlinks - always use `cp -r`. For detailed standards and configuration, read the primary sources in `.claude/rules/documentation/`.
+**Key Principle**: Documentation serves dual purpose -- user education AND functional validation. Ensure every notebook is reproducible on any machine using RasExamples. ReadTheDocs STRIPS symlinks -- always use `cp -r`. For detailed standards and configuration, read the primary sources in `.claude/rules/documentation/`.

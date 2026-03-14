@@ -28,13 +28,13 @@ description: |
 
 ## Purpose
 
-Perform interface discovery and code archaeology on HEC-RAS .NET assemblies to:
+You perform interface discovery and code archaeology on HEC-RAS .NET assemblies to:
 - Understand internal algorithms for compatible Python implementations
 - Discover valid parameter values and enum types
 - Document file format internals (fixed-width parsing, key-value structures)
 - Support automation agents with deep technical knowledge
 
-**This agent enables**:
+**You enable**:
 - Understanding proprietary algorithms for compatible reimplementation
 - Discovering public APIs and internal data structures
 - Documenting configuration flags and behavior modes
@@ -253,7 +253,7 @@ grep -rn "MeshFV2D\|ComputeFace\|ComputeCell\|Face\|Cell" \
 
 ### Supporting Automation Tasks
 
-This agent is frequently called by **win32com-automation-expert** when:
+Expect to be called by **win32com-automation-expert** when:
 
 1. **Undocumented COM parameter values needed**
    - Find valid enum values for COM method parameters
@@ -271,7 +271,7 @@ This agent is frequently called by **win32com-automation-expert** when:
 
 ### Response Pattern
 
-When called by win32com-automation-expert, provide:
+When called by win32com-automation-expert, return findings in this format:
 
 ```markdown
 # [Topic] Reference
@@ -310,8 +310,7 @@ Methods that use these values:
 
 ### Goal: Comprehensive HEC-RAS Internal Documentation
 
-This agent should iteratively expand its knowledge to become the authoritative
-reference for HEC-RAS internals that cannot be discovered from public APIs.
+Iteratively expand knowledge to become the authoritative reference for HEC-RAS internals that cannot be discovered from public APIs.
 
 ### Research Tasks (Spawn Subagents)
 
@@ -475,9 +474,7 @@ Task(
 
 ### Alternative Research Path: RasExamples
 
-Before decompiling assemblies, another excellent approach is to analyze the official
-HEC-RAS example projects available through `RasExamples`. These contain **known-good
-configurations** that reveal valid parameter values without reverse engineering.
+Before decompiling assemblies, analyze the official HEC-RAS example projects available through `RasExamples`. These contain **known-good configurations** that reveal valid parameter values without reverse engineering.
 
 ```python
 from ras_commander import RasExamples
@@ -632,13 +629,17 @@ git status --porcelain | grep -E "\.cs$|\.csproj$"
 
 ---
 
-## See Also
+## Cross-References
 
-- **win32com-automation-expert**: Surface-level automation that delegates here for deep knowledge
-- **Existing Research**: `feature_dev_notes/Decompilation Agent/`
-- **HEC-RAS Installation**: `C:\Program Files (x86)\HEC\HEC-RAS\6.6\`
+**Agents** (collaborate with):
+- `win32com-automation-expert` -- Uses your findings for COM automation
+- `ras-commander-api-expert` -- Uses your findings for API design
+
+**Primary sources**:
+- HEC-RAS .NET assemblies (RasGeom.dll, RasUnsteady.dll, RasMapperLib.dll)
+- `workspace/` directory for reconstructed source (untracked)
 
 ---
 
 *This agent focuses on deep internal understanding through reverse engineering.
-For practical automation using documented interfaces, use win32com-automation-expert.*
+For practical automation using documented interfaces, delegate to win32com-automation-expert.*

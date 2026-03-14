@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # HDF Attribute Mapping Pattern
 
 **Context**: Extracting HDF attributes into DataFrame columns
@@ -9,7 +13,7 @@
 
 ## Overview
 
-When extracting HDF attributes into DataFrame columns, use **explicit mapping dictionaries** instead of dynamic sanitization for clarity, maintainability, and control.
+Use **explicit mapping dictionaries** instead of dynamic sanitization when extracting HDF attributes into DataFrame columns. This provides clarity, maintainability, and control.
 
 ---
 
@@ -154,12 +158,14 @@ except Exception as e:
 
 ---
 
-## See Also
+## Cross-References
 
-- **Implementation Example**: `ras_commander/results/ResultsSummary.py:155-174`
-- **HDF Attribute Reference**: `.claude/outputs/2026-01-11-results-df-refactoring-closeout.md`
-- **Naming Conventions**: `.claude/rules/python/naming-conventions.md`
+**Rules** (related):
+- `.claude/rules/hec-ras/hdf-files.md` -- HDF domain overview
+
+**Agents** (use this pattern):
+- `hdf-analyst` -- Follows this when mapping HDF attributes
 
 ---
 
-**Key Takeaway**: Use explicit mapping dictionaries for HDF attribute → DataFrame column mapping. Provides clarity, control, and maintainability over dynamic sanitization.
+**Key Takeaway**: Use explicit mapping dictionaries for HDF attribute to DataFrame column mapping. This provides clarity, control, and maintainability over dynamic sanitization.

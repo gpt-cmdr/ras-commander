@@ -16,7 +16,7 @@ description: |
 
 **Purpose**: Navigate precipitation workflows for HEC-RAS/HMS models using AORC historical data and Atlas 14 design storms.
 
-**This skill is a NAVIGATOR** - it points you to the primary sources containing complete workflows and API documentation. For implementation details, always refer to the primary sources below.
+**This skill is a NAVIGATOR** -- read the primary sources below for complete workflows and API documentation. Do not duplicate implementation details here.
 
 ## Primary Sources (Read These First!)
 
@@ -169,7 +169,7 @@ StormGenerator.export_to_dss(
 
 **Details**: See `examples/104_Atlas14_AEP_Multi_Project.ipynb`
 
-## API Quick Reference (Navigate to CLAUDE.md for Details)
+## API Quick Reference (Read CLAUDE.md for Details)
 
 ### PrecipAorc Methods
 **Data Retrieval**:
@@ -339,26 +339,28 @@ pip install xarray rasterio geopandas
 
 **Details**: See `ras_commander/precip/CLAUDE.md` "Performance" section
 
-## See Also
+## Cross-References
 
-**Within Repository**:
-- `ras_commander/precip/CLAUDE.md` - Complete precipitation API reference (PRIMARY SOURCE)
-- `ras_commander/CLAUDE.md` - Parent library context
-- `ras_commander/dss/AGENTS.md` - DSS file operations
-- `examples/900_aorc_precipitation.ipynb` - AORC demonstration
-- `examples/720_atlas14_aep_events.ipynb` - Atlas 14 single project
-- `examples/722_atlas14_multi_project.ipynb` - Atlas 14 multi-project
+**Rules** (follow these):
+- `.claude/rules/hec-ras/precipitation.md` -- Precipitation domain overview
+- `.claude/rules/testing/precipitation-method-validation.md` -- Testing precipitation methods
 
-**Related Components**:
-- `ras_commander.RasUnsteady` - Unsteady flow file management
-- `ras_commander.dss.RasDss` - DSS file operations
-- `.claude/rules/python/path-handling.md` - Spatial data handling patterns
+**Agents** (delegate when needed):
+- `precipitation-specialist` -- Delegate for complex precipitation workflows
+
+**Skills** (related workflows):
+- `precip_analyze_atlas14-variance` -- Use for Atlas 14 design storm analysis
+- `dss_read_boundary-data` -- Use when exporting precipitation to DSS format
+- `hecras_compute_plans` -- Use downstream after generating rain-on-grid boundaries
+
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Precipitation section
 
 ## Usage Pattern
 
 1. **Understand the workflow**: Read `ras_commander/precip/CLAUDE.md` for complete details
-2. **See it in action**: Open relevant example notebook (`examples/24_*.ipynb`, `examples/103_*.ipynb`, etc.)
+2. **See it in action**: Open relevant example notebook
 3. **Implement**: Copy patterns from notebook, adapt to your project
 4. **Verify**: Check outputs in HEC-RAS/HMS GUI
 
-**This skill is a lightweight index - detailed content lives in primary sources.**
+**This skill is a lightweight index -- detailed content lives in primary sources.**

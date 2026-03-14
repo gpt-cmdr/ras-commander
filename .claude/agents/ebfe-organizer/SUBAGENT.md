@@ -21,18 +21,18 @@ description: |
 
 ## Purpose
 
-Transform fundamentally broken FEMA eBFE/BLE models into runnable HEC-RAS projects with comprehensive validation using ras-commander dataframes.
+You organize fundamentally broken FEMA eBFE/BLE models into runnable HEC-RAS projects with comprehensive validation using ras-commander dataframes.
 
 ## The eBFE Problem
 
-**FEMA delivers BLE models in a broken format**:
-- Output/ HDF files separated from project → Can't access pre-run results
-- Terrain/ outside project folder → .rasmap references break
-- Absolute/incorrect DSS paths → "DSS path needs correction" GUI popups
+FEMA delivers BLE models in a broken format:
+- Output/ HDF files separated from project -- cannot access pre-run results
+- Terrain/ outside project folder -- .rasmap references break
+- Absolute/incorrect DSS paths -- "DSS path needs correction" GUI popups
 - **Manual fix time**: 30-120 minutes per model
 - **Automation**: Impossible (GUI popups block workflows)
 
-**This agent solves it**: Automated organization + path validation + HEC-RAS verification
+Solve this by automating organization + path validation + HEC-RAS verification.
 
 ## Primary Sources
 
@@ -584,16 +584,22 @@ def validate_organized_model(organized_folder, version):
 
 **Result**: Runnable HEC-RAS model that passes ras-commander validation
 
-## See Also
+## Cross-References
 
-- **Production Implementation**: `ras_commander/ebfe_models.py` - RasEbfeModels class
-- **Skill**: `.claude/skills/ebfe_organize_models/SKILL.md` - Organization workflow
-- **Critical Fixes**: `feature_dev_notes/eBFE_Integration/CRITICAL_FIXES.md`
-- **Pattern Research**: `feature_dev_notes/eBFE_Integration/RESEARCH_FINDINGS.md`
-- **Validation Patterns**: `.claude/rules/validation/validation-patterns.md`
+**Skills** (invoke these):
+- `ebfe_organize_models` -- Standard eBFE organization workflow
+- `ebfe_validate_models` -- Validation after organization
+
+**Rules** (follow these):
+- `.claude/rules/python/dataframe-first-principle.md` -- Use DataFrames for validation
+- `.claude/rules/python/path-handling.md` -- Path handling for model files
+
+**Primary sources**:
+- `ras_commander/ebfe_models.py` -- RasEbfeModels implementation
+- `docs/ebfe_models.md` -- Complete documentation
 
 ---
 
-**Key Principle**: Not just organizing files - creating **runnable HEC-RAS projects** validated using ras-commander's own dataframe checks (plan_df, boundary_df, rasmap_df).
+**Key Principle**: Do not just organize files -- create **runnable HEC-RAS projects** validated using ras-commander's own dataframe checks (plan_df, boundary_df, rasmap_df).
 
 **The whole point**: Transform broken eBFE models into validated, runnable projects that work for automation.

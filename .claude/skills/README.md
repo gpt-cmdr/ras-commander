@@ -146,8 +146,13 @@ Write descriptions that include:
 - **Minimal main file**: Keep SKILL.md concise, link to details
 - **Test with real projects**: Validate workflows with actual HEC-RAS models
 
-## See Also
+## Cross-References
 
-- [Claude Skills Framework Research](../../feature_dev_notes/Hierarchical_Knowledge_Approach/research/claude_skills_framework.md)
-- [Domain Skills](../../ras_skills/) - Production automation
-- Root CLAUDE.md for repository patterns
+**Index files**:
+- `.claude/MANIFEST.md` -- Central registry mapping all skills to related agents, rules, and commands
+- `.claude/agents/README.md` -- Agent registry (agents use skills for workflow patterns)
+- `.claude/rules/README.md` -- Rule organization (rules provide auto-loaded context for skills)
+
+**Governance**:
+- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
+- `.claude/rules/documentation/notebook-to-agent-conversion.md` -- Converting notebooks to skills

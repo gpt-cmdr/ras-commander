@@ -1,3 +1,7 @@
+---
+paths: examples/**
+---
+
 # Precipitation Method Validation Pattern
 
 **Context**: Validating HMS-equivalent precipitation methods
@@ -10,7 +14,7 @@
 
 ### Atlas 14 Depth Verification
 
-**Always verify against NOAA PFDS website**: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
+**Verify all depths against the NOAA PFDS website**: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
 
 **Include verification link in notebooks**:
 ```python
@@ -23,7 +27,7 @@ print(f"Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat={lat}&l
 
 ## HMS-Equivalent Methods Must Match Target Exactly
 
-### Depth Conservation Requirements
+### Enforce Depth Conservation Requirements
 
 | Method | Precision Requirement | Target Source |
 |--------|----------------------|---------------|
@@ -76,7 +80,7 @@ print(f"✓ HMS Equivalence verified: {error:.9f} inches (< 10^-6)")
 
 ### Fair Comparison Requirements
 
-**Rule**: When comparing multiple methods, all must use the **same target depth**
+**Enforce this rule**: When comparing multiple methods, all must use the **same target depth**.
 
 **Get target from NOAA PFDS**:
 ```python
@@ -133,7 +137,7 @@ hyeto_scs = ScsTypeStorm.generate_hyetograph(target, ...)
 
 ### ❌ Not Verifying Against NOAA PFDS
 
-**Always include PFDS link** for user verification:
+**Include a PFDS link** in every precipitation notebook for user verification:
 ```python
 print(f"Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat={lat}&lon={lon}")
 ```
@@ -142,12 +146,19 @@ print(f"Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat={lat}&l
 
 ---
 
-## See Also
+## Cross-References
 
-- **Method comparison**: `examples/720_precipitation_methods_comprehensive.ipynb`
-- **StormGenerator bug fix**: `feature_dev_notes/Atlas14_HMS_Integration/STORMGENERATOR_BUG_FIX.md`
-- **HMS validation**: `hms-commander/examples/08_atlas14_hyetograph_generation.ipynb`
+**Rules** (related):
+- `.claude/rules/hec-ras/precipitation.md` -- Precipitation domain overview
+- `.claude/rules/documentation/precipitation-notebook-debugging-patterns.md` -- Debugging patterns
+
+**Agents** (use this):
+- `precipitation-specialist` -- Precipitation workflows
+
+**Skills** (related):
+- `precip_analyze_aorc` -- AORC precipitation analysis
+- `precip_analyze_atlas14-variance` -- Atlas 14 variance analysis
 
 ---
 
-**Key Takeaway**: HMS-equivalent methods must conserve depth at 10^-6 precision. Always verify precipitation values against NOAA PFDS website. Use same target depth when comparing methods.
+**Key Takeaway**: HMS-equivalent methods must conserve depth at 10^-6 precision. Always verify precipitation values against NOAA PFDS website. Use the same target depth when comparing methods.

@@ -19,7 +19,7 @@ description: |
 - **HdfResultsPlan Implementation**: `ras_commander/hdf/HdfResultsPlan.py` - Compute message methods
 - **Working Example**: `examples/400_1d_hdf_data_extraction.ipynb` - Compute message extraction
 
-This skill provides patterns for extracting and interpreting HEC-RAS computation output. For implementation details, see the primary sources above.
+When the user asks about execution status or compute messages, use these patterns. Read the primary sources above for implementation details.
 
 ---
 
@@ -52,7 +52,7 @@ else:
 
 ### HdfResultsPlan.get_compute_messages()
 
-**Purpose**: Extract raw computation messages from HDF file
+Call this to extract raw computation messages from HDF files.
 
 **Signature**:
 ```python
@@ -81,7 +81,7 @@ print(len(messages))  # Character count
 
 **Purpose**: Extract compute messages WITHOUT RasControl/COM fallback
 
-**Use When**: Automated workflows where COM locking is problematic
+Use this variant in automated/parallel workflows where COM locking is problematic.
 
 **Fallback Order**:
 1. HDF `/Results/Summary/Compute Messages (text)`
@@ -311,9 +311,7 @@ report = analyze_plan_execution("path/to/project", "6.6", "01")
 
 ## Integration with Results Analyst Agent
 
-When delegating compute message analysis to the Results Analyst Agent:
-
-**Context to Provide**:
+When delegating compute message analysis, provide these context items to the `hecras-results-analyst` agent:
 1. Plan number and HDF path
 2. Expected completion status
 3. Any known issues or concerns
@@ -405,8 +403,16 @@ messages = HdfResultsPlan.get_compute_messages_hdf_only("01")
 
 ---
 
-## See Also
+## Cross-References
 
-- **hecras_extract_results**: Full HDF results extraction patterns
-- **hecras_compute_plans**: Plan execution that generates compute messages
-- **qa_repair_geometry**: Fixing geometry errors found in messages
+**Rules** (auto-loaded context):
+- `.claude/rules/hec-ras/hdf-files.md` -- Read for HDF domain overview
+
+**Agents** (delegate when needed):
+- `hecras-results-analyst` -- Delegate for full results interpretation and quality assessment
+- `hdf-analyst` -- Delegate for advanced HDF data extraction
+
+**Skills** (related workflows):
+- `hecras_extract_results` -- Use downstream for full HDF results extraction
+- `hecras_compute_plans` -- Upstream: plan execution that generates compute messages
+- `qa_repair_geometry` -- Use to fix geometry errors identified in compute messages

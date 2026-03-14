@@ -6,11 +6,11 @@
 
 ## Primary Source
 
-**See**: `ras_commander/hdf/AGENTS.md` for complete HDF documentation.
+Read `ras_commander/hdf/AGENTS.md` for complete HDF documentation.
 
 ## Overview
 
-HEC-RAS stores simulation results in HDF5 files (`.p##.hdf`). ras-commander provides static class methods for extracting all result types.
+When working with HEC-RAS results, read them from HDF5 files (`.p##.hdf`). Use the static class methods in `ras_commander.hdf` -- never instantiate these classes.
 
 ## Key Classes
 
@@ -26,7 +26,9 @@ HEC-RAS stores simulation results in HDF5 files (`.p##.hdf`). ras-commander prov
 | `HdfHydraulicTables` | Cross section property tables |
 | `HdfChannelCapacity` | 1D channel capacity analysis (multi-AEP) |
 
-## Critical Pattern: Steady vs Unsteady Detection
+## First Step: Always Detect Plan Type
+
+Before extracting any results, call `HdfResultsPlan.is_steady_plan()`. Steady and unsteady results have different HDF structures -- calling the wrong method returns empty data or errors.
 
 ```python
 from ras_commander.hdf import HdfResultsPlan
@@ -39,8 +41,6 @@ else:
     # Use unsteady methods with time_index
     wse = HdfResultsPlan.get_wse(hdf_file, time_index=-1)
 ```
-
-**Why**: Steady and unsteady results have different HDF structures.
 
 ## Quick Reference
 
@@ -64,7 +64,7 @@ ts = HdfResultsMesh.get_mesh_cells_timeseries(plan_number, ras_object=ras)
 
 ### ras_object Parameter
 
-When using HDF methods with a local `ras` object (not global), always pass it:
+When using a local `ras` object (not the global), always pass `ras_object`:
 
 ```python
 ras = init_ras_project(project_folder, "6.6")
@@ -74,14 +74,23 @@ mesh = HdfMesh.get_mesh_cell_points(plan, ras_object=ras)
 results = HdfResultsMesh.get_mesh_cells_timeseries(plan, ras_object=ras)
 ```
 
-See `.claude/rules/python/ras-commander-patterns.md` for complete context object discipline.
+Read `.claude/rules/python/ras-commander-patterns.md` for complete context object discipline.
 
-## See Also
+## Cross-References
 
-- **Complete Documentation**: `ras_commander/hdf/AGENTS.md`
-- **Example Notebooks**: `examples/400_1d_hdf_data_extraction.ipynb`, `examples/410_2d_hdf_data_extraction.ipynb`, `examples/430_1d_channel_capacity_analysis.ipynb`
-- **Context Object Discipline**: `.claude/rules/python/ras-commander-patterns.md`
+**Rules** (auto-loaded context):
+- `.claude/rules/python/ras-commander-patterns.md` -- Read for ras_object discipline
+- `.claude/rules/python/hdf-attribute-mapping-pattern.md` -- Read when mapping HDF attributes
+- `.claude/rules/python/api-first-principle.md` -- Follow when writing HDF extraction code
 
----
+**Agents** (delegate when needed):
+- `hdf-analyst` -- Delegate for complex HDF analysis, custom extraction
+- `hecras-results-analyst` -- Delegate for results interpretation and quality assessment
 
-**Key Takeaway**: Use `is_steady_plan()` before extraction. Always pass `ras_object` when using local project context.
+**Skills** (related workflows):
+- `hecras_extract_results` -- Use for standard result extraction patterns
+- `hecras_parse_compute-messages` -- Use to check execution status before extracting results
+
+**Primary sources**:
+- `ras_commander/hdf/AGENTS.md` -- Complete HDF class reference
+- `examples/400_1d_hdf_data_extraction.ipynb`, `examples/410_2d_hdf_data_extraction.ipynb` -- Working examples

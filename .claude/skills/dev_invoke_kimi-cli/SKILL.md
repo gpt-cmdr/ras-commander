@@ -16,7 +16,7 @@ description: |
 
 # Invoking Kimi CLI (via Opencode)
 
-Delegate testing, quality assurance, and code review tasks to Opencode CLI using the Kimi K2.5 model via markdown files for input and output.
+Delegate testing, quality assurance, and code review tasks to Opencode CLI using the Kimi K2.5 model. Write task instructions to TASK.md, invoke Opencode with Kimi K2.5, then read OUTPUT.md for results.
 
 ## Pattern: Markdown File Handoff
 
@@ -40,11 +40,11 @@ Claude Code                         Opencode CLI + Kimi K2.5
 ```
 
 **Benefits**:
-- No shell escaping issues
-- Full context in structured format
-- Explicit output structure
+- Eliminates shell escaping issues
+- Keeps context structured in reviewable files
+- Enforces explicit output structure
 - Supports both Opencode and Together.ai providers
-- Excellent for edge case detection
+- Excels at edge case detection
 
 ## Model Selection
 
@@ -202,7 +202,7 @@ Write to OUTPUT.md:
 
 ## Output File Template (OUTPUT.md)
 
-Opencode with Kimi K2.5 should produce:
+Instruct Opencode with Kimi K2.5 to produce:
 
 ```markdown
 # Results: [Task Title]
@@ -335,7 +335,7 @@ opencode run -m opencode/kimi-k2.5-free \
 
 #### 3. Claude Code reads OUTPUT.md
 
-Review the generated tests, check coverage, and integrate into the test suite.
+Review the generated tests, verify coverage, and integrate into the test suite.
 
 ### Example 2: Code Review
 
@@ -380,7 +380,7 @@ opencode run -m opencode/kimi-k2.5-free \
 
 #### 3. Review Findings
 
-Claude Code reads OUTPUT.md and addresses security issues.
+Read OUTPUT.md and address the identified security issues.
 
 ## Environment Variables
 
@@ -428,4 +428,11 @@ GEMINI_API_KEY=xxx        # Google Gemini models
 
 ## Comparison, Tips, and Troubleshooting
 
-For model comparison guide (Kimi vs Gemini vs Codex), integration patterns, usage tips, troubleshooting, and session management, see [references/comparison-and-troubleshooting.md](references/comparison-and-troubleshooting.md).
+Consult [references/comparison-and-troubleshooting.md](references/comparison-and-troubleshooting.md) for model comparison (Kimi vs Gemini vs Codex), integration patterns, usage tips, troubleshooting, and session management.
+
+## Cross-References
+
+**Skills** (related workflows):
+- `dev_invoke_codex-cli` -- Alternative: Codex CLI for deep reasoning
+- `dev_invoke_gemini-cli` -- Alternative: Gemini CLI for large context
+- `qa_review_triple-model` -- Uses this skill as one of three reviewers

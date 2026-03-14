@@ -12,18 +12,18 @@ description: |
 
 # Executing HEC-RAS Plans
 
-This skill helps you execute HEC-RAS plans using ras-commander. It serves as a navigator to primary sources containing comprehensive documentation and working examples.
+When the user asks to run HEC-RAS plans, use `RasCmdr.compute_plan()` for single plans or `RasCmdr.compute_parallel()` for multiple. Read the primary sources below for complete parameter details.
 
 ## Primary Sources
 
 ### 1. Execution Patterns (CLAUDE.md)
 **Location**: `ras_commander/CLAUDE.md`
 
-**See sections**:
+**Read these sections**:
 - **"Plan Execution"** - Core execution methods and parameters
 - **"Execution Modes"** - Four modes: single, parallel, sequential, remote
 - **"Plan Execution Parameters"** - Complete parameter reference
-- **"Common Workflow Pattern"** - Initialize → Execute → Extract
+- **"Common Workflow Pattern"** - Initialize, Execute, Extract
 
 **Key execution modes**:
 ```python
@@ -53,7 +53,7 @@ RasCmdr.compute_test_mode(["01", "02"])
 
 **Location**: `ras_commander/RasCmdr.py`
 
-**Read docstrings for**:
+**Read these docstrings**:
 - `RasCmdr.compute_plan()` - Lines 139-250+ (comprehensive parameter docs)
 - `RasCmdr.compute_parallel()` - Parallel execution details
 - `RasCmdr.compute_test_mode()` - Sequential debugging mode
@@ -137,15 +137,15 @@ RasCmdr.compute_test_mode(["01", "02", "03"])
 
 ## Mode Selection
 
-For choosing between execution modes (single, parallel, sequential, remote, legacy), see the **`hecras_plan_execution`** skill which provides decision trees, mode selection matrices, and parameter recommendations.
+To choose between execution modes (single, parallel, sequential, remote, legacy), invoke the **`hecras_plan_execution`** skill for decision trees, mode selection matrices, and parameter recommendations.
 
-**See also**: `.claude/rules/hec-ras/execution.md` for complete mode documentation.
+Read `.claude/rules/hec-ras/execution.md` for complete mode documentation.
 
 ## Orchestrator Integration
 
 ### Workflow: Inspector → Execute → Analyze
 
-For complex projects, chain execution with inspection and analysis:
+For complex projects, chain execution with inspection and analysis in this order:
 
 ```
 1. Project Inspector → Understand project structure
@@ -156,7 +156,7 @@ For complex projects, chain execution with inspection and analysis:
 
 ### Integration with Project Inspector
 
-**Before executing unfamiliar projects**, gather intelligence:
+**Before executing unfamiliar projects**, gather intelligence first:
 
 ```python
 # Step 1: Inspect project (via hecras-project-inspector agent or manual)
@@ -186,15 +186,15 @@ RasCmdr.compute_parallel(
 
 ### Chaining with Other Skills
 
-**Execution typically follows these upstream skills**:
-- `hecras_parse_geometry` → After geometry modifications
-- `dss_read_boundary-data` → After validating boundary conditions
-- `usgs_integrate_gauges` → After setting up gauge-based boundaries
+**Invoke these upstream skills before execution**:
+- `hecras_parse_geometry` -- After geometry modifications
+- `dss_read_boundary-data` -- After validating boundary conditions
+- `usgs_integrate_gauges` -- After setting up gauge-based boundaries
 
-**Execution typically precedes these downstream skills**:
-- `hecras_extract_results` → Parse HDF outputs
-- Results visualization → Generate plots and maps
-- Validation workflows → Compare to observed data
+**Invoke these downstream skills after execution**:
+- `hecras_extract_results` -- Parse HDF outputs
+- Results visualization -- Generate plots and maps
+- Validation workflows -- Compare to observed data
 
 ### Multi-Project Orchestration
 
@@ -363,7 +363,7 @@ if wse is not None:
 | `num_cores=2-4` | Best balance | Most models |
 | `num_cores=1-2` | Highest efficiency | Resource-limited |
 
-**See**: `.claude/rules/hec-ras/execution.md` for detailed performance guidance.
+Read `.claude/rules/hec-ras/execution.md` for detailed performance guidance.
 
 ## Troubleshooting
 
@@ -381,4 +381,26 @@ print(ras.plan_df)
 
 ---
 
-**Remember**: This skill is a navigator. For detailed documentation, comprehensive examples, and complete API reference, always consult the Primary Sources section above.
+## Cross-References
+
+**Rules** (follow these):
+- `.claude/rules/hec-ras/execution.md` -- Execution mode parameters and performance tuning
+- `.claude/rules/python/static-classes.md` -- RasCmdr static method pattern
+- `.claude/rules/python/decorators.md` -- @log_call and @standardize_input usage
+
+**Agents** (delegate when needed):
+- `hecras-general-agent` -- Delegate for full inspect-plan-execute-analyze workflows
+- `hecras-project-inspector` -- Delegate for project analysis before execution
+
+**Skills** (related workflows):
+- `hecras_plan_execution` -- Use upstream for execution mode selection and parameter tuning
+- `hecras_compute_remote` -- Use for distributed remote execution
+- `hecras_compute_rascontrol` -- Use for legacy COM-based execution
+- `hecras_extract_results` -- Use downstream to extract results after execution
+- `hecras_parse_compute-messages` -- Use downstream to verify execution status
+
+**Primary sources**:
+- `ras_commander/CLAUDE.md` -- Plan execution section with complete parameter reference
+- `ras_commander/RasCmdr.py` -- Source code with comprehensive docstrings
+- `examples/110_single_plan_execution.ipynb` -- Single plan workflow
+- `examples/113_parallel_execution.ipynb` -- Parallel execution workflow

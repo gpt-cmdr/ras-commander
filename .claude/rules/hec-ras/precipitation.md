@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Precipitation Data Integration
 
 **Context**: AORC and Atlas 14 precipitation workflows for HEC-RAS
@@ -10,7 +14,7 @@
 
 ## Overview
 
-ras-commander supports multiple precipitation data sources and hyetograph generation methods:
+Use ras-commander's multiple precipitation data sources and hyetograph generation methods:
 
 1. **AORC** (Analysis of Record for Calibration) - Historic gridded precipitation
 2. **Atlas 14** - NOAA design storm frequencies (AEP events)
@@ -29,7 +33,7 @@ ras-commander supports multiple precipitation data sources and hyetograph genera
 
 ## HMS-Equivalent Hyetograph Generation
 
-**All methods now take `total_depth_inches` as an INPUT parameter**:
+**Pass `total_depth_inches` as an INPUT parameter to all methods**:
 
 ```python
 from ras_commander.precip import Atlas14Storm, ATLAS14_AVAILABLE
@@ -197,12 +201,12 @@ result = AbmHyetographGrid.verify_pixel(output, lat=29.76, lon=-95.37)
 
 ## Internet Dependency
 
-AORC and Atlas 14 require internet access:
+Handle the internet requirement for AORC and Atlas 14:
 - AORC downloads from AWS/NOAA servers
 - Atlas 14 queries NOAA Point Precipitation Frequency
 - Atlas14Grid accesses NOAA CONUS NetCDF via HTTP
 
-Handle offline scenarios:
+Handle offline scenarios gracefully:
 
 ```python
 try:
@@ -212,17 +216,19 @@ except requests.ConnectionError:
     # Use cached data or fail gracefully
 ```
 
-## See Also
+## Cross-References
 
-- **Complete Documentation**: `ras_commander/precip/CLAUDE.md`
-- **Example Notebooks**:
-  - `examples/900_aorc_precipitation.ipynb` - AORC workflow
-  - `examples/720_atlas14_aep_events.ipynb` - Atlas 14 workflow
-  - `examples/722_atlas14_multi_project.ipynb` - Batch processing
-  - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis
-  - `examples/726_abm_hyetograph_grid.ipynb` - Gridded ABM hyetograph workflow
-- **Skill**: `.claude/skills/precip_analyze_aorc/SKILL.md`
+**Skills** (invoke these):
+- `precip_analyze_aorc` -- AORC historical precipitation
+- `precip_analyze_atlas14-variance` -- Atlas 14 design storms
+
+**Agents** (delegate when needed):
+- `precipitation-specialist` -- Precipitation workflows
+
+**Rules** (related):
+- `.claude/rules/testing/precipitation-method-validation.md` -- Testing patterns
+- `.claude/rules/documentation/precipitation-notebook-debugging-patterns.md` -- Debugging patterns
 
 ---
 
-**Key Takeaway**: All four methods now take `total_depth_inches` as input and conserve depth exactly. Use Atlas14Storm for HMS-equivalent workflows, StormGenerator for flexible peak positioning (0-100%), Atlas14Grid for spatial variance analysis, AORC for historic events. Range % > 10% suggests spatially variable rainfall. AEP = 1/return period.
+**Key Takeaway**: All four methods take `total_depth_inches` as input and conserve depth exactly. Use Atlas14Storm for HMS-equivalent workflows, StormGenerator for flexible peak positioning (0-100%), Atlas14Grid for spatial variance analysis, AORC for historic events. Range % > 10% suggests spatially variable rainfall. AEP = 1/return period.

@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Pyright LSP Usage for Agents
 
 **Context**: Type checking and API discovery via pyright-lsp plugin
@@ -6,7 +10,7 @@
 
 ## Overview
 
-The `pyright-lsp@claude-plugins-official` plugin is enabled at project scope. It provides real-time type checking, hover information, and go-to-definition for Python code in the repository.
+Use the `pyright-lsp@claude-plugins-official` plugin (enabled at project scope) for real-time type checking, hover information, and go-to-definition for Python code in the repository.
 
 ## When to Use Pyright
 
@@ -58,8 +62,7 @@ This is faster than Grep or Explore when the location is already known.
 - **Don't add excessive type annotations**: Only add annotations when they improve clarity or fix actual pyright errors. The codebase uses type hints selectively
 - **Use for validation**: After editing library code in `ras_commander/`, check that pyright doesn't report new errors in the modified files
 
-## See Also
+## Cross-References
 
-- **Static Classes**: `.claude/rules/python/static-classes.md` - Class patterns pyright validates
-- **Decorators**: `.claude/rules/python/decorators.md` - Decorator stacking pyright checks
-- **Path Handling**: `.claude/rules/python/path-handling.md` - Path type patterns
+**Rules** (related):
+- `.claude/rules/python/static-classes.md` -- Type checking for static classes

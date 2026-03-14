@@ -1,3 +1,7 @@
+---
+paths: examples/**
+---
+
 # Precipitation Notebook Debugging Patterns
 
 **Context**: Lessons learned from debugging 720-series precipitation notebooks
@@ -9,15 +13,15 @@
 
 ## Overview
 
-This document captures debugging patterns discovered while fixing notebooks 720, 721, and 722 during the precipitation API standardization project.
+Apply these debugging patterns (discovered while fixing notebooks 720, 721, and 722 during the precipitation API standardization project) when working with precipitation notebooks.
 
 ## Common Precipitation Notebook Bugs
 
 ### Bug 1: Return Type Inconsistencies
 
-**Symptom**: TypeError when calling `.sum()`, `.max()`, or array operations on precipitation methods
+**Symptom**: TypeError when calling `.sum()`, `.max()`, or array operations on precipitation methods.
 
-**Cause**: Mixing methods that return different types (DataFrame vs ndarray)
+**Cause**: Mixing methods that return different types (DataFrame vs ndarray).
 
 **Before standardization**:
 ```python
@@ -74,7 +78,7 @@ print(f"Using {ari[ari_idx]}-year (index {ari_idx})")
 precip_grid = pfe_data['pfe_24hr'][:, :, ari_idx]  # Correct!
 ```
 
-**Prevention**: Never hardcode array indices when working with return period data
+**Prevention**: Never hardcode array indices when working with return period data.
 
 ### Bug 3: HDF Path Resolution After compute_parallel() - FIXED in v0.88.1
 
@@ -192,7 +196,7 @@ if cell_polygons is not None:
 
 ### Pre-Execution Validation
 
-Add cells that verify:
+Add cells that verify the following:
 - [ ] All plan files exist
 - [ ] All unsteady files exist
 - [ ] Hyetographs match expected depths (compare to Atlas 14)
@@ -215,7 +219,7 @@ for aep, config in storm_configs.items():
 
 ### Post-Execution Debugging
 
-Add cells that verify:
+Add cells that verify these conditions:
 - [ ] HDF files exist in expected locations
 - [ ] Plan_df has correct HDF paths
 - [ ] Results contain expected data (WSE, velocity, etc.)
@@ -238,7 +242,7 @@ for _, row in ras.plan_df.iterrows():
 
 ### Spatial Analysis Validation
 
-For maps involving grid data:
+For maps involving grid data, verify:
 - [ ] Print return period array (`pfe_data['ari']`)
 - [ ] Print which index is being used
 - [ ] Verify precipitation values in expected range
@@ -352,13 +356,14 @@ hdf_path = ras.plan_df[ras.plan_df['plan_number'] == plan_number]['HDF_Results_P
 
 ---
 
-## See Also
+## Cross-References
 
-- **API Audit**: `.claude/outputs/api-consistency-auditor/2026-01-05-precipitation-api-audit.md`
-- **Session Closeout**: `.claude/outputs/2026-01-05_precipitation_api_standardization_session_closeout.md`
-- **Precipitation Rules**: `.claude/rules/hec-ras/precipitation.md`
-- **Precipitation CLAUDE**: `ras_commander/precip/CLAUDE.md`
-- **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md`
+**Rules** (related):
+- `.claude/rules/hec-ras/precipitation.md` -- Precipitation domain overview
+- `.claude/rules/testing/precipitation-method-validation.md` -- Testing patterns
+
+**Agents** (delegate when needed):
+- `precipitation-specialist` -- Precipitation workflow specialist
 
 ---
 

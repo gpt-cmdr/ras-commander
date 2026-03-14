@@ -14,14 +14,14 @@ description: |
 
 # Executing HEC-RAS Plans via RasControl (COM Interface)
 
-This skill helps you automate HEC-RAS versions 3.x-5.x using the RasControl class, which wraps the HECRASController COM interface with ras-commander conventions.
+Use `RasControl` to automate HEC-RAS versions 3.x-5.x via the HECRASController COM interface. For HEC-RAS 6.x+, use `RasCmdr` instead.
 
 ## Primary Sources
 
 ### 1. RasControl Implementation
 **Location**: `ras_commander/RasControl.py`
 
-**Key sections**:
+**Read these key sections**:
 - Lines 438-527: `RasControl` class with version mapping and output variable codes
 - Lines 543-742: COM lifecycle management (`_com_open_close()`)
 - Lines 746-884: `run_plan()` with smart skip and watchdog protection
@@ -33,7 +33,7 @@ This skill helps you automate HEC-RAS versions 3.x-5.x using the RasControl clas
 - `examples/120_automating_ras_with_win32com.ipynb` - Low-level win32com exploration
 - `examples/121_legacy_hecrascontroller_and_rascontrol.ipynb` - Complete RasControl workflows
 
-### 3. Related Documentation
+### 3. Supporting Documentation
 - `.claude/rules/hec-ras/execution.md` - Execution mode comparison
 - `ras_commander/CLAUDE.md` - Library context and module organization
 
@@ -375,20 +375,19 @@ hdf = HdfResultsPlan(ras.plan_df.loc[0, 'HDF_Results_Path'])
 wse = hdf.get_steady_wse()
 ```
 
-## Where to Learn More
+## Cross-References
 
-### Primary Sources
-- **RasControl.py** - Complete API with docstrings
-- **examples/121_legacy_hecrascontroller_and_rascontrol.ipynb** - Full workflow examples
+**Rules** (follow these):
+- `.claude/rules/hec-ras/execution.md` -- General execution context
 
-### Related Skills
-- **hecras_compute_plans** - Modern RasCmdr execution (HEC-RAS 6.x+)
-- **hecras_extract_results** - HDF-based result extraction
+**Agents** (delegate when needed):
+- `win32com-automation-expert` -- Delegate for COM interface details and GUI automation
 
-### Related Rules
-- `.claude/rules/hec-ras/execution.md` - Execution mode comparison
-- `.claude/rules/python/static-classes.md` - Static class pattern
+**Skills** (related workflows):
+- `hecras_compute_plans` -- Preferred: modern RasCmdr execution (HEC-RAS 6.x+)
+- `hecras_extract_results` -- Downstream: extract results after COM execution
 
----
-
-**Remember**: RasControl is for legacy HEC-RAS (3.x-5.x). For HEC-RAS 6.x+, prefer RasCmdr and HDF-based methods for better performance and reliability.
+**Primary sources**:
+- `ras_commander/RasControl.py` -- HECRASController wrapper
+- `examples/120_automating_ras_with_win32com.ipynb` -- COM automation tutorial
+- `examples/121_legacy_hecrascontroller_and_rascontrol.ipynb` -- RasControl patterns

@@ -10,11 +10,11 @@ description: |
 
 # Conversation Index Scanner
 
-Fast, lightweight scanning of conversation history index.
+Scan conversation history index quickly and efficiently.
 
 ## Purpose
 
-Quickly scan `~/.claude/history.jsonl` to:
+Scan `~/.claude/history.jsonl` to:
 - Count prompts by time period
 - Identify active projects
 - Extract prompt text for pattern matching
@@ -83,9 +83,15 @@ prompt_texts = [p['display'] for p in prompts]
 ## Performance Notes
 
 - File is ~1-2 MB for active users
-- Stream parsing (don't load entire file)
-- Index operations should complete in <5 seconds
-- Results cached for subsequent analysis
+- Stream-parse the file (do not load entirely into memory)
+- Complete index operations in <5 seconds
+- Cache results for subsequent analysis
+
+## Cross-References
+
+**Agents** (collaborate with):
+- `conversation-insights-orchestrator` -- Coordinates analysis workflows
+- `conversation-deep-researcher` -- Deep analysis after initial scan
 
 ## Quick Commands
 

@@ -15,7 +15,7 @@ description: |
 
 # Integrating USGS Gauges
 
-**Lightweight skill navigator** - Points you to authoritative sources instead of duplicating content.
+**Lightweight skill navigator** -- Read authoritative sources instead of duplicating content.
 
 ## Primary Documentation Sources
 
@@ -258,22 +258,25 @@ print(deps)  # {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 
 **See**: `ras_commander/usgs/CLAUDE.md` → Key Features for details
 
-## See Also
+## Cross-References
 
-- **HEC-RAS execution**: `.claude/skills/hecras_compute_plans/`
-- **HDF results extraction**: `.claude/skills/hecras_extract_results/`
-- **Precipitation data**: `ras_commander.precipitation` module
-- **Boundary utilities**: `ras_commander.RasUnsteady`
+**Rules** (follow these):
+- `.claude/rules/hec-ras/usgs.md` -- USGS domain overview and gauge workflows
+- `.claude/rules/hec-ras/dss-files.md` -- Read when generating DSS from gauge data
+
+**Agents** (delegate when needed):
+- `usgs-integrator` -- Delegate for complex multi-step USGS workflows
+
+**Skills** (related workflows):
+- `dss_read_boundary-data` -- Use when working with DSS boundary conditions
+- `hecras_compute_plans` -- Use downstream after generating boundary conditions
+
+**Primary sources**:
+- `ras_commander/usgs/CLAUDE.md` -- Complete USGS module documentation
 
 ## Skill Development Philosophy
 
-This skill is intentionally lightweight (~300 lines) and serves as a **navigator to authoritative sources** rather than duplicating content. This approach:
-
-1. **Eliminates duplication** - Workflows exist in `ras_commander/usgs/CLAUDE.md` (367 lines)
-2. **Reduces maintenance burden** - Update workflows in one place
-3. **Improves accuracy** - Single source of truth for API details
-4. **Provides quick navigation** - Table guides you to right source for your task
-5. **Keeps skills focused** - Skills point to docs, docs contain complete details
+This skill is intentionally lightweight (~300 lines) and serves as a **navigator to authoritative sources** rather than duplicating content.
 
 **When to use this skill**:
 - You need quick navigation to USGS integration resources
@@ -281,6 +284,6 @@ This skill is intentionally lightweight (~300 lines) and serves as a **navigator
 - You need a starting point for USGS workflows
 
 **When to read full docs**:
-- You need complete workflow details → Read `ras_commander/usgs/CLAUDE.md`
-- You need working code examples → Open example notebooks
-- You need parameter documentation → Read code docstrings
+- You need complete workflow details -- Read `ras_commander/usgs/CLAUDE.md`
+- You need working code examples -- Open example notebooks
+- You need parameter documentation -- Read code docstrings

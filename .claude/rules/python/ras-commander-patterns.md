@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # RAS Commander Specific Patterns
 
 **Context**: ras-commander library-specific coding patterns
@@ -6,7 +10,7 @@
 
 ## Overview
 
-This file documents patterns specific to ras-commander that extend beyond general Python conventions. These patterns ensure correct operation when working with HEC-RAS projects, especially in scenarios involving multiple projects or nested function calls.
+Follow these ras-commander-specific patterns that extend beyond general Python conventions. These patterns ensure correct operation when working with HEC-RAS projects, especially in scenarios involving multiple projects or nested function calls.
 
 ## Context Object Discipline
 
@@ -333,13 +337,15 @@ def compare_plans(existing_hdf_path, proposed_hdf_path, ras_object=None):
 
 **Example**: `ras_commander/hdf/HdfBenefitAreas.py:260-357` (`_standardize_hdf_input()` method)
 
-## See Also
+## Cross-References
 
-- **Static Classes**: `.claude/rules/python/static-classes.md` - Why most classes don't need instantiation
-- **Path Handling**: `.claude/rules/python/path-handling.md` - pathlib.Path patterns
-- **Testing Approach**: `.claude/rules/testing/tdd-approach.md` - RasExamples usage in tests
-- **Library Context**: `ras_commander/CLAUDE.md` - Multiple projects workflow
-- **Multi-Plan Comparison**: `ras_commander/hdf/HdfBenefitAreas.py` - First implementation example
+**Rules** (related):
+- `.claude/rules/python/dataframe-first-principle.md` -- DataFrame usage patterns
+- `.claude/rules/python/static-classes.md` -- Static class pattern
+- `.claude/rules/hec-ras/hdf-files.md` -- HDF patterns using ras_object
+
+**Agents** (follow this):
+- `ras-commander-api-expert` -- API integration expert
 
 ---
 

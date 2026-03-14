@@ -13,7 +13,7 @@ description: |
 
 # API Consistency Auditor
 
-Expert agent for enforcing ras-commander's API conventions and detecting pattern violations.
+Enforce ras-commander's API conventions and detect pattern violations.
 
 ## Primary Sources (Read These First)
 
@@ -56,7 +56,7 @@ Expert agent for enforcing ras-commander's API conventions and detecting pattern
 
 ## Mission
 
-Help enforce ras-commander's API conventions by:
+Enforce ras-commander's API conventions by:
 1. **Detecting violations** in code under review
 2. **Providing fix suggestions** with before/after examples
 3. **Guiding implementation** of the auditor tool itself
@@ -459,27 +459,16 @@ class UsgsGaugeCatalog:
 - ✅ 100% developer adoption
 - ✅ CI/CD integration active
 
-## See Also
+## Cross-References
 
-**Specifications**:
-- Complete spec: `feature_dev_notes/Subagents_Under_Construction/api_consistency_auditor/SPECIFICATION.md`
-- Implementation: `IMPLEMENTATION_PLAN.md`
-- Tasks: `TASK_LIST.md`
+**Rules** (enforce these):
+- `.claude/rules/python/static-classes.md` -- Static class pattern
+- `.claude/rules/python/decorators.md` -- Decorator requirements
+- `.claude/rules/python/naming-conventions.md` -- Naming standards
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate
 
-**Task Tracking**:
-- `agent_tasks/API_Consistency_Auditor.md` - Main tracker
-- `agent_tasks/.agent/BACKLOG.md` - Phase 0 tasks listed
-
-**Conventions**:
-- `.claude/rules/python/static-classes.md`
-- `.claude/rules/python/decorators.md`
-- `.claude/rules/python/path-handling.md`
-- `.claude/rules/python/naming-conventions.md`
-
-**Examples**:
-- `ras_commander/RasCmdr.py` - Gold standard static class
-- `ras_commander/hdf/HdfResultsPlan.py` - HDF patterns
-- `ras_commander/usgs/core.py` - Modern parameter naming
+**Agents** (collaborate with):
+- `ras-commander-api-expert` -- API integration guidance
 
 ---
 

@@ -14,7 +14,7 @@ description: |
 
 # Reading DSS Boundary Data
 
-**Primary Source Navigator**: This skill provides a concise entry point to DSS file operations. Complete documentation exists in authoritative sources.
+**Primary Source Navigator** -- Use this skill as a concise entry point to DSS file operations. Read authoritative sources for complete documentation.
 
 ## Quick Reference
 
@@ -52,7 +52,7 @@ Read this for:
 - Testing DSS operations
 - Common issues and troubleshooting
 
-**Why this is authoritative**: Written by maintainers, updated with code changes, read by developers working on the module.
+**Why authoritative**: Written by maintainers, updated with code changes, read by developers working on the module.
 
 ### 2. Complete Workflow Example
 **Location**: `examples/310_dss_boundary_extraction.ipynb`
@@ -293,4 +293,19 @@ except RuntimeError as e:
 5. **Metadata Preserved**: Units, pathname, interval in `df.attrs`
 6. **V6 and V7**: Both DSS versions supported
 7. **Primary Sources**: Always read AGENTS.md and notebook 310 for authoritative guidance
+
+## Cross-References
+
+**Rules** (follow these):
+- `.claude/rules/hec-ras/dss-files.md` -- DSS domain overview, pathname format, lazy loading
+- `.claude/rules/validation/validation-patterns.md` -- Validation patterns for DSS pathnames
+
+**Skills** (related workflows):
+- `usgs_integrate_gauges` -- Use when USGS gauge data feeds DSS boundaries
+- `hecras_compute_plans` -- Use downstream after validating boundary conditions
+- `precip_analyze_aorc` -- Use when working with precipitation DSS data
+
+**Primary sources**:
+- `ras_commander/dss/AGENTS.md` -- Complete DSS documentation
+- `examples/310_dss_boundary_extraction.ipynb` -- DSS extraction workflow
 

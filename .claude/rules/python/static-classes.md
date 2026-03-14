@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # Static Class Pattern
 
 **Context**: Core architectural pattern for ras-commander classes
@@ -6,10 +10,10 @@
 
 ## Overview
 
-The static class pattern is the foundational architectural pattern in ras-commander. Most classes use static methods with `@log_call` decorators, eliminating the need for instantiation and providing a cleaner, more functional API.
+Follow the static class pattern as the foundational architectural pattern in ras-commander. Call static methods directly with `@log_call` decorators -- never instantiate these classes.
 
-This pattern was chosen for:
-- **Simplicity**: No need to manage class instances
+Use this pattern for:
+- **Simplicity**: No instance management required
 - **Clarity**: Direct function calls without instantiation confusion
 - **Consistency**: Uniform API across all modules
 - **Logging**: Automatic call logging via decorators
@@ -179,7 +183,7 @@ cmdr = RasCmdr()    # Instantiated (WRONG for RasCmdr)
 
 ### How It Works Internally
 
-Static classes in ras-commander typically use:
+Implement static classes following this internal structure:
 
 ```python
 class RasCmdr:
@@ -229,13 +233,16 @@ RasCmdr.compute_plan("01")
 # No instantiation needed at any step
 ```
 
-## See Also
+## Cross-References
 
-- **Decorators**: `.claude/rules/python/decorators.md` - `@log_call`, `@staticmethod` usage
-- **Error Handling**: `.claude/rules/python/error-handling.md` - LoggingConfig integration
-- **Multiple Projects**: `ras_commander/CLAUDE.md` - RasPrj class documentation
-- **Remote Workers**: `ras_commander/remote/CLAUDE.md` - Instantiated worker classes
+**Rules** (related):
+- `.claude/rules/python/decorators.md` -- Decorator patterns for static methods
+- `.claude/rules/python/api-first-principle.md` -- API-first mandate
+
+**Agents** (enforce this pattern):
+- `api-consistency-auditor` -- Detects violations of the static class pattern
+- `ras-commander-api-expert` -- API integration guidance
 
 ---
 
-**Key Takeaway**: Most ras-commander classes are static - call methods directly without instantiation. Only `RasPrj`, workers, callbacks, and result containers are instantiated.
+**Key Takeaway**: Most ras-commander classes are static -- call methods directly without instantiation. Only `RasPrj`, workers, callbacks, and result containers are instantiated.

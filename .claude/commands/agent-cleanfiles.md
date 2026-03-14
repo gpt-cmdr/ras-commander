@@ -1,4 +1,4 @@
-Perform a general cleanup pass on the repository. This is for periodic maintenance, NOT task-specific cleanup (use `/agent-taskclose` for that).
+Perform a general cleanup pass on the repository for periodic maintenance. For task-specific cleanup, use `/agent-taskclose` instead.
 
 ## Context Difference
 
@@ -135,3 +135,11 @@ For complex organizational decisions:
 ---
 
 **Remember**: This is a PERIODIC maintenance pass. You have LIMITED context about why files exist. Be aggressive with clearly completed tasks, but conservative with uncertain files.
+
+## Cross-References
+
+**Rules** (follow these):
+- `.claude/rules/subagent-output-pattern.md` -- Output lifecycle and .old/ pattern
+
+**Agents** (coordinate with):
+- `hierarchical-knowledge-agent-skill-memory-curator` -- Knowledge consolidation

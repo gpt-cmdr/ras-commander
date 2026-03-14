@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # State Machine Empty Line Handling Pattern
 
 **Context**: Parsing text with state machines that process table sections
@@ -186,11 +190,13 @@ if condition2:
 
 ---
 
-## See Also
+## Cross-References
 
-- **Error Handling**: `.claude/rules/python/error-handling.md`
-- **Testing Patterns**: `.claude/rules/testing/tdd-approach.md`
-- **Implementation**: `ras_commander/results/ResultsParser.py` (working example)
+**Rules** (related):
+- `.claude/rules/hec-ras/geometry.md` -- Geometry parsing context
+
+**Agents** (use this pattern):
+- `geometry-parser` -- Applies this when parsing geometry files
 
 ---
 

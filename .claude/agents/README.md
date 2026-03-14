@@ -378,8 +378,13 @@ User Request
 3. **Parallel execution**: Multiple agents work concurrently
 4. **Clear boundaries**: Each subagent has defined scope
 
-## See Also
+## Cross-References
 
-- [Architecture Clarity](../../feature_dev_notes/Hierarchical_Knowledge_Approach/ARCHITECTURE_CLARITY.md)
-- [Claude Skills Framework](../../feature_dev_notes/Hierarchical_Knowledge_Approach/research/claude_skills_framework.md)
-- Root CLAUDE.md for delegation patterns
+**Index files**:
+- `.claude/MANIFEST.md` -- Central registry mapping all agents to related skills, rules, and commands
+- `.claude/skills/README.md` -- Skill catalog (agents invoke skills for workflow patterns)
+- `.claude/rules/README.md` -- Rule organization (rules auto-load context for agents)
+
+**Governance**:
+- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
+- `.claude/rules/subagent-output-pattern.md` -- Subagent markdown output convention

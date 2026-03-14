@@ -18,7 +18,7 @@ description: |
 
 ## Purpose
 
-Organize downloaded FEMA eBFE/BLE study area files into a standardized 4-folder structure, regardless of the original archive organization patterns.
+When the user asks to organize eBFE or BLE downloads, use this skill to transform downloaded FEMA eBFE/BLE study area files into a standardized 4-folder structure, regardless of the original archive organization patterns.
 
 ## Standardized Output Structure
 
@@ -52,7 +52,7 @@ Every organized eBFE study area should have this structure:
 
 ## Input Patterns
 
-The skill must handle these downloaded archive patterns:
+Handle these downloaded archive patterns:
 
 **Pattern 1**: Multiple 1D models in variable wrapper folders (80-200 MB)
 **Pattern 2**: ModelURLs.txt links file (1 KB)
@@ -542,11 +542,14 @@ target = Path("D:/eBFE/organized/SpringCreek_12040102/")
 
 For generated function templates, DSS validation examples, and compute test workflows, see [references/templates-and-validation.md](references/templates-and-validation.md).
 
-## See Also
+## Cross-References
 
-- **Research**: `feature_dev_notes/eBFE_Integration/RESEARCH_FINDINGS.md` - 5 patterns documented
-- **Implementation**: `feature_dev_notes/eBFE_Integration/IMPLEMENTATION_SUMMARY.md` - Design guidance
-- **Discovery API**: `feature_dev_notes/eBFE_Integration/prototype_discovery.py` - Download helpers
-- **Generated Functions**: `feature_dev_notes/eBFE_Integration/generated_functions/` - Agent-generated deterministic functions
-- **DSS Validation**: `.claude/rules/hec-ras/dss-files.md` - DSS validation patterns
-- **Results Checking**: `.claude/agents/notebook-output-auditor.md` - Haiku results checker
+**Skills** (related workflows):
+- `ebfe_validate_models` -- Use downstream to validate organized models
+
+**Agents** (delegate when needed):
+- `ebfe-organizer` -- Delegate for complex multi-model eBFE organization
+
+**Primary sources**:
+- `ras_commander/ebfe_models.py` -- RasEbfeModels implementation
+- `docs/ebfe_models.md` -- Complete eBFE documentation

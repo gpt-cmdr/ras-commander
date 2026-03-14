@@ -1,3 +1,7 @@
+---
+paths: .claude/**
+---
+
 # Agent Integration Testing Pattern
 
 **Context**: Testing multi-agent workflows end-to-end
@@ -9,7 +13,7 @@
 
 ## Overview
 
-When creating systems of multiple agents and skills, integration testing validates that the components work together correctly. This pattern emerged from testing the HEC-RAS Operations System (inspect → plan → execute → analyze).
+Validate that multi-agent systems work together correctly through integration testing. Apply this pattern (which emerged from testing the HEC-RAS Operations System: inspect, plan, execute, analyze) when building systems of multiple agents and skills.
 
 ---
 
@@ -17,7 +21,7 @@ When creating systems of multiple agents and skills, integration testing validat
 
 ### Phase 1: Component Testing
 
-Test each agent/skill independently:
+Test each agent/skill independently first:
 
 ```python
 # Test agent X
@@ -33,7 +37,7 @@ assert "Expected Section" in output
 
 ### Phase 2: Chaining Test
 
-Test handoff between components:
+Verify handoff between components works correctly:
 
 ```python
 # Component A produces output
@@ -50,7 +54,7 @@ output_b = Task(
 
 ### Phase 3: End-to-End Workflow
 
-Test complete workflow with real data:
+Run the complete workflow with real data:
 
 ```python
 # Example: HEC-RAS inspect → execute → analyze
@@ -85,7 +89,7 @@ analysis_result = Task(
 
 ### Output Schema Validation
 
-Each agent should produce outputs matching its documented schema:
+Verify each agent produces outputs matching its documented schema:
 
 ```python
 # Read agent output
@@ -103,7 +107,7 @@ assert "```python" in report  # Code examples present
 
 ### Data Flow Validation
 
-Verify information flows correctly between components:
+Confirm information flows correctly between components:
 
 ```python
 # Inspector identifies 3 runnable plans
@@ -121,7 +125,7 @@ assert "3 of 3" in analysis_output or "Plans executed: 3"
 
 ### Error Handling Validation
 
-Test graceful degradation when components encounter issues:
+Ensure graceful degradation when components encounter issues:
 
 ```python
 # Test with broken project (missing files)
@@ -142,7 +146,7 @@ assert "Missing" in output or "Not found" in output
 
 ### Use Example Projects
 
-**Always test with real HEC-RAS projects** (not mocks):
+**Always test with real HEC-RAS projects** (never use mocks):
 
 ```python
 from ras_commander import RasExamples
@@ -176,7 +180,7 @@ for name, project in test_projects.items():
 
 ### Create Test Summary Document
 
-After integration test, write summary:
+Write a summary after each integration test:
 
 **Location**: `.claude/outputs/{system-name}/YYYY-MM-DD-integration-test-summary.md`
 
@@ -254,27 +258,27 @@ After integration test, write summary:
 
 ### ❌ Testing in Isolation Only
 
-**Wrong**: Test each component separately, assume integration works
+**Wrong**: Testing each component separately and assuming integration works.
 
-**Right**: Test component outputs are consumable by downstream components
+**Right**: Verify component outputs are consumable by downstream components.
 
 ### ❌ Using Synthetic Data
 
-**Wrong**: Create fake HEC-RAS project for testing
+**Wrong**: Creating fake HEC-RAS projects for testing.
 
-**Right**: Use `RasExamples.extract_project()` for real-world validation
+**Right**: Use `RasExamples.extract_project()` for real-world validation.
 
 ### ❌ Not Validating Output Schemas
 
-**Wrong**: Check agent runs without error, don't check output format
+**Wrong**: Checking only that the agent runs without error, ignoring output format.
 
-**Right**: Validate output matches documented schema, downstream components can parse
+**Right**: Validate output matches the documented schema and downstream components can parse it.
 
 ### ❌ Skipping Error Cases
 
-**Wrong**: Only test happy path
+**Wrong**: Testing only the happy path.
 
-**Right**: Test with missing files, broken references, execution failures
+**Right**: Test with missing files, broken references, and execution failures.
 
 ---
 
@@ -282,7 +286,7 @@ After integration test, write summary:
 
 ### Implementation Pattern
 
-When creating multiple independent agents/skills:
+Batch by dependencies when creating multiple independent agents/skills:
 
 **Batch by Dependencies**:
 ```python
@@ -311,7 +315,7 @@ Task(subagent_type="general-purpose", model="opus", prompt="Create coordinator..
 
 ## Integration Test Checklist
 
-Before marking agent system as complete:
+Complete all items before marking an agent system as complete:
 
 - [ ] Each component tested independently
 - [ ] Output schemas validated against specifications
@@ -325,12 +329,16 @@ Before marking agent system as complete:
 
 ---
 
-## See Also
+## Cross-References
 
-- **TDD Approach**: `.claude/rules/testing/tdd-approach.md` - Testing with real projects
-- **Notebook Standards**: `.claude/rules/documentation/notebook-standards.md`
-- **Notebook-to-Agent Conversion**: `.claude/rules/documentation/notebook-to-agent-conversion.md`
-- **Example**: `.claude/outputs/2026-01-08-hecras-operations-system-closeout.md`
+**Rules** (related):
+- `.claude/rules/testing/tdd-approach.md` -- General TDD patterns
+- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Agent architecture
+
+**Agents** (test these):
+- `hecras-general-agent` -- Primary integration test target
+- `hecras-project-inspector` -- Component test target
+- `hecras-results-analyst` -- Component test target
 
 ---
 

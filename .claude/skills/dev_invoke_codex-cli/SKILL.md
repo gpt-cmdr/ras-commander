@@ -15,7 +15,7 @@ description: |
 
 # Invoking Codex CLI
 
-Delegate tasks to Codex CLI using markdown files for instruction input and deliverable output.
+Delegate tasks to Codex CLI using markdown files for instruction input and deliverable output. Write instructions to TASK.md, invoke Codex, then read OUTPUT.md for results.
 
 ## Pattern: Markdown File Handoff
 
@@ -39,13 +39,14 @@ Claude Code                         Codex CLI
 ```
 
 **Benefits**:
-- No shell escaping issues (quotes, special characters, code blocks)
-- Structured context in reviewable files
-- Explicit deliverable format
-- Session resume via thread ID
+- Eliminates shell escaping issues (quotes, special characters, code blocks)
+- Keeps context structured in reviewable files
+- Enforces explicit deliverable format
+- Supports session resume via thread ID
 
 ## When to Use
 
+Use this skill for:
 - Complex implementation requiring multi-file changes
 - Refactoring with dependency tracking
 - Code generation with detailed specifications
@@ -53,9 +54,9 @@ Claude Code                         Codex CLI
 
 ## Model Selection
 
-**Model**: Always use `gpt-5.2-codex` (latest model)
+**Model**: Always use `gpt-5.2-codex` (latest model).
 
-**Reasoning Effort**: Adjust based on task complexity
+**Reasoning Effort**: Adjust based on task complexity.
 
 | Reasoning Effort | Use Case | Speed |
 |------------------|----------|-------|
@@ -64,7 +65,7 @@ Claude Code                         Codex CLI
 | `medium` | Lighter tasks, adequate reasoning | Faster |
 | `low` | Simple tasks, quick response | Fastest |
 
-**Recommendation**: Use default `xhigh` reasoning for most tasks. Lower reasoning effort for simpler tasks, not older models.
+**Recommendation**: Use default `xhigh` reasoning for most tasks. Lower reasoning effort for simpler tasks instead of switching to older models.
 
 ## Invocation
 
@@ -141,7 +142,7 @@ Write to OUTPUT.md:
 
 ## Output File Template (OUTPUT.md)
 
-Codex should produce:
+Instruct Codex to produce:
 
 ```markdown
 # Deliverables: [Task Title]
@@ -214,7 +215,7 @@ codex e "Read TASK.md, follow the instructions, write deliverables to OUTPUT.md"
 
 ### 3. Read OUTPUT.md
 
-Parse results, verify changes, continue workflow.
+Parse the results, verify changes, and continue the workflow.
 
 ## Environment Variables
 
@@ -251,8 +252,12 @@ OPENAI_API_KEY=sk-xxx     # Alternative
 - Geometry parsing -> `geometry-parser`
 - USGS integration -> `usgs-integrator`
 
----
+## Cross-References
 
-**See Also**:
-- `code-oracle-codex` agent - Full orchestration capabilities
-- `.claude/rules/subagent-output-pattern.md` - Output format standards
+**Agents** (delegate when needed):
+- `code-oracle-codex` -- Delegate for deep code analysis with Codex
+
+**Skills** (related workflows):
+- `dev_invoke_gemini-cli` -- Alternative: Gemini CLI for large context analysis
+- `dev_invoke_kimi-cli` -- Alternative: Kimi CLI for test generation
+- `qa_review_triple-model` -- Uses this skill as one of three reviewers

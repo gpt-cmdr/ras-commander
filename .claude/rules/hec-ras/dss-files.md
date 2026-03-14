@@ -10,7 +10,7 @@
 
 ## Overview
 
-HEC-DSS (Data Storage System) files store time series data for boundary conditions. ras-commander provides lazy-loaded access via Java bridge.
+Use HEC-DSS files for time series boundary condition data. Access them through ras-commander's lazy-loaded Java bridge.
 
 ## Key Class
 
@@ -84,13 +84,19 @@ df = RasDss.get_timeseries(dss_file, pathname, start_date, end_date)
 report = RasDss.check_pathname(dss_file, pathname)
 ```
 
-## See Also
+## Cross-References
 
-- **Complete Documentation**: `ras_commander/dss/AGENTS.md`
-- **Validation Patterns**: `.claude/rules/validation/validation-patterns.md`
-- **Example Notebook**: `examples/310_dss_boundary_extraction.ipynb`
-- **Skill**: `.claude/skills/dss_read_boundary-data/SKILL.md`
+**Skills** (related workflows):
+- `dss_read_boundary-data` -- Use for DSS boundary condition extraction
+- `usgs_integrate_gauges` -- Use when generating DSS from USGS gauge data
+
+**Rules** (auto-loaded context):
+- `.claude/rules/validation/validation-patterns.md` -- Validation patterns for DSS pathnames
+
+**Primary sources**:
+- `ras_commander/dss/AGENTS.md` -- Complete DSS documentation
+- `examples/310_dss_boundary_extraction.ipynb` -- DSS extraction workflow
 
 ---
 
-**Key Takeaway**: Use `RasDss.check_pathname()` for validation before HEC-RAS execution. DSS uses lazy loading - Java bridge loads only when needed.
+**Key Takeaway**: Call `RasDss.check_pathname()` for validation before HEC-RAS execution. DSS uses lazy loading -- Java bridge loads only when needed.

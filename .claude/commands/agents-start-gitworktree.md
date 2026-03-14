@@ -104,15 +104,17 @@ If an agent loses context and needs to find their worktree:
 3. Check `git worktree list` to verify paths
 4. Continue work in the correct worktree
 
-## Related Commands
-
-- `/agent-close-gitworktree` - Close out a worktree when work is complete
-- `/agent-taskupdate` - Update task progress
-- `dev_manage_git-worktrees` skill - Detailed worktree creation patterns
-
 ## Important Notes
 
 - Always register worktrees in the tracking file
 - Include clear purpose descriptions for recovery
 - Sideload `agent_tasks/` so tracking persists across worktrees
 - Update status to "merged" or "abandoned" when closing out
+
+## Cross-References
+
+**Skills** (invoke these):
+- `dev_manage_git-worktrees` -- Worktree management patterns
+
+**Commands** (related):
+- `/agents-close-gitworktree` -- Close worktree when done

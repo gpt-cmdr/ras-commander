@@ -125,8 +125,10 @@ Before removing worktree:
 3. Warn if uncommitted changes exist
 4. Confirm with user before deletion
 
-## Related Commands
+## Cross-References
 
-- `/agents-start-gitworktree` - Create new worktree
-- `/agent-taskupdate` - Update task progress
-- `finishing-a-development-branch` skill - PR and merge workflow
+**Commands** (related):
+- `/agents-start-gitworktree` -- Create worktree (upstream)
+
+**Skills** (invoke these):
+- `dev_manage_git-worktrees` -- Worktree management patterns

@@ -1,3 +1,7 @@
+---
+paths: ras_commander/**
+---
+
 # API-First Principle for HEC-RAS Agents
 
 **Context**: All HEC-RAS domain agents working with ras-commander
@@ -309,11 +313,13 @@ Before completing any HEC-RAS data task, verify:
 - [ ] If I used any file access, was it for understanding/debugging only?
 - [ ] If I found an API gap, did I document it and suggest contribution?
 
-## See Also
+## Cross-References
 
-- `.claude/rules/python/dataframe-first-principle.md` - DataFrame patterns
-- `.claude/rules/python/ras-commander-patterns.md` - Context object discipline
-- `.claude/agents/api-consistency-auditor.md` - API contribution workflow
-- `ras_commander/CLAUDE.md` - Library overview
-- `ras_commander/hdf/AGENTS.md` - HDF API reference
-- `ras_commander/geom/AGENTS.md` - Geometry API reference
+**Rules** (related):
+- `.claude/rules/python/static-classes.md` -- Static class API pattern
+- `.claude/rules/python/dataframe-first-principle.md` -- DataFrame-first access
+
+**Agents** (enforce this):
+- `api-consistency-auditor` -- Detects API-first violations
+- `hdf-analyst` -- Must follow API-first for HDF access
+- `geometry-parser` -- Must follow API-first for geometry access

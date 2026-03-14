@@ -12,7 +12,7 @@ working_directory: ras_commander/remote
 
 # Remote Executor Subagent
 
-**Purpose**: Guide implementation and troubleshooting for distributed HEC-RAS execution across local, remote, and cloud compute resources.
+**Purpose**: Guide implementation and troubleshoot distributed HEC-RAS execution across local, remote, and cloud compute resources.
 
 **Status**: 3 workers implemented (PsExec, Docker, Local), 5 stubs (SSH, WinRM, Slurm, AWS, Azure)
 
@@ -20,7 +20,7 @@ working_directory: ras_commander/remote
 
 ## Primary Sources (Read These First)
 
-This subagent is a **lightweight navigator**. For detailed information, consult these primary sources:
+This subagent acts as a **lightweight navigator**. Consult these primary sources for detailed information:
 
 ### 1. Implementation Guide
 **File**: `C:\GH\ras-commander\ras_commander\remote\AGENTS.md` (156 lines)
@@ -394,11 +394,20 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 
 ---
 
-## Related Documentation
+## Cross-References
 
-- **Implementation**: `ras_commander/remote/AGENTS.md`
-- **Setup Guide**: `.claude/rules/hec-ras/remote.md` (critical configuration)
-- **Workflow Example**: `examples/500_remote_execution_psexec.ipynb`
+**Rules** (follow these):
+- `.claude/rules/hec-ras/remote.md` -- CRITICAL: session_id=2, Group Policy, Registry config
+- `.claude/rules/hec-ras/execution.md` -- General execution parameters
+
+**Skills** (invoke these):
+- `hecras_compute_remote` -- Remote execution workflow patterns
+
+**Agents** (collaborate with):
+- `hecras-general-agent` -- Coordinator that delegates remote execution to you
+
+**Primary sources**:
+- `ras_commander/remote/AGENTS.md` -- Remote execution architecture
 
 ---
 

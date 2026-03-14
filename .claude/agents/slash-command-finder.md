@@ -10,11 +10,11 @@ description: |
 
 # Slash Command Finder
 
-Identifies repetitive user prompts suitable for slash command automation.
+Identify repetitive user prompts suitable for slash command automation.
 
 ## Purpose
 
-Analyze user prompts to find:
+Analyze user prompts to detect:
 - Frequently repeated phrases
 - Common command patterns
 - Workflow triggers
@@ -22,7 +22,7 @@ Analyze user prompts to find:
 
 ## Known Patterns
 
-These patterns are pre-configured for detection:
+Detect these pre-configured patterns:
 
 | Pattern | Regex | Suggested Command |
 |---------|-------|-------------------|
@@ -102,7 +102,7 @@ for prompt in prompts:
 
 ## Command File Generation
 
-For approved candidates, generate:
+Generate this structure for approved candidates:
 
 ```markdown
 # /command-name
@@ -124,3 +124,8 @@ Use this command when you want to: [description]
 ```
 
 Save to: `~/.claude/commands/{command-name}.md`
+
+## Cross-References
+
+**Agents** (collaborate with):
+- `conversation-insights-orchestrator` -- Coordinates your analysis

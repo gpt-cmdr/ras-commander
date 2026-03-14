@@ -10,13 +10,13 @@ description: |
 
 # Best Practice Extractor
 
-Identifies best practices and successful strategies from conversations.
+Extract best practices and successful strategies from conversation history.
 
 ## Purpose
 
-Analyze conversations to find:
+Analyze conversations to identify:
 - Explicit best practice recommendations
-- Successful approaches that should be repeated
+- Successful approaches worth repeating
 - Patterns worth formalizing
 - Lessons learned
 
@@ -111,8 +111,14 @@ CATEGORIES = {
 
 ## Formalization Recommendations
 
-For each best practice, suggest:
+For each best practice, recommend:
 1. Rule file location (`.claude/rules/`)
 2. CLAUDE.md section to update
 3. Example code/usage to include
 4. Anti-pattern to document
+
+## Cross-References
+
+**Agents** (collaborate with):
+- `conversation-insights-orchestrator` -- Coordinates your analysis
+- `blocker-detector` -- Complementary: problems vs successes

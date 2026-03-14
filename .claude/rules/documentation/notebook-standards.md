@@ -1,3 +1,7 @@
+---
+paths: examples/**
+---
+
 # Notebook Standards
 
 **Context**: Jupyter notebook documentation and testing standards
@@ -7,7 +11,7 @@
 
 ## Overview
 
-Example notebooks in `examples/` serve dual purpose:
+Treat example notebooks in `examples/` as serving a dual purpose:
 1. **User Documentation**: Show how to use ras-commander
 2. **Functional Tests**: Validate library works correctly
 
@@ -15,7 +19,7 @@ Example notebooks in `examples/` serve dual purpose:
 
 ### Mandatory First Cell
 
-**Every notebook MUST have**:
+**Ensure every notebook has**:
 - First cell: Markdown cell
 - Content: H1 heading (`# Title`)
 - Purpose: Page title in documentation
@@ -153,7 +157,7 @@ path = Path("/Users/me/Projects/Muncie")
 
 ### Show Expected Behavior
 
-**Include assertions or verifications**:
+**Always include assertions or verifications**:
 ```python
 # Execute plan
 RasCmdr.compute_plan("01")
@@ -171,7 +175,7 @@ print(f"✓ Extracted {len(wse)} water surface elevations")
 
 **Why**: Shows users what to expect, serves as validation
 
-### Explain, Don't Just Show
+### Explain Before Showing
 
 **Bad** (code only):
 ```python
@@ -432,11 +436,18 @@ mkdocs serve
 4. Images/plots show
 5. Links work
 
-## See Also
+## Cross-References
 
-- **MkDocs Config**: `.claude/rules/documentation/mkdocs-config.md`
-- **Testing**: `.claude/rules/testing/tdd-approach.md`
-- **Import Patterns**: `.claude/rules/python/import-patterns.md`
+**Rules** (related):
+- `.claude/rules/documentation/mkdocs-config.md` -- MkDocs integration
+- `.claude/rules/documentation/notebook-to-agent-conversion.md` -- Converting notebooks to skills
+
+**Agents** (enforce this):
+- `example-notebook-librarian` -- Manages notebook conventions
+- `notebook-runner` -- Executes notebooks for testing
+
+**Commands** (user triggers):
+- `/test-notebook` -- Test notebook execution
 
 ---
 
