@@ -1064,6 +1064,7 @@ Step 5: Configure (optional — auto-detection usually works)
     def store_maps(
         plan_number: str,
         output_folder: str = None,
+        output_path: Union[str, Path] = None,
         profile: str = "Max",
         wse: bool = True,
         depth: bool = True,
@@ -1086,12 +1087,31 @@ Step 5: Configure (optional — auto-detection usually works)
         1. Configures stored maps in the .rasmap file
         2. Runs RasProcess.exe StoreAllMaps command
         3. Optionally fixes georeferencing on output TIFs
+        4. Optionally moves output to a custom directory (output_path)
 
         Works on both Windows (native) and Linux (via Wine, auto-detected).
 
+        Output Path Limitation:
+            RasProcess.exe hardcodes its output directory to
+            ``<project_folder>/<Plan ShortID>/`` based on the Plan ShortID
+            attribute in the HDF file. This cannot be overridden via CLI
+            arguments. When ``output_path`` is specified, this method
+            generates files to the default location first, then moves them
+            to the requested directory. The returned paths point to the
+            final location.
+
         Args:
             plan_number: Plan number (e.g., "01", "06")
-            output_folder: Output folder name (default: plan name from rasmap)
+            output_folder: Output folder name used in .rasmap StoredFilename
+                paths (default: plan name from rasmap). This does NOT control
+                where RasProcess.exe writes files — see output_path.
+            output_path: Custom output directory for generated rasters (str
+                or Path). If provided, files are moved from the default
+                Plan ShortID folder to this directory after generation.
+                Accepts relative or absolute paths — relative paths are
+                resolved to absolute internally. If None (default), files
+                remain in the default ``<project_folder>/<Plan ShortID>/``
+                location.
             profile: Profile to map - "Max", "Min", or specific timestamp string
             wse: Generate Water Surface Elevation map (default: True)
             depth: Generate Depth map (default: True)
@@ -1109,23 +1129,33 @@ Step 5: Configure (optional — auto-detection usually works)
 
         Returns:
             Dict mapping map type names to lists of generated file paths.
+            Paths point to output_path location if specified, otherwise to
+            the default Plan ShortID folder.
 
         Raises:
             FileNotFoundError: If RasProcess.exe or required files not found
             RuntimeError: If RasProcess.exe command fails
 
         Example:
+            >>> # Default output (writes to ./PlanShortID/)
             >>> results = RasProcess.store_maps(
             ...     plan_number="01",
-            ...     output_folder="MaxMaps",
+            ...     profile="Max",
+            ...     wse=True,
+            ...     depth=True
+            ... )
+
+            >>> # Custom output path
+            >>> results = RasProcess.store_maps(
+            ...     plan_number="01",
+            ...     output_path="C:/MyProject/CustomMaps",
             ...     profile="Max",
             ...     wse=True,
             ...     depth=True,
-            ...     velocity=True,
-            ...     froude=True
+            ...     velocity=True
             ... )
             >>> print(results['wse'])
-            [Path('project/MaxMaps/WSE (Max).Terrain.tif')]
+            [Path('C:/MyProject/CustomMaps/WSE (Max).Terrain.tif')]
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -1327,7 +1357,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 else:
                     logger.debug(f"No inundation boundary shapefiles found with pattern: {shp_pattern}")
 
-            # Fix georeferencing if requested
+            # Fix georeferencing if requested (before moving, so terrain ref is nearby)
             if fix_georef and generated_files:
                 proj_info = RasProcess._get_projection_info(rasmap_path)
                 if proj_info.prj_path and proj_info.terrain_path:
@@ -1336,6 +1366,53 @@ Step 5: Configure (optional — auto-detection usually works)
                             RasProcess._fix_georeferencing(tif_path, proj_info.prj_path, proj_info.terrain_path)
                 else:
                     logger.warning("Could not find projection/terrain for georef fix")
+
+            # Move files to custom output_path if specified
+            # RasProcess.exe hardcodes output to <project>/<Plan ShortID>/.
+            # This post-generation move is the only reliable way to redirect output.
+            if output_path is not None and generated_files:
+                output_path = Path(output_path)
+                if not output_path.is_absolute():
+                    output_path = (ras_obj.project_folder / output_path).resolve()
+                output_path.mkdir(parents=True, exist_ok=True)
+
+                logger.info(
+                    f"Moving generated files from {output_dir} to {output_path}"
+                )
+
+                moved_files = {}
+                for map_key, file_list in generated_files.items():
+                    moved_list = []
+                    for src_file in file_list:
+                        dst_file = output_path / src_file.name
+                        shutil.move(str(src_file), str(dst_file))
+                        moved_list.append(dst_file)
+
+                        # Move sidecar files for shapefiles (.dbf, .shx, .prj)
+                        if src_file.suffix.lower() == '.shp':
+                            for sidecar_ext in ('.dbf', '.shx', '.prj', '.cpg'):
+                                sidecar = src_file.with_suffix(sidecar_ext)
+                                if sidecar.exists():
+                                    shutil.move(
+                                        str(sidecar),
+                                        str(output_path / sidecar.name)
+                                    )
+
+                        # Move VRT sidecar if present
+                        vrt_sidecar = src_file.with_suffix('.vrt')
+                        if vrt_sidecar.exists():
+                            shutil.move(
+                                str(vrt_sidecar),
+                                str(output_path / vrt_sidecar.name)
+                            )
+
+                    moved_files[map_key] = moved_list
+
+                generated_files = moved_files
+                logger.info(
+                    f"Moved {sum(len(v) for v in moved_files.values())} "
+                    f"file(s) to {output_path}"
+                )
 
             return generated_files
 
@@ -1349,6 +1426,7 @@ Step 5: Configure (optional — auto-detection usually works)
     @log_call
     def store_all_maps(
         output_folder: str = None,
+        output_path: Union[str, Path] = None,
         profile: str = "Max",
         wse: bool = True,
         depth: bool = True,
@@ -1370,6 +1448,8 @@ Step 5: Configure (optional — auto-detection usually works)
 
         Args:
             output_folder: Base output folder (plan name appended). If None, uses plan titles.
+            output_path: Custom output directory. If provided, a subdirectory per plan
+                is created (e.g., ``output_path/plan_01/``). See store_maps() for details.
             profile: Profile to map - "Max", "Min", or specific timestamp
             wse: Generate WSE maps (default: True)
             depth: Generate Depth maps (default: True)
@@ -1411,10 +1491,16 @@ Step 5: Configure (optional — auto-detection usually works)
             else:
                 plan_output = None  # Will use plan title
 
+            # Per-plan output_path subdirectory
+            plan_output_path = None
+            if output_path is not None:
+                plan_output_path = Path(output_path) / f"plan_{plan_num}"
+
             try:
                 results = RasProcess.store_maps(
                     plan_number=plan_num,
                     output_folder=plan_output,
+                    output_path=plan_output_path,
                     profile=profile,
                     wse=wse,
                     depth=depth,
