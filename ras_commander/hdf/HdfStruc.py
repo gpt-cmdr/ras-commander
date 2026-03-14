@@ -15,6 +15,7 @@ List of Functions in HdfStruc:
 - get_structures()
 - get_geom_structures_attrs()
 - get_culvert_hydraulics()
+- get_storage_area_polygons()
 """
 from typing import Dict, Any, List, Union
 from pathlib import Path
@@ -555,4 +556,148 @@ class HdfStruc:
 
         except Exception as e:
             logger.error(f"Error getting SA/2D breach info: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_storage_area_polygons(hdf_path: Path, *, ras_object=None) -> GeoDataFrame:
+        """
+        Extract storage area polygon geometry from HEC-RAS HDF file.
+
+        Works on both geometry HDF (.g##.hdf) and plan HDF (.p##.hdf) —
+        both contain identical ``/Geometry/Storage Areas/`` data.
+        Pass a geometry number string (e.g. ``"12"``) to resolve via
+        ``geom_df``; pass a full ``Path`` object to use directly.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to geometry or plan HDF file (str, Path, or geometry number).
+        ras_object : RasPrj, optional
+            RAS object for multi-project workflows.
+
+        Returns
+        -------
+        GeoDataFrame
+            GeoDataFrame with columns:
+            - Name (str): Storage area name
+            - geometry (Polygon): Perimeter polygon in project CRS
+            - avg_area (float): Average surface area from HDF attributes
+            - min_elev (float): Minimum elevation from HDF attributes
+            - mode (str): Storage area mode
+
+        Returns empty GeoDataFrame if no storage areas found in file.
+
+        Notes
+        -----
+        Multi-part polygons (rings/holes) are fully supported via the
+        ``Polygon Parts`` dataset; the first ring is the exterior, subsequent
+        rings are interiors (holes).
+        """
+        _empty = GeoDataFrame(
+            columns=['Name', 'geometry', 'avg_area', 'min_elev', 'mode'],
+            geometry='geometry'
+        )
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                if 'Geometry/Storage Areas' not in hdf:
+                    logger.info(f"No Storage Areas group found in HDF: {hdf_path}")
+                    return _empty
+
+                sa_group = hdf['Geometry/Storage Areas']
+
+                if 'Polygon Points' not in sa_group or 'Polygon Info' not in sa_group:
+                    logger.info(
+                        f"Missing Polygon Points or Polygon Info in Storage Areas: {hdf_path}"
+                    )
+                    return _empty
+
+                polygon_points = sa_group['Polygon Points'][:]   # (total_pts, 2) float64
+                polygon_info   = sa_group['Polygon Info'][:]     # (num_sa, 4) int32
+
+                # Polygon Parts for multi-ring (holes) support
+                polygon_parts = None
+                if 'Polygon Parts' in sa_group:
+                    polygon_parts = sa_group['Polygon Parts'][:]  # (total_parts, 2) int32
+
+                # Attributes: Name S16, Mode S16, Avg Area f4, Min Elev f4, ...
+                attrs = None
+                if 'Attributes' in sa_group:
+                    attrs = sa_group['Attributes'][:]
+
+                num_sa = len(polygon_info)
+                records = []
+
+                for i in range(num_sa):
+                    start      = int(polygon_info[i, 0])  # global start in Polygon Points
+                    count      = int(polygon_info[i, 1])  # total points for this SA
+                    part_start = int(polygon_info[i, 2])  # start in Polygon Parts
+                    part_count = int(polygon_info[i, 3])  # number of rings
+
+                    sa_points = polygon_points[start: start + count]
+
+                    # Build polygon: single-part or multi-part (exterior + holes)
+                    if polygon_parts is not None and part_count > 0:
+                        sa_parts = polygon_parts[part_start: part_start + part_count]
+                        rings = []
+                        for p in range(part_count):
+                            local_offset = int(sa_parts[p, 0])
+                            ring_count   = int(sa_parts[p, 1])
+                            rings.append(sa_points[local_offset: local_offset + ring_count])
+                        if len(rings) == 1:
+                            polygon = Polygon(rings[0])
+                        else:
+                            polygon = Polygon(rings[0], rings[1:])
+                    else:
+                        polygon = Polygon(sa_points)
+
+                    # Extract attributes from structured array
+                    sa_name  = f"SA_{i}"
+                    avg_area = None
+                    min_elev = None
+                    mode     = None
+
+                    if attrs is not None and i < len(attrs):
+                        attr_row   = attrs[i]
+                        dt_names   = attr_row.dtype.names or ()
+
+                        if 'Name' in dt_names:
+                            raw = attr_row['Name']
+                            sa_name = (
+                                raw.decode('utf-8', errors='replace').strip()
+                                if isinstance(raw, (bytes, np.bytes_))
+                                else str(raw).strip()
+                            )
+                        if 'Avg Area' in dt_names:
+                            avg_area = float(attr_row['Avg Area'])
+                        if 'Min Elev' in dt_names:
+                            min_elev = float(attr_row['Min Elev'])
+                        if 'Mode' in dt_names:
+                            raw = attr_row['Mode']
+                            mode = (
+                                raw.decode('utf-8', errors='replace').strip()
+                                if isinstance(raw, (bytes, np.bytes_))
+                                else str(raw).strip()
+                            )
+
+                    records.append({
+                        'Name':     sa_name,
+                        'geometry': polygon,
+                        'avg_area': avg_area,
+                        'min_elev': min_elev,
+                        'mode':     mode,
+                    })
+
+                if not records:
+                    return _empty
+
+                gdf = GeoDataFrame(records, geometry='geometry')
+                logger.debug(
+                    f"Found {len(gdf)} storage area polygon(s) in {hdf_path.name}"
+                )
+                return gdf
+
+        except Exception as e:
+            logger.error(f"Error reading storage area polygons from {hdf_path}: {str(e)}")
             raise

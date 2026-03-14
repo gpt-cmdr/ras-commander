@@ -1676,11 +1676,12 @@ class RasPrj:
             else:
                 self.results_df = pd.DataFrame()  # Clear all if updating all
 
-            # Concatenate new results (skip empty frames to avoid FutureWarning)
-            if len(self.results_df) == 0:
-                self.results_df = new_results
+            # Concatenate new results, excluding all-NA/empty frames (avoids FutureWarning)
+            frames = [df for df in [self.results_df, new_results] if not df.empty and not df.isna().all().all()]
+            if frames:
+                self.results_df = pd.concat(frames, ignore_index=True)
             else:
-                self.results_df = pd.concat([self.results_df, new_results], ignore_index=True)
+                self.results_df = new_results
 
         logger.info(f"Updated results_df with {len(new_results)} plan(s)")
         return self.results_df

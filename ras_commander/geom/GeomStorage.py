@@ -10,6 +10,7 @@ List of Functions:
 - get_storage_areas() - List all storage areas with metadata
 - get_elevation_volume() - Read elevation-volume curve for a storage area
 - set_elevation_volume() - Write elevation-volume curve to a storage area
+- get_storage_area_polygons() - Extract storage area polygon perimeter geometry
 
 Example Usage:
     >>> from ras_commander import GeomStorage
@@ -33,8 +34,11 @@ Example Usage:
 """
 
 from pathlib import Path
-from typing import Union, Optional, List
+from typing import TYPE_CHECKING, Union, Optional, List
 import pandas as pd
+
+if TYPE_CHECKING:
+    from geopandas import GeoDataFrame
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -463,3 +467,172 @@ class GeomStorage:
         except Exception as e:
             logger.error(f"Error writing elevation-volume: {str(e)}")
             raise IOError(f"Failed to write elevation-volume: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_storage_area_polygons(
+        geom_file: Union[str, Path],
+        exclude_2d: bool = True
+    ) -> "GeoDataFrame":
+        """
+        Extract storage area polygon perimeter geometry from plain text geometry file.
+
+        Parses the ``Storage Area Surface Line= N`` block to build a Shapely
+        Polygon from the N 16-char fixed-width XY pairs that follow it.
+
+        Parameters:
+            geom_file: Path to .g## geometry file
+            exclude_2d: If True, exclude 2D flow areas identified by
+                ``Storage Area Is2D= -1`` (default True)
+
+        Returns:
+            GeoDataFrame with columns:
+                - Name (str): Storage area name
+                - geometry (Polygon): Perimeter polygon in project CRS
+                - centroid_x (float): SA centroid X coordinate
+                - centroid_y (float): SA centroid Y coordinate
+                - is_2d (bool): Whether this is a 2D flow area
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+
+        Example:
+            >>> sa_polygons = GeomStorage.get_storage_area_polygons("model.g01")
+            >>> print(f"Found {len(sa_polygons)} storage area polygons")
+            >>> for _, row in sa_polygons.iterrows():
+            ...     coords = list(row.geometry.exterior.coords)
+            ...     print(f"  {row['Name']}: {len(coords)-1} vertices")
+        """
+        import geopandas as gpd
+        from shapely.geometry import Polygon as ShapelyPolygon
+
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        def _parse_surface_line_coords(lines, start_idx, count):
+            """Parse N XY pairs from Storage Area Surface Line data."""
+            vertices = []
+            for k in range(start_idx, start_idx + count):
+                if k >= len(lines):
+                    break
+                line = lines[k].rstrip('\n')
+                # Primary: 16-char fixed-width (standard HEC-RAS format, no separator)
+                try:
+                    x = float(line[0:16])
+                    y = float(line[16:32])
+                except (ValueError, IndexError):
+                    # Fallback: space-separated (rare variant)
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        x, y = float(parts[0]), float(parts[1])
+                    else:
+                        continue  # skip malformed line
+                vertices.append((x, y))
+            return vertices
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            records = []
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                if line.startswith("Storage Area="):
+                    value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+                    # Format: Name,centroid_X,centroid_Y
+                    parts = [p.strip() for p in value_str.split(',')]
+                    sa_name = parts[0] if parts else value_str
+                    try:
+                        centroid_x = float(parts[1]) if len(parts) > 1 else None
+                        centroid_y = float(parts[2]) if len(parts) > 2 else None
+                    except ValueError:
+                        centroid_x = None
+                        centroid_y = None
+
+                    # Scan entire SA block FIRST to record both Surface Line index
+                    # and Is2D flag before processing any coordinates.
+                    # Is2D= may appear AFTER Surface Line= in the file.
+                    surface_line_idx = None
+                    surface_line_count = 0
+                    is_2d = False
+
+                    for j in range(i + 1, len(lines)):
+                        if (lines[j].startswith("Storage Area=") or
+                                lines[j].startswith("River Reach=")):
+                            break
+                        if lines[j].startswith("Storage Area Surface Line="):
+                            try:
+                                count_str = GeomParser.extract_keyword_value(
+                                    lines[j], "Storage Area Surface Line"
+                                )
+                                surface_line_count = int(count_str.strip())
+                                surface_line_idx = j + 1
+                            except ValueError:
+                                pass
+                        if lines[j].startswith("Storage Area Is2D="):
+                            try:
+                                is2d_str = GeomParser.extract_keyword_value(
+                                    lines[j], "Storage Area Is2D"
+                                )
+                                is_2d = int(is2d_str.strip()) == -1
+                            except ValueError:
+                                pass
+
+                    # Now parse coordinates if we found a surface line
+                    polygon = None
+                    if surface_line_idx is not None and surface_line_count > 0:
+                        vertices = _parse_surface_line_coords(
+                            lines, surface_line_idx, surface_line_count
+                        )
+                        if len(vertices) >= 3:
+                            try:
+                                polygon = ShapelyPolygon(vertices)
+                            except Exception as poly_err:
+                                logger.warning(
+                                    f"Could not create polygon for '{sa_name}': {poly_err}"
+                                )
+
+                    records.append({
+                        'Name': sa_name,
+                        'geometry': polygon,
+                        'centroid_x': centroid_x,
+                        'centroid_y': centroid_y,
+                        'is_2d': is_2d,
+                    })
+
+                i += 1
+
+            if not records:
+                return gpd.GeoDataFrame(
+                    columns=['Name', 'geometry', 'centroid_x', 'centroid_y', 'is_2d'],
+                    geometry='geometry'
+                )
+
+            gdf = gpd.GeoDataFrame(records, geometry='geometry')
+
+            if exclude_2d and not gdf.empty:
+                original_count = len(gdf)
+                gdf = gdf[~gdf['is_2d']].reset_index(drop=True)
+                if original_count != len(gdf):
+                    logger.debug(f"Excluded {original_count - len(gdf)} 2D flow areas")
+
+            # Drop entries without valid polygon geometry
+            valid_mask = gdf['geometry'].notna()
+            if not valid_mask.all():
+                dropped = (~valid_mask).sum()
+                logger.warning(
+                    f"Dropped {dropped} storage areas with no polygon geometry"
+                )
+                gdf = gdf[valid_mask].reset_index(drop=True)
+
+            logger.debug(f"Found {len(gdf)} storage area polygons in {geom_file.name}")
+            return gdf
+
+        except FileNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading storage area polygons: {str(e)}")
+            raise IOError(f"Failed to read storage area polygons: {str(e)}")
