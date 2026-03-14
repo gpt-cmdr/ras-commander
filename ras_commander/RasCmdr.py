@@ -1096,3 +1096,278 @@ class RasCmdr:
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
             return ComputeParallelResult()
+
+    @staticmethod
+    @log_call
+    def compute_plan_linux(
+        plan_number: Union[str, Number],
+        ras_exe_dir: Union[str, Path],
+        ras_object=None,
+        timeout_sec: int = 14400,
+        dos2unix: bool = True,
+        num_cores: int = None,
+        retry: bool = True,
+        retry_delay_sec: int = 30,
+    ) -> 'ComputeResult':
+        """
+        Execute a HEC-RAS plan using the native Linux RasUnsteady binary.
+
+        This is Phase 2 of a two-phase Linux execution workflow:
+
+        **Phase 1 (Windows)**: Preprocess the plan on Windows to generate
+        .tmp.hdf, .b##, and .x## files. Use RasPreprocessor from the
+        TNTech dashboard, or run HEC-RAS on Windows and kill after
+        "Starting Unsteady Flow Computations" appears in the .bco log.
+
+        **Phase 2 (Linux — this method)**: Execute the preprocessed plan
+        using the native RasUnsteady binary.
+
+        Prerequisites (must exist in project folder before calling):
+            - {project}.p{plan_num}.tmp.hdf — preprocessed plan HDF
+            - {project}.b{plan_num} — boundary conditions file
+            - {project}.x{geom_num} — cross-section preprocessor file
+
+        Compatible with HEC-RAS Linux versions 6.3.1, 6.4, 6.5, 6.6, 6.7.
+        Auto-detects library subdirectory layout (libs/, libs/mkl/, libs/rhel_8/).
+
+        The Linux RasUnsteady binary uses Fortran I/O conventions that require
+        files to be accessible with a base name of "io" (e.g., io.b, io.X).
+        This method creates temporary symlinks to satisfy this requirement.
+
+        Args:
+            plan_number (Union[str, Number]): Plan number to execute (e.g., "01").
+            ras_exe_dir (Union[str, Path]): Directory containing the RasUnsteady
+                binary and sibling libs/ directory.
+            ras_object: Optional RAS project object. If None, uses global ras.
+            timeout_sec (int): Maximum execution time in seconds (default 14400 = 4 hours).
+            dos2unix (bool): Convert CRLF→LF in text files before execution (default True).
+            num_cores (int, optional): Number of cores. If specified, updates plan file.
+            retry (bool): Retry once on failure after retry_delay_sec (default True).
+            retry_delay_sec (int): Seconds to wait before retry (default 30).
+
+        Returns:
+            ComputeResult: Result object with success bool and results_df_row.
+
+        Raises:
+            FileNotFoundError: If RasUnsteady binary, .tmp.hdf, .b, or .x files not found.
+
+        Example:
+            >>> # Phase 1: Preprocess on Windows (generates .tmp.hdf, .b, .x)
+            >>> # Phase 2: Execute on Linux
+            >>> from ras_commander import init_ras_project, RasCmdr
+            >>> init_ras_project("/home/user/model")
+            >>> result = RasCmdr.compute_plan_linux(
+            ...     "01", ras_exe_dir="/opt/hecras/6.7-beta5"
+            ... )
+        """
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+
+        plan_num_str = str(plan_number).zfill(2) if isinstance(plan_number, Number) else str(plan_number).zfill(2)
+
+        ras_exe_dir = Path(ras_exe_dir)
+        ras_exe = ras_exe_dir / "RasUnsteady"
+        if not ras_exe.exists():
+            raise FileNotFoundError(
+                f"RasUnsteady binary not found at {ras_exe}. "
+                "Ensure HEC-RAS Linux binaries are installed."
+            )
+
+        project_dir = Path(ras_obj.project_folder)
+        project_name = ras_obj.project_name
+
+        # Determine geometry number from plan file
+        plan_path = RasPlan.get_plan_path(plan_num_str, ras_obj)
+        geom_num = "01"  # default
+        try:
+            plan_text = Path(plan_path).read_text(errors='replace')
+            for line in plan_text.splitlines():
+                if line.startswith("Geom File="):
+                    geom_ref = line.split("=", 1)[1].strip()
+                    # Extract number: "g04" → "04"
+                    import re
+                    m = re.search(r'(\d+)', geom_ref)
+                    if m:
+                        geom_num = m.group(1)
+                    break
+        except Exception as e:
+            logger.warning(f"Could not read geom number from plan file: {e}")
+
+        # Verify prerequisite files exist
+        tmp_hdf = project_dir / f"{project_name}.p{plan_num_str}.tmp.hdf"
+        b_file = project_dir / f"{project_name}.b{plan_num_str}"
+        x_file = project_dir / f"{project_name}.x{geom_num}"
+
+        missing = []
+        if not tmp_hdf.exists():
+            missing.append(f".p{plan_num_str}.tmp.hdf")
+        if not b_file.exists():
+            missing.append(f".b{plan_num_str}")
+        if not x_file.exists():
+            missing.append(f".x{geom_num}")
+
+        if missing:
+            raise FileNotFoundError(
+                f"Missing prerequisite files for Linux execution: {', '.join(missing)}. "
+                f"Run Windows preprocessing first (Phase 1) to generate these files. "
+                f"See RasPreprocessor or the TNTech dashboard Linux Preprocessing page."
+            )
+
+        # Set num_cores if specified
+        if num_cores is not None:
+            try:
+                RasPlan.set_num_cores(plan_path, num_cores=num_cores, ras_object=ras_obj)
+                logger.info(f"Set number of cores to {num_cores} for plan: {plan_num_str}")
+            except Exception as e:
+                logger.error(f"Error setting number of cores: {e}")
+
+        # Build LD_LIBRARY_PATH — auto-detect library subdirectories
+        # HEC-RAS Linux versions have varying layouts:
+        #   6.3.1-6.5: libs/, libs/mkl/
+        #   6.6-6.7:   libs/, libs/mkl/, libs/rhel_8/
+        lib_base = ras_exe_dir / "libs"
+        if not lib_base.exists():
+            lib_base = ras_exe_dir.parent / "libs"
+        ld_path_parts = []
+        if lib_base.exists():
+            ld_path_parts.append(str(lib_base))
+            for subdir in sorted(lib_base.iterdir()):
+                if subdir.is_dir():
+                    ld_path_parts.append(str(subdir))
+                    logger.debug(f"Added library path: {subdir}")
+        else:
+            logger.warning(f"No libs/ directory found near {ras_exe_dir}")
+            ld_path_parts.append(str(ras_exe_dir))
+        ld_path = ":".join(ld_path_parts)
+        logger.info(f"LD_LIBRARY_PATH: {ld_path}")
+
+        # dos2unix text files
+        if dos2unix:
+            try:
+                count = RasUtils.dos2unix(project_dir)
+                logger.debug(f"dos2unix converted {count} files")
+            except Exception as e:
+                logger.warning(f"dos2unix failed: {e}")
+
+        # Create Fortran io.* symlinks
+        # RasUnsteady uses Fortran I/O that expects files named io.b, io.X, io.g, etc.
+        io_links = []
+
+        def _create_io_link(source: Path, io_name: str):
+            """Create io.* symlink and track for cleanup."""
+            link_path = project_dir / io_name
+            if link_path.exists() or link_path.is_symlink():
+                link_path.unlink()
+            link_path.symlink_to(source.name)
+            io_links.append(link_path)
+
+        try:
+            _create_io_link(b_file, "io.b")
+            _create_io_link(x_file, "io.X")
+            _create_io_link(x_file, "io.x")
+            # Symlink all project files to io.* equivalents
+            for f in project_dir.iterdir():
+                if f.name.startswith(project_name + ".") and not f.name.startswith("io."):
+                    suffix = f.name[len(project_name) + 1:]  # everything after "ProjectName."
+                    io_name = f"io.{suffix}"
+                    io_path = project_dir / io_name
+                    if not io_path.exists() and not io_path.is_symlink():
+                        _create_io_link(f, io_name)
+            logger.debug(f"Created {len(io_links)} io.* symlinks")
+        except OSError as e:
+            logger.warning(f"Could not create io.* symlinks (may not be needed): {e}")
+
+        max_attempts = 2 if retry else 1
+        for attempt in range(1, max_attempts + 1):
+            logger.info(f"Linux execution attempt {attempt}/{max_attempts} for plan {plan_num_str}")
+
+            # Remove any leftover io.tmp.hdf from previous run
+            io_tmp_hdf = project_dir / "io.tmp.hdf"
+            if io_tmp_hdf.exists():
+                io_tmp_hdf.unlink()
+
+            env = os.environ.copy()
+            env["LD_LIBRARY_PATH"] = ld_path
+
+            log_path = project_dir / f"compute_linux_{plan_num_str}.log"
+            success = False
+            err_msg = ""
+
+            try:
+                start_time = time.time()
+                with open(log_path, "w") as log_fh:
+                    proc = subprocess.Popen(
+                        [str(ras_exe), str(tmp_hdf), f"x{geom_num}"],
+                        stdout=log_fh,
+                        stderr=subprocess.STDOUT,
+                        env=env,
+                        cwd=str(project_dir),
+                    )
+                try:
+                    rc = proc.wait(timeout=timeout_sec)
+                    end_time = time.time()
+                    run_time = end_time - start_time
+                    if rc == 0:
+                        success = True
+                        logger.info(
+                            f"RasUnsteady completed for plan {plan_num_str} "
+                            f"in {run_time:.1f}s (exit code 0)"
+                        )
+                    else:
+                        try:
+                            tail = log_path.read_text(errors='replace')[-500:]
+                        except OSError:
+                            tail = "(log unreadable)"
+                        err_msg = f"RasUnsteady exited with code {rc}. Log tail: {tail}"
+                        logger.error(f"Plan {plan_num_str}: {err_msg}")
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                    err_msg = f"Timeout after {timeout_sec}s"
+                    logger.error(f"Plan {plan_num_str}: {err_msg}")
+            except FileNotFoundError:
+                raise RuntimeError(
+                    f"RasUnsteady binary not found at {ras_exe}."
+                )
+
+            if success:
+                # Move results from .tmp.hdf → .hdf
+                if tmp_hdf.exists():
+                    plan_hdf = RasCmdr._get_hdf_path(plan_num_str, ras_obj)
+                    shutil.move(str(tmp_hdf), str(plan_hdf))
+                    logger.debug(f"Renamed {tmp_hdf.name} → {plan_hdf.name}")
+
+                # Clean up io.* symlinks
+                for link in io_links:
+                    try:
+                        if link.is_symlink():
+                            link.unlink()
+                    except OSError:
+                        pass
+
+                # Refresh DataFrames
+                try:
+                    ras_obj.plan_df = ras_obj.get_plan_entries()
+                    ras_obj.update_results_df(plan_numbers=[plan_num_str])
+                    mask = ras_obj.results_df['plan_number'] == plan_num_str
+                    results_row = ras_obj.results_df[mask].iloc[0].copy() if mask.any() else None
+                except Exception as e:
+                    logger.debug(f"Could not extract results_df_row: {e}")
+                    results_row = None
+
+                return ComputeResult(success=True, results_df_row=results_row)
+            else:
+                if attempt < max_attempts:
+                    logger.info(f"Retrying in {retry_delay_sec}s...")
+                    time.sleep(retry_delay_sec)
+                    continue
+
+                # Clean up io.* symlinks on final failure
+                for link in io_links:
+                    try:
+                        if link.is_symlink():
+                            link.unlink()
+                    except OSError:
+                        pass
+
+                return ComputeResult(success=False, results_df_row=None)
