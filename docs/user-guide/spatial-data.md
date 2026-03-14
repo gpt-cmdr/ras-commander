@@ -308,9 +308,45 @@ RasMap.postprocess_stored_maps(
 )
 ```
 
-### Output Locations
+### Custom Output Path
 
-Generated stored maps are saved in the project directory:
+By default, RasProcess.exe writes output to a folder named after the plan's ShortID (e.g., `./PlanShortID/`). This is hardcoded in RasProcess.exe and cannot be overridden via CLI arguments.
+
+The `output_path` parameter works around this by using individual `StoreMap` XML commands with an absolute `OutputBaseFilename`, writing files directly to your requested directory:
+
+```python
+# Output to a custom directory
+results = RasProcess.store_maps(
+    plan_number="01",
+    output_path="C:/MyProject/FloodMaps",
+    profile="Max",
+    wse=True,
+    depth=True
+)
+
+# Files are now in C:/MyProject/FloodMaps/
+for map_type, files in results.items():
+    for f in files:
+        print(f"  {f}")
+```
+
+Relative paths are resolved against the project folder:
+
+```python
+# Relative path - resolves to <project_folder>/exported_rasters/
+results = RasProcess.store_maps(
+    plan_number="01",
+    output_path="exported_rasters",
+    depth=True
+)
+```
+
+!!! note "How It Works"
+    The default `StoreAllMaps` CLI command hardcodes output to `<project_folder>/<Plan ShortID>/` with no override. When `output_path` is specified, `store_maps()` uses individual `StoreMap` XML commands instead, passing the resolved absolute path as `OutputBaseFilename`. C#'s `Path.Combine()` discards the ShortID prefix when the second argument is absolute, so files are written directly to the requested directory.
+
+### Default Output Location
+
+Without `output_path`, generated stored maps are saved in the project directory:
 
 ```
 MyRasModel/

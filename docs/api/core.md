@@ -526,6 +526,23 @@ results = RasProcess.store_maps(
     Set `fix_georef=True` (default) to automatically apply the CRS from the project's
     projection file using rasterio.
 
-!!! note "Output Location"
-    Generated files are written to the plan's result layer folder as defined in the
-    `.rasmap` file (e.g., `PMF Multi 2D/WSE (Max).Terrain.tif`), not a custom path.
+##### Custom Output Path
+
+By default, RasProcess.exe writes to `<project_folder>/<Plan ShortID>/`. Use the `output_path` parameter to redirect output to any directory:
+
+```python
+# Output to custom location
+results = RasProcess.store_maps(
+    plan_number="01",
+    output_path="C:/Exports/FloodMaps",
+    depth=True, wse=True
+)
+# Files moved to C:/Exports/FloodMaps/ after generation
+```
+
+!!! note "How output_path Works"
+    The default `StoreAllMaps` command hardcodes output to `<Plan ShortID>/`.
+    When `output_path` is specified, individual `StoreMap` XML commands are
+    used instead, with an absolute `OutputBaseFilename` that bypasses the
+    ShortID prefix via C#'s `Path.Combine()` behavior. Relative paths are
+    resolved against the project folder.
