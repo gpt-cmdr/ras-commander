@@ -437,6 +437,10 @@ class HdfResultsMesh:
         Get the maximum depth for each 2D mesh cell by reading the full Depth
         time series and computing np.max(axis=0) per cell.
 
+        Attribution: Implementation pattern derived from ras-agent
+        (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
+        Illinois State Water Survey. See results.py:extract_max_depth().
+
         Args:
             hdf_path (Path): Path to the HDF file.
 
@@ -520,6 +524,10 @@ class HdfResultsMesh:
     ) -> Path:
         """
         Export maximum depth as a Cloud-Optimized GeoTIFF raster.
+
+        Attribution: Implementation pattern derived from ras-agent
+        (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
+        Illinois State Water Survey. See results.py:cells_to_raster().
 
         Reads cell centers and max depth from the HDF file, interpolates onto
         a regular grid using scipy.interpolate.griddata, and writes a COG with

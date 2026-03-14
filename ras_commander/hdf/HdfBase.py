@@ -384,6 +384,10 @@ class HdfBase:
         removing previous simulation results while preserving geometry and
         plan configuration data.
 
+        Attribution: Implementation pattern derived from ras-agent
+        (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
+        Illinois State Water Survey. See runner.py:_prepare_run().
+
         Parameters:
             hdf_path (Union[str, Path]): Path to the plan HDF file.
 

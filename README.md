@@ -653,6 +653,8 @@ These acknowledgments recognize the contributions and inspirations that have hel
 
 5. [HEC-Commander Tools](https://github.com/gpt-cmdr/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
 
+6. Attribution: Glenn Heistand's [`ras-agent`](https://github.com/gheistand/ras-agent) (CHAMP -- Illinois State Water Survey) -- an automated HEC-RAS pipeline that converts pour points into flood maps. The ras-agent pipeline's Linux execution patterns (`runner.py`), HDF results extraction (`results.py`), and Cloud-Optimized GeoTIFF rasterization directly informed the development of several ras-commander methods including `RasCmdr.compute_plan_linux()`, `HdfResultsMesh.get_mesh_max_depth()`, `HdfResultsMesh.export_max_depth_raster()`, `RasUtils.dos2unix()`, and `HdfBase.strip_results()`.
+
 ## Official RAS Commander AI-Generated Songs:
 
 [No More Wait and See (Bluegrass)](https://suno.com/song/16889f3e-50f1-4afe-b779-a41738d7617a)  

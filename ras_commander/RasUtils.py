@@ -1843,6 +1843,10 @@ class RasUtils:
         that need LF endings for Linux HEC-RAS execution). Done in-place using
         pure Python (no shell dependency).
 
+        Attribution: Implementation pattern derived from ras-agent
+        (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
+        Illinois State Water Survey. See runner.py:_dos2unix_dir().
+
         Parameters:
             project_dir (Union[str, Path]): Path to the HEC-RAS project directory.
             extensions (Optional[List[str]]): Custom regex patterns for file extensions

@@ -1112,6 +1112,12 @@ class RasCmdr:
         """
         Execute a HEC-RAS plan using the native Linux RasUnsteady binary.
 
+        Attribution: Execution pattern derived from ras-agent
+        (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
+        Illinois State Water Survey. See runner.py:run_job() for the original
+        Linux RasUnsteady invocation pattern (subprocess, LD_LIBRARY_PATH,
+        .tmp.hdf preparation, retry logic).
+
         This is Phase 2 of a two-phase Linux execution workflow:
 
         **Phase 1 (Windows)**: Preprocess the plan on Windows to generate
