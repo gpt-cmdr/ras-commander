@@ -428,9 +428,242 @@ class HdfResultsMesh:
         except Exception as e:
             logger.error(f"Error in get_mesh_max_iter: {str(e)}")
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
-        
-        
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_mesh_max_depth(hdf_path: Path) -> gpd.GeoDataFrame:
+        """
+        Get the maximum depth for each 2D mesh cell by reading the full Depth
+        time series and computing np.max(axis=0) per cell.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+
+        Returns:
+            gpd.GeoDataFrame: GeoDataFrame with columns:
+                - mesh_name (str): Name of the 2D flow area
+                - cell_id (int): Cell index
+                - maximum_depth (float): Maximum depth at that cell
+                - geometry (Point): Cell center point geometry
+        """
+        from shapely.geometry import Point
+
+        try:
+            dfs = []
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
+                if d2_flow_areas is None:
+                    logger.info("No 2D Flow Areas found in HDF file")
+                    return gpd.GeoDataFrame()
+
+                for d2_flow_area in d2_flow_areas[:]:
+                    mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
+
+                    # Read cell centers
+                    cc_path = f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"
+                    cc_ds = hdf_file.get(cc_path)
+                    if cc_ds is None:
+                        logger.warning(f"Cell centers not found for mesh '{mesh_name}'")
+                        continue
+                    xy = np.array(cc_ds, dtype=np.float64)
+
+                    # Read depth time series
+                    depth_path = (
+                        f"Results/Unsteady/Output/Output Blocks/Base Output/"
+                        f"Unsteady Time Series/2D Flow Areas/{mesh_name}/Depth"
+                    )
+                    depth_ds = hdf_file.get(depth_path)
+                    if depth_ds is None:
+                        logger.warning(f"Depth dataset not found for mesh '{mesh_name}'")
+                        continue
+
+                    depths = np.array(depth_ds, dtype=np.float32)  # (T, N)
+                    max_depth = np.max(depths, axis=0)  # (N,)
+
+                    geom = [Point(x, y) for x, y in xy]
+                    df = gpd.GeoDataFrame({
+                        "mesh_name": [mesh_name] * len(max_depth),
+                        "cell_id": range(len(max_depth)),
+                        "maximum_depth": max_depth,
+                    }, geometry=geom)
+                    dfs.append(df)
+
+            if not dfs:
+                return gpd.GeoDataFrame()
+
+            result = pd.concat(dfs, ignore_index=True)
+
+            # Set CRS
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                crs = HdfBase.get_projection(hdf_file)
+            if crs:
+                result.set_crs(crs, inplace=True)
+
+            logger.info(f"Extracted max depth for {len(result)} cells")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in get_mesh_max_depth: {str(e)}")
+            raise ValueError(f"Failed to get maximum depth: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def export_max_depth_raster(
+        hdf_path: Path,
+        output_path: Union[str, Path] = None,
+        resolution_m: float = 3.0,
+        crs=None,
+        method: str = "linear",
+        nodata: float = -9999.0,
+    ) -> Path:
+        """
+        Export maximum depth as a Cloud-Optimized GeoTIFF raster.
+
+        Reads cell centers and max depth from the HDF file, interpolates onto
+        a regular grid using scipy.interpolate.griddata, and writes a COG with
+        LZW compression and overviews.
+
+        Args:
+            hdf_path (Path): Path to the HDF file.
+            output_path (Union[str, Path], optional): Output GeoTIFF path.
+                If None, writes to a temporary file.
+            resolution_m (float): Grid cell size in CRS units (default 3.0).
+            crs: Output CRS. If None, uses the CRS from the HDF file.
+            method (str): Interpolation method for griddata (default "linear").
+            nodata (float): Nodata value for the raster (default -9999.0).
+
+        Returns:
+            Path: Path to the written GeoTIFF file.
+        """
+        import rasterio
+        from rasterio.transform import from_bounds
+        from scipy.interpolate import griddata as scipy_griddata
+
+        gdf = HdfResultsMesh.get_mesh_max_depth(hdf_path)
+        if gdf.empty:
+            raise ValueError("No depth data found in HDF file")
+
+        xy = np.column_stack([gdf.geometry.x, gdf.geometry.y])
+        values = gdf["maximum_depth"].values
+
+        if output_path is None:
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
+            output_path = Path(tmp.name)
+            tmp.close()
+        else:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if crs is None:
+            crs = gdf.crs
+
+        x, y = xy[:, 0], xy[:, 1]
+        x_min, x_max = x.min(), x.max()
+        y_min, y_max = y.min(), y.max()
+
+        cols = max(2, int(np.ceil((x_max - x_min) / resolution_m)) + 1)
+        rows = max(2, int(np.ceil((y_max - y_min) / resolution_m)) + 1)
+        grid_x = np.linspace(x_min, x_max, cols)
+        grid_y = np.linspace(y_max, y_min, rows)
+        gx, gy = np.meshgrid(grid_x, grid_y)
+
+        grid_vals = scipy_griddata(
+            points=xy,
+            values=values.astype(np.float64),
+            xi=(gx, gy),
+            method=method,
+            fill_value=nodata,
+        ).astype(np.float32)
+
+        grid_vals = np.where(np.isnan(grid_vals), nodata, grid_vals)
+        transform = from_bounds(x_min, y_min, x_max, y_max, cols, rows)
+
+        with rasterio.open(
+            str(output_path), "w",
+            driver="GTiff", height=rows, width=cols, count=1,
+            dtype=np.float32, crs=crs, transform=transform, nodata=nodata,
+            compress="lzw", tiled=True, blockxsize=256, blockysize=256,
+            BIGTIFF="IF_SAFER",
+        ) as dst:
+            dst.write(grid_vals, 1)
+            dst.build_overviews([2, 4, 8, 16], rasterio.enums.Resampling.average)
+            dst.update_tags(ns="rio_overview", resampling="average")
+
+        logger.info(f"Wrote max depth raster ({rows}x{cols} px, {resolution_m}m): {output_path}")
+        return output_path
+
+    @staticmethod
+    @log_call
+    def get_flood_extent_polygon(
+        plan_number: str,
+        profile: str = "Max",
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 600,
+    ) -> gpd.GeoDataFrame:
+        """
+        Generate the canonical RASMapper inundation boundary polygon via
+        RasProcess.exe StoreAllMaps.
+
+        This uses the same algorithm RASMapper uses in the GUI to produce
+        inundation boundary shapefiles — the authoritative HEC-RAS flood
+        extent. Requires an initialized ras-commander project and HEC-RAS
+        installed.
+
+        Args:
+            plan_number (str): Plan number (e.g., "01").
+            profile (str): Profile to map — "Max", "Min", or timestamp string.
+            ras_object: Optional RAS project object.
+            ras_version (str): Optional HEC-RAS version for RasProcess.exe.
+            timeout (int): RasProcess.exe timeout in seconds (default 600).
+
+        Returns:
+            gpd.GeoDataFrame: Inundation boundary polygon(s) read from the
+                shapefile generated by RASMapper. Returns empty GeoDataFrame
+                if generation fails or no flood extent is produced.
+
+        Raises:
+            FileNotFoundError: If RasProcess.exe or plan HDF not found.
+            RuntimeError: If RasProcess.exe command fails.
+
+        Example:
+            >>> from ras_commander import init_ras_project
+            >>> from ras_commander.hdf import HdfResultsMesh
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> flood_gdf = HdfResultsMesh.get_flood_extent_polygon("01")
+        """
+        from ..RasProcess import RasProcess
+
+        results = RasProcess.store_maps(
+            plan_number=plan_number,
+            profile=profile,
+            wse=False,
+            depth=False,
+            velocity=False,
+            inundation_boundary=True,
+            fix_georef=False,
+            ras_object=ras_object,
+            ras_version=ras_version,
+            timeout=timeout,
+        )
+
+        shp_files = results.get('inundation_boundary', [])
+        if not shp_files:
+            logger.warning("RasProcess did not produce an inundation boundary shapefile")
+            return gpd.GeoDataFrame()
+
+        # Read the first shapefile
+        shp_path = shp_files[0]
+        gdf = gpd.read_file(shp_path)
+        logger.info(
+            f"Read inundation boundary from {shp_path.name}: "
+            f"{len(gdf)} feature(s), "
+            f"{gdf.geometry.area.sum() / 1e6:.3f} km² total area"
+        )
+        return gdf
 
     @staticmethod
     def _get_mesh_timeseries_output_path(mesh_name: str, var_name: str) -> str:

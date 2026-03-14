@@ -1832,3 +1832,55 @@ class RasUtils:
         except IOError as e:
             logger.error(f"Error writing description to {file_path}: {e}")
             return False
+
+    @staticmethod
+    @log_call
+    def dos2unix(project_dir: Union[str, Path], extensions: Optional[List[str]] = None) -> int:
+        """
+        Convert CRLF line endings to LF in HEC-RAS text files.
+
+        Processes .b## and .g## files by default (boundary and geometry text files
+        that need LF endings for Linux HEC-RAS execution). Done in-place using
+        pure Python (no shell dependency).
+
+        Parameters:
+            project_dir (Union[str, Path]): Path to the HEC-RAS project directory.
+            extensions (Optional[List[str]]): Custom regex patterns for file extensions
+                to process. Defaults to [r'\\.(b|g)\\d+$'] which matches .b01, .g01, etc.
+
+        Returns:
+            int: Number of files modified.
+
+        Example:
+            >>> from ras_commander import RasUtils
+            >>> count = RasUtils.dos2unix(Path("/project/dir"))
+            >>> print(f"Converted {count} files")
+        """
+        import re
+
+        project_dir = Path(project_dir)
+        if not project_dir.is_dir():
+            raise FileNotFoundError(f"Directory not found: {project_dir}")
+
+        if extensions is None:
+            patterns = [re.compile(r'\.(b|g)\d+$', re.IGNORECASE)]
+        else:
+            patterns = [re.compile(ext, re.IGNORECASE) for ext in extensions]
+
+        modified_count = 0
+        for fpath in project_dir.iterdir():
+            if not fpath.is_file():
+                continue
+            if not any(p.search(fpath.name) for p in patterns):
+                continue
+            try:
+                raw = fpath.read_bytes()
+                if b'\r' in raw:
+                    fpath.write_bytes(raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n'))
+                    modified_count += 1
+                    logger.debug(f"dos2unix: {fpath.name}")
+            except (OSError, PermissionError) as exc:
+                logger.warning(f"dos2unix skipped {fpath.name}: {exc}")
+
+        logger.info(f"dos2unix: converted {modified_count} files in {project_dir}")
+        return modified_count

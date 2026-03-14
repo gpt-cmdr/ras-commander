@@ -12,6 +12,7 @@ List of Functions:
 - set_base_mannings_n() - Write base Manning's n values to geometry file
 - get_region_mannings_n() - Read Manning's n region overrides
 - set_region_mannings_n() - Write regional Manning's n overrides
+- set_2d_mannings_n_hdf() - Set uniform Manning's n in geometry HDF file
 
 Example Usage:
     >>> from ras_commander import GeomLandCover, RasPlan
@@ -451,4 +452,74 @@ class GeomLandCover:
         with open(geom_file_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
 
+        return True
+
+    @staticmethod
+    @log_call
+    def set_2d_mannings_n_hdf(
+        geom_hdf_path: Union[str, Path],
+        mannings_n: float,
+        area_name: str = None,
+    ) -> bool:
+        """
+        Set a uniform Manning's n value for all 2D flow areas in a geometry HDF file.
+
+        Updates the Mann dataset at /Geometry/2D Flow Areas/{area}/Mann in the
+        geometry HDF file. The Mann dataset has shape (N, 3) where columns are
+        [region_id, n_value, calibration]. This method updates column 1 (n_value)
+        for all rows.
+
+        Parameters:
+            geom_hdf_path (Union[str, Path]): Path to the geometry HDF file (.g##.hdf)
+            mannings_n (float): Manning's n roughness coefficient to set uniformly.
+            area_name (str, optional): Name of specific 2D flow area to update.
+                If None, updates all 2D flow areas in the file.
+
+        Returns:
+            bool: True if at least one area was updated, False if no Mann datasets found.
+
+        Raises:
+            FileNotFoundError: If the geometry HDF file does not exist.
+            ValueError: If mannings_n is not a positive number.
+
+        Example:
+            >>> from ras_commander.geom import GeomLandCover
+            >>> GeomLandCover.set_2d_mannings_n_hdf("model.g01.hdf", 0.035)
+            True
+        """
+        import h5py
+        import numpy as np
+
+        geom_hdf_path = Path(geom_hdf_path)
+        if not geom_hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF file not found: {geom_hdf_path}")
+        if not isinstance(mannings_n, (int, float)) or mannings_n <= 0:
+            raise ValueError(f"mannings_n must be a positive number, got {mannings_n}")
+
+        updated_count = 0
+        with h5py.File(str(geom_hdf_path), "a") as hf:
+            fa_group = hf.get("Geometry/2D Flow Areas")
+            if fa_group is None:
+                logger.warning(f"No 'Geometry/2D Flow Areas' group in {geom_hdf_path.name}")
+                return False
+
+            areas = [area_name] if area_name else list(fa_group.keys())
+            for area in areas:
+                mann_path = f"Geometry/2D Flow Areas/{area}/Mann"
+                if mann_path in hf:
+                    mann = hf[mann_path][:]
+                    mann[:, 1] = mannings_n
+                    hf[mann_path][:] = mann
+                    updated_count += 1
+                    logger.info(
+                        f"Set Manning's n to {mannings_n} in {geom_hdf_path.name}/{area}"
+                    )
+                else:
+                    logger.debug(f"No Mann dataset at {mann_path}")
+
+        if updated_count == 0:
+            logger.warning(f"No Mann datasets found in {geom_hdf_path.name}")
+            return False
+
+        logger.info(f"Updated Manning's n in {updated_count} area(s)")
         return True

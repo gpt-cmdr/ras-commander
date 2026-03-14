@@ -146,6 +146,7 @@ class RasProcess:
         'arrival_time': ('arrivaltime', 'Arrival Time', False),
         'duration': ('duration', 'Duration', False),
         'recession': ('recession', 'Recession', False),
+        'inundation_boundary': ('depth', 'Inundation Boundary', False),
     }
 
     # Standard HEC-RAS installation paths (Windows)
@@ -896,7 +897,8 @@ Step 5: Configure (optional — auto-detection usually works)
         map_type: str,
         profile_name: str,
         output_folder: str,
-        profile_index: int = 2147483647
+        profile_index: int = 2147483647,
+        output_mode: str = "Stored Current Terrain",
     ) -> bool:
         """
         Add a stored map configuration to the .rasmap file.
@@ -910,6 +912,9 @@ Step 5: Configure (optional — auto-detection usually works)
             profile_name: Profile name (e.g., "Max", "10SEP2018 02:30:00")
             output_folder: Output folder name relative to project
             profile_index: Profile index (2147483647 for Max/Min)
+            output_mode: OutputMode for MapParameters. Use "Stored Current Terrain"
+                for raster outputs (default), or "Stored Polygon Specified Depth"
+                for inundation boundary shapefile output.
 
         Returns:
             True if successful, False otherwise
@@ -967,9 +972,11 @@ Step 5: Configure (optional — auto-detection usually works)
                 display_name = type_info[1]
 
             # Create output filename
-            # Format: .\OutputFolder\WSE (Max).vrt or .\OutputFolder\Depth (10SEP2018 02 30 00).vrt
+            # Polygon outputs use .shp; raster outputs use .vrt
             safe_profile = profile_name.replace(":", " ").replace("/", "_")
-            output_filename = f".\\{output_folder}\\{display_name} ({safe_profile}).vrt"
+            is_polygon = "Polygon" in output_mode
+            ext = ".shp" if is_polygon else ".vrt"
+            output_filename = f".\\{output_folder}\\{display_name} ({safe_profile}){ext}"
 
             # Create the Layer element
             layer_elem = ET.SubElement(plan_layer, "Layer")
@@ -981,7 +988,7 @@ Step 5: Configure (optional — auto-detection usually works)
             # Create MapParameters element
             map_params = ET.SubElement(layer_elem, "MapParameters")
             map_params.set("MapType", map_type)
-            map_params.set("OutputMode", "Stored Current Terrain")
+            map_params.set("OutputMode", output_mode)
             map_params.set("StoredFilename", output_filename)
             map_params.set("ProfileIndex", str(profile_index))
             map_params.set("ProfileName", profile_name)
@@ -1237,16 +1244,16 @@ Step 5: Configure (optional — auto-detection usually works)
                     profile_index
                 )
 
-            # Add inundation boundary if requested
+            # Add inundation boundary if requested (shapefile polygon output)
             if inundation_boundary:
-                # This uses a different output mode
                 RasProcess._add_stored_map_to_rasmap(
                     rasmap_path,
                     plan_hdf,
-                    'depth',  # Uses depth with polygon output
+                    'depth',
                     profile_name,
                     output_folder,
-                    profile_index
+                    profile_index,
+                    output_mode="Stored Polygon Specified Depth",
                 )
 
             # Build command arguments
@@ -1305,6 +1312,20 @@ Step 5: Configure (optional — auto-detection usually works)
                     logger.info(f"Generated {len(tif_files)} {map_key} TIF(s)")
                 else:
                     logger.debug(f"No TIF files found for {map_key} with pattern: {pattern}")
+
+            # Collect inundation boundary shapefile if requested
+            if inundation_boundary:
+                safe_profile = profile_name.replace(":", " ").replace("/", "_")
+                shp_pattern = f"Inundation Boundary ({safe_profile})*.shp"
+                shp_files = list(output_dir.glob(shp_pattern))
+                if not shp_files:
+                    shp_pattern_alt = f"Inundation_Boundary*({safe_profile})*.shp"
+                    shp_files = list(output_dir.glob(shp_pattern_alt))
+                if shp_files:
+                    generated_files['inundation_boundary'] = shp_files
+                    logger.info(f"Generated {len(shp_files)} inundation boundary shapefile(s)")
+                else:
+                    logger.debug(f"No inundation boundary shapefiles found with pattern: {shp_pattern}")
 
             # Fix georeferencing if requested
             if fix_georef and generated_files:

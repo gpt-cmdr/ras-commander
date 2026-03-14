@@ -374,5 +374,41 @@ class HdfBase:
             for key, value in obj.attrs.items():
                 print(f"        {key}: {value}")
 
+    @staticmethod
+    @log_call
+    def strip_results(hdf_path: Union[str, Path]) -> bool:
+        """
+        Remove the /Results group from a plan HDF file for clean re-execution.
+
+        This is used to prepare an HDF file for re-running RasUnsteady by
+        removing previous simulation results while preserving geometry and
+        plan configuration data.
+
+        Parameters:
+            hdf_path (Union[str, Path]): Path to the plan HDF file.
+
+        Returns:
+            bool: True if the Results group was found and removed,
+                  False if no Results group existed.
+
+        Example:
+            >>> from ras_commander.hdf import HdfBase
+            >>> removed = HdfBase.strip_results("model.p01.hdf")
+            >>> if removed:
+            ...     print("Results stripped, ready for re-execution")
+        """
+        hdf_path = Path(hdf_path)
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"HDF file not found: {hdf_path}")
+
+        with h5py.File(str(hdf_path), "a") as hf:
+            if "Results" in hf:
+                del hf["Results"]
+                logger.info(f"Stripped /Results group from {hdf_path.name}")
+                return True
+            else:
+                logger.debug(f"No /Results group found in {hdf_path.name}")
+                return False
+
 
 
