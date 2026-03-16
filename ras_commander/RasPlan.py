@@ -2977,3 +2977,4 @@ class RasPlan:
         n_created = len(report[report['status'] == 'created'])
         logger.info(f"Created {n_created}/{len(variants)} plan variants from plan p{base_plan}")
         return report
+

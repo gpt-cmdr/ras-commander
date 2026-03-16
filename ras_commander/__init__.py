@@ -104,8 +104,17 @@ _TERRAIN_EXPORTS = {'RasTerrain'}
 # Results module - Compute message parsing and execution summary
 _RESULTS_EXPORTS = {'ResultsParser', 'ResultsSummary'}
 
+# GUI automation - lazy loaded to avoid importing pywin32 on non-Windows platforms
+_GUI_EXPORTS = {
+    'Win32Primitives', 'HecRasElements', 'RasMapperElements',
+    'VB6ClassNames', 'Win32Constants',
+    'WorkflowStep', 'WorkflowResult', 'WorkflowExecutor',
+    'OpenAndComputeWorkflow', 'RunMultiplePlansWorkflow',
+    'OpenRasMapperWorkflow', 'MeshRegenerationWorkflow',
+}
+
 def __getattr__(name):
-    """Lazy load remote execution, DSS, check, fixit, terrain, and results components on first access."""
+    """Lazy load remote execution, DSS, check, fixit, terrain, results, and gui components on first access."""
     if name in _REMOTE_EXPORTS:
         from . import remote
         return getattr(remote, name)
@@ -124,6 +133,9 @@ def __getattr__(name):
     if name in _RESULTS_EXPORTS:
         from . import results
         return getattr(results, name)
+    if name in _GUI_EXPORTS:
+        from . import gui
+        return getattr(gui, name)
     raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
 
 
@@ -166,6 +178,13 @@ __all__ = [
 
     # Results module - Compute message parsing and execution summary (lazy loaded)
     'ResultsParser', 'ResultsSummary',
+
+    # GUI automation (lazy loaded, Windows only)
+    'Win32Primitives', 'HecRasElements', 'RasMapperElements',
+    'VB6ClassNames', 'Win32Constants',
+    'WorkflowStep', 'WorkflowResult', 'WorkflowExecutor',
+    'OpenAndComputeWorkflow', 'RunMultiplePlansWorkflow',
+    'OpenRasMapperWorkflow', 'MeshRegenerationWorkflow',
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
