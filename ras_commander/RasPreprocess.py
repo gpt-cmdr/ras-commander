@@ -11,9 +11,8 @@ derived from TECH WARMS Dam Break Dashboard by CLB Engineering Corporation.
 Adapted to ras-commander static class conventions.
 
 Windows preprocessing is required for ALL HEC-RAS Linux versions (6.3.1+).
-The Linux binaries (RasUnsteady, RasGeomPreprocess) handle compute and .x##
-generation, but cannot produce the .tmp.hdf or .b## files needed to begin
-execution. This method automates the Windows-side preprocessing step.
+The Linux binaries cannot produce the .tmp.hdf or .b## files needed to begin
+execution. This module automates the Windows-side preprocessing step.
 
 Classes:
     RasPreprocess - Static class for Windows preprocessing operations.
