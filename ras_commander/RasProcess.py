@@ -1091,13 +1091,14 @@ Step 5: Configure (optional — auto-detection usually works)
         Works on both Windows (native) and Linux (via Wine, auto-detected).
 
         Output Path Behavior:
-            The ``StoreAllMaps`` CLI command hardcodes its output directory
-            to ``<project_folder>/<Plan ShortID>/`` and has no override.
-            When ``output_path`` is specified, this method uses individual
-            ``StoreMap`` XML commands instead, passing the resolved absolute
-            path as ``OutputBaseFilename``. C#'s ``Path.Combine()`` discards
-            the Plan ShortID prefix when the second argument is absolute,
-            so files are written directly to the requested directory.
+            The ``StoreAllMaps`` CLI command always writes output to
+            ``<project_folder>/<Plan ShortID>/``. When ``output_path`` is
+            specified, this method runs ``StoreAllMaps`` to the default
+            location, then moves the generated files to the requested
+            directory. This avoids a HEC-RAS 6.6 bug where individual
+            ``StoreMap`` commands with absolute ``OutputBaseFilename``
+            crash with ``NullReferenceException`` in
+            ``SetProjectionInfo()`` on multi-terrain projects.
 
         Args:
             plan_number: Plan number (e.g., "01", "06")
@@ -1105,12 +1106,11 @@ Step 5: Configure (optional — auto-detection usually works)
                 paths (default: plan name from rasmap). This does NOT control
                 where RasProcess.exe writes files — see output_path.
             output_path: Custom output directory for generated rasters (str
-                or Path). If provided, individual ``StoreMap`` XML commands
-                are used with an absolute ``OutputBaseFilename`` so files
-                are written directly to this directory. Accepts relative or
-                absolute paths — relative paths are resolved against the
-                project folder. If None (default), ``StoreAllMaps`` is used
-                and files go to ``<project_folder>/<Plan ShortID>/``.
+                or Path). If provided, ``StoreAllMaps`` runs to the default
+                Plan ShortID folder, then files are moved to this directory.
+                Accepts relative or absolute paths — relative paths are
+                resolved against the project folder. If None (default),
+                files remain in ``<project_folder>/<Plan ShortID>/``.
             profile: Profile to map - "Max", "Min", or specific timestamp string
             wse: Generate Water Surface Elevation map (default: True)
             depth: Generate Depth map (default: True)
@@ -1128,8 +1128,9 @@ Step 5: Configure (optional — auto-detection usually works)
 
         Returns:
             Dict mapping map type names to lists of generated file paths.
-            Paths point to output_path location if specified, otherwise to
-            the default Plan ShortID folder.
+            Paths point to ``output_path`` if specified (files are moved
+            there after generation), otherwise to the default Plan ShortID
+            folder.
 
         Raises:
             FileNotFoundError: If RasProcess.exe or required files not found
@@ -1293,100 +1294,57 @@ Step 5: Configure (optional — auto-detection usually works)
                     resolved_output_path = (ras_obj.project_folder / resolved_output_path).resolve()
                 resolved_output_path.mkdir(parents=True, exist_ok=True)
 
-            # Choose execution strategy based on output_path
+            # Always use StoreAllMaps (writes to Plan ShortID folder).
+            # Individual StoreMap with absolute OutputBaseFilename crashes on
+            # multi-terrain projects (NullReferenceException in SetProjectionInfo).
+            rasmap_arg = RasProcess._resolve_path_for_rasprocess(rasmap_path)
+            result_arg = RasProcess._resolve_path_for_rasprocess(plan_hdf_path)
+
+            args = [
+                "-Command=StoreAllMaps",
+                f"-RasMapFilename={rasmap_arg}",
+                f"-ResultFilename={result_arg}"
+            ]
+
+            logger.info(f"Running StoreAllMaps for plan {plan_num}...")
+
+            result = RasProcess._run_rasprocess(
+                rasprocess, args,
+                timeout=timeout,
+                working_dir=ras_obj.project_folder,
+            )
+
+            logger.debug(f"StoreAllMaps stdout: {result.stdout}")
+            if result.stderr:
+                logger.warning(f"StoreAllMaps stderr: {result.stderr}")
+
+            for line in result.stdout.splitlines():
+                if "Maps generated" in line:
+                    logger.info(line.strip())
+
+            search_dir = output_dir
+
+            # If output_path was requested, move files from default dir to output_path
             if resolved_output_path is not None:
-                # Use individual StoreMap XML commands with absolute OutputBaseFilename.
-                # C#'s Path.Combine() discards the Plan ShortID prefix when the second
-                # argument is an absolute path, so files go directly to output_path.
-                rasmap_arg = RasProcess._resolve_path_for_rasprocess(rasmap_path)
-                result_arg = RasProcess._resolve_path_for_rasprocess(plan_hdf_path)
-                safe_profile = profile_name.replace(":", " ").replace("/", "_")
-
                 logger.info(
-                    f"Using StoreMap XML commands with absolute output: {resolved_output_path}"
+                    f"Moving generated files from {output_dir} to {resolved_output_path}"
                 )
+                moved_count = 0
+                for item in output_dir.iterdir():
+                    dest = resolved_output_path / item.name
+                    if dest.exists():
+                        dest.unlink()
+                    shutil.move(str(item), str(dest))
+                    moved_count += 1
+                logger.info(f"Moved {moved_count} file(s) to {resolved_output_path}")
 
-                for map_type, map_key in maps_to_add:
-                    # Get display name for output filename
-                    for key, (xml_name, display_name, _) in RasProcess.MAP_TYPES.items():
-                        if xml_name == map_type:
-                            display_name_used = display_name
-                            break
-                    else:
-                        display_name_used = map_type.title()
+                # Remove the now-empty default output dir
+                try:
+                    output_dir.rmdir()
+                except OSError:
+                    logger.debug(f"Default output dir not empty after move: {output_dir}")
 
-                    # Build absolute OutputBaseFilename (no extension — RasProcess adds it)
-                    out_base = resolved_output_path / f"{display_name_used} ({safe_profile})"
-                    out_base_arg = RasProcess._resolve_path_for_rasprocess(out_base)
-
-                    xml = (
-                        '<?xml version="1.0" encoding="utf-8"?>\n'
-                        '<Command Type="StoreMap">\n'
-                        f'  <RasMapFilename>{rasmap_arg}</RasMapFilename>\n'
-                        f'  <MapType>{map_type}</MapType>\n'
-                        f'  <Result>{result_arg}</Result>\n'
-                        f'  <ProfileName>{profile_name}</ProfileName>\n'
-                        f'  <ProfileIndex>{profile_index}</ProfileIndex>\n'
-                        '  <OutputMode>Stored Current Terrain</OutputMode>\n'
-                        f'  <OutputBaseFilename>{out_base_arg}</OutputBaseFilename>\n'
-                        '</Command>'
-                    )
-
-                    logger.debug(f"StoreMap XML for {map_key}:\n{xml}")
-                    RasProcess.run_command(xml, ras_version=ras_version, timeout=timeout)
-
-                # Handle inundation boundary via StoreMap with polygon mode
-                if inundation_boundary:
-                    out_base = resolved_output_path / f"Inundation Boundary ({safe_profile})"
-                    out_base_arg = RasProcess._resolve_path_for_rasprocess(out_base)
-
-                    xml = (
-                        '<?xml version="1.0" encoding="utf-8"?>\n'
-                        '<Command Type="StoreMap">\n'
-                        f'  <RasMapFilename>{rasmap_arg}</RasMapFilename>\n'
-                        f'  <MapType>depth</MapType>\n'
-                        f'  <Result>{result_arg}</Result>\n'
-                        f'  <ProfileName>{profile_name}</ProfileName>\n'
-                        f'  <ProfileIndex>{profile_index}</ProfileIndex>\n'
-                        '  <OutputMode>Stored Polygon Specified Depth</OutputMode>\n'
-                        f'  <OutputBaseFilename>{out_base_arg}</OutputBaseFilename>\n'
-                        '</Command>'
-                    )
-
-                    logger.debug(f"StoreMap XML for inundation_boundary:\n{xml}")
-                    RasProcess.run_command(xml, ras_version=ras_version, timeout=timeout)
-
-                # Collect generated files from resolved_output_path
                 search_dir = resolved_output_path
-
-            else:
-                # Default path: use StoreAllMaps CLI command (writes to Plan ShortID folder)
-                rasmap_arg = RasProcess._resolve_path_for_rasprocess(rasmap_path)
-                result_arg = RasProcess._resolve_path_for_rasprocess(plan_hdf_path)
-
-                args = [
-                    "-Command=StoreAllMaps",
-                    f"-RasMapFilename={rasmap_arg}",
-                    f"-ResultFilename={result_arg}"
-                ]
-
-                logger.info(f"Running StoreAllMaps for plan {plan_num}...")
-
-                result = RasProcess._run_rasprocess(
-                    rasprocess, args,
-                    timeout=timeout,
-                    working_dir=ras_obj.project_folder,
-                )
-
-                logger.debug(f"StoreAllMaps stdout: {result.stdout}")
-                if result.stderr:
-                    logger.warning(f"StoreAllMaps stderr: {result.stderr}")
-
-                for line in result.stdout.splitlines():
-                    if "Maps generated" in line:
-                        logger.info(line.strip())
-
-                search_dir = output_dir
 
             # Find generated files in the appropriate directory
             generated_files = {}
@@ -1563,9 +1521,10 @@ Step 5: Configure (optional — auto-detection usually works)
             ``StoreAllMaps`` commands always write to
             ``<project>/<Plan ShortID>/`` and cannot be redirected.
             To control the output directory, use ``store_maps(output_path=...)``
-            instead, which uses individual ``StoreMap`` commands with absolute
-            ``OutputBaseFilename``. If you must use ``StoreAllMaps`` directly,
-            move the generated files afterward with ``shutil.move()``.
+            which runs ``StoreAllMaps`` then moves files to the requested path.
+            Individual ``StoreMap`` commands with absolute ``OutputBaseFilename``
+            crash on multi-terrain projects (NullReferenceException in
+            ``SetProjectionInfo``), so ``store_maps()`` avoids that approach.
 
         Args:
             command_xml: XML command string
@@ -1593,11 +1552,8 @@ Step 5: Configure (optional — auto-detection usually works)
         if 'StoreAllMaps' in command_xml:
             logger.warning(
                 "StoreAllMaps always writes to <project>/<Plan ShortID>/. "
-                "It does not support custom output paths. To write to a "
-                "custom directory, use store_maps(output_path=...) which "
-                "uses individual StoreMap commands with absolute "
-                "OutputBaseFilename. If you need StoreAllMaps specifically, "
-                "move the generated files afterward with shutil.move()."
+                "To write to a custom directory, use store_maps(output_path=...) "
+                "which runs StoreAllMaps then moves files to the requested path."
             )
 
         # Write XML to temp file
