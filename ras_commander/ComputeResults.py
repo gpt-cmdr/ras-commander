@@ -11,6 +11,7 @@ Classes:
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Iterator, Tuple, Any
 import pandas as pd
 
@@ -157,3 +158,52 @@ class RasControlResult:
         n_msgs = len(self.messages)
         has_row = self.results_df_row is not None
         return f"RasControlResult({status}, {n_msgs} messages, results_df_row={'available' if has_row else 'None'})"
+
+
+@dataclass
+class PreprocessResult:
+    """
+    Result of RasPreprocess.preprocess_plan().
+
+    Backward compatible with bool via __bool__. Existing code like
+    ``if RasPreprocess.preprocess_plan("01"):`` works unchanged.
+
+    Attributes:
+        success: Whether preprocessing succeeded.
+        plan_number: Plan number that was preprocessed (e.g., "01").
+        geometry_number: Geometry number extracted from plan file (e.g., "04").
+        tmp_hdf_path: Path to the generated .tmp.hdf file, or None on failure.
+        b_file_path: Path to the generated .b## file, or None on failure.
+        x_file_path: Path to the generated .x## file, or None on failure.
+        elapsed_seconds: Wall-clock time for preprocessing.
+        error: Error message if preprocessing failed, None on success.
+
+    Examples:
+        # Simple usage (bool-compatible):
+        if RasPreprocess.preprocess_plan("01"):
+            print("Ready for Linux execution")
+
+        # Rich usage:
+        result = RasPreprocess.preprocess_plan("01")
+        if result:
+            print(f"Completed in {result.elapsed_seconds:.1f}s")
+            print(f"  tmp.hdf: {result.tmp_hdf_path}")
+            print(f"  .b file: {result.b_file_path}")
+            print(f"  .x file: {result.x_file_path}")
+    """
+    success: bool
+    plan_number: str = ""
+    geometry_number: Optional[str] = None
+    tmp_hdf_path: Optional[Path] = None
+    b_file_path: Optional[Path] = None
+    x_file_path: Optional[Path] = None
+    elapsed_seconds: float = 0.0
+    error: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        status = 'SUCCESS' if self.success else 'FAILED'
+        time_str = f"{self.elapsed_seconds:.1f}s" if self.elapsed_seconds > 0 else "N/A"
+        return f"PreprocessResult({status}, plan={self.plan_number}, geom={self.geometry_number}, time={time_str})"

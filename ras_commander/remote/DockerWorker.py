@@ -360,287 +360,6 @@ def init_docker_worker(**kwargs) -> DockerWorker:
     return worker
 
 
-def _extract_geometry_number(project_path: Path, plan_number: str) -> Optional[str]:
-    """
-    Extract geometry file number from plan file.
-
-    HEC-RAS plan files reference geometry files with "Geom File=gXX" syntax.
-    The geometry number is DIFFERENT from the plan number.
-
-    Args:
-        project_path: Path to project folder
-        plan_number: Plan number (e.g., "01")
-
-    Returns:
-        Geometry number as string (e.g., "13") or None if not found
-    """
-    plan_files = list(project_path.glob(f"*.p{plan_number}"))
-    if not plan_files:
-        return None
-
-    plan_file = plan_files[0]
-    try:
-        with open(plan_file, 'r', encoding='utf-8', errors='ignore') as f:
-            for line in f:
-                if line.strip().startswith("Geom File="):
-                    geom_ref = line.split('=')[1].strip()
-                    if geom_ref.startswith('g'):
-                        return geom_ref[1:]
-        return None
-    except Exception as e:
-        logger.error(f"Error reading plan file {plan_file}: {e}")
-        return None
-
-
-def _preprocess_plan_for_linux(
-    ras_obj,
-    plan_number: str,
-    project_staging: Path,
-    max_wait: int = 300
-) -> bool:
-    """
-    Preprocess a plan on Windows to create files needed for Linux execution.
-
-    This runs HEC-RAS on Windows with EARLY TERMINATION to generate:
-    - .tmp.hdf file (preprocessed geometry and initial conditions)
-    - .b file (binary geometry)
-    - .x file (execution file)
-
-    Detection Method:
-    The process is killed when the .bcoXX file (detailed log) contains
-    "Starting Unsteady Flow Computations", indicating preprocessing is complete
-    and the actual simulation is about to begin.
-
-    To enable .bco file creation, "Write Detailed= 1" is set in the plan file.
-
-    Args:
-        ras_obj: RasPrj object
-        plan_number: Plan number to preprocess
-        project_staging: Path to staged project copy
-        max_wait: Maximum seconds to wait for preprocessing to complete
-
-    Returns:
-        bool: True if preprocessing succeeded
-    """
-    import subprocess
-    import psutil
-
-    try:
-        # Import here to avoid circular imports
-        from ..RasPrj import init_ras_project, RasPrj
-        from ..RasGeo import RasGeo
-        from ..RasPlan import RasPlan
-
-        # Initialize the staged project with a NEW RasPrj instance
-        # CRITICAL: Pass ras_object to avoid modifying the global ras object
-        # This is required for thread-safety when running multiple plans in parallel
-        temp_ras = RasPrj()
-        init_ras_project(str(project_staging), ras_obj.ras_version, ras_object=temp_ras)
-        project_name = temp_ras.project_name
-
-        logger.info(f"Preprocessing plan {plan_number} for Linux execution...")
-
-        # Clear geometry preprocessor files
-        logger.debug("Clearing geometry preprocessor files...")
-        RasGeo.clear_geompre_files(plan_files=plan_number, ras_object=temp_ras)
-
-        # Extract geometry number
-        geometry_number = _extract_geometry_number(project_staging, plan_number)
-        if not geometry_number:
-            logger.error(f"Could not extract geometry number for plan {plan_number}")
-            return False
-
-        logger.info(f"Plan {plan_number} uses geometry {geometry_number}")
-
-        # Clear existing HDF/binary/log files to force regeneration
-        for pattern in [f"*.p{plan_number}.hdf", f"*.p{plan_number}.tmp.hdf",
-                       f"*.b{plan_number}", f"*.x{geometry_number}", f"*.bco{plan_number}"]:
-            for f in project_staging.glob(pattern):
-                try:
-                    f.unlink()
-                    logger.debug(f"Deleted: {f.name}")
-                except:
-                    pass
-
-        # Set plan flags for preprocessing AND enable detailed logging
-        plan_file_path = project_staging / f"{project_name}.p{plan_number}"
-        if plan_file_path.exists():
-            RasPlan.update_run_flags(
-                plan_number_or_path=str(plan_file_path),
-                geometry_preprocessor=True,
-                unsteady_flow_simulation=True,
-                post_processor=True,
-                ras_object=temp_ras
-            )
-
-            # Enable detailed logging (Write Detailed= 1) to create .bco file
-            _enable_detailed_logging(plan_file_path)
-
-        # Get HEC-RAS executable path from temp_ras
-        ras_exe = temp_ras.ras_exe_path
-        if not ras_exe or not Path(ras_exe).exists():
-            logger.error(f"HEC-RAS executable not found: {ras_exe}")
-            return False
-
-        # Get project file path
-        prj_file = project_staging / f"{project_name}.prj"
-        if not prj_file.exists():
-            logger.error(f"Project file not found: {prj_file}")
-            return False
-
-        # Build command line - matches RasCmdr format: RAS.exe -c project.prj plan.p##
-        plan_file = project_staging / f"{project_name}.p{plan_number}"
-        if not plan_file.exists():
-            logger.error(f"Plan file not found: {plan_file}")
-            return False
-
-        # Use shell command format to match RasCmdr
-        cmd = f'"{ras_exe}" -c "{prj_file}" "{plan_file}"'
-
-        logger.info(f"Starting HEC-RAS preprocessing with early termination...")
-        logger.debug(f"Command: {cmd}")
-
-        # Record start time for .bco file detection
-        execution_start_time = time.time()
-
-        # Start HEC-RAS as subprocess
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=str(project_staging),
-            shell=True
-        )
-
-        tmp_hdf = project_staging / f"{project_name}.p{plan_number}.tmp.hdf"
-        hdf = project_staging / f"{project_name}.p{plan_number}.hdf"
-        bco_file = project_staging / f"{project_name}.bco{plan_number}"
-
-        check_interval = 0.5
-        start_time = time.time()
-
-        logger.info(f"Monitoring {bco_file.name} for 'Starting Unsteady Flow Computations' signal...")
-
-        while time.time() - start_time < max_wait:
-            # Check if process died
-            if process.poll() is not None:
-                logger.info(f"HEC-RAS process exited with code {process.returncode}")
-                break
-
-            # Check for .bco file with the signal that preprocessing is complete
-            if bco_file.exists():
-                # Verify file was modified after we started execution
-                file_mtime = bco_file.stat().st_mtime
-                if file_mtime >= execution_start_time:
-                    try:
-                        # Read the .bco file and check for the signal
-                        content = bco_file.read_text(encoding='utf-8', errors='ignore')
-                        if "Starting Unsteady Flow Computations" in content:
-                            logger.info(f"Detected 'Starting Unsteady Flow Computations' in {bco_file.name}")
-                            logger.info("Preprocessing complete - terminating HEC-RAS before computation starts")
-                            break
-                    except Exception as e:
-                        logger.debug(f"Could not read .bco file: {e}")
-
-            # Also check if .tmp.hdf exists and is being written (fallback)
-            if tmp_hdf.exists() and tmp_hdf.stat().st_size > 0:
-                logger.debug(f".tmp.hdf growing: {tmp_hdf.stat().st_size / 1024 / 1024:.1f} MB")
-
-            time.sleep(check_interval)
-
-        # Terminate HEC-RAS and all child processes
-        if process.poll() is None:
-            logger.info("Terminating HEC-RAS process...")
-            try:
-                # Kill the entire process tree
-                parent = psutil.Process(process.pid)
-                children = parent.children(recursive=True)
-
-                # Kill children first
-                for child in children:
-                    try:
-                        child.kill()
-                    except psutil.NoSuchProcess:
-                        pass
-
-                # Then kill parent
-                parent.kill()
-                process.wait(timeout=5)
-                logger.info("HEC-RAS terminated successfully")
-            except Exception as e:
-                logger.warning(f"Error terminating process: {e}")
-                try:
-                    process.kill()
-                except:
-                    pass
-
-        # Verify .tmp.hdf was created
-        if tmp_hdf.exists() and tmp_hdf.stat().st_size > 0:
-            logger.info(f"Preprocessing complete: {tmp_hdf.name} ({tmp_hdf.stat().st_size / 1024 / 1024:.1f} MB)")
-            return True
-
-        # If .hdf exists (process completed before we could kill it), we can still use it
-        # but need to rename to .tmp.hdf for Linux container
-        if hdf.exists() and hdf.stat().st_size > 0:
-            logger.warning(f"Full simulation completed. Renaming {hdf.name} to {tmp_hdf.name}...")
-            shutil.copy2(hdf, tmp_hdf)
-            logger.info(f"Created {tmp_hdf.name} ({tmp_hdf.stat().st_size / 1024 / 1024:.1f} MB)")
-            return True
-
-        logger.error("Preprocessing did not create HDF file")
-        return False
-
-    except Exception as e:
-        logger.error(f"Preprocessing failed: {e}", exc_info=True)
-        return False
-
-
-def _enable_detailed_logging(plan_file_path: Path) -> bool:
-    """
-    Enable detailed logging in a plan file by setting 'Write Detailed= 1'.
-
-    This creates a .bcoXX file during HEC-RAS execution that can be monitored
-    for the "Starting Unsteady Flow Computations" signal.
-
-    Args:
-        plan_file_path: Path to the plan file (.pXX)
-
-    Returns:
-        bool: True if successful
-    """
-    try:
-        content = plan_file_path.read_text(encoding='utf-8', errors='ignore')
-
-        # Check if Write Detailed line exists
-        if "Write Detailed=" in content:
-            # Replace existing setting
-            import re
-            new_content = re.sub(
-                r'Write Detailed=\s*\d+',
-                'Write Detailed= 1',
-                content
-            )
-            if new_content != content:
-                plan_file_path.write_text(new_content, encoding='utf-8')
-                logger.debug(f"Enabled detailed logging in {plan_file_path.name}")
-        else:
-            # Add the setting after Run HTab line or at the end
-            if "Run HTab=" in content:
-                new_content = content.replace(
-                    "Run HTab=",
-                    "Write Detailed= 1\nRun HTab="
-                )
-            else:
-                new_content = content + "\nWrite Detailed= 1\n"
-            plan_file_path.write_text(new_content, encoding='utf-8')
-            logger.debug(f"Added detailed logging setting to {plan_file_path.name}")
-
-        return True
-    except Exception as e:
-        logger.warning(f"Could not enable detailed logging: {e}")
-        return False
-
-
 @log_call
 def execute_docker_plan(
     worker: DockerWorker,
@@ -754,8 +473,13 @@ def execute_docker_plan(
         # Step 1: Preprocess on Windows LOCALLY (if enabled)
         if worker.preprocess_on_host:
             logger.info(f"Running preprocessing locally (not on network share)...")
-            if not _preprocess_plan_for_linux(ras_obj, plan_number, local_input_staging):
-                logger.error("Windows preprocessing failed")
+            from ..RasPreprocess import RasPreprocess
+            from ..RasPrj import RasPrj, init_ras_project
+            temp_ras = RasPrj()
+            init_ras_project(str(local_input_staging), ras_obj.ras_version, ras_object=temp_ras)
+            preprocess_result = RasPreprocess.preprocess_plan(plan_number, ras_object=temp_ras)
+            if not preprocess_result:
+                logger.error(f"Windows preprocessing failed: {preprocess_result.error}")
                 return False
 
         # Step 1.5: For remote Docker, copy preprocessed files to remote share
@@ -775,7 +499,12 @@ def execute_docker_plan(
             logger.info(f"Files copied to: {remote_staging_folder}")
 
         # Extract geometry number
-        geometry_number = _extract_geometry_number(input_staging, plan_number)
+        from ..RasPreprocess import RasPreprocess
+        plan_files = list(input_staging.glob(f"*.p{plan_number}"))
+        if plan_files:
+            geometry_number = RasPreprocess._extract_geometry_number(plan_files[0])
+        else:
+            geometry_number = None
         if not geometry_number:
             logger.error(f"Could not extract geometry number for plan {plan_number}")
             return False

@@ -1121,9 +1121,9 @@ class RasCmdr:
         This is Phase 2 of a two-phase Linux execution workflow:
 
         **Phase 1 (Windows)**: Preprocess the plan on Windows to generate
-        .tmp.hdf, .b##, and .x## files. Use RasPreprocessor from the
-        TNTech dashboard, or run HEC-RAS on Windows and kill after
-        "Starting Unsteady Flow Computations" appears in the .bco log.
+        .tmp.hdf, .b##, and .x## files. Use ``RasPreprocess.preprocess_plan()``
+        to automate this step, or manually run HEC-RAS on Windows and kill
+        after "Starting Unsteady Flow Computations" appears in the .bco log.
 
         **Phase 2 (Linux — this method)**: Execute the preprocessed plan
         using the native RasUnsteady binary.
@@ -1215,8 +1215,8 @@ class RasCmdr:
         if missing:
             raise FileNotFoundError(
                 f"Missing prerequisite files for Linux execution: {', '.join(missing)}. "
-                f"Run Windows preprocessing first (Phase 1) to generate these files. "
-                f"See RasPreprocessor or the TNTech dashboard Linux Preprocessing page."
+                f"Run RasPreprocess.preprocess_plan() on Windows first (Phase 1). "
+                f"See examples/510_linux_execution.ipynb for the complete workflow."
             )
 
         # Set num_cores if specified
