@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to ras-commander!
 
-**Our philosophy: Don't Ask Me, Ask a GPT!** -- ras-commander was built with LLMs and welcomes contributions prepared with LLM agent assistance. See [CONTRIBUTING.md](../../CONTRIBUTING.md) at the repo root for the quick-start guide and self-review checklist, and [LLM-Driven Development](llm-development.md) for the full philosophy.
+**Our philosophy: Don't Ask Me, Ask a GPT!** -- ras-commander was built with LLMs and welcomes contributions prepared with LLM agent assistance. See [CONTRIBUTING.md](https://github.com/gpt-cmdr/ras-commander/blob/main/CONTRIBUTING.md) at the repo root for the quick-start guide and self-review checklist, and [LLM-Driven Development](llm-development.md) for the full philosophy.
 
 This page covers detailed development setup, coding patterns, and the complete style guide reference for LLM agents.
 
@@ -247,11 +247,11 @@ Your agent should follow the patterns described in the style rules. The key patt
 
 ### Step 4: Self-Review Before PR
 
-Run through the [LLM Self-Review Checklist](../../CONTRIBUTING.md#llm-self-review-checklist) in `CONTRIBUTING.md`. Your agent can verify each item programmatically.
+Run through the [LLM Self-Review Checklist](https://github.com/gpt-cmdr/ras-commander/blob/main/CONTRIBUTING.md#llm-self-review-checklist) in `CONTRIBUTING.md`. Your agent can verify each item programmatically.
 
 ### Step 5: Submit PR Using Template
 
-The [PR template](../../.github/pull_request_template.md) includes the self-review checklist. Fill it out honestly -- it helps the maintainer review your PR quickly.
+The [PR template](https://github.com/gpt-cmdr/ras-commander/blob/main/.github/pull_request_template.md) includes the self-review checklist. Fill it out honestly -- it helps the maintainer review your PR quickly.
 
 ---
 
