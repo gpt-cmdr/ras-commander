@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/ras-commander_logo.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#floodplain-mapping-via-gui-automation-last-resort" class="md-skip">
+        <a href="#floodplain-mapping-via-gui-automation" class="md-skip">
           Skip to content
         </a>
       
@@ -2691,10 +2691,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this-method" class="md-nav__link">
+  <a href="#how-it-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to Use This Method
+        How It Works
       
     </span>
   </a>
@@ -2702,41 +2702,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#comparison-with-other-methods" class="md-nav__link">
+  <a href="#comparison-with-rasprocess-cli-notebook-601" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Comparison with Other Methods
+        Comparison with RasProcess CLI (Notebook 601)
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Comparison with Other Methods">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#reference-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference Documentation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#workflow-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Workflow Overview
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2763,10 +2735,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-1-initialize-project" class="md-nav__link">
+  <a href="#step-1-extract-example-project-and-initialize" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 1: Initialize Project
+        Step 1: Extract Example Project and Initialize
       
     </span>
   </a>
@@ -2774,10 +2746,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-pre-requisite-check-rasmap-compatibility" class="md-nav__link">
+  <a href="#step-2-compute-plan-if-needed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2: Pre-requisite - Check .rasmap Compatibility
+        Step 2: Compute Plan (if needed)
       
     </span>
   </a>
@@ -2785,10 +2757,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-compute-plan-if-needed" class="md-nav__link">
+  <a href="#step-3-generate-maps-via-gui-automation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3: Compute Plan (if needed)
+        Step 3: Generate Maps via GUI Automation
       
     </span>
   </a>
@@ -2796,52 +2768,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-4-generate-maps-via-gui-automation" class="md-nav__link">
+  <a href="#step-4-verify-output-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 4: Generate Maps via GUI Automation
+        Step 4: Verify Output Files
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Step 4: Generate Maps via GUI Automation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#how-this-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How This Works
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#available-map-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Available Map Types
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#user-interaction-required" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        User Interaction Required
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2857,22 +2790,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#technical-explanation-win32-com-automation" class="md-nav__link">
+  <a href="#technical-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Technical Explanation: Win32 COM Automation
+        Technical Notes
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Technical Explanation: Win32 COM Automation">
+    <nav class="md-nav" aria-label="Technical Notes">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#completion-detection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Completion Detection
       
     </span>
   </a>
@@ -2880,22 +2813,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
+  <a href="#rasresults-layer-creation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How It Works
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="How It Works">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-open-hec-ras-application" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Open HEC-RAS Application
+        RASResults Layer Creation
       
     </span>
   </a>
@@ -2903,43 +2824,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-find-hec-ras-window-by-process-id" class="md-nav__link">
+  <a href="#when-to-use-gui-vs-rasprocess" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Find HEC-RAS Window by Process ID
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-enumerate-menu-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Enumerate Menu System
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-click-menu-via-wm_command" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Click Menu via WM_COMMAND
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-wait-for-computation-to-complete" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Wait for Computation to Complete
+        When to Use GUI vs RasProcess
       
     </span>
   </a>
@@ -2948,177 +2836,6 @@
         
       </ul>
     </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#why-this-is-fragile" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why This Is Fragile
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#when-gui-automation-is-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When GUI Automation Is Useful
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#issue-hec-ras-doesnt-open" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: HEC-RAS Doesn't Open
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-menu-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: Menu Not Found
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-function-hangs-waiting-for-hec-ras" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: Function Hangs Waiting for HEC-RAS
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-no-maps-generated" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: No Maps Generated
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-rasmap-upgrade-failed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: .rasmap Upgrade Failed
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#decision-matrix-when-to-use-each-method" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Decision Matrix: When to Use Each Method
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Decision Matrix: When to Use Each Method">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#use-15_a-gui-automation-when" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Use 15_a (GUI Automation) when:
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#use-15_b-rasprocess-cli-when" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Use 15_b (RasProcess CLI) when:
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#use-15_c-python-gis-when" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Use 15_c (Python-GIS) when:
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary
-      
-    </span>
-  </a>
   
 </li>
       
@@ -5572,10 +5289,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this-method" class="md-nav__link">
+  <a href="#how-it-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to Use This Method
+        How It Works
       
     </span>
   </a>
@@ -5583,41 +5300,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#comparison-with-other-methods" class="md-nav__link">
+  <a href="#comparison-with-rasprocess-cli-notebook-601" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Comparison with Other Methods
+        Comparison with RasProcess CLI (Notebook 601)
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Comparison with Other Methods">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#reference-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference Documentation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#workflow-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Workflow Overview
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -5644,10 +5333,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-1-initialize-project" class="md-nav__link">
+  <a href="#step-1-extract-example-project-and-initialize" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 1: Initialize Project
+        Step 1: Extract Example Project and Initialize
       
     </span>
   </a>
@@ -5655,10 +5344,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-pre-requisite-check-rasmap-compatibility" class="md-nav__link">
+  <a href="#step-2-compute-plan-if-needed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2: Pre-requisite - Check .rasmap Compatibility
+        Step 2: Compute Plan (if needed)
       
     </span>
   </a>
@@ -5666,10 +5355,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-compute-plan-if-needed" class="md-nav__link">
+  <a href="#step-3-generate-maps-via-gui-automation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3: Compute Plan (if needed)
+        Step 3: Generate Maps via GUI Automation
       
     </span>
   </a>
@@ -5677,52 +5366,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-4-generate-maps-via-gui-automation" class="md-nav__link">
+  <a href="#step-4-verify-output-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 4: Generate Maps via GUI Automation
+        Step 4: Verify Output Files
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Step 4: Generate Maps via GUI Automation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#how-this-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How This Works
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#available-map-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Available Map Types
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#user-interaction-required" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        User Interaction Required
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -5738,22 +5388,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#technical-explanation-win32-com-automation" class="md-nav__link">
+  <a href="#technical-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Technical Explanation: Win32 COM Automation
+        Technical Notes
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Technical Explanation: Win32 COM Automation">
+    <nav class="md-nav" aria-label="Technical Notes">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#completion-detection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Completion Detection
       
     </span>
   </a>
@@ -5761,22 +5411,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
+  <a href="#rasresults-layer-creation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How It Works
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="How It Works">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-open-hec-ras-application" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Open HEC-RAS Application
+        RASResults Layer Creation
       
     </span>
   </a>
@@ -5784,43 +5422,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-find-hec-ras-window-by-process-id" class="md-nav__link">
+  <a href="#when-to-use-gui-vs-rasprocess" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Find HEC-RAS Window by Process ID
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-enumerate-menu-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Enumerate Menu System
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-click-menu-via-wm_command" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Click Menu via WM_COMMAND
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-wait-for-computation-to-complete" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Wait for Computation to Complete
+        When to Use GUI vs RasProcess
       
     </span>
   </a>
@@ -5829,177 +5434,6 @@
         
       </ul>
     </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#why-this-is-fragile" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why This Is Fragile
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#when-gui-automation-is-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When GUI Automation Is Useful
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#issue-hec-ras-doesnt-open" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: HEC-RAS Doesn't Open
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-menu-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: Menu Not Found
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-function-hangs-waiting-for-hec-ras" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: Function Hangs Waiting for HEC-RAS
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-no-maps-generated" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: No Maps Generated
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#issue-rasmap-upgrade-failed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Issue: .rasmap Upgrade Failed
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#decision-matrix-when-to-use-each-method" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Decision Matrix: When to Use Each Method
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Decision Matrix: When to Use Each Method">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#use-15_a-gui-automation-when" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Use 15_a (GUI Automation) when:
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#use-15_b-rasprocess-cli-when" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Use 15_b (RasProcess CLI) when:
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#use-15_c-python-gis-when" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Use 15_c (Python-GIS) when:
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary
-      
-    </span>
-  </a>
   
 </li>
       
@@ -6023,89 +5457,54 @@
   
 
 
-<h1 id="floodplain-mapping-via-gui-automation-last-resort">Floodplain Mapping via GUI Automation (Last Resort)<a class="headerlink" href="#floodplain-mapping-via-gui-automation-last-resort" title="Permanent link">&para;</a></h1>
-<p>This notebook demonstrates floodplain mapping using <strong>HEC-RAS GUI automation</strong>, which is the most fragile and least recommended method.</p>
-<h2 id="when-to-use-this-method">When to Use This Method<a class="headerlink" href="#when-to-use-this-method" title="Permanent link">&para;</a></h2>
-<p>✅ <strong>Best for:</strong>
-- Debugging why maps aren't generating
-- Visual verification in RASMapper GUI
-- One-off manual operations</p>
-<p>❌ <strong>Not suitable for:</strong>
-- Production workflows (fragile)
-- Batch processing (slow)
-- Automated pipelines (GUI dependency)
-- Cloud/headless environments (requires GUI)</p>
-<h2 id="comparison-with-other-methods">Comparison with Other Methods<a class="headerlink" href="#comparison-with-other-methods" title="Permanent link">&para;</a></h2>
+<h1 id="floodplain-mapping-via-gui-automation">Floodplain Mapping via GUI Automation<a class="headerlink" href="#floodplain-mapping-via-gui-automation" title="Permanent link">&para;</a></h1>
+<p>This notebook demonstrates floodplain mapping using <strong>HEC-RAS GUI automation</strong> to generate:
+- Maximum Water Surface Elevation (WSE) rasters
+- Maximum Depth rasters</p>
+<p>The workflow is fully automated: HEC-RAS opens, computes the stored maps, and <strong>auto-closes</strong> when complete. No manual interaction is required.</p>
+<h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
+<p><code>RasMap.postprocess_stored_maps()</code> handles the full workflow:
+1. Backs up plan and <code>.rasmap</code> files
+2. Sets run flags to floodplain-mapping-only (skips simulation)
+3. Configures stored map layers in <code>.rasmap</code> XML (creates RASResults layer if missing)
+4. Opens HEC-RAS GUI and clicks Compute
+5. Polls plan HDF for "Complete Process" signal to detect completion
+6. Auto-closes HEC-RAS and restores original files</p>
+<h3 id="comparison-with-rasprocess-cli-notebook-601">Comparison with RasProcess CLI (Notebook 601)<a class="headerlink" href="#comparison-with-rasprocess-cli-notebook-601" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
 <th>Method</th>
 <th>Speed</th>
-<th>Reliability</th>
-<th>Matches HEC-RAS to 0.01'</th>
-<th>Cloud-Compatible</th>
 <th>GUI Required</th>
-<th>Recommendation</th>
+<th>Best For</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>15_b: RasProcess CLI</td>
-<td>⭐⭐⭐ Fastest (8-10 sec)</td>
-<td>⭐⭐⭐ Excellent</td>
-<td>✅ Yes (100% - native)</td>
-<td>❌ No</td>
-<td>❌ No</td>
-<td><strong>Recommended</strong> (Windows)</td>
+<td><strong>GUI Automation</strong> (this notebook)</td>
+<td>~15 sec</td>
+<td>Yes (auto-managed)</td>
+<td>Debugging, visual verification</td>
 </tr>
 <tr>
-<td>15_c: Python-GIS</td>
-<td>⭐⭐ Moderate (15-20 sec)</td>
-<td>⭐⭐⭐ Excellent</td>
-<td>✅ Yes (horizontal)*</td>
-<td>✅ Yes</td>
-<td>❌ No</td>
-<td><strong>Recommended</strong> (Cloud/2D)</td>
-</tr>
-<tr>
-<td><strong>15_a: GUI Automation</strong></td>
-<td>⭐ Slow (60+ sec)</td>
-<td>⭐ Fragile</td>
-<td>✅ Yes (100% - native)</td>
-<td>❌ No</td>
-<td>✅ Yes</td>
-<td><strong>Last Resort</strong></td>
+<td><strong>RasProcess CLI</strong> (notebook 601)</td>
+<td>~8 sec</td>
+<td>No</td>
+<td>Production, batch processing</td>
 </tr>
 </tbody>
 </table>
-<p>* Python-GIS matches HEC-RAS to 0.01' for <strong>2D horizontal interpolation only</strong> (validation tests in notebook 15_c). Limitations: 2D mesh only (no 1D support yet), horizontal interpolation only.</p>
-<p><strong>Recommendation</strong>: Use 15_b (RasProcess) or 15_c (Python-GIS) instead. Only use this method for debugging or visual verification.</p>
-<h3 id="reference-documentation">Reference Documentation<a class="headerlink" href="#reference-documentation" title="Permanent link">&para;</a></h3>
-<p><strong>HEC-RAS Mapping Resources</strong>:
-- <a href="https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx">HEC-RAS User's Manual, Chapter 15: Using RAS Mapper</a>
-- <a href="https://www.hec.usace.army.mil/software/hec-ras/documentation.aspx">HEC-RAS 2D Modeling User's Manual</a> (mapping chapter)</p>
-<p><strong>Floodplain Mapping Standards</strong>:
-- <a href="https://www.fema.gov/flood-maps/guidance-partners/guidelines-standards">FEMA Guidelines and Standards for Flood Risk Analysis and Mapping</a>
-- <a href="https://www.fema.gov/flood-maps/tools-resources/engineering-library">FEMA Guidance for Flood Risk Analysis and Mapping</a></p>
-<p><strong>Professional Context</strong>: This notebook demonstrates automation of floodplain mapping workflows. All automated outputs should be reviewed by a licensed professional engineer before use in regulatory applications.</p>
-<h3 id="workflow-overview">Workflow Overview<a class="headerlink" href="#workflow-overview" title="Permanent link">&para;</a></h3>
-<p>This notebook uses <strong>GUI automation</strong> via <code>win32com</code> to drive RAS Mapper. This approach:
-- ✓ Leverages HEC-RAS's native mapping engine
-- ✓ Produces identical results to manual GUI operation
-- ✓ Enables batch processing of multiple scenarios
-- ✓ Creates reviewable HEC-RAS project files</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li>HEC-RAS 6.x installed (GUI automation requires HEC-RAS executable)</li>
+<li>HEC-RAS 6.x installed (provides GUI executable)</li>
 <li>Windows operating system</li>
-<li>pywin32 package (for Win32 COM automation)</li>
-<li>Computed HEC-RAS plan with results</li>
-<li><strong>User must be present</strong> to monitor GUI operations</li>
+<li>Required packages: <code>ras-commander</code>, <code>rasterio</code>, <code>matplotlib</code>, <code>pywin32</code></li>
 </ul>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- Set to True to use local ras-commander source</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
@@ -6113,403 +5512,136 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">local_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="k">if</span> <span class="n">local_path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">:</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">local_path</span><span class="p">)</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;📁 LOCAL SOURCE MODE: Loading from </span><span class="si">{</span><span class="n">local_path</span><span class="si">}</span><span class="s2">/ras_commander&quot;</span><span class="p">)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LOCAL SOURCE MODE: Loading from </span><span class="si">{</span><span class="n">local_path</span><span class="si">}</span><span class="s2">/ras_commander&quot;</span><span class="p">)</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;📦 PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Import ras-commander</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasMap</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Additional imports for visualization</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rasterio.plot</span><span class="w"> </span><span class="kn">import</span> <span class="n">show</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="c1"># Verify which version loaded</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasMap</span><span class="p">,</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rasterio.plot</span><span class="w"> </span><span class="kn">import</span> <span class="n">show</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
-✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
-</code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
-<p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Project Configuration</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>           <span class="c1"># Example project to extract</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># HDF Analysis Settings</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;06&quot;</span>                       <span class="c1"># Plan number (for HDF file path)</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">TIME_INDEX</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>                   <span class="c1"># Time step index (-1 = last)</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">PROFILE</span> <span class="o">=</span> <span class="s2">&quot;Max&quot;</span>                   <span class="c1"># Profile name for steady analysis</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Configuration set: Project=</span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2">, Plan=</span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2">, Profile=</span><span class="si">{</span><span class="n">PROFILE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">PLAN</span> <span class="o">=</span> <span class="s2">&quot;06&quot;</span>  <span class="c1"># Dam break plan</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2">, Plan: </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Configuration set: Project=BaldEagleCrkMulti2D, Plan=06, Profile=Max
-</code></pre></div>
-<h2 id="step-1-initialize-project">Step 1: Initialize Project<a class="headerlink" href="#step-1-initialize-project" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Extract example project</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;600&quot;</span><span class="p">)</span>
+<h2 id="step-1-extract-example-project-and-initialize">Step 1: Extract Example Project and Initialize<a class="headerlink" href="#step-1-extract-example-project-and-initialize" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;600&quot;</span><span class="p">)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Initialize project</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Plans:&quot;</span><span class="p">)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
-2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Loading project data from CSV...
-2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
-2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
-2025-12-29 00:18:22 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_600&#39;
-2025-12-29 00:18:24 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600
-2025-12-29 00:18:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap
-
-
-Project: BaldEagleDamBrk
-Folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600
-</code></pre></div>
-<h2 id="step-2-pre-requisite-check-rasmap-compatibility">Step 2: Pre-requisite - Check .rasmap Compatibility<a class="headerlink" href="#step-2-pre-requisite-check-rasmap-compatibility" title="Permanent link">&para;</a></h2>
-<p><strong>IMPORTANT</strong>: For HEC-RAS 5.0.7 projects running in 6.x, the <code>.rasmap</code> file must be upgraded to 6.x format.</p>
-<p>The <code>postprocess_stored_maps()</code> function now automatically detects this and provides instructions if manual intervention is needed.</p>
-<h2 id="step-3-compute-plan-if-needed">Step 3: Compute Plan (if needed)<a class="headerlink" href="#step-3-compute-plan-if-needed" title="Permanent link">&para;</a></h2>
-<p>Make sure plan 06 has been computed.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check if plan 06 has HDF results</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p06.hdf&quot;</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">hdf_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing plan 06...&quot;</span><span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">PLAN</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<h2 id="step-2-compute-plan-if-needed">Step 2: Compute Plan (if needed)<a class="headerlink" href="#step-2-compute-plan-if-needed" title="Permanent link">&para;</a></h2>
+<p>GUI automation generates stored maps from existing HDF results. The plan must be computed first.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2">.hdf&quot;</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">hdf_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Computing plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">PLAN</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2"> complete.&quot;</span><span class="p">)</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan 06 already computed&quot;</span><span class="p">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2"> already computed (</span><span class="si">{</span><span class="n">hdf_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600
-2025-12-29 00:18:24 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06
-2025-12-29 00:18:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06
-2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
-2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2025-12-29 00:18:24 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.prj&quot; &quot;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06&quot;
-
-
-Computing plan 06...
-
-
-2025-12-29 00:27:19 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
-2025-12-29 00:27:19 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 535.36 seconds
-</code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Display results summary from results_df</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
+<h2 id="step-3-generate-maps-via-gui-automation">Step 3: Generate Maps via GUI Automation<a class="headerlink" href="#step-3-generate-maps-via-gui-automation" title="Permanent link">&para;</a></h2>
+<p>One function call handles everything:
+- Configures <code>.rasmap</code> with stored map layers
+- Sets plan flags to mapping-only (skips re-running the simulation)
+- Opens HEC-RAS, clicks Compute, monitors HDF for completion
+- Auto-closes HEC-RAS when maps are generated
+- Restores original plan and <code>.rasmap</code> files</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Get available terrains</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">rasmap_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.rasmap&quot;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">terrains</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">get_terrain_names</span><span class="p">(</span><span class="n">rasmap_path</span><span class="p">)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Available terrains: </span><span class="si">{</span><span class="n">terrains</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Generate stored maps — HEC-RAS will open and auto-close</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">success</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">postprocess_stored_maps</span><span class="p">(</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="n">PLAN</span><span class="p">,</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">specify_terrain</span><span class="o">=</span><span class="n">terrains</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">terrains</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Depth&#39;</span><span class="p">,</span> <span class="s1">&#39;WSEL&#39;</span><span class="p">]</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">)</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">if</span> <span class="n">success</span><span class="p">:</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Successfully generated stored maps via GUI automation&quot;</span><span class="p">)</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Failed to generate stored maps&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="step-4-generate-maps-via-gui-automation">Step 4: Generate Maps via GUI Automation<a class="headerlink" href="#step-4-generate-maps-via-gui-automation" title="Permanent link">&para;</a></h2>
-<h3 id="how-this-works">How This Works<a class="headerlink" href="#how-this-works" title="Permanent link">&para;</a></h3>
-<p>The <code>postprocess_stored_maps()</code> function performs GUI automation:</p>
-<ol>
-<li><strong>Checks .rasmap compatibility</strong> (upgrades 5.0.7→6.x if needed)</li>
-<li><strong>Modifies .rasmap XML</strong> to add stored map layer definitions</li>
-<li><strong>Updates plan flags</strong> to run floodplain mapping only (skips full simulation)</li>
-<li><strong>Opens HEC-RAS GUI</strong> via Win32 COM automation</li>
-<li><strong>Navigates menus</strong> to click "Run &gt; Unsteady Flow Analysis"</li>
-<li><strong>Waits for completion</strong> (user must close HEC-RAS when done)</li>
-<li><strong>Restores original files</strong> (plan, .rasmap) while keeping generated maps</li>
-</ol>
-<h3 id="available-map-types">Available Map Types<a class="headerlink" href="#available-map-types" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>Depth</code> - Water depth (maximum)</li>
-<li><code>WSEL</code> - Water surface elevation (maximum)</li>
-<li><code>Velocity</code> - Flow velocity (maximum)</li>
-<li>All other variables supported by RASMapper</li>
-</ul>
-<h3 id="user-interaction-required">User Interaction Required<a class="headerlink" href="#user-interaction-required" title="Permanent link">&para;</a></h3>
-<p>⚠️ <strong>IMPORTANT</strong>: You will need to:
-1. Monitor the HEC-RAS window that opens
-2. Wait for floodplain mapping to complete (watch status bar)
-3. Close HEC-RAS when computation finishes</p>
-<p>The function will wait for you to close HEC-RAS before continuing.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Get available terrains</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">rasmap_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.rasmap&quot;</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">terrains</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">get_terrain_names</span><span class="p">(</span><span class="n">rasmap_path</span><span class="p">)</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Available terrains: </span><span class="si">{</span><span class="n">terrains</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<h2 id="step-4-verify-output-files">Step 4: Verify Output Files<a class="headerlink" href="#step-4-verify-output-files" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Find the output directory using Short Identifier from plan_df</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">plan_info</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">PLAN</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">short_id</span> <span class="o">=</span> <span class="n">plan_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Short Identifier&#39;</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Plan_</span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">output_folder</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="n">short_id</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Use first terrain if available</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">target_terrain</span> <span class="o">=</span> <span class="n">terrains</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">terrains</span> <span class="k">else</span> <span class="kc">None</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using terrain: </span><span class="si">{</span><span class="n">target_terrain</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Generate stored maps via GUI automation</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;GUI AUTOMATION STARTING&quot;</span><span class="p">)</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HEC-RAS will open automatically.&quot;</span><span class="p">)</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Please monitor the window and close HEC-RAS when done.&quot;</span><span class="p">)</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="n">success</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">postprocess_stored_maps</span><span class="p">(</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="n">PLAN</span><span class="p">,</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>    <span class="n">specify_terrain</span><span class="o">=</span><span class="n">target_terrain</span><span class="p">,</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Depth&#39;</span><span class="p">,</span> <span class="s1">&#39;WSEL&#39;</span><span class="p">]</span>  <span class="c1"># Generate Depth and WSE maps</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="p">)</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="k">if</span> <span class="n">success</span><span class="p">:</span>
-</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✅ Successfully generated stored maps via GUI automation&quot;</span><span class="p">)</span>
-</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">❌ Failed to generate stored maps&quot;</span><span class="p">)</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output folder: </span><span class="si">{</span><span class="n">output_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">if</span> <span class="n">output_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">tif_files</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">output_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*.tif&#39;</span><span class="p">))</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">vrt_files</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">output_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*.vrt&#39;</span><span class="p">))</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Generated files:&quot;</span><span class="p">)</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">tif_files</span> <span class="o">+</span> <span class="n">vrt_files</span><span class="p">:</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> KB)&quot;</span><span class="p">)</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Output folder not found — maps were not generated&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Extracted terrain names: [&#39;Terrain50&#39;]
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Checking .rasmap compatibility...
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - .rasmap file is already compatible (version 2.0.0)
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - .rasmap compatibility check passed: Already compatible (version 2.0.0)
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Backing up plan file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06.storedmap.bak
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Updating plan run flags for floodplain mapping for plan 06...
-2025-12-29 00:27:19 - ras_commander.RasPlan - INFO - Successfully updated run flags in plan file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06 (flags modified: 4)
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Backing up rasmap file C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap.storedmap.bak
-2025-12-29 00:27:19 - ras_commander.rasmap - WARNING - Could not find RASResults layer for plan ending in &#39;.p06.hdf&#39; in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Filtered terrains, keeping only &#39;Terrain50&#39;.
-2025-12-29 00:27:19 - ras_commander.rasmap - INFO - Using GUI automation to run floodplain mapping...
-2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - Setting current plan to 06 in project file...
-2025-12-29 00:27:19 - ras_commander.RasPrj - INFO - Set current plan to p06 in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.prj
-2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - Current plan set to 06 in C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.prj
-2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - Opening HEC-RAS...
-2025-12-29 00:27:19 - ras_commander.RasGuiAutomation - INFO - HEC-RAS opened with Process ID: 171544
-
-
-Available terrains: [&#39;Terrain50&#39;]
-Using terrain: Terrain50
-
-============================================================
-GUI AUTOMATION STARTING
-HEC-RAS will open automatically.
-Please monitor the window and close HEC-RAS when done.
-============================================================
-
-
-
-2025-12-29 00:27:20 - ras_commander.RasGuiAutomation - INFO - Found &#39;already running&#39; dialog - clicking Yes to continue
-2025-12-29 00:27:20 - ras_commander.RasGuiAutomation - INFO - Clicked button: &amp;Yes
-2025-12-29 00:27:20 - ras_commander.RasGuiAutomation - INFO - Clicked &#39;Yes&#39; button on already running dialog
-2025-12-29 00:27:21 - ras_commander.RasGuiAutomation - INFO - Waiting for HEC-RAS main window...
-2025-12-29 00:27:23 - ras_commander.RasGuiAutomation - INFO - Found HEC-RAS main window: HEC-RAS 6.6
-2025-12-29 00:27:24 - ras_commander.RasGuiAutomation - INFO - Clicking &#39;Run &gt; Unsteady Flow Analysis&#39; menu...
-2025-12-29 00:27:24 - ras_commander.RasGuiAutomation - INFO - Clicked menu item ID: 47
-2025-12-29 00:27:26 - ras_commander.RasGuiAutomation - INFO - Looking for Unsteady Flow Analysis dialog...
-2025-12-29 00:27:26 - ras_commander.RasGuiAutomation - INFO - Found Unsteady Flow Analysis dialog
-2025-12-29 00:27:26 - ras_commander.RasGuiAutomation - INFO - Looking for Compute button...
-2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - WARNING - Could not find Compute button - trying keyboard shortcut as fallback...
-2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - INFO - Sent Enter key via win32api
-2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - INFO - Waiting for user to close HEC-RAS...
-2025-12-29 00:27:27 - ras_commander.RasGuiAutomation - INFO - Please monitor plan 06 execution and close HEC-RAS when complete
-2025-12-29 00:27:45 - ras_commander.RasGuiAutomation - INFO - HEC-RAS has been closed
-2025-12-29 00:27:45 - ras_commander.rasmap - INFO - Floodplain mapping computation successful.
-2025-12-29 00:27:45 - ras_commander.rasmap - INFO - Restoring original plan file from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.p06.storedmap.bak
-2025-12-29 00:27:45 - ras_commander.rasmap - INFO - Restoring original rasmap file from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\BaldEagleDamBrk.rasmap.storedmap.bak
-
-
-
-✅ Successfully generated stored maps via GUI automation
-</code></pre></div>
 <h2 id="step-5-visualize-results">Step 5: Visualize Results<a class="headerlink" href="#step-5-visualize-results" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Find the output directory</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plan_info</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;06&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">short_id</span> <span class="o">=</span> <span class="n">plan_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Short Identifier&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan_06&#39;</span><span class="p">)</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">output_folder</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="n">short_id</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Find depth map</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">depth_map_path</span> <span class="o">=</span> <span class="n">output_folder</span> <span class="o">/</span> <span class="s2">&quot;Depth (Max).vrt&quot;</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">if</span> <span class="n">depth_map_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found depth map at: </span><span class="si">{</span><span class="n">depth_map_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">depth_map_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>        <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;Blues&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Maximum Depth (GUI Automation)&#39;</span><span class="p">)</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Resolution: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">res</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bounds: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">bounds</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Depth map not found at: </span><span class="si">{</span><span class="n">depth_map_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Find depth and WSE TIF files</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">depth_tifs</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">output_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;Depth*.tif&#39;</span><span class="p">))</span> <span class="k">if</span> <span class="n">output_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="p">[]</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">wse_tifs</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">output_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;WSE*.tif&#39;</span><span class="p">))</span> <span class="k">if</span> <span class="n">output_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="p">[]</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">if</span> <span class="n">depth_tifs</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="c1"># Plot depth raster</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">depth_tifs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;Blues&#39;</span><span class="p">)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Max Depth - Plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>        <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Easting&#39;</span><span class="p">)</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>        <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Northing&#39;</span><span class="p">)</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Depth raster: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2">, CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="c1"># Plot WSE raster</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    <span class="k">if</span> <span class="n">wse_tifs</span><span class="p">:</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">wse_tifs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>            <span class="n">show</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;terrain&#39;</span><span class="p">)</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>            <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Max WSE - Plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>            <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Easting&#39;</span><span class="p">)</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>            <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Northing&#39;</span><span class="p">)</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WSE raster: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2">, CRS: </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No depth rasters found for visualization&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Depth map not found at: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_600\Grid Precip Infiltration\Depth (Max).vrt
-</code></pre></div>
-<h2 id="technical-explanation-win32-com-automation">Technical Explanation: Win32 COM Automation<a class="headerlink" href="#technical-explanation-win32-com-automation" title="Permanent link">&para;</a></h2>
-<h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h3>
-<p>The GUI automation method uses <strong>Win32 COM API</strong> to control the HEC-RAS application programmatically.</p>
-<h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
-<h4 id="1-open-hec-ras-application">1. Open HEC-RAS Application<a class="headerlink" href="#1-open-hec-ras-application" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">ras_exe</span> <span class="o">=</span> <span class="s2">&quot;C:/Program Files/HEC/HEC-RAS/6.6/RAS.exe&quot;</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">prj_path</span> <span class="o">=</span> <span class="s2">&quot;C:/path/to/project.prj&quot;</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Open HEC-RAS with project</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">process</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">([</span><span class="n">ras_exe</span><span class="p">,</span> <span class="n">prj_path</span><span class="p">])</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">pid</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">pid</span>
-</span></code></pre></div>
-<h4 id="2-find-hec-ras-window-by-process-id">2. Find HEC-RAS Window by Process ID<a class="headerlink" href="#2-find-hec-ras-window-by-process-id" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">win32gui</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">win32process</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_window_by_pid</span><span class="p">(</span><span class="n">pid</span><span class="p">):</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Enumerate all windows to find HEC-RAS window&quot;&quot;&quot;</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">callback</span><span class="p">(</span><span class="n">hwnd</span><span class="p">,</span> <span class="n">windows</span><span class="p">):</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>        <span class="k">if</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">IsWindowVisible</span><span class="p">(</span><span class="n">hwnd</span><span class="p">):</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>            <span class="n">_</span><span class="p">,</span> <span class="n">window_pid</span> <span class="o">=</span> <span class="n">win32process</span><span class="o">.</span><span class="n">GetWindowThreadProcessId</span><span class="p">(</span><span class="n">hwnd</span><span class="p">)</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>            <span class="k">if</span> <span class="n">window_pid</span> <span class="o">==</span> <span class="n">pid</span><span class="p">:</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>                <span class="n">title</span> <span class="o">=</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">GetWindowText</span><span class="p">(</span><span class="n">hwnd</span><span class="p">)</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>                <span class="k">if</span> <span class="s2">&quot;HEC-RAS&quot;</span> <span class="ow">in</span> <span class="n">title</span><span class="p">:</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>                    <span class="n">windows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hwnd</span><span class="p">)</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        <span class="k">return</span> <span class="kc">True</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">windows</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">win32gui</span><span class="o">.</span><span class="n">EnumWindows</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="n">windows</span><span class="p">)</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="k">return</span> <span class="n">windows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">windows</span> <span class="k">else</span> <span class="kc">None</span>
-</span></code></pre></div>
-<h4 id="3-enumerate-menu-system">3. Enumerate Menu System<a class="headerlink" href="#3-enumerate-menu-system" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">enumerate_menus</span><span class="p">(</span><span class="n">hwnd</span><span class="p">):</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Find &#39;GIS Tools&#39; &gt; &#39;RAS Mapper&#39; menu item&quot;&quot;&quot;</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">menu_bar</span> <span class="o">=</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">GetMenu</span><span class="p">(</span><span class="n">hwnd</span><span class="p">)</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">menu_count</span> <span class="o">=</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">GetMenuItemCount</span><span class="p">(</span><span class="n">menu_bar</span><span class="p">)</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">menu_count</span><span class="p">):</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>        <span class="c1"># Get menu text</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>        <span class="n">submenu</span> <span class="o">=</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">GetSubMenu</span><span class="p">(</span><span class="n">menu_bar</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>        <span class="n">item_count</span> <span class="o">=</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">GetMenuItemCount</span><span class="p">(</span><span class="n">submenu</span><span class="p">)</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">item_count</span><span class="p">):</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>            <span class="c1"># Check if this is &quot;Run &gt; Unsteady Flow Analysis&quot;</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>            <span class="n">menu_id</span> <span class="o">=</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">GetMenuItemID</span><span class="p">(</span><span class="n">submenu</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>            <span class="c1"># Return menu ID if found</span>
-</span></code></pre></div>
-<h4 id="4-click-menu-via-wm_command">4. Click Menu via WM_COMMAND<a class="headerlink" href="#4-click-menu-via-wm_command" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">win32api</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">win32con</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Send command to HEC-RAS to click menu</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">WM_COMMAND</span> <span class="o">=</span> <span class="mh">0x0111</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="n">win32api</span><span class="o">.</span><span class="n">PostMessage</span><span class="p">(</span><span class="n">hwnd</span><span class="p">,</span> <span class="n">WM_COMMAND</span><span class="p">,</span> <span class="n">menu_id</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-</span></code></pre></div>
-<h4 id="5-wait-for-computation-to-complete">5. Wait for Computation to Complete<a class="headerlink" href="#5-wait-for-computation-to-complete" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Wait for user to close HEC-RAS</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">while</span> <span class="n">win32gui</span><span class="o">.</span><span class="n">IsWindow</span><span class="p">(</span><span class="n">hwnd</span><span class="p">):</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HEC-RAS closed, computation complete&quot;</span><span class="p">)</span>
-</span></code></pre></div>
-<h3 id="why-this-is-fragile">Why This Is Fragile<a class="headerlink" href="#why-this-is-fragile" title="Permanent link">&para;</a></h3>
-<p><strong>Menu IDs Can Change</strong>:
-- Different HEC-RAS versions use different menu IDs
-- Updates can break automation</p>
-<p><strong>Window Titles Can Vary</strong>:
-- "HEC-RAS 6.6" vs "HEC-RAS 6.5" vs "HEC-RAS"
-- Dialog titles may differ by version</p>
-<p><strong>Timing Issues</strong>:
-- Need to wait for windows to load
-- Race conditions if timing is wrong
-- No reliable way to detect completion</p>
-<p><strong>Focus Issues</strong>:
-- Other windows can steal focus
-- User interaction can break automation
-- Window minimization causes failures</p>
-<p><strong>Dialog Variations</strong>:
-- Confirmation dialogs may or may not appear
-- Error dialogs can halt automation
-- No standardized window hierarchy</p>
-<h3 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h3>
-<p><strong>Typical timing</strong> (BaldEagleCrkMulti2D, 2 variables):
-- GUI Automation: 60+ seconds
-- RasProcess CLI: 8-10 seconds (6-7x faster)
-- Python-GIS: 15-20 seconds (3-4x faster)</p>
-<p><strong>Overhead breakdown</strong>:
-- HEC-RAS startup: 5-10 seconds
-- Menu navigation: 2-3 seconds
-- Dialog handling: 2-3 seconds
-- Actual mapping: 40-50 seconds
-- User close wait: Variable</p>
-<h3 id="when-gui-automation-is-useful">When GUI Automation Is Useful<a class="headerlink" href="#when-gui-automation-is-useful" title="Permanent link">&para;</a></h3>
-<p>Despite the fragility, GUI automation has value:</p>
-<p>✅ <strong>Debugging</strong>: See what HEC-RAS is doing in real-time</p>
-<p>✅ <strong>Visual Verification</strong>: Confirm maps look correct in RASMapper</p>
-<p>✅ <strong>One-off Operations</strong>: When speed doesn't matter</p>
-<p>✅ <strong>Learning</strong>: Understand HEC-RAS workflow</p>
-<p>❌ <strong>Production</strong>: Use RasProcess CLI (15_b) instead</p>
-<p>❌ <strong>Batch Processing</strong>: Use RasProcess CLI (15_b) or Python-GIS (15_c)</p>
-<p>❌ <strong>Cloud/Headless</strong>: Use Python-GIS (15_c) only</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<h3 id="issue-hec-ras-doesnt-open">Issue: HEC-RAS Doesn't Open<a class="headerlink" href="#issue-hec-ras-doesnt-open" title="Permanent link">&para;</a></h3>
-<p><strong>Solution</strong>: Verify HEC-RAS installation:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Check if HEC-RAS executable exists</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS path: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exists: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">ras_exe_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span></code></pre></div></p>
-<h3 id="issue-menu-not-found">Issue: Menu Not Found<a class="headerlink" href="#issue-menu-not-found" title="Permanent link">&para;</a></h3>
-<p><strong>Symptom</strong>: "Could not find menu item"</p>
-<p><strong>Cause</strong>: Menu IDs changed in different HEC-RAS version</p>
-<p><strong>Solution</strong>: Use keyboard shortcuts as fallback (function tries this automatically)</p>
-<h3 id="issue-function-hangs-waiting-for-hec-ras">Issue: Function Hangs Waiting for HEC-RAS<a class="headerlink" href="#issue-function-hangs-waiting-for-hec-ras" title="Permanent link">&para;</a></h3>
-<p><strong>Symptom</strong>: "Waiting for HEC-RAS to close..."</p>
-<p><strong>Solution</strong>: Manually close HEC-RAS application (computation may have failed)</p>
-<h3 id="issue-no-maps-generated">Issue: No Maps Generated<a class="headerlink" href="#issue-no-maps-generated" title="Permanent link">&para;</a></h3>
-<p><strong>Symptom</strong>: Output folder empty or VRT files missing</p>
-<p><strong>Diagnosis</strong>:
-1. Check if floodplain mapping actually ran
-2. Look for errors in HEC-RAS compute log
-3. Verify .rasmap was upgraded (5.0.7→6.x)
-4. Ensure terrain exists in .rasmap</p>
-<p><strong>Solution</strong>: Try RasProcess CLI method (15_b) instead - more reliable</p>
-<h3 id="issue-rasmap-upgrade-failed">Issue: .rasmap Upgrade Failed<a class="headerlink" href="#issue-rasmap-upgrade-failed" title="Permanent link">&para;</a></h3>
-<p><strong>Symptom</strong>: "Manual intervention required"</p>
-<p><strong>Solution</strong>: Follow on-screen instructions:
-1. Open project in HEC-RAS
-2. Click "GIS Tools" &gt; "RAS Mapper"
-3. Allow .rasmap update when prompted
-4. Close RASMapper and HEC-RAS
-5. Re-run this notebook</p>
-<h2 id="decision-matrix-when-to-use-each-method">Decision Matrix: When to Use Each Method<a class="headerlink" href="#decision-matrix-when-to-use-each-method" title="Permanent link">&para;</a></h2>
-<h3 id="use-15_a-gui-automation-when">Use 15_a (GUI Automation) when:<a class="headerlink" href="#use-15_a-gui-automation-when" title="Permanent link">&para;</a></h3>
+<h2 id="technical-notes">Technical Notes<a class="headerlink" href="#technical-notes" title="Permanent link">&para;</a></h2>
+<h3 id="completion-detection">Completion Detection<a class="headerlink" href="#completion-detection" title="Permanent link">&para;</a></h3>
+<p>The GUI automation detects when floodplain mapping is complete by polling the plan HDF file:
+1. Records the HDF modification time before launching HEC-RAS
+2. After clicking Compute, polls every 2 seconds
+3. When the HDF is modified AND contains <code>"Complete Process"</code> in compute messages, mapping is done
+4. HEC-RAS is terminated automatically and backup files are restored</p>
+<h3 id="rasresults-layer-creation">RASResults Layer Creation<a class="headerlink" href="#rasresults-layer-creation" title="Permanent link">&para;</a></h3>
+<p>Some example projects have an empty <code>&lt;Results /&gt;</code> section in their <code>.rasmap</code> file (no RASResults layers). The function automatically creates the required <code>&lt;Layer Type="RASResults"&gt;</code> XML element when one doesn't exist, referencing the plan's HDF file.</p>
+<h3 id="when-to-use-gui-vs-rasprocess">When to Use GUI vs RasProcess<a class="headerlink" href="#when-to-use-gui-vs-rasprocess" title="Permanent link">&para;</a></h3>
 <ul>
-<li>✅ Debugging why maps aren't generating</li>
-<li>✅ Visual verification in RASMapper needed</li>
-<li>✅ One-off manual operation</li>
-<li>✅ Learning HEC-RAS workflow</li>
-<li>⚠️ <strong>Last resort when other methods fail</strong></li>
+<li><strong>GUI Automation</strong> (this notebook): Useful when you need to debug mapping issues or verify output visually in RASMapper. The HEC-RAS window is visible during computation.</li>
+<li><strong>RasProcess CLI</strong> (notebook 601): Faster, headless, recommended for production and batch workflows. No GUI window opens.</li>
 </ul>
-<h3 id="use-15_b-rasprocess-cli-when">Use 15_b (RasProcess CLI) when:<a class="headerlink" href="#use-15_b-rasprocess-cli-when" title="Permanent link">&para;</a></h3>
-<ul>
-<li>✅ Running on Windows (most common)</li>
-<li>✅ Need fastest performance</li>
-<li>✅ Need all variables (Froude, Shear, D*V, etc.)</li>
-<li>✅ Batch processing multiple plans</li>
-<li>✅ Production workflows</li>
-<li>✅ <strong>RECOMMENDED DEFAULT</strong></li>
-</ul>
-<h3 id="use-15_c-python-gis-when">Use 15_c (Python-GIS) when:<a class="headerlink" href="#use-15_c-python-gis-when" title="Permanent link">&para;</a></h3>
-<ul>
-<li>✅ Running in cloud/Docker</li>
-<li>✅ Linux/Mac environment</li>
-<li>✅ Only need WSE, Depth, Velocity</li>
-<li>✅ 2D mesh projects only</li>
-<li>✅ Reproducible research workflows</li>
-<li>✅ <strong>RECOMMENDED for cloud/headless</strong></li>
-</ul>
-<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
-<p>This notebook demonstrated:</p>
-<ol>
-<li>✅ GUI automation approach using <code>RasMap.postprocess_stored_maps()</code></li>
-<li>✅ Automatic .rasmap compatibility checking</li>
-<li>✅ Win32 COM technical explanation</li>
-<li>✅ Performance comparison (60+ seconds vs 8-10 seconds RasProcess)</li>
-<li>✅ Fragility issues and when to avoid</li>
-<li>✅ Decision matrix showing this is last resort</li>
-</ol>
-<p><strong>Key Takeaway</strong>: GUI automation is the slowest and most fragile method. Use RasProcess CLI (15_b) for Windows or Python-GIS (15_c) for cloud. Only use GUI automation for debugging or visual verification.</p>
-<p><strong>Next Steps</strong>:
-- See notebook 15_b for recommended Windows method (RasProcess CLI)
-- See notebook 15_c for cloud-compatible method (Python-GIS)
-- See notebook 11 for detailed HDF data extraction</p>
 
 
 
@@ -6532,7 +5664,7 @@ Please monitor the window and close HEC-RAS when done.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 17, 2026 15:26:39 UTC">March 17, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 20, 2026 13:43:17 UTC">March 20, 2026</span>
   </span>
 
     
@@ -6542,7 +5674,7 @@ Please monitor the window and close HEC-RAS when done.
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 17, 2026 15:26:39 UTC">March 17, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 20, 2026 13:43:17 UTC">March 20, 2026</span>
   </span>
 
     
