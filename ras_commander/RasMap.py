@@ -1283,10 +1283,10 @@ class RasMap:
                 logger.info(f"Updating plan run flags for floodplain mapping for plan {plan_num}...")
                 RasPlan.update_run_flags(
                     plan_num,
-                    geometry_preprocessor=False,
+                    geometry_preprocessor=True,
                     unsteady_flow_simulation=False,
                     post_processor=False,
-                    floodplain_mapping=True, # Note: True maps to 0, which means "Run"
+                    floodplain_mapping=True,
                     ras_object=ras_obj
                 )
 
@@ -1312,8 +1312,25 @@ class RasMap:
                         break
 
                 if results_layer is None:
-                    logger.warning(f"Could not find RASResults layer for plan ending in '{plan_hdf_part}' in {rasmap_path}")
-                    continue
+                    # Create a new RASResults layer for this plan
+                    plan_hdf_filename = f".\\{ras_obj.project_name}.p{plan_num}.hdf"
+                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
+                    if not plan_info.empty:
+                        layer_name = plan_info.iloc[0].get('Plan Title', f'Plan {plan_num}')
+                        if pd.isna(layer_name) or not layer_name:
+                            layer_name = f"Plan {plan_num}"
+                    else:
+                        layer_name = f"Plan {plan_num}"
+
+                    results_layer = ET.SubElement(
+                        results_section, 'Layer',
+                        Name=layer_name,
+                        Type="RASResults",
+                        Checked="True",
+                        Expanded="True",
+                        Filename=plan_hdf_filename
+                    )
+                    logger.info(f"Created new RASResults layer '{layer_name}' for plan {plan_num} (none existed in .rasmap)")
                 
                 # Map user-provided layer names to HEC-RAS variable names and map types
                 # Note: "WSE" is the correct HEC-RAS convention (not "WSEL")
