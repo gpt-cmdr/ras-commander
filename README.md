@@ -142,56 +142,39 @@ Note about version support: The modern HDF-based features target HEC-RAS 6.2+ fo
 
 ## Installation
 
-First, create a virtual environment with conda or venv (ask ChatGPT if you need help).  
+#### Quick Install (all optional dependencies)
 
-#### Install via Pip
-
-In your virtual environment, install ras-commander using pip:
+```bash
+pip install ras-commander[all]
 ```
+
+#### Standard Install
+
+```bash
 pip install --upgrade ras-commander
 ```
-If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages 'C:\Users\your_username\AppData\Roaming\Python\' and then creating a new virtual environment.  
 
-### Library Dependencies
+If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages `C:\Users\your_username\AppData\Roaming\Python\` and then creating a new virtual environment.
 
-These are the core dependencies required for ras-commander library functionality:
+### Extras
 
-```bash
-# Core library dependencies
-pip install h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely rasterstats rtree
+Install only what you need using pip extras:
 
-# Windows-specific (for RasControl COM interface and GUI automation)
-pip install pywin32 psutil
-```
+| Extra | What it adds | Install command |
+|-------|-------------|-----------------|
+| `all` | Everything below | `pip install ras-commander[all]` |
+| `remote-all` | All remote backends (SSH, WinRM, Docker, AWS, Azure) | `pip install ras-commander[remote-all]` |
+| `gui` | GUI automation & screenshots (Pillow) | `pip install ras-commander[gui]` |
+| `usgs` | USGS gauge data (dataretrieval) | `pip install ras-commander[usgs]` |
+| `notebooks` | Example notebook deps (rasterio, pyproj, aiohttp, dataretrieval) | `pip install ras-commander[notebooks]` |
+| `dss` | DSS file operations (pyjnius; requires Java JRE/JDK 8+) | `pip install ras-commander[dss]` |
+| `precip-huc12` | HUC12 watershed boundaries (pygeohydro) | `pip install ras-commander[precip-huc12]` |
 
-### Notebook Dependencies
+Combine extras as needed: `pip install ras-commander[notebooks,usgs,dss]`
 
-Additional packages needed to run the example notebooks in the `examples/` folder:
+### Core Dependencies (installed automatically)
 
-```bash
-# For raster visualization (notebooks 15, 21) and coordinate system operations (notebook 14) and external downloads 
-pip install rasterio pyproj requests aiohttp
-
-```
-
-### Optional Dependencies
-
-For specific features that aren't required for core functionality:
-
-```bash
-# DSS file operations (requires Java JRE/JDK 8+)
-pip install pyjnius
-
-# Remote execution backends
-pip install paramiko      # SSH remote execution
-pip install pywinrm       # WinRM remote execution
-pip install docker        # Docker container execution
-pip install boto3         # AWS EC2 execution
-pip install azure-identity azure-mgmt-compute  # Azure execution
-
-# Or install all remote backends at once:
-pip install ras-commander[remote-all]
-```
+h5py, numpy, pandas, requests, tqdm, scipy, xarray, geopandas, matplotlib, shapely, rasterstats, rtree, fsspec, hms-commander, psutil, and pywin32 (Windows only).
 
 Note: `pathlib` is built into Python 3.4+ and does not need to be installed separately.
 

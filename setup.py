@@ -83,8 +83,30 @@ setup(
         ],
         # GUI automation and screenshot capture (Windows only)
         'gui': ['Pillow>=9.0'],
+        # USGS gauge data integration
+        'usgs': ['dataretrieval>=1.0'],
         # Precipitation enhancements
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
+        # Notebook dependencies (raster visualization, coordinate systems)
+        'notebooks': ['rasterio', 'pyproj', 'aiohttp', 'dataretrieval>=1.0'],
+        # DSS file operations (requires Java JRE/JDK 8+)
+        'dss': ['pyjnius'],
+        # Everything (all optional dependencies)
+        'all': [
+            'paramiko>=3.0',
+            'pywinrm>=0.4.3',
+            'docker>=6.0',
+            'boto3>=1.28',
+            'azure-identity>=1.14',
+            'azure-mgmt-compute>=30.0',
+            'Pillow>=9.0',
+            'dataretrieval>=1.0',
+            'pygeohydro>=0.19.0',
+            'rasterio',
+            'pyproj',
+            'aiohttp',
+            'pyjnius',
+        ],
     })
 
 """

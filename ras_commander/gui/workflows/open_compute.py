@@ -144,17 +144,55 @@ class OpenAndComputeWorkflow:
                 logger.warning("Could not find Unsteady Flow Analysis dialog")
                 logger.info("User must manually click 'Run > Unsteady Flow Analysis' and Compute")
 
-        # Step 5: Wait for user to close HEC-RAS (or return immediately)
+        # Step 5: Poll HDF for "Complete Process", then auto-close HEC-RAS
+        #
+        # The HDF may already contain "Complete Process" from a prior run.
+        # Record its mtime before compute starts. Only accept completion
+        # if the HDF was modified after we clicked Compute.
         if wait_for_user:
-            logger.info("Waiting for user to close HEC-RAS...")
-            logger.info(f"Please monitor plan {plan_number} execution and close HEC-RAS when complete")
+            from pathlib import Path as _Path
+            import subprocess as _subprocess
 
-            try:
+            hdf_path = _Path(ras_obj.project_folder) / f"{ras_obj.project_name}.p{plan_number}.hdf"
+            hdf_mtime_before = hdf_path.stat().st_mtime if hdf_path.exists() else 0
+            logger.info(f"Polling HDF for completion signal: {hdf_path.name}")
+
+            poll_interval = 2.0
+            poll_timeout = 3600
+            poll_start = time.time()
+            completion_detected = False
+
+            while time.time() - poll_start < poll_timeout:
+                if hecras_process.poll() is not None:
+                    logger.info("HEC-RAS has exited")
+                    completion_detected = True
+                    break
+
+                # Only check HDF if it was modified since we started
+                try:
+                    if hdf_path.exists() and hdf_path.stat().st_mtime > hdf_mtime_before:
+                        from ...RasCurrency import RasCurrency
+                        if RasCurrency.check_plan_hdf_complete(hdf_path):
+                            logger.info("Detected 'Complete Process' in HDF — computation complete")
+                            completion_detected = True
+                            break
+                except Exception:
+                    pass
+
+                time.sleep(poll_interval)
+
+            if completion_detected and hecras_process.poll() is None:
+                logger.info("Closing HEC-RAS...")
+                hecras_process.terminate()
+                try:
+                    hecras_process.wait(timeout=15)
+                except _subprocess.TimeoutExpired:
+                    hecras_process.kill()
+                logger.info("HEC-RAS closed automatically after computation")
+            elif not completion_detected:
+                logger.warning("Polling timed out — waiting for user to close HEC-RAS")
                 hecras_process.wait()
-                logger.info("HEC-RAS has been closed")
-            except Exception as e:
-                logger.error(f"Error waiting for HEC-RAS to close: {e}")
-                return False
+                logger.info("HEC-RAS has been closed by user")
         else:
             logger.info("Returning without waiting for HEC-RAS to close")
             logger.info(f"HEC-RAS process ID: {hecras_process.pid}")
