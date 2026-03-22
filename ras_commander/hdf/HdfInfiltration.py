@@ -59,13 +59,6 @@ from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
-        
-from pathlib import Path
-import pandas as pd
-import geopandas as gpd
-import h5py
-
-from ..Decorators import log_call, standardize_input
 
 class HdfInfiltration:
         
@@ -80,8 +73,135 @@ class HdfInfiltration:
     SQM_TO_ACRE = 0.000247105
     SQM_TO_SQMILE = 3.861e-7
 
+    # Valid infiltration variables for preprocessed cell-level data
+    INFILTRATION_VARIABLES = [
+        'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate',
+        'Maximum Deficit', 'Initial Deficit', 'Potential Percolation Rate',
+        'Wetting Front Suction', 'Saturated Hydraulic Conductivity',
+        'Initial Soil Water Content', 'Saturated Soil Water Content',
+    ]
+
     @staticmethod
-    @log_call 
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_preprocessed_infiltration(
+        hdf_path: Path,
+        mesh_name: Optional[str] = None,
+        variable: str = 'Curve Number',
+        ras_object=None
+    ) -> pd.DataFrame:
+        """
+        Read preprocessed per-cell infiltration values from geometry HDF.
+
+        Returns the exact per-cell infiltration parameter values that HEC-RAS
+        uses in computation, from
+        ``/Geometry/2D Flow Areas/{mesh}/Infiltration/{variable}``.
+        These reflect all overrides (base + calibration regions) as resolved
+        during geometry preprocessing.
+
+        Args:
+            hdf_path: Geometry HDF path, plan number ("01"), or geometry number ("g01").
+            mesh_name: Specific 2D flow area. If None, reads all.
+            variable: Infiltration variable name. Common values:
+                'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'
+            ras_object: Optional RasPrj object for path resolution.
+
+        Returns:
+            DataFrame with columns: mesh_name, cell_id, value
+
+        Example:
+            >>> cn = HdfInfiltration.get_preprocessed_infiltration("01", variable='Curve Number')
+        """
+        results = []
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                areas_path = "Geometry/2D Flow Areas"
+                if areas_path not in hdf_file:
+                    logger.warning(f"No 2D Flow Areas found in {hdf_path}")
+                    return pd.DataFrame(columns=['mesh_name', 'cell_id', 'value'])
+
+                areas_group = hdf_file[areas_path]
+
+                for area_name in areas_group:
+                    # Skip datasets - only process groups (mesh perimeters)
+                    if not isinstance(areas_group[area_name], h5py.Group):
+                        continue
+                    if mesh_name is not None and area_name != mesh_name:
+                        continue
+
+                    area = areas_group[area_name]
+                    var_path = f"Infiltration/{variable}"
+
+                    if var_path not in area:
+                        logger.debug(f"No '{variable}' data for mesh '{area_name}'")
+                        continue
+
+                    values = area[var_path][()]
+                    n_cells = len(values)
+
+                    area_df = pd.DataFrame({
+                        'mesh_name': [area_name] * n_cells,
+                        'cell_id': range(n_cells),
+                        'value': values.astype(float),
+                    })
+                    results.append(area_df)
+
+        except Exception as e:
+            logger.error(f"Error reading preprocessed infiltration from {hdf_path}: {e}")
+            return pd.DataFrame(columns=['mesh_name', 'cell_id', 'value'])
+
+        if not results:
+            return pd.DataFrame(columns=['mesh_name', 'cell_id', 'value'])
+
+        return pd.concat(results, ignore_index=True)
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_preprocessed_infiltration_stats(
+        hdf_path: Path,
+        mesh_name: Optional[str] = None,
+        variable: str = 'Curve Number',
+        ras_object=None
+    ) -> pd.DataFrame:
+        """
+        Compute statistics on preprocessed per-cell infiltration values.
+
+        Args:
+            hdf_path: Geometry HDF path, plan number ("01"), or geometry number ("g01").
+            mesh_name: Specific 2D flow area. If None, computes for all.
+            variable: Infiltration variable name.
+            ras_object: Optional RasPrj object.
+
+        Returns:
+            DataFrame with columns: mesh_name, variable, n_cells,
+            min_val, max_val, mean_val, median_val, std_val
+        """
+        df = HdfInfiltration.get_preprocessed_infiltration(
+            hdf_path, mesh_name, variable, ras_object
+        )
+
+        if len(df) == 0:
+            return pd.DataFrame(columns=[
+                'mesh_name', 'variable', 'n_cells',
+                'min_val', 'max_val', 'mean_val', 'median_val', 'std_val'
+            ])
+
+        stats = df.groupby('mesh_name').agg(
+            n_cells=('value', 'count'),
+            min_val=('value', 'min'),
+            max_val=('value', 'max'),
+            mean_val=('value', 'mean'),
+            median_val=('value', 'median'),
+            std_val=('value', 'std'),
+        ).reset_index()
+        stats['variable'] = variable
+
+        return stats
+
+    @staticmethod
+    @log_call
     def get_infiltration_baseoverrides(hdf_path: Path) -> Optional[pd.DataFrame]:
         """
         Retrieve current infiltration parameters from a HEC-RAS geometry HDF file.
@@ -130,9 +250,173 @@ class HdfInfiltration:
         
 
 
-    # set_infiltration_baseoverrides goes here, once finalized tested and fixed. 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_infiltration_region_names(hdf_path: Path) -> Optional[List[str]]:
+        """Retrieve infiltration region names from a HEC-RAS geometry HDF file.
 
+        Reads the ``Name`` field from the structured array at
+        ``Geometry/Infiltration/Attributes``.
 
+        Args:
+            hdf_path: Path to the HEC-RAS geometry HDF file.
+
+        Returns:
+            A list of infiltration region name strings, or ``None`` if the
+            dataset does not exist.
+
+        Example
+        -------
+        >>> names = HdfInfiltration.get_infiltration_region_names("model.g01.hdf")
+        >>> print(names)
+        ['Grass', 'Paving - Concrete', 'Detention Pond']
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                attrs_path = "Geometry/Infiltration/Attributes"
+                if attrs_path not in hdf_file:
+                    logger.warning(f"No infiltration attributes found in {hdf_path}")
+                    return None
+
+                data = hdf_file[attrs_path][()]
+                names = list(np.vectorize(HdfUtils.convert_ras_string)(data['Name']))
+                return names
+
+        except Exception as e:
+            logger.error(f"Error reading infiltration region names from {hdf_path}: {str(e)}")
+            return None
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_infiltration_calibration_regions(hdf_path: Path) -> Optional[Dict[str, pd.DataFrame]]:
+        """Retrieve infiltration calibration region data from a HEC-RAS geometry HDF file.
+
+        Reads compound datasets from ``Geometry/Infiltration/Variables`` (e.g.
+        Curve Number, Abstraction Ratio, Minimum Infiltration Rate) and builds
+        a DataFrame for each, indexed by the infiltration region names from
+        ``Geometry/Infiltration/Attributes``.
+
+        Args:
+            hdf_path: Path to the HEC-RAS geometry HDF file.
+
+        Returns:
+            A dictionary mapping variable names (e.g. ``"Curve Number"``) to
+            DataFrames where rows are regions and columns are land cover / soil
+            combinations, or ``None`` if the required paths do not exist.
+
+        Example
+        -------
+        >>> regions = HdfInfiltration.get_infiltration_calibration_regions("model.g01.hdf")
+        >>> print(regions.keys())
+        dict_keys(['Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                variables_path = "Geometry/Infiltration/Variables"
+                attrs_path = "Geometry/Infiltration/Attributes"
+
+                if variables_path not in hdf_file or attrs_path not in hdf_file:
+                    logger.warning(f"No infiltration variables or attributes found in {hdf_path}")
+                    return None
+
+                # Read region names
+                attrs_data = hdf_file[attrs_path][()]
+                region_names = list(np.vectorize(HdfUtils.convert_ras_string)(attrs_data['Name']))
+
+                result = {}
+                variables_group = hdf_file[variables_path]
+
+                for ds_name in variables_group:
+                    data = variables_group[ds_name][()]
+                    df_dict = {}
+                    for field_name in data.dtype.names:
+                        values = data[field_name]
+                        if values.dtype.kind == 'S':
+                            values = [v.decode('utf-8').strip() for v in values]
+                        df_dict[field_name] = values
+
+                    df = pd.DataFrame(df_dict)
+                    if len(df) == len(region_names):
+                        df.index = region_names
+                    result[ds_name] = df
+
+                return result
+
+        except Exception as e:
+            logger.error(f"Error reading infiltration calibration regions from {hdf_path}: {str(e)}")
+            return None
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_infiltration_region_polygons(hdf_path: Path) -> 'gpd.GeoDataFrame':
+        """Retrieve infiltration region polygons from a HEC-RAS geometry HDF file.
+
+        Reads polygon geometry from ``Geometry/Infiltration/Polygon Info``,
+        ``Polygon Parts``, ``Polygon Points``, and region names from
+        ``Geometry/Infiltration/Attributes``.
+
+        Args:
+            hdf_path: Path to the HEC-RAS geometry HDF file.
+
+        Returns:
+            A GeoDataFrame with columns ``region_id``, ``Name``, and
+            ``geometry``. Returns an empty GeoDataFrame if the required
+            datasets do not exist.
+
+        Example
+        -------
+        >>> gdf = HdfInfiltration.get_infiltration_region_polygons("model.g01.hdf")
+        >>> print(gdf[['Name', 'geometry']].head())
+        """
+        import geopandas as gpd
+        from shapely.geometry import Polygon, MultiPolygon
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                infiltration_path = "Geometry/Infiltration"
+                if infiltration_path not in hdf_file:
+                    return gpd.GeoDataFrame()
+
+                infil_data = hdf_file[infiltration_path]
+
+                if ("Polygon Info" not in infil_data or
+                    "Attributes" not in infil_data or
+                    "Polygon Points" not in infil_data):
+                    return gpd.GeoDataFrame()
+
+                region_ids = range(infil_data["Attributes"][()].shape[0])
+                names = np.vectorize(HdfUtils.convert_ras_string)(infil_data["Attributes"][()]["Name"])
+
+                geoms = list()
+                for pnt_start, pnt_cnt, part_start, part_cnt in infil_data["Polygon Info"][()]:
+                    points = infil_data["Polygon Points"][()][pnt_start : pnt_start + pnt_cnt]
+                    if part_cnt == 1:
+                        geoms.append(Polygon(points))
+                    else:
+                        parts = infil_data["Polygon Parts"][()][part_start : part_start + part_cnt]
+                        geoms.append(
+                            MultiPolygon(
+                                list(
+                                    points[part_pnt_start : part_pnt_start + part_pnt_cnt]
+                                    for part_pnt_start, part_pnt_cnt in parts
+                                )
+                            )
+                        )
+
+                return gpd.GeoDataFrame(
+                    {"region_id": region_ids, "Name": names, "geometry": geoms},
+                    geometry="geometry",
+                    crs=HdfBase.get_projection(hdf_file),
+                )
+
+        except Exception as e:
+            logger.error(f"Error reading infiltration region polygons from {hdf_path}: {str(e)}")
+            return gpd.GeoDataFrame()
+
+    # set_infiltration_baseoverrides goes here, once finalized tested and fixed.
 
     # Since the infiltration base overrides are in the geometry file, the above functions work on the geometry files
     # The below functions work on the infiltration layer HDF files.  Changes only take effect if no base overrides are present. 

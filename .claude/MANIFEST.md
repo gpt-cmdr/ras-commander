@@ -67,11 +67,15 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `precipitation-notebook-debugging-patterns.md` | rule | `.claude/rules/documentation/precipitation-notebook-debugging-patterns.md` |
 | `precipitation-specialist` | agent | `.claude/agents/precipitation-specialist/SUBAGENT.md` |
 
-### Terrain
+### Terrain & Land Cover
 
 | Component | Type | Path |
 |-----------|------|------|
 | `terrain.md` | rule | `.claude/rules/hec-ras/terrain.md` |
+| `RasTerrainMod` | module | `ras_commander/terrain/RasTerrainMod.py` |
+| `HdfLandCover` | module | `ras_commander/hdf/HdfLandCover.py` |
+| `930_terrain_modification_analysis` | notebook | `examples/930_terrain_modification_analysis.ipynb` |
+| `211_final_mannings_and_infiltration` | notebook | `examples/211_final_mannings_and_infiltration.ipynb` |
 
 ### eBFE/BLE Models
 

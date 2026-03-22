@@ -528,6 +528,51 @@ result = GeomHtab.optimize_all_htab_from_results("model.g01", "model.p01.hdf")
 # See ras_commander/geom/AGENTS.md for complete HTAB documentation
 ```
 
+**Terrain modification analysis** (cut/fill, no-net-fill via pythonnet):
+```python
+from ras_commander.terrain import RasTerrainMod
+
+# One-time setup (creates GDAL junction for pythonnet)
+RasTerrainMod.setup_gdal_bridge()
+
+# Sample terrain profile WITH modifications applied (no GUI!)
+profile = RasTerrainMod.get_terrain_profile(
+    "project.rasmap", "project.g01.hdf",
+    x_coords=[3400000, 3410000], y_coords=[612000, 612000]
+)
+
+# Elevation-volume curve for pond sizing / no-net-fill
+ev = RasTerrainMod.get_terrain_volume_elevation(
+    "project.rasmap", "project.g01.hdf",
+    x_coords=pond_x, y_coords=pond_y,
+    volume_factor=43560.0  # acre-feet
+)
+
+# See examples/930_terrain_modification_analysis.ipynb for complete workflow
+```
+
+**Final Manning's N and infiltration** (preprocessed per-cell values + calibration analysis):
+```python
+from ras_commander.hdf import HdfLandCover, HdfInfiltration
+
+# Read preprocessed Manning's N (what HEC-RAS actually uses) - accepts plan number
+mann = HdfLandCover.get_preprocessed_mannings_n("01")
+
+# Calibration table: base + all region overrides
+cal = HdfLandCover.get_mannings_calibration_table("01")
+
+# Compare base vs calibrated (which regions change which classes)
+comp = HdfLandCover.compare_base_vs_calibrated("01")
+
+# Read preprocessed infiltration (Curve Number, Abstraction Ratio, etc.)
+cn = HdfInfiltration.get_preprocessed_infiltration("01", variable='Curve Number')
+
+# Full-resolution raster with overrides applied (auto-resolves land cover association)
+arr = HdfLandCover.compute_final_mannings_raster("01", output_tif_path="final_n.tif")
+
+# See examples/211_final_mannings_and_infiltration.ipynb for complete workflow
+```
+
 ### Common Pitfalls
 
 - ❌ Don't instantiate static classes: `RasCmdr()` is wrong

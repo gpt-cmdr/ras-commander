@@ -27,7 +27,8 @@ Results:
 Infrastructure:
     - HdfPipe: Pipe network geometry and results
     - HdfPump: Pump station geometry and results
-    - HdfInfiltration: Infiltration parameters
+    - HdfInfiltration: Infiltration parameters and preprocessed per-cell values
+    - HdfLandCover: Final Manning's N (base + calibration overrides, raster composition)
 
 Visualization:
     - HdfPlot: General HDF plotting
@@ -77,6 +78,7 @@ from .HdfResultsBreach import HdfResultsBreach
 from .HdfPipe import HdfPipe
 from .HdfPump import HdfPump
 from .HdfInfiltration import HdfInfiltration
+from .HdfLandCover import HdfLandCover
 
 # Visualization classes
 from .HdfPlot import HdfPlot
@@ -99,7 +101,7 @@ __all__ = [
     # Results
     'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsXsec', 'HdfResultsBreach',
     # Infrastructure
-    'HdfPipe', 'HdfPump', 'HdfInfiltration',
+    'HdfPipe', 'HdfPump', 'HdfInfiltration', 'HdfLandCover',
     # Visualization
     'HdfPlot', 'HdfResultsPlot',
     # Analysis
