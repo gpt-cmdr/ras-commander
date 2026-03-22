@@ -19,11 +19,13 @@ paths: ras_commander/**
 
 Create HEC-RAS terrain files (`.hdf`) programmatically. These files store multi-resolution elevation data with pyramid levels and multi-source stitching. Use CLI-based terrain creation via `RasProcess.exe` (HEC-RAS 6.6+).
 
-## Key Class
+## Key Classes
 
 | Class | Purpose |
 |-------|---------|
-| `RasTerrain` | Terrain HDF creation, VRT conversion, USGS download (future) |
+| `RasTerrain` | Terrain HDF creation, VRT conversion via RasProcess.exe CLI |
+| `Usgs3depAws` | USGS 3DEP elevation tile download from AWS S3 |
+| `RasTerrainMod` | Terrain modification analysis via pythonnet (cut/fill, no-net-fill) |
 
 ## RasProcess.exe CreateTerrain Command
 
@@ -165,11 +167,47 @@ subprocess.run(cmd_str, shell=True)
 3. TerrainDestinationFolder set in .rasmap?
 4. Projection file referenced in .rasmap?
 
+## Terrain Modification Analysis (RasTerrainMod)
+
+**New**: Sample terrain WITH modifications applied via pythonnet + RasMapperLib.dll. No GUI required.
+
+```python
+from ras_commander.terrain import RasTerrainMod
+
+# One-time setup (creates GDAL junction)
+RasTerrainMod.setup_gdal_bridge()
+
+# Sample terrain profile with channels/levees/polygon overrides applied
+profile = RasTerrainMod.get_terrain_profile(
+    "project.rasmap", "project.g01.hdf",
+    x_coords=[3400000, 3410000], y_coords=[612000, 612000]
+)
+
+# Elevation-volume curve for a polygon (for pond sizing / no-net-fill)
+ev = RasTerrainMod.get_terrain_volume_elevation(
+    "project.rasmap", "project.g01.hdf",
+    x_coords=pond_polygon_x, y_coords=pond_polygon_y,
+    volume_factor=43560.0  # acre-feet
+)
+```
+
+**Requirements**: pythonnet (`pip install pythonnet`), HEC-RAS 6.6+, Windows.
+
+**How it works**: Loads `RasMapperLib.dll` via pythonnet and calls `RASMapperCom` methods directly. Terrain modifications (channels, levees, polygon overrides stored in `/Modifications/` within terrain HDF) are applied on-the-fly by the .NET code, identical to RASMapper.
+
+**See**: `examples/930_terrain_modification_analysis.ipynb` for complete cut/fill workflow.
+
 ## Cross-References
 
 **Primary sources**:
 - `ras_commander/terrain/` -- Terrain module implementation
+- `ras_commander/terrain/RasTerrainMod.py` -- Terrain modification analysis via pythonnet
+- `examples/920_terrain_creation.ipynb` -- Terrain creation workflow
+- `examples/930_terrain_modification_analysis.ipynb` -- Cut/fill analysis workflow
+
+**Research**:
+- `feature_dev_notes/Terrain_Modifications/` -- HDF format research, API design, rasterization path
 
 ---
 
-**Key Takeaway**: Use `RasTerrain.create_terrain_hdf()` to create terrain HDF files via `RasProcess.exe CreateTerrain`. Register in RasMapper with `RasMap.add_terrain_layer()`. Input files are processed in priority order (first = highest).
+**Key Takeaway**: Use `RasTerrain.create_terrain_hdf()` for terrain creation, `RasTerrainMod.get_terrain_profile()` for sampling terrain with modifications. Register terrains with `RasMap.add_terrain_layer()`. For cut/fill: use `RasTerrainMod.compare_terrain_volumes()`.

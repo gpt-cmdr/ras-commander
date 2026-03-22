@@ -1059,3 +1059,50 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error reading sloped topology from {hdf_path}: {e}")
             return {}
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_mannings_calibration_table(hdf_path: Path) -> Optional[pd.DataFrame]:
+        """Retrieve the Manning's n calibration table from a HEC-RAS geometry HDF file.
+
+        Reads the compound dataset at
+        ``Geometry/Land Cover (Manning's n)/Calibration Table`` which contains
+        land cover names, base Manning's n values, and per-region calibration
+        factors.
+
+        Args:
+            hdf_path: Path to the HEC-RAS geometry HDF file.
+
+        Returns:
+            A DataFrame with columns for each field in the calibration table
+            (land cover name, base Manning's n, and one column per calibration
+            region), or ``None`` if the dataset does not exist.
+
+        Example
+        -------
+        >>> df = HdfMesh.get_mannings_calibration_table("model.g01.hdf")
+        >>> print(df.columns.tolist()[:3])
+        ['Land Cover Name', "Base Manning's n Value", ...]
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                table_path = "Geometry/Land Cover (Manning's n)/Calibration Table"
+                if table_path not in hdf_file:
+                    logger.warning(f"No Manning's n calibration table found in {hdf_path}")
+                    return None
+
+                data = hdf_file[table_path][()]
+
+                df_dict = {}
+                for field_name in data.dtype.names:
+                    values = data[field_name]
+                    if values.dtype.kind == 'S':
+                        values = [v.decode('utf-8').strip() for v in values]
+                    df_dict[field_name] = values
+
+                return pd.DataFrame(df_dict)
+
+        except Exception as e:
+            logger.error(f"Error reading Manning's n calibration table from {hdf_path}: {str(e)}")
+            return None

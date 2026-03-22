@@ -38,6 +38,8 @@ The ras_commander library is organized into core modules and specialized subpack
 - `HdfResultsMesh`, `HdfResultsPlan`, `HdfResultsXsec` - Results time series extraction
 - `HdfResultsBreach` - Breach results extraction
 - `HdfPipe`, `HdfPump` - Infrastructure analysis (HEC-RAS 6.6+)
+- `HdfLandCover` - Final Manning's N (base + calibration overrides, raster composition)
+- `HdfInfiltration` - Infiltration parameters (base overrides, preprocessed per-cell values)
 - `HdfPlot`, `HdfResultsPlot` - Visualization helpers
 - `HdfBenefitAreas`, `HdfFluvialPluvial`, `HdfChannelCapacity` - Analysis tools
 - `HdfResultsAnalysis` - Results analysis utilities
@@ -77,6 +79,12 @@ Each subpackage has its own CLAUDE.md or AGENTS.md file with detailed guidance:
 **dss/** (3 modules):
 - DSS file operations for boundary conditions
 - See `ras_commander/dss/AGENTS.md`
+
+**terrain/** (3 modules):
+- Terrain creation (RasTerrain via RasProcess.exe), USGS 3DEP download (Usgs3depAws)
+- Terrain modification analysis (RasTerrainMod via pythonnet/RasMapperLib.dll)
+- Cut/fill analysis, elevation-volume curves, no-net-fill compliance
+- See `.claude/rules/hec-ras/terrain.md`
 
 **fixit/** (6 modules):
 - Automated geometry repair (RasFixit framework)
