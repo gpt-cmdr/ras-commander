@@ -5496,6 +5496,10 @@
 - Focus: Automatically detect and fix overlapping blocked obstructions.
 - Functions: RasFixit.check_blocked_obstructions (ras_commander/RasFixit.py), RasFixit.fix_blocked_obstructions (ras_commander/RasFixit.py).
 - Pattern: Use 0.02-unit gap constant for HEC-RAS compatibility; inspect FixResults for before/after.</p>
+<p>211_final_mannings_and_infiltration.ipynb
+- Focus: Extract and analyze final resolved Manning's N and infiltration parameters from geometry HDF, including base values and calibration region overrides.
+- Functions: HdfLandCover.get_preprocessed_mannings_n (ras_commander/hdf/HdfLandCover.py), HdfLandCover.get_mannings_calibration_table (ras_commander/hdf/HdfLandCover.py), HdfLandCover.compare_base_vs_calibrated (ras_commander/hdf/HdfLandCover.py), HdfLandCover.get_preprocessed_mannings_stats (ras_commander/hdf/HdfLandCover.py), HdfInfiltration.get_preprocessed_infiltration (ras_commander/hdf/HdfInfiltration.py), HdfInfiltration.get_preprocessed_infiltration_stats (ras_commander/hdf/HdfInfiltration.py).
+- Pattern: Read preprocessed per-cell values from geometry HDF → compute statistics → analyze calibration table for override inventory → compare base vs calibrated → visualize distributions; for raster export use compute_final_mannings_raster().</p>
 <hr />
 <h2 id="300s-boundary-condition-parsing-operations">300s: Boundary Condition Parsing &amp; Operations<a class="headerlink" href="#300s-boundary-condition-parsing-operations" title="Permanent link">&para;</a></h2>
 <p>300_unsteady_flow_operations.ipynb
@@ -5701,6 +5705,10 @@
 - Focus: Download USGS 3DEP elevation tiles and create HEC-RAS terrain HDF files programmatically.
 - Functions: Usgs3depAws.find_tiles_for_bbox (ras_commander/terrain/Usgs3depAws.py), Usgs3depAws.download_tiles (ras_commander/terrain/Usgs3depAws.py), Usgs3depAws.create_vrt (ras_commander/terrain/Usgs3depAws.py), RasTerrain.vrt_to_tiff (ras_commander/terrain/RasTerrain.py), RasTerrain.create_terrain_hdf (ras_commander/terrain/RasTerrain.py), RasMap.add_terrain_layer (ras_commander/RasMap.py).
 - Pattern: Query 3DEP tiles for project bbox → download GeoTIFF tiles → build VRT mosaic → convert to single GeoTIFF → create terrain HDF via RasProcess.exe → register layer in .rasmap; uses BaldEagleCrkMulti2D as example project.</p>
+<p>930_terrain_modification_analysis.ipynb
+- Focus: Analyze terrain modifications (channels, levees, polygon overrides) for cut/fill and no-net-fill analysis without the RASMapper GUI.
+- Functions: RasTerrainMod.setup_gdal_bridge (ras_commander/terrain/RasTerrainMod.py), RasTerrainMod.get_terrain_extent (ras_commander/terrain/RasTerrainMod.py), RasTerrainMod.get_terrain_profile (ras_commander/terrain/RasTerrainMod.py), RasTerrainMod.get_terrain_volume_elevation (ras_commander/terrain/RasTerrainMod.py), RasTerrainMod.compare_terrain_profiles (ras_commander/terrain/RasTerrainMod.py), RasTerrainMod.compare_terrain_volumes (ras_commander/terrain/RasTerrainMod.py).
+- Pattern: Setup GDAL bridge (one-time) → sample terrain profiles with modifications → compute elevation-volume curves → compare existing vs proposed for cut/fill; uses pythonnet to call RasMapperLib.dll directly (no GUI); requires HEC-RAS 6.6+ and pythonnet.</p>
 <hr />
 <h2 id="950s-fema-ebfe-model-organization">950s: FEMA eBFE Model Organization<a class="headerlink" href="#950s-fema-ebfe-model-organization" title="Permanent link">&para;</a></h2>
 <p>950_ebfe_spring_creek.ipynb
