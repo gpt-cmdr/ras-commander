@@ -16194,9 +16194,9 @@ When integrating new functions that do not clearly fit into other classes, add t
 </span><span id="__span-0-1194"><a id="__codelineno-0-1194" name="__codelineno-0-1194"></a>        <span class="n">idx</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">array</span> <span class="o">-</span> <span class="n">target_value</span><span class="p">))</span><span class="o">.</span><span class="n">argmin</span><span class="p">()</span>
 </span><span id="__span-0-1195"><a id="__codelineno-0-1195" name="__codelineno-0-1195"></a>        <span class="k">return</span> <span class="n">array</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
 </span><span id="__span-0-1196"><a id="__codelineno-0-1196" name="__codelineno-0-1196"></a>
-</span><span id="__span-0-1197"><a id="__codelineno-0-1197" name="__codelineno-0-1197"></a>    <span class="nd">@classmethod</span>
+</span><span id="__span-0-1197"><a id="__codelineno-0-1197" name="__codelineno-0-1197"></a>    <span class="nd">@staticmethod</span>
 </span><span id="__span-0-1198"><a id="__codelineno-0-1198" name="__codelineno-0-1198"></a>    <span class="nd">@log_call</span>
-</span><span id="__span-0-1199"><a id="__codelineno-0-1199" name="__codelineno-0-1199"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">horizontal_distance</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">coord1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">coord2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span><span id="__span-0-1199"><a id="__codelineno-0-1199" name="__codelineno-0-1199"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">horizontal_distance</span><span class="p">(</span><span class="n">coord1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">coord2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 </span><span id="__span-0-1200"><a id="__codelineno-0-1200" name="__codelineno-0-1200"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-0-1201"><a id="__codelineno-0-1201" name="__codelineno-0-1201"></a><span class="sd">        Calculate the horizontal distance between two coordinate points.</span>
 </span><span id="__span-0-1202"><a id="__codelineno-0-1202" name="__codelineno-0-1202"></a>
@@ -21228,7 +21228,7 @@ print(result)
 
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
   </span>
 
 <a href="#ras_commander.RasUtils.RasUtils.horizontal_distance" class="headerlink" title="Permanent link">&para;</a></h5>
@@ -21343,9 +21343,9 @@ print(distance)
 <span class="normal"><a href="#__codelineno-0-1212">1212</a></span>
 <span class="normal"><a href="#__codelineno-0-1213">1213</a></span>
 <span class="normal"><a href="#__codelineno-0-1214">1214</a></span>
-<span class="normal"><a href="#__codelineno-0-1215">1215</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1197"><a id="__codelineno-0-1197" name="__codelineno-0-1197"></a><span class="nd">@classmethod</span>
+<span class="normal"><a href="#__codelineno-0-1215">1215</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1197"><a id="__codelineno-0-1197" name="__codelineno-0-1197"></a><span class="nd">@staticmethod</span>
 </span><span id="__span-0-1198"><a id="__codelineno-0-1198" name="__codelineno-0-1198"></a><span class="nd">@log_call</span>
-</span><span id="__span-0-1199"><a id="__codelineno-0-1199" name="__codelineno-0-1199"></a><span class="k">def</span><span class="w"> </span><span class="nf">horizontal_distance</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">coord1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">coord2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span><span id="__span-0-1199"><a id="__codelineno-0-1199" name="__codelineno-0-1199"></a><span class="k">def</span><span class="w"> </span><span class="nf">horizontal_distance</span><span class="p">(</span><span class="n">coord1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">coord2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 </span><span id="__span-0-1200"><a id="__codelineno-0-1200" name="__codelineno-0-1200"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-0-1201"><a id="__codelineno-0-1201" name="__codelineno-0-1201"></a><span class="sd">    Calculate the horizontal distance between two coordinate points.</span>
 </span><span id="__span-0-1202"><a id="__codelineno-0-1202" name="__codelineno-0-1202"></a>
