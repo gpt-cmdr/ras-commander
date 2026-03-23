@@ -1194,9 +1194,9 @@ class RasUtils:
         idx = (np.abs(array - target_value)).argmin()
         return array[idx]
     
-    @classmethod
+    @staticmethod
     @log_call
-    def horizontal_distance(cls, coord1: np.ndarray, coord2: np.ndarray) -> float:
+    def horizontal_distance(coord1: np.ndarray, coord2: np.ndarray) -> float:
         """
         Calculate the horizontal distance between two coordinate points.
         

@@ -543,8 +543,8 @@ class HdfInfiltration:
 
 
     @staticmethod
-    @standardize_input(file_type='geom_hdf')
     @log_call
+    @standardize_input(file_type='geom_hdf')
     def scale_infiltration_data(
         hdf_path: Path,
         infiltration_df: pd.DataFrame,

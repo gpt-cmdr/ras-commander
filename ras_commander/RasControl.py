@@ -61,7 +61,10 @@ except ImportError:
     win32com = None
     WIN32_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+from .LoggingConfig import get_logger
+from .Decorators import log_call
+
+logger = get_logger(__name__)
 
 # Import ras-commander components
 from .RasPrj import ras
@@ -774,6 +777,7 @@ class RasControl:
     # ========== PUBLIC API (ras-commander style) ==========
 
     @staticmethod
+    @log_call
     def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False,
                  use_watchdog: bool = True, max_runtime: int = 86400) -> 'RasControlResult':
         """
@@ -999,6 +1003,7 @@ class RasControl:
                 return pd.NaT
 
     @staticmethod
+    @log_call
     def get_steady_results(plan: Union[str, Path], ras_object=None) -> pd.DataFrame:
         """
         Extract steady state profile results from HEC-RAS via COM interface.
@@ -1242,6 +1247,7 @@ class RasControl:
         return RasControl._com_open_close(info.project_path, info.version, _extract_operation)
 
     @staticmethod
+    @log_call
     def get_unsteady_results(plan: Union[str, Path], max_times: Optional[int] = None,
                             ras_object=None) -> pd.DataFrame:
         """
@@ -1524,6 +1530,7 @@ class RasControl:
         return RasControl._com_open_close(info.project_path, info.version, _extract_operation)
 
     @staticmethod
+    @log_call
     def get_output_times(plan: Union[str, Path], ras_object=None) -> List[str]:
         """
         Get list of output times for unsteady run.
@@ -1561,6 +1568,7 @@ class RasControl:
         return RasControl._com_open_close(info.project_path, info.version, _get_times)
 
     @staticmethod
+    @log_call
     def get_plans(plan: Union[str, Path], ras_object=None) -> List[dict]:
         """
         Get list of plans in project.
@@ -1589,6 +1597,7 @@ class RasControl:
         return RasControl._com_open_close(info.project_path, info.version, _get_plans)
 
     @staticmethod
+    @log_call
     def set_current_plan(plan: Union[str, Path], ras_object=None) -> bool:
         """
         Set the current/active plan by plan number.
@@ -1607,19 +1616,20 @@ class RasControl:
         Example:
             >>> RasControl.set_current_plan("02")  # Set to Plan 02
         """
-        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
-        if not plan_name:
+        if not info.plan_name:
             raise ValueError("Cannot set current plan - plan name could not be determined")
 
         def _set_plan(com_rc):
-            com_rc.Plan_SetCurrent(plan_name)
-            logger.info(f"Set current plan to Plan {plan_num}: {plan_name}")
+            com_rc.Plan_SetCurrent(info.plan_name)
+            logger.info(f"Set current plan to Plan {info.plan_number}: {info.plan_name}")
             return True
 
-        return RasControl._com_open_close(project_path, version, _set_plan)
+        return RasControl._com_open_close(info.project_path, info.version, _set_plan)
 
     @staticmethod
+    @log_call
     def get_comp_msgs(plan: Union[str, Path], ras_object=None) -> str:
         """
         Read computation messages from .txt file with fallback to HDF.
@@ -1653,12 +1663,12 @@ class RasControl:
             - Newer: {plan_file}.computeMsgs.txt
             Falls back to HDF: /Results/Summary/Compute Messages (text)
         """
-        project_path, version, plan_num, plan_name = RasControl._get_project_info(plan, ras_object)
+        info = RasControl._get_project_info(plan, ras_object)
 
         # Construct plan file path
         # e.g., "A100_00_00.prj" -> "A100_00_00"
-        project_base = project_path.stem
-        plan_file = project_path.parent / f"{project_base}.p{plan_num}"
+        project_base = info.project_path.stem
+        plan_file = info.project_path.parent / f"{project_base}.p{info.plan_number}"
 
         # Try both .txt file naming patterns (version-dependent)
         comp_msgs_file_old = Path(str(plan_file) + ".comp_msgs.txt")
@@ -1705,13 +1715,14 @@ class RasControl:
 
         # Both methods failed
         logger.debug(
-            f"No computation messages found in .txt or HDF sources for plan {plan_num}"
+            f"No computation messages found in .txt or HDF sources for plan {info.plan_number}"
         )
         return ""
 
     # ========== PROCESS MANAGEMENT API ==========
 
     @staticmethod
+    @log_call
     def list_processes(show_all: bool = False) -> pd.DataFrame:
         """
         List ras.exe processes with tracking status.
@@ -1775,6 +1786,7 @@ class RasControl:
         return pd.DataFrame(rows)
 
     @staticmethod
+    @log_call
     def scan_orphans() -> List[SessionLock]:
         """
         Scan lock files for orphaned sessions from crashed Python processes.
@@ -1815,6 +1827,7 @@ class RasControl:
         return orphans
 
     @staticmethod
+    @log_call
     def cleanup_orphans(interactive: bool = True, dry_run: bool = False) -> int:
         """
         Clean up orphaned ras.exe processes from crashed Python sessions.
@@ -1899,6 +1912,7 @@ class RasControl:
         return cleaned
 
     @staticmethod
+    @log_call
     def force_cleanup_all() -> int:
         """
         NUCLEAR OPTION: Terminate ALL ras.exe processes on the system.
