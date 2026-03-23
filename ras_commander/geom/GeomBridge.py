@@ -2041,6 +2041,7 @@ class GeomBridge:
         free_flow_points: int = 100,
         submerged_curves: int = 60,
         points_per_curve: int = 50,
+        create_backup: bool = True,
         ras_object=None
     ) -> Dict[str, Any]:
         """
@@ -2059,6 +2060,8 @@ class GeomBridge:
             free_flow_points: Points on free flow curve (optimal 100)
             submerged_curves: Number of submerged curves (optimal 60)
             points_per_curve: Points per submerged curve (optimal 50)
+            create_backup: Whether to create a .bak backup before modification (default True).
+                          Set to False when called from an orchestrator that manages its own backup.
             ras_object: RasPrj object for multi-project workflows
 
         Returns:
@@ -2068,7 +2071,7 @@ class GeomBridge:
                 - 'total': Total structures found
                 - 'details': List of per-structure results
                 - 'errors': List of error messages for failed structures
-                - 'backup_path': Path to geometry backup
+                - 'backup_path': Path to geometry backup (or None if create_backup=False)
 
         Raises:
             FileNotFoundError: If geometry or HDF file doesn't exist
@@ -2103,9 +2106,11 @@ class GeomBridge:
         if not hdf_results_path.exists():
             raise FileNotFoundError(f"HDF results file not found: {hdf_results_path}")
 
-        # Create single backup
-        backup_path = GeomParser.create_backup(geom_file)
-        logger.info(f"Created backup: {backup_path}")
+        # Create single backup (if requested)
+        backup_path = None
+        if create_backup:
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
 
         # Read file and find all structures
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -2121,7 +2126,7 @@ class GeomBridge:
                 'total': 0,
                 'details': [],
                 'errors': [],
-                'backup_path': str(backup_path)
+                'backup_path': str(backup_path) if backup_path else None
             }
 
         logger.debug(f"Found {len(structures)} structures to optimize")
@@ -2188,7 +2193,7 @@ class GeomBridge:
             'total': len(structures),
             'details': details,
             'errors': errors,
-            'backup_path': str(backup_path)
+            'backup_path': str(backup_path) if backup_path else None
         }
 
         logger.info(

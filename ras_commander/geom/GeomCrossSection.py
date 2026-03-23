@@ -2002,7 +2002,8 @@ class GeomCrossSection:
         hdf_results_path: Union[str, Path],
         safety_factor: float = 1.3,
         increment: float = 0.1,
-        num_points: int = 500
+        num_points: int = 500,
+        create_backup: bool = True
     ) -> dict:
         """
         Optimize cross section HTAB parameters based on existing HEC-RAS results.
@@ -2030,6 +2031,8 @@ class GeomCrossSection:
             increment (float): Maximum elevation increment in feet (default 0.1)
                               Smaller increments give more accurate interpolation
             num_points (int): Maximum number of points (default 500, HEC-RAS limit)
+            create_backup (bool): Whether to create a .bak backup before modification (default True).
+                                  Set to False when called from an orchestrator that manages its own backup.
 
         Returns:
             dict: Summary statistics with keys:
@@ -2179,9 +2182,11 @@ class GeomCrossSection:
         )
         STA_ELEV_PATTERN = re.compile(r'^#Sta/Elev=\s*(\d+)')
 
-        # Step 4: Create backup ONCE before any modifications
-        backup_path = GeomParser.create_backup(geom_file)
-        logger.info(f"Created backup: {backup_path}")
+        # Step 4: Create backup ONCE before any modifications (if requested)
+        backup_path = None
+        if create_backup:
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
 
         # Step 5: Calculate optimal parameters for each XS and collect modifications
         modifications = []

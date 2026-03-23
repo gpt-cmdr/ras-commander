@@ -49,12 +49,9 @@ References:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
-import shutil
+from typing import Dict, Union, Any
 from datetime import datetime
 
-import h5py
-import pandas as pd
 import numpy as np
 
 from ..Decorators import log_call
@@ -293,9 +290,8 @@ class GeomHtab:
         """
         Optimize HTAB parameters for ALL cross sections from HDF results.
 
-        Reads maximum water surface elevation for each cross section from HDF
-        results, calculates optimal HTAB parameters with safety factor, and
-        updates the geometry file.
+        Delegates to GeomCrossSection.optimize_xs_htab_from_results() which uses
+        batch I/O (single read/write cycle) for optimal performance.
 
         Parameters:
             geom_file: Path to geometry file (.g##)
@@ -317,149 +313,38 @@ class GeomHtab:
             - For 1D cross sections, extracts max WSE from HDF 1D results
             - For 2D-connected XS, attempts to use mesh max WSE
             - XS without results data are skipped with warning
+
+        See Also:
+            - GeomCrossSection.optimize_xs_htab_from_results(): Batch implementation
         """
-        from .GeomParser import GeomParser
         from .GeomCrossSection import GeomCrossSection
-        from .GeomHtabUtils import GeomHtabUtils
-        from ..hdf.HdfResultsXsec import HdfResultsXsec
 
-        geom_file = Path(geom_file)
-        hdf_results_path = Path(hdf_results_path)
-
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        if not hdf_results_path.exists():
-            raise FileNotFoundError(f"HDF results file not found: {hdf_results_path}")
-
-        result = {
-            'modified': 0,
-            'skipped': 0,
-            'errors': [],
-            'params_summary': {},
-            'backup': None
-        }
-
-        # Create backup if requested
-        if create_backup:
-            result['backup'] = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {result['backup']}")
-
-        # Extract max WSE data from HDF
-        try:
-            xs_timeseries = HdfResultsXsec.get_xsec_timeseries(hdf_results_path)
-
-            # Get max WSE for each cross section
-            max_wse_data = {}
-
-            # Extract max water surface from xarray Dataset
-            cross_sections = xs_timeseries.coords['cross_section'].values
-            rivers = xs_timeseries.coords['River'].values
-            reaches = xs_timeseries.coords['Reach'].values
-            stations = xs_timeseries.coords['Station'].values
-            max_wse_values = xs_timeseries.coords['Maximum_Water_Surface'].values
-
-            for i, xs_name in enumerate(cross_sections):
-                max_wse_data[xs_name] = {
-                    'river': rivers[i],
-                    'reach': reaches[i],
-                    'station': stations[i],
-                    'max_wse': float(max_wse_values[i])
-                }
-
-            logger.info(f"Extracted max WSE for {len(max_wse_data)} cross sections")
-
-        except Exception as e:
-            logger.warning(f"Could not extract 1D XS timeseries: {str(e)}")
-            logger.warning("Attempting alternative max WSE extraction...")
-            max_wse_data = {}
-
-        if not max_wse_data:
-            result['errors'].append("No cross section max WSE data available in HDF")
-            logger.error("No cross section results data found in HDF file")
-            return result
-
-        # Track parameters for summary
-        increments_used = []
-        depths_covered = []
-
-        # Process each cross section
-        for xs_name, xs_data in max_wse_data.items():
-            try:
-                river = xs_data['river']
-                reach = xs_data['reach']
-                rs = xs_data['station']
-                max_wse = xs_data['max_wse']
-
-                # Skip if max_wse is invalid (NaN or very small)
-                if np.isnan(max_wse) or max_wse < -9998:
-                    logger.debug(f"Skipping {xs_name}: no valid max WSE")
-                    result['skipped'] += 1
-                    continue
-
-                # Get current HTAB params to get invert
-                current_params = GeomCrossSection.get_xs_htab_params(
-                    geom_file, river, reach, rs
-                )
-
-                if current_params['invert'] is None:
-                    logger.warning(f"Skipping {xs_name}: no invert elevation available")
-                    result['skipped'] += 1
-                    continue
-
-                invert = current_params['invert']
-
-                # Calculate optimal parameters
-                optimal = GeomHtabUtils.calculate_optimal_xs_htab(
-                    invert=invert,
-                    max_wse=max_wse,
-                    safety_factor=safety_factor,
-                    target_increment=target_increment,
-                    max_points=max_points
-                )
-
-                # Apply optimal parameters
-                GeomCrossSection.set_xs_htab_params(
-                    geom_file=geom_file,
-                    river=river,
-                    reach=reach,
-                    rs=rs,
-                    starting_el=optimal['starting_el'],
-                    increment=optimal['increment'],
-                    num_points=optimal['num_points']
-                )
-
-                result['modified'] += 1
-                increments_used.append(optimal['increment'])
-                depths_covered.append(optimal['target_depth'])
-
-                logger.debug(
-                    f"Optimized {xs_name}: starting_el={optimal['starting_el']:.2f}, "
-                    f"increment={optimal['increment']:.4f}, num_points={optimal['num_points']}"
-                )
-
-            except Exception as e:
-                error_msg = f"Failed to optimize {xs_name}: {str(e)}"
-                logger.error(error_msg)
-                result['errors'].append(error_msg)
-
-        # Build summary statistics
-        if increments_used:
-            result['params_summary'] = {
-                'min_increment': min(increments_used),
-                'max_increment': max(increments_used),
-                'avg_increment': sum(increments_used) / len(increments_used),
-                'min_depth': min(depths_covered),
-                'max_depth': max(depths_covered),
-                'avg_depth': sum(depths_covered) / len(depths_covered)
-            }
-
-        logger.info(
-            f"XS HTAB optimization complete: {result['modified']} modified, "
-            f"{result['skipped']} skipped, {len(result['errors'])} errors"
+        # Delegate to GeomCrossSection's batch implementation (125x faster)
+        xs_result = GeomCrossSection.optimize_xs_htab_from_results(
+            geom_file=geom_file,
+            hdf_results_path=hdf_results_path,
+            safety_factor=safety_factor,
+            increment=target_increment,
+            num_points=max_points,
+            create_backup=create_backup
         )
 
-        return result
+        # Adapt return schema from GeomCrossSection format to GeomHtab format
+        return {
+            'modified': xs_result.get('modified_count', 0),
+            'skipped': xs_result.get('skipped_count', 0),
+            'errors': [
+                f"Failed to optimize XS: {mod.get('error', 'unknown')}"
+                for mod in xs_result.get('modifications', [])
+                if mod.get('status') == 'failed'
+            ] if xs_result.get('modifications') else [],
+            'params_summary': {
+                'min_increment': xs_result.get('min_increment'),
+                'max_increment': xs_result.get('max_increment'),
+                'avg_increment': xs_result.get('avg_increment'),
+            },
+            'backup': xs_result.get('backup_path')
+        }
 
     @staticmethod
     @log_call
@@ -477,9 +362,8 @@ class GeomHtab:
         """
         Optimize HTAB parameters for ALL structures from HDF results.
 
-        Reads maximum headwater, tailwater, and flow for each structure from
-        HDF results, calculates optimal HTAB parameters with safety factors,
-        and updates the geometry file.
+        Delegates to GeomBridge.optimize_all_structures_from_results() which uses
+        HdfStruc1D for robust HDF extraction and processes all structure types.
 
         Parameters:
             geom_file: Path to geometry file (.g##)
@@ -504,266 +388,40 @@ class GeomHtab:
             - Processes bridges, culverts, and inline weirs
             - Structures without results data are skipped with warning
             - Safety is applied to range above invert, not absolute elevation
+
+        See Also:
+            - GeomBridge.optimize_all_structures_from_results(): Full implementation
         """
-        from .GeomParser import GeomParser
         from .GeomBridge import GeomBridge
-        from .GeomHtabUtils import GeomHtabUtils
 
-        geom_file = Path(geom_file)
-        hdf_results_path = Path(hdf_results_path)
-
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        if not hdf_results_path.exists():
-            raise FileNotFoundError(f"HDF results file not found: {hdf_results_path}")
-
-        result = {
-            'modified': 0,
-            'skipped': 0,
-            'errors': [],
-            'structures_processed': [],
-            'backup': None
-        }
-
-        # Create backup if requested
-        if create_backup:
-            result['backup'] = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {result['backup']}")
-
-        # Extract structure max values from HDF
-        try:
-            structure_max_data = GeomHtab._extract_structure_max_values(hdf_results_path)
-            logger.info(f"Extracted max values for {len(structure_max_data)} structures")
-        except Exception as e:
-            logger.warning(f"Could not extract structure results: {str(e)}")
-            structure_max_data = {}
-
-        if not structure_max_data:
-            # No structure data found - this may be OK if model has no structures
-            logger.info("No structure results data found in HDF file (model may have no structures)")
-            return result
-
-        # Process each structure
-        for struct_id, struct_data in structure_max_data.items():
-            try:
-                river = struct_data['river']
-                reach = struct_data['reach']
-                rs = struct_data['station']
-                max_hw = struct_data.get('max_hw')
-                max_tw = struct_data.get('max_tw')
-                max_flow = struct_data.get('max_flow')
-
-                # Skip if no useful data
-                if max_hw is None and max_flow is None:
-                    logger.debug(f"Skipping structure {struct_id}: no max HW or flow data")
-                    result['skipped'] += 1
-                    continue
-
-                # Get current HTAB to get invert
-                current_htab = GeomBridge.get_htab_dict(geom_file, river, reach, rs)
-
-                if current_htab.get('invert') is None:
-                    logger.warning(f"Skipping structure {struct_id}: no invert available")
-                    result['skipped'] += 1
-                    continue
-
-                struct_invert = current_htab['invert']
-
-                # Calculate optimal parameters
-                # Use current values as defaults if results are missing
-                effective_max_hw = max_hw if max_hw is not None else (current_htab.get('hw_max') or struct_invert + 10)
-                effective_max_tw = max_tw if max_tw is not None else (current_htab.get('tw_max') or struct_invert + 5)
-                effective_max_flow = max_flow if max_flow is not None else (current_htab.get('max_flow') or 10000)
-
-                optimal = GeomHtabUtils.calculate_optimal_structure_htab(
-                    struct_invert=struct_invert,
-                    max_hw=effective_max_hw,
-                    max_tw=effective_max_tw,
-                    max_flow=effective_max_flow,
-                    hw_safety=hw_safety_factor,
-                    flow_safety=flow_safety_factor,
-                    tw_safety=tw_safety_factor,
-                    free_flow_points=free_flow_points,
-                    submerged_curves=submerged_curves,
-                    points_per_curve=points_per_curve
-                )
-
-                # Apply optimal parameters
-                GeomBridge.set_htab(
-                    geom_file=geom_file,
-                    river=river,
-                    reach=reach,
-                    rs=rs,
-                    hw_max=optimal['hw_max'],
-                    tw_max=optimal['tw_max'],
-                    max_flow=optimal['max_flow'],
-                    use_user_curves=optimal['use_user_curves'],
-                    free_flow_points=optimal['free_flow_points'],
-                    submerged_curves=optimal['submerged_curves'],
-                    points_per_curve=optimal['points_per_curve'],
-                    validate=False  # Already calculated optimal values
-                )
-
-                result['modified'] += 1
-                result['structures_processed'].append(struct_id)
-
-                logger.debug(
-                    f"Optimized structure {struct_id}: hw_max={optimal['hw_max']:.2f}, "
-                    f"max_flow={optimal['max_flow']:.2f}"
-                )
-
-            except Exception as e:
-                error_msg = f"Failed to optimize structure {struct_id}: {str(e)}"
-                logger.error(error_msg)
-                result['errors'].append(error_msg)
-
-        logger.info(
-            f"Structure HTAB optimization complete: {result['modified']} modified, "
-            f"{result['skipped']} skipped, {len(result['errors'])} errors"
+        # Delegate to GeomBridge's implementation (uses HdfStruc1D for robust extraction)
+        bridge_result = GeomBridge.optimize_all_structures_from_results(
+            geom_file=geom_file,
+            hdf_results_path=hdf_results_path,
+            hw_safety_factor=hw_safety_factor,
+            flow_safety_factor=flow_safety_factor,
+            tw_safety_factor=tw_safety_factor,
+            free_flow_points=free_flow_points,
+            submerged_curves=submerged_curves,
+            points_per_curve=points_per_curve,
+            create_backup=create_backup
         )
 
-        return result
+        # Adapt return schema from GeomBridge format to GeomHtab format
+        # Build structures_processed list from successful detail entries
+        structures_processed = [
+            f"{d.get('struct_type', 'Structure')} {d.get('river', '')}/{d.get('reach', '')}/RS {d.get('rs', '')}"
+            for d in bridge_result.get('details', [])
+            if d.get('status') == 'optimized'
+        ]
 
-    @staticmethod
-    def _extract_structure_max_values(hdf_path: Path) -> Dict[str, Dict[str, Any]]:
-        """
-        Extract maximum headwater, tailwater, and flow for structures from HDF.
-
-        This internal method reads the HDF file to find maximum hydraulic values
-        for all structures (bridges, culverts, inline weirs).
-
-        Parameters:
-            hdf_path: Path to HDF results file
-
-        Returns:
-            dict: Mapping of structure ID to max values:
-                {
-                    'structure_id': {
-                        'river': str,
-                        'reach': str,
-                        'station': str,
-                        'max_hw': float,
-                        'max_tw': float,
-                        'max_flow': float
-                    },
-                    ...
-                }
-        """
-        structure_data = {}
-
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Try multiple possible paths for structure results
-                possible_paths = [
-                    "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections",
-                    "Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Cross Sections",
-                ]
-
-                # Try to find structures in the HDF
-                # Structures are typically stored with their XS data or in separate datasets
-                structures_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/SA/2D Area Connections"
-                inline_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/SA/2D Area Inline"
-
-                # Check for SA/2D Area Connections (bridges, culverts over 2D areas)
-                if structures_base in hdf:
-                    try:
-                        conn_path = structures_base
-                        # Look for structure-specific datasets
-                        if "Connection Attributes" in hdf[conn_path]:
-                            attrs = hdf[f"{conn_path}/Connection Attributes"][:]
-
-                            # Get flow data if available
-                            flow_data = None
-                            if "Flow" in hdf[conn_path]:
-                                flow_data = hdf[f"{conn_path}/Flow"][:]
-                                max_flows = np.max(np.abs(flow_data), axis=0)
-
-                            for i, attr in enumerate(attrs):
-                                struct_id = f"SA_Conn_{i}"
-                                try:
-                                    name = attr['Name'].decode('utf-8').strip() if hasattr(attr['Name'], 'decode') else str(attr['Name'])
-                                except:
-                                    name = f"Connection_{i}"
-
-                                structure_data[name] = {
-                                    'river': 'SA_Connection',
-                                    'reach': 'SA_Connection',
-                                    'station': name,
-                                    'max_hw': None,  # SA connections may not have explicit HW
-                                    'max_tw': None,
-                                    'max_flow': float(max_flows[i]) if flow_data is not None else None
-                                }
-                    except Exception as e:
-                        logger.debug(f"Could not process SA connections: {e}")
-
-                # Check for 1D lateral structures
-                lateral_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Lateral Structures"
-                if lateral_base in hdf:
-                    try:
-                        if "Lateral Structure Attributes" in hdf[lateral_base]:
-                            attrs = hdf[f"{lateral_base}/Lateral Structure Attributes"][:]
-
-                            flow_data = None
-                            if "Flow" in hdf[lateral_base]:
-                                flow_data = hdf[f"{lateral_base}/Flow"][:]
-                                max_flows = np.max(np.abs(flow_data), axis=0)
-
-                            for i, attr in enumerate(attrs):
-                                try:
-                                    name = attr['Name'].decode('utf-8').strip() if hasattr(attr['Name'], 'decode') else str(attr['Name'])
-                                except:
-                                    name = f"Lateral_{i}"
-
-                                structure_data[name] = {
-                                    'river': 'Lateral',
-                                    'reach': 'Lateral',
-                                    'station': name,
-                                    'max_hw': None,
-                                    'max_tw': None,
-                                    'max_flow': float(max_flows[i]) if flow_data is not None else None
-                                }
-                    except Exception as e:
-                        logger.debug(f"Could not process lateral structures: {e}")
-
-                # Check for 1D inline structures
-                inline_1d_base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Inline Structures"
-                if inline_1d_base in hdf:
-                    try:
-                        if "Inline Structure Attributes" in hdf[inline_1d_base]:
-                            attrs = hdf[f"{inline_1d_base}/Inline Structure Attributes"][:]
-
-                            flow_data = None
-                            if "Flow" in hdf[inline_1d_base]:
-                                flow_data = hdf[f"{inline_1d_base}/Flow"][:]
-                                max_flows = np.max(np.abs(flow_data), axis=0)
-
-                            for i, attr in enumerate(attrs):
-                                try:
-                                    name = attr['Name'].decode('utf-8').strip() if hasattr(attr['Name'], 'decode') else str(attr['Name'])
-                                except:
-                                    name = f"Inline_{i}"
-
-                                structure_data[name] = {
-                                    'river': 'Inline',
-                                    'reach': 'Inline',
-                                    'station': name,
-                                    'max_hw': None,
-                                    'max_tw': None,
-                                    'max_flow': float(max_flows[i]) if flow_data is not None else None
-                                }
-                    except Exception as e:
-                        logger.debug(f"Could not process inline structures: {e}")
-
-                # If no structure data found, try reading from geometry attributes
-                # that might be stored in results
-                if not structure_data:
-                    logger.debug("No structure results found in standard HDF paths")
-
-        except Exception as e:
-            logger.warning(f"Error extracting structure max values: {str(e)}")
-
-        return structure_data
+        return {
+            'modified': bridge_result.get('optimized', 0),
+            'skipped': bridge_result.get('total', 0) - bridge_result.get('optimized', 0) - bridge_result.get('failed', 0),
+            'errors': bridge_result.get('errors', []),
+            'structures_processed': structures_processed,
+            'backup': bridge_result.get('backup_path')
+        }
 
     @staticmethod
     def get_optimization_report(
