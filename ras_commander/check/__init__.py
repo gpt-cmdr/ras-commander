@@ -43,7 +43,14 @@ Example:
     >>> results.to_html("validation_report.html")
 """
 
-from .RasCheck import RasCheck, CheckResults, CheckMessage, Severity, FlowType
+from .types import Severity, FlowType, CheckMessage, CheckResults
+from .RasCheck import RasCheck
+from .check_unsteady import CheckUnsteady
+from .check_nt import CheckNt
+from .check_xs import CheckXs
+from .check_structures import CheckStructures
+from .check_floodways import CheckFloodways
+from .check_profiles import CheckProfiles
 from .thresholds import (
     ValidationThresholds,
     get_default_thresholds,
@@ -65,8 +72,15 @@ from .report import (
 )
 
 __all__ = [
-    # Main class
+    # Main class (facade)
     'RasCheck',
+    # Domain check classes
+    'CheckUnsteady',
+    'CheckNt',
+    'CheckXs',
+    'CheckStructures',
+    'CheckFloodways',
+    'CheckProfiles',
     # Result classes
     'CheckResults',
     'CheckMessage',

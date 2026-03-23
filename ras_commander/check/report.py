@@ -20,7 +20,7 @@ import html
 
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
-from .RasCheck import CheckResults, CheckMessage, Severity
+from .types import CheckResults, CheckMessage, Severity
 
 logger = get_logger(__name__)
 
