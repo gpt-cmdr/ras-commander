@@ -556,21 +556,14 @@ class RasPlan:
         >>> # Integer input also works
         >>> flow_path = ras_plan.get_flow_path(1)
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        # Normalize flow number to two-digit format
-        flow_number = RasUtils.normalize_ras_number(flow_number)
-        
-        # Use updated flow dataframe
-        ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
-        
-        flow_path = ras_obj.flow_df[ras_obj.flow_df['flow_number'] == flow_number]
-        if not flow_path.empty:
-            full_path = flow_path['full_path'].iloc[0]
-            return Path(full_path) if full_path else None
-        else:
-            return None
+        return RasPlan._get_component_path(
+            component_number=flow_number,
+            df_attr='flow_df',
+            number_column='flow_number',
+            prj_entry_type='Flow',
+            file_prefix='f',
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -598,21 +591,14 @@ class RasPlan:
         >>> # Integer input also works
         >>> unsteady_path = ras_plan.get_unsteady_path(1)
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        # Normalize unsteady number to two-digit format
-        unsteady_number = RasUtils.normalize_ras_number(unsteady_number)
-        
-        # Use updated unsteady dataframe
-        ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
-        
-        unsteady_path = ras_obj.unsteady_df[ras_obj.unsteady_df['unsteady_number'] == unsteady_number]
-        if not unsteady_path.empty:
-            full_path = unsteady_path['full_path'].iloc[0]
-            return Path(full_path) if full_path else None
-        else:
-            return None
+        return RasPlan._get_component_path(
+            component_number=unsteady_number,
+            df_attr='unsteady_df',
+            number_column='unsteady_number',
+            prj_entry_type='Unsteady',
+            file_prefix='u',
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -640,39 +626,28 @@ class RasPlan:
         >>> # Integer input also works
         >>> geom_path = ras_plan.get_geom_path(1)
         """
-        logger = get_logger(__name__)
+        _logger = get_logger(__name__)
 
         if geom_number is None:
-            logger.warning("Provided geometry number is None")
+            _logger.warning("Provided geometry number is None")
             return None
 
         try:
-            ras_obj = ras_object or ras
-            ras_obj.check_initialized()
-
-            # Normalize geometry number to two-digit format
-            geom_number = RasUtils.normalize_ras_number(geom_number)
-            
-            # Use updated geom dataframe
-            ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
-            
-            # Find the geometry file path
-            geom_path = ras_obj.geom_df[ras_obj.geom_df['geom_number'] == geom_number]
-            if not geom_path.empty:
-                if 'full_path' in geom_path.columns and pd.notna(geom_path['full_path'].iloc[0]):
-                    full_path = geom_path['full_path'].iloc[0]
-                    logger.info(f"Found geometry path: {full_path}")
-                    return Path(full_path)
-                else:
-                    # Fallback to constructing path
-                    constructed_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{geom_number}"
-                    logger.info(f"Constructed geometry path: {constructed_path}")
-                    return constructed_path
+            result = RasPlan._get_component_path(
+                component_number=geom_number,
+                df_attr='geom_df',
+                number_column='geom_number',
+                prj_entry_type='Geom',
+                file_prefix='g',
+                ras_object=ras_object,
+            )
+            if result is not None:
+                _logger.info(f"Found geometry path: {result}")
             else:
-                logger.warning(f"No geometry file found with number: {geom_number}")
-                return None
+                _logger.warning(f"No geometry file found with number: {geom_number}")
+            return result
         except Exception as e:
-            logger.error(f"Error in get_geom_path: {str(e)}")
+            _logger.error(f"Error in get_geom_path: {str(e)}")
             return None
 
     # Clone Functions to copy unsteady, flow, and geometry files from templates
@@ -881,60 +856,17 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        # Normalize unsteady number to two-digit format
-        template_unsteady = RasUtils.normalize_ras_number(template_unsteady)
-
-        # Validate new_title length if provided
-        if new_title is not None and len(new_title) > 32:
-            raise ValueError(
-                f"Flow title must be 32 characters or less. "
-                f"Got {len(new_title)} characters: '{new_title}'"
-            )
-
-        # Update unsteady entries without reinitializing the entire project
-        ras_obj.unsteady_df = ras_obj.get_prj_entries('Unsteady')
-
-        new_unsteady_num = RasPlan.get_next_number(ras_obj.unsteady_df['unsteady_number'])
-        template_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}"
-        new_unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}"
-
-        def update_flow_title(lines):
-            """Update Flow Title if new_title provided"""
-            if new_title is None:
-                return lines
-
-            title_pattern = re.compile(r'^Flow Title=(.*)$', re.IGNORECASE)
-            for i, line in enumerate(lines):
-                title_match = title_pattern.match(line.strip())
-                if title_match:
-                    lines[i] = f"Flow Title={new_title[:32]}\n"
-                    break
-            return lines
-
-        # Use RasUtils to clone the file and update flow title
-        RasUtils.clone_file(template_unsteady_path, new_unsteady_path, update_flow_title)
-
-        # Copy the corresponding .hdf file if it exists
-        template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{template_unsteady}.hdf"
-        new_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_num}.hdf"
-        if template_hdf_path.exists():
-            shutil.copy(template_hdf_path, new_hdf_path)
-
-        # Use RasUtils to update the project file
-        RasUtils.update_project_file(ras_obj.prj_file, 'Unsteady', new_unsteady_num, ras_object=ras_obj)
-
-        # Re-initialize the ras global object
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
-
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-
-        return new_unsteady_num
+        return RasPlan._clone_component(
+            template_number=template_unsteady,
+            component_type='Unsteady',
+            file_prefix='u',
+            df_attr='unsteady_df',
+            number_column='unsteady_number',
+            new_title=new_title,
+            title_keyword='Flow Title',
+            copy_hdf=True,
+            ras_object=ras_object,
+        )
 
 
     @staticmethod
@@ -963,54 +895,17 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        # Normalize flow number to two-digit format
-        template_flow = RasUtils.normalize_ras_number(template_flow)
-
-        # Validate new_title length if provided
-        if new_title is not None and len(new_title) > 32:
-            raise ValueError(
-                f"Flow title must be 32 characters or less. "
-                f"Got {len(new_title)} characters: '{new_title}'"
-            )
-
-        # Update flow entries without reinitializing the entire project
-        ras_obj.flow_df = ras_obj.get_prj_entries('Flow')
-
-        new_flow_num = RasPlan.get_next_number(ras_obj.flow_df['flow_number'])
-        template_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{template_flow}"
-        new_flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_flow_num}"
-
-        def update_flow_title(lines):
-            """Update Flow Title if new_title provided"""
-            if new_title is None:
-                return lines
-
-            title_pattern = re.compile(r'^Flow Title=(.*)$', re.IGNORECASE)
-            for i, line in enumerate(lines):
-                title_match = title_pattern.match(line.strip())
-                if title_match:
-                    lines[i] = f"Flow Title={new_title[:32]}\n"
-                    break
-            return lines
-
-        # Use RasUtils to clone the file and update flow title
-        RasUtils.clone_file(template_flow_path, new_flow_path, update_flow_title)
-
-        # Use RasUtils to update the project file
-        RasUtils.update_project_file(ras_obj.prj_file, 'Flow', new_flow_num, ras_object=ras_obj)
-
-        # Re-initialize the ras global object
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
-        
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-        
-        return new_flow_num
+        return RasPlan._clone_component(
+            template_number=template_flow,
+            component_type='Flow',
+            file_prefix='f',
+            df_attr='flow_df',
+            number_column='flow_number',
+            new_title=new_title,
+            title_keyword='Flow Title',
+            copy_hdf=False,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -1035,38 +930,17 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
-        # Normalize geometry number to two-digit format
-        template_geom = RasUtils.normalize_ras_number(template_geom)
-
-        # Update geometry entries without reinitializing the entire project
-        ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
-
-        new_geom_num = RasPlan.get_next_number(ras_obj.geom_df['geom_number'])
-        template_geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{template_geom}"
-        new_geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom_num}"
-
-        # Use RasUtils to clone the file
-        RasUtils.clone_file(template_geom_path, new_geom_path)
-
-        # Handle HDF file copy
-        template_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{template_geom}.hdf"
-        new_hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom_num}.hdf"
-        if template_hdf_path.is_file():
-            RasUtils.clone_file(template_hdf_path, new_hdf_path)
-
-        # Use RasUtils to update the project file
-        RasUtils.update_project_file(ras_obj.prj_file, 'Geom', new_geom_num, ras_object=ras_obj)
-
-        # Update all dataframes in the ras object
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-
-        return new_geom_num
+        return RasPlan._clone_component(
+            template_number=template_geom,
+            component_type='Geom',
+            file_prefix='g',
+            df_attr='geom_df',
+            number_column='geom_number',
+            new_title=None,
+            title_keyword='Geom Title',
+            copy_hdf=True,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -2273,7 +2147,318 @@ class RasPlan:
     # -------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------
-    # Private helpers
+    # Private helpers for deduplication
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _get_component_path(
+        component_number: Union[str, Number],
+        df_attr: str,
+        number_column: str,
+        prj_entry_type: str,
+        file_prefix: str,
+        ras_object=None,
+    ) -> Optional[Path]:
+        """
+        Generic path resolution helper for flow, unsteady, and geometry components.
+
+        Resolves a component number to its full filesystem path by looking up the
+        component DataFrame on the ras object.
+
+        Parameters:
+            component_number: The component number (e.g., '01', 1)
+            df_attr: Name of the DataFrame attribute on ras_obj (e.g., 'flow_df')
+            number_column: Column name for the number (e.g., 'flow_number')
+            prj_entry_type: PRJ entry type for get_prj_entries() (e.g., 'Flow')
+            file_prefix: File prefix letter (e.g., 'f', 'u', 'g')
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            Optional[Path]: Full path if found, None otherwise.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        component_number = RasUtils.normalize_ras_number(component_number)
+
+        # Refresh the relevant DataFrame
+        setattr(ras_obj, df_attr, ras_obj.get_prj_entries(prj_entry_type))
+        df = getattr(ras_obj, df_attr)
+
+        matching = df[df[number_column] == component_number]
+        if not matching.empty:
+            full_path = matching['full_path'].iloc[0]
+            if full_path:
+                return Path(full_path)
+            # No fallback here - callers (e.g., get_geom_path) add their own if needed
+            return None
+        else:
+            return None
+
+    @staticmethod
+    def _clone_component(
+        template_number: Union[str, Number],
+        component_type: str,
+        file_prefix: str,
+        df_attr: str,
+        number_column: str,
+        new_title: Optional[str] = None,
+        title_keyword: str = 'Flow Title',
+        copy_hdf: bool = False,
+        ras_object=None,
+    ) -> str:
+        """
+        Generic clone helper for unsteady, steady, and geometry components.
+
+        Clones a component file, optionally updates its title, optionally copies
+        the companion HDF file, updates the PRJ file, and refreshes DataFrames.
+
+        Parameters:
+            template_number: Number of the template to clone (e.g., '01')
+            component_type: PRJ entry type (e.g., 'Flow', 'Unsteady', 'Geom')
+            file_prefix: File prefix letter (e.g., 'f', 'u', 'g')
+            df_attr: DataFrame attribute name (e.g., 'flow_df')
+            number_column: Column for the component number (e.g., 'flow_number')
+            new_title: Optional new title (max 32 chars). None keeps original.
+            title_keyword: Keyword in file for title line (e.g., 'Flow Title')
+            copy_hdf: Whether to copy the companion .hdf file.
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            str: The new component number.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        template_number = RasUtils.normalize_ras_number(template_number)
+
+        # Validate new_title length if provided
+        if new_title is not None and len(new_title) > 32:
+            raise ValueError(
+                f"{title_keyword} must be 32 characters or less. "
+                f"Got {len(new_title)} characters: '{new_title}'"
+            )
+
+        # Refresh the relevant DataFrame
+        setattr(ras_obj, df_attr, ras_obj.get_prj_entries(component_type))
+        df = getattr(ras_obj, df_attr)
+
+        new_num = RasPlan.get_next_number(df[number_column])
+        template_path = ras_obj.project_folder / f"{ras_obj.project_name}.{file_prefix}{template_number}"
+        new_path = ras_obj.project_folder / f"{ras_obj.project_name}.{file_prefix}{new_num}"
+
+        def update_title(lines):
+            """Update title line in cloned file."""
+            title_pattern = re.compile(rf'^{re.escape(title_keyword)}=(.*)$', re.IGNORECASE)
+            for i, line in enumerate(lines):
+                if title_pattern.match(line.strip()):
+                    lines[i] = f"{title_keyword}={new_title[:32]}\n"
+                    break
+            return lines
+
+        # Clone the file (with optional title update)
+        if new_title is not None:
+            RasUtils.clone_file(template_path, new_path, update_title)
+        else:
+            RasUtils.clone_file(template_path, new_path)
+
+        # Copy companion HDF if requested
+        if copy_hdf:
+            template_hdf = ras_obj.project_folder / f"{ras_obj.project_name}.{file_prefix}{template_number}.hdf"
+            new_hdf = ras_obj.project_folder / f"{ras_obj.project_name}.{file_prefix}{new_num}.hdf"
+            if template_hdf.is_file():
+                if file_prefix == 'g':
+                    RasUtils.clone_file(template_hdf, new_hdf)
+                else:
+                    shutil.copy(template_hdf, new_hdf)
+
+        # Update .prj file
+        RasUtils.update_project_file(ras_obj.prj_file, component_type, new_num, ras_object=ras_obj)
+
+        # Re-initialize and refresh DataFrames
+        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+        return new_num
+
+    @staticmethod
+    def _delete_component(
+        component_number: Union[str, Number],
+        component_type: str,
+        file_prefix: str,
+        df_attr: str,
+        number_column: str,
+        associated_suffixes: List[str],
+        reference_check_fn=None,
+        force: bool = False,
+        ras_object=None,
+    ) -> None:
+        """
+        Generic delete helper for geometry, unsteady, and steady components.
+
+        Verifies the component exists, optionally checks for referencing plans,
+        deletes the component files and associated files, removes the PRJ entry,
+        and refreshes all DataFrames.
+
+        Parameters:
+            component_number: Number to delete (e.g., '06')
+            component_type: PRJ entry type (e.g., 'Geom', 'Unsteady', 'Flow')
+            file_prefix: File prefix letter (e.g., 'g', 'u', 'f')
+            df_attr: DataFrame attribute name (e.g., 'geom_df')
+            number_column: Column for the component number (e.g., 'geom_number')
+            associated_suffixes: List of file suffixes to delete (e.g., ['.hdf', ''] where
+                '' means the base file itself). Each suffix is appended to
+                "{project_name}.{prefix}{number}".
+            reference_check_fn: Optional callable(ras_obj, number) -> pd.DataFrame.
+                If it returns a non-empty DataFrame, deletion is blocked unless force=True.
+            force: If True, skip reference checks.
+            ras_object: Optional RAS object instance.
+
+        Raises:
+            ValueError: If component doesn't exist or is referenced and force=False.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        component_number = RasUtils.normalize_ras_number(component_number)
+
+        # Refresh and verify existence
+        if component_type in ('Flow', 'Unsteady', 'Geom'):
+            if component_type == 'Geom':
+                ras_obj.geom_df = ras_obj.get_geom_entries()
+            elif component_type == 'Unsteady':
+                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            elif component_type == 'Flow':
+                ras_obj.flow_df = ras_obj.get_flow_entries()
+
+        df = getattr(ras_obj, df_attr)
+        if component_number not in df[number_column].values:
+            raise ValueError(f"{component_type} {component_number} does not exist in the project")
+
+        # Check for referencing plans
+        if not force and reference_check_fn is not None:
+            referencing = reference_check_fn(ras_obj, component_number)
+            if not referencing.empty:
+                plan_nums = referencing['plan_number'].tolist()
+                raise ValueError(
+                    f"Cannot delete {component_type.lower()} {component_number}: "
+                    f"referenced by plan(s) {plan_nums}. Use force=True to delete anyway."
+                )
+
+        # Delete files
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        for suffix in associated_suffixes:
+            file_path = Path(f"{base}.{file_prefix}{component_number}{suffix}")
+            if file_path.exists():
+                file_path.unlink()
+                logger.info(f"Deleted {file_path.name}")
+
+        # Remove from .prj
+        RasUtils.remove_prj_entry(ras_obj.prj_file, component_type, component_number, ras_object=ras_obj)
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+
+    @staticmethod
+    def _renumber_component(
+        old_number: Union[str, Number],
+        new_number: Union[str, Number],
+        component_type: str,
+        file_prefix: str,
+        df_attr: str,
+        number_column: str,
+        companion_extensions: List[str],
+        plan_ref_key: str,
+        plan_ref_column: str,
+        plan_ref_filter_fn=None,
+        ras_object=None,
+    ) -> str:
+        """
+        Generic renumber helper for geometry, unsteady, and steady components.
+
+        Renames files, updates the PRJ entry, and updates all plan files that
+        reference this component.
+
+        Parameters:
+            old_number: Current component number (e.g., '06')
+            new_number: New component number (e.g., '02')
+            component_type: PRJ entry type (e.g., 'Geom', 'Unsteady', 'Flow')
+            file_prefix: File prefix letter (e.g., 'g', 'u', 'f')
+            df_attr: DataFrame attribute name (e.g., 'geom_df')
+            number_column: Column for the component number (e.g., 'geom_number')
+            companion_extensions: Additional file extensions to rename (e.g., ['.hdf'] for .g01.hdf).
+                The base file (no extension) is always included.
+            plan_ref_key: Key in plan files to update (e.g., 'Geom File', 'Flow File')
+            plan_ref_column: Column in plan_df to match against old_number
+                (e.g., 'Geom File', 'unsteady_number', 'Flow File')
+            plan_ref_filter_fn: Optional callable(row) -> bool for additional filtering
+                of which plan rows should be updated. If None, all matching rows are updated.
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            str: The new component number.
+
+        Raises:
+            ValueError: If old doesn't exist or new already exists.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        old_number = RasUtils.normalize_ras_number(old_number)
+        new_number = RasUtils.normalize_ras_number(new_number)
+
+        # Refresh and verify
+        if component_type == 'Geom':
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+        elif component_type == 'Unsteady':
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        elif component_type == 'Flow':
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+
+        df = getattr(ras_obj, df_attr)
+        if old_number not in df[number_column].values:
+            raise ValueError(f"{component_type} {old_number} does not exist in the project")
+        if new_number in df[number_column].values:
+            raise ValueError(f"{component_type} {new_number} already exists in the project")
+
+        # Rename files: base file + companion extensions
+        base = ras_obj.project_folder / f"{ras_obj.project_name}"
+        rename_pairs = [
+            (Path(f"{base}.{file_prefix}{old_number}"), Path(f"{base}.{file_prefix}{new_number}")),
+        ]
+        for ext in companion_extensions:
+            rename_pairs.append(
+                (Path(f"{base}.{file_prefix}{old_number}{ext}"), Path(f"{base}.{file_prefix}{new_number}{ext}"))
+            )
+
+        for old_path, new_path in rename_pairs:
+            if old_path.exists():
+                old_path.rename(new_path)
+                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+
+        # Update .prj entry
+        RasUtils.rename_prj_entry(ras_obj.prj_file, component_type, old_number, new_number, ras_object=ras_obj)
+
+        # Update plan files that reference this component
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        for _, row in ras_obj.plan_df.iterrows():
+            should_update = (row.get(plan_ref_column) == old_number)
+            if should_update and plan_ref_filter_fn is not None:
+                should_update = plan_ref_filter_fn(row)
+            if should_update:
+                plan_path = Path(row['full_path'])
+                if plan_path.exists():
+                    RasPlan._update_plan_file_reference(
+                        plan_path, plan_ref_key, f'{file_prefix}{old_number}', f'{file_prefix}{new_number}'
+                    )
+
+        # Refresh all DataFrames
+        RasPlan._refresh_all_dataframes(ras_obj)
+        return new_number
+
+    # -------------------------------------------------------------------------
+    # Private helpers (original)
     # -------------------------------------------------------------------------
 
     @staticmethod
@@ -2493,44 +2678,28 @@ class RasPlan:
         >>> RasPlan.delete_geom("06")  # Fails if any plan references g06
         >>> RasPlan.delete_geom("06", force=True)  # Deletes regardless
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        geom_number = RasUtils.normalize_ras_number(geom_number)
-
-        # Verify geom exists
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        if geom_number not in ras_obj.geom_df['geom_number'].values:
-            raise ValueError(f"Geometry {geom_number} does not exist in the project")
-
-        # Check for referencing plans
-        if not force:
+        def _geom_ref_check(ras_obj, number):
             ras_obj.plan_df = ras_obj.get_plan_entries()
-            referencing = ras_obj.plan_df[ras_obj.plan_df['Geom File'] == geom_number]
-            if not referencing.empty:
-                plan_nums = referencing['plan_number'].tolist()
-                raise ValueError(
-                    f"Cannot delete geometry {geom_number}: referenced by plan(s) {plan_nums}. "
-                    f"Use force=True to delete anyway."
-                )
+            return ras_obj.plan_df[ras_obj.plan_df['Geom File'] == number]
 
-        # Delete files
-        base = ras_obj.project_folder / f"{ras_obj.project_name}"
-        files_to_delete = [
-            Path(f"{base}.g{geom_number}"),
-            Path(f"{base}.g{geom_number}.hdf"),
-            Path(f"{base}.c{geom_number}"),
-        ]
-
-        for f in files_to_delete:
-            if f.exists():
-                f.unlink()
-                logger.info(f"Deleted {f.name}")
-
-        # Remove from .prj
-        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Geom', geom_number, ras_object=ras_obj)
-
-        # Refresh all DataFrames
-        RasPlan._refresh_all_dataframes(ras_obj)
+        RasPlan._delete_component(
+            component_number=geom_number,
+            component_type='Geom',
+            file_prefix='g',
+            df_attr='geom_df',
+            number_column='geom_number',
+            associated_suffixes=['', '.hdf'],
+            reference_check_fn=_geom_ref_check,
+            force=force,
+            ras_object=ras_object,
+        )
+        # Also delete .cXX preprocessor file
+        ras_obj = ras_object or ras
+        number = RasUtils.normalize_ras_number(geom_number)
+        c_file = ras_obj.project_folder / f"{ras_obj.project_name}.c{number}"
+        if c_file.exists():
+            c_file.unlink()
+            logger.info(f"Deleted {c_file.name}")
 
     @staticmethod
     @log_call
@@ -2556,47 +2725,29 @@ class RasPlan:
         >>> RasPlan.renumber_geom("06", "02")
         '02'
         """
+        result = RasPlan._renumber_component(
+            old_number=old_number,
+            new_number=new_number,
+            component_type='Geom',
+            file_prefix='g',
+            df_attr='geom_df',
+            number_column='geom_number',
+            companion_extensions=['.hdf'],
+            plan_ref_key='Geom File',
+            plan_ref_column='Geom File',
+            ras_object=ras_object,
+        )
+        # Also rename the .cXX preprocessor file
         ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        old_number = RasUtils.normalize_ras_number(old_number)
-        new_number = RasUtils.normalize_ras_number(new_number)
-
-        # Verify old exists, new doesn't
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        if old_number not in ras_obj.geom_df['geom_number'].values:
-            raise ValueError(f"Geometry {old_number} does not exist in the project")
-        if new_number in ras_obj.geom_df['geom_number'].values:
-            raise ValueError(f"Geometry {new_number} already exists in the project")
-
-        # Rename files
+        old_num = RasUtils.normalize_ras_number(old_number)
+        new_num = RasUtils.normalize_ras_number(new_number)
         base = ras_obj.project_folder / f"{ras_obj.project_name}"
-        rename_pairs = [
-            (Path(f"{base}.g{old_number}"), Path(f"{base}.g{new_number}")),
-            (Path(f"{base}.g{old_number}.hdf"), Path(f"{base}.g{new_number}.hdf")),
-            (Path(f"{base}.c{old_number}"), Path(f"{base}.c{new_number}")),
-        ]
-
-        for old_path, new_path in rename_pairs:
-            if old_path.exists():
-                old_path.rename(new_path)
-                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
-
-        # Update .prj entry
-        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Geom', old_number, new_number, ras_object=ras_obj)
-
-        # Update plan files that reference this geometry
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        for _, row in ras_obj.plan_df.iterrows():
-            if row.get('Geom File') == old_number:
-                plan_path = Path(row['full_path'])
-                if plan_path.exists():
-                    RasPlan._update_plan_file_reference(
-                        plan_path, 'Geom File', f'g{old_number}', f'g{new_number}'
-                    )
-
-        # Refresh all DataFrames
-        RasPlan._refresh_all_dataframes(ras_obj)
-        return new_number
+        c_old = Path(f"{base}.c{old_num}")
+        c_new = Path(f"{base}.c{new_num}")
+        if c_old.exists():
+            c_old.rename(c_new)
+            logger.info(f"Renamed {c_old.name} -> {c_new.name}")
+        return result
 
     @staticmethod
     @log_call
@@ -2617,43 +2768,21 @@ class RasPlan:
         Example:
         >>> RasPlan.delete_unsteady("07")
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        unsteady_number = RasUtils.normalize_ras_number(unsteady_number)
-
-        # Verify exists
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-        if unsteady_number not in ras_obj.unsteady_df['unsteady_number'].values:
-            raise ValueError(f"Unsteady {unsteady_number} does not exist in the project")
-
-        # Check for referencing plans
-        if not force:
+        def _unsteady_ref_check(ras_obj, number):
             ras_obj.plan_df = ras_obj.get_plan_entries()
-            referencing = ras_obj.plan_df[ras_obj.plan_df['unsteady_number'] == unsteady_number]
-            if not referencing.empty:
-                plan_nums = referencing['plan_number'].tolist()
-                raise ValueError(
-                    f"Cannot delete unsteady {unsteady_number}: referenced by plan(s) {plan_nums}. "
-                    f"Use force=True to delete anyway."
-                )
+            return ras_obj.plan_df[ras_obj.plan_df['unsteady_number'] == number]
 
-        # Delete files
-        base = ras_obj.project_folder / f"{ras_obj.project_name}"
-        files_to_delete = [
-            Path(f"{base}.u{unsteady_number}"),
-            Path(f"{base}.u{unsteady_number}.hdf"),
-        ]
-
-        for f in files_to_delete:
-            if f.exists():
-                f.unlink()
-                logger.info(f"Deleted {f.name}")
-
-        # Remove from .prj
-        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Unsteady', unsteady_number, ras_object=ras_obj)
-
-        # Refresh all DataFrames
-        RasPlan._refresh_all_dataframes(ras_obj)
+        RasPlan._delete_component(
+            component_number=unsteady_number,
+            component_type='Unsteady',
+            file_prefix='u',
+            df_attr='unsteady_df',
+            number_column='unsteady_number',
+            associated_suffixes=['', '.hdf'],
+            reference_check_fn=_unsteady_ref_check,
+            force=force,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -2679,46 +2808,18 @@ class RasPlan:
         >>> RasPlan.renumber_unsteady("07", "02")
         '02'
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        old_number = RasUtils.normalize_ras_number(old_number)
-        new_number = RasUtils.normalize_ras_number(new_number)
-
-        # Verify old exists, new doesn't
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-        if old_number not in ras_obj.unsteady_df['unsteady_number'].values:
-            raise ValueError(f"Unsteady {old_number} does not exist in the project")
-        if new_number in ras_obj.unsteady_df['unsteady_number'].values:
-            raise ValueError(f"Unsteady {new_number} already exists in the project")
-
-        # Rename files
-        base = ras_obj.project_folder / f"{ras_obj.project_name}"
-        rename_pairs = [
-            (Path(f"{base}.u{old_number}"), Path(f"{base}.u{new_number}")),
-            (Path(f"{base}.u{old_number}.hdf"), Path(f"{base}.u{new_number}.hdf")),
-        ]
-
-        for old_path, new_path in rename_pairs:
-            if old_path.exists():
-                old_path.rename(new_path)
-                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
-
-        # Update .prj entry
-        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Unsteady', old_number, new_number, ras_object=ras_obj)
-
-        # Update plan files that reference this unsteady
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        for _, row in ras_obj.plan_df.iterrows():
-            if row.get('unsteady_number') == old_number:
-                plan_path = Path(row['full_path'])
-                if plan_path.exists():
-                    RasPlan._update_plan_file_reference(
-                        plan_path, 'Flow File', f'u{old_number}', f'u{new_number}'
-                    )
-
-        # Refresh all DataFrames
-        RasPlan._refresh_all_dataframes(ras_obj)
-        return new_number
+        return RasPlan._renumber_component(
+            old_number=old_number,
+            new_number=new_number,
+            component_type='Unsteady',
+            file_prefix='u',
+            df_attr='unsteady_df',
+            number_column='unsteady_number',
+            companion_extensions=['.hdf'],
+            plan_ref_key='Flow File',
+            plan_ref_column='unsteady_number',
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -2739,40 +2840,24 @@ class RasPlan:
         Example:
         >>> RasPlan.delete_steady("01")
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        flow_number = RasUtils.normalize_ras_number(flow_number)
-
-        # Verify exists
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        if flow_number not in ras_obj.flow_df['flow_number'].values:
-            raise ValueError(f"Steady flow {flow_number} does not exist in the project")
-
-        # Check for referencing plans (steady plans have unsteady_number == None and Flow File matches)
-        if not force:
+        def _steady_ref_check(ras_obj, number):
             ras_obj.plan_df = ras_obj.get_plan_entries()
-            referencing = ras_obj.plan_df[
+            return ras_obj.plan_df[
                 (ras_obj.plan_df['unsteady_number'].isna()) &
-                (ras_obj.plan_df['Flow File'] == flow_number)
+                (ras_obj.plan_df['Flow File'] == number)
             ]
-            if not referencing.empty:
-                plan_nums = referencing['plan_number'].tolist()
-                raise ValueError(
-                    f"Cannot delete steady flow {flow_number}: referenced by plan(s) {plan_nums}. "
-                    f"Use force=True to delete anyway."
-                )
 
-        # Delete file
-        flow_file = ras_obj.project_folder / f"{ras_obj.project_name}.f{flow_number}"
-        if flow_file.exists():
-            flow_file.unlink()
-            logger.info(f"Deleted {flow_file.name}")
-
-        # Remove from .prj
-        RasUtils.remove_prj_entry(ras_obj.prj_file, 'Flow', flow_number, ras_object=ras_obj)
-
-        # Refresh all DataFrames
-        RasPlan._refresh_all_dataframes(ras_obj)
+        RasPlan._delete_component(
+            component_number=flow_number,
+            component_type='Flow',
+            file_prefix='f',
+            df_attr='flow_df',
+            number_column='flow_number',
+            associated_suffixes=[''],
+            reference_check_fn=_steady_ref_check,
+            force=force,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
@@ -2798,44 +2883,19 @@ class RasPlan:
         >>> RasPlan.renumber_steady("01", "02")
         '02'
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        old_number = RasUtils.normalize_ras_number(old_number)
-        new_number = RasUtils.normalize_ras_number(new_number)
-
-        # Verify old exists, new doesn't
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        if old_number not in ras_obj.flow_df['flow_number'].values:
-            raise ValueError(f"Steady flow {old_number} does not exist in the project")
-        if new_number in ras_obj.flow_df['flow_number'].values:
-            raise ValueError(f"Steady flow {new_number} already exists in the project")
-
-        # Rename file
-        base = ras_obj.project_folder / f"{ras_obj.project_name}"
-        old_path = Path(f"{base}.f{old_number}")
-        new_path = Path(f"{base}.f{new_number}")
-
-        if old_path.exists():
-            old_path.rename(new_path)
-            logger.info(f"Renamed {old_path.name} -> {new_path.name}")
-
-        # Update .prj entry
-        RasUtils.rename_prj_entry(ras_obj.prj_file, 'Flow', old_number, new_number, ras_object=ras_obj)
-
-        # Update plan files that reference this steady flow
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        for _, row in ras_obj.plan_df.iterrows():
-            # Steady flow plans have unsteady_number == None and Flow File matches
-            if pd.isna(row.get('unsteady_number')) and row.get('Flow File') == old_number:
-                plan_path = Path(row['full_path'])
-                if plan_path.exists():
-                    RasPlan._update_plan_file_reference(
-                        plan_path, 'Flow File', f'f{old_number}', f'f{new_number}'
-                    )
-
-        # Refresh all DataFrames
-        RasPlan._refresh_all_dataframes(ras_obj)
-        return new_number
+        return RasPlan._renumber_component(
+            old_number=old_number,
+            new_number=new_number,
+            component_type='Flow',
+            file_prefix='f',
+            df_attr='flow_df',
+            number_column='flow_number',
+            companion_extensions=[],
+            plan_ref_key='Flow File',
+            plan_ref_column='Flow File',
+            plan_ref_filter_fn=lambda row: pd.isna(row.get('unsteady_number')),
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
