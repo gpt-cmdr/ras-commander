@@ -36,6 +36,7 @@ from .RasControl import RasControl
 from .ComputeResults import ComputeResult, ComputeParallelResult, RasControlResult, PreprocessResult
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
+from .RasMapValidation import RasMapValidation
 from .RasProcess import RasProcess, ProjectionInfo
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot

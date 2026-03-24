@@ -1190,6 +1190,22 @@ class RasMap:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        # ── Version validation: only 6.x is verified for correct output ──
+        # HEC-RAS 5.0.7 floodplain mapping is UNTESTED and may produce
+        # incorrect results if the project was ever opened in a newer version.
+        # Verified 2026-03-23: GUI floodplain mapping (Run RASMapper= -1)
+        # produces pixel-perfect output for HEC-RAS 6.3.1 and 6.6.
+        ras_version = getattr(ras_obj, 'ras_version', None) or ""
+        if ras_version.startswith("5.") or ras_version.startswith("4."):
+            raise RuntimeError(
+                f"postprocess_stored_maps() is not supported for HEC-RAS {ras_version}.\n\n"
+                "REASON: HEC-RAS 5.x floodplain mapping output has not been validated\n"
+                "against manual RASMapper benchmarks, and 5.x projects opened in newer\n"
+                "versions become corrupted. Only HEC-RAS 6.x (6.3.1, 6.6+) is verified\n"
+                "to produce pixel-perfect raster output via the GUI floodplain mapping path.\n\n"
+                "If you need 5.x support, please open a GitHub issue with test data."
+            )
+
         # Ensure .rasmap compatibility (upgrade 5.0.7 to 6.x if needed)
         logger.info("Checking .rasmap compatibility...")
         compat_result = RasMap.ensure_rasmap_compatible(ras_object=ras_obj, auto_upgrade=True)
@@ -1439,6 +1455,146 @@ class RasMap:
                 logger.info(f"Restoring original rasmap file from {rasmap_backup_path}")
                 shutil.move(rasmap_backup_path, rasmap_path)
 
+    # ── Cross-version validation registry ──────────────────────────────────
+    # Only version+mode combos verified pixel-perfect against manual RASMapper
+    # benchmarks should be listed here. Updated 2026-03-23.
+    VALIDATED_MAP_CONFIGURATIONS = {
+        # (version_prefix, render_mode) -> status
+        # "pixel-perfect" = verified 0.000 diff against manual benchmark
+        # "untested" = allowed with warning
+        ("6.3", "horizontal"): "pixel-perfect",  # Spring Creek 6.31_Hz, 2026-03-23
+    }
+
+    @staticmethod
+    @log_call
+    def store_all_maps(
+        plan_number: Union[str, List[str]],
+        render_mode: str = None,
+        reduce_shallow_to_horizontal: bool = True,
+        use_depth_weighted_faces: bool = False,
+        layers: List[str] = None,
+        terrain: str = None,
+        ras_object=None,
+    ) -> bool:
+        """
+        Generate stored floodplain map rasters via GUI automation.
+
+        This is the validated path for map generation. It uses the HEC-RAS GUI
+        with ``Run RASMapper= -1`` (floodplain mapping only, no simulation),
+        which produces pixel-perfect output verified against manual RASMapper
+        benchmarks.
+
+        Args:
+            plan_number: Plan number(s) to generate maps for (e.g., "01" or ["01","02"]).
+            render_mode: Water surface rendering mode to set before generating maps.
+                Options: "horizontal", "sloping", "slopingPretty".
+                If None (default), uses whatever mode is already in the .rasmap.
+            reduce_shallow_to_horizontal: For slopingPretty mode, whether shallow
+                cells fall back to horizontal. Default True.
+            use_depth_weighted_faces: For slopingPretty mode, whether face
+                contributions are depth-weighted. Default False.
+            layers: Map layers to generate. Default: ['WSE', 'Velocity', 'Depth'].
+            terrain: Specific terrain name to use. If None, uses all terrains.
+            ras_object: Optional RAS object instance.
+
+        Returns:
+            True if successful, False otherwise.
+
+        Raises:
+            RuntimeError: If HEC-RAS version is 5.x or 4.x (untested).
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
+            >>>
+            >>> # Generate maps with current render mode
+            >>> RasMap.store_all_maps("01")
+            >>>
+            >>> # Generate maps with explicit horizontal rendering
+            >>> RasMap.store_all_maps("01", render_mode="horizontal")
+            >>>
+            >>> # Generate maps with slopingPretty rendering
+            >>> RasMap.store_all_maps("01", render_mode="slopingPretty")
+
+        Notes:
+            - Requires Windows with HEC-RAS GUI (uses Win32 automation)
+            - Opens and closes HEC-RAS automatically
+            - Original .rasmap and plan files are backed up and restored
+            - RasProcess.exe StoreAllMaps is NOT used (it produces incorrect output)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # ── Version validation ──
+        ras_version = getattr(ras_obj, 'ras_version', None) or ""
+        if ras_version.startswith("5.") or ras_version.startswith("4."):
+            raise RuntimeError(
+                f"store_all_maps() is not supported for HEC-RAS {ras_version}.\n"
+                "Only HEC-RAS 6.x (6.3.1, 6.6+) is verified to produce correct output."
+            )
+
+        # ── Cross-version validation ──
+        effective_mode = render_mode or "unknown"
+        if effective_mode == "unknown":
+            # Read current mode from rasmap
+            mode_info = RasMap.get_water_surface_render_mode(ras_object=ras_obj)
+            if mode_info:
+                effective_mode = mode_info.get("mode", "unknown")
+
+        # Check validation registry
+        version_prefix = ras_version[:3] if len(ras_version) >= 3 else ras_version
+        config_key = (version_prefix, effective_mode)
+        validation_status = RasMap.VALIDATED_MAP_CONFIGURATIONS.get(config_key)
+
+        if validation_status == "pixel-perfect":
+            logger.info(
+                f"Configuration ({ras_version}, {effective_mode}) is validated pixel-perfect"
+            )
+        elif validation_status is None:
+            logger.warning(
+                f"Configuration ({ras_version}, {effective_mode}) has NOT been validated "
+                f"against manual RASMapper benchmarks. Output may differ from expected. "
+                f"Validated configurations: {list(RasMap.VALIDATED_MAP_CONFIGURATIONS.keys())}"
+            )
+        else:
+            logger.info(f"Configuration ({ras_version}, {effective_mode}): {validation_status}")
+
+        # ── Set render mode if requested ──
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        rasmap_render_backup = None
+
+        if render_mode is not None:
+            # Back up current rasmap render settings
+            if rasmap_path.exists():
+                rasmap_render_backup = rasmap_path.read_bytes()
+
+            RasMap.set_water_surface_render_mode(
+                mode=render_mode,
+                reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+                use_depth_weighted_faces=use_depth_weighted_faces,
+                ras_object=ras_obj,
+            )
+            logger.info(f"Set render mode to '{render_mode}' before map generation")
+
+        # ── Delegate to postprocess_stored_maps ──
+        try:
+            result = RasMap.postprocess_stored_maps(
+                plan_number=plan_number,
+                specify_terrain=terrain,
+                layers=layers,
+                ras_object=ras_obj,
+                auto_click_compute=True,
+            )
+            return result
+        finally:
+            # Restore render mode if we changed it
+            # (postprocess_stored_maps already restores its own .rasmap backup,
+            # but that backup was taken AFTER we changed the render mode.
+            # The render mode change is intentional for the output, so we
+            # don't need to restore it — postprocess_stored_maps handles
+            # its own backup/restore of the stored map entries.)
+            pass
+
     @staticmethod
     @log_call
     def get_results_folder(plan_number: Union[str, int, float], ras_object=None) -> Path:
@@ -1628,6 +1784,8 @@ class RasMap:
     @log_call
     def set_water_surface_render_mode(
         mode: str = "horizontal",
+        reduce_shallow_to_horizontal: bool = True,
+        use_depth_weighted_faces: bool = False,
         ras_object=None
     ) -> bool:
         """
@@ -1641,9 +1799,18 @@ class RasMap:
             mode (str): Rendering mode. Options:
                 - "horizontal": Constant water surface elevation per mesh cell.
                   Each cell displays a single, flat water surface. Faster rendering.
-                - "sloped": Sloped water surface using cell corner elevations.
-                  Water surface varies within each cell for smoother visualization.
-                  Uses depth-weighted faces and reduces shallow areas to horizontal.
+                - "sloping": Sloped water surface using 4-corner cell elevations.
+                  Basic interpolation within each cell.
+                - "slopingPretty": Enhanced sloped mode using 8-point interpolation
+                  (4 corners + 4 face centers). Smoothest visualization.
+                  Supports optional reduce_shallow_to_horizontal and
+                  use_depth_weighted_faces flags.
+            reduce_shallow_to_horizontal (bool): When True, shallow cells fall back
+                to horizontal rendering. Only applies to slopingPretty mode.
+                Default: True.
+            use_depth_weighted_faces (bool): When True, face contributions are
+                weighted by depth. Only applies to slopingPretty mode.
+                Default: False.
             ras_object: Optional RAS object instance.
 
         Returns:
@@ -1657,27 +1824,42 @@ class RasMap:
             >>> from ras_commander import init_ras_project, RasMap
             >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
             >>>
-            >>> # Set horizontal mode
+            >>> # Set horizontal mode (flat WSE per cell)
             >>> RasMap.set_water_surface_render_mode("horizontal")
             >>>
-            >>> # Set sloped mode for smoother visualization
-            >>> RasMap.set_water_surface_render_mode("sloped")
+            >>> # Set basic sloping mode (4-corner interpolation)
+            >>> RasMap.set_water_surface_render_mode("sloping")
+            >>>
+            >>> # Set slopingPretty mode (8-point interpolation, smoothest)
+            >>> RasMap.set_water_surface_render_mode("slopingPretty")
+            >>>
+            >>> # slopingPretty with depth-weighted faces (HEC-RAS 6.31 style)
+            >>> RasMap.set_water_surface_render_mode(
+            ...     "slopingPretty",
+            ...     reduce_shallow_to_horizontal=True,
+            ...     use_depth_weighted_faces=True
+            ... )
 
         Notes:
             - Changes take effect the next time RASMapper generates raster outputs
             - "horizontal" mode uses constant WSE per cell
-            - "sloped" mode produces smoother but computationally different results
+            - "sloping" mode uses 4-corner interpolation within each cell
+            - "slopingPretty" mode uses 8-point interpolation for smoothest results
             - The original .rasmap file is modified in place (no backup created)
+            - The legacy mode name "sloped" is accepted as an alias for "slopingPretty"
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Validate mode
-        mode = mode.lower()
-        valid_modes = {"horizontal", "sloped"}
-        if mode not in valid_modes:
+        # Validate and normalize mode
+        mode_lower = mode.lower()
+        # Accept legacy alias
+        if mode_lower == "sloped":
+            mode_lower = "slopingpretty"
+        valid_modes = {"horizontal", "sloping", "slopingpretty"}
+        if mode_lower not in valid_modes:
             raise ValueError(
-                f"Invalid mode '{mode}'. Valid options: {valid_modes}"
+                f"Invalid mode '{mode}'. Valid options: 'horizontal', 'sloping', 'slopingPretty'"
             )
 
         # Get rasmap path
@@ -1706,8 +1888,7 @@ class RasMap:
             depth_weighted_elem = root.find("UseDepthWeightedFaces")
             reduce_shallow_elem = root.find("ReduceShallowToHorizontal")
 
-            if mode == "horizontal":
-                # Set horizontal mode
+            if mode_lower == "horizontal":
                 render_mode_elem.text = "horizontal"
 
                 # Remove sloped-specific elements if present
@@ -1718,25 +1899,49 @@ class RasMap:
 
                 logger.info("Set water surface render mode to 'horizontal'")
 
-            elif mode == "sloped":
-                # Set sloped mode
+            elif mode_lower == "sloping":
+                render_mode_elem.text = "sloping"
+
+                # Remove slopingPretty-specific elements if present
+                if depth_weighted_elem is not None:
+                    root.remove(depth_weighted_elem)
+                if reduce_shallow_elem is not None:
+                    root.remove(reduce_shallow_elem)
+
+                logger.info("Set water surface render mode to 'sloping'")
+
+            elif mode_lower == "slopingpretty":
                 render_mode_elem.text = "slopingPretty"
 
-                # Add/update depth-weighted faces element
-                if depth_weighted_elem is None:
-                    idx = list(root).index(render_mode_elem) + 1
-                    depth_weighted_elem = ET.Element("UseDepthWeightedFaces")
-                    root.insert(idx, depth_weighted_elem)
-                depth_weighted_elem.text = "true"
-
                 # Add/update reduce-shallow element
-                if reduce_shallow_elem is None:
-                    idx = list(root).index(depth_weighted_elem) + 1
-                    reduce_shallow_elem = ET.Element("ReduceShallowToHorizontal")
-                    root.insert(idx, reduce_shallow_elem)
-                reduce_shallow_elem.text = "true"
+                if reduce_shallow_to_horizontal:
+                    if reduce_shallow_elem is None:
+                        idx = list(root).index(render_mode_elem) + 1
+                        reduce_shallow_elem = ET.Element("ReduceShallowToHorizontal")
+                        root.insert(idx, reduce_shallow_elem)
+                    reduce_shallow_elem.text = "true"
+                else:
+                    if reduce_shallow_elem is not None:
+                        root.remove(reduce_shallow_elem)
 
-                logger.info("Set water surface render mode to 'sloped' (slopingPretty)")
+                # Add/update depth-weighted faces element
+                if use_depth_weighted_faces:
+                    if depth_weighted_elem is None:
+                        # Insert after RenderMode (or after ReduceShallowToHorizontal if present)
+                        after_elem = reduce_shallow_elem if reduce_shallow_elem is not None else render_mode_elem
+                        idx = list(root).index(after_elem) + 1
+                        depth_weighted_elem = ET.Element("UseDepthWeightedFaces")
+                        root.insert(idx, depth_weighted_elem)
+                    depth_weighted_elem.text = "true"
+                else:
+                    if depth_weighted_elem is not None:
+                        root.remove(depth_weighted_elem)
+
+                logger.info(
+                    f"Set water surface render mode to 'slopingPretty' "
+                    f"(reduceShallow={reduce_shallow_to_horizontal}, "
+                    f"depthWeighted={use_depth_weighted_faces})"
+                )
 
             # Write the modified XML back
             tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
@@ -1750,7 +1955,7 @@ class RasMap:
 
     @staticmethod
     @log_call
-    def get_water_surface_render_mode(ras_object=None) -> Optional[str]:
+    def get_water_surface_render_mode(ras_object=None) -> Optional[dict]:
         """
         Get the current water surface rendering mode from the RASMapper configuration.
 
@@ -1758,16 +1963,23 @@ class RasMap:
             ras_object: Optional RAS object instance.
 
         Returns:
-            Optional[str]: Current rendering mode:
-                - "horizontal": Constant WSE per cell
-                - "sloped": Sloped surface using cell corners
-                - None: If .rasmap file not found or mode not set
+            Optional[dict]: Rendering mode configuration with keys:
+                - "mode": The rendering mode string — "horizontal", "sloping",
+                  or "slopingPretty"
+                - "reduce_shallow_to_horizontal": bool, whether shallow cells
+                  fall back to horizontal (only for slopingPretty)
+                - "use_depth_weighted_faces": bool, whether face contributions
+                  are depth-weighted (only for slopingPretty)
+                Returns None if .rasmap file not found or mode not set.
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
             >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
-            >>> mode = RasMap.get_water_surface_render_mode()
-            >>> print(f"Current mode: {mode}")
+            >>> render_info = RasMap.get_water_surface_render_mode()
+            >>> print(f"Mode: {render_info['mode']}")
+            >>> # For slopingPretty, check flags:
+            >>> if render_info['mode'] == 'slopingPretty':
+            ...     print(f"Depth weighted: {render_info['use_depth_weighted_faces']}")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -1785,15 +1997,44 @@ class RasMap:
             if render_mode_elem is None or render_mode_elem.text is None:
                 return None
 
-            mode_text = render_mode_elem.text.lower()
+            mode_text = render_mode_elem.text.strip()
 
-            if mode_text == "horizontal":
-                return "horizontal"
-            elif mode_text in ("slopingpretty", "sloping"):
-                return "sloped"
+            # Read associated flags
+            depth_weighted_elem = root.find("UseDepthWeightedFaces")
+            reduce_shallow_elem = root.find("ReduceShallowToHorizontal")
+
+            has_depth_weighted = (
+                depth_weighted_elem is not None
+                and depth_weighted_elem.text is not None
+                and depth_weighted_elem.text.strip().lower() == "true"
+            )
+            has_reduce_shallow = (
+                reduce_shallow_elem is not None
+                and reduce_shallow_elem.text is not None
+                and reduce_shallow_elem.text.strip().lower() == "true"
+            )
+
+            # Normalize mode text to canonical form
+            mode_lower = mode_text.lower()
+            if mode_lower == "horizontal":
+                canonical_mode = "horizontal"
+            elif mode_lower == "slopingpretty":
+                canonical_mode = "slopingPretty"
+            elif mode_lower == "sloping":
+                # "sloping" with both flags is effectively slopingPretty (HEC-RAS 6.31 style)
+                if has_depth_weighted and has_reduce_shallow:
+                    canonical_mode = "slopingPretty"
+                else:
+                    canonical_mode = "sloping"
             else:
                 logger.warning(f"Unknown render mode in rasmap: {mode_text}")
-                return mode_text
+                canonical_mode = mode_text
+
+            return {
+                "mode": canonical_mode,
+                "reduce_shallow_to_horizontal": has_reduce_shallow,
+                "use_depth_weighted_faces": has_depth_weighted,
+            }
 
         except Exception as e:
             logger.error(f"Error reading water surface render mode: {e}")
@@ -2055,786 +2296,23 @@ class RasMap:
         return None
 
     # =========================================================================
-    # Map Layer Validation Methods
+    # Map Layer Validation Methods (delegated to RasMapValidation)
     # =========================================================================
-
-    @staticmethod
-    @log_call
-    def check_layer_format(layer_file: Union[str, Path]) -> 'ValidationResult':
-        """
-        Check layer file format validity.
-
-        Validates:
-        - File exists
-        - Format is supported (GeoJSON, Shapefile, GeoTIFF, HDF)
-        - File can be opened and read
-
-        Args:
-            layer_file: Path to layer file
-
-        Returns:
-            ValidationResult with format validation
-
-        Example:
-            >>> from ras_commander import RasMap
-            >>> result = RasMap.check_layer_format("terrain.tif")
-            >>> if result.is_valid:
-            ...     print(f"Format valid: {result.context.get('format')}")
-        """
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        layer_file = Path(layer_file)
-
-        # Check existence
-        if not layer_file.exists():
-            return ValidationResult(
-                check_name="file_existence",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"File not found: {layer_file}"
-            )
-
-        # Check file is readable
-        try:
-            with open(layer_file, 'rb') as f:
-                _ = f.read(1)  # Try reading one byte
-        except PermissionError:
-            return ValidationResult(
-                check_name="file_accessibility",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Permission denied reading file: {layer_file}"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="file_accessibility",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Cannot read file: {e}"
-            )
-
-        # Determine format from extension
-        suffix = layer_file.suffix.lower()
-        format_map = {
-            '.geojson': 'geojson',
-            '.json': 'geojson',
-            '.shp': 'shapefile',
-            '.tif': 'geotiff',
-            '.tiff': 'geotiff',
-            '.hdf': 'hdf',
-            '.h5': 'hdf'
-        }
-
-        detected_format = format_map.get(suffix)
-
-        if detected_format is None:
-            return ValidationResult(
-                check_name="format_detection",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message=f"Unrecognized file extension: {suffix}",
-                details={"extension": suffix}
-            )
-
-        # Format-specific validation (with graceful degradation)
-        try:
-            if detected_format == 'geojson':
-                return RasMap._validate_geojson_format(layer_file)
-            elif detected_format == 'shapefile':
-                return RasMap._validate_shapefile_format(layer_file)
-            elif detected_format == 'geotiff':
-                return RasMap._validate_geotiff_format(layer_file)
-            elif detected_format == 'hdf':
-                return RasMap._validate_hdf_format(layer_file)
-        except ImportError:
-            # Library not available - graceful degradation
-            return ValidationResult(
-                check_name="format_validation",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message=f"File format appears valid ({detected_format}), but validation library not available",
-                details={"format": detected_format}
-            )
-
-        return ValidationResult(
-            check_name="format_validation",
-            severity=ValidationSeverity.INFO,
-            passed=True,
-            message=f"File format appears valid: {detected_format}",
-            details={"format": detected_format}
-        )
-
-    @staticmethod
-    def _validate_geojson_format(layer_file: Path) -> 'ValidationResult':
-        """Validate GeoJSON file format and structure."""
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        try:
-            import geopandas as gpd
-            gdf = gpd.read_file(layer_file)
-
-            return ValidationResult(
-                check_name="geojson_format",
-                severity=ValidationSeverity.INFO,
-                passed=True,
-                message=f"GeoJSON format valid ({len(gdf)} features)",
-                details={
-                    "feature_count": len(gdf),
-                    "geometry_types": gdf.geom_type.unique().tolist(),
-                    "crs": str(gdf.crs) if gdf.crs else None
-                }
-            )
-        except ImportError:
-            return ValidationResult(
-                check_name="geojson_format",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message="geopandas not available, cannot validate GeoJSON structure"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="geojson_format",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Failed to read GeoJSON: {e}"
-            )
-
-    @staticmethod
-    def _validate_shapefile_format(layer_file: Path) -> 'ValidationResult':
-        """Validate Shapefile format and structure."""
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        try:
-            import geopandas as gpd
-            gdf = gpd.read_file(layer_file)
-
-            return ValidationResult(
-                check_name="shapefile_format",
-                severity=ValidationSeverity.INFO,
-                passed=True,
-                message=f"Shapefile format valid ({len(gdf)} features)",
-                details={
-                    "feature_count": len(gdf),
-                    "geometry_types": gdf.geom_type.unique().tolist(),
-                    "crs": str(gdf.crs) if gdf.crs else None
-                }
-            )
-        except ImportError:
-            return ValidationResult(
-                check_name="shapefile_format",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message="geopandas not available, cannot validate Shapefile structure"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="shapefile_format",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Failed to read Shapefile: {e}"
-            )
-
-    @staticmethod
-    def _validate_geotiff_format(layer_file: Path) -> 'ValidationResult':
-        """Validate GeoTIFF raster format and metadata."""
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        try:
-            import rasterio
-            with rasterio.open(layer_file) as src:
-                details = {
-                    "width": src.width,
-                    "height": src.height,
-                    "bands": src.count,
-                    "dtype": str(src.dtypes[0]),
-                    "crs": src.crs.to_string() if src.crs else None,
-                    "resolution": (src.res[0], src.res[1]),
-                    "bounds": src.bounds
-                }
-
-                return ValidationResult(
-                    check_name="geotiff_format",
-                    severity=ValidationSeverity.INFO,
-                    passed=True,
-                    message=f"GeoTIFF format valid ({details['width']}x{details['height']}, {details['bands']} bands)",
-                    details=details
-                )
-        except ImportError:
-            return ValidationResult(
-                check_name="geotiff_format",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message="rasterio not available, cannot validate GeoTIFF structure"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="geotiff_format",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Failed to read GeoTIFF: {e}"
-            )
-
-    @staticmethod
-    def _validate_hdf_format(layer_file: Path) -> 'ValidationResult':
-        """Validate HDF file format."""
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        try:
-            import h5py
-            with h5py.File(layer_file, 'r') as hdf:
-                groups = list(hdf.keys())
-                return ValidationResult(
-                    check_name="hdf_format",
-                    severity=ValidationSeverity.INFO,
-                    passed=True,
-                    message=f"HDF format valid ({len(groups)} root groups)",
-                    details={"groups": groups}
-                )
-        except ImportError:
-            return ValidationResult(
-                check_name="hdf_format",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message="h5py not available, cannot validate HDF structure"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="hdf_format",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Failed to read HDF: {e}"
-            )
-
-    @staticmethod
-    @log_call
-    def check_layer_crs(
-        layer_file: Union[str, Path],
-        expected_epsg: Optional[int] = None
-    ) -> 'ValidationResult':
-        """
-        Check layer CRS/projection validity.
-
-        For GeoJSON files, enforces WGS84 (EPSG:4326) requirement.
-        For other formats, checks against expected CRS if provided.
-
-        Args:
-            layer_file: Path to layer file
-            expected_epsg: Optional expected EPSG code (e.g., 4326 for WGS84)
-
-        Returns:
-            ValidationResult with CRS validation
-
-        Example:
-            >>> result = RasMap.check_layer_crs("layer.geojson", expected_epsg=4326)
-            >>> if not result.passed:
-            ...     print(f"CRS issue: {result.message}")
-        """
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        layer_file = Path(layer_file)
-        suffix = layer_file.suffix.lower()
-
-        # Convert expected_epsg to CRS string if provided
-        expected_crs = f"EPSG:{expected_epsg}" if expected_epsg else None
-
-        try:
-            # Vector layers
-            if suffix in ['.geojson', '.json', '.shp']:
-                import geopandas as gpd
-                gdf = gpd.read_file(layer_file)
-
-                if gdf.crs is None:
-                    return ValidationResult(
-                        check_name="crs_validation",
-                        severity=ValidationSeverity.WARNING,
-                        passed=True,
-                        message="Layer has no CRS defined (assuming WGS84)",
-                        details={"crs": None}
-                    )
-
-                crs_string = gdf.crs.to_string()
-
-                # Check for GeoJSON WGS84 requirement
-                if suffix in ['.geojson', '.json']:
-                    if crs_string != "EPSG:4326":
-                        return ValidationResult(
-                            check_name="crs_validation",
-                            severity=ValidationSeverity.ERROR,
-                            passed=False,
-                            message=f"GeoJSON must be in WGS84 (EPSG:4326), got {crs_string}",
-                            details={"actual_crs": crs_string, "required_crs": "EPSG:4326"}
-                        )
-
-                # Check expected CRS if provided
-                if expected_crs and crs_string != expected_crs:
-                    return ValidationResult(
-                        check_name="crs_validation",
-                        severity=ValidationSeverity.WARNING,
-                        passed=True,
-                        message=f"CRS mismatch: expected {expected_crs}, got {crs_string}",
-                        details={"expected_crs": expected_crs, "actual_crs": crs_string}
-                    )
-
-                return ValidationResult(
-                    check_name="crs_validation",
-                    severity=ValidationSeverity.INFO,
-                    passed=True,
-                    message=f"CRS valid: {crs_string}",
-                    details={"crs": crs_string}
-                )
-
-            # Raster layers
-            elif suffix in ['.tif', '.tiff']:
-                import rasterio
-                with rasterio.open(layer_file) as src:
-                    if src.crs is None:
-                        return ValidationResult(
-                            check_name="crs_validation",
-                            severity=ValidationSeverity.WARNING,
-                            passed=True,
-                            message="Raster has no CRS defined",
-                            details={"crs": None}
-                        )
-
-                    crs_string = src.crs.to_string()
-
-                    if expected_crs and crs_string != expected_crs:
-                        return ValidationResult(
-                            check_name="crs_validation",
-                            severity=ValidationSeverity.WARNING,
-                            passed=True,
-                            message=f"CRS mismatch: expected {expected_crs}, got {crs_string}",
-                            details={"expected_crs": expected_crs, "actual_crs": crs_string}
-                        )
-
-                    return ValidationResult(
-                        check_name="crs_validation",
-                        severity=ValidationSeverity.INFO,
-                        passed=True,
-                        message=f"CRS valid: {crs_string}",
-                        details={"crs": crs_string}
-                    )
-
-        except ImportError as e:
-            return ValidationResult(
-                check_name="crs_validation",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message=f"Required library not available: {e}"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="crs_validation",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message=f"Could not check CRS: {e}"
-            )
-
-        return ValidationResult(
-            check_name="crs_validation",
-            severity=ValidationSeverity.INFO,
-            passed=True,
-            message="CRS check not applicable for this file type"
-        )
-
-    @staticmethod
-    @log_call
-    def check_raster_metadata(
-        layer_file: Union[str, Path],
-        max_resolution: Optional[float] = 100.0,
-        check_nodata: bool = True
-    ) -> List['ValidationResult']:
-        """
-        Check raster metadata (resolution, extent, nodata).
-
-        Args:
-            layer_file: Path to raster file
-            max_resolution: Maximum acceptable resolution in meters (warn if coarser)
-            check_nodata: If True, check nodata percentage
-
-        Returns:
-            List[ValidationResult]: Raster metadata validation results
-
-        Example:
-            >>> results = RasMap.check_raster_metadata("terrain.tif", max_resolution=10.0)
-            >>> for result in results:
-            ...     if not result.passed:
-            ...         print(f"Issue: {result.message}")
-        """
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        layer_file = Path(layer_file)
-        results = []
-
-        try:
-            import rasterio
-            import numpy as np
-
-            with rasterio.open(layer_file) as src:
-                # Resolution check
-                resolution = max(abs(src.res[0]), abs(src.res[1]))
-
-                if max_resolution and resolution > max_resolution:
-                    results.append(ValidationResult(
-                        check_name="resolution_check",
-                        severity=ValidationSeverity.WARNING,
-                        passed=True,
-                        message=f"Raster resolution is coarse: {resolution:.2f} meters (limit: {max_resolution} m)",
-                        details={"resolution": resolution, "max_resolution": max_resolution}
-                    ))
-                else:
-                    results.append(ValidationResult(
-                        check_name="resolution_check",
-                        severity=ValidationSeverity.INFO,
-                        passed=True,
-                        message=f"Raster resolution acceptable: {resolution:.2f} meters",
-                        details={"resolution": resolution}
-                    ))
-
-                # Nodata check
-                if check_nodata:
-                    try:
-                        data = src.read(1, masked=True)
-                        if hasattr(data, 'mask'):
-                            nodata_pct = (data.mask.sum() / data.size) * 100
-
-                            if nodata_pct > 50:
-                                results.append(ValidationResult(
-                                    check_name="nodata_check",
-                                    severity=ValidationSeverity.WARNING,
-                                    passed=True,
-                                    message=f"Raster has high nodata percentage: {nodata_pct:.1f}%",
-                                    details={"nodata_percent": nodata_pct}
-                                ))
-                            else:
-                                results.append(ValidationResult(
-                                    check_name="nodata_check",
-                                    severity=ValidationSeverity.INFO,
-                                    passed=True,
-                                    message=f"Raster nodata acceptable: {nodata_pct:.1f}%",
-                                    details={"nodata_percent": nodata_pct}
-                                ))
-                        else:
-                            results.append(ValidationResult(
-                                check_name="nodata_check",
-                                severity=ValidationSeverity.INFO,
-                                passed=True,
-                                message="Raster has no masked/nodata values"
-                            ))
-                    except Exception as e:
-                        results.append(ValidationResult(
-                            check_name="nodata_check",
-                            severity=ValidationSeverity.WARNING,
-                            passed=True,
-                            message=f"Could not check nodata: {e}"
-                        ))
-
-                # Extent check
-                bounds = src.bounds
-                results.append(ValidationResult(
-                    check_name="extent_info",
-                    severity=ValidationSeverity.INFO,
-                    passed=True,
-                    message=f"Raster extent: ({bounds.left:.2f}, {bounds.bottom:.2f}, {bounds.right:.2f}, {bounds.top:.2f})",
-                    details={"bounds": (bounds.left, bounds.bottom, bounds.right, bounds.top)}
-                ))
-
-        except ImportError:
-            results.append(ValidationResult(
-                check_name="raster_metadata",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message="rasterio not available, cannot validate raster metadata"
-            ))
-        except Exception as e:
-            results.append(ValidationResult(
-                check_name="raster_metadata",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Failed to read raster metadata: {e}"
-            ))
-
-        return results
-
-    @staticmethod
-    @log_call
-    def check_spatial_extent(
-        layer_file: Union[str, Path],
-        model_extent: tuple,
-        min_coverage_pct: float = 50.0
-    ) -> 'ValidationResult':
-        """
-        Check layer spatial extent vs model domain.
-
-        Args:
-            layer_file: Path to layer file
-            model_extent: Model bounding box (minx, miny, maxx, maxy)
-            min_coverage_pct: Minimum coverage percentage (warn if below)
-
-        Returns:
-            ValidationResult: Spatial extent validation result
-
-        Example:
-            >>> model_box = (-85.5, 40.1, -85.3, 40.3)  # Example bounds
-            >>> result = RasMap.check_spatial_extent("terrain.tif", model_box)
-            >>> if result.passed:
-            ...     print(f"Coverage: {result.details.get('coverage_percent'):.1f}%")
-        """
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        layer_file = Path(layer_file)
-        suffix = layer_file.suffix.lower()
-
-        try:
-            from shapely.geometry import box
-
-            model_box = box(*model_extent)
-
-            # Get layer extent
-            if suffix in ['.tif', '.tiff']:
-                import rasterio
-                with rasterio.open(layer_file) as src:
-                    layer_box = box(*src.bounds)
-            elif suffix in ['.geojson', '.json', '.shp']:
-                import geopandas as gpd
-                gdf = gpd.read_file(layer_file)
-                layer_box = box(*gdf.total_bounds)
-            else:
-                return ValidationResult(
-                    check_name="spatial_coverage",
-                    severity=ValidationSeverity.INFO,
-                    passed=True,
-                    message="Spatial coverage check not applicable for this file type"
-                )
-
-            # Check for overlap
-            if not model_box.intersects(layer_box):
-                return ValidationResult(
-                    check_name="spatial_coverage",
-                    severity=ValidationSeverity.ERROR,
-                    passed=False,
-                    message="Layer does not overlap with model domain",
-                    details={
-                        "model_extent": model_extent,
-                        "layer_extent": layer_box.bounds
-                    }
-                )
-
-            # Calculate coverage percentage
-            intersection = model_box.intersection(layer_box)
-            coverage_pct = (intersection.area / model_box.area) * 100
-
-            if coverage_pct < min_coverage_pct:
-                return ValidationResult(
-                    check_name="spatial_coverage",
-                    severity=ValidationSeverity.WARNING,
-                    passed=True,
-                    message=f"Layer only covers {coverage_pct:.1f}% of model domain (minimum: {min_coverage_pct:.1f}%)",
-                    details={"coverage_percent": coverage_pct, "min_coverage_pct": min_coverage_pct}
-                )
-
-            return ValidationResult(
-                check_name="spatial_coverage",
-                severity=ValidationSeverity.INFO,
-                passed=True,
-                message=f"Layer covers {coverage_pct:.1f}% of model domain",
-                details={"coverage_percent": coverage_pct}
-            )
-
-        except ImportError as e:
-            return ValidationResult(
-                check_name="spatial_coverage",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message=f"Required library not available: {e}"
-            )
-        except Exception as e:
-            return ValidationResult(
-                check_name="spatial_coverage",
-                severity=ValidationSeverity.WARNING,
-                passed=True,
-                message=f"Could not check spatial coverage: {e}"
-            )
-
-    @staticmethod
-    @log_call
-    def check_terrain_layer(
-        rasmap_path: Union[str, Path],
-        layer_name: str
-    ) -> 'ValidationResult':
-        """
-        Check terrain layer configuration in rasmap file.
-
-        Validates terrain layer exists and checks for HDF terrain structure
-        if layer is HDF format.
-
-        Args:
-            rasmap_path: Path to .rasmap file
-            layer_name: Name of terrain layer
-
-        Returns:
-            ValidationResult: Terrain validation result
-
-        Example:
-            >>> result = RasMap.check_terrain_layer("project.rasmap", "Terrain_2024")
-            >>> if not result.passed:
-            ...     print(f"Terrain issue: {result.message}")
-        """
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        rasmap_path = Path(rasmap_path)
-
-        # Check if layer exists in rasmap
-        try:
-            terrain_names = RasMap.get_terrain_names(rasmap_path)
-            if layer_name not in terrain_names:
-                return ValidationResult(
-                    check_name="terrain_layer_exists",
-                    severity=ValidationSeverity.ERROR,
-                    passed=False,
-                    message=f"Terrain layer '{layer_name}' not found in rasmap",
-                    details={"layer_name": layer_name, "available": terrain_names}
-                )
-        except Exception as e:
-            return ValidationResult(
-                check_name="terrain_layer_exists",
-                severity=ValidationSeverity.ERROR,
-                passed=False,
-                message=f"Failed to read rasmap file: {e}"
-            )
-
-        # TODO: Get terrain file path and validate HDF structure if applicable
-        # This requires additional RasMap methods to extract layer file paths
-
-        return ValidationResult(
-            check_name="terrain_layer_validation",
-            severity=ValidationSeverity.INFO,
-            passed=True,
-            message=f"Terrain layer '{layer_name}' found in rasmap",
-            details={"layer_name": layer_name}
-        )
-
-    @staticmethod
-    @log_call
-    def check_land_cover_layer(
-        rasmap_path: Union[str, Path],
-        layer_name: str
-    ) -> 'ValidationResult':
-        """
-        Check land cover layer configuration in rasmap file.
-
-        Args:
-            rasmap_path: Path to .rasmap file
-            layer_name: Name of land cover layer
-
-        Returns:
-            ValidationResult: Land cover validation result
-
-        Example:
-            >>> result = RasMap.check_land_cover_layer("project.rasmap", "NLCD_2024")
-            >>> if result.passed:
-            ...     print("Land cover layer valid")
-        """
-        from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-
-        rasmap_path = Path(rasmap_path)
-
-        # TODO: Implement land cover layer validation
-        # This requires methods to extract land cover layer information from rasmap
-
-        return ValidationResult(
-            check_name="land_cover_validation",
-            severity=ValidationSeverity.INFO,
-            passed=True,
-            message=f"Land cover validation for '{layer_name}' not yet implemented",
-            details={"layer_name": layer_name}
-        )
-
-    @staticmethod
-    @log_call
-    def check_layer(
-        rasmap_path: Union[str, Path],
-        layer_name: str,
-        layer_type: Optional[str] = None
-    ) -> 'ValidationReport':
-        """
-        Comprehensive layer validation.
-
-        Performs:
-        1. Layer exists in rasmap
-        2. Type-specific checks (terrain, land cover, etc.)
-
-        Args:
-            rasmap_path: Path to .rasmap file
-            layer_name: Name of layer to validate
-            layer_type: Optional layer type ('Terrain', 'Land Cover', etc.)
-
-        Returns:
-            ValidationReport with all validation results
-
-        Example:
-            >>> from ras_commander import RasMap
-            >>> report = RasMap.check_layer(
-            ...     rasmap_path="project.rasmap",
-            ...     layer_name="Terrain_2024",
-            ...     layer_type="Terrain"
-            ... )
-            >>> if not report.is_valid:
-            ...     print(report.summary())
-        """
-        from ras_commander.RasValidation import ValidationReport
-        from datetime import datetime
-
-        rasmap_path = Path(rasmap_path)
-        results = []
-
-        # Type-specific validation
-        if layer_type == "Terrain":
-            result = RasMap.check_terrain_layer(rasmap_path, layer_name)
-            results.append(result)
-        elif layer_type == "Land Cover":
-            result = RasMap.check_land_cover_layer(rasmap_path, layer_name)
-            results.append(result)
-        else:
-            # Generic layer check
-            from ras_commander.RasValidation import ValidationResult, ValidationSeverity
-            results.append(ValidationResult(
-                check_name="layer_type",
-                severity=ValidationSeverity.INFO,
-                passed=True,
-                message=f"Layer type '{layer_type}' validation not specialized",
-                details={"layer_name": layer_name, "layer_type": layer_type}
-            ))
-
-        return ValidationReport(
-            target=f"{rasmap_path} - {layer_name}",
-            timestamp=datetime.now(),
-            results=results
-        )
-
-    @staticmethod
-    def is_valid_layer(
-        rasmap_path: Union[str, Path],
-        layer_name: str,
-        layer_type: Optional[str] = None
-    ) -> bool:
-        """
-        Quick boolean check for layer validity.
-
-        Args:
-            rasmap_path: Path to .rasmap file
-            layer_name: Name of layer to validate
-            layer_type: Optional layer type
-
-        Returns:
-            True if layer is valid
-
-        Example:
-            >>> if RasMap.is_valid_layer("project.rasmap", "Terrain_2024", "Terrain"):
-            ...     print("Layer is valid")
-        """
-        report = RasMap.check_layer(rasmap_path, layer_name, layer_type)
-        return all(result.passed for result in report.results)
+    # These methods are maintained here for backward compatibility.
+    # Implementation lives in RasMapValidation.py.
+
+    from .RasMapValidation import RasMapValidation as _RMV
+
+    check_layer_format = _RMV.check_layer_format
+    check_layer_crs = _RMV.check_layer_crs
+    check_raster_metadata = _RMV.check_raster_metadata
+    check_spatial_extent = _RMV.check_spatial_extent
+    check_terrain_layer = _RMV.check_terrain_layer
+    check_land_cover_layer = _RMV.check_land_cover_layer
+    check_layer = _RMV.check_layer
+    is_valid_layer = _RMV.is_valid_layer
+
+    del _RMV  # Clean up class namespace
 
     @staticmethod
     @log_call

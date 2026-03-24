@@ -96,13 +96,52 @@ class OpenAndComputeWorkflow:
         if auto_click_compute:
             logger.info("Looking for Unsteady Flow Analysis dialog...")
 
-            def find_unsteady_dialog():
-                return Win32Primitives.find_dialog_by_title("Unsteady Flow Analysis")
+            # Snapshot windows before menu click already happened (wait for dialog to appear)
+            # Try multiple title patterns — HEC-RAS versions use different dialog titles
+            dialog_title_patterns = [
+                "Unsteady Flow Analysis",
+                "Unsteady Flow Simulation",
+                "Unsteady",
+                "Performing Computation",
+            ]
 
-            dialog_hwnd = Win32Primitives.wait_for_window(find_unsteady_dialog, timeout=15)
+            dialog_hwnd = None
+
+            # Strategy 1: Try title-based search with multiple patterns
+            for pattern in dialog_title_patterns:
+                def find_dialog(p=pattern):
+                    return Win32Primitives.find_dialog_by_title(p)
+                dialog_hwnd = Win32Primitives.wait_for_window(find_dialog, timeout=5)
+                if dialog_hwnd:
+                    logger.info(f"Found dialog matching '{pattern}'")
+                    break
+
+            # Strategy 2: If title search failed, find any NEW window belonging to the
+            # HEC-RAS process that wasn't the main window (likely a dialog/popup)
+            if not dialog_hwnd:
+                logger.info("Title-based search failed, searching for new windows by PID...")
+                hecras_pid = hecras_process.pid
+                time.sleep(2)  # Give dialog time to appear
+
+                all_windows = Win32Primitives.get_windows_by_pid(hecras_pid)
+                for hwnd, title in all_windows:
+                    if hwnd != hec_ras_hwnd and title:
+                        logger.info(f"Found new window: '{title}' (hwnd={hwnd})")
+                        dialog_hwnd = hwnd
+                        break
+
+                if not dialog_hwnd:
+                    # Last resort: wait longer and try again
+                    time.sleep(5)
+                    all_windows = Win32Primitives.get_windows_by_pid(hecras_pid)
+                    for hwnd, title in all_windows:
+                        if hwnd != hec_ras_hwnd and title:
+                            logger.info(f"Found new window (delayed): '{title}' (hwnd={hwnd})")
+                            dialog_hwnd = hwnd
+                            break
 
             if dialog_hwnd:
-                logger.info("Found Unsteady Flow Analysis dialog")
+                logger.info(f"Found dialog window: '{win32gui.GetWindowText(dialog_hwnd)}'")
                 logger.info("Looking for Compute button...")
 
                 try:
@@ -141,7 +180,7 @@ class OpenAndComputeWorkflow:
                             logger.warning(f"WScript.Shell approach failed: {e2}")
                             logger.info("User must manually click Compute button")
             else:
-                logger.warning("Could not find Unsteady Flow Analysis dialog")
+                logger.warning("Could not find Unsteady Flow Analysis dialog by any method")
                 logger.info("User must manually click 'Run > Unsteady Flow Analysis' and Compute")
 
         # Step 5: Poll HDF for "Complete Process", then auto-close HEC-RAS
