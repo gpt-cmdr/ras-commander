@@ -1,5 +1,13 @@
 **Purpose**
-- Orient AI agents to use Ras Commander effectively without relying on external knowledge bases or executing heavyweight notebooks in-place. This file governs the entire repository. Subfolder files add context-specific guidance.
+- Thin compatibility wrapper for agents that look for `AGENTS.md`.
+- The canonical repository guidance lives in `CLAUDE.md` and the canonical agent framework content lives under `.claude/`.
+- Use this file to redirect non-Claude agents to the canonical sources rather than maintaining a parallel instruction set here.
+
+**Canonical Source of Truth**
+- Read `CLAUDE.md` first. It is the canonical top-level instruction file for this repository.
+- Treat `.claude/` as the canonical repository folder for shared agent framework materials such as rules, skills, agents, commands, outputs, and manifests.
+- Use `AGENTS.md` only as a thin compatibility layer for tools that automatically discover it.
+- Do not create alternate top-level instruction hierarchies or tool-specific framework folders unless the user explicitly asks for them.
 
 **Do This First**
 - Ignore `ai_tools/` and any generated knowledge bases. These are for maintainers; agents should not read, build, or depend on them.
@@ -165,3 +173,18 @@ Each `CLAUDE.md` file contains domain-specific guidance that should be imported 
 - **Feature CLAUDE.md**: Experimental feature development context
 
 **Non-Claude agents**: When you encounter a `CLAUDE.md` file, import it to get the detailed context for that directory. Each `AGENTS.md` in a subdirectory will reference its corresponding `CLAUDE.md`.
+
+### Cross-Agent Loading Contract
+
+To keep Claude and non-Claude agents aligned, use this loading order unless a
+more specific local wrapper overrides it:
+
+1. Read the nearest applicable `AGENTS.md`
+2. Immediately read the corresponding `CLAUDE.md`
+3. Treat `.claude/MANIFEST.md` as the canonical index for rules, skills,
+   agents, and commands
+4. Read only the relevant files under `.claude/` for the current task
+
+Claude may auto-load some of this context. Non-Claude agents should read it
+explicitly by path and must not create duplicate framework files just because
+auto-loading is unavailable.

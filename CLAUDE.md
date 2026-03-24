@@ -2,12 +2,35 @@
 
 This file provides strategic guidance to Claude Code when working with ras-commander. **Detailed patterns are in `.claude/rules/`** (auto-loaded).
 
-## AGENTS.md Standard
+## AGENTS.md Compatibility Layer
 
-This repository uses the AGENTS.md standard alongside CLAUDE.md:
-- `AGENTS.md` files provide scoped guidance (folder and subfolders)
-- More deeply nested AGENTS.md files override parent guidance
-- Always read both CLAUDE.md and AGENTS.md for working directory
+This repository keeps `CLAUDE.md` as the canonical instruction file and uses
+`AGENTS.md` as a thin compatibility layer for tools that automatically look for
+that filename.
+
+- `CLAUDE.md` is the source of truth for durable repository guidance
+- `AGENTS.md` should redirect agents to the corresponding `CLAUDE.md`
+- If both files exist, treat `CLAUDE.md` as canonical and use `AGENTS.md`
+  mainly for discovery and compatibility
+
+## Canonical Agent Framework Location
+
+The `.claude/` directory is the single canonical repository location for
+shared agent framework materials:
+- rules
+- skills
+- agents
+- commands
+- outputs
+- related manifests and coordination documents
+
+This rule applies to Claude Code and non-Claude agents alike. If an agent
+needs to update shared framework content, update the canonical files under
+`.claude/` rather than creating a parallel tool-specific folder.
+
+Do not create duplicate framework directories such as `.codex/`,
+`.cursor/`, `.windsurf/`, or `.agents/` unless the user explicitly asks for
+that divergence.
 
 **Key locations**:
 - `/AGENTS.md` (root - library overview)
@@ -596,4 +619,7 @@ arr = HdfLandCover.compute_final_mannings_raster("01", output_tif_path="final_n.
 
 ---
 
-**Note**: This file provides strategic overview. Detailed patterns auto-load from `.claude/rules/`. For subpackage-specific guidance, see AGENTS.md files in relevant directories.
+**Note**: This file provides strategic overview. Claude auto-loads relevant
+patterns from `.claude/rules/`. Other agents should read the applicable files
+explicitly by path. For subpackage-specific guidance, see AGENTS.md files in
+relevant directories.
