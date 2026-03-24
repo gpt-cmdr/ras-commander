@@ -1177,7 +1177,8 @@ Step 5: Configure (optional — auto-detection usually works)
             "RASMapper benchmarks across 7 Spring Creek model variants\n"
             "(HEC-RAS 5.0.7, 6.3.1, 6.6 x horizontal/sloping/slopingPretty).\n\n"
             "USE INSTEAD:\n"
-            "  RasMap.postprocess_stored_maps(plan_number='01')\n"
+            "  RasMap.store_all_maps(plan_number='01')  # headless, no GUI\n"
+            "  RasMap.postprocess_stored_maps(plan_number='01')  # GUI automation\n"
             "  # Uses GUI automation (Run RASMapper= -1) which produces\n"
             "  # pixel-perfect output verified against manual benchmarks.\n"
         )
@@ -1493,7 +1494,8 @@ Step 5: Configure (optional — auto-detection usually works)
             "incorrect WSE and Depth rasters (ignores RenderMode setting).\n"
             "See RasProcess.store_maps() docstring for full details.\n\n"
             "USE INSTEAD:\n"
-            "  RasMap.postprocess_stored_maps(plan_number=['01','02',...])\n"
+            "  RasMap.store_all_maps(plan_number='01')  # headless, no GUI\n"
+            "  RasMap.postprocess_stored_maps(plan_number=['01','02',...])  # GUI automation\n"
         )
 
         all_results = {}

@@ -27,7 +27,8 @@ List of Functions in RasMap:
 - list_map_layers(): List all map layers in the RASMapper configuration file
 - add_map_layer(): Add a map layer to the RASMapper configuration file
 - remove_map_layer(): Remove a map layer from the RASMapper configuration file
-- postprocess_stored_maps(): Automates the generation of stored floodplain map outputs (e.g., .tif files)
+- postprocess_stored_maps(): Automates the generation of stored floodplain map outputs via GUI automation
+- store_all_maps(): Headless stored map generation using RasStoreMapHelper.exe (no GUI required)
 - get_results_folder(): Get the folder path containing raster results for a specified plan
 - get_results_raster(): Get the .vrt file path for a specified plan and variable name
 - set_water_surface_render_mode(): Set the water surface rendering mode (horizontal or sloped)
@@ -1470,130 +1471,194 @@ class RasMap:
     def store_all_maps(
         plan_number: Union[str, List[str]],
         render_mode: str = None,
-        reduce_shallow_to_horizontal: bool = True,
-        use_depth_weighted_faces: bool = False,
-        layers: List[str] = None,
-        terrain: str = None,
-        ras_object=None,
-    ) -> bool:
+        ras_object: Optional[Any] = None,
+        timeout: int = 600,
+    ) -> Dict[str, Any]:
         """
-        Generate stored floodplain map rasters via GUI automation.
+        Generate stored floodplain map rasters headlessly using RasStoreMapHelper.exe.
 
-        This is the validated path for map generation. It uses the HEC-RAS GUI
-        with ``Run RASMapper= -1`` (floodplain mapping only, no simulation),
-        which produces pixel-perfect output verified against manual RASMapper
-        benchmarks.
+        This method sets the rendering mode correctly and generates map rasters
+        without requiring the HEC-RAS GUI. It addresses a bug in RasProcess.exe
+        StoreAllMaps where HEC-RAS 6.x ignores the RenderMode setting from the
+        .rasmap file.
+
+        The helper exe is bundled with ras-commander and copied to the HEC-RAS
+        installation directory at runtime (required for GDAL initialization).
 
         Args:
-            plan_number: Plan number(s) to generate maps for (e.g., "01" or ["01","02"]).
-            render_mode: Water surface rendering mode to set before generating maps.
-                Options: "horizontal", "sloping", "slopingPretty".
-                If None (default), uses whatever mode is already in the .rasmap.
-            reduce_shallow_to_horizontal: For slopingPretty mode, whether shallow
-                cells fall back to horizontal. Default True.
-            use_depth_weighted_faces: For slopingPretty mode, whether face
-                contributions are depth-weighted. Default False.
-            layers: Map layers to generate. Default: ['WSE', 'Velocity', 'Depth'].
-            terrain: Specific terrain name to use. If None, uses all terrains.
-            ras_object: Optional RAS object instance.
+            plan_number: Plan number(s) to generate maps for (e.g. "01" or ["01", "02"]).
+            render_mode: Rendering mode override. If None, reads from .rasmap file.
+                Valid values: "horizontal", "sloping", "slopingPretty".
+            ras_object: Optional RAS project object.
+            timeout: Timeout in seconds per plan (default: 600).
 
         Returns:
-            True if successful, False otherwise.
+            Dict with keys:
+                - "success" (bool): True if all plans completed successfully.
+                - "plans" (dict): Per-plan results with output file lists.
+                - "render_mode" (str): The rendering mode used.
 
         Raises:
-            RuntimeError: If HEC-RAS version is 5.x or 4.x (untested).
+            RuntimeError: If HEC-RAS version is 5.x or earlier (untested).
+            FileNotFoundError: If required files are missing.
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
             >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
-            >>>
-            >>> # Generate maps with current render mode
-            >>> RasMap.store_all_maps("01")
-            >>>
-            >>> # Generate maps with explicit horizontal rendering
-            >>> RasMap.store_all_maps("01", render_mode="horizontal")
-            >>>
-            >>> # Generate maps with slopingPretty rendering
-            >>> RasMap.store_all_maps("01", render_mode="slopingPretty")
-
-        Notes:
-            - Requires Windows with HEC-RAS GUI (uses Win32 automation)
-            - Opens and closes HEC-RAS automatically
-            - Original .rasmap and plan files are backed up and restored
-            - RasProcess.exe StoreAllMaps is NOT used (it produces incorrect output)
+            >>> result = RasMap.store_all_maps("01", render_mode="horizontal")
+            >>> print(result["success"])
         """
+        import subprocess
+
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # ── Version validation ──
+        # Version guard: only 6.x is validated
         ras_version = getattr(ras_obj, 'ras_version', None) or ""
+        exe_path_str = str(getattr(ras_obj, 'ras_exe_path', ''))
+        # Try to detect version from exe path (e.g. "...\6.6\Ras.exe")
+        if not ras_version:
+            for segment in Path(exe_path_str).parts:
+                if segment and segment[0].isdigit():
+                    ras_version = segment
+                    break
+
         if ras_version.startswith("5.") or ras_version.startswith("4."):
             raise RuntimeError(
                 f"store_all_maps() is not supported for HEC-RAS {ras_version}.\n"
-                "Only HEC-RAS 6.x (6.3.1, 6.6+) is verified to produce correct output."
+                "HEC-RAS 5.x/4.x map generation has not been validated with this method."
             )
 
-        # ── Cross-version validation ──
-        effective_mode = render_mode or "unknown"
-        if effective_mode == "unknown":
-            # Read current mode from rasmap
-            mode_info = RasMap.get_water_surface_render_mode(ras_object=ras_obj)
-            if mode_info:
-                effective_mode = mode_info.get("mode", "unknown")
+        # Locate HEC-RAS directory from ras_exe_path
+        hecras_dir = Path(exe_path_str).parent
+        if not hecras_dir.exists():
+            raise FileNotFoundError(f"HEC-RAS directory not found: {hecras_dir}")
 
-        # Check validation registry
-        version_prefix = ras_version[:3] if len(ras_version) >= 3 else ras_version
-        config_key = (version_prefix, effective_mode)
-        validation_status = RasMap.VALIDATED_MAP_CONFIGURATIONS.get(config_key)
-
-        if validation_status == "pixel-perfect":
-            logger.info(
-                f"Configuration ({ras_version}, {effective_mode}) is validated pixel-perfect"
+        # Locate and deploy the helper exe
+        helper_source = Path(__file__).parent / "RasStoreMapHelper.exe"
+        if not helper_source.exists():
+            raise FileNotFoundError(
+                f"RasStoreMapHelper.exe not found in ras-commander package at {helper_source}.\n"
+                "This file is required for headless map generation."
             )
-        elif validation_status is None:
-            logger.warning(
-                f"Configuration ({ras_version}, {effective_mode}) has NOT been validated "
-                f"against manual RASMapper benchmarks. Output may differ from expected. "
-                f"Validated configurations: {list(RasMap.VALIDATED_MAP_CONFIGURATIONS.keys())}"
-            )
-        else:
-            logger.info(f"Configuration ({ras_version}, {effective_mode}): {validation_status}")
 
-        # ── Set render mode if requested ──
+        helper_dest = hecras_dir / "RasStoreMapHelper.exe"
+        if not helper_dest.exists() or helper_dest.stat().st_size != helper_source.stat().st_size:
+            import shutil as _shutil
+            _shutil.copy2(str(helper_source), str(helper_dest))
+            logger.info(f"Deployed RasStoreMapHelper.exe to {helper_dest}")
+
+        # Determine render mode
+        if render_mode is None:
+            render_mode = RasMap.get_water_surface_render_mode(ras_object=ras_obj)
+            if render_mode is None:
+                render_mode = "horizontal"
+                logger.warning("No RenderMode found in .rasmap, defaulting to 'horizontal'")
+            # Normalize: get_water_surface_render_mode returns "sloped" for both sloping modes
+            if render_mode == "sloped":
+                # Read the raw value from rasmap to distinguish sloping vs slopingPretty
+                rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+                try:
+                    tree = ET.parse(rasmap_path)
+                    raw_mode = tree.getroot().findtext("RenderMode", "").strip().lower()
+                    if raw_mode == "slopingpretty":
+                        render_mode = "slopingPretty"
+                    else:
+                        render_mode = "sloping"
+                except Exception:
+                    render_mode = "sloping"
+
+        # Normalize render_mode for the helper exe
+        mode_map = {
+            "horizontal": "horizontal",
+            "sloping": "sloping",
+            "slopingpretty": "slopingPretty",
+            "sloped": "sloping",
+        }
+        helper_mode = mode_map.get(render_mode.lower())
+        if helper_mode is None:
+            raise ValueError(
+                f"Invalid render_mode: {render_mode}. "
+                "Valid values: horizontal, sloping, slopingPretty"
+            )
+
+        # Process plan numbers
+        plan_number_list = [plan_number] if isinstance(plan_number, str) else list(plan_number)
+
         rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
-        rasmap_render_backup = None
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f".rasmap file not found: {rasmap_path}")
 
-        if render_mode is not None:
-            # Back up current rasmap render settings
-            if rasmap_path.exists():
-                rasmap_render_backup = rasmap_path.read_bytes()
+        results = {"success": True, "plans": {}, "render_mode": helper_mode}
 
-            RasMap.set_water_surface_render_mode(
-                mode=render_mode,
-                reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
-                use_depth_weighted_faces=use_depth_weighted_faces,
-                ras_object=ras_obj,
-            )
-            logger.info(f"Set render mode to '{render_mode}' before map generation")
+        for plan_num in plan_number_list:
+            result_hdf = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_num}.hdf"
+            if not result_hdf.exists():
+                logger.warning(f"Skipping plan {plan_num} — no result HDF: {result_hdf}")
+                results["plans"][plan_num] = {"success": False, "error": "No result HDF"}
+                results["success"] = False
+                continue
 
-        # ── Delegate to postprocess_stored_maps ──
-        try:
-            result = RasMap.postprocess_stored_maps(
-                plan_number=plan_number,
-                specify_terrain=terrain,
-                layers=layers,
-                ras_object=ras_obj,
-                auto_click_compute=True,
-            )
-            return result
-        finally:
-            # Restore render mode if we changed it
-            # (postprocess_stored_maps already restores its own .rasmap backup,
-            # but that backup was taken AFTER we changed the render mode.
-            # The render mode change is intentional for the output, so we
-            # don't need to restore it — postprocess_stored_maps handles
-            # its own backup/restore of the stored map entries.)
-            pass
+            logger.info(f"Generating stored maps for plan {plan_num} (mode={helper_mode})...")
+
+            cmd = [
+                str(helper_dest),
+                str(hecras_dir),
+                helper_mode,
+                str(rasmap_path),
+                str(result_hdf),
+            ]
+
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=str(ras_obj.project_folder),
+                )
+
+                if proc.returncode == 0:
+                    logger.info(f"Plan {plan_num}: StoreAllMaps completed successfully")
+                    logger.debug(f"stdout: {proc.stdout}")
+
+                    # Collect output files
+                    plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
+                    if not plan_info.empty:
+                        short_id = plan_info.iloc[0].get('Short Identifier', f'Plan_{plan_num}')
+                        if pd.isna(short_id) or not short_id:
+                            short_id = f"Plan_{plan_num}"
+                    else:
+                        short_id = f"Plan_{plan_num}"
+
+                    output_dir = ras_obj.project_folder / short_id.strip()
+                    output_files = []
+                    if output_dir.exists():
+                        output_files = list(output_dir.glob("*.tif")) + list(output_dir.glob("*.vrt"))
+
+                    results["plans"][plan_num] = {
+                        "success": True,
+                        "output_dir": str(output_dir),
+                        "files": [str(f) for f in output_files],
+                        "stdout": proc.stdout,
+                    }
+                else:
+                    logger.error(f"Plan {plan_num}: StoreAllMaps failed (exit code {proc.returncode})")
+                    logger.error(f"stderr: {proc.stderr}")
+                    logger.error(f"stdout: {proc.stdout}")
+                    results["plans"][plan_num] = {
+                        "success": False,
+                        "error": proc.stderr or proc.stdout,
+                        "exit_code": proc.returncode,
+                    }
+                    results["success"] = False
+
+            except subprocess.TimeoutExpired:
+                logger.error(f"Plan {plan_num}: StoreAllMaps timed out after {timeout}s")
+                results["plans"][plan_num] = {"success": False, "error": "Timeout"}
+                results["success"] = False
+
+        return results
 
     @staticmethod
     @log_call
