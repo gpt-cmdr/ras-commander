@@ -1161,41 +1161,26 @@ Step 5: Configure (optional — auto-detection usually works)
             >>> print(results['wse'])
             [Path('C:/MyProject/CustomMaps/WSE (Max).Terrain.tif')]
         """
-        # ── DEPRECATION: RasProcess.exe StoreAllMaps produces incorrect WSE/Depth ──
-        # Verified 2026-03-23: RasProcess.exe in HEC-RAS 6.x ignores the RenderMode
-        # setting from the .rasmap file, producing WSE and Depth rasters that differ
-        # from RASMapper by up to 15 ft across 87-96% of pixels. Velocity is unaffected.
-        # Use RasMap.postprocess_stored_maps() instead (GUI automation with
-        # Run RASMapper= -1), which produces pixel-perfect output.
-        raise RuntimeError(
-            "RasProcess.store_maps() is deprecated and MUST NOT be used.\n\n"
-            "REASON: RasProcess.exe StoreAllMaps in HEC-RAS 6.x ignores the\n"
-            "RenderMode setting from the .rasmap file, producing WSE and Depth\n"
-            "rasters that differ from RASMapper output by up to 15 ft across\n"
-            "87-96% of pixels. Only Velocity is unaffected.\n\n"
-            "Verified via pixel-by-pixel comparison against manually-generated\n"
-            "RASMapper benchmarks across 7 Spring Creek model variants\n"
-            "(HEC-RAS 5.0.7, 6.3.1, 6.6 x horizontal/sloping/slopingPretty).\n\n"
-            "USE INSTEAD:\n"
-            "  RasMap.store_all_maps(plan_number='01')  # headless, no GUI\n"
-            "  RasMap.postprocess_stored_maps(plan_number='01')  # GUI automation\n"
-            "  # Uses GUI automation (Run RASMapper= -1) which produces\n"
-            "  # pixel-perfect output verified against manual benchmarks.\n"
-        )
+        # HISTORY: Prior to 2026-03-24, this used RasProcess.exe StoreAllMaps
+        # which ignores RenderMode in HEC-RAS 6.x. Now uses RasStoreMapHelper.exe
+        # which sets SharedData render mode via .NET reflection before executing
+        # StoreAllMapsCommand, producing pixel-perfect output.
 
-        # Find RasProcess.exe
-        rasprocess = RasProcess.find_rasprocess(ras_version)
-        if rasprocess is None:
-            if IS_LINUX:
-                raise FileNotFoundError(
-                    "RasProcess.exe not found in Wine prefix. "
-                    "Run RasProcess.setup_wine_environment() for installation instructions, "
-                    "or call RasProcess.configure_wine(ras_install_dir=...) to specify location."
-                )
-            else:
-                raise FileNotFoundError(
-                    "RasProcess.exe not found. Ensure HEC-RAS is installed or specify ras_version."
-                )
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Locate HEC-RAS directory and deploy helper
+        hecras_dir = Path(str(ras_obj.ras_exe_path)).parent
+        helper_source = Path(__file__).parent / "RasStoreMapHelper.exe"
+        if not helper_source.exists():
+            raise FileNotFoundError(
+                f"RasStoreMapHelper.exe not found at {helper_source}. "
+                "This file is required for headless map generation."
+            )
+        helper_dest = hecras_dir / "RasStoreMapHelper.exe"
+        if not helper_dest.exists() or helper_dest.stat().st_size != helper_source.stat().st_size:
+            shutil.copy2(str(helper_source), str(helper_dest))
+            logger.info(f"Deployed RasStoreMapHelper.exe to {helper_dest}")
 
         # Get paths
         plan_num = RasUtils.normalize_ras_number(plan_number)
@@ -1332,29 +1317,58 @@ Step 5: Configure (optional — auto-detection usually works)
             if output_dir.exists():
                 pre_existing_files = {f.name for f in output_dir.iterdir()}
 
-            # Always use StoreAllMaps (writes to Plan ShortID folder).
-            # Individual StoreMap with absolute OutputBaseFilename crashes on
-            # multi-terrain projects (NullReferenceException in SetProjectionInfo).
-            rasmap_arg = RasProcess._resolve_path_for_rasprocess(rasmap_path)
-            result_arg = RasProcess._resolve_path_for_rasprocess(plan_hdf_path)
+            # Use RasStoreMapHelper.exe instead of RasProcess.exe.
+            # RasStoreMapHelper sets SharedData render mode via .NET reflection
+            # before calling StoreAllMapsCommand.Execute(), fixing the 6.x bug
+            # where RasProcess.exe ignores the RenderMode from the .rasmap.
 
-            args = [
-                "-Command=StoreAllMaps",
-                f"-RasMapFilename={rasmap_arg}",
-                f"-ResultFilename={result_arg}"
+            # Determine render mode for the helper
+            helper_mode = "horizontal"  # default
+            if render_mode is not None:
+                mode_map = {
+                    "horizontal": "horizontal", "sloping": "sloping",
+                    "slopingpretty": "slopingPretty", "sloped": "sloping",
+                }
+                helper_mode = mode_map.get(render_mode.lower(), render_mode)
+            else:
+                # Read from rasmap
+                current_mode = RasMap.get_water_surface_render_mode(ras_object=ras_obj)
+                if current_mode:
+                    if current_mode == "sloped":
+                        # Distinguish sloping vs slopingPretty from raw XML
+                        try:
+                            raw = ET.parse(rasmap_path).getroot().findtext("RenderMode", "").strip().lower()
+                            helper_mode = "slopingPretty" if raw == "slopingpretty" else "sloping"
+                        except Exception:
+                            helper_mode = "sloping"
+                    else:
+                        helper_mode = current_mode
+
+            helper_cmd = [
+                str(helper_dest),
+                str(hecras_dir),
+                helper_mode,
+                str(rasmap_path),
+                str(plan_hdf_path),
             ]
 
-            logger.info(f"Running StoreAllMaps for plan {plan_num}...")
+            logger.info(f"Running StoreAllMaps for plan {plan_num} (mode={helper_mode})...")
 
-            result = RasProcess._run_rasprocess(
-                rasprocess, args,
+            import subprocess as _sp
+            result = _sp.run(
+                helper_cmd,
+                capture_output=True,
+                text=True,
                 timeout=timeout,
-                working_dir=ras_obj.project_folder,
+                cwd=str(ras_obj.project_folder),
             )
 
             logger.debug(f"StoreAllMaps stdout: {result.stdout}")
             if result.stderr:
                 logger.warning(f"StoreAllMaps stderr: {result.stderr}")
+            if result.returncode != 0:
+                logger.error(f"StoreAllMaps failed (exit code {result.returncode})")
+                logger.error(f"stderr: {result.stderr}")
 
             for line in result.stdout.splitlines():
                 if "Maps generated" in line:
@@ -1487,16 +1501,9 @@ Step 5: Configure (optional — auto-detection usually works)
             >>> for plan, files in all_results.items():
             ...     print(f"Plan {plan}: {len(files.get('wse', []))} WSE files")
         """
-        # ── DEPRECATION: Same issue as store_maps() ──
-        raise RuntimeError(
-            "RasProcess.store_all_maps() is deprecated and MUST NOT be used.\n\n"
-            "REASON: RasProcess.exe StoreAllMaps in HEC-RAS 6.x produces\n"
-            "incorrect WSE and Depth rasters (ignores RenderMode setting).\n"
-            "See RasProcess.store_maps() docstring for full details.\n\n"
-            "USE INSTEAD:\n"
-            "  RasMap.store_all_maps(plan_number='01')  # headless, no GUI\n"
-            "  RasMap.postprocess_stored_maps(plan_number=['01','02',...])  # GUI automation\n"
-        )
+        # HISTORY: Prior to 2026-03-24, this was deprecated because it delegated
+        # to store_maps() which used RasProcess.exe (ignores RenderMode in 6.x).
+        # Now uses RasStoreMapHelper.exe via store_maps().
 
         all_results = {}
 
