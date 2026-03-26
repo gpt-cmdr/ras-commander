@@ -21,6 +21,7 @@ Main Classes:
         - get_terrain_volume_elevation(): Elevation-volume curve for polygons
         - compare_terrain_profiles(): Cut/fill analysis between terrains
         - compare_terrain_volumes(): No-net-fill compliance checking
+        - compute_modified_terrain_raster(): Full-resolution GeoTIFF of modified terrain
         Requires: pythonnet, HEC-RAS 6.6+, one-time setup_gdal_bridge() call
 
 Requirements:

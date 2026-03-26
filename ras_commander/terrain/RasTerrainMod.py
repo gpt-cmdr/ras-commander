@@ -665,3 +665,143 @@ class RasTerrainMod:
             'proposed_volume': proposed_interp,
             'net_volume': proposed_interp - existing_interp,
         })
+
+    @staticmethod
+    @log_call
+    def compute_modified_terrain_raster(
+        rasmap_path: Union[str, Path],
+        geom_hdf_path: Union[str, Path],
+        terrain_tif_path: Union[str, Path],
+        output_tif_path: Optional[Union[str, Path]] = None,
+        filter_tolerance: float = 0.0,
+        ras_object=None,
+    ) -> Optional[np.ndarray]:
+        """
+        Compute a full-resolution raster of terrain with modifications applied.
+
+        Reads the original terrain GeoTIFF to determine the output grid (CRS,
+        resolution, extent), then samples the modified terrain (with channels,
+        levees, polygon overrides, etc.) at each cell center row-by-row via
+        RasMapperLib. Where sampling succeeds, modified elevations replace the
+        original; where it fails (e.g., outside the geometry extent), the
+        original terrain value is preserved.
+
+        Args:
+            rasmap_path: Path to .rasmap project file
+            geom_hdf_path: Path to geometry HDF file (.g##.hdf)
+            terrain_tif_path: Path to original terrain GeoTIFF (defines output grid)
+            output_tif_path: If provided, writes result to GeoTIFF (deflate compressed)
+            filter_tolerance: Douglas-Peucker vertical filter tolerance for profile
+                sampling (default 0.0 = maximum detail, no filtering)
+
+        Returns:
+            2D numpy array (float32) of modified terrain elevations, same shape as
+            the input terrain raster. None if the terrain TIF cannot be read.
+
+        Platform:
+            Windows only (requires HEC-RAS 6.6+ and pythonnet).
+
+        Example:
+            >>> RasTerrainMod.setup_gdal_bridge()
+            >>> arr = RasTerrainMod.compute_modified_terrain_raster(
+            ...     "project.rasmap", "project.g01.hdf",
+            ...     "Terrain/Terrain.tif",
+            ...     output_tif_path="Terrain/Terrain_modified.tif"
+            ... )
+            >>> print(f"Shape: {arr.shape}, range: {arr.min():.1f} to {arr.max():.1f}")
+        """
+        import rasterio
+
+        terrain_tif_path = Path(terrain_tif_path)
+        if not terrain_tif_path.exists():
+            raise FileNotFoundError(f"Terrain TIF not found: {terrain_tif_path}")
+
+        rasmap_path, geom_hdf_path = RasTerrainMod._validate_paths(rasmap_path, geom_hdf_path)
+
+        # Read terrain raster grid definition and original data
+        with rasterio.open(terrain_tif_path) as src:
+            height = src.height
+            width = src.width
+            transform = src.transform
+            crs = src.crs
+            nodata = src.nodata if src.nodata is not None else -9999.0
+            original = src.read(1).astype(np.float32)
+
+        # Compute cell center x-coordinates (constant for all rows)
+        # transform: x = origin_x + col * pixel_width  (pixel_width = transform.a)
+        x_centers = transform.c + (np.arange(width) + 0.5) * transform.a
+
+        # Allocate output — start with original terrain
+        modified = original.copy()
+
+        logger.info(
+            f"Sampling modified terrain: {width}x{height} grid "
+            f"({width * height:,} cells, {height} rows)"
+        )
+
+        sampled_rows = 0
+        for row_idx in range(height):
+            # Cell center y for this row
+            y_center = transform.f + (row_idx + 0.5) * transform.e
+
+            # Horizontal polyline spanning the full row
+            x_line = [float(x_centers[0]), float(x_centers[-1])]
+            y_line = [float(y_center), float(y_center)]
+
+            try:
+                profile = RasTerrainMod.get_terrain_profile(
+                    rasmap_path, geom_hdf_path,
+                    x_coords=x_line, y_coords=y_line,
+                    filter_tolerance=filter_tolerance,
+                )
+            except Exception as e:
+                logger.debug(f"Row {row_idx} sampling failed: {e}")
+                continue  # keep original values for this row
+
+            if len(profile) < 2:
+                continue  # keep original
+
+            # Interpolate profile (station-based) to grid cell centers.
+            # For a horizontal line, station = distance from start = x - x_start
+            cell_stations = x_centers - x_centers[0]
+            row_elevations = np.interp(
+                cell_stations,
+                profile['station'].values,
+                profile['elevation'].values,
+                left=np.nan, right=np.nan,
+            )
+
+            # Only overwrite cells where interpolation succeeded
+            valid = np.isfinite(row_elevations)
+            if valid.any():
+                modified[row_idx, valid] = row_elevations[valid].astype(np.float32)
+                sampled_rows += 1
+
+            if (row_idx + 1) % 500 == 0:
+                logger.info(f"  Progress: {row_idx + 1}/{height} rows")
+
+        logger.info(f"Modified terrain raster: {sampled_rows}/{height} rows updated")
+
+        # Write GeoTIFF if requested
+        if output_tif_path is not None:
+            output_tif_path = Path(output_tif_path)
+            output_tif_path.parent.mkdir(parents=True, exist_ok=True)
+
+            out_meta = {
+                'driver': 'GTiff',
+                'dtype': 'float32',
+                'width': width,
+                'height': height,
+                'count': 1,
+                'crs': crs,
+                'transform': transform,
+                'nodata': float(nodata),
+                'compress': 'deflate',
+            }
+
+            with rasterio.open(output_tif_path, 'w', **out_meta) as dst:
+                dst.write(modified, 1)
+
+            logger.info(f"Modified terrain raster written to {output_tif_path}")
+
+        return modified
