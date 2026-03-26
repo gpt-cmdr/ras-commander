@@ -6506,15 +6506,65 @@ Checking volume accounting...
 </table>
 </div>
 
+<h2 id="deleting-plans-geometries-and-flow-files">Deleting Plans, Geometries, and Flow Files<a class="headerlink" href="#deleting-plans-geometries-and-flow-files" title="Permanent link">&para;</a></h2>
+<p>After working with cloned elements, you may want to clean up by deleting them. By default, 
+all delete methods move files to a timestamped <strong>Backup/</strong> folder instead of permanently deleting 
+them. This provides a safety net for recovering accidentally deleted files.</p>
+<p>The <code>permanent_delete=True</code> parameter can be used to skip the backup and permanently remove files.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># First, let&#39;s clone fresh elements to demonstrate deletion</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># (Our earlier clones may have been used for computation)</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">demo_plan</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">new_shortid</span><span class="o">=</span><span class="s2">&quot;Delete Demo Plan&quot;</span><span class="p">)</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="n">demo_geom</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_geom</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">demo_unsteady</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_unsteady</span><span class="p">(</span><span class="s2">&quot;02&quot;</span><span class="p">)</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created demo plan: </span><span class="si">{</span><span class="n">demo_plan</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created demo geometry: </span><span class="si">{</span><span class="n">demo_geom</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created demo unsteady: </span><span class="si">{</span><span class="n">demo_unsteady</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan count before deletion: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry count before deletion: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady count before deletion: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>
+</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="c1"># Delete the plan (default: backs up to Backup/ folder)</span>
+</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">delete_plan</span><span class="p">(</span><span class="n">demo_plan</span><span class="p">)</span>
+</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a><span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan count after deleting plan </span><span class="si">{</span><span class="n">demo_plan</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-18"><a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a>
+</span><span id="__span-26-19"><a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a><span class="c1"># Delete the geometry (default: backs up .g##, .g##.hdf, .c## to Backup/)</span>
+</span><span id="__span-26-20"><a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">delete_geom</span><span class="p">(</span><span class="n">demo_geom</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-26-21"><a id="__codelineno-26-21" name="__codelineno-26-21" href="#__codelineno-26-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry count after deleting geom </span><span class="si">{</span><span class="n">demo_geom</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-22"><a id="__codelineno-26-22" name="__codelineno-26-22" href="#__codelineno-26-22"></a>
+</span><span id="__span-26-23"><a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a><span class="c1"># Delete the unsteady flow (default: backs up to Backup/)</span>
+</span><span id="__span-26-24"><a id="__codelineno-26-24" name="__codelineno-26-24" href="#__codelineno-26-24"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">delete_unsteady</span><span class="p">(</span><span class="n">demo_unsteady</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-26-25"><a id="__codelineno-26-25" name="__codelineno-26-25" href="#__codelineno-26-25"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady count after deleting unsteady </span><span class="si">{</span><span class="n">demo_unsteady</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-26-26"><a id="__codelineno-26-26" name="__codelineno-26-26" href="#__codelineno-26-26"></a>
+</span><span id="__span-26-27"><a id="__codelineno-26-27" name="__codelineno-26-27" href="#__codelineno-26-27"></a><span class="c1"># Show the Backup folder contents</span>
+</span><span id="__span-26-28"><a id="__codelineno-26-28" name="__codelineno-26-28" href="#__codelineno-26-28"></a><span class="n">backup_dir</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span> <span class="o">/</span> <span class="s2">&quot;Backup&quot;</span>
+</span><span id="__span-26-29"><a id="__codelineno-26-29" name="__codelineno-26-29" href="#__codelineno-26-29"></a><span class="k">if</span> <span class="n">backup_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-26-30"><a id="__codelineno-26-30" name="__codelineno-26-30" href="#__codelineno-26-30"></a>    <span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-26-31"><a id="__codelineno-26-31" name="__codelineno-26-31" href="#__codelineno-26-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Backup folder contents:&quot;</span><span class="p">)</span>
+</span><span id="__span-26-32"><a id="__codelineno-26-32" name="__codelineno-26-32" href="#__codelineno-26-32"></a>    <span class="k">for</span> <span class="n">folder</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">backup_dir</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+</span><span id="__span-26-33"><a id="__codelineno-26-33" name="__codelineno-26-33" href="#__codelineno-26-33"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">/&quot;</span><span class="p">)</span>
+</span><span id="__span-26-34"><a id="__codelineno-26-34" name="__codelineno-26-34" href="#__codelineno-26-34"></a>        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">folder</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+</span><span id="__span-26-35"><a id="__codelineno-26-35" name="__codelineno-26-35" href="#__codelineno-26-35"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Demonstrate permanent deletion (no backup)</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">perm_plan</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">new_shortid</span><span class="o">=</span><span class="s2">&quot;Perm Delete Demo&quot;</span><span class="p">)</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created plan </span><span class="si">{</span><span class="n">perm_plan</span><span class="si">}</span><span class="s2"> for permanent deletion demo&quot;</span><span class="p">)</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># Permanently delete - files are removed, not backed up</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">delete_plan</span><span class="p">(</span><span class="n">perm_plan</span><span class="p">,</span> <span class="n">permanent_delete</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan </span><span class="si">{</span><span class="n">perm_plan</span><span class="si">}</span><span class="s2"> permanently deleted (no backup created)&quot;</span><span class="p">)</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan count after permanent deletion: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="hec-ras-plan-file-structure-reference">HEC-RAS Plan File Structure Reference<a class="headerlink" href="#hec-ras-plan-file-structure-reference" title="Permanent link">&para;</a></h2>
 <p>Understanding plan file structure helps debug cloning operations:</p>
 <h3 id="plan-file-p-components">Plan File (.p##) Components<a class="headerlink" href="#plan-file-p-components" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>Proj Title=My Project
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>Plan Title=Baseline Run
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>Geom File=g01          # Links to geometry file
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>Flow File=f01          # Links to flow file
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>Run HTab=0             # Hydraulic tables flag
-</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>Run Unsteady=0         # Unsteady flow flag
+<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>Proj Title=My Project
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>Plan Title=Baseline Run
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>Geom File=g01          # Links to geometry file
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>Flow File=f01          # Links to flow file
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>Run HTab=0             # Hydraulic tables flag
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>Run Unsteady=0         # Unsteady flow flag
 </span></code></pre></div>
 <h3 id="hec-documentation">HEC Documentation<a class="headerlink" href="#hec-documentation" title="Permanent link">&para;</a></h3>
 <ul>
@@ -6524,34 +6574,34 @@ Checking volume accounting...
 </ul>
 <h3 id="llm-forward-reviewable-modifications">LLM Forward: Reviewable Modifications<a class="headerlink" href="#llm-forward-reviewable-modifications" title="Permanent link">&para;</a></h3>
 <p>When modifying plans programmatically, create comparison reports:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">document_plan_changes</span><span class="p">(</span><span class="n">original_plan</span><span class="p">,</span> <span class="n">modified_plan</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="c1"># Document what changed between plans</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="n">changes</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;Run HTab&#39;</span><span class="p">,</span> <span class="s1">&#39;Run Unsteady&#39;</span><span class="p">,</span> <span class="s1">&#39;Computation Interval&#39;</span><span class="p">]:</span>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>        <span class="n">orig_val</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">original_plan</span><span class="p">,</span> <span class="n">param</span><span class="p">)</span>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>        <span class="n">new_val</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">modified_plan</span><span class="p">,</span> <span class="n">param</span><span class="p">)</span>
-</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>
-</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>        <span class="k">if</span> <span class="n">orig_val</span> <span class="o">!=</span> <span class="n">new_val</span><span class="p">:</span>
-</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>            <span class="n">changes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-</span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a>                <span class="s1">&#39;parameter&#39;</span><span class="p">:</span> <span class="n">param</span><span class="p">,</span>
-</span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>                <span class="s1">&#39;original&#39;</span><span class="p">:</span> <span class="n">orig_val</span><span class="p">,</span>
-</span><span id="__span-27-13"><a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a>                <span class="s1">&#39;modified&#39;</span><span class="p">:</span> <span class="n">new_val</span>
-</span><span id="__span-27-14"><a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>            <span class="p">})</span>
-</span><span id="__span-27-15"><a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a>
-</span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>    <span class="c1"># Export for review</span>
-</span><span id="__span-27-17"><a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-27-18"><a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a>    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">changes</span><span class="p">)</span>
-</span><span id="__span-27-19"><a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>    <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-</span><span id="__span-27-20"><a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a>
-</span><span id="__span-27-21"><a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a>    <span class="k">return</span> <span class="n">df</span>
-</span><span id="__span-27-22"><a id="__codelineno-27-22" name="__codelineno-27-22" href="#__codelineno-27-22"></a>
-</span><span id="__span-27-23"><a id="__codelineno-27-23" name="__codelineno-27-23" href="#__codelineno-27-23"></a><span class="c1"># Usage</span>
-</span><span id="__span-27-24"><a id="__codelineno-27-24" name="__codelineno-27-24" href="#__codelineno-27-24"></a><span class="n">changes_df</span> <span class="o">=</span> <span class="n">document_plan_changes</span><span class="p">(</span>
-</span><span id="__span-27-25"><a id="__codelineno-27-25" name="__codelineno-27-25" href="#__codelineno-27-25"></a>    <span class="s2">&quot;01&quot;</span><span class="p">,</span>
-</span><span id="__span-27-26"><a id="__codelineno-27-26" name="__codelineno-27-26" href="#__codelineno-27-26"></a>    <span class="n">new_plan_number</span><span class="p">,</span>
-</span><span id="__span-27-27"><a id="__codelineno-27-27" name="__codelineno-27-27" href="#__codelineno-27-27"></a>    <span class="n">project_folder</span> <span class="o">/</span> <span class="s1">&#39;plan_modifications.csv&#39;</span>
-</span><span id="__span-27-28"><a id="__codelineno-27-28" name="__codelineno-27-28" href="#__codelineno-27-28"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">document_plan_changes</span><span class="p">(</span><span class="n">original_plan</span><span class="p">,</span> <span class="n">modified_plan</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>    <span class="c1"># Document what changed between plans</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="n">changes</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;Run HTab&#39;</span><span class="p">,</span> <span class="s1">&#39;Run Unsteady&#39;</span><span class="p">,</span> <span class="s1">&#39;Computation Interval&#39;</span><span class="p">]:</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>        <span class="n">orig_val</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">original_plan</span><span class="p">,</span> <span class="n">param</span><span class="p">)</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>        <span class="n">new_val</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_plan_value</span><span class="p">(</span><span class="n">modified_plan</span><span class="p">,</span> <span class="n">param</span><span class="p">)</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>        <span class="k">if</span> <span class="n">orig_val</span> <span class="o">!=</span> <span class="n">new_val</span><span class="p">:</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>            <span class="n">changes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>                <span class="s1">&#39;parameter&#39;</span><span class="p">:</span> <span class="n">param</span><span class="p">,</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>                <span class="s1">&#39;original&#39;</span><span class="p">:</span> <span class="n">orig_val</span><span class="p">,</span>
+</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>                <span class="s1">&#39;modified&#39;</span><span class="p">:</span> <span class="n">new_val</span>
+</span><span id="__span-29-14"><a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>            <span class="p">})</span>
+</span><span id="__span-29-15"><a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>
+</span><span id="__span-29-16"><a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a>    <span class="c1"># Export for review</span>
+</span><span id="__span-29-17"><a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-29-18"><a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a>    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">changes</span><span class="p">)</span>
+</span><span id="__span-29-19"><a id="__codelineno-29-19" name="__codelineno-29-19" href="#__codelineno-29-19"></a>    <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-29-20"><a id="__codelineno-29-20" name="__codelineno-29-20" href="#__codelineno-29-20"></a>
+</span><span id="__span-29-21"><a id="__codelineno-29-21" name="__codelineno-29-21" href="#__codelineno-29-21"></a>    <span class="k">return</span> <span class="n">df</span>
+</span><span id="__span-29-22"><a id="__codelineno-29-22" name="__codelineno-29-22" href="#__codelineno-29-22"></a>
+</span><span id="__span-29-23"><a id="__codelineno-29-23" name="__codelineno-29-23" href="#__codelineno-29-23"></a><span class="c1"># Usage</span>
+</span><span id="__span-29-24"><a id="__codelineno-29-24" name="__codelineno-29-24" href="#__codelineno-29-24"></a><span class="n">changes_df</span> <span class="o">=</span> <span class="n">document_plan_changes</span><span class="p">(</span>
+</span><span id="__span-29-25"><a id="__codelineno-29-25" name="__codelineno-29-25" href="#__codelineno-29-25"></a>    <span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-29-26"><a id="__codelineno-29-26" name="__codelineno-29-26" href="#__codelineno-29-26"></a>    <span class="n">new_plan_number</span><span class="p">,</span>
+</span><span id="__span-29-27"><a id="__codelineno-29-27" name="__codelineno-29-27" href="#__codelineno-29-27"></a>    <span class="n">project_folder</span> <span class="o">/</span> <span class="s1">&#39;plan_modifications.csv&#39;</span>
+</span><span id="__span-29-28"><a id="__codelineno-29-28" name="__codelineno-29-28" href="#__codelineno-29-28"></a><span class="p">)</span>
 </span></code></pre></div>
 <p>This enables:
 - <strong>Change tracking</strong>: Know exactly what was modified
@@ -6577,10 +6627,14 @@ Checking volume accounting...
 <li>Computed our plan with the specified settings</li>
 <li>Verified the results using HDF entries</li>
 <li>Analyzed runtime statistics and volume accounting</li>
+<li><strong>Deletion with Backup</strong>:</li>
+<li>Deleted cloned plans, geometries, and unsteady files</li>
+<li>Files moved to timestamped Backup/ folder by default</li>
+<li>Used <code>permanent_delete=True</code> for irreversible deletion</li>
 </ol>
 <h3 id="key-classes-and-functions-used">Key Classes and Functions Used<a class="headerlink" href="#key-classes-and-functions-used" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>RasPlan</code>: For plan operations (cloning, setting components, and modifying parameters)</li>
+<li><code>RasPlan</code>: For plan operations (cloning, setting components, modifying parameters, and deletion)</li>
 <li><code>RasGeo</code>: For geometry operations (cloning, clearing preprocessor files)</li>
 <li><code>RasCmdr</code>: For executing HEC-RAS simulations</li>
 </ul>
@@ -6616,7 +6670,7 @@ Checking volume accounting...
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 25, 2026 01:25:43 UTC">March 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 26, 2026 02:14:34 UTC">March 26, 2026</span>
   </span>
 
     
@@ -6626,7 +6680,7 @@ Checking volume accounting...
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 25, 2026 01:25:43 UTC">March 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 26, 2026 02:14:34 UTC">March 26, 2026</span>
   </span>
 
     
