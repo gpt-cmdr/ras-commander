@@ -2294,14 +2294,15 @@ class RasPlan:
         associated_suffixes: List[str],
         reference_check_fn=None,
         force: bool = False,
+        permanent_delete: bool = False,
         ras_object=None,
-    ) -> None:
+    ) -> Optional[Path]:
         """
         Generic delete helper for geometry, unsteady, and steady components.
 
         Verifies the component exists, optionally checks for referencing plans,
-        deletes the component files and associated files, removes the PRJ entry,
-        and refreshes all DataFrames.
+        removes the component files (backing up or permanently deleting),
+        removes the PRJ entry, and refreshes all DataFrames.
 
         Parameters:
             component_number: Number to delete (e.g., '06')
@@ -2315,7 +2316,13 @@ class RasPlan:
             reference_check_fn: Optional callable(ras_obj, number) -> pd.DataFrame.
                 If it returns a non-empty DataFrame, deletion is blocked unless force=True.
             force: If True, skip reference checks.
+            permanent_delete: If True, permanently delete files. If False (default),
+                move files to {project_folder}/Backup/{timestamp}_{label}/.
             ras_object: Optional RAS object instance.
+
+        Returns:
+            Optional[Path]: Path to backup folder if files were backed up, None if
+                permanently deleted or no files existed.
 
         Raises:
             ValueError: If component doesn't exist or is referenced and force=False.
@@ -2347,19 +2354,32 @@ class RasPlan:
                     f"referenced by plan(s) {plan_nums}. Use force=True to delete anyway."
                 )
 
-        # Delete files
+        # Build list of files to remove
         base = ras_obj.project_folder / f"{ras_obj.project_name}"
-        for suffix in associated_suffixes:
-            file_path = Path(f"{base}.{file_prefix}{component_number}{suffix}")
-            if file_path.exists():
-                file_path.unlink()
-                logger.info(f"Deleted {file_path.name}")
+        files_to_remove = [
+            Path(f"{base}.{file_prefix}{component_number}{suffix}")
+            for suffix in associated_suffixes
+        ]
+
+        if permanent_delete:
+            backup_dir = None
+            for file_path in files_to_remove:
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info(f"Permanently deleted {file_path.name}")
+        else:
+            label = f"deleted_{file_prefix}{component_number}"
+            backup_dir = RasUtils.backup_files(
+                files_to_remove, ras_obj.project_folder, label
+            )
 
         # Remove from .prj
         RasUtils.remove_prj_entry(ras_obj.prj_file, component_type, component_number, ras_object=ras_obj)
 
         # Refresh all DataFrames
         RasPlan._refresh_all_dataframes(ras_obj)
+
+        return backup_dir
 
     @staticmethod
     def _renumber_component(
@@ -2521,15 +2541,18 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def delete_plan(plan_number: Union[str, Number], ras_object=None) -> None:
+    def delete_plan(plan_number: Union[str, Number], permanent_delete: bool = False, ras_object=None) -> None:
         """
         Delete a plan and its associated files from the project.
 
-        Deletes the .pXX file and any associated .pXX.hdf, .pXX.computeMsgs.txt,
-        and .pXX.comp_msgs.txt files, then removes the entry from the .prj file.
+        By default, moves the .pXX file and any associated .pXX.hdf, .pXX.computeMsgs.txt,
+        and .pXX.comp_msgs.txt files to a timestamped Backup folder, then removes the
+        entry from the .prj file.
 
         Parameters:
         plan_number (Union[str, Number]): Plan number to delete (e.g., '05', 5)
+        permanent_delete (bool): If True, permanently delete files. If False (default),
+            move files to {project_folder}/Backup/{timestamp}_deleted_p{number}/.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Raises:
@@ -2540,7 +2563,8 @@ class RasPlan:
         HEC-RAS will open without errors, but no plan will be active.
 
         Example:
-        >>> RasPlan.delete_plan("05")
+        >>> RasPlan.delete_plan("05")  # Backs up to Backup/ folder
+        >>> RasPlan.delete_plan("05", permanent_delete=True)  # Permanently deletes
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -2560,19 +2584,23 @@ class RasPlan:
                 f"but no plan will be active until a new Current Plan is set."
             )
 
-        # Build list of files to delete
+        # Build list of files to remove
         base = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
-        files_to_delete = [
+        files_to_remove = [
             base,
             Path(str(base) + '.hdf'),
             Path(str(base) + '.computeMsgs.txt'),
             Path(str(base) + '.comp_msgs.txt'),
         ]
 
-        for f in files_to_delete:
-            if f.exists():
-                f.unlink()
-                logger.info(f"Deleted {f.name}")
+        if permanent_delete:
+            for f in files_to_remove:
+                if f.exists():
+                    f.unlink()
+                    logger.info(f"Permanently deleted {f.name}")
+        else:
+            label = f"deleted_p{plan_number}"
+            RasUtils.backup_files(files_to_remove, ras_obj.project_folder, label)
 
         # Remove from .prj
         RasUtils.remove_prj_entry(ras_obj.prj_file, 'Plan', plan_number, ras_object=ras_obj)
@@ -2660,29 +2688,32 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def delete_geom(geom_number: Union[str, Number], force: bool = False, ras_object=None) -> None:
+    def delete_geom(geom_number: Union[str, Number], force: bool = False, permanent_delete: bool = False, ras_object=None) -> None:
         """
         Delete a geometry file and its associated files from the project.
 
-        Deletes the .gXX, .gXX.hdf, and .cXX files, then removes the entry from the .prj file.
+        By default, moves the .gXX, .gXX.hdf, and .cXX files to a timestamped Backup
+        folder, then removes the entry from the .prj file.
 
         Parameters:
         geom_number (Union[str, Number]): Geometry number to delete (e.g., '06', 6)
         force (bool): If True, allow deletion even if plans reference this geometry. Default False.
+        permanent_delete (bool): If True, permanently delete files. If False (default),
+            move files to {project_folder}/Backup/{timestamp}_deleted_g{number}/.
         ras_object (RasPrj, optional): Specific RAS object to use.
 
         Raises:
         ValueError: If the geometry doesn't exist, or if plans reference it and force=False.
 
         Example:
-        >>> RasPlan.delete_geom("06")  # Fails if any plan references g06
-        >>> RasPlan.delete_geom("06", force=True)  # Deletes regardless
+        >>> RasPlan.delete_geom("06")  # Backs up to Backup/ folder
+        >>> RasPlan.delete_geom("06", force=True, permanent_delete=True)  # Permanently deletes
         """
         def _geom_ref_check(ras_obj, number):
             ras_obj.plan_df = ras_obj.get_plan_entries()
             return ras_obj.plan_df[ras_obj.plan_df['Geom File'] == number]
 
-        RasPlan._delete_component(
+        backup_dir = RasPlan._delete_component(
             component_number=geom_number,
             component_type='Geom',
             file_prefix='g',
@@ -2691,15 +2722,23 @@ class RasPlan:
             associated_suffixes=['', '.hdf'],
             reference_check_fn=_geom_ref_check,
             force=force,
+            permanent_delete=permanent_delete,
             ras_object=ras_object,
         )
-        # Also delete .cXX preprocessor file
+        # Also handle .cXX preprocessor file
         ras_obj = ras_object or ras
         number = RasUtils.normalize_ras_number(geom_number)
         c_file = ras_obj.project_folder / f"{ras_obj.project_name}.c{number}"
         if c_file.exists():
-            c_file.unlink()
-            logger.info(f"Deleted {c_file.name}")
+            if permanent_delete:
+                c_file.unlink()
+                logger.info(f"Permanently deleted {c_file.name}")
+            elif backup_dir:
+                shutil.move(str(c_file), str(backup_dir / c_file.name))
+                logger.info(f"Backed up {c_file.name} to {backup_dir}")
+            else:
+                label = f"deleted_g{number}"
+                RasUtils.backup_files([c_file], ras_obj.project_folder, label)
 
     @staticmethod
     @log_call
@@ -2751,22 +2790,26 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def delete_unsteady(unsteady_number: Union[str, Number], force: bool = False, ras_object=None) -> None:
+    def delete_unsteady(unsteady_number: Union[str, Number], force: bool = False, permanent_delete: bool = False, ras_object=None) -> None:
         """
         Delete an unsteady flow file from the project.
 
-        Deletes the .uXX file and its .hdf companion, then removes the entry from the .prj file.
+        By default, moves the .uXX file and its .hdf companion to a timestamped Backup
+        folder, then removes the entry from the .prj file.
 
         Parameters:
         unsteady_number (Union[str, Number]): Unsteady number to delete (e.g., '07', 7)
         force (bool): If True, allow deletion even if plans reference it. Default False.
+        permanent_delete (bool): If True, permanently delete files. If False (default),
+            move files to {project_folder}/Backup/{timestamp}_deleted_u{number}/.
         ras_object (RasPrj, optional): Specific RAS object to use.
 
         Raises:
         ValueError: If the unsteady file doesn't exist, or if plans reference it and force=False.
 
         Example:
-        >>> RasPlan.delete_unsteady("07")
+        >>> RasPlan.delete_unsteady("07")  # Backs up to Backup/ folder
+        >>> RasPlan.delete_unsteady("07", permanent_delete=True)  # Permanently deletes
         """
         def _unsteady_ref_check(ras_obj, number):
             ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -2781,6 +2824,7 @@ class RasPlan:
             associated_suffixes=['', '.hdf'],
             reference_check_fn=_unsteady_ref_check,
             force=force,
+            permanent_delete=permanent_delete,
             ras_object=ras_object,
         )
 
@@ -2823,22 +2867,26 @@ class RasPlan:
 
     @staticmethod
     @log_call
-    def delete_steady(flow_number: Union[str, Number], force: bool = False, ras_object=None) -> None:
+    def delete_steady(flow_number: Union[str, Number], force: bool = False, permanent_delete: bool = False, ras_object=None) -> None:
         """
         Delete a steady flow file from the project.
 
-        Deletes the .fXX file and removes the entry from the .prj file.
+        By default, moves the .fXX file to a timestamped Backup folder, then removes
+        the entry from the .prj file.
 
         Parameters:
         flow_number (Union[str, Number]): Flow number to delete (e.g., '01', 1)
         force (bool): If True, allow deletion even if plans reference it. Default False.
+        permanent_delete (bool): If True, permanently delete files. If False (default),
+            move files to {project_folder}/Backup/{timestamp}_deleted_f{number}/.
         ras_object (RasPrj, optional): Specific RAS object to use.
 
         Raises:
         ValueError: If the flow file doesn't exist, or if plans reference it and force=False.
 
         Example:
-        >>> RasPlan.delete_steady("01")
+        >>> RasPlan.delete_steady("01")  # Backs up to Backup/ folder
+        >>> RasPlan.delete_steady("01", permanent_delete=True)  # Permanently deletes
         """
         def _steady_ref_check(ras_obj, number):
             ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -2856,6 +2904,7 @@ class RasPlan:
             associated_suffixes=[''],
             reference_check_fn=_steady_ref_check,
             force=force,
+            permanent_delete=permanent_delete,
             ras_object=ras_object,
         )
 

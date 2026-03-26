@@ -58,6 +58,7 @@ List of Functions in RasUtils:
 - safe_write_geometry()      # Phase 2.1 - Atomic file write with backup
 - rollback_geometry()        # Phase 2.1 - Restore from backup
 - validate_geometry_file_basic()  # Phase 2.1 - Basic validation
+- backup_files()             # Move files to timestamped Backup folder (safe deletion)
 - _read_description_block()  # Internal - Read BEGIN DESCRIPTION / END DESCRIPTION block
 - _write_description_block() # Internal - Write BEGIN DESCRIPTION / END DESCRIPTION block
 
@@ -1033,8 +1034,49 @@ class RasUtils:
             logger.exception(f"Failed to rename entry in project file {prj_file}")
             raise
 
+    @staticmethod
+    @log_call
+    def backup_files(
+        files: List[Union[Path, str]],
+        project_folder: Union[Path, str],
+        operation_label: str = "deleted",
+    ) -> Optional[Path]:
+        """
+        Move files to a timestamped Backup folder inside the project.
+
+        Creates {project_folder}/Backup/{YYYY-MM-DD_HHMMSS}_{operation_label}/
+        and moves each existing file into that folder. Non-existent files are
+        silently skipped.
+
+        Parameters:
+        files (List[Union[Path, str]]): File paths to back up (str or Path).
+        project_folder (Union[Path, str]): Project root where Backup/ will be created.
+        operation_label (str): Label appended to timestamp folder name (e.g., "deleted_p05").
+
+        Returns:
+        Optional[Path]: Path to backup folder if any files were moved, None otherwise.
+
+        Example:
+        >>> files = [Path("Muncie.p05"), Path("Muncie.p05.hdf")]
+        >>> backup_dir = RasUtils.backup_files(files, project_folder, "deleted_p05")
+        """
+        files = [Path(f) for f in files]
+        existing_files = [f for f in files if f.exists()]
+        if not existing_files:
+            return None
+
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        backup_folder = Path(project_folder) / "Backup" / f"{timestamp}_{operation_label}"
+        backup_folder.mkdir(parents=True, exist_ok=True)
+
+        for f in existing_files:
+            shutil.move(str(f), str(backup_folder / f.name))
+            logger.info(f"Backed up {f.name} to {backup_folder}")
+
+        return backup_folder
+
     # From FunkShuns
-        
+
     @staticmethod
     @log_call
     def decode_byte_strings(dataframe: pd.DataFrame) -> pd.DataFrame:
