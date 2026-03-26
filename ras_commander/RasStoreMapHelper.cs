@@ -114,6 +114,10 @@ class RasStoreMapHelper
         }
     }
 
+    // Render mode arguments: parsed from CLI as "sloping:true:false" or just "sloping"
+    static bool _reduceShallow = false;
+    static bool _depthWeighted = false;
+
     static int SetRenderMode(string renderMode)
     {
         Type sharedData = _asm.GetType("RasMapperLib.SharedData");
@@ -123,8 +127,18 @@ class RasStoreMapHelper
             return 4;
         }
 
+        // Parse render mode flags: "slopingPretty:true:false" or just "slopingPretty"
+        string baseName = renderMode;
+        if (renderMode.Contains(":"))
+        {
+            string[] parts = renderMode.Split(new char[] { ':' });
+            baseName = parts[0];
+            if (parts.Length > 1) _reduceShallow = parts[1].ToLower() == "true";
+            if (parts.Length > 2) _depthWeighted = parts[2].ToLower() == "true";
+        }
+
         bool modeSet = false;
-        switch (renderMode)
+        switch (baseName)
         {
             case "horizontal":
             {
@@ -138,21 +152,71 @@ class RasStoreMapHelper
             {
                 MethodInfo m = sharedData.GetMethod("SetSlopingRenderingMode",
                     BindingFlags.Public | BindingFlags.Static);
-                if (m != null) { m.Invoke(null, null); modeSet = true; }
-                Console.WriteLine("RenderMode set: Sloping");
+                if (m != null)
+                {
+                    // 6.0-6.1: no params. 6.2-6.3.1: (bool, bool). 6.5+: no params.
+                    var parms = m.GetParameters();
+                    if (parms.Length == 0)
+                        m.Invoke(null, null);
+                    else if (parms.Length == 2)
+                        m.Invoke(null, new object[] { _reduceShallow, _depthWeighted });
+                    else
+                        m.Invoke(null, null); // best effort
+                    modeSet = true;
+                }
+                // On 6.5+, SetSlopingRenderingMode() exists but SetSlopingPrettyRenderingMode
+                // is the "pretty" variant. If user asked for "sloping" and the method takes
+                // no params, this is correct plain sloping.
+                Console.WriteLine("RenderMode set: Sloping (reduceShallow=" + _reduceShallow +
+                    ", depthWeighted=" + _depthWeighted + ")");
                 break;
             }
             case "slopingpretty":
             {
+                // Default reduceShallow=true for slopingPretty (matches RASMapper GUI default)
+                // unless explicitly overridden via "slopingpretty:false:false" syntax
+                bool spReduceShallow = renderMode.Contains(":") ? _reduceShallow : true;
+                bool spDepthWeighted = _depthWeighted; // false by default (causes no output if true)
+
+                // Try SetSlopingPrettyRenderingMode (6.5+)
                 MethodInfo m = sharedData.GetMethod("SetSlopingPrettyRenderingMode",
                     BindingFlags.Public | BindingFlags.Static);
-                if (m != null) { m.Invoke(null, new object[] { false, false }); modeSet = true; }
-                Console.WriteLine("RenderMode set: SlopingPretty");
+                if (m != null)
+                {
+                    var parms = m.GetParameters();
+                    if (parms.Length == 2)
+                        m.Invoke(null, new object[] { spReduceShallow, spDepthWeighted });
+                    else if (parms.Length == 0)
+                        m.Invoke(null, null);
+                    else
+                        m.Invoke(null, null);
+                    modeSet = true;
+                    Console.WriteLine("RenderMode set: SlopingPretty (reduceShallow=" +
+                        spReduceShallow + ", depthWeighted=" + spDepthWeighted + ")");
+                }
+                else
+                {
+                    // On 6.2-6.3.1, SlopingPretty doesn't exist.
+                    // SetSlopingRenderingMode(bool, bool) is the equivalent.
+                    m = sharedData.GetMethod("SetSlopingRenderingMode",
+                        BindingFlags.Public | BindingFlags.Static);
+                    if (m != null && m.GetParameters().Length == 2)
+                    {
+                        m.Invoke(null, new object[] { spReduceShallow, spDepthWeighted });
+                        modeSet = true;
+                        Console.WriteLine("RenderMode set: SlopingPretty via SetSlopingRenderingMode(bool,bool) [6.2-6.3.1]");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("WARNING: SlopingPretty not available in this version.");
+                    }
+                }
                 break;
             }
             default:
                 Console.Error.WriteLine("ERROR: Unknown render mode: " + renderMode);
                 Console.Error.WriteLine("  Valid: horizontal, sloping, slopingPretty");
+                Console.Error.WriteLine("  Flags: sloping:reduceShallow:depthWeighted (e.g. slopingPretty:true:false)");
                 return 3;
         }
 
