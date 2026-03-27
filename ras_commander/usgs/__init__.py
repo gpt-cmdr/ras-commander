@@ -63,6 +63,10 @@ Public API:
         - normalized_nash_sutcliffe: Normalized NSE mapped to (0, 1]
         - peak_weighted_rmse: Peak-Weighted RMSE
         - index_of_agreement: Willmott Index of Agreement
+        - stage_to_depth: Convert stage elevations to depth above datum
+        - calculate_stage_metrics: Compute depth-based RMSE, PBIAS, and NRMSE
+        - normalized_rmse: Normalize RMSE by peak, mean, or range
+        - classify_performance_full: Full Moriasi NSE+RSR+PBIAS classification
 
     From real_time:
         - get_latest_value: Get most recent gauge reading

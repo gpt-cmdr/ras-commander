@@ -142,6 +142,12 @@ project_folder/
 - `calculate_volume_error()` - Total volume bias
 - `calculate_all_metrics()` - Comprehensive suite of validation metrics
 
+**Current shipped Phase 4 CLB metrics**:
+- `stage_to_depth()` - Convert stage elevations to depth above datum
+- `calculate_stage_metrics()` - Compute RMSE, PBIAS, and NRMSE on depth values
+- `normalized_rmse()` - Normalize RMSE by peak, mean, or range
+- `classify_performance_full()` - Apply full Moriasi NSE+RSR+PBIAS thresholds
+
 **Returns**: Dictionary with all metrics for model validation reporting.
 
 ### Visualization (visualization.py)
