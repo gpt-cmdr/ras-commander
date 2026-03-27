@@ -90,6 +90,25 @@ class GeomBridge:
         return None
 
     @staticmethod
+    def _find_structure(lines: List[str], river: str, reach: str, rs: str) -> Optional[Dict[str, Any]]:
+        """
+        Find any internal structure section and return its structure metadata.
+
+        Returns:
+            Structure dict from _find_all_structures() or None if not found.
+        """
+        rs = str(rs)
+
+        for structure in GeomBridge._find_all_structures(lines):
+            if (structure['river'] == river and
+                    structure['reach'] == reach and
+                    str(structure['rs']) == rs):
+                return structure
+
+        logger.debug(f"Structure not found: {river}/{reach}/RS {rs}")
+        return None
+
+    @staticmethod
     def _parse_bridge_header(line: str) -> Dict[str, Any]:
         """Parse 'Bridge Culvert-' header line into dict of flags."""
         value_part = line.replace("Bridge Culvert-", "").strip()
@@ -906,7 +925,7 @@ class GeomBridge:
                 reach: str,
                 rs: str) -> pd.DataFrame:
         """
-        Extract bridge hydraulic table (HTab) parameters.
+        Extract structure hydraulic table (HTab) parameters.
 
         Parameters:
             geom_file: Path to geometry file (.g##)
@@ -921,7 +940,7 @@ class GeomBridge:
 
         Raises:
             FileNotFoundError: If geometry file doesn't exist
-            ValueError: If bridge not found
+            ValueError: If structure not found
 
         Example:
             >>> htab = GeomBridge.get_htab("model.g08", "River", "Reach", "25548")
@@ -937,17 +956,22 @@ class GeomBridge:
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
-            bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
+            structure = GeomBridge._find_structure(lines, river, reach, rs)
 
-            if bridge_idx is None:
-                raise ValueError(f"Bridge not found: {river}/{reach}/RS {rs}")
+            if structure is None:
+                raise ValueError(f"Structure not found: {river}/{reach}/RS {rs}")
+
+            structure_idx = structure['marker_idx']
 
             htab_data = []
 
-            for j in range(bridge_idx, min(bridge_idx + GeomBridge.DEFAULT_SEARCH_RANGE, len(lines))):
+            for j in range(
+                structure_idx,
+                min(structure_idx + GeomBridge.DEFAULT_SEARCH_RANGE, len(lines))
+            ):
                 line = lines[j]
 
-                if line.startswith("Type RM Length L Ch R =") and j > bridge_idx + 5:
+                if line.startswith("Type RM Length L Ch R =") and j > structure_idx + 5:
                     break
 
                 if line.startswith("BC HTab HWMax="):
@@ -1019,11 +1043,11 @@ class GeomBridge:
                       rs: str,
                       include_invert: bool = True) -> Dict[str, Any]:
         """
-        Extract bridge hydraulic table (HTab) parameters as a dictionary.
+        Extract structure hydraulic table (HTab) parameters as a dictionary.
 
         This method provides a more convenient dictionary interface compared to
         get_htab() which returns a DataFrame. It also optionally includes the
-        structure invert elevation extracted from the deck geometry.
+        structure invert elevation extracted from bridge deck geometry.
 
         Parameters:
             geom_file: Path to geometry file (.g##)
@@ -1046,7 +1070,7 @@ class GeomBridge:
 
         Raises:
             FileNotFoundError: If geometry file doesn't exist
-            ValueError: If bridge not found
+            ValueError: If structure not found
 
         Example:
             >>> htab = GeomBridge.get_htab_dict("model.g08", "River", "Reach", "25548")
@@ -1375,9 +1399,10 @@ class GeomBridge:
                 lines = f.readlines()
 
             # Find structure
-            struct_idx = GeomBridge._find_bridge(lines, river, reach, rs)
-            if struct_idx is None:
+            structure = GeomBridge._find_structure(lines, river, reach, rs)
+            if structure is None:
                 raise ValueError(f"Structure not found: {river}/{reach}/RS {rs}")
+            struct_idx = structure['marker_idx']
 
             # Find structure end
             struct_end_idx = GeomBridge._find_structure_end(lines, struct_idx)
