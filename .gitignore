@@ -154,6 +154,7 @@ check_*.py
 fix_*.py
 run_*.py
 test_*.py
+!tests/test_*.py
 monitor_*.py
 cayce_*.py
 ai_tools/generate_*.py  # Only ignore AI tool generators, not scripts/

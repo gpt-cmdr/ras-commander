@@ -607,6 +607,7 @@ class CheckNt:
             This would only apply to models with existing HDF results.
         """
         from ..geom.GeomBridge import GeomBridge
+        from ..geom.GeomInlineWeir import GeomInlineWeir
 
         results = CheckResults()
         messages = []
@@ -632,25 +633,42 @@ class CheckNt:
         optimal_prc = thresholds.htab.structure_optimal_pts_per_curve
 
         try:
-            # Get all bridges from geometry file
+            # Get all bridge/culvert and inline weir structures from the geometry
             bridges_df = GeomBridge.get_bridges(geom_file)
+            weirs_df = GeomInlineWeir.get_weirs(geom_file)
 
-            if bridges_df is None or bridges_df.empty:
+            structure_rows = []
+
+            if bridges_df is not None and not bridges_df.empty:
+                structure_rows.extend(bridges_df.to_dict('records'))
+
+            if weirs_df is not None and not weirs_df.empty:
+                structure_rows.extend(weirs_df.to_dict('records'))
+
+            if not structure_rows:
                 logger.info(f"No bridges/structures found in {geom_file.name}")
                 results.messages = messages
                 return results
 
-            logger.info(f"Checking structure HTAB parameters for {len(bridges_df)} structures")
+            logger.info(
+                f"Checking structure HTAB parameters for {len(structure_rows)} structures"
+            )
 
-            for _, row in bridges_df.iterrows():
+            for row in structure_rows:
                 river = row.get('River', '')
                 reach = row.get('Reach', '')
-                rs = row.get('RS', '')
+                rs = str(row.get('RS', ''))
                 structure_name = f"{river}/{reach}/RS {rs}"
 
                 try:
                     # Get HTAB parameters for this structure
-                    htab_params = GeomBridge.get_htab(geom_file, river, reach, rs)
+                    htab_params = GeomBridge.get_htab_dict(
+                        geom_file,
+                        river,
+                        reach,
+                        rs,
+                        include_invert=False
+                    )
 
                     if htab_params is None:
                         continue
