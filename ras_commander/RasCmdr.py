@@ -107,6 +107,62 @@ class RasCmdr:
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
 
     @staticmethod
+    def _normalize_requested_plan_numbers(
+        plan_number: Union[str, Number, List[Union[str, Number]], None]
+    ) -> Optional[List[str]]:
+        """
+        Normalize user-supplied plan selectors to two-digit plan numbers.
+        """
+        if plan_number is None:
+            return None
+
+        if isinstance(plan_number, (str, Number)):
+            requested_plan_numbers = [plan_number]
+        else:
+            requested_plan_numbers = list(plan_number)
+
+        return [
+            RasUtils.normalize_ras_number(requested_plan)
+            for requested_plan in requested_plan_numbers
+        ]
+
+    @staticmethod
+    def _filter_plan_entries(
+        plan_entries: pd.DataFrame,
+        plan_number: Union[str, Number, List[Union[str, Number]], None]
+    ) -> pd.DataFrame:
+        """
+        Filter plan entries using normalized two-digit plan numbers.
+        """
+        if not plan_number:
+            return plan_entries
+
+        requested_plan_numbers = RasCmdr._normalize_requested_plan_numbers(
+            plan_number
+        )
+        filtered_plan_entries = plan_entries[
+            plan_entries["plan_number"].isin(requested_plan_numbers)
+        ].copy()
+        available_plan_numbers = set(filtered_plan_entries["plan_number"])
+        missing_plan_numbers = [
+            requested_plan
+            for requested_plan in requested_plan_numbers
+            if requested_plan not in available_plan_numbers
+        ]
+
+        if missing_plan_numbers:
+            logger.warning(
+                "Requested plan numbers not found in plan_df after "
+                f"normalization: {missing_plan_numbers}"
+            )
+
+        logger.info(
+            "Filtered plans to execute: "
+            f"{list(filtered_plan_entries['plan_number'])}"
+        )
+        return filtered_plan_entries
+
+    @staticmethod
     def _verify_completion(hdf_path: Path, check_errors: bool = False) -> bool:
         """
         Verify that a HEC-RAS computation completed successfully (HDF-only).
@@ -629,16 +685,11 @@ class RasCmdr:
                 project_folder = dest_folder_path
 
             # Store filtered plan numbers separately to ensure only these are executed
-            filtered_plan_numbers = []
-
-            if plan_number:
-                if isinstance(plan_number, (str, Number)):
-                    plan_number = [plan_number]
-                ras_obj.plan_df = ras_obj.plan_df[ras_obj.plan_df['plan_number'].isin(plan_number)]
-                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
-                logger.info(f"Filtered plans to execute: {filtered_plan_numbers}")
-            else:
-                filtered_plan_numbers = list(ras_obj.plan_df['plan_number'])
+            filtered_plan_entries = RasCmdr._filter_plan_entries(
+                ras_obj.plan_df,
+                plan_number
+            )
+            filtered_plan_numbers = list(filtered_plan_entries["plan_number"])
 
             # Initialize execution_results dict
             execution_results: Dict[str, bool] = {}
@@ -662,7 +713,10 @@ class RasCmdr:
 
             # If all plans were skipped, return early
             if num_plans == 0:
-                logger.info("All plans skipped (existing results found). No computation needed.")
+                if execution_results:
+                    logger.info("All plans skipped (existing results found). No computation needed.")
+                else:
+                    logger.warning("No plans matched the requested plan filter. No computation needed.")
                 # Try to populate results_df from existing results
                 _results_df = pd.DataFrame()
                 try:
@@ -1002,13 +1056,10 @@ class RasCmdr:
                 logger.critical(f"Error retrieving plan entries: {str(e)}")
                 return ComputeParallelResult()
 
-            if plan_number:
-                if isinstance(plan_number, (str, Number)):
-                    plan_number = [plan_number]
-                ras_compute_plan_entries = ras_compute_plan_entries[
-                    ras_compute_plan_entries['plan_number'].isin(plan_number)
-                ]
-                logger.info(f"Filtered plans to execute: {plan_number}")
+            ras_compute_plan_entries = RasCmdr._filter_plan_entries(
+                ras_compute_plan_entries,
+                plan_number
+            )
 
             execution_results = {}
             logger.info("Running selected plans sequentially...")
