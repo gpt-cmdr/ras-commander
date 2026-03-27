@@ -63,7 +63,8 @@ class RasEbfeModels:
         Pattern 3a: Single 2D model in nested zip with self-contained terrain.
 
         **Automatic Download**: If source data not found, automatically downloads 9.7 GB
-        from eBFE S3 bucket. Download includes progress tracking and is resume-safe.
+        from eBFE S3 bucket. Download includes progress tracking and resumes
+        interrupted downloads when the server supports byte-range requests.
 
         Model characteristics:
         - Single HEC-RAS 2D unsteady flow model
@@ -247,7 +248,8 @@ class RasEbfeModels:
         Pattern 4: Compound archive with HMS hydrologic + RAS hydraulic models.
 
         **Automatic Download**: If source data not found, automatically downloads 8.2 GB
-        from eBFE S3 bucket. Download includes progress tracking and is resume-safe.
+        from eBFE S3 bucket. Download includes progress tracking and resumes
+        interrupted downloads when the server supports byte-range requests.
 
         Model characteristics:
         - Contains both HMS (NorthGalvestonBay.hms) and RAS models
@@ -423,7 +425,8 @@ class RasEbfeModels:
 
         **Automatic Download**: If source data not found, automatically downloads 54.6 GB
         from eBFE S3 bucket. This is a VERY LARGE download - ensure sufficient disk space
-        and time for download/extraction. Download includes progress tracking and is resume-safe.
+        and time for download/extraction. Download includes progress tracking and
+        resumes interrupted downloads when the server supports byte-range requests.
 
         Model characteristics:
         - 4 cascaded watershed models (UPGU1 → UPGU2 → UPGU3 → UPGU4)
@@ -631,7 +634,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         Pattern 1D-BLE: Multiple 1D steady-state reach models.
 
         **Automatic Download**: If source data not found, automatically downloads 290.7 MB
-        from eBFE S3 bucket. Download includes progress tracking and is resume-safe.
+        from eBFE S3 bucket. Download includes progress tracking and resumes
+        interrupted downloads when the server supports byte-range requests.
 
         Model characteristics:
         - 2,378 separate 1D steady-state reach models
@@ -1231,25 +1235,134 @@ HEC-RAS version: 5.0.1 / 5.0.3
     # =========================================================================
 
     @staticmethod
+    def _get_partial_download_path(dest: Path) -> Path:
+        """Return the path used for resumable partial downloads."""
+        dest = Path(dest)
+        return dest.parent / f"{dest.name}.part"
+
+    @staticmethod
+    def _get_download_total_bytes(response: requests.Response, resume_from: int) -> int:
+        """Best-effort total byte count for tqdm when downloading or resuming."""
+        content_range = response.headers.get('content-range')
+        if content_range and '/' in content_range:
+            total_text = content_range.rsplit('/', 1)[-1].strip()
+            try:
+                return int(total_text)
+            except ValueError:
+                pass
+
+        content_length = response.headers.get('content-length')
+        if content_length is not None:
+            try:
+                return int(content_length) + resume_from
+            except ValueError:
+                pass
+
+        return 0
+
+    @staticmethod
+    def _download_file(
+        url: str,
+        dest: Path,
+        description: str = ""
+    ) -> Path:
+        """
+        Download a file with resumable `.part` support when the server allows it.
+
+        If a partial download exists, this helper attempts to resume with an HTTP
+        range request. If the server ignores the range request, the partial file
+        is discarded and the download restarts from the beginning.
+        """
+        dest = Path(dest)
+        part_path = RasEbfeModels._get_partial_download_path(dest)
+
+        if dest.exists():
+            if part_path.exists():
+                part_path.unlink()
+            print(f"  Already downloaded: {dest.name}")
+            return dest
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        response = None
+        existing_size = part_path.stat().st_size if part_path.exists() else 0
+        label = description or dest.name
+
+        try:
+            request_headers = {}
+            if existing_size > 0:
+                request_headers['Range'] = f"bytes={existing_size}-"
+                print(f"  Resuming {label}...")
+            else:
+                print(f"  Downloading {label}...")
+
+            response = requests.get(
+                url,
+                stream=True,
+                headers=request_headers or None,
+                timeout=300
+            )
+
+            if existing_size > 0 and response.status_code == 416:
+                response.close()
+                response = None
+                print("  Partial download is not usable - restarting from beginning...")
+                part_path.unlink()
+                existing_size = 0
+                response = requests.get(url, stream=True, timeout=300)
+
+            response.raise_for_status()
+            append_mode = existing_size > 0 and response.status_code == 206
+
+            if existing_size > 0 and not append_mode:
+                response.close()
+                response = None
+                print(
+                    "  Server did not honor resume request - restarting download "
+                    "from beginning..."
+                )
+                part_path.unlink()
+                existing_size = 0
+                response = requests.get(url, stream=True, timeout=300)
+                response.raise_for_status()
+
+            resume_from = existing_size if append_mode else 0
+            total_bytes = RasEbfeModels._get_download_total_bytes(
+                response,
+                resume_from=resume_from
+            )
+            tqdm_total = total_bytes if total_bytes > 0 else None
+            file_mode = 'ab' if append_mode else 'wb'
+
+            with open(part_path, file_mode) as file_obj:
+                with tqdm(
+                    total=tqdm_total,
+                    initial=resume_from,
+                    unit='B',
+                    unit_scale=True,
+                    desc=f"    {dest.name}"
+                ) as pbar:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if not chunk:
+                            continue
+                        file_obj.write(chunk)
+                        pbar.update(len(chunk))
+
+        finally:
+            if response is not None:
+                response.close()
+
+        part_path.replace(dest)
+        return dest
+
+    @staticmethod
     def _download_component(
         url: str,
         dest: Path,
         description: str = ""
     ):
         """Download a single component file, skip if already exists."""
-        if dest.exists():
-            print(f"  Already downloaded: {dest.name}")
-            return
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        print(f"  Downloading {description or dest.name}...")
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        total = int(response.headers.get('content-length', 0))
-        with open(dest, 'wb') as f:
-            with tqdm(total=total, unit='B', unit_scale=True, desc=f"    {dest.name}") as pbar:
-                for chunk in response.iter_content(8192):
-                    f.write(chunk)
-                    pbar.update(len(chunk))
+        RasEbfeModels._download_file(url, dest, description)
 
     @staticmethod
     def _extract_component(
@@ -1293,6 +1406,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         # Determine zip filename from URL
         zip_filename = url.split('/')[-1]
         zip_path = output_folder / zip_filename
+        partial_zip_path = RasEbfeModels._get_partial_download_path(zip_path)
 
         # Download if not already present
         download_needed = False
@@ -1303,10 +1417,14 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 with zipfile.ZipFile(zip_path, 'r') as zf:
                     # Quick test - just open, don't extract
                     pass
+                if partial_zip_path.exists():
+                    partial_zip_path.unlink()
                 print(f"\n✓ {description} already downloaded: {zip_path}")
             except zipfile.BadZipFile:
                 print(f"\n⚠️ Existing file is corrupted, re-downloading...")
                 zip_path.unlink()  # Delete corrupted file
+                if partial_zip_path.exists():
+                    partial_zip_path.unlink()
                 download_needed = True
         else:
             download_needed = True
@@ -1316,18 +1434,13 @@ HEC-RAS version: 5.0.1 / 5.0.3
             print(f"  URL: {url}")
             print(f"  Destination: {zip_path}")
 
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
+            RasEbfeModels._download_file(
+                url=url,
+                dest=zip_path,
+                description=description
+            )
 
-            total_size = int(response.headers.get('content-length', 0))
-            block_size = 8192
-
-            with open(zip_path, 'wb') as f:
-                with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"  {description}") as pbar:
-                    for chunk in response.iter_content(block_size):
-                        f.write(chunk)
-                        pbar.update(len(chunk))
-
+            total_size = zip_path.stat().st_size
             print(f"  ✓ Downloaded {total_size / 1e9:.1f} GB")
 
         # Extract if not already extracted
