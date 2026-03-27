@@ -1038,6 +1038,133 @@ class RasUsgsMetrics:
     # -------------------------------------------------------------------------
 
     @staticmethod
+    def _prepare_comparison_data(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series],
+        time_index: Optional[pd.DatetimeIndex] = None
+    ) -> Tuple[np.ndarray, np.ndarray, Optional[pd.DatetimeIndex]]:
+        """Convert inputs to aligned float arrays and drop pairwise NaNs."""
+        if isinstance(observed, pd.Series):
+            observed = observed.values
+        if isinstance(modeled, pd.Series):
+            modeled = modeled.values
+
+        observed = np.asarray(observed, dtype=float)
+        modeled = np.asarray(modeled, dtype=float)
+
+        if observed.shape != modeled.shape:
+            raise ValueError(
+                "observed and modeled must have the same shape; "
+                f"got {observed.shape} and {modeled.shape}"
+            )
+
+        clean_time_index = None
+        if time_index is not None:
+            clean_time_index = pd.DatetimeIndex(time_index)
+            if len(clean_time_index) != len(observed):
+                raise ValueError(
+                    "time_index must match observed/modeled length; "
+                    f"got {len(clean_time_index)} and {len(observed)}"
+                )
+
+        valid_mask = ~(np.isnan(observed) | np.isnan(modeled))
+        observed = observed[valid_mask]
+        modeled = modeled[valid_mask]
+
+        if clean_time_index is not None:
+            clean_time_index = clean_time_index[valid_mask]
+
+        return observed, modeled, clean_time_index
+
+    @staticmethod
+    def _lyne_hollick_baseflow(
+        discharge: np.ndarray,
+        alpha: float = 0.925,
+        passes: int = 3,
+        timestep_hours: float = 1.0,
+        alpha_reference_timestep_hours: float = 1.0
+    ) -> np.ndarray:
+        """
+        Estimate baseflow using a Lyne-Hollick digital filter.
+
+        This is a pragmatic approximation for "baseflow-separated discharge"
+        when a repository-specific separation method is not otherwise defined.
+        The filter coefficient is timestep-sensitive, so ``alpha`` is treated
+        as calibrated for ``alpha_reference_timestep_hours`` and rescaled to
+        the requested ``timestep_hours`` using a power-law approximation.
+        """
+        if alpha <= 0 or alpha >= 1:
+            raise ValueError(f"alpha must be between 0 and 1; got {alpha}")
+        if passes < 1:
+            raise ValueError(f"passes must be at least 1; got {passes}")
+        if timestep_hours <= 0:
+            raise ValueError(
+                f"timestep_hours must be positive; got {timestep_hours}"
+            )
+        if alpha_reference_timestep_hours <= 0:
+            raise ValueError(
+                "alpha_reference_timestep_hours must be positive; got "
+                f"{alpha_reference_timestep_hours}"
+            )
+
+        baseflow = np.maximum(np.asarray(discharge, dtype=float), 0.0)
+        if len(baseflow) == 0:
+            return baseflow
+
+        effective_alpha = alpha ** (
+            timestep_hours / alpha_reference_timestep_hours
+        )
+
+        for pass_idx in range(passes):
+            series = baseflow[::-1] if pass_idx % 2 else baseflow.copy()
+            quickflow = np.zeros_like(series)
+
+            for i in range(1, len(series)):
+                quickflow[i] = (
+                    effective_alpha * quickflow[i - 1]
+                    + ((1.0 + effective_alpha) / 2.0)
+                    * (series[i] - series[i - 1])
+                )
+                quickflow[i] = min(max(quickflow[i], 0.0), series[i])
+
+            filtered = np.clip(series - quickflow, 0.0, series)
+            baseflow = filtered[::-1] if pass_idx % 2 else filtered
+
+        return baseflow
+
+    @staticmethod
+    def _interpolate_crossing_time(
+        series: np.ndarray,
+        time_index: pd.DatetimeIndex,
+        threshold: float
+    ) -> Optional[pd.Timestamp]:
+        """Find the first threshold crossing time by linear interpolation."""
+        if len(series) == 0:
+            return None
+
+        if series[0] >= threshold:
+            return time_index[0]
+
+        for i in range(1, len(series)):
+            prev_value = series[i - 1]
+            curr_value = series[i]
+
+            if prev_value < threshold <= curr_value:
+                if curr_value == prev_value:
+                    return time_index[i]
+
+                fraction = (threshold - prev_value) / (curr_value - prev_value)
+                delta_seconds = (
+                    time_index[i] - time_index[i - 1]
+                ).total_seconds()
+                return time_index[i - 1] + pd.to_timedelta(
+                    delta_seconds * fraction,
+                    unit='s'
+                )
+
+        return None
+
+    @staticmethod
     @log_call
     def stage_to_depth(
         stage: Union[np.ndarray, pd.Series],
@@ -1308,6 +1435,355 @@ class RasUsgsMetrics:
 
     @staticmethod
     @log_call
+    def nrmse_depth_normalized(
+        observed_stage: Union[np.ndarray, pd.Series],
+        modeled_stage: Union[np.ndarray, pd.Series],
+        datum: Optional[float] = None
+    ) -> float:
+        """
+        Calculate depth-normalized RMSE for stage after datum adjustment.
+
+        This is the public Phase 4 name advertised by the original feature
+        surface. It is equivalent to the ``nrmse_depth`` value returned by
+        ``calculate_stage_metrics()``.
+        """
+        stage_metrics = RasUsgsMetrics.calculate_stage_metrics(
+            observed_stage,
+            modeled_stage,
+            datum=datum
+        )
+        return stage_metrics.get('nrmse_depth', np.nan)
+
+    @staticmethod
+    @log_call
+    def flow_weighted_rmse(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series],
+        weight_power: float = 1.0
+    ) -> float:
+        """
+        Calculate RMSE with higher weight on higher-flow observations.
+
+        Weights are based on the observed-flow magnitude relative to the
+        observed peak, so high-flow errors contribute more strongly than
+        low-flow errors while the result remains in flow units.
+        """
+        if weight_power < 0:
+            raise ValueError(
+                f"weight_power must be non-negative; got {weight_power}"
+            )
+
+        obs_clean, mod_clean, _ = RasUsgsMetrics._prepare_comparison_data(
+            observed,
+            modeled
+        )
+
+        if len(obs_clean) == 0:
+            logger.warning("flow_weighted_rmse: no valid data points")
+            return np.nan
+
+        abs_obs = np.abs(obs_clean)
+        peak_obs = float(np.max(abs_obs))
+        if peak_obs == 0:
+            logger.warning(
+                "flow_weighted_rmse: observed peak is zero; "
+                "falling back to standard RMSE"
+            )
+            return RasUtils.calculate_rmse(
+                obs_clean,
+                mod_clean,
+                normalized=False
+            )
+
+        weights = np.power(abs_obs / peak_obs, weight_power)
+        if np.sum(weights) == 0:
+            logger.warning(
+                "flow_weighted_rmse: all weights are zero; "
+                "falling back to standard RMSE"
+            )
+            return RasUtils.calculate_rmse(
+                obs_clean,
+                mod_clean,
+                normalized=False
+            )
+
+        rmse = float(
+            np.sqrt(
+                np.sum(weights * (obs_clean - mod_clean) ** 2)
+                / np.sum(weights)
+            )
+        )
+        logger.debug(
+            f"flow_weighted_rmse: RMSE={rmse:.4f}, "
+            f"weight_power={weight_power}"
+        )
+        return rmse
+
+    @staticmethod
+    @log_call
+    def fdc_high_flow_bias(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series],
+        high_flow_exceedance: float = 0.02
+    ) -> float:
+        """
+        Calculate high-flow bias using the FDC high-segment volume definition.
+
+        This implements the USGS/Yilmaz FHV-style metric:
+
+            FHV = sum(Qsim - Qobs for high-flow FDC ranks) / sum(Qobs) * 100
+
+        where the high-flow segment is defined by exceedance probabilities below
+        ``high_flow_exceedance`` (default 0.02, i.e. the top 2% of flows).
+
+        Notes
+        -----
+        - Comparison is performed on sorted flow-duration-curve ranks, not on
+          original timestamp alignment.
+        - Positive values indicate the modeled high-flow segment is too large.
+        """
+        if high_flow_exceedance <= 0 or high_flow_exceedance >= 1:
+            raise ValueError(
+                "high_flow_exceedance must be between 0 and 1; got "
+                f"{high_flow_exceedance}"
+            )
+
+        obs_clean, mod_clean, _ = RasUsgsMetrics._prepare_comparison_data(
+            observed,
+            modeled
+        )
+
+        if len(obs_clean) == 0:
+            logger.warning("fdc_high_flow_bias: no valid data points")
+            return np.nan
+
+        obs_sorted = np.sort(obs_clean)[::-1]
+        mod_sorted = np.sort(mod_clean)[::-1]
+
+        exceedance_probs = np.arange(1, len(obs_sorted) + 1, dtype=float) / (
+            len(obs_sorted) + 1.0
+        )
+        high_flow_mask = exceedance_probs < high_flow_exceedance
+        if not np.any(high_flow_mask):
+            high_flow_mask[0] = True
+
+        obs_high = obs_sorted[high_flow_mask]
+        mod_high = mod_sorted[high_flow_mask]
+
+        denominator = np.sum(obs_high)
+        if denominator == 0:
+            logger.warning(
+                "fdc_high_flow_bias: observed high-flow segment sums to zero; "
+                "bias is undefined"
+            )
+            return np.nan
+
+        bias = float(100.0 * np.sum(mod_high - obs_high) / denominator)
+        logger.debug(
+            f"fdc_high_flow_bias/FHV: bias={bias:.2f}%, "
+            f"high_flow_exceedance={high_flow_exceedance:.3f}, "
+            f"n_high={len(obs_high)}"
+        )
+        return bias
+
+    @staticmethod
+    @log_call
+    def baseflow_nse(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series],
+        alpha: float = 0.925,
+        passes: int = 3,
+        timestep_hours: float = 1.0,
+        alpha_reference_timestep_hours: float = 1.0
+    ) -> float:
+        """
+        Calculate NSE on baseflow-separated discharge.
+
+        Baseflow separation is approximated with a Lyne-Hollick digital filter
+        applied independently to observed and modeled discharge series. This is
+        a pragmatic metric, not a repository-defined canonical formula, so the
+        separation assumptions are explicit parameters:
+
+        - ``alpha``: Lyne-Hollick filter coefficient at the reference timestep
+        - ``passes``: number of forward/reverse filter passes
+        - ``timestep_hours``: actual sampling interval of the discharge series
+        - ``alpha_reference_timestep_hours``: timestep that ``alpha`` was tuned for
+        """
+        obs_clean, mod_clean, _ = RasUsgsMetrics._prepare_comparison_data(
+            observed,
+            modeled
+        )
+
+        if len(obs_clean) == 0:
+            logger.warning("baseflow_nse: no valid data points")
+            return np.nan
+
+        obs_baseflow = RasUsgsMetrics._lyne_hollick_baseflow(
+            obs_clean,
+            alpha=alpha,
+            passes=passes,
+            timestep_hours=timestep_hours,
+            alpha_reference_timestep_hours=alpha_reference_timestep_hours
+        )
+        mod_baseflow = RasUsgsMetrics._lyne_hollick_baseflow(
+            mod_clean,
+            alpha=alpha,
+            passes=passes,
+            timestep_hours=timestep_hours,
+            alpha_reference_timestep_hours=alpha_reference_timestep_hours
+        )
+
+        nse = RasUsgsMetrics.nash_sutcliffe_efficiency(
+            obs_baseflow,
+            mod_baseflow
+        )
+        logger.debug(
+            f"baseflow_nse: NSE={nse:.4f}, alpha={alpha}, passes={passes}, "
+            f"timestep_hours={timestep_hours}, "
+            f"alpha_reference_timestep_hours={alpha_reference_timestep_hours}"
+        )
+        return nse
+
+    @staticmethod
+    @log_call
+    def rising_limb_timing_error(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series],
+        time_index: pd.DatetimeIndex,
+        rise_fractions: Tuple[float, ...] = (0.25, 0.5, 0.75, 0.9)
+    ) -> float:
+        """
+        Calculate mean timing error across rising-limb threshold crossings.
+
+        Positive values mean the modeled hydrograph lags the observed
+        hydrograph; negative values mean it arrives early.
+        """
+        obs_clean, mod_clean, time_clean = RasUsgsMetrics._prepare_comparison_data(
+            observed,
+            modeled,
+            time_index=time_index
+        )
+
+        if len(obs_clean) < 2:
+            logger.warning(
+                "rising_limb_timing_error: at least two valid points are required"
+            )
+            return np.nan
+
+        obs_peak_idx = int(np.argmax(obs_clean))
+        mod_peak_idx = int(np.argmax(mod_clean))
+        if obs_peak_idx == 0 or mod_peak_idx == 0:
+            logger.warning(
+                "rising_limb_timing_error: one series has no rising limb before "
+                "its peak"
+            )
+            return np.nan
+
+        obs_rising = obs_clean[:obs_peak_idx + 1]
+        mod_rising = mod_clean[:mod_peak_idx + 1]
+        obs_times = time_clean[:obs_peak_idx + 1]
+        mod_times = time_clean[:mod_peak_idx + 1]
+
+        obs_min = float(np.min(obs_rising))
+        obs_peak = float(np.max(obs_rising))
+        amplitude = obs_peak - obs_min
+        if amplitude <= 0:
+            logger.warning(
+                "rising_limb_timing_error: observed rising limb has zero amplitude"
+            )
+            return np.nan
+
+        errors_hours = []
+        for fraction in rise_fractions:
+            if fraction <= 0 or fraction >= 1:
+                raise ValueError(
+                    "rise_fractions must contain values strictly between 0 "
+                    f"and 1; got {fraction}"
+                )
+
+            threshold = obs_min + (fraction * amplitude)
+            obs_cross = RasUsgsMetrics._interpolate_crossing_time(
+                obs_rising,
+                obs_times,
+                threshold
+            )
+            mod_cross = RasUsgsMetrics._interpolate_crossing_time(
+                mod_rising,
+                mod_times,
+                threshold
+            )
+
+            if obs_cross is None or mod_cross is None:
+                continue
+
+            delta_hours = (mod_cross - obs_cross).total_seconds() / 3600.0
+            errors_hours.append(delta_hours)
+
+        if not errors_hours:
+            logger.warning(
+                "rising_limb_timing_error: no shared threshold crossings found"
+            )
+            return np.nan
+
+        result = float(np.mean(errors_hours))
+        logger.debug(
+            f"rising_limb_timing_error: error={result:.4f} hr across "
+            f"{len(errors_hours)} thresholds"
+        )
+        return result
+
+    @staticmethod
+    @log_call
+    def recession_bias(
+        observed: Union[np.ndarray, pd.Series],
+        modeled: Union[np.ndarray, pd.Series]
+    ) -> float:
+        """
+        Calculate percent bias on the observed recession limb only.
+
+        The recession limb is anchored at the observed peak and filtered to
+        timesteps where observed flow is non-increasing.
+        """
+        obs_clean, mod_clean, _ = RasUsgsMetrics._prepare_comparison_data(
+            observed,
+            modeled
+        )
+
+        if len(obs_clean) < 2:
+            logger.warning("recession_bias: at least two valid points are required")
+            return np.nan
+
+        peak_idx = int(np.argmax(obs_clean))
+        if peak_idx >= len(obs_clean) - 1:
+            logger.warning("recession_bias: no post-peak recession limb found")
+            return np.nan
+
+        obs_recession = obs_clean[peak_idx:]
+        mod_recession = mod_clean[peak_idx:]
+
+        recession_mask = np.ones(len(obs_recession), dtype=bool)
+        if len(obs_recession) > 1:
+            recession_mask[1:] = np.diff(obs_recession) <= 0
+
+        obs_recession = obs_recession[recession_mask]
+        mod_recession = mod_recession[recession_mask]
+
+        denominator = np.sum(obs_recession)
+        if denominator == 0:
+            logger.warning(
+                "recession_bias: observed recession limb sums to zero; "
+                "bias is undefined"
+            )
+            return np.nan
+
+        bias = float(
+            100.0 * np.sum(mod_recession - obs_recession) / denominator
+        )
+        logger.debug(f"recession_bias: bias={bias:.2f}%")
+        return bias
+
+    @staticmethod
+    @log_call
     def classify_performance_full(
         metrics_dict: Dict[str, float],
         parameter_type: str = 'streamflow'
@@ -1444,6 +1920,11 @@ class RasUsgsMetrics:
             - 'performance_rating': Overall performance classification
             - 'nrmse_peak': Normalized RMSE (RMSE / peak observed, dimensionless)
             - 'performance_rating_full': Full Moriasi 2007 classification using NSE + RSR + PBIAS
+            - 'flow_weighted_rmse': High-flow-emphasis RMSE in flow units
+            - 'fdc_high_flow_bias': FDC high-segment volume bias (%)
+            - 'baseflow_nse': NSE on baseflow-separated discharge
+            - 'recession_bias': Bias on the observed recession limb only (%)
+            - 'rising_limb_timing_error': Mean rising-limb crossing error (hours)
 
         Notes
         -----
@@ -1537,11 +2018,36 @@ class RasUsgsMetrics:
         # Phase 4 CLB innovations
         metrics['nrmse_peak'] = RasUsgsMetrics.normalized_rmse(obs_clean, mod_clean, normalization='peak')
         metrics['performance_rating_full'] = RasUsgsMetrics.classify_performance_full(metrics)
+        metrics['flow_weighted_rmse'] = RasUsgsMetrics.flow_weighted_rmse(
+            obs_clean,
+            mod_clean
+        )
+        metrics['fdc_high_flow_bias'] = RasUsgsMetrics.fdc_high_flow_bias(
+            obs_clean,
+            mod_clean
+        )
+        metrics['baseflow_nse'] = RasUsgsMetrics.baseflow_nse(
+            obs_clean,
+            mod_clean
+        )
+        metrics['recession_bias'] = RasUsgsMetrics.recession_bias(
+            obs_clean,
+            mod_clean
+        )
 
         # Peak analysis - filter time_index with same valid_mask to keep alignment
         filtered_time_index = time_index[valid_mask] if time_index is not None else None
         peak_metrics = RasUsgsMetrics.calculate_peak_error(obs_clean, mod_clean, time_index=filtered_time_index)
         metrics.update(peak_metrics)
+
+        if filtered_time_index is not None:
+            metrics['rising_limb_timing_error'] = (
+                RasUsgsMetrics.rising_limb_timing_error(
+                    obs_clean,
+                    mod_clean,
+                    time_index=filtered_time_index
+                )
+            )
 
         # Volume analysis
         volume_metrics = RasUsgsMetrics.calculate_volume_error(obs_clean, mod_clean, dt_hours=dt_hours)
@@ -1777,4 +2283,10 @@ index_of_agreement = RasUsgsMetrics.index_of_agreement
 stage_to_depth = RasUsgsMetrics.stage_to_depth
 calculate_stage_metrics = RasUsgsMetrics.calculate_stage_metrics
 normalized_rmse = RasUsgsMetrics.normalized_rmse
+nrmse_depth_normalized = RasUsgsMetrics.nrmse_depth_normalized
+flow_weighted_rmse = RasUsgsMetrics.flow_weighted_rmse
+fdc_high_flow_bias = RasUsgsMetrics.fdc_high_flow_bias
+baseflow_nse = RasUsgsMetrics.baseflow_nse
+rising_limb_timing_error = RasUsgsMetrics.rising_limb_timing_error
+recession_bias = RasUsgsMetrics.recession_bias
 classify_performance_full = RasUsgsMetrics.classify_performance_full
