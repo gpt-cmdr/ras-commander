@@ -372,7 +372,7 @@ class HdfInfiltration:
         >>> print(gdf[['Name', 'geometry']].head())
         """
         import geopandas as gpd
-        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.geometry import Polygon
 
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -390,21 +390,38 @@ class HdfInfiltration:
                 region_ids = range(infil_data["Attributes"][()].shape[0])
                 names = np.vectorize(HdfUtils.convert_ras_string)(infil_data["Attributes"][()]["Name"])
 
-                geoms = list()
+                geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in infil_data["Polygon Info"][()]:
-                    points = infil_data["Polygon Points"][()][pnt_start : pnt_start + pnt_cnt]
-                    if part_cnt == 1:
+                    points = infil_data["Polygon Points"][()][
+                        pnt_start : pnt_start + pnt_cnt
+                    ]
+
+                    if part_cnt <= 1:
                         geoms.append(Polygon(points))
-                    else:
-                        parts = infil_data["Polygon Parts"][()][part_start : part_start + part_cnt]
-                        geoms.append(
-                            MultiPolygon(
-                                list(
-                                    points[part_pnt_start : part_pnt_start + part_pnt_cnt]
-                                    for part_pnt_start, part_pnt_cnt in parts
-                                )
-                            )
+                        continue
+
+                    if "Polygon Parts" not in infil_data:
+                        logger.warning(
+                            "Multi-part infiltration polygon but "
+                            "'Polygon Parts' dataset missing"
                         )
+                        geoms.append(Polygon(points))
+                        continue
+
+                    parts = infil_data["Polygon Parts"][()][
+                        part_start : part_start + part_cnt
+                    ]
+                    rings = [
+                        points[part_pnt_start : part_pnt_start + part_pnt_cnt]
+                        for part_pnt_start, part_pnt_cnt in parts
+                    ]
+
+                    if len(rings) == 1:
+                        geoms.append(Polygon(rings[0]))
+                    else:
+                        # HEC-RAS stores polygon parts as rings:
+                        # first ring exterior, remaining rings interiors.
+                        geoms.append(Polygon(rings[0], rings[1:]))
 
                 return gpd.GeoDataFrame(
                     {"region_id": region_ids, "Name": names, "geometry": geoms},
