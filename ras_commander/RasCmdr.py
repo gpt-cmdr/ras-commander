@@ -540,7 +540,7 @@ class RasCmdr:
                 except Exception as e_refresh:
                     logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
 
-            return ComputeResult(success=_success, results_df_row=_results_df_row)
+        return ComputeResult(success=_success, results_df_row=_results_df_row)
 
 
 
