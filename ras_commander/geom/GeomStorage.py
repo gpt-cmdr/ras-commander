@@ -11,6 +11,8 @@ List of Functions:
 - get_elevation_volume() - Read elevation-volume curve for a storage area
 - set_elevation_volume() - Write elevation-volume curve to a storage area
 - get_storage_area_polygons() - Extract storage area polygon perimeter geometry
+- get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
+- set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
 
 Example Usage:
     >>> from ras_commander import GeomStorage
@@ -636,3 +638,314 @@ class GeomStorage:
         except Exception as e:
             logger.error(f"Error reading storage area polygons: {str(e)}")
             raise IOError(f"Failed to read storage area polygons: {str(e)}")
+
+    # Plain text keywords for 2D flow area settings
+    _SETTINGS_KEYWORDS = {
+        'Storage Area Mannings': 'mannings_n',
+        '2D Cell Volume Filter Tolerance': 'cell_vol_tol',
+        '2D Cell Minimum Area Fraction': 'cell_min_area_fraction',
+        '2D Face Profile Filter Tolerance': 'face_profile_tol',
+        '2D Face Area Elevation Profile Filter Tolerance': 'face_area_tol',
+        '2D Face Area Elevation Conveyance Ratio': 'face_conv_ratio',
+        '2D Face Area Laminar Depth': 'laminar_depth',
+        '2D Face Min Length Ratio': 'min_face_length_ratio',
+    }
+
+    # Boolean keywords: present with =-1 means True, absent means False
+    _BOOLEAN_KEYWORDS = {
+        '2D Multiple Face Mann n': 'spatially_varied_mann_on_faces',
+        '2D Composite LC': 'composite_classification',
+    }
+
+    @staticmethod
+    @log_call
+    def get_2d_flow_area_settings(geom_file: Union[str, Path]) -> pd.DataFrame:
+        """
+        Read 2D flow area cell/face property settings from plain text geometry file.
+
+        Extracts per-flow-area settings including default Manning's n,
+        tolerance/filter values, and subgrid sampling options (spatially
+        varied Manning's n on faces, composite classification in cells).
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+
+        Returns:
+            pd.DataFrame: DataFrame with one row per 2D flow area. Columns:
+                - name (str): 2D flow area name
+                - mannings_n (float): Default Manning's n
+                - spatially_varied_mann_on_faces (bool): Spatially varied Manning's n
+                - composite_classification (bool): Composite classification values
+                - cell_vol_tol (float): Cell volume filter tolerance
+                - cell_min_area_fraction (float): Cell minimum area fraction
+                - face_profile_tol (float): Face profile filter tolerance
+                - face_area_tol (float): Face area elevation profile filter tolerance
+                - face_conv_ratio (float): Face area elevation conveyance ratio
+                - laminar_depth (float): Face area laminar depth
+                - min_face_length_ratio (float): Min face length ratio (NaN if absent)
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+
+        Example:
+            >>> settings = GeomStorage.get_2d_flow_area_settings("model.g01")
+            >>> for _, row in settings.iterrows():
+            ...     print(f"{row['name']}: Mann n={row['mannings_n']}, "
+            ...           f"Spatial={row['spatially_varied_mann_on_faces']}, "
+            ...           f"Composite={row['composite_classification']}")
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+
+        records = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            if line.startswith("Storage Area="):
+                value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+                parts = [p.strip() for p in value_str.split(',')]
+                sa_name = parts[0] if parts else value_str
+
+                is_2d = False
+                settings = {
+                    'name': sa_name,
+                    'mannings_n': float('nan'),
+                    'spatially_varied_mann_on_faces': False,
+                    'composite_classification': False,
+                    'cell_vol_tol': float('nan'),
+                    'cell_min_area_fraction': float('nan'),
+                    'face_profile_tol': float('nan'),
+                    'face_area_tol': float('nan'),
+                    'face_conv_ratio': float('nan'),
+                    'laminar_depth': float('nan'),
+                    'min_face_length_ratio': float('nan'),
+                }
+
+                for j in range(i + 1, len(lines)):
+                    if lines[j].startswith("Storage Area=") or lines[j].startswith("River Reach="):
+                        break
+
+                    if lines[j].startswith("Storage Area Is2D="):
+                        is2d_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Is2D")
+                        try:
+                            is_2d = int(is2d_str.strip()) == -1
+                        except ValueError:
+                            pass
+
+                    for keyword, column in GeomStorage._SETTINGS_KEYWORDS.items():
+                        if lines[j].startswith(keyword + '='):
+                            val_str = GeomParser.extract_keyword_value(lines[j], keyword)
+                            try:
+                                settings[column] = float(val_str.strip())
+                            except ValueError:
+                                pass
+
+                    for keyword, column in GeomStorage._BOOLEAN_KEYWORDS.items():
+                        if lines[j].startswith(keyword + '='):
+                            val_str = GeomParser.extract_keyword_value(lines[j], keyword)
+                            try:
+                                settings[column] = int(val_str.strip()) == -1
+                            except ValueError:
+                                pass
+
+                if is_2d:
+                    records.append(settings)
+
+            i += 1
+
+        df = pd.DataFrame(records)
+        if df.empty:
+            df = pd.DataFrame(columns=[
+                'name', 'mannings_n', 'spatially_varied_mann_on_faces',
+                'composite_classification', 'cell_vol_tol', 'cell_min_area_fraction',
+                'face_profile_tol', 'face_area_tol', 'face_conv_ratio',
+                'laminar_depth', 'min_face_length_ratio',
+            ])
+
+        logger.debug(f"Found {len(df)} 2D flow area settings in {geom_file.name}")
+        return df
+
+    @staticmethod
+    @log_call
+    def set_2d_flow_area_settings(
+        geom_file: Union[str, Path],
+        flow_area_name: str,
+        spatially_varied_mann_on_faces: Optional[bool] = None,
+        composite_classification: Optional[bool] = None,
+        mannings_n: Optional[float] = None,
+        create_backup: bool = True,
+    ) -> Path:
+        """
+        Set 2D flow area cell/face property settings in plain text geometry file.
+
+        Modifies settings for a specific 2D flow area. Only parameters that
+        are explicitly provided (not None) are modified; others are left unchanged.
+
+        The geometry HDF is rebuilt from the plain text file during preprocessing,
+        so changes here propagate to the HDF automatically.
+
+        Parameters:
+            geom_file (Union[str, Path]): Path to geometry file (.g##)
+            flow_area_name (str): Name of the 2D flow area (case-sensitive)
+            spatially_varied_mann_on_faces (Optional[bool]): Enable/disable
+                spatially varied Manning's n on faces. None = no change.
+            composite_classification (Optional[bool]): Enable/disable
+                composite classification values in cells. None = no change.
+            mannings_n (Optional[float]): Default Manning's n value.
+                None = no change.
+            create_backup (bool): Create .bak backup before modification (default True)
+
+        Returns:
+            Path: Path to backup file if created, or geometry file path if no backup
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If flow area not found or not a 2D flow area
+
+        Example:
+            >>> # Enable both subgrid sampling options
+            >>> GeomStorage.set_2d_flow_area_settings(
+            ...     "model.g01",
+            ...     flow_area_name="Perimeter 1",
+            ...     spatially_varied_mann_on_faces=True,
+            ...     composite_classification=True,
+            ... )
+
+            >>> # Change default Manning's n and disable composite
+            >>> GeomStorage.set_2d_flow_area_settings(
+            ...     "model.g01",
+            ...     flow_area_name="Perimeter 1",
+            ...     mannings_n=0.04,
+            ...     composite_classification=False,
+            ... )
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        if (spatially_varied_mann_on_faces is None and
+                composite_classification is None and
+                mannings_n is None):
+            logger.info("No settings to change")
+            return geom_file
+
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+
+        # Find the target 2D flow area block
+        sa_idx = None
+        block_end = None
+        is_2d = False
+
+        for i, line in enumerate(lines):
+            if line.startswith("Storage Area="):
+                value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+                parts = [p.strip() for p in value_str.split(',')]
+                sa_name = parts[0] if parts else value_str
+                if sa_name == flow_area_name:
+                    sa_idx = i
+                    # Find end of this storage area block
+                    for j in range(i + 1, len(lines)):
+                        if lines[j].startswith("Storage Area=") or lines[j].startswith("River Reach="):
+                            block_end = j
+                            break
+                    if block_end is None:
+                        block_end = len(lines)
+                    # Check it's a 2D flow area
+                    for j in range(i + 1, block_end):
+                        if lines[j].startswith("Storage Area Is2D="):
+                            is2d_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Is2D")
+                            try:
+                                is_2d = int(is2d_str.strip()) == -1
+                            except ValueError:
+                                pass
+                    break
+
+        if sa_idx is None:
+            raise ValueError(f"Flow area not found: {flow_area_name}")
+        if not is_2d:
+            raise ValueError(f"'{flow_area_name}' is not a 2D flow area")
+
+        # Find the settings sub-block (between PointsPerimeterTime and
+        # blank line or BreakLine)
+        settings_start = None
+        settings_end = None
+        for j in range(sa_idx + 1, block_end):
+            if lines[j].startswith("Storage Area Mannings="):
+                settings_start = j
+            if settings_start is not None and j > settings_start:
+                stripped = lines[j].strip()
+                if (stripped == '' or
+                        lines[j].startswith("BreakLine ") or
+                        lines[j].startswith("Storage Area=") or
+                        lines[j].startswith("River Reach=")):
+                    settings_end = j
+                    break
+        if settings_end is None and settings_start is not None:
+            settings_end = block_end
+
+        if settings_start is None:
+            raise ValueError(
+                f"Could not find settings block for '{flow_area_name}'. "
+                f"Expected 'Storage Area Mannings=' line."
+            )
+
+        # Create backup before modifying
+        backup_path = None
+        if create_backup:
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
+
+        # Modify settings in place
+        # 1. Update Manning's n if requested
+        if mannings_n is not None:
+            for j in range(settings_start, settings_end):
+                if lines[j].startswith("Storage Area Mannings="):
+                    lines[j] = f"Storage Area Mannings={mannings_n}\n"
+                    break
+
+        # 2. Handle boolean settings (add/remove lines)
+        bool_changes = {}
+        if spatially_varied_mann_on_faces is not None:
+            bool_changes['2D Multiple Face Mann n'] = spatially_varied_mann_on_faces
+        if composite_classification is not None:
+            bool_changes['2D Composite LC'] = composite_classification
+
+        for keyword, enabled in bool_changes.items():
+            # Find if line already exists
+            existing_idx = None
+            for j in range(settings_start, settings_end):
+                if lines[j].startswith(keyword + '='):
+                    existing_idx = j
+                    break
+
+            if enabled and existing_idx is None:
+                # Add the line before settings_end
+                new_line = f"{keyword}=-1\n"
+                lines.insert(settings_end, new_line)
+                settings_end += 1  # Adjust for inserted line
+            elif not enabled and existing_idx is not None:
+                # Remove the line
+                lines.pop(existing_idx)
+                settings_end -= 1  # Adjust for removed line
+
+        # Write modified file
+        with open(geom_file, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        changes = []
+        if mannings_n is not None:
+            changes.append(f"Manning's n={mannings_n}")
+        if spatially_varied_mann_on_faces is not None:
+            changes.append(f"Spatially Varied={'ON' if spatially_varied_mann_on_faces else 'OFF'}")
+        if composite_classification is not None:
+            changes.append(f"Composite LC={'ON' if composite_classification else 'OFF'}")
+
+        logger.info(f"Updated {flow_area_name}: {', '.join(changes)}")
+
+        return backup_path if backup_path else geom_file

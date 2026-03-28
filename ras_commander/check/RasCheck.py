@@ -213,6 +213,9 @@ class RasCheck:
             struct_htab_results = CheckNt.check_structure_htab_params(geom_file, thresholds)
             results.messages.extend(struct_htab_results.messages)
 
+            subgrid_results = CheckNt.check_subgrid_sampling(geom_file, thresholds)
+            results.messages.extend(subgrid_results.messages)
+
         # Calculate statistics
         results.statistics = _utils.calculate_statistics(results)
 
@@ -295,6 +298,9 @@ class RasCheck:
             struct_htab_results = CheckNt.check_structure_htab_params(geom_file, thresholds)
             results.messages.extend(struct_htab_results.messages)
 
+            subgrid_results = CheckNt.check_subgrid_sampling(geom_file, thresholds)
+            results.messages.extend(subgrid_results.messages)
+
         # Calculate statistics
         results.statistics = _utils.calculate_statistics(results)
 
@@ -363,3 +369,8 @@ class RasCheck:
     def check_mesh_quality(plan_hdf, geom_hdf, thresholds=None):
         """Delegate to CheckUnsteady.check_mesh_quality."""
         return CheckUnsteady.check_mesh_quality(plan_hdf, geom_hdf, thresholds)
+
+    @staticmethod
+    def check_subgrid_sampling(geom_file, thresholds=None):
+        """Delegate to CheckNt.check_subgrid_sampling."""
+        return CheckNt.check_subgrid_sampling(geom_file, thresholds)

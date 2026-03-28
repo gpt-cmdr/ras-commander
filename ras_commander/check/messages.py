@@ -165,6 +165,35 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "type": MessageType.NTCHECK
     },
 
+    # Subgrid Sampling Options (2D Flow Areas)
+    "NT_SG_01": {
+        "message": "2D flow area '{flow_area}': 'Spatially Varied Manning's n on Faces' is disabled. "
+                   "Enabling this improves hydraulic accuracy by assigning land-cover-based roughness to each face.",
+        "help_text": "When disabled, all faces use the single default Manning's n value. "
+                     "With spatially varied Manning's n, each computational face gets a roughness "
+                     "value based on the land cover at its location, significantly improving accuracy "
+                     "for models with varying land cover. This is a key component of the HEC-RAS "
+                     "subgrid approach. See: https://www.hec.usace.army.mil/confluence/rasdocs/d2sd/ras2dsedtr/latest/numerical-methods/subgrid-concept",
+        "type": MessageType.NTCHECK
+    },
+    "NT_SG_02": {
+        "message": "2D flow area '{flow_area}': 'Composite Classification Values in Cells' is disabled. "
+                   "Enabling this improves volume accounting by sampling land cover at multiple subgrid points per cell.",
+        "help_text": "When disabled, each cell uses a single dominant land cover class sampled at "
+                     "the cell center. With composite classification, land cover is sampled at many "
+                     "subgrid points within each cell, producing weighted roughness values that better "
+                     "represent mixed land cover. This is especially important for larger cells that "
+                     "span multiple land cover types. See: https://www.hec.usace.army.mil/confluence/rasdocs/d2sd/ras2dsedtr/latest/numerical-methods/subgrid-concept",
+        "type": MessageType.NTCHECK
+    },
+    "NT_SG_03": {
+        "message": "2D flow area '{flow_area}': Both subgrid sampling options are enabled (recommended).",
+        "help_text": "Spatially Varied Manning's n on Faces and Composite Classification Values in "
+                     "Cells are both enabled, providing the best hydraulic accuracy for the subgrid model. "
+                     "See: https://www.hec.usace.army.mil/confluence/rasdocs/d2sd/ras2dsedtr/latest/numerical-methods/subgrid-concept",
+        "type": MessageType.NTCHECK
+    },
+
     # =========================================================================
     # XS CHECK MESSAGES
     # =========================================================================

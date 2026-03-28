@@ -84,6 +84,10 @@ The check subpackage contains 5 modules organized by function:
   - Cell area validation (100-50,000 sq ft default range)
   - Aspect ratio checks (max 10:1 default)
   - Face velocity analysis
+- `check_subgrid_sampling()` - Subgrid sampling option suggestions (2D)
+  - Spatially Varied Manning's n on Faces (WARNING if disabled)
+  - Composite Classification Values in Cells (WARNING if disabled)
+  - Reference: [HEC-RAS Subgrid Concept](https://www.hec.usace.army.mil/confluence/rasdocs/d2sd/ras2dsedtr/latest/numerical-methods/subgrid-concept)
 
 **Flow Type Detection**:
 - Auto-detects steady vs unsteady from HDF file structure
@@ -387,6 +391,7 @@ Validates roughness coefficients against land cover standards. Catches:
 - Manning's n = 0 (uninitialized)
 - Extreme values (n > 0.20 for most cases)
 - Channel vs overbank inconsistencies
+- 2D subgrid sampling options disabled (recommends enabling Spatially Varied Manning's n on Faces and Composite Classification Values in Cells for HEC-RAS 6.x models)
 
 ### XS Check (Cross Sections)
 Validates cross section geometry and placement. Catches:

@@ -82,6 +82,29 @@ if len(stations) > 500:
 
 Use `_find_xs_section_end()` to dynamically search to the end of each XS section. Do not impose a fixed search range limit -- the parser searches until it finds the next `Type RM Length L Ch R =` header, `River Reach=` block, or end of file. This handles XS with arbitrarily many GIS cut line points (verified with 462-point real-world FEMA models).
 
+## 2D Flow Area Subgrid Sampling Options
+
+For HEC-RAS 6.x 2D models, check and configure subgrid sampling:
+
+```python
+from ras_commander import GeomStorage
+
+# Read current settings
+settings = GeomStorage.get_2d_flow_area_settings("model.g01")
+print(settings[['name', 'spatially_varied_mann_on_faces', 'composite_classification']])
+
+# Enable both (recommended best practice)
+GeomStorage.set_2d_flow_area_settings(
+    "model.g01", "Perimeter 1",
+    spatially_varied_mann_on_faces=True,
+    composite_classification=True,
+)
+```
+
+**Reference**: [HEC-RAS Subgrid Concept](https://www.hec.usace.army.mil/confluence/rasdocs/d2sd/ras2dsedtr/latest/numerical-methods/subgrid-concept)
+
+`RasCheck` automatically suggests enabling these when disabled (WARNING severity).
+
 ## Cross-References
 
 **Agents** (delegate when needed):

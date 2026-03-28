@@ -77,9 +77,29 @@ Standard exception hierarchy:
 - `get_expansion_contraction(geom_file, river, reach, rs)` - Get coefficients
 - `get_mannings_n(geom_file, river, reach, rs)` - Get roughness values
 
-### GeomStorage (Storage Areas)
+### GeomStorage (Storage Areas & 2D Flow Areas)
 - `get_storage_areas(geom_file, exclude_2d=True)` - List storage area names
 - `get_elevation_volume(geom_file, area_name)` - Get elevation-volume curve
+- `set_elevation_volume(geom_file, area_name, elevations, volumes)` - Write elevation-volume curve
+- `get_storage_area_polygons(geom_file, exclude_2d=True)` - Extract perimeter polygons
+- `get_2d_flow_area_settings(geom_file)` - Read 2D flow area cell/face property settings (Manning's n, tolerances, subgrid sampling options)
+- `set_2d_flow_area_settings(geom_file, flow_area_name, ...)` - Enable/disable subgrid sampling options (spatially varied Manning's n, composite classification)
+
+**Subgrid Sampling Options** (HEC-RAS 6.x):
+```python
+# Read current settings
+settings = GeomStorage.get_2d_flow_area_settings("model.g01")
+print(settings[['name', 'spatially_varied_mann_on_faces', 'composite_classification']])
+
+# Enable both (recommended for 2D models)
+GeomStorage.set_2d_flow_area_settings(
+    "model.g01", "Perimeter 1",
+    spatially_varied_mann_on_faces=True,
+    composite_classification=True,
+)
+```
+
+Reference: [HEC-RAS Subgrid Concept](https://www.hec.usace.army.mil/confluence/rasdocs/d2sd/ras2dsedtr/latest/numerical-methods/subgrid-concept)
 
 ### GeomLateral (Laterals & Connections)
 - `get_lateral_structures(geom_file, river=None, reach=None)` - List lateral structures
