@@ -429,6 +429,11 @@ indices = RasUtils.perform_kdtree_query(
         - parse_rasmap
         - get_terrain_path
         - get_landcover_path
+        - list_results_plans
+        - list_calculated_layers
+        - add_calculated_layer
+        - remove_calculated_layer
+        - add_wse_comparison_layers
 
 ### RasProcess
 

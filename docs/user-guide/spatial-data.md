@@ -359,6 +359,87 @@ MyRasModel/
     └── Velocity (Max).tif
 ```
 
+## Calculated Layers (WSE Comparison)
+
+RASMapper Calculated Layers perform raster algebra on plan results. The most common use case is comparing Water Surface Elevation (WSE) between Existing and Proposed conditions to identify benefits and adverse impacts.
+
+### Listing Plan Results and Existing Calculated Layers
+
+```python
+from ras_commander import init_ras_project, RasMap
+
+init_ras_project(r"C:\Projects\FloodModel", "6.6")
+
+# Discover available plan result layers
+plans = RasMap.list_results_plans()
+for p in plans:
+    print(f"  {p['name']}")
+
+# List any existing calculated layers
+layers = RasMap.list_calculated_layers()
+for l in layers:
+    print(f"  {l['name']} (under {l['parent_plan']})")
+```
+
+### Batch WSE Comparison (Existing vs Proposed)
+
+Generate comparison layers for multiple AEP/boundary condition pairs at once. The formula is `Proposed WSE - Existing WSE`:
+
+- **Positive values** = WSE raised by project (adverse impact)
+- **Negative values** = WSE lowered by project (benefit)
+
+```python
+created = RasMap.add_wse_comparison_layers(
+    plan_pairs=[
+        {"exist_plan": "Exist_10yr_Reg_BO", "prop_plan": "Prop_10yr_Reg_BO", "tag": "10yr_Reg"},
+        {"exist_plan": "Exist_10yr_Loc_BO", "prop_plan": "Prop_10yr_Loc_BO", "tag": "10yr_Loc"},
+        {"exist_plan": "Exist_25yr_Reg_BO", "prop_plan": "Prop_25yr_Reg_BO", "tag": "25yr_Reg"},
+        {"exist_plan": "Exist_25yr_Loc_BO", "prop_plan": "Prop_25yr_Loc_BO", "tag": "25yr_Loc"},
+        {"exist_plan": "Exist_100yr_Reg_BO", "prop_plan": "Prop_100yr_Reg_BO", "tag": "100yr_Reg"},
+        {"exist_plan": "Exist_100yr_Loc_BO", "prop_plan": "Prop_100yr_Loc_BO", "tag": "100yr_Loc"},
+    ],
+    exist_terrain="Bathy_QESDrone_",
+    prop_terrain="Terrain_Proposed_20260313",
+)
+print(f"Created {len(created)} comparison layers")
+```
+
+Each call generates:
+
+1. A `.rasscript` file (VB.NET raster algebra) in `Calculated Layers/`
+2. A `<Layer Type="CalculatedLayer">` XML entry in the `.rasmap`
+3. A viewport-dynamic diverging color ramp (blue=benefit, red=adverse)
+
+### Custom Calculated Layers
+
+For non-standard comparisons, use `add_calculated_layer()` directly with custom VB.NET script content:
+
+```python
+RasMap.add_calculated_layer(
+    layer_name="CustomDiff",
+    host_plan_name="Prop_10yr_Reg_BO",
+    script_content=my_vbnet_script,
+    raster_maps=[
+        {"result": "Exist_10yr_Reg_BO"},
+        {"result": "Prop_10yr_Reg_BO"},
+    ],
+    terrain_names=["Bathy_QESDrone_", "Terrain_Proposed_20260313"],
+)
+```
+
+### Removing Calculated Layers
+
+```python
+# Remove a single layer (optionally delete the .rasscript file too)
+RasMap.remove_calculated_layer("CompareWSE_10yr_Reg", delete_script=True)
+```
+
+!!! note "Dry Cell Handling"
+    When a cell is wet in one plan but dry in the other, the terrain elevation for the
+    dry plan's scenario is substituted as the WSE estimate. Each plan uses its own terrain
+    for this fallback (existing terrain for existing-dry cells, proposed terrain for
+    proposed-dry cells).
+
 ## Manning's n Calibration Workflow
 
 Calibrating Manning's n roughness coefficients is a common modeling task. RAS Commander provides tools to programmatically adjust Manning's n values for 2D flow areas.
