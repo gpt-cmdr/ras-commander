@@ -1594,8 +1594,8 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         This finds where DSS files actually exist and corrects all references.
 
         Handles:
-        - Absolute paths: C:\\eBFE\\... → relative path to actual file
-        - Wrong relative paths: DSS\Input\file.dss → file.dss (if file is in same folder)
+        - Absolute paths: C:/eBFE/... → relative path to actual file
+        - Wrong relative paths: DSS/Input/file.dss → file.dss (if file is in same folder)
 
         Args:
             ras_model_folder: Path to RAS Model/ folder
@@ -2150,7 +2150,7 @@ print(ras.plan_df)
 - WA3 has breakline shapefiles for mesh refinement
 - WA4 has non-standard plan numbering (p08-p13 instead of p01-p07)
 - WA5 originally referenced WA4's Terrain and LandCover (cross-model refs corrected)
-- All DSS boundary conditions use relative paths (.\\Input_DSS\\...)
+- All DSS boundary conditions use relative paths (./Input_DSS/...)
 
 ## Usage
 
