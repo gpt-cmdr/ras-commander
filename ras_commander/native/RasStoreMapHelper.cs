@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Xml;
 
 /// <summary>
 /// Headless stored map generator that respects rendering mode.
@@ -301,6 +302,8 @@ class RasStoreMapHelper
         if (outputBasePath != null)
             Console.WriteLine("Output base: " + outputBasePath);
 
+        SeedProjectSrsFromResult(resultHdf);
+
         try
         {
             Type cmdType = _asm.GetType("RasMapperLib.Scripting.StoreMapCommand");
@@ -394,19 +397,8 @@ class RasStoreMapHelper
             }
 
             Console.WriteLine("Executing StoreMap...");
-            InvokeExecute(cmdType, cmd);
-
-            // Read results
-            PropertyInfo successProp = cmdType.GetProperty("ComputeSuccessful");
-            PropertyInfo outputProp = cmdType.GetProperty("ActualOutputFilename");
-
-            bool success = true;
-            string outputFile = "";
-
-            if (successProp != null)
-                success = (bool)successProp.GetValue(cmd, null);
-            if (outputProp != null)
-                outputFile = (string)outputProp.GetValue(cmd, null) ?? "";
+            string outputFile;
+            bool success = ExecuteStoreMapHeadless(cmdType, cmd, out outputFile);
 
             Console.WriteLine("RESULT_SUCCESS=" + success);
             Console.WriteLine("RESULT_FILE=" + outputFile);
@@ -426,6 +418,352 @@ class RasStoreMapHelper
         {
             return HandleException(ex);
         }
+    }
+
+    static void SeedProjectSrsFromResult(string resultHdf)
+    {
+        string rasmapFile = FindSiblingRasmap(resultHdf);
+        if (rasmapFile == null)
+        {
+            Console.WriteLine("WARNING: Could not infer sibling rasmap for " + resultHdf);
+            return;
+        }
+
+        try
+        {
+            XmlDocument doc = new XmlDocument();
+            doc.Load(rasmapFile);
+
+            XmlNode projectionNode =
+                doc.SelectSingleNode("/RASMapper/RASProjectionFilename");
+            string relativeSrsPath = null;
+            if (
+                projectionNode != null &&
+                projectionNode.Attributes != null &&
+                projectionNode.Attributes["Filename"] != null
+            )
+            {
+                relativeSrsPath = projectionNode.Attributes["Filename"].Value;
+            }
+            if (string.IsNullOrEmpty(relativeSrsPath))
+            {
+                Console.WriteLine(
+                    "WARNING: rasmap does not define RASProjectionFilename: "
+                    + rasmapFile
+                );
+                return;
+            }
+
+            string srsPath = relativeSrsPath;
+            if (!Path.IsPathRooted(srsPath))
+            {
+                srsPath = Path.GetFullPath(
+                    Path.Combine(Path.GetDirectoryName(rasmapFile), srsPath)
+                );
+            }
+
+            if (!File.Exists(srsPath))
+            {
+                Console.WriteLine(
+                    "WARNING: Project SRS file not found: " + srsPath
+                );
+                return;
+            }
+
+            Type sharedData = _asm.GetType("RasMapperLib.SharedData");
+            if (sharedData == null)
+            {
+                Console.WriteLine("WARNING: SharedData type not found");
+                return;
+            }
+
+            PropertyInfo rasmapProp = sharedData.GetProperty(
+                "RasMapFilename",
+                BindingFlags.Public | BindingFlags.Static
+            );
+            if (rasmapProp != null)
+                rasmapProp.SetValue(null, rasmapFile, null);
+
+            PropertyInfo srsProp = sharedData.GetProperty(
+                "SRSFilename",
+                BindingFlags.Public | BindingFlags.Static
+            );
+            if (srsProp == null)
+            {
+                Console.WriteLine("WARNING: SharedData.SRSFilename not found");
+                return;
+            }
+
+            srsProp.SetValue(null, srsPath, null);
+            Console.WriteLine("Seeded project SRS from rasmap: " + srsPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                "WARNING: Could not seed project SRS from rasmap: "
+                + ex.Message
+            );
+        }
+    }
+
+    static string FindSiblingRasmap(string resultHdf)
+    {
+        string directory = Path.GetDirectoryName(resultHdf);
+        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+            return null;
+
+        string filename = Path.GetFileName(resultHdf);
+        string lowerFilename = filename.ToLowerInvariant();
+        if (lowerFilename.EndsWith(".hdf"))
+        {
+            int planIndex = lowerFilename.LastIndexOf(".p");
+            if (planIndex > 0)
+            {
+                string projectBase = filename.Substring(0, planIndex);
+                string candidate =
+                    Path.Combine(directory, projectBase + ".rasmap");
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+        }
+
+        string[] rasmaps = Directory.GetFiles(directory, "*.rasmap");
+        if (rasmaps.Length == 1)
+            return rasmaps[0];
+
+        return null;
+    }
+
+    static bool ExecuteStoreMapHeadless(
+        Type cmdType,
+        object cmd,
+        out string outputFile
+    )
+    {
+        outputFile = "";
+
+        string resultFilename = (string)cmdType
+            .GetProperty("Result")
+            .GetValue(cmd, null);
+        object mapType = cmdType.GetProperty("MapType").GetValue(cmd, null);
+        string outputBaseFilename = (string)cmdType
+            .GetProperty("OutputBaseFilename")
+            .GetValue(cmd, null);
+        string terrainFilename = (string)cmdType
+            .GetProperty("Terrain")
+            .GetValue(cmd, null);
+        string profileName = (string)cmdType
+            .GetProperty("ProfileName")
+            .GetValue(cmd, null);
+
+        Type resultsType = _asm.GetType("RasMapperLib.RASResults");
+        if (resultsType == null)
+            throw new Exception("RASResults type not found");
+
+        MethodInfo identifyResults = resultsType.GetMethod(
+            "TryIdentifyResultsFile",
+            BindingFlags.Public | BindingFlags.Static
+        );
+        if (identifyResults == null)
+            throw new Exception("RASResults.TryIdentifyResultsFile not found");
+
+        object results = identifyResults.Invoke(
+            null,
+            new object[] { resultFilename }
+        );
+        if (results == null)
+            throw new Exception(
+                "Result could not be identified '" + resultFilename + "'"
+            );
+
+        object geometry = resultsType
+            .GetProperty("Geometry")
+            .GetValue(results, null);
+        if (geometry == null)
+            throw new Exception("Results.Geometry is null");
+
+        object terrainLayer;
+        if (string.IsNullOrEmpty(terrainFilename))
+        {
+            terrainLayer = geometry.GetType()
+                .GetProperty("Terrain")
+                .GetValue(geometry, null);
+        }
+        else
+        {
+            Type terrainType = _asm.GetType("RasMapperLib.TerrainLayer");
+            if (terrainType == null)
+                throw new Exception("TerrainLayer type not found");
+
+            ConstructorInfo terrainCtor = terrainType.GetConstructor(
+                new Type[] { typeof(string), typeof(string) }
+            );
+            if (terrainCtor == null)
+                throw new Exception(
+                    "TerrainLayer(string, string) constructor not found"
+                );
+
+            terrainLayer = terrainCtor.Invoke(
+                new object[] { "Terrain", terrainFilename }
+            );
+
+            MethodInfo setTerrainTemporary = geometry.GetType().GetMethod(
+                "SetTerrainTemporary"
+            );
+            if (setTerrainTemporary == null)
+                throw new Exception("SetTerrainTemporary method not found");
+            setTerrainTemporary.Invoke(geometry, new object[] { terrainLayer });
+        }
+
+        if (terrainLayer == null)
+            throw new Exception("Terrain is undefined or unavailable.");
+
+        MethodInfo allSourceFilesExist = terrainLayer.GetType().GetMethod(
+            "AllSourceFilesExist"
+        );
+        if (allSourceFilesExist == null)
+            throw new Exception("TerrainLayer.AllSourceFilesExist not found");
+        if (!(bool)allSourceFilesExist.Invoke(terrainLayer, null))
+            throw new Exception(
+                "Invalid terrain - required source files do not exist."
+            );
+
+        Type rasResultsMapType = _asm.GetType("RasMapperLib.RASResultsMap");
+        if (rasResultsMapType == null)
+            throw new Exception("RASResultsMap type not found");
+
+        ConstructorInfo mapCtor = rasResultsMapType.GetConstructor(
+            new Type[] { resultsType, mapType.GetType() }
+        );
+        if (mapCtor == null)
+            throw new Exception(
+                "RASResultsMap constructor for map type not found"
+            );
+
+        object resultsMap = mapCtor.Invoke(new object[] { results, mapType });
+
+        PropertyInfo outputModeProp = rasResultsMapType.GetProperty("OutputMode");
+        if (outputModeProp == null)
+            throw new Exception("RASResultsMap.OutputMode property not found");
+
+        object storedDefaultTerrain = GetStaticMemberValue(
+            outputModeProp.PropertyType,
+            "StoredDefaultTerrain"
+        );
+        if (storedDefaultTerrain == null)
+            throw new Exception("OutputModes.StoredDefaultTerrain not found");
+
+        outputModeProp.SetValue(resultsMap, storedDefaultTerrain, null);
+
+        MethodInfo trySetProfile = rasResultsMapType.GetMethod("TrySetProfile");
+        if (trySetProfile == null)
+            throw new Exception("RASResultsMap.TrySetProfile not found");
+        trySetProfile.Invoke(resultsMap, new object[] { profileName });
+
+        if (!string.IsNullOrEmpty(outputBaseFilename))
+        {
+            PropertyInfo overwriteProp = rasResultsMapType.GetProperty(
+                "OverwriteOutputFilename"
+            );
+            if (overwriteProp == null)
+                throw new Exception(
+                    "RASResultsMap.OverwriteOutputFilename not found"
+                );
+            overwriteProp.SetValue(resultsMap, outputBaseFilename, null);
+        }
+
+        Type setSrsHelperType = _asm.GetType("RasMapperLib.Scripting.SetSRSHelper");
+        if (setSrsHelperType == null)
+            throw new Exception("SetSRSHelper type not found");
+
+        IDisposable srsHelper = CreateSrsHelper(setSrsHelperType, terrainLayer);
+        try
+        {
+            MethodInfo storeMapMethod = FindStoreMapMethod(rasResultsMapType);
+            if (storeMapMethod == null)
+                throw new Exception(
+                    "RASResultsMap.StoreMap(reporter, showFinishedMessage) "
+                    + "not found"
+                );
+
+            bool success = (bool)storeMapMethod.Invoke(
+                resultsMap,
+                new object[] { null, false }
+            );
+
+            PropertyInfo vrtProp = rasResultsMapType.GetProperty("VRTFilename");
+            if (vrtProp != null)
+                outputFile = (string)vrtProp.GetValue(resultsMap, null) ?? "";
+
+            return success;
+        }
+        finally
+        {
+            if (srsHelper != null)
+                srsHelper.Dispose();
+        }
+    }
+
+    static IDisposable CreateSrsHelper(Type setSrsHelperType, object terrainLayer)
+    {
+        ConstructorInfo ctor = setSrsHelperType.GetConstructor(
+            new Type[] { terrainLayer.GetType(), typeof(bool) }
+        );
+        if (ctor != null)
+            return (IDisposable)ctor.Invoke(
+                new object[] { terrainLayer, false }
+            );
+
+        ctor = setSrsHelperType.GetConstructor(
+            new Type[] { terrainLayer.GetType() }
+        );
+        if (ctor != null)
+            return (IDisposable)ctor.Invoke(new object[] { terrainLayer });
+
+        throw new Exception("Suitable SetSRSHelper constructor not found");
+    }
+
+    static MethodInfo FindStoreMapMethod(Type rasResultsMapType)
+    {
+        foreach (
+            MethodInfo method in rasResultsMapType.GetMethods(
+                BindingFlags.Public | BindingFlags.Instance
+            )
+        )
+        {
+            if (method.Name != "StoreMap")
+                continue;
+
+            ParameterInfo[] parameters = method.GetParameters();
+            if (
+                parameters.Length == 2 &&
+                parameters[1].ParameterType == typeof(bool)
+            )
+            {
+                return method;
+            }
+        }
+
+        return null;
+    }
+
+    static object GetStaticMemberValue(Type type, string name)
+    {
+        FieldInfo field = type.GetField(
+            name,
+            BindingFlags.Public | BindingFlags.Static
+        );
+        if (field != null)
+            return field.GetValue(null);
+
+        PropertyInfo property = type.GetProperty(
+            name,
+            BindingFlags.Public | BindingFlags.Static
+        );
+        if (property != null)
+            return property.GetValue(null, null);
+
+        return null;
     }
 
     static void InvokeExecute(Type cmdType, object cmd)
