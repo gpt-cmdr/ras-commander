@@ -13,7 +13,7 @@ Primary classes for project management and execution:
 - [`RasUnsteady`](core.md#rasunsteady) - Unsteady flow file management
 - [`RasUtils`](core.md#rasutils) - Utility functions
 - [`RasExamples`](core.md#rasexamples) - Example project management
-- [`RasMap`](core.md#rasmap) - RASMapper configuration
+- [`RasMap`](core.md#rasmap) - RASMapper configuration and calculated layers
 - [`RasProcess`](core.md#rasprocess) - RasProcess.exe CLI automation (stored maps)
 - [`RasControl`](core.md#rascontrol) - Legacy COM interface
 
