@@ -352,6 +352,9 @@ class CheckNt:
         messages = []
         summary_data = []
 
+        if thresholds is None:
+            thresholds = get_default_thresholds()
+
         geom_file = Path(geom_file)
 
         if not geom_file.exists():
