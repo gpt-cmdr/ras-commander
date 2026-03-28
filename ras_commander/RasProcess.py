@@ -79,6 +79,10 @@ from .RasMap import RasMap
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from ._native_helper import (
+    normalize_store_map_render_mode,
+    run_store_all_maps_helper,
+)
 
 # Optional rasterio for georeferencing fix
 try:
@@ -814,7 +818,7 @@ Step 5: Configure (optional — auto-detection usually works)
     @log_call
     def _fix_georeferencing(
         tif_path: Path,
-        prj_path: Path,
+        prj_path: Optional[Path],
         terrain_path: Path
     ) -> bool:
         """
@@ -822,7 +826,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
         Args:
             tif_path: Path to TIF file to fix
-            prj_path: Path to .prj file with CRS
+            prj_path: Path to .prj file with CRS, if available
             terrain_path: Path to terrain TIF with transform
 
         Returns:
@@ -833,27 +837,33 @@ Step 5: Configure (optional — auto-detection usually works)
             return False
 
         try:
-            # Read CRS from .prj
-            with open(prj_path, 'r') as f:
-                wkt = f.read()
-            crs = CRS.from_wkt(wkt)
-
-            # Get transform from terrain
             with rasterio.open(terrain_path) as terrain:
                 transform = terrain.transform
+                terrain_crs = terrain.crs
 
-            # Read generated data
-            with rasterio.open(tif_path) as src:
-                data = src.read(1)
-                nodata = src.nodata
-                profile = src.profile.copy()
+            crs = None
+            if prj_path is not None and prj_path.exists():
+                with open(prj_path, 'r', encoding='utf-8') as f:
+                    wkt = f.read()
+                crs = CRS.from_wkt(wkt)
+            elif terrain_crs is not None:
+                crs = terrain_crs
+                logger.info(
+                    "Using terrain CRS for georeferencing fix on %s because "
+                    "no projection file was found.",
+                    tif_path,
+                )
+            else:
+                logger.warning(
+                    "Could not determine CRS for georeferencing fix on %s "
+                    "(missing projection file and terrain CRS).",
+                    tif_path,
+                )
+                return False
 
-            # Update profile with correct georeferencing
-            profile.update(crs=crs, transform=transform)
-
-            # Write back
-            with rasterio.open(tif_path, 'w', **profile) as dst:
-                dst.write(data, 1)
+            with rasterio.open(tif_path, 'r+') as dst:
+                dst.transform = transform
+                dst.crs = crs
 
             logger.info(f"Fixed georeferencing: {tif_path}")
             return True
@@ -1169,18 +1179,10 @@ Step 5: Configure (optional — auto-detection usually works)
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Locate HEC-RAS directory and deploy helper
+        # Locate HEC-RAS directory
         hecras_dir = Path(str(ras_obj.ras_exe_path)).parent
-        helper_source = Path(__file__).parent / "RasStoreMapHelper.exe"
-        if not helper_source.exists():
-            raise FileNotFoundError(
-                f"RasStoreMapHelper.exe not found at {helper_source}. "
-                "This file is required for headless map generation."
-            )
-        helper_dest = hecras_dir / "RasStoreMapHelper.exe"
-        if not helper_dest.exists() or helper_dest.stat().st_size != helper_source.stat().st_size:
-            shutil.copy2(str(helper_source), str(helper_dest))
-            logger.info(f"Deployed RasStoreMapHelper.exe to {helper_dest}")
+        if not hecras_dir.exists():
+            raise FileNotFoundError(f"HEC-RAS directory not found: {hecras_dir}")
 
         # Get paths
         plan_num = RasUtils.normalize_ras_number(plan_number)
@@ -1322,45 +1324,23 @@ Step 5: Configure (optional — auto-detection usually works)
             # before calling StoreAllMapsCommand.Execute(), fixing the 6.x bug
             # where RasProcess.exe ignores the RenderMode from the .rasmap.
 
-            # Determine render mode for the helper
-            helper_mode = "horizontal"  # default
-            if render_mode is not None:
-                mode_map = {
-                    "horizontal": "horizontal", "sloping": "sloping",
-                    "slopingpretty": "slopingPretty", "sloped": "sloping",
-                }
-                helper_mode = mode_map.get(render_mode.lower(), render_mode)
-            else:
-                # Read from rasmap
-                current_mode = RasMap.get_water_surface_render_mode(ras_object=ras_obj)
-                if current_mode:
-                    if current_mode == "sloped":
-                        # Distinguish sloping vs slopingPretty from raw XML
-                        try:
-                            raw = ET.parse(rasmap_path).getroot().findtext("RenderMode", "").strip().lower()
-                            helper_mode = "slopingPretty" if raw == "slopingpretty" else "sloping"
-                        except Exception:
-                            helper_mode = "sloping"
-                    else:
-                        helper_mode = current_mode
+            current_mode = render_mode
+            if current_mode is None:
+                current_mode = RasMap.get_water_surface_render_mode(
+                    ras_object=ras_obj,
+                )
 
-            helper_cmd = [
-                str(helper_dest),
-                str(hecras_dir),
-                helper_mode,
-                str(rasmap_path),
-                str(plan_hdf_path),
-            ]
+            helper_mode = normalize_store_map_render_mode(current_mode)
 
             logger.info(f"Running StoreAllMaps for plan {plan_num} (mode={helper_mode})...")
 
-            import subprocess as _sp
-            result = _sp.run(
-                helper_cmd,
-                capture_output=True,
-                text=True,
+            result = run_store_all_maps_helper(
+                hecras_dir=hecras_dir,
+                render_mode=helper_mode,
+                rasmap_path=rasmap_path,
+                result_hdf_path=plan_hdf_path,
                 timeout=timeout,
-                cwd=str(ras_obj.project_folder),
+                working_dir=ras_obj.project_folder,
             )
 
             logger.debug(f"StoreAllMaps stdout: {result.stdout}")
@@ -1437,12 +1417,22 @@ Step 5: Configure (optional — auto-detection usually works)
             # Fix georeferencing if requested
             if fix_georef and generated_files:
                 proj_info = RasProcess._get_projection_info(rasmap_path)
-                if proj_info.prj_path and proj_info.terrain_path:
+                if proj_info.terrain_path:
+                    if proj_info.prj_path is None:
+                        logger.info(
+                            "Projection file referenced by %s was not found; "
+                            "using terrain CRS for georef fix instead.",
+                            rasmap_path.name,
+                        )
                     for tif_list in generated_files.values():
                         for tif_path in tif_list:
-                            RasProcess._fix_georeferencing(tif_path, proj_info.prj_path, proj_info.terrain_path)
+                            RasProcess._fix_georeferencing(
+                                tif_path,
+                                proj_info.prj_path,
+                                proj_info.terrain_path,
+                            )
                 else:
-                    logger.warning("Could not find projection/terrain for georef fix")
+                    logger.warning("Could not find terrain for georef fix")
 
             return generated_files
 

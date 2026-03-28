@@ -37,6 +37,12 @@ setup(
     version="0.92.0",
     packages=find_packages(),
     include_package_data=True,
+    package_data={
+        "ras_commander.native": [
+            "RasStoreMapHelper.exe",
+            "RasStoreMapHelper.cs",
+        ],
+    },
     python_requires='>=3.10',
     author="William M. Katzenmeyer, P.E., C.F.M.",
     author_email="info@clbengineering.com",

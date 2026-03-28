@@ -39,7 +39,7 @@ Example:
         timestamps = HdfBase.get_unsteady_timestamps(hdf)
     ```
 """
-import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import h5py
 import numpy as np
@@ -142,96 +142,172 @@ class HdfBase:
 
 
     @staticmethod
+    def _wkt_to_crs_string(wkt_string: str, source: str) -> str:
+        from pyproj import CRS
+
+        try:
+            crs = CRS.from_wkt(wkt_string)
+            epsg = crs.to_epsg()
+            if epsg:
+                epsg_str = f"EPSG:{epsg}"
+                logger.info(f"Converted WKT to {epsg_str} from {source}")
+                return epsg_str
+
+            logger.debug(
+                f"No EPSG match for CRS '{crs.name}' from {source}, using WKT"
+            )
+            return wkt_string
+        except Exception as e:
+            logger.warning(
+                f"Could not parse WKT from {source}: {e}. Returning raw WKT."
+            )
+            return wkt_string
+
+    @staticmethod
+    def _resolve_rasmap_path(base_folder: Path, filename: str) -> Path:
+        cleaned = filename.replace(".\\", "").replace("./", "")
+        return base_folder / cleaned
+
+    @staticmethod
+    def _get_projection_from_hdf_attribute(
+        hdf_path: Path,
+    ) -> Optional[str]:
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                proj_wkt = hdf_file.attrs.get("Projection")
+                if proj_wkt is None:
+                    return None
+                if isinstance(proj_wkt, (bytes, np.bytes_)):
+                    proj_wkt = proj_wkt.decode("utf-8")
+                logger.info(f"Found projection in HDF file: {hdf_path}")
+                return HdfBase._wkt_to_crs_string(
+                    str(proj_wkt),
+                    f"HDF file {hdf_path.name}",
+                )
+        except Exception as e:
+            logger.debug(
+                f"Could not read projection from HDF file {hdf_path}: {e}"
+            )
+            return None
+
+    @staticmethod
+    def _get_projection_from_prj_file(prj_path: Path) -> Optional[str]:
+        try:
+            with open(prj_path, 'r', encoding='utf-8') as f:
+                wkt = f.read().strip()
+            logger.info(f"Found projection in projection file: {prj_path}")
+            return HdfBase._wkt_to_crs_string(
+                wkt,
+                f"projection file {prj_path.name}",
+            )
+        except Exception as e:
+            logger.debug(
+                f"Could not read projection from projection file {prj_path}: {e}"
+            )
+            return None
+
+    @staticmethod
+    def _get_projection_from_raster(raster_path: Path) -> Optional[str]:
+        try:
+            import rasterio
+        except ImportError:
+            logger.debug(
+                "rasterio not installed; skipping raster CRS lookup for %s",
+                raster_path,
+            )
+            return None
+
+        try:
+            with rasterio.open(raster_path) as src:
+                if src.crs is None:
+                    return None
+                epsg = src.crs.to_epsg()
+                if epsg:
+                    epsg_str = f"EPSG:{epsg}"
+                    logger.info(f"Found CRS {epsg_str} in raster: {raster_path}")
+                    return epsg_str
+                wkt = src.crs.to_wkt()
+                if wkt:
+                    return HdfBase._wkt_to_crs_string(
+                        wkt,
+                        f"raster {raster_path.name}",
+                    )
+        except Exception as e:
+            logger.debug(
+                f"Could not read CRS from raster {raster_path}: {e}"
+            )
+            return None
+
+        return None
+
+    @staticmethod
     @standardize_input(file_type='plan_hdf')
     def get_projection(hdf_path: Path) -> Optional[str]:
         """
         Get projection information from HDF file or RASMapper project file.
         Converts WKT projection to EPSG code for GeoDataFrame compatibility.
-        
+
         Args:
             hdf_path (Path): Path to the HDF file.
 
         Returns:
-            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), WKT string if no 
-                          EPSG match found, or None if no projection found.
+            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), WKT
+                string if no EPSG match is found, or None if no projection is
+                available.
         """
-        from pyproj import CRS
-
-        def wkt_to_crs_string(wkt_string: str, source: str) -> str:
-            """Convert WKT to EPSG code if possible, otherwise return WKT."""
-            try:
-                crs = CRS.from_wkt(wkt_string)
-                # Try to get EPSG code
-                epsg = crs.to_epsg()
-                if epsg:
-                    epsg_str = f"EPSG:{epsg}"
-                    logger.info(f"Converted WKT to {epsg_str} from {source}")
-                    return epsg_str
-                else:
-                    # No EPSG match - return WKT (pyproj/geopandas can still use it)
-                    logger.debug(f"No EPSG match for CRS '{crs.name}' from {source}, using WKT")
-                    return wkt_string
-            except Exception as e:
-                logger.warning(f"Could not parse WKT from {source}: {e}. Returning raw WKT.")
-                return wkt_string
-
         project_folder = hdf_path.parent
-        wkt = None
-        proj_file = None  # Initialize proj_file variable
-        
-        # Try HDF file
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                proj_wkt = hdf_file.attrs.get("Projection")
-                if proj_wkt is not None:
-                    if isinstance(proj_wkt, (bytes, np.bytes_)):
-                        wkt = proj_wkt.decode("utf-8")
-                        logger.info(f"Found projection in HDF file: {hdf_path}")
-                        return wkt_to_crs_string(wkt, f"HDF file {hdf_path.name}")
-        except Exception as e:
-            logger.error(f"Error reading projection from HDF file {hdf_path}: {str(e)}")
+        proj_file = None
 
-        # Try RASMapper file if no HDF projection
-        if not wkt:
-            try:
-                rasmap_files = list(project_folder.glob("*.rasmap"))
-                if rasmap_files:
-                    with open(rasmap_files[0], 'r') as f:
-                        content = f.read()
-                        
-                    proj_match = re.search(r'<RASProjectionFilename Filename="(.*?)"', content)
-                    if proj_match:
-                        proj_file = project_folder / proj_match.group(1).replace('.\\', '')
+        projection = HdfBase._get_projection_from_hdf_attribute(hdf_path)
+        if projection:
+            return projection
+
+        try:
+            rasmap_files = list(project_folder.glob("*.rasmap"))
+            if rasmap_files:
+                rasmap_path = rasmap_files[0]
+                tree = ET.parse(rasmap_path)
+                root = tree.getroot()
+
+                proj_elem = root.find(".//RASProjectionFilename")
+                if proj_elem is not None:
+                    filename = proj_elem.get("Filename")
+                    if filename:
+                        proj_file = HdfBase._resolve_rasmap_path(
+                            project_folder,
+                            filename,
+                        )
                         if proj_file.exists():
-                            with open(proj_file, 'r') as f:
-                                wkt = f.read().strip()
-                                logger.info(f"Found projection in RASMapper file: {proj_file}")
-                                return wkt_to_crs_string(wkt, f"RASMapper file {proj_file.name}")
-            except Exception as e:
-                logger.error(f"Error reading RASMapper projection file: {str(e)}")
-        
-        # Customize error message based on whether proj_file was found
+                            projection = HdfBase._get_projection_from_prj_file(
+                                proj_file
+                            )
+                            if projection:
+                                return projection
+        except Exception as e:
+            logger.error(f"Error reading RASMapper projection file: {str(e)}")
+
         if proj_file:
             error_msg = (
                 "No valid projection found. Checked:\n"
                 f"1. HDF file projection attribute: {hdf_path}\n"
-                f"2. RASMapper projection file {proj_file} found in RASMapper file, but was invalid"
+                f"2. RASMapper projection file {proj_file} found in RASMapper "
+                "file, but was invalid"
             )
         else:
             error_msg = (
                 "No valid projection found. Checked:\n"
-                f"1. HDF file projection attribute: {hdf_path}\n was checked and no projection attribute found"
+                f"1. HDF file projection attribute: {hdf_path}\n"
                 "2. No RASMapper projection file found"
             )
 
         error_msg += (
             "\nTo fix this:\n"
             "1. Open RASMapper\n"
-            "2. Click Map > Set Projection\n" 
+            "2. Click Map > Set Projection\n"
             "3. Select an appropriate projection file or coordinate system\n"
             "4. Save the RASMapper project"
         )
-        
+
         logger.critical(error_msg)
         return None
 
