@@ -1242,6 +1242,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#calculated-layers-wse-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calculated Layers (WSE Comparison)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calculated Layers (WSE Comparison)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#listing-plan-results-and-existing-calculated-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listing Plan Results and Existing Calculated Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batch-wse-comparison-existing-vs-proposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch WSE Comparison (Existing vs Proposed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-calculated-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Calculated Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removing-calculated-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removing Calculated Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#mannings-n-calibration-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6059,6 +6120,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#calculated-layers-wse-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calculated Layers (WSE Comparison)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calculated Layers (WSE Comparison)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#listing-plan-results-and-existing-calculated-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listing Plan Results and Existing Calculated Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batch-wse-comparison-existing-vs-proposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch WSE Comparison (Existing vs Proposed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-calculated-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Calculated Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removing-calculated-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removing Calculated Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#mannings-n-calibration-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6683,17 +6805,84 @@
 </span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    ├── WSEL (Max).tif
 </span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>    └── Velocity (Max).tif
 </span></code></pre></div>
+<h2 id="calculated-layers-wse-comparison">Calculated Layers (WSE Comparison)<a class="headerlink" href="#calculated-layers-wse-comparison" title="Permanent link">&para;</a></h2>
+<p>RASMapper Calculated Layers perform raster algebra on plan results. The most common use case is comparing Water Surface Elevation (WSE) between Existing and Proposed conditions to identify benefits and adverse impacts.</p>
+<h3 id="listing-plan-results-and-existing-calculated-layers">Listing Plan Results and Existing Calculated Layers<a class="headerlink" href="#listing-plan-results-and-existing-calculated-layers" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasMap</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;C:\Projects\FloodModel&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Discover available plan result layers</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="n">plans</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">list_results_plans</span><span class="p">()</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">plans</span><span class="p">:</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># List any existing calculated layers</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="n">layers</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">list_calculated_layers</span><span class="p">()</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">layers</span><span class="p">:</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">l</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (under </span><span class="si">{</span><span class="n">l</span><span class="p">[</span><span class="s1">&#39;parent_plan&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="batch-wse-comparison-existing-vs-proposed">Batch WSE Comparison (Existing vs Proposed)<a class="headerlink" href="#batch-wse-comparison-existing-vs-proposed" title="Permanent link">&para;</a></h3>
+<p>Generate comparison layers for multiple AEP/boundary condition pairs at once. The formula is <code>Proposed WSE - Existing WSE</code>:</p>
+<ul>
+<li><strong>Positive values</strong> = WSE raised by project (adverse impact)</li>
+<li><strong>Negative values</strong> = WSE lowered by project (benefit)</li>
+</ul>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">created</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">add_wse_comparison_layers</span><span class="p">(</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">plan_pairs</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>        <span class="p">{</span><span class="s2">&quot;exist_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_10yr_Reg_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;prop_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_10yr_Reg_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;10yr_Reg&quot;</span><span class="p">},</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>        <span class="p">{</span><span class="s2">&quot;exist_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_10yr_Loc_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;prop_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_10yr_Loc_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;10yr_Loc&quot;</span><span class="p">},</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>        <span class="p">{</span><span class="s2">&quot;exist_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_25yr_Reg_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;prop_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_25yr_Reg_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;25yr_Reg&quot;</span><span class="p">},</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>        <span class="p">{</span><span class="s2">&quot;exist_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_25yr_Loc_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;prop_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_25yr_Loc_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;25yr_Loc&quot;</span><span class="p">},</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>        <span class="p">{</span><span class="s2">&quot;exist_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_100yr_Reg_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;prop_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_100yr_Reg_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;100yr_Reg&quot;</span><span class="p">},</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>        <span class="p">{</span><span class="s2">&quot;exist_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_100yr_Loc_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;prop_plan&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_100yr_Loc_BO&quot;</span><span class="p">,</span> <span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;100yr_Loc&quot;</span><span class="p">},</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>    <span class="p">],</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>    <span class="n">exist_terrain</span><span class="o">=</span><span class="s2">&quot;Bathy_QESDrone_&quot;</span><span class="p">,</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>    <span class="n">prop_terrain</span><span class="o">=</span><span class="s2">&quot;Terrain_Proposed_20260313&quot;</span><span class="p">,</span>
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="p">)</span>
+</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">created</span><span class="p">)</span><span class="si">}</span><span class="s2"> comparison layers&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Each call generates:</p>
+<ol>
+<li>A <code>.rasscript</code> file (VB.NET raster algebra) in <code>Calculated Layers/</code></li>
+<li>A <code>&lt;Layer Type="CalculatedLayer"&gt;</code> XML entry in the <code>.rasmap</code></li>
+<li>A viewport-dynamic diverging color ramp (blue=benefit, red=adverse)</li>
+</ol>
+<h3 id="custom-calculated-layers">Custom Calculated Layers<a class="headerlink" href="#custom-calculated-layers" title="Permanent link">&para;</a></h3>
+<p>For non-standard comparisons, use <code>add_calculated_layer()</code> directly with custom VB.NET script content:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">RasMap</span><span class="o">.</span><span class="n">add_calculated_layer</span><span class="p">(</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>    <span class="n">layer_name</span><span class="o">=</span><span class="s2">&quot;CustomDiff&quot;</span><span class="p">,</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="n">host_plan_name</span><span class="o">=</span><span class="s2">&quot;Prop_10yr_Reg_BO&quot;</span><span class="p">,</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="n">script_content</span><span class="o">=</span><span class="n">my_vbnet_script</span><span class="p">,</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>    <span class="n">raster_maps</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>        <span class="p">{</span><span class="s2">&quot;result&quot;</span><span class="p">:</span> <span class="s2">&quot;Exist_10yr_Reg_BO&quot;</span><span class="p">},</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>        <span class="p">{</span><span class="s2">&quot;result&quot;</span><span class="p">:</span> <span class="s2">&quot;Prop_10yr_Reg_BO&quot;</span><span class="p">},</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>    <span class="p">],</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>    <span class="n">terrain_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Bathy_QESDrone_&quot;</span><span class="p">,</span> <span class="s2">&quot;Terrain_Proposed_20260313&quot;</span><span class="p">],</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="removing-calculated-layers">Removing Calculated Layers<a class="headerlink" href="#removing-calculated-layers" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Remove a single layer (optionally delete the .rasscript file too)</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">RasMap</span><span class="o">.</span><span class="n">remove_calculated_layer</span><span class="p">(</span><span class="s2">&quot;CompareWSE_10yr_Reg&quot;</span><span class="p">,</span> <span class="n">delete_script</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Dry Cell Handling</p>
+<p>When a cell is wet in one plan but dry in the other, the terrain elevation for the
+dry plan's scenario is substituted as the WSE estimate. Each plan uses its own terrain
+for this fallback (existing terrain for existing-dry cells, proposed terrain for
+proposed-dry cells).</p>
+</div>
 <h2 id="mannings-n-calibration-workflow">Manning's n Calibration Workflow<a class="headerlink" href="#mannings-n-calibration-workflow" title="Permanent link">&para;</a></h2>
 <p>Calibrating Manning's n roughness coefficients is a common modeling task. RAS Commander provides tools to programmatically adjust Manning's n values for 2D flow areas.</p>
 <h3 id="reading-current-mannings-n-values">Reading Current Manning's n Values<a class="headerlink" href="#reading-current-mannings-n-values" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasPlan</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># Get geometry file path for the plan</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_geom_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># Extract current Manning&#39;s n values</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">mannings_df</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasPlan</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Get geometry file path for the plan</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_geom_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># Extract current Manning&#39;s n values</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">mannings_df</span><span class="p">)</span>
 </span></code></pre></div>
 <p>The returned DataFrame contains:</p>
 <ul>
@@ -6702,58 +6891,58 @@
 <li>Other metadata depending on your model configuration</li>
 </ul>
 <h3 id="modifying-mannings-n-values">Modifying Manning's n Values<a class="headerlink" href="#modifying-mannings-n-values" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Increase all Manning&#39;s n values by 20%</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">1.2</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Or modify specific land cover classes</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">mannings_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Land Cover Class&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Forest&#39;</span><span class="p">,</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>    <span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="p">]</span> <span class="o">=</span> <span class="mf">0.15</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>
-</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="c1"># Write modified values back to geometry file</span>
-</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">set_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">,</span> <span class="n">mannings_df</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Increase all Manning&#39;s n values by 20%</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">1.2</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Or modify specific land cover classes</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="n">mannings_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>    <span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Land Cover Class&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Forest&#39;</span><span class="p">,</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>    <span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="p">]</span> <span class="o">=</span> <span class="mf">0.15</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="c1"># Write modified values back to geometry file</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">set_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">,</span> <span class="n">mannings_df</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="clearing-geometry-preprocessor-files">Clearing Geometry Preprocessor Files<a class="headerlink" href="#clearing-geometry-preprocessor-files" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Critical Step: Clear Geometry Preprocessor</p>
 <p>After modifying Manning's n values (or any geometry parameters), you <strong>must</strong> clear the geometry preprocessor files. Otherwise, HEC-RAS will use the cached preprocessed geometry and ignore your changes.</p>
 </div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Clear preprocessed geometry files</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Now re-run the simulation with updated Manning&#39;s n</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Clear preprocessed geometry files</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Now re-run the simulation with updated Manning&#39;s n</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="calibration-loop-example">Calibration Loop Example<a class="headerlink" href="#calibration-loop-example" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Automated calibration loop</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">calibration_factors</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.8</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">]</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">for</span> <span class="n">factor</span> <span class="ow">in</span> <span class="n">calibration_factors</span><span class="p">:</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>    <span class="c1"># Modify Manning&#39;s n</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>    <span class="n">geom_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_geom_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>    <span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>    <span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span> <span class="o">*=</span> <span class="n">factor</span>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>    <span class="n">RasGeo</span><span class="o">.</span><span class="n">set_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">,</span> <span class="n">mannings_df</span><span class="p">)</span>
-</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>
-</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>    <span class="c1"># Clear preprocessor and run</span>
-</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>    <span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
-</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;run_n_factor_</span><span class="si">{</span><span class="n">factor</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>
-</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>    <span class="c1"># Extract and compare results</span>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>    <span class="c1"># (See HDF data extraction guide)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Automated calibration loop</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">calibration_factors</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.8</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">]</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="k">for</span> <span class="n">factor</span> <span class="ow">in</span> <span class="n">calibration_factors</span><span class="p">:</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="c1"># Modify Manning&#39;s n</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>    <span class="n">geom_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_geom_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>    <span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>    <span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span> <span class="o">*=</span> <span class="n">factor</span>
+</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>    <span class="n">RasGeo</span><span class="o">.</span><span class="n">set_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">,</span> <span class="n">mannings_df</span><span class="p">)</span>
+</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>
+</span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a>    <span class="c1"># Clear preprocessor and run</span>
+</span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>    <span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
+</span><span id="__span-27-13"><a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;run_n_factor_</span><span class="si">{</span><span class="n">factor</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-14"><a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>
+</span><span id="__span-27-15"><a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a>    <span class="c1"># Extract and compare results</span>
+</span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>    <span class="c1"># (See HDF data extraction guide)</span>
 </span></code></pre></div>
 <h2 id="infiltration-data-handling">Infiltration Data Handling<a class="headerlink" href="#infiltration-data-handling" title="Permanent link">&para;</a></h2>
 <p>For 2D unsteady flow models with infiltration, RAS Commander provides the <code>HdfInfiltration</code> class to read and modify infiltration parameters stored in HDF files.</p>
 <h3 id="reading-infiltration-parameters">Reading Infiltration Parameters<a class="headerlink" href="#reading-infiltration-parameters" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfInfiltration</span><span class="p">,</span> <span class="n">ras</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Get infiltration HDF path from rasmap_df</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="n">infiltration_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">[</span><span class="s1">&#39;infiltration_hdf_path&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># Extract current infiltration parameters</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="n">infil_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">get_infiltration_baseoverrides</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">)</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">infil_df</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfInfiltration</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="c1"># Get infiltration HDF path from rasmap_df</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="n">infiltration_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">[</span><span class="s1">&#39;infiltration_hdf_path&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="c1"># Extract current infiltration parameters</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="n">infil_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">get_infiltration_baseoverrides</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">)</span>
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">infil_df</span><span class="p">)</span>
 </span></code></pre></div>
 <p>The DataFrame typically contains columns like:</p>
 <ul>
@@ -6764,46 +6953,46 @@
 <li><code>Hydraulic Conductivity</code> - Soil hydraulic conductivity (in/hr)</li>
 </ul>
 <h3 id="scaling-infiltration-parameters">Scaling Infiltration Parameters<a class="headerlink" href="#scaling-infiltration-parameters" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Define scale factors for each parameter</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">scale_factors</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="s1">&#39;Maximum Deficit&#39;</span><span class="p">:</span> <span class="mf">1.2</span><span class="p">,</span>        <span class="c1"># Increase by 20%</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>    <span class="s1">&#39;Initial Deficit&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>         <span class="c1"># No change</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>    <span class="s1">&#39;Potential Percolation Rate&#39;</span><span class="p">:</span> <span class="mf">0.8</span>  <span class="c1"># Decrease by 20%</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="p">}</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="c1"># Apply scaling and get updated DataFrame</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="n">updated_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">scale_infiltration_data</span><span class="p">(</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>    <span class="n">infiltration_path</span><span class="p">,</span>
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>    <span class="n">infil_df</span><span class="p">,</span>
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>    <span class="n">scale_factors</span>
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="p">)</span>
-</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>
-</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a><span class="c1"># The scaled values are automatically written to the HDF file</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Define scale factors for each parameter</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">scale_factors</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="s1">&#39;Maximum Deficit&#39;</span><span class="p">:</span> <span class="mf">1.2</span><span class="p">,</span>        <span class="c1"># Increase by 20%</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="s1">&#39;Initial Deficit&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>         <span class="c1"># No change</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="s1">&#39;Potential Percolation Rate&#39;</span><span class="p">:</span> <span class="mf">0.8</span>  <span class="c1"># Decrease by 20%</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="p">}</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="c1"># Apply scaling and get updated DataFrame</span>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="n">updated_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">scale_infiltration_data</span><span class="p">(</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>    <span class="n">infiltration_path</span><span class="p">,</span>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>    <span class="n">infil_df</span><span class="p">,</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>    <span class="n">scale_factors</span>
+</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="p">)</span>
+</span><span id="__span-29-14"><a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>
+</span><span id="__span-29-15"><a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a><span class="c1"># The scaled values are automatically written to the HDF file</span>
 </span></code></pre></div>
 <h3 id="infiltration-calibration-workflow">Infiltration Calibration Workflow<a class="headerlink" href="#infiltration-calibration-workflow" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfInfiltration</span><span class="p">,</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasCmdr</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># 1. Get infiltration data path</span>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="n">infiltration_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">[</span><span class="s1">&#39;infiltration_hdf_path&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">infil_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">get_infiltration_baseoverrides</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">)</span>
-</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
-</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1"># 2. Modify infiltration parameters</span>
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="n">scale_factors</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>    <span class="s1">&#39;Maximum Deficit&#39;</span><span class="p">:</span> <span class="mf">1.3</span><span class="p">,</span>
-</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>    <span class="s1">&#39;Initial Deficit&#39;</span><span class="p">:</span> <span class="mf">1.1</span><span class="p">,</span>
-</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>    <span class="s1">&#39;Potential Percolation Rate&#39;</span><span class="p">:</span> <span class="mf">0.9</span>
-</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="p">}</span>
-</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="n">updated_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">scale_infiltration_data</span><span class="p">(</span>
-</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a>    <span class="n">infiltration_path</span><span class="p">,</span>
-</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a>    <span class="n">infil_df</span><span class="p">,</span>
-</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a>    <span class="n">scale_factors</span>
-</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="p">)</span>
-</span><span id="__span-26-18"><a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a>
-</span><span id="__span-26-19"><a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a><span class="c1"># 3. Clear geometry preprocessor</span>
-</span><span id="__span-26-20"><a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
-</span><span id="__span-26-21"><a id="__codelineno-26-21" name="__codelineno-26-21" href="#__codelineno-26-21"></a>
-</span><span id="__span-26-22"><a id="__codelineno-26-22" name="__codelineno-26-22" href="#__codelineno-26-22"></a><span class="c1"># 4. Re-run simulation</span>
-</span><span id="__span-26-23"><a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;calibration_infil_run1&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfInfiltration</span><span class="p">,</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasCmdr</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># 1. Get infiltration data path</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="n">infiltration_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">[</span><span class="s1">&#39;infiltration_hdf_path&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="n">infil_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">get_infiltration_baseoverrides</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">)</span>
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># 2. Modify infiltration parameters</span>
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="n">scale_factors</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>    <span class="s1">&#39;Maximum Deficit&#39;</span><span class="p">:</span> <span class="mf">1.3</span><span class="p">,</span>
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>    <span class="s1">&#39;Initial Deficit&#39;</span><span class="p">:</span> <span class="mf">1.1</span><span class="p">,</span>
+</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>    <span class="s1">&#39;Potential Percolation Rate&#39;</span><span class="p">:</span> <span class="mf">0.9</span>
+</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a><span class="p">}</span>
+</span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a><span class="n">updated_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">scale_infiltration_data</span><span class="p">(</span>
+</span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>    <span class="n">infiltration_path</span><span class="p">,</span>
+</span><span id="__span-30-15"><a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a>    <span class="n">infil_df</span><span class="p">,</span>
+</span><span id="__span-30-16"><a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>    <span class="n">scale_factors</span>
+</span><span id="__span-30-17"><a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a><span class="p">)</span>
+</span><span id="__span-30-18"><a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a>
+</span><span id="__span-30-19"><a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a><span class="c1"># 3. Clear geometry preprocessor</span>
+</span><span id="__span-30-20"><a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
+</span><span id="__span-30-21"><a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a>
+</span><span id="__span-30-22"><a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a><span class="c1"># 4. Re-run simulation</span>
+</span><span id="__span-30-23"><a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;calibration_infil_run1&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="common-infiltration-parameters">Common Infiltration Parameters<a class="headerlink" href="#common-infiltration-parameters" title="Permanent link">&para;</a></h3>
 <p><strong>Green-Ampt Method:</strong></p>
@@ -6819,59 +7008,59 @@
 </ul>
 <h2 id="complete-spatial-data-workflow-example">Complete Spatial Data Workflow Example<a class="headerlink" href="#complete-spatial-data-workflow-example" title="Permanent link">&para;</a></h2>
 <p>This example demonstrates a complete workflow combining terrain, Manning's n, and infiltration adjustments:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span> <span class="n">RasMap</span><span class="p">,</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">HdfInfiltration</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="p">)</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="c1"># 1. Initialize project</span>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;C:\Projects\FloodModel&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
-</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>
-</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="c1"># 2. Check available spatial data</span>
-</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Available terrains:&quot;</span><span class="p">,</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">get_terrain_names</span><span class="p">(</span><span class="n">RasMap</span><span class="o">.</span><span class="n">get_rasmap_path</span><span class="p">()))</span>
-</span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Rasmap data:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">)</span>
-</span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>
-</span><span id="__span-27-13"><a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a><span class="c1"># 3. Calibration: Adjust Manning&#39;s n</span>
-</span><span id="__span-27-14"><a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_geom_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
-</span><span id="__span-27-15"><a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a><span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
-</span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>
-</span><span id="__span-27-17"><a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a><span class="c1"># Increase forest roughness</span>
-</span><span id="__span-27-18"><a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a><span class="n">mannings_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
-</span><span id="__span-27-19"><a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>    <span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Land Cover Class&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Forest&#39;</span><span class="p">,</span>
-</span><span id="__span-27-20"><a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a>    <span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span>
-</span><span id="__span-27-21"><a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a><span class="p">]</span> <span class="o">=</span> <span class="mf">0.18</span>
-</span><span id="__span-27-22"><a id="__codelineno-27-22" name="__codelineno-27-22" href="#__codelineno-27-22"></a>
-</span><span id="__span-27-23"><a id="__codelineno-27-23" name="__codelineno-27-23" href="#__codelineno-27-23"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">set_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">,</span> <span class="n">mannings_df</span><span class="p">)</span>
-</span><span id="__span-27-24"><a id="__codelineno-27-24" name="__codelineno-27-24" href="#__codelineno-27-24"></a>
-</span><span id="__span-27-25"><a id="__codelineno-27-25" name="__codelineno-27-25" href="#__codelineno-27-25"></a><span class="c1"># 4. Calibration: Adjust infiltration</span>
-</span><span id="__span-27-26"><a id="__codelineno-27-26" name="__codelineno-27-26" href="#__codelineno-27-26"></a><span class="n">infiltration_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">[</span><span class="s1">&#39;infiltration_hdf_path&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-27-27"><a id="__codelineno-27-27" name="__codelineno-27-27" href="#__codelineno-27-27"></a><span class="n">infil_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">get_infiltration_baseoverrides</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">)</span>
-</span><span id="__span-27-28"><a id="__codelineno-27-28" name="__codelineno-27-28" href="#__codelineno-27-28"></a>
-</span><span id="__span-27-29"><a id="__codelineno-27-29" name="__codelineno-27-29" href="#__codelineno-27-29"></a><span class="n">scale_factors</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-27-30"><a id="__codelineno-27-30" name="__codelineno-27-30" href="#__codelineno-27-30"></a>    <span class="s1">&#39;Maximum Deficit&#39;</span><span class="p">:</span> <span class="mf">1.25</span><span class="p">,</span>
-</span><span id="__span-27-31"><a id="__codelineno-27-31" name="__codelineno-27-31" href="#__codelineno-27-31"></a>    <span class="s1">&#39;Potential Percolation Rate&#39;</span><span class="p">:</span> <span class="mf">0.85</span>
-</span><span id="__span-27-32"><a id="__codelineno-27-32" name="__codelineno-27-32" href="#__codelineno-27-32"></a><span class="p">}</span>
-</span><span id="__span-27-33"><a id="__codelineno-27-33" name="__codelineno-27-33" href="#__codelineno-27-33"></a><span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">scale_infiltration_data</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">,</span> <span class="n">infil_df</span><span class="p">,</span> <span class="n">scale_factors</span><span class="p">)</span>
-</span><span id="__span-27-34"><a id="__codelineno-27-34" name="__codelineno-27-34" href="#__codelineno-27-34"></a>
-</span><span id="__span-27-35"><a id="__codelineno-27-35" name="__codelineno-27-35" href="#__codelineno-27-35"></a><span class="c1"># 5. Clear preprocessor and run</span>
-</span><span id="__span-27-36"><a id="__codelineno-27-36" name="__codelineno-27-36" href="#__codelineno-27-36"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
-</span><span id="__span-27-37"><a id="__codelineno-27-37" name="__codelineno-27-37" href="#__codelineno-27-37"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;calibrated_run&quot;</span><span class="p">)</span>
-</span><span id="__span-27-38"><a id="__codelineno-27-38" name="__codelineno-27-38" href="#__codelineno-27-38"></a>
-</span><span id="__span-27-39"><a id="__codelineno-27-39" name="__codelineno-27-39" href="#__codelineno-27-39"></a><span class="c1"># 6. Generate result maps</span>
-</span><span id="__span-27-40"><a id="__codelineno-27-40" name="__codelineno-27-40" href="#__codelineno-27-40"></a><span class="n">RasMap</span><span class="o">.</span><span class="n">postprocess_stored_maps</span><span class="p">(</span>
-</span><span id="__span-27-41"><a id="__codelineno-27-41" name="__codelineno-27-41" href="#__codelineno-27-41"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
-</span><span id="__span-27-42"><a id="__codelineno-27-42" name="__codelineno-27-42" href="#__codelineno-27-42"></a>    <span class="n">specify_terrain</span><span class="o">=</span><span class="s2">&quot;Terrain50&quot;</span><span class="p">,</span>
-</span><span id="__span-27-43"><a id="__codelineno-27-43" name="__codelineno-27-43" href="#__codelineno-27-43"></a>    <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Depth (Max)&quot;</span><span class="p">,</span> <span class="s2">&quot;WSEL (Max)&quot;</span><span class="p">,</span> <span class="s2">&quot;Velocity (Max)&quot;</span><span class="p">]</span>
-</span><span id="__span-27-44"><a id="__codelineno-27-44" name="__codelineno-27-44" href="#__codelineno-27-44"></a><span class="p">)</span>
-</span><span id="__span-27-45"><a id="__codelineno-27-45" name="__codelineno-27-45" href="#__codelineno-27-45"></a>
-</span><span id="__span-27-46"><a id="__codelineno-27-46" name="__codelineno-27-46" href="#__codelineno-27-46"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Calibration run complete with updated spatial parameters!&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>    <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span> <span class="n">RasMap</span><span class="p">,</span> <span class="n">RasGeo</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>    <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">HdfInfiltration</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="p">)</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>
+</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="c1"># 1. Initialize project</span>
+</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;C:\Projects\FloodModel&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
+</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>
+</span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="c1"># 2. Check available spatial data</span>
+</span><span id="__span-31-10"><a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Available terrains:&quot;</span><span class="p">,</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">get_terrain_names</span><span class="p">(</span><span class="n">RasMap</span><span class="o">.</span><span class="n">get_rasmap_path</span><span class="p">()))</span>
+</span><span id="__span-31-11"><a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Rasmap data:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">)</span>
+</span><span id="__span-31-12"><a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a>
+</span><span id="__span-31-13"><a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a><span class="c1"># 3. Calibration: Adjust Manning&#39;s n</span>
+</span><span id="__span-31-14"><a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_geom_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
+</span><span id="__span-31-15"><a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
+</span><span id="__span-31-16"><a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a>
+</span><span id="__span-31-17"><a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a><span class="c1"># Increase forest roughness</span>
+</span><span id="__span-31-18"><a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a><span class="n">mannings_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+</span><span id="__span-31-19"><a id="__codelineno-31-19" name="__codelineno-31-19" href="#__codelineno-31-19"></a>    <span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Land Cover Class&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Forest&#39;</span><span class="p">,</span>
+</span><span id="__span-31-20"><a id="__codelineno-31-20" name="__codelineno-31-20" href="#__codelineno-31-20"></a>    <span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span>
+</span><span id="__span-31-21"><a id="__codelineno-31-21" name="__codelineno-31-21" href="#__codelineno-31-21"></a><span class="p">]</span> <span class="o">=</span> <span class="mf">0.18</span>
+</span><span id="__span-31-22"><a id="__codelineno-31-22" name="__codelineno-31-22" href="#__codelineno-31-22"></a>
+</span><span id="__span-31-23"><a id="__codelineno-31-23" name="__codelineno-31-23" href="#__codelineno-31-23"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">set_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">,</span> <span class="n">mannings_df</span><span class="p">)</span>
+</span><span id="__span-31-24"><a id="__codelineno-31-24" name="__codelineno-31-24" href="#__codelineno-31-24"></a>
+</span><span id="__span-31-25"><a id="__codelineno-31-25" name="__codelineno-31-25" href="#__codelineno-31-25"></a><span class="c1"># 4. Calibration: Adjust infiltration</span>
+</span><span id="__span-31-26"><a id="__codelineno-31-26" name="__codelineno-31-26" href="#__codelineno-31-26"></a><span class="n">infiltration_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">rasmap_df</span><span class="p">[</span><span class="s1">&#39;infiltration_hdf_path&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-31-27"><a id="__codelineno-31-27" name="__codelineno-31-27" href="#__codelineno-31-27"></a><span class="n">infil_df</span> <span class="o">=</span> <span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">get_infiltration_baseoverrides</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">)</span>
+</span><span id="__span-31-28"><a id="__codelineno-31-28" name="__codelineno-31-28" href="#__codelineno-31-28"></a>
+</span><span id="__span-31-29"><a id="__codelineno-31-29" name="__codelineno-31-29" href="#__codelineno-31-29"></a><span class="n">scale_factors</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-31-30"><a id="__codelineno-31-30" name="__codelineno-31-30" href="#__codelineno-31-30"></a>    <span class="s1">&#39;Maximum Deficit&#39;</span><span class="p">:</span> <span class="mf">1.25</span><span class="p">,</span>
+</span><span id="__span-31-31"><a id="__codelineno-31-31" name="__codelineno-31-31" href="#__codelineno-31-31"></a>    <span class="s1">&#39;Potential Percolation Rate&#39;</span><span class="p">:</span> <span class="mf">0.85</span>
+</span><span id="__span-31-32"><a id="__codelineno-31-32" name="__codelineno-31-32" href="#__codelineno-31-32"></a><span class="p">}</span>
+</span><span id="__span-31-33"><a id="__codelineno-31-33" name="__codelineno-31-33" href="#__codelineno-31-33"></a><span class="n">HdfInfiltration</span><span class="o">.</span><span class="n">scale_infiltration_data</span><span class="p">(</span><span class="n">infiltration_path</span><span class="p">,</span> <span class="n">infil_df</span><span class="p">,</span> <span class="n">scale_factors</span><span class="p">)</span>
+</span><span id="__span-31-34"><a id="__codelineno-31-34" name="__codelineno-31-34" href="#__codelineno-31-34"></a>
+</span><span id="__span-31-35"><a id="__codelineno-31-35" name="__codelineno-31-35" href="#__codelineno-31-35"></a><span class="c1"># 5. Clear preprocessor and run</span>
+</span><span id="__span-31-36"><a id="__codelineno-31-36" name="__codelineno-31-36" href="#__codelineno-31-36"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
+</span><span id="__span-31-37"><a id="__codelineno-31-37" name="__codelineno-31-37" href="#__codelineno-31-37"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;calibrated_run&quot;</span><span class="p">)</span>
+</span><span id="__span-31-38"><a id="__codelineno-31-38" name="__codelineno-31-38" href="#__codelineno-31-38"></a>
+</span><span id="__span-31-39"><a id="__codelineno-31-39" name="__codelineno-31-39" href="#__codelineno-31-39"></a><span class="c1"># 6. Generate result maps</span>
+</span><span id="__span-31-40"><a id="__codelineno-31-40" name="__codelineno-31-40" href="#__codelineno-31-40"></a><span class="n">RasMap</span><span class="o">.</span><span class="n">postprocess_stored_maps</span><span class="p">(</span>
+</span><span id="__span-31-41"><a id="__codelineno-31-41" name="__codelineno-31-41" href="#__codelineno-31-41"></a>    <span class="n">plan_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-31-42"><a id="__codelineno-31-42" name="__codelineno-31-42" href="#__codelineno-31-42"></a>    <span class="n">specify_terrain</span><span class="o">=</span><span class="s2">&quot;Terrain50&quot;</span><span class="p">,</span>
+</span><span id="__span-31-43"><a id="__codelineno-31-43" name="__codelineno-31-43" href="#__codelineno-31-43"></a>    <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Depth (Max)&quot;</span><span class="p">,</span> <span class="s2">&quot;WSEL (Max)&quot;</span><span class="p">,</span> <span class="s2">&quot;Velocity (Max)&quot;</span><span class="p">]</span>
+</span><span id="__span-31-44"><a id="__codelineno-31-44" name="__codelineno-31-44" href="#__codelineno-31-44"></a><span class="p">)</span>
+</span><span id="__span-31-45"><a id="__codelineno-31-45" name="__codelineno-31-45" href="#__codelineno-31-45"></a>
+</span><span id="__span-31-46"><a id="__codelineno-31-46" name="__codelineno-31-46" href="#__codelineno-31-46"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Calibration run complete with updated spatial parameters!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <h3 id="always-clear-geometry-preprocessor">Always Clear Geometry Preprocessor<a class="headerlink" href="#always-clear-geometry-preprocessor" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Critical for Geometry Changes</p>
 <p>Whenever you modify geometry-related data (Manning's n, cross sections, structures, etc.), always call:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="n">RasGeo</span><span class="o">.</span><span class="n">clear_geompre_files</span><span class="p">()</span>
 </span></code></pre></div>
 This ensures HEC-RAS rebuilds the geometry from your modified files rather than using cached preprocessed data.</p>
 </div>
@@ -6884,21 +7073,21 @@ This ensures HEC-RAS rebuilds the geometry from your modified files rather than 
 <li>Track which parameters changed between calibration iterations</li>
 </ol>
 <h3 id="verify-changes-before-running">Verify Changes Before Running<a class="headerlink" href="#verify-changes-before-running" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Good practice: Verify changes before running expensive simulations</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Manning&#39;s n summary:&quot;</span><span class="p">)</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">describe</span><span class="p">())</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="c1"># Check for unrealistic values</span>
-</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="k">if</span> <span class="p">(</span><span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning: Some Manning&#39;s n values exceed 0.5!&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Good practice: Verify changes before running expensive simulations</span>
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="n">mannings_df</span> <span class="o">=</span> <span class="n">RasGeo</span><span class="o">.</span><span class="n">get_mannings_baseoverrides</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span>
+</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Manning&#39;s n summary:&quot;</span><span class="p">)</span>
+</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">describe</span><span class="p">())</span>
+</span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a>
+</span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="c1"># Check for unrealistic values</span>
+</span><span id="__span-33-7"><a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="k">if</span> <span class="p">(</span><span class="n">mannings_df</span><span class="p">[</span><span class="s1">&#39;Base Manning</span><span class="se">\&#39;</span><span class="s1">s n Value&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="__span-33-8"><a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning: Some Manning&#39;s n values exceed 0.5!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="use-descriptive-folder-names">Use Descriptive Folder Names<a class="headerlink" href="#use-descriptive-folder-names" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Good: Descriptive folder names for calibration runs</span>
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;n_increased_20pct_infil_decreased_15pct&quot;</span><span class="p">)</span>
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># Bad: Generic folder names</span>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;run1&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Good: Descriptive folder names for calibration runs</span>
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;n_increased_20pct_infil_decreased_15pct&quot;</span><span class="p">)</span>
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># Bad: Generic folder names</span>
+</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="s2">&quot;run1&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="maps-not-generating">Maps Not Generating<a class="headerlink" href="#maps-not-generating" title="Permanent link">&para;</a></h3>
@@ -6960,7 +7149,7 @@ This ensures HEC-RAS rebuilds the geometry from your modified files rather than 
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 14, 2026 11:15:45 UTC">March 14, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 28, 2026 02:31:52 UTC">March 28, 2026</span>
   </span>
 
     
