@@ -34,6 +34,11 @@ List of Functions in RasMap:
 - set_water_surface_render_mode(): Set the water surface rendering mode (horizontal or sloped)
 - get_water_surface_render_mode(): Get the current water surface rendering mode
 - add_terrain_layer(): Add terrain layer to RASMapper configuration
+- list_results_plans(): List all plan result layers in the RASMapper configuration
+- list_calculated_layers(): List all calculated layers across all plan results
+- add_calculated_layer(): Add a calculated layer with .rasscript to the RASMapper configuration
+- remove_calculated_layer(): Remove a calculated layer from the RASMapper configuration
+- add_wse_comparison_layers(): Batch add WSE comparison layers for existing/proposed plan pairs
 """
 
 import os
@@ -63,6 +68,85 @@ if TYPE_CHECKING:
     from geopandas import GeoDataFrame
 
 logger = get_logger(__name__)
+
+
+def _sanitize_vbnet_identifier(name: str) -> str:
+    """Convert a string to a valid VB.NET identifier for use in .rasscript Dim statements.
+
+    Replaces dots, spaces, hyphens, and other non-alphanumeric characters with underscores.
+    Prepends '_' if the result starts with a digit.
+    """
+    sanitized = re.sub(r'[^A-Za-z0-9_]', '_', name)
+    if sanitized and sanitized[0].isdigit():
+        sanitized = '_' + sanitized
+    return sanitized
+
+
+# Default diverging color ramp for WSE comparison layers (blue=benefit, white=zero, red=adverse)
+# .NET ARGB signed Int32: Blue(-16776961), Cyan(-16724737), White(-1), Orange(-23296), Red(-65536)
+_WSE_COMPARISON_DEFAULT_COLORS = "-16776961,-16724737,-1,-23296,-65536"
+_WSE_COMPARISON_DEFAULT_VALUES = "-2,-1,0,1,2"
+
+
+_WSE_COMPARISON_RASSCRIPT_TEMPLATE = """\
+Imports System
+Imports System.Linq
+Imports System.Collections.Generic
+
+Namespace RasterCode
+  Public Class Processor
+    Public Shared Function ProcessTile(inputTiles As List(of Single())) As Single()
+      Const NoData As Single = -9999.0
+      Dim length As Integer = inputTiles.First().Length
+      For Each tile As Single() In inputTiles
+        If tile Is Nothing OrElse tile.Length <> length Then Throw New ArgumentException("Tile has invalid dimensions.")
+      Next
+
+      Dim returnArray(length - 1) as Single
+      For i as Integer = 0 to length - 1
+        Dim WSE_Exist As Single = inputTiles(0)(i)
+        Dim WSE_Prop As Single = inputTiles(1)(i)
+        Dim {exist_terrain_var} As Single = inputTiles(2)(i)
+        Dim {prop_terrain_var} As Single = inputTiles(3)(i)
+        Dim Output As Single = NoData
+
+' #BEGINSCRIPT:
+'  WSE Comparison: Proposed - Existing (positive=rise/adverse, negative=drop/benefit)
+'  {layer_name}
+'  Requirements: Water surfaces 'WSE_Exist' and 'WSE_Prop'
+'                Terrains '{exist_terrain_var}' (existing) and '{prop_terrain_var}' (proposed)
+' #VARIABLES:
+'  'WSE_Exist' is the cell value from 'WSE_Exist = {exist_plan} | elevation | 2147483647 | Fixed Profile'
+'  'WSE_Prop' is the cell value from 'WSE_Prop = {prop_plan} | elevation | 2147483647 | Fixed Profile'
+'  '{exist_terrain_var}' is the cell value from '{exist_terrain_name}'
+'  '{prop_terrain_var}' is the cell value from '{prop_terrain_name}'
+'-------------------------------------------------------
+If WSE_Exist = NoData AndAlso WSE_Prop = NoData Then
+  ' Both plans are dry at this cell
+  Output = NoData
+Else
+  ' Substitute terrain elevation where a plan is dry
+  If WSE_Exist = NoData Then WSE_Exist = {exist_terrain_var}
+  If WSE_Prop = NoData Then WSE_Prop = {prop_terrain_var}
+  Output = WSE_Prop - WSE_Exist
+End If
+' #ENDSCRIPT:
+
+        returnArray(i) = Output
+      Next
+
+      return returnArray
+    End Function
+  End Class
+End Namespace
+
+' #VARIABLE: WSE_Exist = {exist_plan} | elevation | 2147483647 | Fixed Profile
+' #VARIABLE: WSE_Prop = {prop_plan} | elevation | 2147483647 | Fixed Profile
+
+' #TERRAIN: {exist_terrain_var} = {exist_terrain_name}
+' #TERRAIN: {prop_terrain_var} = {prop_terrain_name}
+"""
+
 
 class RasMap:
     """
@@ -2512,3 +2596,522 @@ class RasMap:
         logger.info(
             f"Added terrain layer '{layer_name}' to .rasmap file: {rel_path_str}"
         )
+
+    # ── Calculated Layers ───────────────────────────────────────────────
+
+    @staticmethod
+    @log_call
+    def list_results_plans(ras_object=None) -> List[Dict[str, Any]]:
+        """
+        List all plan result layers in the RASMapper configuration file.
+
+        Enumerates all ``<Layer Type="RASResults">`` entries under the ``<Results>``
+        section of the ``.rasmap`` file. These are the valid host plans for
+        calculated layers.
+
+        Args:
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            List[Dict[str, Any]]: List of dicts with keys:
+                - ``name`` (str): Plan result layer name (e.g., "Prop_10yr_Reg_BO")
+                - ``filename`` (str): Relative path to the plan HDF file
+                - ``checked`` (bool): Whether the layer is visible
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> plans = RasMap.list_results_plans()
+            >>> for p in plans:
+            ...     print(f"{p['name']} - {p['filename']}")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return []
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return []
+
+        results = root.find("Results")
+        if results is None:
+            logger.warning("No Results section found in .rasmap")
+            return []
+
+        plans = []
+        for layer in results.findall("Layer"):
+            if layer.get("Type") == "RASResults":
+                plans.append({
+                    "name": layer.get("Name", ""),
+                    "filename": layer.get("Filename", ""),
+                    "checked": layer.get("Checked", "True").lower() == "true",
+                })
+
+        logger.info(f"Found {len(plans)} results plan(s) in .rasmap")
+        return plans
+
+    @staticmethod
+    @log_call
+    def list_calculated_layers(ras_object=None) -> List[Dict[str, Any]]:
+        """
+        List all calculated layers across all plan results in the RASMapper configuration.
+
+        Enumerates all ``<Layer Type="CalculatedLayer">`` entries nested within
+        ``<Layer Type="RASResults">`` blocks.
+
+        Args:
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            List[Dict[str, Any]]: List of dicts with keys:
+                - ``name`` (str): Calculated layer name
+                - ``parent_plan`` (str): Name of the host RASResults plan
+                - ``filename`` (str): Relative path to the .rasscript file
+                - ``checked`` (bool): Whether the layer is visible
+                - ``profile_index`` (str): ProfileIndex attribute value
+                - ``raster_maps`` (List[Dict]): Input raster maps, each with
+                  ``result``, ``map_type``, ``profile_index``, ``animation_behavior``
+                - ``terrains`` (List[str]): Input terrain layer names
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> layers = RasMap.list_calculated_layers()
+            >>> for l in layers:
+            ...     print(f"{l['name']} (under {l['parent_plan']})")
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return []
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return []
+
+        results = root.find("Results")
+        if results is None:
+            return []
+
+        calc_layers = []
+        for results_layer in results.findall("Layer"):
+            if results_layer.get("Type") != "RASResults":
+                continue
+            parent_plan = results_layer.get("Name", "")
+
+            for child in results_layer.findall("Layer"):
+                if child.get("Type") != "CalculatedLayer":
+                    continue
+
+                raster_maps = []
+                for rm in child.findall("RasterMap"):
+                    raster_maps.append({
+                        "result": rm.get("Result", ""),
+                        "map_type": rm.get("MapType", ""),
+                        "profile_index": rm.get("ProfileIndex", ""),
+                        "animation_behavior": rm.get("AnimationBehavior", ""),
+                    })
+
+                terrains = [t.get("Name", "") for t in child.findall("Terrain")]
+
+                calc_layers.append({
+                    "name": child.get("Name", ""),
+                    "parent_plan": parent_plan,
+                    "filename": child.get("Filename", ""),
+                    "checked": child.get("Checked", "False").lower() == "true",
+                    "profile_index": child.get("ProfileIndex", "0"),
+                    "raster_maps": raster_maps,
+                    "terrains": terrains,
+                })
+
+        logger.info(f"Found {len(calc_layers)} calculated layer(s) in .rasmap")
+        return calc_layers
+
+    @staticmethod
+    @log_call
+    def add_calculated_layer(
+        layer_name: str,
+        host_plan_name: str,
+        script_content: str,
+        raster_maps: List[Dict[str, str]],
+        terrain_names: List[str],
+        checked: bool = True,
+        profile_index: int = 0,
+        ras_object=None,
+    ) -> bool:
+        """
+        Add a calculated layer to the RASMapper configuration and write its .rasscript file.
+
+        Creates a ``.rasscript`` file in the ``Calculated Layers/`` subdirectory and
+        registers it as a ``<Layer Type="CalculatedLayer">`` under the specified host
+        plan's ``<Layer Type="RASResults">`` block. Includes a default viewport-dynamic
+        diverging color ramp (blue=benefit, red=adverse).
+
+        If a calculated layer with the same name already exists in the host plan, it is
+        replaced (matching the ``add_terrain_layer`` convention).
+
+        Args:
+            layer_name: Display name for the calculated layer.
+            host_plan_name: Name of the RASResults plan to nest this layer under.
+                Must match a ``<Layer Name="..." Type="RASResults">`` in the rasmap.
+            script_content: Full VB.NET ``.rasscript`` content string.
+            raster_maps: List of dicts defining input raster maps. Each dict should have:
+                - ``result`` (str): Plan result name
+                - ``map_type`` (str, optional): Default ``"elevation"``
+                - ``animation_behavior`` (str, optional): Default ``"Fixed Profile"``
+                - ``profile_index`` (str, optional): Default ``"2147483647"`` (Max)
+            terrain_names: List of terrain layer names (order must match inputTiles
+                indices in the script).
+            checked: Whether the layer is visible in RASMapper. Default True.
+            profile_index: ProfileIndex attribute for the calculated layer. Default 0.
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            bool: True if the layer was successfully added.
+
+        Raises:
+            FileNotFoundError: If the .rasmap file does not exist.
+            ValueError: If ``host_plan_name`` is not found in the Results section.
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> RasMap.add_calculated_layer(
+            ...     layer_name="CompareWSE_10yr_Reg",
+            ...     host_plan_name="Prop_10yr_Reg_BO",
+            ...     script_content=script_text,
+            ...     raster_maps=[
+            ...         {"result": "Exist_10yr_Reg_BO"},
+            ...         {"result": "Prop_10yr_Reg_BO"},
+            ...     ],
+            ...     terrain_names=["Bathy_QESDrone_", "Terrain_Proposed_20260313"],
+            ... )
+
+        Notes:
+            - Creates the ``Calculated Layers`` directory if it doesn't exist.
+            - Replaces any existing calculated layer with the same name in the host plan.
+            - The .rasscript file is written with UTF-8 encoding.
+            - inputTiles indices in the script must match the order of RasterMap
+              then Terrain children in the XML.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f"RASMapper file not found: {rasmap_path}")
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return False
+
+        # Find the Results section
+        results = root.find("Results")
+        if results is None:
+            raise ValueError("No Results section found in .rasmap")
+
+        # Find the host plan's RASResults layer
+        host_layer = None
+        for layer in results.findall("Layer"):
+            if layer.get("Type") == "RASResults" and layer.get("Name") == host_plan_name:
+                host_layer = layer
+                break
+
+        if host_layer is None:
+            raise ValueError(
+                f"RASResults plan '{host_plan_name}' not found in .rasmap Results section"
+            )
+
+        # Remove existing calculated layer with same name (replace-if-exists)
+        for child in host_layer.findall("Layer"):
+            if child.get("Type") == "CalculatedLayer" and child.get("Name") == layer_name:
+                host_layer.remove(child)
+                logger.info(f"Replacing existing calculated layer '{layer_name}'")
+
+        # Create Calculated Layers directory
+        calc_dir = ras_obj.project_folder / "Calculated Layers"
+        calc_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write .rasscript file
+        script_path = calc_dir / f"{layer_name}.rasscript"
+        script_path.write_text(script_content, encoding='utf-8')
+        logger.info(f"Written script: {script_path.name}")
+
+        # Build relative path with .\ prefix and backslashes
+        rel_path_str = f".\\Calculated Layers\\{layer_name}.rasscript"
+
+        # Build XML element
+        calc_elem = ET.SubElement(host_layer, "Layer")
+        calc_elem.set("Name", layer_name)
+        calc_elem.set("Type", "CalculatedLayer")
+        calc_elem.set("Checked", "True" if checked else "False")
+        calc_elem.set("Filename", rel_path_str)
+        calc_elem.set("ProfileIndex", str(profile_index))
+
+        resample = ET.SubElement(calc_elem, "ResampleMethod")
+        resample.text = "near"
+
+        # Symbology with viewport-dynamic diverging color ramp
+        symbology = ET.SubElement(calc_elem, "Symbology")
+        surface_fill = ET.SubElement(symbology, "SurfaceFill")
+        surface_fill.set("Colors", _WSE_COMPARISON_DEFAULT_COLORS)
+        surface_fill.set("Values", _WSE_COMPARISON_DEFAULT_VALUES)
+        surface_fill.set("Stretched", "True")
+        surface_fill.set("AlphaTag", "255")
+        surface_fill.set("UseDatasetMinMax", "False")
+        surface_fill.set("RegenerateForScreen", "True")
+
+        surface = ET.SubElement(calc_elem, "Surface")
+        surface.set("On", "True")
+
+        # Add RasterMap inputs
+        for rm in raster_maps:
+            rm_elem = ET.SubElement(calc_elem, "RasterMap")
+            rm_elem.set("Result", rm["result"])
+            rm_elem.set("MapType", rm.get("map_type", "elevation"))
+            rm_elem.set("AnimationBehavior", rm.get("animation_behavior", "Fixed Profile"))
+            rm_elem.set("ProfileIndex", rm.get("profile_index", "2147483647"))
+
+        # Add Terrain inputs
+        for terrain_name in terrain_names:
+            t_elem = ET.SubElement(calc_elem, "Terrain")
+            t_elem.set("Name", terrain_name)
+
+        # Write updated rasmap
+        tree.write(rasmap_path, encoding='utf-8', xml_declaration=False)
+        logger.info(
+            f"Added calculated layer '{layer_name}' to plan '{host_plan_name}'"
+        )
+        return True
+
+    @staticmethod
+    @log_call
+    def remove_calculated_layer(
+        layer_name: str,
+        host_plan_name: Optional[str] = None,
+        delete_script: bool = False,
+        ras_object=None,
+    ) -> bool:
+        """
+        Remove a calculated layer from the RASMapper configuration.
+
+        Args:
+            layer_name: Name of the calculated layer to remove.
+            host_plan_name: If provided, only search within that specific RASResults
+                block. If None, searches all RASResults blocks and removes the first match.
+            delete_script: If True, also delete the ``.rasscript`` file from disk.
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            bool: True if the layer was found and removed, False if not found.
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> init_ras_project("/path/to/project", "6.6")
+            >>> RasMap.remove_calculated_layer("CompareWSE_10yr_Reg", delete_script=True)
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return False
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return False
+
+        results = root.find("Results")
+        if results is None:
+            logger.warning("No Results section found in .rasmap")
+            return False
+
+        # Determine which RASResults layers to search
+        search_layers = []
+        for layer in results.findall("Layer"):
+            if layer.get("Type") != "RASResults":
+                continue
+            if host_plan_name is None or layer.get("Name") == host_plan_name:
+                search_layers.append(layer)
+
+        # Find and remove
+        for results_layer in search_layers:
+            for child in results_layer.findall("Layer"):
+                if child.get("Type") == "CalculatedLayer" and child.get("Name") == layer_name:
+                    script_filename = child.get("Filename", "")
+                    results_layer.remove(child)
+
+                    tree.write(rasmap_path, encoding='utf-8', xml_declaration=False)
+                    logger.info(
+                        f"Removed calculated layer '{layer_name}' from "
+                        f"'{results_layer.get('Name')}'"
+                    )
+
+                    if delete_script and script_filename:
+                        # Resolve relative path from project folder
+                        script_rel = script_filename.replace("\\", "/").lstrip("./")
+                        script_path = ras_obj.project_folder / script_rel
+                        script_path.unlink(missing_ok=True)
+                        logger.info(f"Deleted script file: {script_path}")
+
+                    return True
+
+        logger.warning(f"Calculated layer '{layer_name}' not found in .rasmap")
+        return False
+
+    @staticmethod
+    @log_call
+    def add_wse_comparison_layers(
+        plan_pairs: List[Dict[str, str]],
+        exist_terrain: str,
+        prop_terrain: str,
+        layer_name_template: str = "CompareWSE_{tag}",
+        host_plan: str = "proposed",
+        ras_object=None,
+    ) -> List[str]:
+        """
+        Add WSE comparison calculated layers for multiple existing/proposed plan pairs.
+
+        Generates ``.rasscript`` files and registers calculated layers for each pair.
+        The formula is ``Proposed WSE - Existing WSE``:
+
+        - **Positive values** = WSE raised by project (rise / adverse impact)
+        - **Negative values** = WSE lowered by project (drop / benefit)
+
+        When a cell is dry in one plan, the terrain elevation for that plan's scenario
+        is used as the WSE fallback.
+
+        Args:
+            plan_pairs: List of dicts, each with keys:
+                - ``exist_plan`` (str): Name of the existing conditions plan result
+                - ``prop_plan`` (str): Name of the proposed conditions plan result
+                - ``tag`` (str): Short identifier used in layer naming (e.g., "10yr_Reg")
+            exist_terrain: Terrain layer name for existing conditions (dry-cell fallback).
+            prop_terrain: Terrain layer name for proposed conditions (dry-cell fallback).
+            layer_name_template: Format string for layer names. Must contain ``{tag}``.
+                Default: ``"CompareWSE_{tag}"``.
+            host_plan: Which plan to host the calculated layer under — ``"proposed"``
+                (default) or ``"existing"``.
+            ras_object: Optional RasPrj object instance.
+
+        Returns:
+            List[str]: Names of successfully created layers.
+
+        Raises:
+            ValueError: If a referenced plan name is not found in the Results section,
+                or if a terrain name is not found in the Terrains section.
+
+        Examples:
+            >>> from ras_commander import init_ras_project, RasMap
+            >>> ras = init_ras_project("/path/to/project", "6.6")
+            >>> created = RasMap.add_wse_comparison_layers(
+            ...     plan_pairs=[
+            ...         {"exist_plan": "Exist_10yr_Reg_BO", "prop_plan": "Prop_10yr_Reg_BO", "tag": "10yr_Reg"},
+            ...         {"exist_plan": "Exist_10yr_Loc_BO", "prop_plan": "Prop_10yr_Loc_BO", "tag": "10yr_Loc"},
+            ...         {"exist_plan": "Exist_100yr_Reg_BO", "prop_plan": "Prop_100yr_Reg_BO", "tag": "100yr_Reg"},
+            ...     ],
+            ...     exist_terrain="Bathy_QESDrone_",
+            ...     prop_terrain="Terrain_Proposed_20260313",
+            ... )
+            >>> print(f"Created {len(created)} comparison layers")
+
+        Notes:
+            - Each plan pair generates one ``.rasscript`` file and one rasmap XML entry.
+            - Layers are hosted under the proposed plan by default (``host_plan="proposed"``).
+            - Uses Max profile (ProfileIndex=2147483647) with Fixed Profile animation.
+            - Includes a viewport-dynamic diverging color ramp by default.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        # Validate referenced plans exist
+        existing_plans = RasMap.list_results_plans(ras_object=ras_obj)
+        plan_names = {p["name"] for p in existing_plans}
+
+        for pair in plan_pairs:
+            for key in ("exist_plan", "prop_plan", "tag"):
+                if key not in pair:
+                    raise ValueError(f"Missing required key '{key}' in plan_pairs entry: {pair}")
+            if pair["exist_plan"] not in plan_names:
+                raise ValueError(
+                    f"Existing plan '{pair['exist_plan']}' not found in .rasmap Results. "
+                    f"Available plans: {sorted(plan_names)}"
+                )
+            if pair["prop_plan"] not in plan_names:
+                raise ValueError(
+                    f"Proposed plan '{pair['prop_plan']}' not found in .rasmap Results. "
+                    f"Available plans: {sorted(plan_names)}"
+                )
+
+        # Validate terrain names exist
+        terrain_names = RasMap.get_terrain_names(ras_object=ras_obj)
+        for t_name in (exist_terrain, prop_terrain):
+            if t_name not in terrain_names:
+                raise ValueError(
+                    f"Terrain '{t_name}' not found in .rasmap. "
+                    f"Available terrains: {terrain_names}"
+                )
+
+        # Generate calculated layers
+        exist_terrain_var = _sanitize_vbnet_identifier(exist_terrain)
+        prop_terrain_var = _sanitize_vbnet_identifier(prop_terrain)
+
+        created = []
+        for pair in plan_pairs:
+            layer_name = layer_name_template.format(tag=pair["tag"])
+            host_plan_name = (
+                pair["prop_plan"] if host_plan == "proposed" else pair["exist_plan"]
+            )
+
+            script_content = _WSE_COMPARISON_RASSCRIPT_TEMPLATE.format(
+                layer_name=layer_name,
+                exist_plan=pair["exist_plan"],
+                prop_plan=pair["prop_plan"],
+                exist_terrain_name=exist_terrain,
+                prop_terrain_name=prop_terrain,
+                exist_terrain_var=exist_terrain_var,
+                prop_terrain_var=prop_terrain_var,
+            )
+
+            raster_maps = [
+                {"result": pair["exist_plan"]},
+                {"result": pair["prop_plan"]},
+            ]
+
+            success = RasMap.add_calculated_layer(
+                layer_name=layer_name,
+                host_plan_name=host_plan_name,
+                script_content=script_content,
+                raster_maps=raster_maps,
+                terrain_names=[exist_terrain, prop_terrain],
+                ras_object=ras_obj,
+            )
+
+            if success:
+                created.append(layer_name)
+                logger.info(f"Created WSE comparison layer: {layer_name}")
+            else:
+                logger.warning(f"Failed to create layer: {layer_name}")
+
+        logger.info(f"Created {len(created)} of {len(plan_pairs)} WSE comparison layers")
+        return created

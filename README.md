@@ -107,6 +107,8 @@ RASMapper Data Integration
 - RASMapper configuration parsing (.rasmap files)
 - Terrain, soil, and land cover HDF paths
 - Profile line paths
+- Calculated layers: programmatic WSE comparison (Existing vs. Proposed) with .rasscript generation
+- Viewport-dynamic symbology for calculated layer raster output
 
 Model Discovery & Download (NEW - Experimental)
 - Unified catalog for discovering HEC-RAS models from 25+ documented public sources
@@ -387,7 +389,7 @@ This is useful for comparing different river systems, running scenario analyses 
 - `RasBreach`: Dam breach parameter modification in plan files
 - `RasUnsteady`: Manages unsteady flow file operations
 - `RasUtils`: Contains utility functions for file operations and data management
-- `RasMap`: Parses RASMapper configuration files and automates floodplain mapping
+- `RasMap`: Parses RASMapper configuration files, automates floodplain mapping, and manages calculated layers (WSE comparison)
 - `RasExamples`: Manages and loads HEC-RAS example projects
 
 #### HDF Data Access Classes
