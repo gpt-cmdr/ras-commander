@@ -172,7 +172,6 @@ class TestUsgsPhase4Behavior:
         result = usgs.recession_bias(observed, modeled)
 
         assert result == pytest.approx((2.0 / 11.0) * 100.0)
-
     def test_classify_performance_full_uses_three_criterion_thresholds(self):
         """Full performance classification should honor NSE, RSR, and PBIAS."""
         assert usgs.classify_performance_full(
