@@ -331,7 +331,8 @@ class HdfProject:
         Returns
         -------
         str or None
-            CRS as WKT string, or None if not defined
+            CRS as an EPSG string when resolvable, otherwise WKT, or None if
+            not defined
 
         Examples
         --------

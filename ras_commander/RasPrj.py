@@ -77,6 +77,7 @@ Functions in RasPrj that are not part of the class:
 """
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 import pandas as pd
 from typing import Union, Any, List, Dict, Tuple, Optional
@@ -85,6 +86,13 @@ from ras_commander.LoggingConfig import get_logger
 from ras_commander.Decorators import log_call
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class _ProjectCrsResolution:
+    crs: Optional[str]
+    source: Optional[str]
+    path: Optional[Path] = None
 
 def read_file_with_fallback_encoding(file_path, encodings=['utf-8', 'latin1', 'cp1252', 'iso-8859-1']):
     """
@@ -118,6 +126,8 @@ class RasPrj:
         self.boundaries_df = None  # New attribute to store boundary conditions
         self.results_df = pd.DataFrame()  # Lightweight HDF results summaries
         self.suppress_logging = False  # Add suppress_logging as instance variable
+        self.project_crs = None
+        self.project_crs_source = None
 
     @log_call
     def initialize(self, project_folder, ras_exe_path, suppress_logging=True, prj_file=None, load_results_summary=True):
@@ -154,6 +164,8 @@ class RasPrj:
         self.suppress_logging = suppress_logging  # Store suppress_logging state
         self.project_folder = Path(project_folder)
         self.project_path = self.project_folder  # Alias for compatibility
+        self.project_crs = None
+        self.project_crs_source = None
 
         # If user specified a .prj file directly, use it (Phase 2 optimization)
         if prj_file is not None:
@@ -196,6 +208,8 @@ class RasPrj:
                                                 'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path',
                                                 'current_settings'])
 
+        self.refresh_project_crs()
+
         # Load results summaries if requested (default behavior)
         if load_results_summary and self.plan_df is not None and len(self.plan_df) > 0:
             try:
@@ -211,6 +225,10 @@ class RasPrj:
             logger.info(f"Plan entries: {len(self.plan_df)}, Flow entries: {len(self.flow_df)}, "
                          f"Unsteady entries: {len(self.unsteady_df)}, Geometry entries: {len(self.geom_df)}, "
                          f"Boundary conditions: {len(self.boundaries_df)}")
+            logger.info(
+                f"Project CRS: {self.project_crs} "
+                f"(source={self.project_crs_source})"
+            )
             logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
             logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
             logger.info(f"Results summaries loaded: {len(self.results_df)} plans with HDF results")
@@ -778,6 +796,198 @@ class RasPrj:
             raise RuntimeError("Project not initialized. Call init_ras_project() first.")
 
     @staticmethod
+    def _coerce_candidate_paths(raw_value: Any) -> List[Path]:
+        """Normalize scalar or list-like path values into Path objects."""
+        if raw_value is None:
+            return []
+
+        if isinstance(raw_value, Path):
+            return [raw_value]
+
+        if isinstance(raw_value, str):
+            cleaned = raw_value.strip()
+            if not cleaned or cleaned.lower() == "none":
+                return []
+            return [Path(cleaned)]
+
+        if isinstance(raw_value, (list, tuple, set)):
+            paths = []
+            for value in raw_value:
+                paths.extend(RasPrj._coerce_candidate_paths(value))
+            return paths
+
+        try:
+            if pd.isna(raw_value):
+                return []
+        except Exception:
+            pass
+
+        return []
+
+    def _resolve_candidate_path(self, path_value: Path) -> Path:
+        """Resolve project-relative paths without requiring the target to exist."""
+        if path_value.is_absolute():
+            return path_value.resolve(strict=False)
+        return (self.project_folder / path_value).resolve(strict=False)
+
+    def _get_rasmap_scalar_path(self, column: str) -> Optional[Path]:
+        if getattr(self, 'rasmap_df', None) is None or self.rasmap_df.empty:
+            return None
+
+        if column not in self.rasmap_df.columns:
+            return None
+
+        paths = self._coerce_candidate_paths(self.rasmap_df.iloc[0].get(column))
+        if not paths:
+            return None
+
+        return self._resolve_candidate_path(paths[0])
+
+    def _get_rasmap_list_paths(self, column: str) -> List[Path]:
+        if getattr(self, 'rasmap_df', None) is None or self.rasmap_df.empty:
+            return []
+
+        if column not in self.rasmap_df.columns:
+            return []
+
+        raw_paths = self._coerce_candidate_paths(self.rasmap_df.iloc[0].get(column))
+        return [self._resolve_candidate_path(path) for path in raw_paths]
+
+    def _get_terrain_raster_candidates(
+        self,
+        terrain_hdf_paths: List[Path],
+    ) -> List[Path]:
+        raster_paths = []
+        seen = set()
+
+        for terrain_hdf_path in terrain_hdf_paths:
+            parent = terrain_hdf_path.parent
+            if not parent.exists():
+                continue
+
+            preferred_candidates = [
+                terrain_hdf_path.with_suffix('.tif'),
+                terrain_hdf_path.with_suffix('.vrt'),
+            ]
+            for candidate in preferred_candidates:
+                resolved = candidate.resolve(strict=False)
+                candidate_key = str(resolved).lower()
+                if candidate_key in seen or not resolved.exists():
+                    continue
+                seen.add(candidate_key)
+                raster_paths.append(resolved)
+
+            for pattern in ("*.tif", "*.vrt"):
+                for candidate in sorted(parent.glob(pattern)):
+                    candidate_key = str(candidate).lower()
+                    if candidate_key in seen:
+                        continue
+                    seen.add(candidate_key)
+                    raster_paths.append(candidate)
+
+        return raster_paths
+
+    def _resolve_project_crs(self) -> _ProjectCrsResolution:
+        from .hdf.HdfBase import HdfBase
+
+        candidates = []
+        seen = set()
+
+        def add_candidates(
+            source: str,
+            path_kind: str,
+            raw_values: List[Path],
+        ) -> None:
+            for raw_value in raw_values:
+                resolved = self._resolve_candidate_path(raw_value)
+                candidate_key = (source, str(resolved).lower())
+                if candidate_key in seen:
+                    continue
+                seen.add(candidate_key)
+                candidates.append((source, path_kind, resolved))
+
+        if getattr(self, 'geom_df', None) is not None:
+            add_candidates(
+                'geom_hdf',
+                'hdf',
+                [
+                    path
+                    for raw_value in self.geom_df.get('hdf_path', [])
+                    for path in self._coerce_candidate_paths(raw_value)
+                ],
+            )
+
+        if getattr(self, 'plan_df', None) is not None:
+            add_candidates(
+                'plan_hdf',
+                'hdf',
+                [
+                    path
+                    for raw_value in self.plan_df.get('HDF_Results_Path', [])
+                    for path in self._coerce_candidate_paths(raw_value)
+                ],
+            )
+
+        projection_path = self._get_rasmap_scalar_path('projection_path')
+        if projection_path is not None:
+            add_candidates('rasmap_projection_path', 'prj', [projection_path])
+
+        terrain_hdf_paths = self._get_rasmap_list_paths('terrain_hdf_path')
+        add_candidates('terrain_hdf', 'hdf', terrain_hdf_paths)
+        add_candidates(
+            'terrain_raster',
+            'raster',
+            self._get_terrain_raster_candidates(terrain_hdf_paths),
+        )
+
+        for source, path_kind, candidate_path in candidates:
+            if not candidate_path.exists():
+                continue
+
+            if path_kind == 'hdf':
+                crs = HdfBase._get_projection_from_hdf_attribute(candidate_path)
+            elif path_kind == 'prj':
+                crs = HdfBase._get_projection_from_prj_file(candidate_path)
+            else:
+                crs = HdfBase._get_projection_from_raster(candidate_path)
+
+            if crs:
+                return _ProjectCrsResolution(crs=crs, source=source,
+                                             path=candidate_path)
+
+        return _ProjectCrsResolution(crs=None, source=None, path=None)
+
+    @log_call
+    def refresh_project_crs(self) -> Optional[str]:
+        """
+        Recompute the resolved project CRS and cache the result on the object.
+
+        Returns:
+            Optional[str]: CRS as an EPSG string, WKT string, or None if not
+            resolvable from project files.
+        """
+        self.check_initialized()
+        self.project_crs = None
+        self.project_crs_source = None
+
+        resolution = self._resolve_project_crs()
+        self.project_crs = resolution.crs
+        self.project_crs_source = resolution.source
+
+        if self.project_crs:
+            if not self.suppress_logging:
+                logger.info(
+                    f"Resolved project CRS: {self.project_crs} "
+                    f"(source={self.project_crs_source})"
+                )
+        else:
+            logger.warning(
+                f"Could not resolve project CRS for {self.project_folder}"
+            )
+
+        return self.project_crs
+
+    @staticmethod
     @log_call
     def find_ras_prj(folder_path):
         """
@@ -1234,6 +1444,10 @@ class RasPrj:
         logger.info(f"Project folder: {self.project_folder}")
         logger.info(f"PRJ file: {self.prj_file}")
         logger.info(f"HEC-RAS executable: {self.ras_exe_path}")
+        logger.info(
+            f"Project CRS: {self.project_crs} "
+            f"(source={self.project_crs_source})"
+        )
         logger.info("Plan files:")
         logger.info(f"\n{self.plan_df}")
         logger.info("Flow files:")
