@@ -82,6 +82,83 @@ class HdfInfiltration:
     ]
 
     @staticmethod
+    def _is_nodata_value(value: Any, no_data: Any) -> bool:
+        """Return True when a categorical raster value should be ignored."""
+        if value is None:
+            return True
+        if no_data is None:
+            return False
+        try:
+            if pd.isna(no_data) and pd.isna(value):
+                return True
+        except TypeError:
+            pass
+        return value == no_data
+
+    @staticmethod
+    def _get_linear_unit_to_meter(crs: Any) -> float:
+        """Return the linear-unit conversion factor from CRS units to meters."""
+        if crs is None:
+            raise ValueError(
+                "Raster CRS is missing. Cannot compute area_sqm, area_acres, "
+                "or area_sqmiles without a projected CRS."
+            )
+
+        if getattr(crs, 'is_geographic', False):
+            raise ValueError(
+                "Raster CRS is geographic. Cannot compute area_sqm, "
+                "area_acres, or area_sqmiles from angular units."
+            )
+
+        linear_units_factor = getattr(crs, 'linear_units_factor', None)
+        if linear_units_factor is None:
+            raise ValueError(
+                "Raster CRS does not report a linear unit factor. Cannot "
+                "compute area_sqm, area_acres, or area_sqmiles."
+            )
+
+        if isinstance(linear_units_factor, tuple):
+            linear_units_factor = linear_units_factor[1]
+
+        return float(linear_units_factor)
+
+    @staticmethod
+    def _get_raster_cell_area_sqm(raster_src: Any) -> float:
+        """Return raster cell area in square meters."""
+        transform = raster_src.transform
+        cell_area_native = abs(
+            (transform.a * transform.e) - (transform.b * transform.d)
+        )
+        if cell_area_native <= 0:
+            raise ValueError(
+                "Raster transform does not define a positive cell area."
+            )
+        linear_unit_to_meter = HdfInfiltration._get_linear_unit_to_meter(
+            getattr(raster_src, 'crs', None)
+        )
+        return cell_area_native * (linear_unit_to_meter ** 2)
+
+    @staticmethod
+    def _categorical_counts_to_area_sqm(
+        stats: Dict[Any, Any],
+        no_data: Any,
+        cell_area_sqm: float,
+    ) -> Tuple[Dict[Any, float], float]:
+        """Convert categorical pixel counts into square-meter areas."""
+        area_by_value = {}
+        total_area_sqm = 0.0
+
+        for raster_val, pixel_count in stats.items():
+            if HdfInfiltration._is_nodata_value(raster_val, no_data):
+                continue
+
+            area_sqm = float(pixel_count) * cell_area_sqm
+            area_by_value[raster_val] = area_sqm
+            total_area_sqm += area_sqm
+
+        return area_by_value, total_area_sqm
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
     def get_preprocessed_infiltration(
@@ -372,7 +449,7 @@ class HdfInfiltration:
         >>> print(gdf[['Name', 'geometry']].head())
         """
         import geopandas as gpd
-        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.geometry import Polygon
 
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -390,21 +467,38 @@ class HdfInfiltration:
                 region_ids = range(infil_data["Attributes"][()].shape[0])
                 names = np.vectorize(HdfUtils.convert_ras_string)(infil_data["Attributes"][()]["Name"])
 
-                geoms = list()
+                geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in infil_data["Polygon Info"][()]:
-                    points = infil_data["Polygon Points"][()][pnt_start : pnt_start + pnt_cnt]
-                    if part_cnt == 1:
+                    points = infil_data["Polygon Points"][()][
+                        pnt_start : pnt_start + pnt_cnt
+                    ]
+
+                    if part_cnt <= 1:
                         geoms.append(Polygon(points))
-                    else:
-                        parts = infil_data["Polygon Parts"][()][part_start : part_start + part_cnt]
-                        geoms.append(
-                            MultiPolygon(
-                                list(
-                                    points[part_pnt_start : part_pnt_start + part_pnt_cnt]
-                                    for part_pnt_start, part_pnt_cnt in parts
-                                )
-                            )
+                        continue
+
+                    if "Polygon Parts" not in infil_data:
+                        logger.warning(
+                            "Multi-part infiltration polygon but "
+                            "'Polygon Parts' dataset missing"
                         )
+                        geoms.append(Polygon(points))
+                        continue
+
+                    parts = infil_data["Polygon Parts"][()][
+                        part_start : part_start + part_cnt
+                    ]
+                    rings = [
+                        points[part_pnt_start : part_pnt_start + part_pnt_cnt]
+                        for part_pnt_start, part_pnt_cnt in parts
+                    ]
+
+                    if len(rings) == 1:
+                        geoms.append(Polygon(rings[0]))
+                    else:
+                        # HEC-RAS stores polygon parts as rings:
+                        # first ring exterior, remaining rings interiors.
+                        geoms.append(Polygon(rings[0], rings[1:]))
 
                 return gpd.GeoDataFrame(
                     {"region_id": region_ids, "Name": names, "geometry": geoms},
@@ -624,7 +718,8 @@ class HdfInfiltration:
         
         Notes
         -----
-        Requires the rasterstats package to be installed.
+        Requires the rasterstats package to be installed. Area outputs are
+        derived from categorical pixel counts scaled by raster cell area.
         """
         try:
             from rasterstats import zonal_stats
@@ -682,10 +777,9 @@ class HdfInfiltration:
         import rasterio
         with rasterio.open(tif_path) as src:
             grid_data = src.read(1)
-            
-            # Get transform directly from rasterio
             transform = src.transform
             no_data = src.nodata if src.nodata is not None else -9999
+            cell_area_sqm = HdfInfiltration._get_raster_cell_area_sqm(src)
             
             # List to store all results
             all_results = []
@@ -709,16 +803,24 @@ class HdfInfiltration:
                     if not stats:
                         logger.warning(f"No soil data found for 2D flow area: {mesh_name}")
                         continue
-                    
-                    # Calculate total area and percentages
-                    total_area_sqm = sum(stats.values())
-                    
+
+                    area_by_value, total_area_sqm = (
+                        HdfInfiltration._categorical_counts_to_area_sqm(
+                            stats,
+                            no_data=no_data,
+                            cell_area_sqm=cell_area_sqm,
+                        )
+                    )
+                    if not area_by_value:
+                        logger.warning(
+                            f"No non-NoData soil pixels found for 2D flow area: "
+                            f"{mesh_name}"
+                        )
+                        continue
+
                     # Process each mukey
-                    for raster_val, area_sqm in stats.items():
-                        # Skip NoData values
-                        if raster_val is None or raster_val == no_data:
-                            continue
-                            
+                    for raster_val, area_sqm in area_by_value.items():
+                             
                         try:
                             mukey = raster_map.get(int(raster_val), f"Unknown-{raster_val}")
                         except (ValueError, TypeError):
@@ -1296,33 +1398,49 @@ class HdfInfiltration:
 
     @staticmethod
     @log_call
-    def calculate_soil_statistics(zonal_stats: list, raster_map: dict) -> pd.DataFrame:
+    def calculate_soil_statistics(
+        zonal_stats: list,
+        raster_map: dict,
+        cell_area_sqm: Optional[float] = None,
+        no_data: Any = None,
+    ) -> pd.DataFrame:
         """Calculate soil statistics from zonal statistics
         
         Args:
             zonal_stats: List of zonal statistics
             raster_map: Dictionary mapping raster values to mukeys
-            
+            cell_area_sqm: Area represented by one raster cell in square
+                meters. Must be provided by the caller.
+            no_data: Optional NoData raster value to exclude.
+             
         Returns:
             DataFrame with soil statistics including percentages and areas
         """
-        
-        try:
-            from rasterstats import zonal_stats
-        except ImportError as e:
-            logger.error("Failed to import rasterstats. Please run 'pip install rasterstats' and try again.")
-            raise e
+        if cell_area_sqm is None or cell_area_sqm <= 0:
+            raise ValueError(
+                "cell_area_sqm must be provided as a positive square-meter "
+                "area per raster cell."
+            )
+
         # Initialize areas dictionary
-        mukey_areas = {mukey: 0 for mukey in raster_map.values()}
+        mukey_areas = {mukey: 0.0 for mukey in raster_map.values()}
         
         # Calculate total area and mukey areas
-        total_area_sqm = 0
+        total_area_sqm = 0.0
         for stat in zonal_stats:
-            for raster_val, area in stat.items():
+            area_by_value, stat_total_area_sqm = (
+                HdfInfiltration._categorical_counts_to_area_sqm(
+                    stat,
+                    no_data=no_data,
+                    cell_area_sqm=cell_area_sqm,
+                )
+            )
+            total_area_sqm += stat_total_area_sqm
+
+            for raster_val, area_sqm in area_by_value.items():
                 mukey = raster_map.get(raster_val)
                 if mukey:
-                    mukey_areas[mukey] += area
-                total_area_sqm += area
+                    mukey_areas[mukey] += area_sqm
 
         # Create DataFrame rows
         rows = []
@@ -1518,7 +1636,8 @@ class HdfInfiltration:
         
         Notes
         -----
-        Requires the rasterstats package to be installed.
+        Requires the rasterstats package to be installed. Area outputs are
+        derived from categorical pixel counts scaled by raster cell area.
         """
         try:
             from rasterstats import zonal_stats
@@ -1595,9 +1714,8 @@ class HdfInfiltration:
         # Read the raster data and info
         try:
             with rasterio.open(tif_path) as src:
-                # Get transform directly from rasterio
-                transform = src.transform
                 no_data = src.nodata if src.nodata is not None else -9999
+                cell_area_sqm = HdfInfiltration._get_raster_cell_area_sqm(src)
                 
                 # Calculate zonal statistics for each 2D flow area
                 for _, mesh_row in mesh_areas.iterrows():
@@ -1617,15 +1735,23 @@ class HdfInfiltration:
                         if not stats:
                             logger.warning(f"No land cover data found for 2D flow area: {mesh_name}")
                             continue
-                        
-                        # Calculate total area and percentages
-                        total_area_sqm = sum(stats.values())
-                        
+
+                        area_by_value, total_area_sqm = (
+                            HdfInfiltration._categorical_counts_to_area_sqm(
+                                stats,
+                                no_data=no_data,
+                                cell_area_sqm=cell_area_sqm,
+                            )
+                        )
+                        if not area_by_value:
+                            logger.warning(
+                                f"No non-NoData land cover pixels found for 2D "
+                                f"flow area: {mesh_name}"
+                            )
+                            continue
+
                         # Process each land cover type
-                        for raster_val, area_sqm in stats.items():
-                            # Skip NoData values
-                            if raster_val is None or raster_val == no_data:
-                                continue
+                        for raster_val, area_sqm in area_by_value.items():
                                 
                             try:
                                 # Get land cover name from raster map
@@ -1653,6 +1779,8 @@ class HdfInfiltration:
                     except Exception as e:
                         logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
                         continue
+        except ValueError:
+            raise
         except Exception as e:
             logger.error(f"Error opening raster file {tif_path}: {str(e)}")
             return pd.DataFrame()

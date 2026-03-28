@@ -517,10 +517,23 @@ class PrecipHrrr:
         # Clip to bounds if specified
         if bounds is not None:
             west, south, east, north = bounds
-            combined = combined.sel(
-                latitude=slice(north, south),
-                longitude=slice(west + 360, east + 360)  # HRRR uses 0-360 lons
+            lons = xr.where(
+                combined['longitude'] > 180,
+                combined['longitude'] - 360,
+                combined['longitude'],
             )
+            mask = (
+                (combined['latitude'] >= south)
+                & (combined['latitude'] <= north)
+                & (lons >= west)
+                & (lons <= east)
+            )
+            if not mask.any().item():
+                raise ValueError(
+                    f"Bounds do not intersect HRRR grid: "
+                    f"({west}, {south}, {east}, {north})"
+                )
+            combined = combined.where(mask, drop=True)
             logger.info(
                 f"Clipped to bounds: ({west}, {south}, {east}, {north})"
             )
@@ -572,55 +585,100 @@ class PrecipHrrr:
                 "Install with: pip install xarray cfgrib rasterio numpy pandas"
             )
 
-        # Extract full precipitation grid
-        precip_ds = PrecipHrrr.extract_precipitation(grib_files)
-
         # Get geometry bounds for initial clip
         if hasattr(geometry, 'total_bounds'):
             west, south, east, north = geometry.total_bounds
-        elif hasattr(geometry, 'bounds'):
+            if hasattr(geometry, 'geometry'):
+                geometry_source = geometry.geometry
+            else:
+                geometry_source = geometry
+            if hasattr(geometry_source, 'union_all'):
+                basin_geometry = geometry_source.union_all()
+            else:
+                basin_geometry = geometry_source.unary_union
+        elif hasattr(geometry, 'bounds') and hasattr(geometry, '__geo_interface__'):
             west, south, east, north = geometry.bounds
+            basin_geometry = geometry
         else:
             raise TypeError(
                 "geometry must be a Shapely polygon or GeoDataFrame"
             )
 
+        if basin_geometry is None or getattr(basin_geometry, 'is_empty', False):
+            raise ValueError("geometry must contain at least one non-empty shape")
+
+        # Extract full precipitation grid
+        precip_ds = PrecipHrrr.extract_precipitation(grib_files)
+
         logger.info("Calculating basin-average precipitation")
+
+        _tp0 = precip_ds['tp'].isel(step=0)
+        _precip_shape = tuple(_tp0.shape)
+        _lons = np.asarray(_tp0.coords['longitude'].values)
+        _lats = np.asarray(_tp0.coords['latitude'].values)
+
+        # HRRR uses 0-360 longitude convention; convert to -180/180.
+        _lons = np.where(_lons > 180, _lons - 360, _lons)
+        if _lons.ndim == 1 and _lats.ndim == 1:
+            _lon_grid, _lat_grid = np.meshgrid(_lons, _lats)
+        else:
+            _lon_grid, _lat_grid = _lons, _lats
+
+        _ny, _nx = _precip_shape
+        _res_x = (float(_lon_grid.max()) - float(_lon_grid.min())) / max(_nx - 1, 1)
+        _res_y = (float(_lat_grid.max()) - float(_lat_grid.min())) / max(_ny - 1, 1)
+        _row0_lat = float(_lat_grid[0, 0])
+        _rowN_lat = float(_lat_grid[-1, 0])
+        _south_up = _row0_lat < _rowN_lat
+
+        _bbox_mask = (
+            (_lon_grid >= west)
+            & (_lon_grid <= east)
+            & (_lat_grid >= south)
+            & (_lat_grid <= north)
+        )
+        if _south_up:
+            _bbox_mask = _bbox_mask[::-1, :]
+        if not np.any(_bbox_mask):
+            raise ValueError("geometry does not intersect extracted HRRR grid")
+
+        _grid_transform = None
+        try:
+            from affine import Affine as _AffineTransform
+
+            # Build north-up affine: west edge, north edge, positive dx, negative dy
+            _grid_transform = _AffineTransform(
+                _res_x, 0.0, float(_lon_grid.min()) - _res_x / 2,
+                0.0, -_res_y, float(_lat_grid.max()) + _res_y / 2,
+            )
+        except ImportError:
+            logger.warning(
+                "affine package not available; exact basin masking is disabled "
+                "and zonal_stats will use pixel coordinates "
+                "(install with: pip install affine)"
+            )
+
+        _exact_mask = None
+        if _grid_transform is not None:
+            try:
+                _exact_mask = rasterio.features.geometry_mask(
+                    [basin_geometry.__geo_interface__],
+                    out_shape=_precip_shape,
+                    transform=_grid_transform,
+                    invert=True,
+                )
+                if not np.any(_exact_mask):
+                    _exact_mask = None
+            except Exception as exc:
+                logger.warning(
+                    "Could not build exact basin mask; falling back to "
+                    "watershed bounding box average: %s",
+                    exc,
+                )
 
         # Calculate basin-average using rasterstats if available
         try:
             from rasterstats import zonal_stats
-
-            # Compute affine transform from HRRR 2D lat/lon coordinate arrays.
-            # HRRR uses Lambert Conformal native grid with 0-360 longitude convention;
-            # convert to -180/180 to match geometry CRS (WGS84/EPSG:4326).
-            try:
-                from affine import Affine as _AffineTransform
-                _tp0 = precip_ds['tp'].isel(step=0)
-                _lons = np.asarray(_tp0.coords['longitude'].values)
-                _lats = np.asarray(_tp0.coords['latitude'].values)
-                # Convert 0-360 → -180/180
-                _lons = np.where(_lons > 180, _lons - 360, _lons)
-                _ny = _lats.shape[0] if _lats.ndim == 2 else len(_lats)
-                _nx = _lons.shape[1] if _lons.ndim == 2 else len(_lons)
-                _res_x = (float(_lons.max()) - float(_lons.min())) / max(_nx - 1, 1)
-                _res_y = (float(_lats.max()) - float(_lats.min())) / max(_ny - 1, 1)
-                # Build north-up affine: west edge, north edge, positive dx, negative dy
-                _grid_transform = _AffineTransform(
-                    _res_x, 0.0, float(_lons.min()) - _res_x / 2,
-                    0.0, -_res_y, float(_lats.max()) + _res_y / 2,
-                )
-                # Detect south-up storage (row 0 has lower latitude than last row)
-                _row0_lat = float(_lats[0, 0]) if _lats.ndim == 2 else float(_lats[0])
-                _rowN_lat = float(_lats[-1, 0]) if _lats.ndim == 2 else float(_lats[-1])
-                _south_up = _row0_lat < _rowN_lat
-            except ImportError:
-                _grid_transform = None
-                _south_up = False
-                logger.warning(
-                    "affine package not available; zonal_stats will use pixel coordinates "
-                    "(results will be incorrect — install with: pip install affine)"
-                )
 
             results = []
             for step_idx in range(len(precip_ds.step)):
@@ -630,7 +688,7 @@ class PrecipHrrr:
                     precip_slice = precip_slice[::-1, :]
 
                 stats = zonal_stats(
-                    geometry,
+                    [basin_geometry.__geo_interface__],
                     precip_slice,
                     affine=_grid_transform,
                     stats=['mean'],
@@ -646,17 +704,30 @@ class PrecipHrrr:
             })
 
         except ImportError:
-            # Fallback: simple bounding box average
-            logger.warning(
-                "rasterstats not available - using bounding box average "
-                "instead of exact basin boundary"
-            )
+            if _exact_mask is not None:
+                logger.warning(
+                    "rasterstats not available - using rasterio geometry mask "
+                    "fallback for exact basin average"
+                )
+                _fallback_mask = _exact_mask
+            else:
+                logger.warning(
+                    "rasterstats not available - using watershed bounding box "
+                    "average instead of exact basin boundary"
+                )
+                _fallback_mask = _bbox_mask
 
             results = []
             for step_idx in range(len(precip_ds.step)):
-                mean_val = float(
-                    precip_ds['tp'].isel(step=step_idx).mean().values
+                precip_slice = np.asarray(
+                    precip_ds['tp'].isel(step=step_idx).values,
+                    dtype=float,
                 )
+                if _south_up:
+                    precip_slice = precip_slice[::-1, :]
+                selected_values = precip_slice[_fallback_mask]
+                finite_values = selected_values[np.isfinite(selected_values)]
+                mean_val = float(finite_values.mean()) if finite_values.size else 0.0
                 results.append(mean_val)
 
             df = pd.DataFrame({

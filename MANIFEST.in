@@ -1,0 +1,3 @@
+include ras_commander/native/RasStoreMapHelper.exe
+include ras_commander/native/RasStoreMapHelper.cs
+

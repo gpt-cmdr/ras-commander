@@ -38,6 +38,7 @@ List of Functions in RasMap:
 
 import os
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 import pandas as pd
@@ -53,6 +54,10 @@ from .RasUtils import RasUtils
 from .RasGuiAutomation import RasGuiAutomation
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from ._native_helper import (
+    normalize_store_map_render_mode,
+    run_store_all_maps_helper,
+)
 
 if TYPE_CHECKING:
     from geopandas import GeoDataFrame
@@ -1482,8 +1487,10 @@ class RasMap:
         StoreAllMaps where HEC-RAS 6.x ignores the RenderMode setting from the
         .rasmap file.
 
-        The helper exe is bundled with ras-commander and copied to the HEC-RAS
-        installation directory at runtime (required for GDAL initialization).
+        The helper exe is bundled with ras-commander and executed from the
+        installed package path when possible. If needed, it can be staged into
+        a user-writable cache directory without modifying the HEC-RAS
+        installation.
 
         Args:
             plan_number: Plan number(s) to generate maps for (e.g. "01" or ["01", "02"]).
@@ -1508,8 +1515,6 @@ class RasMap:
             >>> result = RasMap.store_all_maps("01", render_mode="horizontal")
             >>> print(result["success"])
         """
-        import subprocess
-
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
@@ -1534,53 +1539,14 @@ class RasMap:
         if not hecras_dir.exists():
             raise FileNotFoundError(f"HEC-RAS directory not found: {hecras_dir}")
 
-        # Locate and deploy the helper exe
-        helper_source = Path(__file__).parent / "RasStoreMapHelper.exe"
-        if not helper_source.exists():
-            raise FileNotFoundError(
-                f"RasStoreMapHelper.exe not found in ras-commander package at {helper_source}.\n"
-                "This file is required for headless map generation."
-            )
-
-        helper_dest = hecras_dir / "RasStoreMapHelper.exe"
-        if not helper_dest.exists() or helper_dest.stat().st_size != helper_source.stat().st_size:
-            import shutil as _shutil
-            _shutil.copy2(str(helper_source), str(helper_dest))
-            logger.info(f"Deployed RasStoreMapHelper.exe to {helper_dest}")
-
         # Determine render mode
         if render_mode is None:
             render_mode = RasMap.get_water_surface_render_mode(ras_object=ras_obj)
             if render_mode is None:
-                render_mode = "horizontal"
+                render_mode = {"mode": "horizontal"}
                 logger.warning("No RenderMode found in .rasmap, defaulting to 'horizontal'")
-            # Normalize: get_water_surface_render_mode returns "sloped" for both sloping modes
-            if render_mode == "sloped":
-                # Read the raw value from rasmap to distinguish sloping vs slopingPretty
-                rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
-                try:
-                    tree = ET.parse(rasmap_path)
-                    raw_mode = tree.getroot().findtext("RenderMode", "").strip().lower()
-                    if raw_mode == "slopingpretty":
-                        render_mode = "slopingPretty"
-                    else:
-                        render_mode = "sloping"
-                except Exception:
-                    render_mode = "sloping"
 
-        # Normalize render_mode for the helper exe
-        mode_map = {
-            "horizontal": "horizontal",
-            "sloping": "sloping",
-            "slopingpretty": "slopingPretty",
-            "sloped": "sloping",
-        }
-        helper_mode = mode_map.get(render_mode.lower())
-        if helper_mode is None:
-            raise ValueError(
-                f"Invalid render_mode: {render_mode}. "
-                "Valid values: horizontal, sloping, slopingPretty"
-            )
+        helper_mode = normalize_store_map_render_mode(render_mode)
 
         # Process plan numbers
         plan_number_list = [plan_number] if isinstance(plan_number, str) else list(plan_number)
@@ -1601,21 +1567,14 @@ class RasMap:
 
             logger.info(f"Generating stored maps for plan {plan_num} (mode={helper_mode})...")
 
-            cmd = [
-                str(helper_dest),
-                str(hecras_dir),
-                helper_mode,
-                str(rasmap_path),
-                str(result_hdf),
-            ]
-
             try:
-                proc = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
+                proc = run_store_all_maps_helper(
+                    hecras_dir=hecras_dir,
+                    render_mode=helper_mode,
+                    rasmap_path=rasmap_path,
+                    result_hdf_path=result_hdf,
                     timeout=timeout,
-                    cwd=str(ras_obj.project_folder),
+                    working_dir=ras_obj.project_folder,
                 )
 
                 if proc.returncode == 0:

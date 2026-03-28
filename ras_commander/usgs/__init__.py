@@ -66,6 +66,13 @@ Public API:
         - stage_to_depth: Convert stage elevations to depth above datum
         - calculate_stage_metrics: Compute depth-based RMSE, PBIAS, and NRMSE
         - normalized_rmse: Normalize RMSE by peak, mean, or range
+        - nrmse_depth_normalized: Depth-normalized RMSE for stage series
+        - flow_weighted_rmse: High-flow-emphasis RMSE in flow units
+        - fdc_high_flow_bias: FDC high-segment volume bias (FHV-style)
+        - baseflow_nse: NSE on baseflow-separated discharge using an explicit
+          Lyne-Hollick separation configuration
+        - rising_limb_timing_error: Mean threshold-crossing timing error
+        - recession_bias: Bias on the observed recession limb only
         - classify_performance_full: Full Moriasi NSE+RSR+PBIAS classification
 
     From real_time:
@@ -187,6 +194,12 @@ from .metrics import (
     stage_to_depth,
     calculate_stage_metrics,
     normalized_rmse,
+    nrmse_depth_normalized,
+    flow_weighted_rmse,
+    fdc_high_flow_bias,
+    baseflow_nse,
+    rising_limb_timing_error,
+    recession_bias,
     classify_performance_full,
 )
 
@@ -352,6 +365,12 @@ __all__ = [
     'stage_to_depth',
     'calculate_stage_metrics',
     'normalized_rmse',
+    'nrmse_depth_normalized',
+    'flow_weighted_rmse',
+    'fdc_high_flow_bias',
+    'baseflow_nse',
+    'rising_limb_timing_error',
+    'recession_bias',
     'classify_performance_full',
     # Real-time monitoring functions
     'get_latest_value',
