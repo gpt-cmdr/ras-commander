@@ -51,6 +51,82 @@ class ResultsSummary:
     """
 
     @staticmethod
+    def _has_value(value: Any) -> bool:
+        """Return True when a scalar metadata value is present."""
+        if value is None:
+            return False
+
+        if isinstance(value, str):
+            return bool(value.strip())
+
+        try:
+            if pd.isna(value):
+                return False
+        except TypeError:
+            pass
+
+        return True
+
+    @staticmethod
+    def _infer_flow_type_from_reference(flow_ref: Any) -> str:
+        """
+        Infer flow type from raw flow metadata like ``u01`` or ``Project.u01``.
+
+        Bare numeric flow identifiers from ``plan_df`` (for example ``01``)
+        are ambiguous after ras-commander normalization and therefore return
+        ``Unknown``.
+        """
+        if not ResultsSummary._has_value(flow_ref):
+            return 'Unknown'
+
+        flow_name = str(flow_ref).strip().replace('\\', '/').split('/')[-1]
+        flow_name = flow_name.lower()
+
+        if flow_name.startswith('u') and flow_name[1:].isdigit():
+            return 'Unsteady'
+
+        if flow_name.startswith('f') and flow_name[1:].isdigit():
+            return 'Steady'
+
+        if '.u' in flow_name:
+            suffix = flow_name.rsplit('.u', 1)[1]
+            if suffix.isdigit():
+                return 'Unsteady'
+
+        if '.f' in flow_name:
+            suffix = flow_name.rsplit('.f', 1)[1]
+            if suffix.isdigit():
+                return 'Steady'
+
+        return 'Unknown'
+
+    @staticmethod
+    def _resolve_flow_type(entry: Dict[str, Any]) -> str:
+        """
+        Resolve flow type using the same precedence as project metadata.
+
+        Preferred inputs:
+        1. Explicit ``flow_type``
+        2. ``unsteady_number`` from ``plan_df``
+        3. Raw ``Flow Path`` or ``Flow File`` values with ``u##``/``f##``
+        """
+        flow_type = entry.get('flow_type')
+        if ResultsSummary._has_value(flow_type):
+            return str(flow_type).strip()
+
+        if ResultsSummary._has_value(entry.get('unsteady_number')):
+            return 'Unsteady'
+
+        for key in ('Flow Path', 'flow_path', 'Flow File', 'flow_file'):
+            inferred = ResultsSummary._infer_flow_type_from_reference(
+                entry.get(key)
+            )
+            if inferred != 'Unknown':
+                return inferred
+
+        return 'Unknown'
+
+    @staticmethod
     @log_call
     def summarize_plan(
         hdf_path: Union[str, Path],
@@ -235,7 +311,15 @@ class ResultsSummary:
         Args:
             plan_entries: List of dicts with plan metadata (from plan_df.to_dict('records'))
                 Each dict should have keys: plan_number, Plan Title (or plan_title),
-                flow_type (or Flow File to detect type), and optionally HDF_Results_Path
+                and optionally HDF_Results_Path.
+                Flow type resolution uses this precedence:
+                1. explicit flow_type
+                2. unsteady_number
+                3. Flow Path / Flow File values like u01, f01, Project.u01
+
+                Note: plan_df normalizes Flow File to bare digits (for example 01),
+                so Flow File alone is not always sufficient unless the raw prefix or
+                full filename/path is still available.
             project_folder: Project folder path for resolving HDF paths when not provided
                 in plan_entries. If None, HDF_Results_Path must be in each entry.
 
@@ -259,21 +343,7 @@ class ResultsSummary:
             # Normalize plan_title from different possible column names
             plan_title = entry.get('plan_title') or entry.get('Plan Title') or entry.get('plan_shortid')
 
-            # Determine flow type - check for direct value or infer from flow file
-            flow_type = entry.get('flow_type')
-            if not flow_type:
-                # Try to infer from unsteady_number presence
-                if entry.get('unsteady_number'):
-                    flow_type = 'Unsteady'
-                elif entry.get('Flow File'):
-                    # Check if it references .f## (steady) or .u## (unsteady)
-                    flow_file = str(entry.get('Flow File', ''))
-                    if '.u' in flow_file.lower():
-                        flow_type = 'Unsteady'
-                    else:
-                        flow_type = 'Steady'
-                else:
-                    flow_type = 'Unknown'
+            flow_type = ResultsSummary._resolve_flow_type(entry)
 
             # Build plan_meta dict
             plan_meta = {
