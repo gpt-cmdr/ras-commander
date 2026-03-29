@@ -38,6 +38,7 @@ List of Functions in RasCmdr:
 import os
 import subprocess
 import shutil
+from collections import defaultdict
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .RasPrj import ras, RasPrj, init_ras_project, get_ras_exe
@@ -161,6 +162,97 @@ class RasCmdr:
             f"{list(filtered_plan_entries['plan_number'])}"
         )
         return filtered_plan_entries
+
+    @staticmethod
+    def _get_plan_geometry_number(
+        plan_entries: pd.DataFrame,
+        plan_number: Union[str, Number]
+    ) -> Optional[str]:
+        """
+        Resolve the geometry number associated with a plan entry.
+        """
+        normalized_plan_number = RasUtils.normalize_ras_number(plan_number)
+        matching_rows = plan_entries[
+            plan_entries["plan_number"] == normalized_plan_number
+        ]
+        if matching_rows.empty:
+            return None
+
+        plan_row = matching_rows.iloc[0]
+        for column_name in ("geometry_number", "Geom File"):
+            value = plan_row.get(column_name)
+            if pd.isna(value):
+                continue
+
+            digits = "".join(ch for ch in str(value) if ch.isdigit())
+            if digits:
+                return digits.zfill(2)
+
+        return None
+
+    @staticmethod
+    def _get_worker_plan_artifacts(
+        worker_folder: Path,
+        project_name: str,
+        plan_number: str,
+        geometry_number: Optional[str] = None
+    ) -> List[Path]:
+        """
+        Collect plan-owned worker artifacts that are safe to consolidate.
+        """
+        artifact_patterns = [
+            f"{project_name}.p{plan_number}",
+            f"{project_name}.p{plan_number}.*",
+            f"{project_name}.bco{plan_number}",
+            f"{project_name}.O{plan_number}",
+            f"{project_name}.c{plan_number}",
+        ]
+        if geometry_number:
+            artifact_patterns.append(f"{project_name}.g{geometry_number}.hdf")
+
+        artifact_paths = {}
+        for pattern in artifact_patterns:
+            for artifact_path in worker_folder.glob(pattern):
+                if artifact_path.is_file():
+                    artifact_paths[artifact_path.name] = artifact_path
+
+        return [artifact_paths[name] for name in sorted(artifact_paths)]
+
+    @staticmethod
+    def _copy_worker_artifact(source_path: Path, dest_path: Path) -> bool:
+        """
+        Copy a worker artifact unless the destination is already newer.
+        """
+        if not source_path.exists() or not source_path.is_file():
+            return False
+
+        if dest_path.exists():
+            source_stat = source_path.stat()
+            dest_stat = dest_path.stat()
+
+            if dest_stat.st_mtime > source_stat.st_mtime:
+                logger.debug(
+                    "Skipping older worker artifact %s because destination %s is newer",
+                    source_path,
+                    dest_path,
+                )
+                return False
+
+            if (
+                dest_stat.st_mtime == source_stat.st_mtime
+                and dest_stat.st_size == source_stat.st_size
+            ):
+                logger.debug(
+                    "Skipping unchanged worker artifact %s",
+                    source_path,
+                )
+                return False
+
+            dest_path.unlink()
+
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, dest_path)
+        return True
 
     @staticmethod
     def _verify_completion(hdf_path: Path, check_errors: bool = False) -> bool:
@@ -732,6 +824,7 @@ class RasCmdr:
             logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
 
             worker_ras_objects = {}
+            worker_plan_numbers: Dict[int, List[str]] = defaultdict(list)
             for worker_id in range(1, max_workers + 1):
                 worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
                 if worker_folder.exists():
@@ -755,6 +848,8 @@ class RasCmdr:
             # Explicitly use the filtered plan numbers for assignments
             worker_cycle = cycle(range(1, max_workers + 1))
             plan_assignments = [(next(worker_cycle), plan_num) for plan_num in filtered_plan_numbers]
+            for worker_id, plan_num in plan_assignments:
+                worker_plan_numbers[worker_id].append(plan_num)
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit futures and track which plan each future represents
@@ -794,10 +889,12 @@ class RasCmdr:
                 final_dest_folder = project_folder
                 logger.info(f"Consolidating results back to original project folder: {final_dest_folder}")
 
-            for worker_ras in worker_ras_objects.values():
+            consolidated_artifact_count = 0
+            for worker_id, worker_ras in worker_ras_objects.items():
                 if worker_ras is None:
                     continue
                 worker_folder = Path(worker_ras.project_folder)
+                assigned_plan_numbers = worker_plan_numbers.get(worker_id, [])
                 try:
                     # First, close any open resources in the worker RAS object
                     worker_ras.close() if hasattr(worker_ras, 'close') else None
@@ -809,21 +906,25 @@ class RasCmdr:
                     max_retries = 3
                     for retry in range(max_retries):
                         try:
-                            for item in worker_folder.iterdir():
-                                if RasUtils.is_windows_reserved_name(item.name):
-                                    continue
-                                dest_path = final_dest_folder / item.name
-                                if dest_path.exists():
-                                    if dest_path.is_dir():
-                                        shutil.rmtree(dest_path)
-                                    else:
-                                        dest_path.unlink()
-                                # Use copy instead of move for more reliability
-                                if item.is_dir():
-                                    shutil.copytree(item, dest_path, ignore=RasUtils.ignore_windows_reserved)
-                                else:
-                                    shutil.copy2(item, dest_path)
-                            
+                            for plan_num in assigned_plan_numbers:
+                                geometry_number = RasCmdr._get_plan_geometry_number(
+                                    filtered_plan_entries,
+                                    plan_num
+                                )
+                                plan_artifacts = RasCmdr._get_worker_plan_artifacts(
+                                    worker_folder=worker_folder,
+                                    project_name=worker_ras.project_name,
+                                    plan_number=plan_num,
+                                    geometry_number=geometry_number
+                                )
+                                for artifact_path in plan_artifacts:
+                                    dest_path = final_dest_folder / artifact_path.name
+                                    if RasCmdr._copy_worker_artifact(
+                                        artifact_path,
+                                        dest_path
+                                    ):
+                                        consolidated_artifact_count += 1
+                             
                             # Add another small delay before removal
                             time.sleep(1)
                             
@@ -841,6 +942,12 @@ class RasCmdr:
                             
                 except Exception as e:
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
+
+            logger.info(
+                "Consolidated %s worker artifact(s) to %s",
+                consolidated_artifact_count,
+                final_dest_folder
+            )
 
             # When dest_folder is used, re-initialize ras_obj from dest_folder
             # This ensures results_df reflects results in the destination folder
