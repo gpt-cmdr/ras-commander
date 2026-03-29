@@ -943,28 +943,80 @@ class GeomParser:
                 num_pairs = int(count_str)
                 total_values = num_pairs * 2
 
-                coords = []
-                i += 1
-                values_read = 0
+                # Collect raw Reach XY lines first so we can choose the
+                # parsing strategy after seeing the full section.
+                data_lines_raw = []
+                scan_i = i + 1
+                while scan_i < len(lines):
+                    data_line_raw = lines[scan_i]
+                    data_stripped = data_line_raw.strip()
 
-                while values_read < total_values and i < len(lines):
-                    data_line = lines[i].strip()
-                    if not data_line or data_line.startswith(
-                        ('River', 'Junct', 'Type', 'Node', '#')
+                    if not data_stripped or data_stripped.startswith(
+                        (
+                            'River',
+                            'Junct',
+                            'Type',
+                            'Node',
+                            '#',
+                            'Rch Text X Y=',
+                            'Reverse River Text=',
+                        )
                     ):
                         break
 
-                    parts = data_line.split()
-                    for part in parts:
+                    data_lines_raw.append(data_line_raw)
+                    scan_i += 1
+
+                i = scan_i
+
+                # Strategy 1: fixed-width 16-char parsing for legacy
+                # centerline rows, which may have no whitespace between
+                # adjacent values when the field width is fully used.
+                fw_coords = []
+                for raw_line in data_lines_raw:
+                    if len(fw_coords) >= total_values:
+                        break
+
+                    remaining = total_values - len(fw_coords)
+                    parsed = GeomParser.parse_fixed_width(
+                        raw_line,
+                        column_width=16,
+                    )
+                    fw_coords.extend(parsed[:remaining])
+
+                # Strategy 2: whitespace parsing as a fallback for
+                # non-standard modern rows that still separate values.
+                split_coords = []
+                for raw_line in data_lines_raw:
+                    if len(split_coords) >= total_values:
+                        break
+
+                    for token in raw_line.split():
+                        if len(split_coords) >= total_values:
+                            break
+
                         try:
-                            coords.append(float(part))
-                            values_read += 1
+                            split_coords.append(float(token))
                         except ValueError:
                             break
-                    i += 1
+
+                if len(fw_coords) > len(split_coords):
+                    coords = fw_coords[:total_values]
+                else:
+                    coords = split_coords[:total_values]
+
+                if len(coords) < total_values and len(coords) > 0:
+                    logger.warning(
+                        f"Partial Reach XY for {current_river}/"
+                        f"{current_reach}: expected {num_pairs} points "
+                        f"({total_values} values), got {len(coords)} values"
+                    )
 
                 if len(coords) >= 4:
-                    points = [(coords[j], coords[j+1]) for j in range(0, len(coords)-1, 2)]
+                    points = [
+                        (coords[j], coords[j + 1])
+                        for j in range(0, len(coords) - 1, 2)
+                    ]
                     if len(points) >= 2:
                         reaches.append({
                             'river': current_river,
