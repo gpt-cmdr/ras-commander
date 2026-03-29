@@ -135,6 +135,9 @@ winetricks -q corefonts     # Arial, Times New Roman, etc.
 !!! tip "Detailed Setup Instructions"
     Run `RasProcess.setup_wine_environment()` in Python to print the complete list of required DLLs and step-by-step instructions.
 
+!!! info "Validated Environment"
+    Verified on the CLB07 Proxmox container `ras2cng-wine` (Debian 13, Wine 11.0). Custom `wine_executable` paths or wrappers are supported; helper tools such as `winepath` are resolved automatically.
+
 !!! note "Scope"
     Wine support covers `RasProcess.exe` (stored map generation) only. Full HEC-RAS simulation (`Ras.exe`) still requires Windows. HDF analysis works natively on Linux without Wine.
 
