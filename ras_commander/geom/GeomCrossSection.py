@@ -1774,6 +1774,10 @@ class GeomCrossSection:
 
             # Step 2: Get all cross sections using existing method
             xs_df = GeomCrossSection.get_cross_sections(geom_file)
+            # Filter to Type 1 (real cross sections) only - excludes lateral
+            # structures (Type 6), bridges, culverts, etc. which lack #Sta/Elev data
+            if 'Type' in xs_df.columns:
+                xs_df = xs_df[xs_df['Type'] == 1].reset_index(drop=True)
             logger.debug(f"Found {len(xs_df)} cross sections in geometry file")
 
             if len(xs_df) == 0:
@@ -2117,6 +2121,10 @@ class GeomCrossSection:
 
         # Step 1: Get all cross sections from geometry file
         xs_df = GeomCrossSection.get_cross_sections(geom_file)
+        # Filter to Type 1 (real cross sections) only - excludes lateral
+        # structures (Type 6), bridges, culverts, etc. which lack #Sta/Elev data
+        if 'Type' in xs_df.columns:
+            xs_df = xs_df[xs_df['Type'] == 1].reset_index(drop=True)
         total_xs_count = len(xs_df)
 
         if total_xs_count == 0:

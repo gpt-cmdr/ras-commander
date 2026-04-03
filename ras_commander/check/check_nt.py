@@ -376,6 +376,10 @@ class CheckNt:
         try:
             # Get all cross sections from geometry file
             xs_df = GeomCrossSection.get_cross_sections(geom_file)
+            # Filter to Type 1 (real cross sections) only - excludes lateral
+            # structures (Type 6), bridges, culverts, etc. which lack #Sta/Elev data
+            if 'Type' in xs_df.columns:
+                xs_df = xs_df[xs_df['Type'] == 1].reset_index(drop=True)
 
             if xs_df.empty:
                 logger.info(f"No cross sections found in {geom_file.name}")

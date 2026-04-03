@@ -40,19 +40,42 @@ Always produce these minimum artifacts:
 
 ## Execution Modes
 
-### Mode A: Pytest + nbmake (preferred)
+### Mode A: nbconvert with allow-errors (preferred)
+
+Run a COPY of the notebook via nbconvert. This approach captures all cell outputs even when errors occur, enabling complete post-mortem analysis.
+
+1. **Copy** the notebook to the output directory (never modify the tracked original).
+2. **Inject an `os.chdir()` cell** at position 0 so the kernel CWD matches the expected working directory (e.g., `examples/` for RasExamples.projects_dir):
+   ```python
+   import os; os.chdir(r'C:\GH\ras-commander\examples')
+   ```
+3. **Execute** with:
+   ```bash
+   jupyter nbconvert --to notebook --execute \
+     --ExecutePreprocessor.timeout=600 \
+     --ExecutePreprocessor.kernel_name=<kernel> \
+     --ExecutePreprocessor.allow_errors=True \
+     --output <stem>_executed.ipynb \
+     <copied_notebook>.ipynb
+   ```
+4. **Analyze** the executed notebook for errors (cell `output_type == 'error'`), warnings (stderr containing `Warning`/`WARNING`), and anomalies (empty outputs where content expected).
+
+Key advantages over pytest+nbmake:
+- `allow_errors=True` ensures ALL cells execute, not just up to the first failure
+- Full output capture enables comprehensive QAQC review
+- Executed notebook is a reviewable artifact with inline outputs
+
+### Mode B: Pytest + nbmake (for CI / pass-fail gating)
 
 Run a single notebook:
-- `pytest --nbmake examples/101_project_initialization.ipynb -vv`
+- `pytest --nbmake examples/101_project_initialization.ipynb -vv --nbmake-timeout=300`
 
 Run all example notebooks:
 - `pytest --nbmake examples/*.ipynb -vv`
 
+Note: nbmake stops at the first cell failure per notebook and does not capture subsequent cell outputs. Use Mode A for development testing and QAQC; use Mode B for CI gates where pass/fail is sufficient.
+
 Note that many notebooks require HEC-RAS installed and a valid `Ras.exe` path. Record intentionally “manual” (GUI automation) notebooks as such.
-
-### Mode B: nbconvert fallback (when nbmake unavailable)
-
-Run `jupyter nbconvert --execute` on a COPY of the notebook. Never overwrite the tracked example notebook unless explicitly requested.
 
 ## Output Digest Workflow (for large notebooks)
 
