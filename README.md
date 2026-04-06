@@ -616,16 +616,16 @@ This project follows a specific style guide to maintain consistency across the c
 
 ## Acknowledgments
 
-RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and AI tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor AI Coding IDE.
+RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and LLM Coding tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor LLM-Assisted Coding IDE -- especially CLI tools such as Claude Code and Codex.
 
 Additionally, we would like to acknowledge the following notable contributions and attributions for open source projects which significantly influenced the development of RAS Commander:
 
-1. Contributions: Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration, code examples and utility functions which were adapted with AI for use in RAS Commander. Sean has also contributed heavily to 
+1. Contributions: Sean Micek's [`funkshuns`](https://github.com/openSourcerer9000/funkshuns), [`TXTure`](https://github.com/openSourcerer9000/TXTure), and [`RASmatazz`](https://github.com/openSourcerer9000/RASmatazz) libraries provided inspiration, code examples and utility functions which were adapted with LLM assistance for use in RAS Commander. Sean has also contributed heavily to 
 
 - Development of additional HDF functions for detailed analysis and mapping of HEC-RAS results within the RasHdf class.
 - Development of the prototype `RasCmdr` class for executing HEC-RAS simulations.
 
-2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with AI for use in RAS Commander. 
+2. Attribution: The [`pyHMT2D`](https://github.com/psu-efd/pyHMT2D/) project by Xiaofeng Liu, which provided insights into HDF file handling methods for HEC-RAS outputs.  Many of the functions in the [Ras_2D_Data.py](https://github.com/psu-efd/pyHMT2D/blob/main/pyHMT2D/Hydraulic_Models_Data/RAS_2D/RAS_2D_Data.py) file were adapted with LLM assistance for use in RAS Commander. 
 
    Xiaofeng Liu, Ph.D., P.E.,    Associate Professor, Department of Civil and Environmental Engineering
    Institute of Computational and Data Sciences, Penn State University
@@ -639,6 +639,10 @@ These acknowledgments recognize the contributions and inspirations that have hel
 5. [HEC-Commander Tools](https://github.com/gpt-cmdr/HEC-Commander) - Inspiration and initial code base for the development of RAS Commander.
 
 6. Attribution: Glenn Heistand's [`ras-agent`](https://github.com/gheistand/ras-agent) (CHAMP -- Illinois State Water Survey) -- an automated HEC-RAS pipeline that converts pour points into flood maps. The ras-agent pipeline's Linux execution patterns (`runner.py`), HDF results extraction (`results.py`), and Cloud-Optimized GeoTIFF rasterization directly informed the development of several ras-commander methods including `RasCmdr.compute_plan_linux()`, `HdfResultsMesh.get_mesh_max_depth()`, `HdfResultsMesh.export_max_depth_raster()`, `RasUtils.dos2unix()`, and `HdfBase.strip_results()`.
+
+7. Attribution and Contribution: Gyan Basyal's [`pydsstools`](https://github.com/gyanz/pydsstools) and [`rivia`](https://github.com/gyanz/rivia) packages. Gyan's pydsstools was particularly influential in ras-commander's DSS handling approach -- its cross-version DSS6/DSS7 support philosophy, HEC epoch time conversion pattern, catalog-based lazy loading design, and TimeSeriesContainer wrapping informed the architecture of ras-commander's `RasDss` module. Gyan's rivia package is the source of the StoreAllMaps approach implemented in the ras-commander RasProcess module. 
+
+8. Attribution: Michael Koohafkan's [`dssrip2`](https://github.com/mkoohafkan/dssrip2) -- an R package for reading and writing HEC-DSS files. The dssrip2 project's HEC Monolith JAR download and management approach was directly replicated in ras-commander's `_hec_monolith.py` module, including the Maven artifact specifications, platform-specific native library handling, and automatic download/cache strategy. This enabled ras-commander to provide a pure-Python DSS reading capability via the same Java bridge architecture that dssrip2 pioneered for R.
 
 ## Official RAS Commander AI-Generated Songs:
 
