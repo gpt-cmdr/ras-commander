@@ -255,8 +255,11 @@ class RasExamples:
                     shutil.rmtree(final_folder_path)
                     logger.info(f"Existing folder '{folder_name}' has been deleted.")
                 except Exception as e:
-                    logger.error(f"Failed to delete existing folder '{folder_name}': {e}")
-                    continue
+                    raise RuntimeError(
+                        f"Cannot extract project '{project_name}': failed to delete existing "
+                        f"folder '{folder_name}'. A file may be locked by another process. "
+                        f"Close any running HEC-RAS instances and retry. Error: {e}"
+                    ) from e
 
             project_info = cls._folder_df[cls._folder_df['Project'] == project_name]
             if project_info.empty:
@@ -290,6 +293,11 @@ class RasExamples:
                 logger.error(f"An error occurred while extracting project '{project_name}': {str(e)}")
 
         # Return single path if only one project was extracted, otherwise return list
+        if not extracted_paths:
+            raise RuntimeError(
+                f"Failed to extract any projects from: {project_names}. "
+                f"Check log output above for details."
+            )
         return extracted_paths[0] if len(project_names) == 1 else extracted_paths
 
     @classmethod

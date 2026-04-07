@@ -1890,8 +1890,16 @@ class RasPrj:
             else:
                 self.results_df = pd.DataFrame()  # Clear all if updating all
 
-            # Concatenate new results, excluding all-NA/empty frames (avoids FutureWarning)
-            frames = [df for df in [self.results_df, new_results] if not df.empty and not df.isna().all().all()]
+            # Concatenate new results, dropping all-NA columns first (avoids pandas FutureWarning
+            # about empty/all-NA entries changing dtype inference behavior in future versions)
+            frames = []
+            for df in [self.results_df, new_results]:
+                if df.empty:
+                    continue
+                # Drop columns where every value is NA — these trigger the FutureWarning
+                df_clean = df.dropna(axis=1, how='all')
+                if not df_clean.empty:
+                    frames.append(df_clean)
             if frames:
                 self.results_df = pd.concat(frames, ignore_index=True)
             else:

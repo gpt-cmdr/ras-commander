@@ -416,7 +416,9 @@ class HdfPipe:
             
             # --- Read and Process Node Surface Connectivity ---
             node_surface_connectivity = network_group['Node Surface Connectivity'][:]
-            node_surface_connectivity_df = pd.DataFrame(node_surface_connectivity, columns=['Node_ID', 'Layer', 'Layer_ID', 'Sublayer_ID'])
+            # Read with native HDF field names, then rename to match downstream code
+            node_surface_connectivity_df = pd.DataFrame(node_surface_connectivity)
+            node_surface_connectivity_df.columns = ['Node_ID', 'Layer', 'Layer_ID', 'Sublayer_ID']
             
             # --- Combine All Cell-Related Data ---
             cells_df = pd.DataFrame({

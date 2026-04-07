@@ -53,10 +53,11 @@ See Also:
 
 from .RasTerrain import RasTerrain
 from .Usgs3depAws import Usgs3depAws
+from .RasTerrainModWriter import RasTerrainModWriter
 
 # Conditional import - RasTerrainMod requires pythonnet (Windows only)
 try:
     from .RasTerrainMod import RasTerrainMod
-    __all__ = ['RasTerrain', 'Usgs3depAws', 'RasTerrainMod']
+    __all__ = ['RasTerrain', 'Usgs3depAws', 'RasTerrainMod', 'RasTerrainModWriter']
 except ImportError:
-    __all__ = ['RasTerrain', 'Usgs3depAws']
+    __all__ = ['RasTerrain', 'Usgs3depAws', 'RasTerrainModWriter']
