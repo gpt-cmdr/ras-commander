@@ -38,7 +38,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Union, Optional, List, Dict, Any
+from typing import Union, Optional, List, Dict, Any, Tuple
 from datetime import datetime
 import shutil
 import platform
@@ -193,7 +193,9 @@ class RasProcess:
 
         Args:
             wine_prefix: Path to WINEPREFIX (default: auto-detect from WINE_PREFIX_PATHS)
-            wine_executable: Wine binary name or path (default: "wine")
+            wine_executable: Wine binary name or path used to launch
+                            Windows executables under Wine. Auxiliary tools
+                            such as ``winepath`` are resolved automatically.
             ras_install_dir: Path to directory containing RasProcess.exe and DLLs.
                            Can be a Linux path (under drive_c/) or left None for auto-detect.
 
@@ -266,6 +268,51 @@ class RasProcess:
         return config
 
     @staticmethod
+    def _build_wine_env(
+        wine_config: WineConfig = None,
+        include_winedebug: bool = True,
+    ) -> Dict[str, str]:
+        """Build environment variables for Wine subprocess execution."""
+        config = wine_config or RasProcess._get_wine_config()
+
+        env = {**os.environ, "DISPLAY": ""}
+        if config and config.wine_prefix:
+            env["WINEPREFIX"] = str(config.wine_prefix)
+        if include_winedebug:
+            env["WINEDEBUG"] = "-all"
+
+        return env
+
+    @staticmethod
+    def _resolve_wine_tool_executable(
+        tool_name: str,
+        wine_config: WineConfig = None,
+    ) -> str:
+        """
+        Resolve an auxiliary Wine tool for the configured Wine install.
+
+        For the main Wine runner, returns the configured ``wine_executable``.
+        For tools like ``winepath``, prefer a sibling binary next to a
+        path-based executable (for example ``/opt/wine/bin/wine64`` ->
+        ``/opt/wine/bin/winepath``). Otherwise fall back to the generic tool
+        name on ``PATH``.
+        """
+        config = wine_config or RasProcess._get_wine_config()
+        if config is None:
+            return tool_name
+
+        if tool_name == "wine":
+            return str(config.wine_executable)
+
+        wine_executable = Path(str(config.wine_executable))
+        if wine_executable.parent != Path(".") or wine_executable.is_absolute():
+            sibling_tool = wine_executable.with_name(tool_name)
+            if sibling_tool.exists():
+                return str(sibling_tool)
+
+        return tool_name
+
+    @staticmethod
     def _linux_to_wine_path(linux_path: Union[str, Path]) -> str:
         """
         Convert a Linux filesystem path to a Wine/Windows path.
@@ -291,14 +338,25 @@ class RasProcess:
             wine_config = RasProcess._get_wine_config()
             if wine_config:
                 try:
+                    winepath_executable = (
+                        RasProcess._resolve_wine_tool_executable(
+                            "winepath",
+                            wine_config,
+                        )
+                    )
                     result = subprocess.run(
-                        [wine_config.wine_executable + "path", "-w", str(linux_path)],
-                        capture_output=True, text=True, timeout=10,
-                        env={**os.environ, "WINEPREFIX": str(wine_config.wine_prefix), "DISPLAY": ""}
+                        [winepath_executable, "-w", str(linux_path)],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        env=RasProcess._build_wine_env(
+                            wine_config,
+                            include_winedebug=False,
+                        ),
                     )
                     if result.returncode == 0:
                         return result.stdout.strip()
-                except Exception:
+                except (OSError, subprocess.TimeoutExpired):
                     pass
             # Fallback: return as-is (Wine can sometimes handle Unix paths)
             logger.warning(f"Cannot convert to Wine path (no drive_c/ found): {linux_path}")
@@ -348,7 +406,7 @@ class RasProcess:
         args: List[str],
         wine_config: WineConfig = None,
         working_dir: Path = None,
-    ) -> tuple:
+    ) -> Tuple[List[str], Dict[str, str], Optional[str]]:
         """
         Build a Wine-wrapped command line.
 
@@ -374,14 +432,12 @@ class RasProcess:
         else:
             exe_wine_path = exe_str  # Bare filename, let Wine find it
 
-        cmd = [config.wine_executable, exe_wine_path] + args
+        cmd = [
+            RasProcess._resolve_wine_tool_executable("wine", config),
+            exe_wine_path,
+        ] + args
 
-        env = {
-            **os.environ,
-            "WINEPREFIX": str(config.wine_prefix),
-            "DISPLAY": "",  # Headless — no X11 needed
-            "WINEDEBUG": "-all",  # Suppress Wine debug output
-        }
+        env = RasProcess._build_wine_env(config)
 
         cwd = str(working_dir) if working_dir else None
 
@@ -392,6 +448,9 @@ class RasProcess:
     def check_wine_environment() -> Dict[str, Any]:
         """
         Verify the Wine environment is properly configured for RasProcess.
+
+        Uses the configured ``wine_executable`` when one was provided via
+        ``configure_wine()``.
 
         Returns a dict with status of each component:
         - wine_found: bool
@@ -421,12 +480,23 @@ class RasProcess:
             "hdf5_found": False,
         }
 
+        config = RasProcess._get_wine_config()
+        wine_executable = RasProcess._resolve_wine_tool_executable(
+            "wine",
+            config,
+        )
+
         # Check wine binary
         try:
             proc = subprocess.run(
-                ["wine", "--version"],
-                capture_output=True, text=True, timeout=10,
-                env={**os.environ, "DISPLAY": ""}
+                [wine_executable, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=RasProcess._build_wine_env(
+                    config,
+                    include_winedebug=False,
+                ),
             )
             if proc.returncode == 0:
                 result["wine_found"] = True
@@ -435,7 +505,6 @@ class RasProcess:
             pass
 
         # Check Wine prefix
-        config = RasProcess._get_wine_config()
         if config and config.wine_prefix:
             result["wine_prefix"] = str(config.wine_prefix)
             result["prefix_exists"] = config.wine_prefix.exists()
