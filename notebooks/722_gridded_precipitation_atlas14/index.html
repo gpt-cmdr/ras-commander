@@ -7753,7 +7753,7 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 </span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">EXECUTE_PLAN</span><span class="p">:</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[--] Execution DISABLED (EXECUTE_PLAN = False)&quot;</span><span class="p">)</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[--] Execution DISABLED (EXECUTE_PLAN = True)&quot;</span><span class="p">)</span>
 </span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">To enable execution:&quot;</span><span class="p">)</span>
 </span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  1. Set EXECUTE_PLAN = True in Part 1 configuration cell&quot;</span><span class="p">)</span>
 </span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  2. Re-run the configuration cell&quot;</span><span class="p">)</span>
@@ -7820,95 +7820,6 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 </span><span id="__span-21-73"><a id="__codelineno-21-73" name="__codelineno-21-73" href="#__codelineno-21-73"></a>
 </span><span id="__span-21-74"><a id="__codelineno-21-74" name="__codelineno-21-74" href="#__codelineno-21-74"></a>    <span class="n">EXECUTION_SUCCESS</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span><span class="n">execution_results</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> <span class="n">successful</span> <span class="o">&gt;</span> <span class="mi">0</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded
-2026-01-25 16:39:10 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06
-
-
-================================================================================
-PLAN EXECUTION
-================================================================================
-
-Executing 2 plans for comparison:
-  - Plan 06: Gridded Precipitation
-  - Plan 07: Uniform Precipitation
-
-Cores per plan: 2
-----------------------------------------
-
-Executing Plan 06 (Gridded Precipitation)...
-
-
-2026-01-25 16:39:10 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06
-2026-01-25 16:39:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06
-2026-01-25 16:39:10 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06&quot;
-2026-01-25 16:39:10 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06&quot;
-2026-01-25 16:45:34 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
-2026-01-25 16:45:34 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
-2026-01-25 16:45:34 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 384.06 seconds
-2026-01-25 16:45:34 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 384.06 seconds
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1790 characters from HDF
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1790 characters from HDF
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Gridded Precip - Infiltration
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Gridded Precip - Infiltration
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 120.0
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 120.0
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
-2026-01-25 16:45:34 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-2026-01-25 16:45:34 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-2026-01-25 16:45:34 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded
-2026-01-25 16:45:34 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded
-2026-01-25 16:45:34 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
-2026-01-25 16:45:34 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
-2026-01-25 16:45:34 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
-2026-01-25 16:45:34 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
-2026-01-25 16:45:35 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 07
-2026-01-25 16:45:35 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 07
-
-
-  [OK] Plan 06 completed in 384.5 seconds
-
-Executing Plan 07 (Uniform Precipitation)...
-
-
-2026-01-25 16:45:35 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2026-01-25 16:45:35 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-2026-01-25 16:45:35 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07&quot;
-2026-01-25 16:45:35 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07&quot;
-2026-01-25 16:45:37 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 07
-2026-01-25 16:45:37 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 07
-2026-01-25 16:45:37 - ras_commander.RasCmdr - INFO - Total run time for plan 07: 2.55 seconds
-2026-01-25 16:45:37 - ras_commander.RasCmdr - INFO - Total run time for plan 07: 2.55 seconds
-2026-01-25 16:45:37 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-2026-01-25 16:45:37 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-
-
-  [OK] Plan 07 completed in 3.0 seconds
-
-----------------------------------------
-Execution Summary: 2/2 plans successful
-Total time: 387.6 seconds
-</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Display results summary from results_df (if execution was performed)</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Shows execution status, completion, errors/warnings, and runtime for all plans</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="k">if</span> <span class="n">EXECUTE_PLAN</span> <span class="ow">and</span> <span class="n">EXECUTION_SUCCESS</span><span class="p">:</span>
@@ -9495,7 +9406,7 @@ Execution:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 29, 2026 21:22:59 UTC">March 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 7, 2026 12:35:49 UTC">April 7, 2026</span>
   </span>
 
     
@@ -9505,7 +9416,7 @@ Execution:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 29, 2026 21:22:59 UTC">March 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 7, 2026 12:35:49 UTC">April 7, 2026</span>
   </span>
 
     

@@ -5780,8 +5780,8 @@
 <h2 id="step-1-organize-downloaded-model">Step 1: Organize Downloaded Model<a class="headerlink" href="#step-1-organize-downloaded-model" title="Permanent link">&para;</a></h2>
 <p>Use <code>RasEbfeModels.organize_upper_guadalupe()</code> with comprehensive DSS validation (10,248 pathnames).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Set paths (adjust these to your download location)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">downloaded_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;D:\Ras-Commander_BulkData\eBFE\Upper_Guadalupe\12100201_UpperGuadalupe_Models_extracted&quot;</span><span class="p">)</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">organized_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;D:\Ras-Commander_BulkData\eBFE\Organized\UpperGuadalupe_12100201&quot;</span><span class="p">)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">downloaded_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_projects/ebfe/UpperGuadalupe_12100201_downloaded&quot;</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">organized_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_projects/ebfe/UpperGuadalupe_12100201&quot;</span><span class="p">)</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Check if already organized</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">organized_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="p">(</span><span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;agent&quot;</span> <span class="o">/</span> <span class="s2">&quot;model_log.md&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -5800,10 +5800,6 @@
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Organized model location: </span><span class="si">{</span><span class="n">organized_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Model already organized at: D:\Ras-Commander_BulkData\eBFE\Organized\UpperGuadalupe_12100201
-
-✓ Organized model location: D:\Ras-Commander_BulkData\eBFE\Organized\UpperGuadalupe_12100201
-</code></pre></div>
 <h2 id="understanding-the-massive-fix-applied">Understanding the Massive Fix Applied<a class="headerlink" href="#understanding-the-massive-fix-applied" title="Permanent link">&para;</a></h2>
 <h3 id="before-rasebfemodels-completely-broken">Before RasEbfeModels (Completely Broken)<a class="headerlink" href="#before-rasebfemodels-completely-broken" title="Permanent link">&para;</a></h3>
 <p><strong>What you get from eBFE</strong> (55 GB of frustration):
@@ -5898,18 +5894,6 @@
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>
 </span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Cascaded Watershed Models:
-================================================================================
-Flow Direction: UPGU1 → UPGU2 → UPGU3 → UPGU4
-
-Each model receives upstream flow via DSS boundary conditions
-
-UPGU1: ⚠️ Not found
-UPGU2: ⚠️ Not found
-UPGU3: ⚠️ Not found
-UPGU4: ⚠️ Not found
-================================================================================
-</code></pre></div>
 <h2 id="step-3-review-dss-validation-results">Step 3: Review DSS Validation Results<a class="headerlink" href="#step-3-review-dss-validation-results" title="Permanent link">&para;</a></h2>
 <p>The organization function validated 10,248 DSS pathnames. Check the results.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Check DSS validation output</span>
@@ -5931,10 +5915,6 @@ UPGU4: ⚠️ Not found
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ DSS validation output not found&quot;</span><span class="p">)</span>
 </span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Re-run organization with validate_dss=True&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>⚠️ DSS validation output not found
-
-Re-run organization with validate_dss=True
-</code></pre></div>
 <h2 id="step-4-examine-gridded-precipitation-dss">Step 4: Examine Gridded Precipitation DSS<a class="headerlink" href="#step-4-examine-gridded-precipitation-dss" title="Permanent link">&para;</a></h2>
 <p>Upper Guadalupe uses gridded precipitation DSS files (1,680 pathnames × 4 files = 6,720 total).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
@@ -5967,10 +5947,6 @@ Re-run organization with validate_dss=True
 </span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ No precipitation DSS files found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Gridded Precipitation DSS Files: 0
-
-⚠️ No precipitation DSS files found
-</code></pre></div>
 <h2 id="step-5-initialize-first-watershed-model-upgu1">Step 5: Initialize First Watershed Model (UPGU1)<a class="headerlink" href="#step-5-initialize-first-watershed-model-upgu1" title="Permanent link">&para;</a></h2>
 <p>Initialize the upstream model - this provides boundary conditions for UPGU2.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Initialize UPGU1 (upstream model)</span>
@@ -5998,8 +5974,6 @@ Re-run organization with validate_dss=True
 </span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ UPGU1 folder not found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>⚠️ UPGU1 folder not found
-</code></pre></div>
 <h2 id="step-6-validate-upgu1-dss-files">Step 6: Validate UPGU1 DSS Files<a class="headerlink" href="#step-6-validate-upgu1-dss-files" title="Permanent link">&para;</a></h2>
 <p>UPGU1 has precipitation + upstream boundary conditions. Validate all pathnames.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Find DSS files for UPGU1</span>
@@ -6043,16 +6017,6 @@ Re-run organization with validate_dss=True
 </span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a><span class="n">total_pathnames</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;pathnames&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">dss_summary</span><span class="p">)</span>
 </span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total pathnames in UPGU1: </span><span class="si">{</span><span class="n">total_pathnames</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>UPGU1 DSS Files: 0
-
-
-DSS Summary:
-Empty DataFrame
-Columns: []
-Index: []
-
-Total pathnames in UPGU1: 0
-</code></pre></div>
 <h2 id="step-7-understanding-the-cascade">Step 7: Understanding the Cascade<a class="headerlink" href="#step-7-understanding-the-cascade" title="Permanent link">&para;</a></h2>
 <p>Each downstream model receives flow from upstream via DSS files.</p>
 <p><strong>Cascade Flow</strong>:
@@ -6093,8 +6057,6 @@ Total pathnames in UPGU1: 0
 </span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a>
 </span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>        <span class="nb">print</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Cascade DSS Structure:
-</code></pre></div>
 <h2 id="step-8-initialize-all-watershed-models">Step 8: Initialize All Watershed Models<a class="headerlink" href="#step-8-initialize-all-watershed-models" title="Permanent link">&para;</a></h2>
 <p>Initialize all 4 models to examine their structure.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Initialize all 4 models with separate RasPrj objects</span>
@@ -6114,8 +6076,6 @@ Total pathnames in UPGU1: 0
 </span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Initialized </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">watershed_models</span><span class="p">)</span><span class="si">}</span><span class="s2"> watershed models&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>✓ Initialized 0 watershed models
-</code></pre></div>
 <h2 id="step-9-check-plan-structure">Step 9: Check Plan Structure<a class="headerlink" href="#step-9-check-plan-structure" title="Permanent link">&para;</a></h2>
 <p>Each model has 7 plans for different AEP (Annual Exceedance Probability) frequencies.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Show plan structure for first model</span>
@@ -6140,8 +6100,8 @@ Total pathnames in UPGU1: 0
 <p><strong>Warning</strong>: This will execute 4 large 2D models sequentially. Each model may take 2-6 hours.</p>
 <p><strong>Total Time</strong>: 8-24 hours depending on hardware</p>
 <p><strong>Set EXECUTE_CASCADE = True only if you want to run the full validation</strong></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">EXECUTE_CASCADE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to True to run full cascade</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">EXECUTE_UPGU1_ONLY</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to True to test just first model</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">EXECUTE_CASCADE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to True to run full cascade</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">EXECUTE_UPGU1_ONLY</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to True to test just first model</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">if</span> <span class="n">EXECUTE_CASCADE</span><span class="p">:</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Executing CASCADE (UPGU1 → UPGU2 → UPGU3 → UPGU4)&quot;</span><span class="p">)</span>
@@ -6178,18 +6138,18 @@ Total pathnames in UPGU1: 0
 </span><span id="__span-14-36"><a id="__codelineno-14-36" name="__codelineno-14-36" href="#__codelineno-14-36"></a>        <span class="p">)</span>
 </span><span id="__span-14-37"><a id="__codelineno-14-37" name="__codelineno-14-37" href="#__codelineno-14-37"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ UPGU1 complete&quot;</span><span class="p">)</span>
 </span><span id="__span-14-38"><a id="__codelineno-14-38" name="__codelineno-14-38" href="#__codelineno-14-38"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-14-39"><a id="__codelineno-14-39" name="__codelineno-14-39" href="#__codelineno-14-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cascade execution skipped (EXECUTE_CASCADE = False)&quot;</span><span class="p">)</span>
+</span><span id="__span-14-39"><a id="__codelineno-14-39" name="__codelineno-14-39" href="#__codelineno-14-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cascade execution skipped (EXECUTE_CASCADE = True)&quot;</span><span class="p">)</span>
 </span><span id="__span-14-40"><a id="__codelineno-14-40" name="__codelineno-14-40" href="#__codelineno-14-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">💡 See COMPUTE_TEST_INSTRUCTIONS.md for detailed execution guidance:&quot;</span><span class="p">)</span>
 </span><span id="__span-14-41"><a id="__codelineno-14-41" name="__codelineno-14-41" href="#__codelineno-14-41"></a>    <span class="n">compute_instructions</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;COMPUTE_TEST_INSTRUCTIONS.md&quot;</span>
 </span><span id="__span-14-42"><a id="__codelineno-14-42" name="__codelineno-14-42" href="#__codelineno-14-42"></a>    <span class="k">if</span> <span class="n">compute_instructions</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-14-43"><a id="__codelineno-14-43" name="__codelineno-14-43" href="#__codelineno-14-43"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   </span><span class="si">{</span><span class="n">compute_instructions</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Cascade execution skipped (EXECUTE_CASCADE = False)
-
-💡 See COMPUTE_TEST_INSTRUCTIONS.md for detailed execution guidance:
-</code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Display results summary from results_df</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Display results summary (requires cascade execution)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="c1"># Display results summary from results_df</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">except</span> <span class="ne">NameError</span><span class="p">:</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Results display requires cascade execution (EXECUTE_CASCADE=True)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="optional-check-results">Optional: Check Results<a class="headerlink" href="#optional-check-results" title="Permanent link">&para;</a></h2>
 <p>After executing models, check HDF results for errors.</p>
@@ -6227,8 +6187,6 @@ Total pathnames in UPGU1: 0
 </span><span id="__span-16-32"><a id="__codelineno-16-32" name="__codelineno-16-32" href="#__codelineno-16-32"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-16-33"><a id="__codelineno-16-33" name="__codelineno-16-33" href="#__codelineno-16-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No models executed yet - run compute test first&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No models executed yet - run compute test first
-</code></pre></div>
 <h2 id="step-10-extract-results-if-models-executed">Step 10: Extract Results (If Models Executed)<a class="headerlink" href="#step-10-extract-results-if-models-executed" title="Permanent link">&para;</a></h2>
 <p>Extract water surface elevations from executed models.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">if</span> <span class="n">executed_models</span><span class="p">:</span>
@@ -6249,13 +6207,6 @@ Total pathnames in UPGU1: 0
 </span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  2. Wait for execution to complete&quot;</span><span class="p">)</span>
 </span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  3. Re-run this cell&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No results to extract - models not yet executed
-
-To extract results:
-  1. Set EXECUTE_CASCADE = True or EXECUTE_UPGU1_ONLY = True above
-  2. Wait for execution to complete
-  3. Re-run this cell
-</code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated:</p>
 <ol>
@@ -6312,7 +6263,7 @@ To extract results:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 29, 2026 21:23:00 UTC">March 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 7, 2026 12:35:49 UTC">April 7, 2026</span>
   </span>
 
     
@@ -6322,7 +6273,7 @@ To extract results:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 29, 2026 21:23:00 UTC">March 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 7, 2026 12:35:49 UTC">April 7, 2026</span>
   </span>
 
     
