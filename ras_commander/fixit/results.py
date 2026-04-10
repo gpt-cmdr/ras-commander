@@ -20,6 +20,12 @@ class FixAction(Enum):
     # HTAB (Hydraulic Table) fix actions
     HTAB_STARTING_EL_FIXED = "HTAB_STARTING_EL_FIXED"  # Starting elevation raised to >= invert
     HTAB_PARAMS_SET = "HTAB_PARAMS_SET"        # HTAB parameters written/updated
+    # Bank station fix actions (version upgrade)
+    BANK_STATION_REWRITTEN = "BANK_STATION_REWRITTEN"  # Sta/elev rewritten with bank interpolation
+    # Manning's n fix actions (version upgrade)
+    MANNINGS_N_REWRITTEN = "MANNINGS_N_REWRITTEN"      # Manning's n data renormalized
+    # Ineffective flow area fix actions (version upgrade)
+    INEFFECTIVE_FIXED = "INEFFECTIVE_FIXED"            # Malformed ineffective area corrected
 
 
 @dataclass
