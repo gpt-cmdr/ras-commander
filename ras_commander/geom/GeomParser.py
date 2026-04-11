@@ -16,6 +16,8 @@ List of Functions:
 - extract_comma_list() - Extract comma-separated list
 - create_backup() - Create .bak backup before modification
 - validate_river_reach_rs() - Validate river/reach/RS exists
+- get_geom_title() - Read the Geom Title from a geometry file
+- set_geom_title() - Write the Geom Title to a geometry file
 
 Example Usage:
     >>> from ras_commander import GeomParser
@@ -1031,3 +1033,111 @@ class GeomParser:
         return gpd.GeoDataFrame(reaches, geometry='geometry') if reaches else gpd.GeoDataFrame(
             columns=['river', 'reach', 'geometry']
         )
+
+    @staticmethod
+    @log_call
+    def get_geom_title(geom_file: Union[str, Path]) -> str:
+        """
+        Read the Geom Title from a HEC-RAS geometry file.
+
+        Scans the .g## text file line-by-line for ``Geom Title=`` and returns
+        the value.  Returns an empty string if the keyword is not present.
+
+        Parameters
+        ----------
+        geom_file : Union[str, Path]
+            Path to the .g## geometry text file.
+
+        Returns
+        -------
+        str
+            The geometry title, or ``""`` if not found.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *geom_file* does not exist.
+
+        Examples
+        --------
+        >>> title = GeomParser.get_geom_title("MyProject.g01")
+        >>> print(f"Geometry title: {title}")
+        Geometry title: White Lick Creek Geometry
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                value = GeomParser.extract_keyword_value(line, "Geom Title")
+                if value:
+                    return value
+                # Stop once we've passed the header section (first blank line
+                # after non-blank content is a reasonable boundary, but we scan
+                # the full file to be safe and match extract_keyword_value behavior)
+
+        return ""
+
+    @staticmethod
+    @log_call
+    def set_geom_title(
+        geom_file: Union[str, Path],
+        title: str,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write the Geom Title to a HEC-RAS geometry file.
+
+        Replaces the existing ``Geom Title=`` line in place.  If the keyword
+        is absent it is inserted at index 0, matching the
+        ``RasPlan.set_plan_title`` pattern.
+
+        Parameters
+        ----------
+        geom_file : Union[str, Path]
+            Path to the .g## geometry text file.
+        title : str
+            New geometry title to write.
+        create_backup : bool, optional
+            Create a .bak backup before modifying the file (default ``True``).
+
+        Returns
+        -------
+        Optional[Path]
+            Path to the backup file (from :meth:`safe_write_geometry`), or
+            ``None`` if *create_backup* is ``False``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *geom_file* does not exist.
+        IOError
+            If the file cannot be written.
+
+        Examples
+        --------
+        >>> backup = GeomParser.set_geom_title("MyProject.g01", "Updated Geometry")
+        >>> print(f"Backup created: {backup}")
+        Backup created: MyProject.g01.bak
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+
+        updated = False
+        for i, line in enumerate(lines):
+            if line.lower().startswith("geom title="):
+                lines[i] = f"Geom Title={title}\n"
+                updated = True
+                break
+
+        if not updated:
+            lines.insert(0, f"Geom Title={title}\n")
+
+        return GeomParser.safe_write_geometry(geom_file, lines, create_backup=create_backup)
