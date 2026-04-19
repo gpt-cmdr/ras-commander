@@ -22,20 +22,42 @@ Look at the current conversation to determine which notebook is being worked on:
 
 If unclear, ask the user which notebook to test.
 
-### 2. Delegate to notebook-runner Subagent
+### 2. Determine the Kernel
 
-**You MUST use the Task tool** to delegate this work:
+**Default**: Use the `rascommander` kernel (pip-installed package). This validates the end-user experience.
+
+**Switch to local dev kernel** (`rascmdr` or `rascmdr_local`) only when:
+- The current work involves unpublished library changes being tested
+- The user explicitly requests local dev testing
+
+**If neither kernel is available**: Ask the user which environment to use and offer to set one up.
+
+### 3. Delegate to notebook-runner Subagent
+
+**You MUST use the Agent tool** to delegate this work:
 
 ```python
-Task(
+Agent(
     subagent_type="notebook-runner",
     model="sonnet",
     prompt=f"""
-    Execute and test this notebook: {notebook_path}
+    Execute and test this notebook using **papermill**: {notebook_path}
+    Use kernel: {kernel_name}
 
     **DEVELOPMENT TEST MODE - Report ALL issues back to main agent.**
 
-    Execute the notebook and return:
+    Run via papermill (NOT nbconvert):
+    ```
+    papermill {notebook_path} working/notebook_runs/{stem}_executed.ipynb \
+      --cwd {notebook_dir} \
+      --kernel {kernel_name} \
+      --no-progress-bar
+    ```
+
+    Use `--execution-timeout 0` (no hard kill) — let cells run to completion.
+    If execution seems stuck, report which cell is blocking and why, but do NOT kill it.
+
+    Return:
 
     1. EXECUTION STATUS
        - Pass/Fail
@@ -62,6 +84,7 @@ Task(
        - Import failures (even partial)
        - Slow cells (>30 seconds)
        - Print statements suggesting issues
+       - GUI automation cells (will block waiting for user)
 
     Write artifacts to: working/notebook_runs/
 
@@ -70,7 +93,7 @@ Task(
 )
 ```
 
-### 3. Report Results Back to User
+### 4. Report Results Back to User
 
 After receiving the subagent's response, present ALL findings to the user:
 
@@ -100,11 +123,20 @@ Agent identifies notebook from context, delegates to notebook-runner, receives r
 - All stderr output
 - Anything that indicates the notebook isn't working perfectly
 
+## GUI Automation Cells
+
+Some notebooks (e.g., 120, 320, 600) contain cells that launch HEC-RAS GUI and wait for user interaction. These cells will **block indefinitely** during automated execution. The subagent should:
+- Warn about GUI-blocking cells before execution
+- Note them in the execution report
+- Not treat them as failures
+
 ## Cross-References
 
 **Agents** (delegate to):
-- `notebook-runner` -- Notebook execution
-- `notebook-output-auditor` -- Output review
+- `notebook-runner` -- Notebook execution via papermill
+- `notebook-output-auditor` -- Output review (downstream)
+- `notebook-anomaly-spotter` -- Anomaly detection (downstream)
+- `hecras-notebook-qaqc` -- HEC-RAS project linkage verification (downstream)
 
 **Rules** (follow these):
 - `.claude/rules/documentation/notebook-standards.md` -- Notebook conventions
