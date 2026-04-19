@@ -39,7 +39,7 @@ def test_set_2d_flow_area_perimeter_updates_existing_block_and_preserves_breakli
         [
             "Geom Title=2D Writer Regression Test\n",
             "Program Version=6.60\n",
-            "Storage Area=Existing 2D,10.0000000,10.0000000\n",
+            "Storage Area=Existing 2D      ,10.0000000,10.0000000\n",
             "Storage Area Surface Line= 4\n",
             *_format_xy_rows(
                 [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 0.0)],
@@ -56,7 +56,7 @@ def test_set_2d_flow_area_perimeter_updates_existing_block_and_preserves_breakli
             "Storage Area Mannings=0.04\n",
             "2D Cell Volume Filter Tolerance=0.01\n",
             "\n",
-            "BreakLine BL-1\n",
+            "BreakLine Name=TestBreakline\n",
             "River Reach=TestRiver    ,TestReach\n",
         ],
     )
@@ -70,6 +70,7 @@ def test_set_2d_flow_area_perimeter_updates_existing_block_and_preserves_breakli
             (150.0, 250.0),
             (100.0, 250.0),
         ],
+        recompute_centroid=True,
         create_backup=False,
     )
 
@@ -82,7 +83,7 @@ def test_set_2d_flow_area_perimeter_updates_existing_block_and_preserves_breakli
     assert "Storage Area 2D PointsPerimeterTime=01Jan2026 00:00:00" not in updated_text
     assert "Storage Area Point Generation Data=,,100,100" in updated_text
     assert "Storage Area Mannings=0.04" in updated_text
-    assert "BreakLine BL-1" in updated_text
+    assert "BreakLine Name=TestBreakline" in updated_text
 
 
 def test_set_2d_flow_area_perimeter_creates_new_block_from_polygon(tmp_path):
@@ -184,3 +185,177 @@ def test_set_2d_flow_area_settings_updates_text_settings_without_resetting_mesh_
     assert row["laminar_depth"] == pytest.approx(0.65)
     assert row["min_face_length_ratio"] == pytest.approx(0.75)
     assert row["point_generation_data"] == ",,125,150"
+
+
+def test_unchanged_perimeter_preserves_header_and_mesh_points(tmp_path):
+    """No-op round-trip must preserve header X/Y, mesh points, and timestamp."""
+    original_header = "Storage Area=TestArea       ,12345.6789012,67890.1234567\n"
+    points_line = "Storage Area 2D Points= 42\n"
+    time_line = "Storage Area 2D PointsPerimeterTime=15Mar2025 09:30:00\n"
+    coords = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0), (0.0, 0.0)]
+
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Preservation Test\n",
+            "Program Version=6.60\n",
+            original_header,
+            "Storage Area Surface Line= 5\n",
+            *_format_xy_rows(coords, values_per_line=2),
+            "Storage Area Type= 0\n",
+            "Storage Area Area=\n",
+            "Storage Area Min Elev=\n",
+            "Storage Area Is2D=-1\n",
+            "Storage Area Point Generation Data=,,500,500\n",
+            points_line,
+            time_line,
+            "Storage Area Mannings=0.04\n",
+            "\n",
+        ],
+    )
+
+    GeomStorage.set_2d_flow_area_perimeter(
+        geom_file,
+        "TestArea",
+        coordinates=coords,
+        create_backup=False,
+    )
+
+    updated_text = geom_file.read_text(encoding="utf-8")
+
+    assert original_header.strip() in updated_text
+    assert "Storage Area 2D Points= 42" in updated_text
+    assert "Storage Area 2D PointsPerimeterTime=15Mar2025 09:30:00" in updated_text
+
+
+def test_update_preserves_original_header_by_default(tmp_path):
+    """When perimeter changes, header X/Y is preserved unless recompute_centroid=True."""
+    original_header = "Storage Area=MyArea         ,999.1234567,888.7654321\n"
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Header Test\n",
+            "Program Version=6.60\n",
+            original_header,
+            "Storage Area Surface Line= 4\n",
+            *_format_xy_rows(
+                [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 0.0)],
+                values_per_line=2,
+            ),
+            "Storage Area Type= 0\n",
+            "Storage Area Area=\n",
+            "Storage Area Min Elev=\n",
+            "Storage Area Is2D=-1\n",
+            "Storage Area Point Generation Data=,,100,100\n",
+            "Storage Area 2D Points= 0\n",
+            "Storage Area 2D PointsPerimeterTime=01Jan2026 00:00:00\n",
+            "Storage Area Mannings=0.04\n",
+            "\n",
+        ],
+    )
+
+    # Update with new perimeter, default recompute_centroid=False
+    GeomStorage.set_2d_flow_area_perimeter(
+        geom_file,
+        "MyArea",
+        coordinates=[(50.0, 50.0), (150.0, 50.0), (150.0, 150.0), (50.0, 150.0)],
+        create_backup=False,
+    )
+
+    updated_text = geom_file.read_text(encoding="utf-8")
+    assert original_header.strip() in updated_text
+    assert "Storage Area Surface Line= 5" in updated_text
+
+
+def test_recompute_centroid_flag(tmp_path):
+    """recompute_centroid=True recomputes header X/Y from the polygon."""
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Centroid Test\n",
+            "Program Version=6.60\n",
+            "Storage Area=CentroidTest    ,0.0000000,0.0000000\n",
+            "Storage Area Surface Line= 4\n",
+            *_format_xy_rows(
+                [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 0.0)],
+                values_per_line=2,
+            ),
+            "Storage Area Type= 0\n",
+            "Storage Area Area=\n",
+            "Storage Area Min Elev=\n",
+            "Storage Area Is2D=-1\n",
+            "Storage Area Point Generation Data=,,100,100\n",
+            "Storage Area 2D Points= 0\n",
+            "Storage Area 2D PointsPerimeterTime=01Jan2026 00:00:00\n",
+            "Storage Area Mannings=0.04\n",
+            "\n",
+        ],
+    )
+
+    GeomStorage.set_2d_flow_area_perimeter(
+        geom_file,
+        "CentroidTest",
+        coordinates=[(0.0, 0.0), (200.0, 0.0), (200.0, 100.0), (0.0, 100.0)],
+        recompute_centroid=True,
+        create_backup=False,
+    )
+
+    updated_text = geom_file.read_text(encoding="utf-8")
+    assert "Storage Area=CentroidTest,100.0000000,50.0000000" in updated_text
+
+
+@pytest.mark.parametrize("bad_name", [
+    "Area,Injected",
+    "Area\nInjected",
+    "Area=Injected",
+    "Area\rInjected",
+])
+def test_invalid_name_rejected(tmp_path, bad_name):
+    """Names containing commas, newlines, or = must be rejected."""
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Name Validation Test\n",
+            "Program Version=6.60\n",
+        ],
+    )
+    with pytest.raises(ValueError, match="invalid characters"):
+        GeomStorage.set_2d_flow_area_perimeter(
+            geom_file,
+            bad_name,
+            coordinates=[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            create_backup=False,
+        )
+
+
+def test_invalid_name_rejected_in_settings(tmp_path):
+    """set_2d_flow_area_settings also validates names."""
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Name Validation Test\n",
+            "Program Version=6.60\n",
+        ],
+    )
+    with pytest.raises(ValueError, match="invalid characters"):
+        GeomStorage.set_2d_flow_area_settings(
+            geom_file,
+            "Bad,Name",
+            mannings_n=0.05,
+            create_backup=False,
+        )
+
+
+def test_adaptive_precision_preserves_digits():
+    """Verify adaptive precision uses max decimals that fit the 16-char field."""
+    # Small value: 10.0 -> integer part "10" = 2 digits, overhead = 3 (2+1), available = 13
+    prec = GeomStorage._max_precision_for_field(10.0, 16)
+    assert prec == 13
+
+    # Large value: 2009315.7 -> integer part "2009315" = 7 digits, overhead = 8, available = 8
+    prec = GeomStorage._max_precision_for_field(2009315.7, 16)
+    assert prec == 8
+
+    # Very large: 99999999.0 -> 8 digits, overhead = 9, available = 7
+    prec = GeomStorage._max_precision_for_field(99999999.0, 16)
+    assert prec == 7
