@@ -7,6 +7,7 @@ description: >
   Primary sources: ras_commander/remote/AGENTS.md (patterns), examples/500_remote_execution_psexec.ipynb (workflow),
   .claude/rules/hec-ras/remote.md (critical setup requirements).
 model: sonnet
+tools: [Bash, Read, Write, Glob, Grep]
 working_directory: ras_commander/remote
 ---
 
@@ -23,7 +24,7 @@ working_directory: ras_commander/remote
 This subagent acts as a **lightweight navigator**. Consult these primary sources for detailed information:
 
 ### 1. Implementation Guide
-**File**: `C:\GH\ras-commander\ras_commander\remote\AGENTS.md` (156 lines)
+**File**: `G:\GH\ras-commander\ras_commander\remote\AGENTS.md` (156 lines)
 
 **Contains**:
 - Module structure and naming conventions
@@ -37,7 +38,7 @@ This subagent acts as a **lightweight navigator**. Consult these primary sources
 **Use for**: Coding patterns, module architecture, worker development
 
 ### 2. Complete Workflow Example
-**File**: `C:\GH\ras-commander\examples\500_remote_execution_psexec.ipynb`
+**File**: `G:\GH\ras-commander\examples\500_remote_execution_psexec.ipynb`
 
 **Contains**:
 - Part 1: Setup and imports
@@ -329,7 +330,7 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 
 ## Testing
 
-**Notebook**: `C:\GH\ras-commander\examples\500_remote_execution_psexec.ipynb`
+**Notebook**: `G:\GH\ras-commander\examples\500_remote_execution_psexec.ipynb`
 
 **Test sequence**:
 1. Part 2: Local parallel (baseline, no remote setup needed)
