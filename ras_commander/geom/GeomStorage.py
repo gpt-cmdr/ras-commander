@@ -67,7 +67,7 @@ class GeomStorage:
 
     DEFAULT_2D_POINT_GENERATION_DATA = ",,,"
 
-    _INVALID_NAME_CHARS = set(',\n\r=')
+    _INVALID_NAME_CHARS = set(',=') | {chr(c) for c in range(0, 32)} | {chr(127)}
 
     # Plain text keywords for 2D flow area settings
     _SETTINGS_KEYWORDS = {
@@ -304,15 +304,25 @@ class GeomStorage:
 
     @staticmethod
     def _max_precision_for_field(value: float, column_width: int) -> int:
-        """Compute the max decimal places that fit a value in a fixed-width field."""
-        if value == 0.0:
-            return column_width - 3  # "0." + decimals + at least 1 leading space
+        """Compute the max decimal places that fit a value in a fixed-width field.
+
+        Uses a fit loop: starts from an arithmetic estimate and decrements
+        until the formatted string actually fits, handling rounding carry
+        (e.g. 99.9999… rounding to 100).
+        """
         sign_chars = 1 if value < 0 else 0
         integer_part = int(abs(value))
-        int_digits = len(str(integer_part)) if integer_part > 0 else 1
-        overhead = sign_chars + int_digits + 1  # digits + decimal point
-        available = column_width - overhead
-        return max(0, available)
+        int_digits = max(1, len(str(integer_part)))
+        overhead = sign_chars + int_digits + 1
+        prec = max(0, column_width - overhead)
+
+        while prec > 0:
+            formatted = f"{value:{column_width}.{prec}f}"
+            if len(formatted) <= column_width:
+                return prec
+            prec -= 1
+
+        return 0
 
     @staticmethod
     def _format_surface_line_lines(coords: List[tuple[float, float]]) -> List[str]:
