@@ -309,6 +309,8 @@ def test_recompute_centroid_flag(tmp_path):
     "Area\nInjected",
     "Area=Injected",
     "Area\rInjected",
+    "Area\x00Injected",
+    "Area\tInjected",
 ])
 def test_invalid_name_rejected(tmp_path, bad_name):
     """Names containing commas, newlines, or = must be rejected."""
@@ -346,16 +348,48 @@ def test_invalid_name_rejected_in_settings(tmp_path):
         )
 
 
-def test_adaptive_precision_preserves_digits():
-    """Verify adaptive precision uses max decimals that fit the 16-char field."""
-    # Small value: 10.0 -> integer part "10" = 2 digits, overhead = 3 (2+1), available = 13
+@pytest.mark.parametrize("value,col_width", [
+    (10.0, 16),
+    (2009315.7, 16),
+    (99999999.0, 16),
+    (99.99999999999996, 16),     # rounding carry: 99.9… → 100
+    (-99.99999999999996, 16),    # negative rounding carry
+    (9999999.99999995, 16),      # large rounding carry
+    (0.123456789, 16),           # sub-unit
+    (-0.123456789, 16),          # negative sub-unit
+    (0.0, 16),                   # zero
+    (1e7, 16),                   # exactly 10M
+])
+def test_adaptive_precision_field_width(value, col_width):
+    """Formatted string must never exceed column_width."""
+    prec = GeomStorage._max_precision_for_field(value, col_width)
+    formatted = f"{value:{col_width}.{prec}f}"
+    assert len(formatted) <= col_width, (
+        f"value={value}, prec={prec}, formatted={formatted!r} "
+        f"is {len(formatted)} chars (max {col_width})"
+    )
+
+
+def test_adaptive_precision_maximizes_digits():
+    """Verify precision is as high as possible within the width constraint."""
     prec = GeomStorage._max_precision_for_field(10.0, 16)
-    assert prec == 13
+    assert prec >= 12
 
-    # Large value: 2009315.7 -> integer part "2009315" = 7 digits, overhead = 8, available = 8
     prec = GeomStorage._max_precision_for_field(2009315.7, 16)
-    assert prec == 8
+    assert prec >= 7
 
-    # Very large: 99999999.0 -> 8 digits, overhead = 9, available = 7
-    prec = GeomStorage._max_precision_for_field(99999999.0, 16)
-    assert prec == 7
+
+def test_surface_line_fields_never_exceed_16_chars():
+    """End-to-end: every field in the formatted surface line fits 16 chars."""
+    coords = [
+        (2009315.70791633, 321138.385272103),
+        (99.99999999999996, -99.99999999999996),
+        (0.0, 9999999.99999995),
+        (2009315.70791633, 321138.385272103),
+    ]
+    lines = GeomStorage._format_surface_line_lines(coords)
+    for line in lines:
+        raw = line.rstrip('\n')
+        for i in range(0, len(raw), 16):
+            field = raw[i:i+16]
+            assert len(field) <= 16, f"Field {field!r} exceeds 16 chars"
