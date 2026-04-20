@@ -64,6 +64,7 @@ from .geom import (
     GeomParser, GeomPreprocessor, GeomLandCover,
     GeomCrossSection, GeomStorage, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert,
+    GeomReferenceFeatures,
 )
 
 # HDF handling - imported from hdf subpackage
@@ -158,6 +159,7 @@ __all__ = [
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
     'GeomCrossSection', 'GeomStorage', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
+    'GeomReferenceFeatures',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',
