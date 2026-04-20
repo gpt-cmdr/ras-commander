@@ -373,6 +373,23 @@ class RasEbfeModels:
                 try:
                     with zipfile.ZipFile(ras_nested_zip, 'r') as zip_ref:
                         zip_ref.extractall(folders['ras'])
+                    print(f"  ✓ Outer zip extracted")
+
+                    # Recursively extract inner zips (Input.zip, Output.zip, Terrain.zip, etc.)
+                    inner_zips = list(folders['ras'].rglob('*.zip'))
+                    if inner_zips:
+                        print(f"  Found {len(inner_zips)} inner zip(s), extracting recursively...")
+                        for inner_zip in inner_zips:
+                            inner_name = inner_zip.stem
+                            inner_dest = inner_zip.parent / inner_name
+                            try:
+                                with zipfile.ZipFile(inner_zip, 'r') as zf:
+                                    zf.extractall(inner_dest)
+                                print(f"    ✓ {inner_zip.name} → {inner_name}/")
+                                inner_zip.unlink()
+                            except Exception as inner_e:
+                                print(f"    ✗ {inner_zip.name}: {inner_e}")
+
                     print(f"  ✓ RAS model extracted")
                     ras_extracted = True
                     RasEbfeModels._organize_spatial_from_ras(folders['ras'], folders['spatial'])
@@ -875,7 +892,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                         break
 
                 if first_reach is not None:
-                    init_ras_project(first_reach, "6.6")
+                    init_ras_project(first_reach, "7.0")
                     print(f"  ✓ init_ras_project succeeded for: {first_reach.name}")
                 else:
                     print("  ⚠ No reach with .prj file found for validation")
@@ -2076,7 +2093,7 @@ from pathlib import Path
 
 # Single reach
 project = Path(r"{dest / 'RAS Model'}") / "Rabbs Creek-Colorado River" / "SHILOH BRANCH"
-init_ras_project(project, "6.6")
+init_ras_project(project, "7.0")
 
 # View plan info
 from ras_commander import ras

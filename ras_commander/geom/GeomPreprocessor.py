@@ -25,12 +25,14 @@ Example Usage:
     >>> GeomPreprocessor.clear_geompre_files(plan_path)
 """
 
+import re
 from pathlib import Path
 from typing import List, Union
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from ..RasPrj import ras
+from ..RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -87,22 +89,55 @@ class GeomPreprocessor:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        def _resolve_geompre_candidates(plan_path: Path, ras_obj) -> List[Path]:
+            """Resolve likely .c## files from plan metadata, then fall back to plan suffix."""
+            candidates = []
+            plan_match = re.search(r"\.p(\d+)$", plan_path.name, re.IGNORECASE)
+            plan_number = RasUtils.normalize_ras_number(plan_match.group(1)) if plan_match else None
+
+            if (
+                plan_number is not None
+                and getattr(ras_obj, "plan_df", None) is not None
+                and not ras_obj.plan_df.empty
+                and "plan_number" in ras_obj.plan_df.columns
+                and "geometry_number" in ras_obj.plan_df.columns
+            ):
+                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
+                matching = ras_obj.plan_df[normalized_plan_numbers == plan_number]
+                if not matching.empty:
+                    geom_number = RasUtils.normalize_ras_number(matching.iloc[0]["geometry_number"])
+                    if geom_number is not None:
+                        candidates.append(plan_path.with_suffix(f".c{geom_number}"))
+
+            geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
+            candidates.append(plan_path.with_suffix(geom_preprocessor_suffix))
+
+            unique_candidates = []
+            seen = set()
+            for candidate in candidates:
+                candidate_str = str(candidate)
+                if candidate_str not in seen:
+                    unique_candidates.append(candidate)
+                    seen.add(candidate_str)
+            return unique_candidates
+
         def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
             plan_path = Path(plan_file)
-            geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
-            geom_preprocessor_file = plan_path.with_suffix(geom_preprocessor_suffix)
-            if geom_preprocessor_file.exists():
+            for geom_preprocessor_file in _resolve_geompre_candidates(plan_path, ras_obj):
+                if not geom_preprocessor_file.exists():
+                    continue
                 try:
                     geom_preprocessor_file.unlink()
                     logger.info(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
+                    return
                 except PermissionError:
                     logger.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}")
                     raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
                 except OSError as e:
                     logger.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
                     raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
-            else:
-                logger.warning(f"No geometry preprocessor file found for: {plan_file}")
+
+            logger.warning(f"No geometry preprocessor file found for: {plan_file}")
 
         if plan_files is None:
             logger.info("Clearing all geometry preprocessor files in the project directory.")

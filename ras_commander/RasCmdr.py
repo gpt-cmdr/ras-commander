@@ -602,6 +602,30 @@ class RasCmdr:
                 logger.error(f"Error message: {e.output}")
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
+                # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
+                plan_num_str = f"{int(plan_number):02d}" if isinstance(plan_number, Number) else str(plan_number).zfill(2)
+                try:
+                    bco_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}.bco{plan_num_str}"
+                    if bco_path.exists():
+                        bco_content = bco_path.read_text(encoding='utf-8', errors='ignore')
+                        if bco_content.strip():
+                            logger.error(f"Compute messages from {bco_path.name}:\n{bco_content}")
+                        else:
+                            logger.debug(f"BCO file {bco_path.name} exists but is empty")
+                except Exception as bco_err:
+                    logger.debug(f"Could not read .bco file: {bco_err}")
+
+                try:
+                    for suffix in [f".p{plan_num_str}.computeMsgs.txt", f".p{plan_num_str}.comp_msgs.txt"]:
+                        msg_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}{suffix}"
+                        if msg_path.exists():
+                            msg_content = msg_path.read_text(encoding='utf-8', errors='ignore')
+                            if msg_content.strip():
+                                logger.error(f"Compute messages from {msg_path.name}:\n{msg_content}")
+                            break
+                except Exception as msg_err:
+                    logger.debug(f"Could not read compute messages file: {msg_err}")
+
                 # Callback: execution complete (failure case)
                 if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
                     stream_callback.on_exec_complete(str(plan_number), False, run_time)
@@ -620,10 +644,15 @@ class RasCmdr:
                     _ras_obj.flow_df = _ras_obj.get_flow_entries()
                     _ras_obj.unsteady_df = _ras_obj.get_unsteady_entries()
                     if _did_execute:
-                        _ras_obj.update_results_df(plan_numbers=[plan_number])
+                        normalized_plan_number = RasUtils.normalize_ras_number(
+                            plan_number
+                        )
+                        _ras_obj.update_results_df(
+                            plan_numbers=[normalized_plan_number]
+                        )
                         # Capture results_df row for the executed plan
                         try:
-                            plan_num_str = str(plan_number).zfill(2)
+                            plan_num_str = normalized_plan_number
                             mask = _ras_obj.results_df['plan_number'] == plan_num_str
                             if mask.any():
                                 _results_df_row = _ras_obj.results_df[mask].iloc[0].copy()

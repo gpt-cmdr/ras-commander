@@ -91,12 +91,20 @@ class CoastalBoundary:
     # Meters to feet conversion factor
     METERS_TO_FEET = 3.28084
 
-    # STOFS-3D field output file pattern
-    # stofs_3d_atl.t{cycle}z.fields.cwl.nc (combined water level)
-    FIELD_PATTERN = "stofs_3d_atl.t{cycle:02d}z.fields.cwl.nc"
+    # STOFS-3D field output file patterns (try in order)
+    # NOAA renamed files circa 2026 — try current names first, then legacy
+    FIELD_PATTERNS = [
+        "stofs_3d_atl.t{cycle:02d}z.fields.cwl.maxele.nc",
+        "stofs_3d_atl.t{cycle:02d}z.fields.cwl.nc",
+    ]
+    FIELD_PATTERN = FIELD_PATTERNS[0]
 
-    # Point output file pattern (station time series)
-    POINT_PATTERN = "stofs_3d_atl.t{cycle:02d}z.points.cwl.nc"
+    # Point output file patterns (try in order)
+    POINT_PATTERNS = [
+        "stofs_3d_atl.t{cycle:02d}z.points.cwl.temp.salt.vel.nc",
+        "stofs_3d_atl.t{cycle:02d}z.points.cwl.nc",
+    ]
+    POINT_PATTERN = POINT_PATTERNS[0]
 
     @staticmethod
     @log_call
@@ -152,30 +160,53 @@ class CoastalBoundary:
 
         date_str = forecast_date.strftime("%Y%m%d")
 
-        # Resolve cycle
+        # Resolve cycle (try previous dates if today's data isn't posted yet)
         if cycle is None:
-            cycle = CoastalBoundary._detect_latest_cycle(date_str)
-            logger.info(f"Auto-detected latest available cycle: {cycle:02d}z")
+            cycle, date_str = CoastalBoundary._detect_latest_cycle_with_fallback(
+                forecast_date, max_days_back=3
+            )
+            logger.info(f"Auto-detected latest available: {date_str} cycle {cycle:02d}z")
 
         if cycle not in CoastalBoundary.VALID_CYCLES:
             raise ValueError(
                 f"Invalid cycle {cycle}. Must be one of {CoastalBoundary.VALID_CYCLES}."
             )
 
-        # Determine file pattern
+        # Determine file patterns to try (current name first, then legacy)
         if file_type == "points":
-            filename = CoastalBoundary.POINT_PATTERN.format(cycle=cycle)
+            patterns = CoastalBoundary.POINT_PATTERNS
         elif file_type == "fields":
-            filename = CoastalBoundary.FIELD_PATTERN.format(cycle=cycle)
+            patterns = CoastalBoundary.FIELD_PATTERNS
         else:
             raise ValueError(
                 f"Invalid file_type '{file_type}'. Must be 'points' or 'fields'."
             )
 
-        url = (
-            f"{CoastalBoundary.BASE_URL}/stofs_3d_atl.{date_str}/"
-            f"{filename}"
-        )
+        # Find which pattern is available on NOMADS
+        filename = None
+        url = None
+        for pattern in patterns:
+            candidate = pattern.format(cycle=cycle)
+            candidate_url = (
+                f"{CoastalBoundary.BASE_URL}/stofs_3d_atl.{date_str}/"
+                f"{candidate}"
+            )
+            try:
+                head = requests.head(candidate_url, timeout=15, allow_redirects=True)
+                if head.status_code == 200:
+                    filename = candidate
+                    url = candidate_url
+                    break
+            except requests.exceptions.RequestException:
+                continue
+
+        if filename is None:
+            filename = patterns[0].format(cycle=cycle)
+            url = (
+                f"{CoastalBoundary.BASE_URL}/stofs_3d_atl.{date_str}/"
+                f"{filename}"
+            )
+
         local_path = output_dir / filename
 
         downloaded_files = []
@@ -303,47 +334,66 @@ class CoastalBoundary:
                 f"Could not open STOFS-3D file {nc_file.name}: {e}"
             )
 
-        # Find nearest point using available coordinate variables
+        # Find nearest point using available coordinate or data variables
         # STOFS-3D uses unstructured mesh - find nearest node
-        if 'x' in ds.coords and 'y' in ds.coords:
+        # Check both coords and data_vars (newer files store x/y as data vars)
+        all_vars = set(ds.coords.keys()) | set(ds.data_vars.keys())
+        if 'x' in all_vars and 'y' in all_vars:
             x_var, y_var = 'x', 'y'
-        elif 'lon' in ds.coords and 'lat' in ds.coords:
+        elif 'lon' in all_vars and 'lat' in all_vars:
             x_var, y_var = 'lon', 'lat'
-        elif 'longitude' in ds.coords and 'latitude' in ds.coords:
+        elif 'longitude' in all_vars and 'latitude' in all_vars:
             x_var, y_var = 'longitude', 'latitude'
         else:
-            # Try dimension variables
-            coord_names = list(ds.coords.keys()) + list(ds.dims.keys())
             raise ValueError(
                 f"Could not identify coordinate variables in STOFS-3D file. "
-                f"Available: {coord_names}"
+                f"Available coords: {list(ds.coords.keys())}, "
+                f"data_vars: {list(ds.data_vars.keys())}"
             )
 
         # Handle negative west longitude
-        model_lons = ds[x_var].values
-        if lon < 0 and model_lons.min() >= 0:
-            lon_query = lon + 360  # Convert to 0-360
+        x_vals = ds[x_var].values
+        y_vals = ds[y_var].values
+
+        if lon < 0 and x_vals.min() >= 0:
+            lon_query = lon + 360
         else:
             lon_query = lon
 
-        # Find nearest grid point
-        dist = np.sqrt(
-            (ds[x_var].values - lon_query) ** 2 +
-            (ds[y_var].values - lat) ** 2
+        # Find nearest point -- try both orientations because some STOFS-3D
+        # point files have swapped x/y for certain stations
+        dist_normal = np.sqrt(
+            (x_vals - lon_query) ** 2 + (y_vals - lat) ** 2
         )
+        dist_swapped = np.sqrt(
+            (y_vals - lon_query) ** 2 + (x_vals - lat) ** 2
+        )
+
+        min_normal = float(dist_normal.min())
+        min_swapped = float(dist_swapped.min())
+
+        if min_normal <= min_swapped:
+            dist = dist_normal
+        else:
+            dist = dist_swapped
+            logger.info("Using swapped x/y orientation (NOAA data quirk)")
+
         nearest_idx = int(np.argmin(dist))
         min_dist = float(dist[nearest_idx])
 
-        # Sanity check: nearest point should be within ~0.5 degrees
-        if min_dist > 0.5:
+        if min_dist > 2.0:
             raise ValueError(
                 f"Nearest STOFS-3D point is {min_dist:.2f} degrees away from "
                 f"({lat}, {lon}). Point may be outside model domain. "
                 f"STOFS-3D covers the US Atlantic and Gulf coasts."
             )
 
-        nearest_lat = float(ds[y_var].values[nearest_idx])
-        nearest_lon = float(ds[x_var].values[nearest_idx])
+        if min_normal <= min_swapped:
+            nearest_lat = float(y_vals[nearest_idx])
+            nearest_lon = float(x_vals[nearest_idx])
+        else:
+            nearest_lat = float(x_vals[nearest_idx])
+            nearest_lon = float(y_vals[nearest_idx])
 
         logger.info(
             f"Nearest grid point: ({nearest_lat:.4f}, {nearest_lon:.4f}), "
@@ -545,13 +595,16 @@ class CoastalBoundary:
                 f"Updating existing Stage Hydrograph for '{bc_location}'"
             )
 
-            # Find the end of the existing stage data
-            # Count of values is on the Stage Hydrograph= line
-            num_values_line = lines[stage_start]
+            # Include the Interval= line BEFORE Stage Hydrograph= in
+            # the replacement range so we don't leave a stale one behind.
+            replace_start = stage_start
+            if (stage_start > 0
+                    and lines[stage_start - 1].strip().startswith('Interval=')):
+                replace_start = stage_start - 1
 
-            # Find where data ends: skip the Interval= line that follows
-            # Stage Hydrograph=, then skip numeric value lines; stop at
-            # the next keyword line (starts with a letter) or end of file.
+            # Find where data ends: skip any Interval= line that follows
+            # Stage Hydrograph= (legacy format), then skip numeric value
+            # lines; stop at the next keyword line or end of file.
             data_end = stage_start + 1
             # Skip Interval= line immediately after Stage Hydrograph= header
             if (data_end < len(lines)
@@ -569,8 +622,8 @@ class CoastalBoundary:
                 datetimes, wse_values
             )
 
-            # Replace existing lines
-            lines[stage_start:data_end] = [stage_block]
+            # Replace existing lines (including preceding Interval=)
+            lines[replace_start:data_end] = [stage_block]
 
         # Write updated file with normalized line endings; preserve trailing newline
         trailing_newline = '\n' if content.endswith(('\n', '\r\n')) else ''
@@ -629,8 +682,8 @@ class CoastalBoundary:
             formatted = ''.join(f'{v:8.2f}' for v in chunk)
             value_lines.append(formatted)
 
-        # Combine
-        parts = [header, interval_line] + value_lines
+        # Combine: Interval= BEFORE Stage Hydrograph= (HEC-RAS format)
+        parts = [interval_line, header] + value_lines
         return '\n'.join(parts)
 
     @staticmethod
@@ -725,6 +778,72 @@ class CoastalBoundary:
             return False
 
     @staticmethod
+    def _detect_latest_cycle_with_fallback(
+        forecast_date: datetime, max_days_back: int = 3
+    ) -> tuple:
+        """
+        Detect the latest available STOFS-3D cycle, falling back to
+        previous dates if today's data isn't posted yet.
+
+        NOMADS retains only ~2 days of STOFS-3D data. When auto-detecting,
+        try today first, then yesterday, etc.
+
+        Args:
+            forecast_date: Starting date to search from.
+            max_days_back: Maximum number of days to search backward.
+
+        Returns:
+            tuple: (cycle_hour, date_str) for the latest available data.
+
+        Raises:
+            RuntimeError: If no cycle found within the search window.
+        """
+        import requests
+
+        now_utc = datetime.utcnow()
+
+        for days_back in range(max_days_back + 1):
+            check_date = forecast_date - timedelta(days=days_back)
+            date_str = check_date.strftime("%Y%m%d")
+            current_date_str = now_utc.strftime("%Y%m%d")
+
+            if date_str == current_date_str:
+                candidate = now_utc - timedelta(hours=6)
+                start_cycle_idx = (candidate.hour // 6)
+            else:
+                start_cycle_idx = 3
+
+            cycles_to_try = [
+                CoastalBoundary.VALID_CYCLES[i % 4]
+                for i in range(start_cycle_idx, start_cycle_idx - 4, -1)
+            ]
+
+            for cycle in cycles_to_try:
+                for pattern in CoastalBoundary.POINT_PATTERNS:
+                    filename = pattern.format(cycle=cycle)
+                    url = (
+                        f"{CoastalBoundary.BASE_URL}/stofs_3d_atl.{date_str}/"
+                        f"{filename}"
+                    )
+
+                    try:
+                        response = requests.head(url, timeout=15, allow_redirects=True)
+                        if response.status_code == 200:
+                            if days_back > 0:
+                                logger.info(
+                                    f"No data for {forecast_date.strftime('%Y%m%d')}, "
+                                    f"using {date_str} instead"
+                                )
+                            return cycle, date_str
+                    except requests.exceptions.RequestException:
+                        continue
+
+        raise RuntimeError(
+            f"No available STOFS-3D cycle found within {max_days_back} days of "
+            f"{forecast_date.strftime('%Y-%m-%d')}. NOMADS may be unavailable."
+        )
+
+    @staticmethod
     def _detect_latest_cycle(date_str: str) -> int:
         """
         Detect the latest available STOFS-3D cycle for a given date.
@@ -743,13 +862,11 @@ class CoastalBoundary:
         now_utc = datetime.utcnow()
         current_date_str = now_utc.strftime("%Y%m%d")
 
-        # Try cycles from most recent to oldest
         if date_str == current_date_str:
-            # Account for ~6 hour latency
             candidate = now_utc - timedelta(hours=6)
             start_cycle_idx = (candidate.hour // 6)
         else:
-            start_cycle_idx = 3  # Start from 18z for past dates
+            start_cycle_idx = 3
 
         cycles_to_try = [
             CoastalBoundary.VALID_CYCLES[i % 4]
@@ -757,18 +874,19 @@ class CoastalBoundary:
         ]
 
         for cycle in cycles_to_try:
-            filename = CoastalBoundary.POINT_PATTERN.format(cycle=cycle)
-            url = (
-                f"{CoastalBoundary.BASE_URL}/stofs_3d_atl.{date_str}/"
-                f"{filename}"
-            )
+            for pattern in CoastalBoundary.POINT_PATTERNS:
+                filename = pattern.format(cycle=cycle)
+                url = (
+                    f"{CoastalBoundary.BASE_URL}/stofs_3d_atl.{date_str}/"
+                    f"{filename}"
+                )
 
-            try:
-                response = requests.head(url, timeout=15, allow_redirects=True)
-                if response.status_code == 200:
-                    return cycle
-            except requests.exceptions.RequestException:
-                continue
+                try:
+                    response = requests.head(url, timeout=15, allow_redirects=True)
+                    if response.status_code == 200:
+                        return cycle
+                except requests.exceptions.RequestException:
+                    continue
 
         raise RuntimeError(
             f"No available STOFS-3D cycle found for {date_str}. "
