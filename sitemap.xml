@@ -141,6 +141,10 @@
          <lastmod>2026-04-20</lastmod>
     </url>
     <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/114_parameter_permutation/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/115_real_time_execution_monitoring/</loc>
          <lastmod>2026-04-20</lastmod>
     </url>
@@ -197,6 +201,18 @@
          <lastmod>2026-04-20</lastmod>
     </url>
     <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/212_landcover_mannings_n_write/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/220_calibration_workflow/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/221_calibration_1d_workflow/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/300_unsteady_flow_operations/</loc>
          <lastmod>2026-04-20</lastmod>
     </url>
@@ -242,6 +258,10 @@
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/412_2d_detail_face_data_extraction/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/415_2d_spatial_result_queries/</loc>
          <lastmod>2026-04-20</lastmod>
     </url>
     <url>
