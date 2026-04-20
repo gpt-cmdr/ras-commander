@@ -40,6 +40,9 @@ Example:
 """
 
 import logging
+import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Union, List, Tuple, Optional
 import geopandas as gpd
@@ -821,7 +824,8 @@ class Usgs3depAws:
     @staticmethod
     def create_vrt(
         tile_files: List[Path],
-        output_vrt: Union[str, Path]
+        output_vrt: Union[str, Path],
+        hecras_version: Optional[str] = None,
     ) -> Path:
         """
         Create a Virtual Raster (VRT) mosaic from multiple tiles.
@@ -829,21 +833,92 @@ class Usgs3depAws:
         Args:
             tile_files: List of TIFF files to mosaic
             output_vrt: Output VRT file path
+            hecras_version: Optional HEC-RAS version to use for bundled
+                GDAL discovery. If None, auto-detects the newest available
+                install.
 
         Returns:
             Path to created VRT file
         """
-        from osgeo import gdal
+        if not tile_files:
+            raise ValueError("tile_files must contain at least one raster")
 
         output_vrt = Path(output_vrt)
+        output_vrt.parent.mkdir(parents=True, exist_ok=True)
+        tile_paths = [Path(tile_file) for tile_file in tile_files]
+
+        for tile_path in tile_paths:
+            if not tile_path.exists():
+                raise FileNotFoundError(f"Tile file not found: {tile_path}")
 
         # Build VRT
         logger.info(f"Creating VRT mosaic from {len(tile_files)} tiles...")
 
+        try:
+            gdalbuildvrt = Usgs3depAws._find_gdalbuildvrt_path(hecras_version)
+        except FileNotFoundError as exc:
+            logger.debug(
+                "HEC-RAS gdalbuildvrt.exe not found, falling back to osgeo.gdal: %s",
+                exc,
+            )
+        else:
+            input_list_path = Usgs3depAws._write_gdal_input_file_list(
+                tile_paths,
+                output_vrt.parent,
+            )
+            cmd = [
+                str(gdalbuildvrt),
+                "-overwrite",
+                "-r", "bilinear",
+                "-input_file_list", str(input_list_path),
+                str(output_vrt),
+            ]
+
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(
+                    "gdalbuildvrt timed out while creating the VRT mosaic."
+                ) from exc
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Failed to execute gdalbuildvrt: {exc}"
+                ) from exc
+            finally:
+                input_list_path.unlink(missing_ok=True)
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"gdalbuildvrt failed with code {result.returncode}. "
+                    f"STDERR: {result.stderr}"
+                )
+
+            if not output_vrt.exists():
+                raise RuntimeError(
+                    f"gdalbuildvrt completed but VRT was not created: {output_vrt}"
+                )
+
+            logger.info(f"  Created: {output_vrt}")
+            return output_vrt
+
+        try:
+            from osgeo import gdal
+        except ImportError as exc:
+            raise ImportError(
+                "Creating a VRT requires either HEC-RAS bundled "
+                "gdalbuildvrt.exe or the GDAL Python bindings "
+                "(`from osgeo import gdal`)."
+            ) from exc
+
         vrt_options = gdal.BuildVRTOptions(resampleAlg='bilinear')
         vrt = gdal.BuildVRT(
             str(output_vrt),
-            [str(f) for f in tile_files],
+            [str(tile_path) for tile_path in tile_paths],
             options=vrt_options
         )
 
@@ -853,5 +928,134 @@ class Usgs3depAws:
         # Close dataset
         vrt = None
 
+        if not output_vrt.exists():
+            raise RuntimeError(f"Failed to create VRT: {output_vrt}")
+
         logger.info(f"  Created: {output_vrt}")
         return output_vrt
+
+    @staticmethod
+    def _find_gdalbuildvrt_path(hecras_version: Optional[str] = None) -> Path:
+        """
+        Find HEC-RAS bundled gdalbuildvrt.exe.
+
+        Args:
+            hecras_version: Optional specific HEC-RAS version to use.
+
+        Returns:
+            Path to gdalbuildvrt.exe within the HEC-RAS GDAL folder.
+
+        Raises:
+            FileNotFoundError: If no supported HEC-RAS GDAL install is found.
+        """
+        from .RasTerrain import RasTerrain
+
+        searched_locations = []
+
+        if hecras_version:
+            install_dirs = [RasTerrain._get_hecras_path(hecras_version)]
+        else:
+            install_dirs = list(Usgs3depAws._iter_hecras_install_dirs())
+
+        for install_dir in install_dirs:
+            searched_locations.append(str(install_dir))
+            gdalbuildvrt = Usgs3depAws._find_gdalbuildvrt_in_install_dir(install_dir)
+            if gdalbuildvrt is not None:
+                return gdalbuildvrt
+
+        searched_text = ", ".join(searched_locations) if searched_locations else "no HEC-RAS installs detected"
+        raise FileNotFoundError(
+            "HEC-RAS bundled gdalbuildvrt.exe not found. "
+            f"Searched: {searched_text}"
+        )
+
+    @staticmethod
+    def _iter_hecras_install_dirs():
+        """
+        Yield installed HEC-RAS directories in descending version order.
+
+        Uses RasTerrain's install discovery first, then falls back to a direct
+        scan of the standard HEC-RAS base directories so point releases and
+        new versions remain discoverable without code changes.
+        """
+        from .RasTerrain import RasTerrain
+
+        seen = set()
+        versions = sorted(
+            set(RasTerrain.get_available_versions()),
+            key=Usgs3depAws._version_sort_key,
+            reverse=True,
+        )
+
+        for version in versions:
+            try:
+                install_dir = RasTerrain._get_hecras_path(version)
+            except FileNotFoundError:
+                continue
+
+            resolved = install_dir.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                yield install_dir
+
+        fallback_dirs = []
+        for base_path in RasTerrain._HECRAS_BASE_PATHS:
+            if not base_path.exists():
+                continue
+            for subdir in base_path.iterdir():
+                if subdir.is_dir():
+                    fallback_dirs.append(subdir)
+
+        fallback_dirs.sort(
+            key=lambda path: Usgs3depAws._version_sort_key(path.name),
+            reverse=True,
+        )
+
+        for install_dir in fallback_dirs:
+            resolved = install_dir.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                yield install_dir
+
+    @staticmethod
+    def _find_gdalbuildvrt_in_install_dir(install_dir: Path) -> Optional[Path]:
+        """Return gdalbuildvrt.exe from a specific HEC-RAS install directory."""
+        gdal_paths = [
+            install_dir / "GDAL" / "bin64",
+            install_dir / "GDAL" / "bin",
+            install_dir / "gdal" / "bin64",
+            install_dir / "gdal" / "bin",
+        ]
+
+        for gdal_path in gdal_paths:
+            gdalbuildvrt = gdal_path / "gdalbuildvrt.exe"
+            if gdalbuildvrt.exists():
+                return gdalbuildvrt
+
+        return None
+
+    @staticmethod
+    def _write_gdal_input_file_list(
+        tile_paths: List[Path],
+        output_dir: Path,
+    ) -> Path:
+        """Write a temporary GDAL input file list and return its path."""
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            suffix=".txt",
+            prefix="gdalbuildvrt-input-",
+            dir=output_dir,
+            delete=False,
+        ) as temp_file:
+            for tile_path in tile_paths:
+                temp_file.write(f"{tile_path}\n")
+
+            return Path(temp_file.name)
+
+    @staticmethod
+    def _version_sort_key(version: str) -> Tuple[Tuple[int, ...], str]:
+        """Sort HEC-RAS version strings numerically when possible."""
+        numeric_parts = tuple(int(part) for part in re.findall(r"\d+", version))
+        return numeric_parts, version.lower()
