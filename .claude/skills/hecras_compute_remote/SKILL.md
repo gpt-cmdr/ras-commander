@@ -25,7 +25,7 @@ Use `compute_parallel_remote()` to distribute HEC-RAS plans across multiple remo
 from ras_commander import init_ras_project, init_ras_worker, compute_parallel_remote
 
 # Initialize project
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Create PsExec worker (Windows remote)
 worker = init_ras_worker(

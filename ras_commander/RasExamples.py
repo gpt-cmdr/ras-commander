@@ -104,10 +104,16 @@ class RasExamples:
     """
     base_url = 'https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/'
     valid_versions = [
-            "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+            "7.0", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
             "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
+
+    # GitHub release tags per version (HEC publishes under different tags)
+    _version_release_tags = {
+        "7.0": "1.0.45",
+    }
+    _default_release_tag = "1.0.33"
 
     # User data directory for ZIP files and CSV cache (writable without admin)
     _user_data_dir = _get_user_data_dir() / 'examples'
@@ -333,7 +339,7 @@ class RasExamples:
         logger.warning("No existing example projects zip file found.")
 
     @classmethod
-    def get_example_projects(cls, version_number='6.6'):
+    def get_example_projects(cls, version_number='7.0'):
         """
         Download and extract HEC-RAS example projects for a specified version.
 
@@ -344,7 +350,7 @@ class RasExamples:
         - Linux: ~/.local/share/ras-commander/examples
 
         Args:
-            version_number: HEC-RAS version (default: '6.6')
+            version_number: HEC-RAS version (default: '7.0')
 
         Returns:
             Path: Directory where projects will be extracted
@@ -355,7 +361,8 @@ class RasExamples:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        zip_url = f"{cls.base_url}1.0.33/Example_Projects_{version_number.replace('.', '_')}.zip"
+        release_tag = cls._version_release_tags.get(version_number, cls._default_release_tag)
+        zip_url = f"{cls.base_url}{release_tag}/Example_Projects_{version_number.replace('.', '_')}.zip"
 
         # Create user data directory for ZIP storage (writable without admin)
         try:

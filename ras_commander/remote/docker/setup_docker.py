@@ -59,7 +59,7 @@ VERSIONS = {
         "libs_path": "libs",
         "notes": "Rocky Linux 8 base"
     },
-    "6.6": {
+    "7.0": {
         "url": "https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v66.zip",
         "base_image": "rockylinux:8",
         "bin_path": "bin",
@@ -73,6 +73,13 @@ VERSIONS = {
         "libs_path": "libs",
         "notes": "Beta version - extract from Windows installer",
         "windows_installer": "https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.42/HEC-RAS_67_Beta_5_with_Linux_Setup.exe"
+    },
+    "7.0": {
+        "url": None,  # Linux binaries TBD - check HEC downloads page
+        "base_image": "rockylinux:8",
+        "bin_path": "",
+        "libs_path": "libs",
+        "notes": "Release version (replaces 6.7 Beta series) - Linux binaries pending",
     }
 }
 

@@ -71,7 +71,7 @@ RasCmdr.compute_test_mode(["01", "02"])
 from ras_commander import init_ras_project, RasCmdr
 
 # Initialize
-init_ras_project("path/to/project", "6.6")
+init_ras_project("path/to/project", "7.0")
 
 # Execute
 RasCmdr.compute_plan("01")
@@ -209,7 +209,7 @@ for project_name in ["upstream", "downstream", "tributary"]:
     projects[project_name] = RasPrj()
     init_ras_project(
         f"path/to/{project_name}",
-        "6.6",
+        "7.0",
         ras_object=projects[project_name]
     )
 

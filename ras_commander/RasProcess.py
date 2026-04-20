@@ -115,7 +115,7 @@ class RasProcess:
 
     Example (Windows - unchanged):
         >>> from ras_commander import init_ras_project, RasProcess
-        >>> init_ras_project("path/to/project", "6.6")
+        >>> init_ras_project("path/to/project", "7.0")
         >>> results = RasProcess.store_maps(
         ...     plan_number="01",
         ...     output_folder="Maps",
@@ -127,7 +127,7 @@ class RasProcess:
     Example (Linux with Wine):
         >>> from ras_commander import init_ras_project, RasProcess
         >>> # Auto-detects Linux and uses default Wine prefix
-        >>> init_ras_project("/path/to/project", "6.6")
+        >>> init_ras_project("/path/to/project", "7.0")
         >>> results = RasProcess.store_maps(plan_number="01")
         >>>
         >>> # Or configure Wine explicitly:
@@ -545,7 +545,7 @@ class RasProcess:
     @log_call
     def setup_wine_environment(
         wine_prefix: Union[str, Path] = "/opt/hecras-wine",
-        ras_version: str = "6.6",
+        ras_version: str = "7.0",
     ) -> None:
         """
         Print setup instructions for the Wine environment.
@@ -635,7 +635,7 @@ Step 5: Configure (optional — auto-detection usually works)
         On Linux, searches within the Wine prefix drive_c/ directory.
 
         Args:
-            ras_version: Optional specific version to look for (e.g., "6.6").
+            ras_version: Optional specific version to look for (e.g., "7.0").
                         If None, searches all known paths.
 
         Returns:

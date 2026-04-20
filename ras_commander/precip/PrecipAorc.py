@@ -775,7 +775,7 @@ class PrecipAorc:
         >>> from ras_commander.precip import PrecipAorc
         >>>
         >>> # Initialize project
-        >>> init_ras_project("/path/to/project", "6.6")
+        >>> init_ras_project("/path/to/project", "7.0")
         >>>
         >>> # Get project bounds and storm catalog
         >>> bounds = (-77.71, 41.01, -77.25, 41.22)

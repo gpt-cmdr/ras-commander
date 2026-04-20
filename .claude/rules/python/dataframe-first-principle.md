@@ -218,7 +218,7 @@ No special [Computed] folder handling is needed.
 
 ```python
 # Simple workflow - just use plan_df after execution
-init_ras_project(project_path, "6.6")
+init_ras_project(project_path, "7.0")
 RasCmdr.compute_parallel(["01", "02"])
 
 # plan_df is automatically refreshed with correct HDF paths

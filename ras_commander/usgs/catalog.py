@@ -22,7 +22,7 @@ Example:
     >>> from ras_commander import init_ras_project
     >>> from ras_commander.usgs.catalog import UsgsGaugeCatalog
     >>>
-    >>> init_ras_project("C:/models/bald_eagle", "6.6")
+    >>> init_ras_project("C:/models/bald_eagle", "7.0")
     >>>
     >>> # Without API key (most users)
     >>> summary = UsgsGaugeCatalog.generate_gauge_catalog()
@@ -151,7 +151,7 @@ class UsgsGaugeCatalog:
         >>> from ras_commander import init_ras_project
         >>> from ras_commander.usgs.catalog import UsgsGaugeCatalog
         >>>
-        >>> init_ras_project("C:/models/bald_eagle", "6.6")
+        >>> init_ras_project("C:/models/bald_eagle", "7.0")
         >>> # For projects without CRS, specify project_crs:
         >>> summary = UsgsGaugeCatalog.generate_gauge_catalog(
         ...     buffer_percent=50.0,

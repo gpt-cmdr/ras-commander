@@ -1015,7 +1015,7 @@ class HdfResultsPlan:
         Extract all steady results:
 
         >>> from ras_commander import init_ras_project, HdfResultsPlan
-        >>> init_ras_project("/path/to/project", "6.6")
+        >>> init_ras_project("/path/to/project", "7.0")
         >>> df = HdfResultsPlan.get_steady_results("01")
         >>> df.to_csv('steady_results.csv', index=False)
 

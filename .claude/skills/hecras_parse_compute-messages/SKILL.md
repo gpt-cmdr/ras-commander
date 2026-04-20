@@ -31,7 +31,7 @@ When the user asks about execution status or compute messages, use these pattern
 from ras_commander import init_ras_project, HdfResultsPlan
 
 # Initialize project
-init_ras_project("path/to/project", "6.6")
+init_ras_project("path/to/project", "7.0")
 
 # Extract compute messages (handles HDF + .txt fallback automatically)
 messages = HdfResultsPlan.get_compute_messages("01")
@@ -304,7 +304,7 @@ def analyze_plan_execution(project_path: str, ras_version: str, plan_number: str
     return report
 
 # Usage
-report = analyze_plan_execution("path/to/project", "6.6", "01")
+report = analyze_plan_execution("path/to/project", "7.0", "01")
 ```
 
 ---

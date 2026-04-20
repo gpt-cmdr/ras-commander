@@ -2467,7 +2467,7 @@ class GeomCrossSection:
             >>>
             >>> # Extract and run example project
             >>> path = RasExamples.extract_project("Muncie", suffix="htab_opt")
-            >>> init_ras_project(path, "6.6")
+            >>> init_ras_project(path, "7.0")
             >>> RasCmdr.compute_plan("01")  # Run to get results
             >>>
             >>> # Optimize HTAB from results

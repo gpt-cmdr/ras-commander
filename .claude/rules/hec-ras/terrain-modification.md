@@ -18,9 +18,11 @@ RasTerrainMod.get_terrain_profile(...)
 
 ## Prerequisites (in order)
 
-1. **HEC-RAS 6.5 or 6.6** installed at one of:
+1. **HEC-RAS 6.5, 6.6, or 7.0** installed at one of:
+   - `C:/Program Files (x86)/HEC/HEC-RAS/7.0/`
    - `C:/Program Files (x86)/HEC/HEC-RAS/6.6/`
    - `C:/Program Files (x86)/HEC/HEC-RAS/6.5/`
+   - `C:/Program Files/HEC/HEC-RAS/7.0/`
    - `C:/Program Files/HEC/HEC-RAS/6.6/`
 
 2. **pythonnet** installed: `pip install pythonnet`

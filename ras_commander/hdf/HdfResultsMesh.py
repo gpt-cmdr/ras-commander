@@ -640,7 +640,7 @@ class HdfResultsMesh:
         Example:
             >>> from ras_commander import init_ras_project
             >>> from ras_commander.hdf import HdfResultsMesh
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> flood_gdf = HdfResultsMesh.get_flood_extent_polygon("01")
         """
         from ..RasProcess import RasProcess

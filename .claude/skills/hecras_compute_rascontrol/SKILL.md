@@ -85,7 +85,7 @@ init_ras_project(path, "5.0.6")
 init_ras_project(path, "506")
 
 # All equivalent - HEC-RAS 6.6
-init_ras_project(path, "6.6")
+init_ras_project(path, "7.0")
 init_ras_project(path, "66")
 ```
 
@@ -223,7 +223,7 @@ print(msgs)
 ```python
 from ras_commander import RasPlan
 
-versions = [("5.0.6", "506"), ("6.3.1", "631"), ("6.6", "66")]
+versions = [("5.0.6", "506"), ("6.3.1", "631"), ("7.0", "66")]
 results = {}
 
 for version_name, version_code in versions:
@@ -369,7 +369,7 @@ df = RasControl.get_steady_results("01")
 from ras_commander import RasCmdr
 from ras_commander.hdf import HdfResultsPlan
 
-init_ras_project(path, "6.6")
+init_ras_project(path, "7.0")
 RasCmdr.compute_plan("01")
 hdf = HdfResultsPlan(ras.plan_df.loc[0, 'HDF_Results_Path'])
 wse = hdf.get_steady_wse()

@@ -102,7 +102,7 @@ from ras_commander import init_ras_project, ras
 from ras_commander.hdf import HdfResultsPlan, HdfResultsMesh
 
 # Initialize project
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Check plan type and extract appropriately
 if HdfResultsPlan.is_steady_plan("01", ras_object=ras):

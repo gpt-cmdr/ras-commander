@@ -260,7 +260,7 @@ pip install ras-commander
 
 If HEC-RAS execution fails:
 
-1. Verify HEC-RAS is installed (default: `C:\Program Files\HEC\HEC-RAS\6.x\`)
+1. Verify HEC-RAS is installed (default: `C:\Program Files\HEC\HEC-RAS\7.x\`)
 2. Specify the full path to Ras.exe:
 
 ```python

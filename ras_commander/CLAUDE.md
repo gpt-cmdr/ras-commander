@@ -103,7 +103,7 @@ Example:
 from ras_commander import init_ras_project, RasCmdr, HdfResultsMesh
 
 # 1. Initialize
-init_ras_project("C:/Projects/MyModel", "C:/Program Files/HEC/HEC-RAS/6.6/Ras.exe")
+init_ras_project("C:/Projects/MyModel", "C:/Program Files/HEC/HEC-RAS/7.0/Ras.exe")
 
 # 2. Execute
 RasCmdr.compute_plan("01", dest_folder="working/run01", overwrite_dest=True)

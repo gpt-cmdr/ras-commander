@@ -73,8 +73,10 @@ from ..LoggingConfig import get_logger
 logger = get_logger(__name__)
 
 _RAS_INSTALL_PATHS = [
+    Path("C:/Program Files (x86)/HEC/HEC-RAS/7.0"),
     Path("C:/Program Files (x86)/HEC/HEC-RAS/6.6"),
     Path("C:/Program Files (x86)/HEC/HEC-RAS/6.5"),
+    Path("C:/Program Files/HEC/HEC-RAS/7.0"),
     Path("C:/Program Files/HEC/HEC-RAS/6.6"),
     Path("C:/Program Files/HEC/HEC-RAS/6.5"),
 ]
@@ -120,7 +122,7 @@ class RasTerrainMod:
     @staticmethod
     @log_call
     def setup_gdal_bridge(
-        hecras_version: str = "6.6",
+        hecras_version: str = "7.0",
         python_dir: Optional[Union[str, Path]] = None
     ) -> bool:
         """
@@ -131,7 +133,7 @@ class RasTerrainMod:
         This method creates a directory junction to satisfy that requirement.
 
         Args:
-            hecras_version: HEC-RAS version to use (default "6.6")
+            hecras_version: HEC-RAS version to use (default "7.0")
             python_dir: Python installation directory (auto-detected if None)
 
         Returns:

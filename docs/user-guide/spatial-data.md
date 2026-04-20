@@ -14,7 +14,7 @@ The `rasmap_df` DataFrame is automatically populated when you call `init_ras_pro
 from ras_commander import init_ras_project, ras
 
 # Initialize project - automatically parses .rasmap file
-init_ras_project(r"C:\Projects\MyRasModel", "6.6")
+init_ras_project(r"C:\Projects\MyRasModel", "7.0")
 
 # Access rasmap DataFrame
 print(ras.rasmap_df)
@@ -53,7 +53,7 @@ The `RasMap` class provides methods for managing custom map layers in RASMapper,
 ```python
 from ras_commander import init_ras_project, RasMap
 
-init_ras_project(r"C:\Projects\MyModel", "6.6")
+init_ras_project(r"C:\Projects\MyModel", "7.0")
 
 # Add a GeoJSON layer to RASMapper
 RasMap.add_map_layer(
@@ -368,7 +368,7 @@ RASMapper Calculated Layers perform raster algebra on plan results. The most com
 ```python
 from ras_commander import init_ras_project, RasMap
 
-init_ras_project(r"C:\Projects\FloodModel", "6.6")
+init_ras_project(r"C:\Projects\FloodModel", "7.0")
 
 # Discover available plan result layers
 plans = RasMap.list_results_plans()
@@ -610,7 +610,7 @@ from ras_commander import (
 )
 
 # 1. Initialize project
-init_ras_project(r"C:\Projects\FloodModel", "6.6")
+init_ras_project(r"C:\Projects\FloodModel", "7.0")
 
 # 2. Check available spatial data
 print("Available terrains:", RasMap.get_terrain_names(RasMap.get_rasmap_path()))

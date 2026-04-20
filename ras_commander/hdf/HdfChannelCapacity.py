@@ -23,7 +23,7 @@ Capacity Levels:
 Example:
     >>> from ras_commander import init_ras_project, HdfChannelCapacity
     >>>
-    >>> init_ras_project("/path/to/project", "6.6")
+    >>> init_ras_project("/path/to/project", "7.0")
     >>>
     >>> results = HdfChannelCapacity.analyze_channel_capacity(
     ...     geom_hdf="01",

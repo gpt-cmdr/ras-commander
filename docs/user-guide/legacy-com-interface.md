@@ -21,6 +21,7 @@ For older HEC-RAS versions that don't support command-line execution or HDF outp
 | 6.0 | Full |
 | 6.3 | Full |
 | 6.6 | Full |
+| 7.0 | Full |
 
 ## Initialization
 
@@ -220,7 +221,7 @@ init_ras_project("/path/to/old_project", "4.1")
 legacy_results = RasControl.get_steady_results("01")
 
 # For modern execution
-init_ras_project("/path/to/new_project", "6.6")
+init_ras_project("/path/to/new_project", "7.0")
 RasCmdr.compute_plan("01")
 
 # Use HDF extraction for modern results

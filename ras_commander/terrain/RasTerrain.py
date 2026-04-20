@@ -46,7 +46,7 @@ Example:
         output_hdf=Path("Terrain/MyTerrain.hdf"),
         projection_prj=Path("Terrain/Projection.prj"),
         units="Feet",
-        hecras_version="6.6"
+        hecras_version="7.0"
     )
 
 See Also:
@@ -102,7 +102,7 @@ class RasTerrain:
 
     @staticmethod
     @log_call
-    def _get_hecras_path(version: str = "6.6") -> Path:
+    def _get_hecras_path(version: str = "7.0") -> Path:
         """
         Get path to HEC-RAS installation directory.
 
@@ -110,8 +110,8 @@ class RasTerrain:
         version and verifies that RasProcess.exe exists.
 
         Args:
-            version: HEC-RAS version string (e.g., "6.6", "6.5", "6.3").
-                     Defaults to "6.6".
+            version: HEC-RAS version string (e.g., "7.0", "6.5", "6.3").
+                     Defaults to "7.0".
 
         Returns:
             Path: Path to HEC-RAS installation directory containing
@@ -122,9 +122,9 @@ class RasTerrain:
                                specified version.
 
         Example:
-            >>> hecras_path = RasTerrain._get_hecras_path("6.6")
+            >>> hecras_path = RasTerrain._get_hecras_path("7.0")
             >>> print(hecras_path)
-            C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6
+            C:\\Program Files (x86)\\HEC\\HEC-RAS\\7.0
         """
         for base_path in RasTerrain._HECRAS_BASE_PATHS:
             hecras_path = base_path / version
@@ -157,7 +157,7 @@ class RasTerrain:
 
     @staticmethod
     @log_call
-    def _get_hecras_gdal_path(version: str = "6.6") -> Path:
+    def _get_hecras_gdal_path(version: str = "7.0") -> Path:
         """
         Get path to GDAL tools in HEC-RAS installation.
 
@@ -165,7 +165,7 @@ class RasTerrain:
         formats. This method locates the GDAL bin64 directory.
 
         Args:
-            version: HEC-RAS version string (e.g., "6.6"). Defaults to "6.6".
+            version: HEC-RAS version string (e.g., "7.0"). Defaults to "7.0".
 
         Returns:
             Path: Path to GDAL bin64 directory containing gdal_translate.exe,
@@ -175,7 +175,7 @@ class RasTerrain:
             FileNotFoundError: If HEC-RAS installation or GDAL tools not found.
 
         Example:
-            >>> gdal_path = RasTerrain._get_hecras_gdal_path("6.6")
+            >>> gdal_path = RasTerrain._get_hecras_gdal_path("7.0")
             >>> print(gdal_path)
             C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\GDAL\\bin64
         """
@@ -285,7 +285,7 @@ class RasTerrain:
         projection_prj: Union[str, Path],
         units: str = "Feet",
         stitch: bool = True,
-        hecras_version: str = "6.6"
+        hecras_version: str = "7.0"
     ) -> Path:
         """
         Create HEC-RAS terrain HDF from input rasters using RasProcess.exe.
@@ -310,7 +310,7 @@ class RasTerrain:
             stitch: Enable terrain stitching for multi-source terrains.
                    Defaults to True.
             hecras_version: HEC-RAS version to use for RasProcess.exe.
-                           Defaults to "6.6".
+                           Defaults to "7.0".
 
         Returns:
             Path: Path to created terrain HDF file.
@@ -329,7 +329,7 @@ class RasTerrain:
             ...     projection_prj=Path("Terrain/Projection.prj"),
             ...     units="Feet",
             ...     stitch=True,
-            ...     hecras_version="6.6"
+            ...     hecras_version="7.0"
             ... )
             >>> print(f"Terrain created: {terrain}")
 
@@ -452,7 +452,7 @@ class RasTerrain:
         create_overviews: bool = True,
         overview_levels: Optional[List[int]] = None,
         nodata_value: Optional[float] = None,
-        hecras_version: str = "6.6"
+        hecras_version: str = "7.0"
     ) -> Path:
         """
         Convert VRT (Virtual Raster) to single optimized TIFF.
@@ -474,7 +474,7 @@ class RasTerrain:
             nodata_value: NoData value for output raster. If None, uses
                          source NoData value.
             hecras_version: HEC-RAS version for GDAL tools path.
-                           Defaults to "6.6".
+                           Defaults to "7.0".
 
         Returns:
             Path: Path to created TIFF file.
@@ -611,7 +611,7 @@ class RasTerrain:
         terrain_name: str = "Terrain",
         units: str = "Feet",
         stitch: bool = True,
-        hecras_version: str = "6.6",
+        hecras_version: str = "7.0",
         generate_prj: bool = True
     ) -> Path:
         """
@@ -628,7 +628,7 @@ class RasTerrain:
                          Terrain.hdf). Defaults to "Terrain".
             units: Vertical data units ("Feet" or "Meters").
             stitch: Enable terrain stitching. Defaults to True.
-            hecras_version: HEC-RAS version. Defaults to "6.6".
+            hecras_version: HEC-RAS version. Defaults to "7.0".
             generate_prj: Auto-generate PRJ from first raster. If False,
                          expects Projection.prj to exist in output_folder.
 
@@ -694,7 +694,7 @@ class RasTerrain:
         have RasProcess.exe available.
 
         Returns:
-            List[str]: List of version strings (e.g., ["6.6", "6.5"]).
+            List[str]: List of version strings (e.g., ["7.0", "6.5"]).
                       Empty list if no compatible versions found.
 
         Example:

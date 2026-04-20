@@ -1263,7 +1263,7 @@ class RasUnsteady:
         Examples
         --------
         >>> from ras_commander import RasUnsteady, init_ras_project
-        >>> init_ras_project("/path/to/project", "6.6")
+        >>> init_ras_project("/path/to/project", "7.0")
         >>>
         >>> # Set gridded precipitation from AORC NetCDF
         >>> RasUnsteady.set_gridded_precipitation(

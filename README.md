@@ -330,7 +330,7 @@ RasCmdr.compute_parallel(["01", ..., "10"])  # Runs only modified plans
 
 ```python
 # Initialize with version
-init_ras_project(project_path, "4.1")  # or "41", "5.0.6", "506", "6.6", etc.
+init_ras_project(project_path, "4.1")  # or "41", "5.0.6", "506", "7.0", etc.
 
 # Run a plan (auto-sets as current, blocks until complete)
 success, messages = RasControl.run_plan("02")
@@ -359,9 +359,9 @@ RAS Commander allows working with multiple HEC-RAS projects simultaneously:
 ```python
 # Initialize multiple projects
 project1 = RasPrj()
-init_ras_project(path1, "6.6", ras_object=project1)
+init_ras_project(path1, "7.0", ras_object=project1)
 project2 = RasPrj()
-init_ras_project(path2, "6.6", ras_object=project2)
+init_ras_project(path2, "7.0", ras_object=project2)
 
 # Perform operations on each project
 RasCmdr.compute_plan("01", ras_object=project1, dest_folder=folder1)

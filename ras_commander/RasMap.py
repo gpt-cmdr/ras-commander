@@ -422,7 +422,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> layers = RasMap.list_map_layers()
             >>> for layer in layers:
             ...     print(f"{layer['name']}: {layer['filename']}")
@@ -510,7 +510,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>>
             >>> # Add boundary conditions GeoJSON
             >>> RasMap.add_map_layer(
@@ -641,7 +641,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> RasMap.remove_map_layer("Boundary Conditions")
         """
         ras_obj = ras_object or ras
@@ -690,7 +690,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> geoms = RasMap.list_geometries()
             >>> for g in geoms:
             ...     print(f"{g['geom_number']}: {g['name']} - Visible: {g['checked']}")
@@ -756,7 +756,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> # Show geometry by number
             >>> RasMap.set_geometry_visibility("08", visible=True)
             >>> # Hide geometry by name
@@ -837,7 +837,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> # Hide all geometries except G08
             >>> RasMap.set_all_geometries_visibility(visible=False, except_geom="08")
             >>> # Then show only G08
@@ -922,11 +922,11 @@ class RasMap:
                     - 'upgraded': Successfully upgraded .rasmap file
                     - 'manual_needed': Upgrade required but auto-upgrade failed
                 - 'message' (str): Human-readable status message
-                - 'version' (str): Detected .rasmap version (e.g., "5.0.7", "6.6")
+                - 'version' (str): Detected .rasmap version (e.g., "5.0.7", "7.0")
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>>
             >>> # Check compatibility (auto-upgrade if needed)
             >>> result = RasMap.ensure_rasmap_compatible(auto_upgrade=True)
@@ -1595,7 +1595,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
+            >>> init_ras_project(r"C:/Projects/MyModel", "7.0")
             >>> result = RasMap.store_all_maps("01", render_mode="horizontal")
             >>> print(result["success"])
         """
@@ -1930,7 +1930,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
+            >>> init_ras_project(r"C:/Projects/MyModel", "7.0")
             >>>
             >>> # Set horizontal mode (flat WSE per cell)
             >>> RasMap.set_water_surface_render_mode("horizontal")
@@ -2082,7 +2082,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project(r"C:/Projects/MyModel", "6.6")
+            >>> init_ras_project(r"C:/Projects/MyModel", "7.0")
             >>> render_info = RasMap.get_water_surface_render_mode()
             >>> print(f"Mode: {render_info['mode']}")
             >>> # For slopingPretty, check flags:
@@ -2620,7 +2620,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> plans = RasMap.list_results_plans()
             >>> for p in plans:
             ...     print(f"{p['name']} - {p['filename']}")
@@ -2682,7 +2682,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> layers = RasMap.list_calculated_layers()
             >>> for l in layers:
             ...     print(f"{l['name']} (under {l['parent_plan']})")
@@ -2788,7 +2788,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> RasMap.add_calculated_layer(
             ...     layer_name="CompareWSE_10yr_Reg",
             ...     host_plan_name="Prop_10yr_Reg_BO",
@@ -2923,7 +2923,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> RasMap.remove_calculated_layer("CompareWSE_10yr_Reg", delete_script=True)
         """
         ras_obj = ras_object or ras
@@ -3023,7 +3023,7 @@ class RasMap:
 
         Examples:
             >>> from ras_commander import init_ras_project, RasMap
-            >>> ras = init_ras_project("/path/to/project", "6.6")
+            >>> ras = init_ras_project("/path/to/project", "7.0")
             >>> created = RasMap.add_wse_comparison_layers(
             ...     plan_pairs=[
             ...         {"exist_plan": "Exist_10yr_Reg_BO", "prop_plan": "Prop_10yr_Reg_BO", "tag": "10yr_Reg"},

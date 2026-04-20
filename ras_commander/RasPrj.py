@@ -1303,6 +1303,9 @@ class RasPrj:
                         geom_entries.append(match.group(1))
         
             geom_df = pd.DataFrame({'geom_file': geom_entries})
+            if geom_df.empty:
+                logger.warning(f"No geometry entries found in {self.prj_file}")
+                return pd.DataFrame(columns=['geom_file', 'geom_number', 'full_path', 'hdf_path'])
             geom_df['geom_number'] = geom_df['geom_file'].str.extract(r'(\d+)$')
             geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
             geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
@@ -1840,7 +1843,7 @@ class RasPrj:
             pd.DataFrame: Updated results_df
 
         Example:
-            >>> init_ras_project("path/to/project", "6.6")
+            >>> init_ras_project("path/to/project", "7.0")
             >>> ras.update_results_df(["01"])  # Update specific plan
             >>> ras.update_results_df()  # Update all plans
             >>> print(ras.results_df[['plan_number', 'completed', 'has_errors']])
@@ -1961,7 +1964,7 @@ def init_ras_project(
                                           - File is validated to have .prj extension
                                           - File content is checked for "Proj Title=" marker
                                           - Parent folder is used as the project folder
-        ras_version (str, optional): The version of RAS to use (e.g., "6.6") OR
+        ras_version (str, optional): The version of RAS to use (e.g., "7.0") OR
                                      a full path to the Ras.exe file (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
                                      If None, will attempt to detect from plan files.
         ras_object (RasPrj, optional): If None, updates the global 'ras' object.
@@ -1984,19 +1987,19 @@ def init_ras_project(
 
     Example:
         >>> # Initialize using project folder (existing behavior)
-        >>> init_ras_project("/path/to/project", "6.6")
+        >>> init_ras_project("/path/to/project", "7.0")
         >>> print(f"Initialized project: {ras.project_name}")
         >>>
         >>> # Initialize using direct .prj file path (new feature)
-        >>> init_ras_project("/path/to/project/MyModel.prj", "6.6")
+        >>> init_ras_project("/path/to/project/MyModel.prj", "7.0")
         >>> print(f"Initialized project: {ras.project_name}")
         >>>
         >>> # Create a new RasPrj instance with .prj file
-        >>> my_project = init_ras_project("/path/to/project/MyModel.prj", "6.6", "new")
+        >>> my_project = init_ras_project("/path/to/project/MyModel.prj", "7.0", "new")
         >>> print(f"Created project instance: {my_project.project_name}")
         >>>
         >>> # Skip results loading for faster initialization
-        >>> init_ras_project("/path/to/project", "6.6", load_results_summary=False)
+        >>> init_ras_project("/path/to/project", "7.0", load_results_summary=False)
     """
     # Convert to Path object for consistent handling
     # Use safe_resolve to preserve drive letters on Windows mapped network drives
@@ -2156,7 +2159,7 @@ def init_ras_project(
         f"GitHub: https://github.com/gpt-cmdr/ras-commander"
     )
     logger.info(f"Project initialized: {ras_object.project_name} | Folder: {ras_object.project_folder}")
-    logger.debug(f"Using HEC-RAS executable: {ras_exe_path}")
+    logger.info(f"Using HEC-RAS executable: {ras_exe_path}")
     return ras_object
 
 @log_call
@@ -2172,7 +2175,7 @@ def get_ras_exe(ras_version=None):
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number (e.g., "6.6") or 
+        ras_version (str, optional): Either a version number (e.g., "7.0") or 
                                      a full path to the HEC-RAS executable 
                                      (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
@@ -2180,7 +2183,7 @@ def get_ras_exe(ras_version=None):
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
     
     Note:
-        - HEC-RAS version numbers include: "6.6", "6.5", "6.4.1", "6.3", etc.
+        - HEC-RAS version numbers include: "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
         - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
@@ -2197,9 +2200,9 @@ def get_ras_exe(ras_version=None):
             return default_path
     
     # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
-    # This list matches the exact folder names on disk (verified 2025-10-30)
+    # This list matches the exact folder names on disk (verified 2026-04-19)
     ras_version_folders = [
-        "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
         "4.1.0", "4.0"
     ]
@@ -2232,7 +2235,7 @@ def get_ras_exe(ras_version=None):
         "64": "6.4.1",
         "641": "6.4.1",
         "65": "6.5",
-        "66": "6.6",
+        "66": "7.0",
         "6.7": "6.7 Beta 5", # User passes "6.7" → finds "6.7 Beta 5"
         "67": "6.7 Beta 5",
         "70": "7.0",
